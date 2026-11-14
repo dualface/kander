@@ -2,7 +2,6 @@
 
 GO ?= go
 PKG := ./cmd/kander
-SERVER_PKG := ./cmd/kander-server
 GOFLAGS ?=
 LDFLAGS ?=
 # Local default is git describe --tags --always. A checkout with no tags still
@@ -14,20 +13,17 @@ VERSION_LDFLAGS := -X $(VERSION_PACKAGE).Version=$(VERSION)
 
 ifeq ($(OS),Windows_NT)
 BIN ?= kander.exe
-SERVER_BIN ?= kander-server.exe
 else
 BIN ?= kander
-SERVER_BIN ?= kander-server
 endif
 
 .PHONY: all build test vet fmt fmt-check clean install help
 
 all: build
 
-## build: build the kander and kander-server binaries into the repository root
+## build: build the kander binary into the repository root
 build:
 	$(GO) build $(GOFLAGS) -ldflags '$(VERSION_LDFLAGS) $(LDFLAGS)' -o $(BIN) $(PKG)
-	$(GO) build $(GOFLAGS) -ldflags '$(VERSION_LDFLAGS) $(LDFLAGS)' -o $(SERVER_BIN) $(SERVER_PKG)
 
 ## test: run the whole test suite
 test:
@@ -48,7 +44,7 @@ fmt-check:
 
 ## clean: remove build artifacts
 clean:
-	rm -f kander kander.exe kander-server kander-server.exe
+	rm -f kander kander.exe
 
 ## install: build, then run the interactive installer
 install: build

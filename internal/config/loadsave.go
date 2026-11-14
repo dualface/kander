@@ -189,6 +189,8 @@ func Effective(cfg *Config) (*Config, error) {
 	}
 	defaults := DefaultConfig()
 	defaults.Rules = cfg.Rules.Clone()
+	// Service binding is independent of completing the interface welcome.
+	defaults.Server, defaults.Project = cfg.Server, cfg.Project
 	return defaults, nil
 }
 

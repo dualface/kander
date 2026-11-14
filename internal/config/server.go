@@ -6,7 +6,18 @@ import (
 	"strings"
 )
 
-// Server selects the kander-server a v2 client talks to.
+// DefaultServerURL is used by mandatory service entrances. Tests may replace
+// it with an isolated HTTP server; Enabled still checks explicit configuration.
+var DefaultServerURL = "http://127.0.0.1:7878"
+
+func ServerURL(cfg *Config) string {
+	if cfg != nil && cfg.Server.URL != "" {
+		return cfg.Server.URL
+	}
+	return DefaultServerURL
+}
+
+// Server selects the board service a v2 client talks to.
 type Server struct {
 	URL string `json:"url,omitempty"`
 }

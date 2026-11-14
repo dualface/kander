@@ -176,7 +176,11 @@ func FormatConfigLines(cfg *Config, boardPath string) ([]string, error) {
 	lines = append(lines, Text("rules.modules")+": "+FormatRulesSummary(effective.Rules))
 	lines = append(lines, formatInstallRulesLines(cfg)...)
 	lines = append(lines, Text("config.issue_result_on_done")+": "+effective.Issue.ResultOnDone)
-	lines = append(lines, Text("config.server_url")+": "+cmp.Or(binding.Server.URL, "-"))
+	serverURL := ServerURL(binding)
+	if binding.Server.URL == "" {
+		serverURL += " (" + Text("config.server_default") + ")"
+	}
+	lines = append(lines, Text("config.server_url")+": "+serverURL)
 	lines = append(lines, Text("config.project_name")+": "+cmp.Or(binding.Project.Name, "-"))
 	lines = append(lines, Text("config.server_board_path")+": "+cmp.Or(boardPath, Text("config.server_board_unavailable")))
 	lines = append(lines, Text("config.git_branch_mode")+": "+effective.Git.BranchMode)

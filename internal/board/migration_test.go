@@ -157,10 +157,10 @@ func TestLegacyReadOnlyAndSizeDiagnostics(t *testing.T) {
 	fileID := "20260907-read-legacy-task"
 	legacyMigrationCard(t, root, "backlog", fileID, false, "# Legacy\n- TYPE: Feature\n")
 	s := transactionSnapshot(t, root, fileID)
-	if err := UpdateDocument(root, fileID, UpdateOptions{Document: "spec.md", Text: s.Text + "edit", ExpectedRevision: s.Revision}); err == nil || !strings.Contains(err.Error(), "kander-server maintain --project NAME") {
+	if err := UpdateDocument(root, fileID, UpdateOptions{Document: "spec.md", Text: s.Text + "edit", ExpectedRevision: s.Revision}); err == nil || !strings.Contains(err.Error(), "kander server maintain --project NAME") {
 		t.Fatalf("legacy update %v", err)
 	}
-	if _, err := MoveWithOptions(s.Entry, root, "trash", MoveOptions{Result: "trashed", Reason: "test", Decision: "test"}); err == nil || !strings.Contains(err.Error(), "kander-server maintain --project NAME") {
+	if _, err := MoveWithOptions(s.Entry, root, "trash", MoveOptions{Result: "trashed", Reason: "test", Decision: "test"}); err == nil || !strings.Contains(err.Error(), "kander server maintain --project NAME") {
 		t.Fatalf("legacy move %v", err)
 	}
 	if _, err := FormatList(mustScan(t, root), "", false); err != nil {
@@ -244,10 +244,10 @@ func assertMigrationRecovery(t *testing.T, root, stage string) {
 	t.Helper()
 	id := "20260907-migration-crash-task"
 	if stage != "committed" {
-		if _, err := Scan(root); err == nil || !strings.Contains(err.Error(), "kander-server maintain --project NAME") {
+		if _, err := Scan(root); err == nil || !strings.Contains(err.Error(), "kander server maintain --project NAME") {
 			t.Fatalf("scan did not diagnose recovery: %v", err)
 		}
-		if _, err := ScanTargets(root, []string{id}); err == nil || !strings.Contains(err.Error(), "kander-server maintain --project NAME") {
+		if _, err := ScanTargets(root, []string{id}); err == nil || !strings.Contains(err.Error(), "kander server maintain --project NAME") {
 			t.Fatalf("target did not diagnose recovery: %v", err)
 		}
 	}

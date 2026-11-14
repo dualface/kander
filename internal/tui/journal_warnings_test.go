@@ -61,7 +61,7 @@ func TestJournalWarningsReachRefreshDetailAndBacklogStart(t *testing.T) {
 	app.GetTask = func(id string) (Task, error) { return loadTaskPayload(root, id) }
 	withoutJournalOutput(t, func() {
 		app.refreshBoard()
-		if !strings.Contains(app.CopyNotice, "kander-server maintain --project NAME") {
+		if !strings.Contains(app.CopyNotice, "kander server maintain --project NAME") {
 			t.Fatal("refresh warning not visible")
 		}
 		app.openDetail()
@@ -74,7 +74,7 @@ func TestJournalWarningsReachRefreshDetailAndBacklogStart(t *testing.T) {
 			t.Fatal("missing expected launcher preflight error")
 		}
 		app.applyStartResult(confirmWork{payload: result, err: err})
-		if !strings.Contains(app.CopyNotice, "cleanup-blocked") || !strings.Contains(app.CopyNotice, "kander-server maintain --project NAME") {
+		if !strings.Contains(app.CopyNotice, "cleanup-blocked") || !strings.Contains(app.CopyNotice, "kander server maintain --project NAME") {
 			t.Fatalf("start warnings not visible: %s", app.CopyNotice)
 		}
 		var warnings board.WarningLog
@@ -109,7 +109,7 @@ func TestTaskActionJournalWarningsUseNotice(t *testing.T) {
 			app.LoadTaskActions = loadTaskActionSource
 			withoutJournalOutput(t, func() {
 				chooseTaskAction(t, app, action)
-				if !strings.Contains(app.CopyNotice, "kander-server maintain --project NAME") {
+				if !strings.Contains(app.CopyNotice, "kander server maintain --project NAME") {
 					t.Fatal("load warning hidden")
 				}
 				if action == actionArchive || action == actionTrash {
@@ -121,7 +121,7 @@ func TestTaskActionJournalWarningsUseNotice(t *testing.T) {
 					app.queueTaskAction()
 				}
 				runPendingWork(t, app)
-				if !strings.Contains(app.CopyNotice, "cleanup-blocked") || !strings.Contains(app.CopyNotice, "kander-server maintain --project NAME") {
+				if !strings.Contains(app.CopyNotice, "cleanup-blocked") || !strings.Contains(app.CopyNotice, "kander server maintain --project NAME") {
 					t.Fatalf("move warning hidden: %s", app.CopyNotice)
 				}
 			})

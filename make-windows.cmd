@@ -1,6 +1,6 @@
 @echo off
 setlocal
-rem Windows build script mirroring the Makefile build target. Run it to produce kander.exe and kander-server.exe.
+rem Windows build script mirroring the Makefile build target. Run it to produce kander.exe.
 
 cd /d "%~dp0"
 
@@ -22,7 +22,5 @@ set "VERSION_PACKAGE=github.com/dualface/kander/internal/version"
 
 go build -ldflags "-X %VERSION_PACKAGE%.Version=%VERSION%" -o kander.exe ./cmd/kander
 if errorlevel 1 exit /b 1
-go build -ldflags "-X %VERSION_PACKAGE%.Version=%VERSION%" -o kander-server.exe ./cmd/kander-server
-if errorlevel 1 exit /b 1
 
-echo built kander.exe kander-server.exe %VERSION%
+echo built kander.exe %VERSION%

@@ -71,7 +71,7 @@ func StartOrchestrator(request OrchestrateRequest) (result OrchestrateResult, er
 	}
 	var loaded board.Board
 	var service *remote.Session
-	if remote.Enabled(cfg) {
+	if remote.ServiceSelected(cfg, request.requireService) {
 		ctx, cancel := context.WithTimeout(context.Background(), remoteCall)
 		loaded, service, request.Root, err = remoteOrchestrateBoard(ctx, cfg)
 		cancel()
@@ -426,7 +426,7 @@ func runServiceOrchestrate(args []string, required bool) int {
 		}
 	}
 	var root string
-	if remote.Enabled(cfg) {
+	if remote.ServiceSelected(cfg, required) {
 		cwd, err := os.Getwd()
 		if err != nil {
 			return fail(err)

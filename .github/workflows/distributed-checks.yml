@@ -45,10 +45,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Build client
+      - name: Build kander
         run: go build -o "${{ runner.temp }}/kander-check${{ matrix.suffix }}" ./cmd/kander
-      - name: Build server
-        run: go build -o "${{ runner.temp }}/kander-server-check${{ matrix.suffix }}" ./cmd/kander-server
       - name: Static analysis
         run: go vet ./...
       # Canonical short paths preserve no-follow checks and fit Unix sockets.

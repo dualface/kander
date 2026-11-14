@@ -318,7 +318,7 @@ func runServiceResume(args []string, required bool) int {
 		}
 	}
 	if release {
-		if !remote.Enabled(cfg) {
+		if !remote.ServiceSelected(cfg, required) {
 			return fail(launchError("remote.release_requires_server"))
 		}
 		if err := commandRemoteRelease(cfg, positional[0], decision); err != nil {
@@ -326,20 +326,20 @@ func runServiceResume(args []string, required bool) int {
 		}
 		return 0
 	}
-	if remote.Enabled(cfg) && adopt {
+	if remote.ServiceSelected(cfg, required) && adopt {
 		if err := commandRemoteAdopt(cfg, positional[0], decision); err != nil {
 			return fail(err)
 		}
 		return 0
 	}
-	if !remote.Enabled(cfg) && !adopt && !agentSet && decision != "" {
+	if !remote.ServiceSelected(cfg, required) && !adopt && !agentSet && decision != "" {
 		return usageFail("resume", "launch.decision_needs_adopt_or_agent")
 	}
 	var agentPtr *string
 	if agentSet {
 		agentPtr = &agent
 	}
-	if remote.Enabled(cfg) {
+	if remote.ServiceSelected(cfg, required) {
 		return runRemoteResume(cfg, agentPtr, launcher, positional[0], message, messageFile, messageSet, timeout, dispatchOptions)
 	}
 	root, err := boardRootFn()

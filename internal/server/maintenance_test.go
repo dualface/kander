@@ -281,7 +281,7 @@ func TestMaintainCommandUsesTheOfflineProducerAndReleasesItsLock(t *testing.T) {
 	}
 	previous := os.Stdout
 	os.Stdout = write
-	code := Main([]string{"maintain", "--data", fixture.data, "--project", "legacy", "--maintenance"})
+	code := RunOffline([]string{"maintain", "--data", fixture.data, "--project", "legacy", "--maintenance"})
 	os.Stdout = previous
 	_ = write.Close()
 	raw, err := io.ReadAll(read)

@@ -33,7 +33,7 @@ var RemoteCommands = map[string]Runner{
 func RequireService(runner Runner) Runner {
 	return func(args []string) int {
 		cfg, err := config.Load(false)
-		if err == nil && (!remote.Enabled(cfg) || cfg.Project.Name == "") {
+		if err == nil && cfg.Project.Name == "" {
 			err = remote.ErrNotConfigured
 		}
 		if err != nil {

@@ -79,3 +79,11 @@ func CleanupStaleBinary(paths config.InstallPaths) {
 		_, _ = fs.RemoveNonDirectoryIfExists(anchor, aside)
 	}
 }
+
+// componentBinaryName also names obsolete binaries removed by uninstall.
+func componentBinaryName(component string) string {
+	if runtime.GOOS == "windows" {
+		return component + ".exe"
+	}
+	return component
+}

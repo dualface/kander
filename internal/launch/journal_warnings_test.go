@@ -46,7 +46,7 @@ func TestStartCollectsJournalWarningsThroughSuccessAndRollback(t *testing.T) {
 				t.Fatalf("start wrote terminal output or changed outcome: %q %q %v", out, stderr, err)
 			}
 			warnings := strings.Join(result.Warnings, "\n")
-			if len(result.Warnings) != 2 || !strings.Contains(warnings, "kander-server maintain --project NAME") || !strings.Contains(warnings, "cleanup-blocked") {
+			if len(result.Warnings) != 2 || !strings.Contains(warnings, "kander server maintain --project NAME") || !strings.Contains(warnings, "cleanup-blocked") {
 				t.Fatalf("missing or repeated journal warnings: %v", result.Warnings)
 			}
 			var log board.WarningLog

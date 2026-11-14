@@ -43,9 +43,8 @@ jobs:
           LDFLAGS="-s -w -X ${VERSION_PACKAGE}.Version=${VERSION}"
 
           mkdir -p dist
-          # Each binary ships in its own archive: the client self-updater
-          # accepts an archive with exactly one kander entry.
-          for program in kander kander-server; do
+          # Each archive contains the single kander executable.
+          for program in kander; do
             for target in windows/amd64 windows/arm64 darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
               GOOS="${target%/*}"
               GOARCH="${target#*/}"

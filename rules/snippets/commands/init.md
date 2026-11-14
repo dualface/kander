@@ -41,7 +41,7 @@ This historical syntax remains indexed for compatibility. `--maintenance` is rej
 
 ## Offline service maintenance
 
-Stop `kander-server` and pause every executor and external writer. Run `kander-server maintain [--data DIR] --project NAME`. If active cards require form migration, add `--maintenance` only after all writers are paused. The command takes the exclusive server data-directory lock and never starts an HTTP listener or stops agents. It converts imported legacy file cards using the existing board redo journal. A repeat reports zero changes. Original import snapshots and evidence bytes stay intact. Keep writers paused after failure and retry the same maintenance command; never choose or delete a partial copy manually.
+Run `kander server stop` and pause every executor and external writer. Run `kander server maintain [--data DIR] --project NAME`. If active cards require form migration, add `--maintenance` only after all writers are paused. The command takes the exclusive server data-directory lock and never starts an HTTP listener or stops agents. It converts imported legacy file cards using the existing board redo journal. A repeat reports zero changes. Original import snapshots and evidence bytes stay intact. Keep writers paused after failure and retry the same maintenance command; never choose or delete a partial copy manually.
 
 ## Additional Syntax
 
@@ -51,4 +51,4 @@ kander init [--server <URL>] [--project <name>] [project-path]
 
 The optional URL and name are validated with the normal configuration schema. The client checks protocol compatibility, registers the project with its canonical Git origin and saves only the requested binding fields in the project's sparse `.kander-config.json`. A concurrent overlay edit refuses the save. Repeating the binding returns the same project. Different checkout paths do not affect project identity. A name already bound to another origin is refused.
 
-Without these flags, `init` uses the existing binding at the selected project path. `--maintenance` does not open a local board: run explicit import or service maintenance through `kander-server`. Unconfigured or unreachable service commands fail; they never fall back to local storage.
+Without these flags, `init` uses the existing binding at the selected project path. `--maintenance` does not open a local board: run explicit import or service maintenance through `kander server`. Unconfigured or unreachable service commands fail; they never fall back to local storage.

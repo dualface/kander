@@ -124,12 +124,16 @@ func Run(_ []string) int {
 	if err != nil {
 		return fail(err)
 	}
+	// Complete local startup/restart questions before Bubble Tea owns terminal input.
 	serviceCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	serverSession, err := remote.Open(serviceCtx, cfg, cwd)
 	cancel()
 	if err != nil {
 		return fail(err)
 	}
+
+	restoreServerQuestions := remote.SuspendServerQuestions()
+	defer restoreServerQuestions()
 
 	app := newApp(prefs.Single, prefs.Refresh, ctx, nil, nil, prefs.Theme, prefs.Columns, saveColumns, copyToClipboard)
 	app.Compact = prefs.Compact

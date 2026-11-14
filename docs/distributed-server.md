@@ -1,12 +1,12 @@
 # Distributed server
 
-Kander v2 splits the tool into a resident board server, `kander-server`, and the `kander` client. Every host that works on one Git repository talks to the same server over REST, so all hosts see one board, task ownership is decided in one place, and each host executes its own tasks. This document is the design contract of the v2 branch. Normal client entry points use the service contract described below.
+Kander v2 ships one `kander` executable with a resident board service under `kander server` and REST client commands. Every host that works on one Git repository talks to the same server over REST, so all hosts see one board, task ownership is decided in one place, and each host executes its own tasks. This document is the design contract of the v2 branch. Normal client entry points use the service contract described below.
 
 ## Roles
 
 | Side | Owns | Never owns |
 | --- | --- | --- |
-| `kander-server` | Registered projects, card documents and attachments, claims and leases, handoff records, collaboration requests, idempotency receipts, the event log, published review evidence | Code, Git repositories, worktrees, agent sessions, terminals |
+| `kander server` | Registered projects, card documents and attachments, claims and leases, handoff records, collaboration requests, idempotency receipts, the event log, published review evidence | Code, Git repositories, worktrees, agent sessions, terminals |
 | `kander` client and worker | Agent and terminal control, repository location, worktrees, sessions, temporary logs, unpublished output, the private action and request journals | The board; a client never writes a local `kanban/` in normal operation |
 
 The first version trusts its network: there is no login and no role model, one server instance serves one data directory, and storage reuses the board package's file transactions instead of a database. Claim tokens and generations isolate concurrent executions; they do not defend against a malicious client on the network. The server binds `127.0.0.1:7878` by default; serving a LAN is an explicit `--listen` choice.
@@ -44,17 +44,17 @@ The project identity derives from the exact name. With `h` the first 16 hex digi
 
 Project responses (`GET` and `POST /api/v1/projects`, and the import result) carry `board_path`, the absolute board directory on the server host; `projects.json` never stores it. `kander init` prints it after the binding, and the human-readable `kander config` asks the bound server for it with one `GET` bounded to 3 seconds, sending no write and creating no file; an unreachable server, a missing binding or an unregistered name prints it as unavailable without changing the exit code. `kander config --json` stays offline and unchanged.
 
-`kander-server projects [--data DIR] [--json]` lists every project with its name, ID, remote, creation time and board path. It reads `projects.json` without the data directory lock and writes nothing, so it also runs beside a serving instance. A missing data directory lists nothing.
+`kander server projects [--data DIR] [--json]` lists every project with its name, ID, remote, creation time and board path. It reads `projects.json` without the data directory lock and writes nothing, so it also runs beside a serving instance. A missing data directory lists nothing.
 
-v2 development data is not migrated. When `projects.json` holds a project whose ID is not derived from its name, or whose name breaks the rule, the server refuses to open and `kander-server projects` exits nonzero; remove the data directory and import the boards again.
+v2 development data is not migrated. When `projects.json` holds a project whose ID is not derived from its name, or whose name breaks the rule, the server refuses to open and `kander server projects` exits nonzero; remove the data directory and import the boards again.
 
 The first registration of a name may bind a Git remote URL; a later registration with a different remote is refused with `project_mismatch`, so two repositories cannot share a board by a name collision. No record keys on a client's absolute path.
 
-`kander-server` opens the data directory, takes `server.lock`, recovers every project's interrupted board transactions (`board.RecoverTransactions`), settles claims from the committed card state, logs one `project` line per project with its name, ID and board path, and only then reports ready. Until ready, domain routes answer `not_ready` (503).
+`kander server` opens the data directory, takes `server.lock`, recovers every project's interrupted board transactions (`board.RecoverTransactions`), settles claims from the committed card state, logs one `project` line per project with its name, ID and board path, and only then reports ready. Until ready, domain routes answer `not_ready` (503).
 
 ## Offline card maintenance
 
-After an explicit import, legacy file cards stay readable and read-only. Pause executors and external writers, stop the server, and run `kander-server maintain --data <data> --project <name>`. If active file cards or a pending active migration exist, the command refuses until `--maintenance` acknowledges the write stop. A serving instance holds the same exclusive data-directory lock, so maintenance cannot run beside it. This command never becomes ready or serves requests.
+After an explicit import, legacy file cards stay readable and read-only. Pause executors and external writers, stop the server, and run `kander server maintain --data <data> --project <name>`. If active file cards or a pending active migration exist, the command refuses until `--maintenance` acknowledges the write stop. A serving instance holds the same exclusive data-directory lock, so maintenance cannot run beside it. This command never becomes ready or serves requests.
 
 Maintenance reuses the board migration redo journal, checks the final board and returns JSON with `project`, `changed_tasks`, and the final `snapshot` digest. An interrupted migration resumes from the exact prepared mapping and original operation ID. Original import identity, the source backup and historical report bytes remain unchanged. Repeating a completed migration reports zero changes. Resume writers only after success and a fresh service snapshot. This operation does not prune historical evidence. Normal startup recovers ordinary transactions but refuses an active pending form migration until explicit offline maintenance acknowledges the paused writers.
 
@@ -223,7 +223,7 @@ The server logs JSON lines with method, path, status, client ID, operation ID (d
 
 ## Migrating a v1 board
 
-`kander-server import [--data DIR] --project NAME [--remote URL] --from KANBAN_DIR` imports one v1 board into a project. It takes the data directory lock, so it refuses to run while the server serves that directory. Before running it, stop the v1 executing agents and other writers of the source board, as for `kander init --maintenance`.
+`kander server import [--data DIR] --project NAME [--remote URL] --from KANBAN_DIR` imports one v1 board into a project. It takes the data directory lock, so it refuses to run while the server serves that directory. Before running it, stop the v1 executing agents and other writers of the source board, as for `kander init --maintenance`.
 
 1. It refuses overlapping source/data paths, recovers the source board's interrupted transactions, then holds the board-exclusive lock while copying a consistent snapshot. Every regular file is digested by path and SHA-256, including empty lock files. For an empty lock file, validated handle metadata supplies its zero length without a byte-range read, which Windows forbids while the source lock is held. Nonempty lock files retain their bytes and receive normal read validation. A symlink, junction, or other entry refuses the import. A second source digest detects non-cooperating writers before publication.
 2. The project must have no tasks. Importing the same snapshot into the same project again answers with the earlier import; any other import into a project with tasks is refused with `project_not_empty`. Two existing boards are never merged.
@@ -234,15 +234,30 @@ The source board is never changed and stays as the local backup; review original
 
 ## Build and release
 
-`make build` (and `make-windows.cmd`) builds `kander` and `kander-server`. The release workflow packages each binary for every platform in its own archive (`kander-<os>-<arch>` and `kander-server-<os>-<arch>`), because the client self-updater accepts an archive with exactly one `kander` entry. A tag with a suffix, such as `v2.0.0-alpha.N`, is published as a GitHub prerelease that is never marked latest and never syncs the Homebrew formula; the MSIX job already skips suffixed tags. The update check reads `releases/latest` and refuses prerelease and suffixed versions, so a v1 stable client never installs a v2 prerelease, and a v2 prerelease client is never offered the older v1 stable release.
+`make build` and `make-windows.cmd` build only `kander` (`kander.exe` on Windows). Release archives and MSIX bundles contain that one executable. `kander install` copies only it; uninstall also removes an obsolete standalone service file. There is no separate service alias, installer or updater. Alpha tags remain prereleases, never replace stable releases or sync the Homebrew formula, and skip MSIX publication. Store installations use Store updates.
 
-`kander install` copies an optional executable `kander-server` sibling beside the client into the selected scope. Both destinations and the sibling source are preflighted before replacement. A missing sibling is valid for a host that uses a remote server. Each file replacement is atomic; the pair is not one atomic transaction. If the service copy fails after the client succeeds, installation returns an error naming the installed client, retains the old server, and can be retried. Existing binaries use the no-follow and Windows busy-file replacement boundaries.
+## Local service lifecycle
 
-`kander-server install [--dir DIR]` installs only the service executable (default: the user binary directory). It writes no agent integration or client configuration. `kander-server update --check` reports the stable channel offer; `kander-server update` applies it. A prerelease server stays out of that channel. An operator can explicitly choose a newer release with `kander-server update --version 2.0.0-alpha.N`. Downloads use trusted HTTPS release hosts, bounded streams, exactly one matching checksum and exactly the service executable in its archive. The staged executable must report the exact requested version before replacement. Downgrades and invalid versions refuse before downloading. Updating a client does not silently update a remote service, and updating a service never restarts it: pause writers and arrange the service restart explicitly, then check `/ready` and protocol compatibility.
+```text
+kander server start [--data DIR] [--listen ADDR] [--ttl D] [--renew D] [--foreground]
+kander server status [--json]
+kander server stop
+kander server restart
+```
 
-MSIX bundles contain both executables and expose both command aliases. A packaged component refuses PATH copying and self-update; the Store owns its replacement. Alpha tags never build or publish Store bundles. The v2 packaging workflow's push job creates only a test identity sideload artifact, never a Store submission.
+Start normally detaches from the terminal (a new Unix session, or a detached Windows process), appends stdout and stderr to `<data>/server.log`, and waits up to 10 seconds for `/api/v1/health`. An already healthy instance is reused. Concurrent starts share the existing exclusive data-directory lock; losing children exit and their callers wait for the winner. A timeout kills and reaps only the child this caller launched and reports the log path and last 20 lines. Foreground mode writes JSON logs to stderr and gracefully shuts down on SIGINT, SIGTERM, or an authenticated administration request.
 
-Run the server with `kander-server --data <dir> --listen <host:port>` (defaults: `$XDG_DATA_HOME/kander-server` or `~/.local/share/kander-server`, `127.0.0.1:7878`); `--ttl` and `--renew` set the lease timings. Health: `GET /api/v1/health`, readiness: `GET /api/v1/ready`, protocol: `GET /api/v1/version`.
+The default data directory remains `$XDG_DATA_HOME/kander-server` when absolute, otherwise `~/.local/share/kander-server`. Default listen is the effective loopback URL's address, otherwise `127.0.0.1:7878`. Explicit `--data` and `--listen` override these. TTL and renewal default to 90s and 15s; both must be positive and renewal shorter than TTL. Status reads the actual data directory from the running server. Restart reads and preserves its data directory, listening address, TTL and renewal interval.
+
+`GET /api/v1/server` reports version, PID, data directory, log path, listen address, TTL, renewal interval, start time and project count. It never returns a secret. `POST /api/v1/server/shutdown` accepts only a loopback peer with the correct `Kander-Admin-Token` header, compared with `crypto/subtle.ConstantTimeCompare`. This management key is a separate random 32-byte token in private `admin-token.json`, created through `internal/fs`; it never reuses the claim-signing `secret.json`. Stop reads the running server's data directory, loads the key locally, sends it to that same loopback URL without redirects, and waits up to 10 seconds for health to fail. Already stopped succeeds. Rejected requests return 403 and never echo or log the key. Information and shutdown routes stay independent of the board protocol handshake so a protocol upgrade can restart the old process.
+
+When `server.url` is absent, mandatory client commands use `http://127.0.0.1:7878`. `remote.Enabled` still means an explicit URL, preserving optional local storage helpers and tests. Missing project binding reports `kander init --project <name>`; init may bind without an explicit URL. Human-readable config marks the default URL, while JSON remains the stored effective configuration.
+
+Before opening a project session (and before the TUI starts), an unreachable loopback server prompts only when stdin and stderr are terminals and neither `KANDER_EXECUTION_ID` nor `KANDER_COORDINATOR_EXECUTION_ID` is set. The question shows URL, default data directory, `<data>/projects/<ProjectDirName(project.name)>/board`, and log path. Empty line, `y`, or `Y` authorizes background start; `n`, `N`, or EOF fails without starting. Noninteractive calls fail with `kander server start` and the data path. Automatic start always uses the default data directory; custom paths require manual start. Configuration/help/install commands and server commands never trigger that question. Remote unreachable servers retain the usual failure behavior.
+
+A local version mismatch, including incompatible protocols, prompts for restart once per endpoint per client process. Noninteractive compatible clients warn once and continue; incompatible ones fail with `kander server restart`. Declining restart keeps a compatible connection and refuses an incompatible one. Questions do not consume the caller's short connection deadline: start/restart and the retried handshake use independent bounded contexts, and Open renews its context for registration after a question.
+
+The remaining service API retains the existing unauthenticated trusted-network boundary. Boot services, log rotation and remote process administration are outside this contract. A local attacker who occupies a stopped server's port can obtain the administration token when the operator sends stop to that port; the accepted impact is later service shutdown, not board access beyond the existing network boundary.
 
 ## Implementation boundaries
 

@@ -11,7 +11,7 @@ The paths in this document belong to server storage. Client `kander init` only r
 ## Maintenance Steps
 
 1. Pause all executors, external editors, in-flight notifications, and archive writes; old Agents and old binaries must stop writing too. Keep cards and sessions; there is no need to terminate Agents.
-2. Stop `kander-server`, then run `kander-server maintain [--data DIR] --project NAME`. When migration is needed and the board has working/review cards, it refuses by default and lists the IDs. After confirming the write-stop conditions above, run `kander-server maintain [--data DIR] --project NAME --maintenance`.
+2. Run `kander server stop`, then run `kander server maintain [--data DIR] --project NAME`. When migration is needed and the board has working/review cards, it refuses by default and lists the IDs. After confirming the write-stop conditions above, run `kander server maintain [--data DIR] --project NAME --maintenance`.
 3. The command acquires the exclusive server data-directory lock, never becomes ready or serves HTTP, and takes the exclusive board lock. It recovers prepared transactions, validates cards and unknown staging artifacts, then migrates the seven states. Controlled init/new/move/update/archiving and reads all honor the same lock; uncontrolled external write processes cannot be constrained by this lock.
 4. After success, re-obtain paths and revisions with show --json, then resume the executors. Do not carry over pre-migration snapshots. Changes continue through the dedicated entry points such as update/move.
 

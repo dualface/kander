@@ -131,7 +131,7 @@ func runServiceCheck(args []string, required bool) int {
 			return 1
 		}
 	}
-	if remote.Enabled(cfg) {
+	if remote.ServiceSelected(cfg, required) {
 		return runRemoteCheck(cfg, tasks, all)
 	}
 	root, err := board.BoardRoot()

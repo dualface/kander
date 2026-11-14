@@ -36,7 +36,7 @@ func TestClientRuntimeNeverFallsBackToLocalBoard(t *testing.T) {
 	calls := [][]string{{"list"}, {"show", "absent"}, {"new", "chore", "unbound", "Unbound task"}, {"update", "absent", "--document", "progress.md", "--file", input, "--expect-revision", "1"}, {"move", "absent", "todo"}, {"pick", "absent"}, {"start", "absent"}, {"resume", "absent", "--message", "continue"}, {"notify", "absent", "--message", "continue"}, {"dismiss", "absent"}, {"check"}, {"subscribe", "--watch", "absent"}, {"dispatch", "show", "absent", "round"}, {"coordinator", "show", "group"}, {"orchestrate", "--message", "handover", "absent"}, {"issue", "import", "42"}, {"issue", "triage", "42"}, {"issue", "result", "42", "--card", "absent"}, {"review", "progress", "/tmp", "absent"}, {"guard-write", "source.go"}, {"init"}}
 	for _, args := range calls {
 		result := runKander(t, args...)
-		if result.code == 0 || !strings.Contains(result.stderr, "server.url") {
+		if result.code == 0 || !strings.Contains(result.stderr, "kander init --project <name>") {
 			t.Fatalf("unbound command %v: %+v", args, result)
 		}
 	}

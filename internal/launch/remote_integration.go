@@ -18,7 +18,7 @@ import (
 )
 
 func runRemoteIntegration(ctx context.Context, cfg *config.Config, args []string) int {
-	if !remote.Enabled(cfg) {
+	if err := remote.RequireBinding(cfg); err != nil {
 		return fail(errors.New(config.Text("remote.not_configured")))
 	}
 	cwd, err := os.Getwd()

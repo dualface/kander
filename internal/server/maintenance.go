@@ -65,7 +65,7 @@ func Maintain(options Options, project string, acknowledged bool) (result Mainte
 }
 
 func runMaintain(args []string) int {
-	flags := flag.NewFlagSet("kander-server maintain", flag.ContinueOnError)
+	flags := flag.NewFlagSet("kander server maintain", flag.ContinueOnError)
 	data := flags.String("data", "", "server data directory")
 	project := flags.String("project", "", "registered project name")
 	maintenance := flags.Bool("maintenance", false, "acknowledge all task writers and executors are paused")
@@ -76,7 +76,7 @@ func runMaintain(args []string) int {
 		return 2
 	}
 	if flags.NArg() != 0 || *project == "" {
-		fmt.Fprintln(os.Stderr, "usage: kander-server maintain [--data DIR] --project NAME [--maintenance]")
+		fmt.Fprintln(os.Stderr, "usage: kander server maintain [--data DIR] --project NAME [--maintenance]")
 		return 2
 	}
 	dir, err := dataDir(*data)

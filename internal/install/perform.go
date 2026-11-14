@@ -31,8 +31,6 @@ type Result struct {
 	DestBinary    string
 	RunBinary     string
 	Copied        bool
-	ServerBinary  string
-	ServerCopied  bool
 	Legacy        []string
 	LegacyRemoved bool
 	// LegacyRules records rule files migrated away from the previous global rules root.
@@ -71,22 +69,12 @@ func Perform(req Request) (Result, error) {
 		return result, err
 	}
 	dest := filepath.Join(paths.BinDir, binaryName())
-	var serverSource string
 	if copyBinary {
 		result.DestBinary = dest
 		if err := rejectDest(dest, project); err != nil {
 			return result, err
 		}
-		serverSource, err = companionSource(source)
-		if err != nil {
-			return result, err
-		}
-		if serverSource != "" {
-			result.ServerBinary = filepath.Join(paths.BinDir, componentBinaryName("kander-server"))
-			if err := rejectDest(result.ServerBinary, project); err != nil {
-				return result, err
-			}
-		}
+
 	}
 	for _, name := range rules.Names() {
 		if err := rejectDest(filepath.Join(paths.RulesDir, filepath.FromSlash(name)), project); err != nil {
@@ -120,12 +108,7 @@ func Perform(req Request) (Result, error) {
 			return result, fmt.Errorf("%s", config.Text("install.failed_to_write_binary", err.Error()))
 		}
 		result.RunBinary = dest
-		if serverSource != "" {
-			result.ServerCopied, err = installBinary(serverSource, result.ServerBinary)
-			if err != nil {
-				return result, fmt.Errorf("client installed at %s; server copy failed: %w", dest, err)
-			}
-		}
+
 	}
 	lang := req.Language
 	if lang == "" {

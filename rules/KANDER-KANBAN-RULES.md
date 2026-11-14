@@ -26,6 +26,13 @@ Before running any `kander` command in this session, read `<rules root>/snippets
 
 ```text
 kander config [--json]
+kander server start [--data DIR] [--listen ADDR] [--ttl D] [--renew D] [--foreground]
+kander server stop
+kander server restart
+kander server status [--json]
+kander server import [--data DIR] --project NAME [--remote URL] --from KANBAN_DIR
+kander server maintain [--data DIR] --project NAME [--maintenance]
+kander server projects [--data DIR] [--json]
 kander doctor
 kander version
 kander install
@@ -126,13 +133,13 @@ Before creating, completing, updating, or reviewing card content, read `snippets
 
 ### Controlled Documents and Recovery
 
-- Use `update --document spec.md` for every card body. Both scales accept `plan.md`, `report.md`, and ordinary attachments, including relative subdirectories. Legacy file cards are read-only: mutation commands fail before side effects and direct the caller to offline `kander-server maintain --project NAME`; never bypass this with an older binary or direct editing.
+- Use `update --document spec.md` for every card body. Both scales accept `plan.md`, `report.md`, and ordinary attachments, including relative subdirectories. Legacy file cards are read-only: mutation commands fail before side effects and direct the caller to offline `kander server maintain --project NAME`; never bypass this with an older binary or direct editing.
 - Paths must be canonical, relative, and free of traversal, symlinks, and reparse points. Never edit managed `reviews/`, `dispatches/`, manifests, indexes, or control records through update; dedicated producers own them.
 - Full-body replacements preserve `LANGUAGE`, `OWNER`, `SESSION`, `WINDOW`, creation/start/completion timestamps, `RESULT`, execution metadata, and managed indexes. Keep `TASK_BRANCH` and ordinary implementation and summary records current through update.
 - Manual claiming uses `kander move <task-id> working --owner <agent>`, writing `OWNER` and `STARTED_AT` with the transition; `start` and `resume` own session and window metadata; dispatch-back moves to working keep the existing owner.
 - Completion uses `kander move <task-id> done --result completed`, with validation, `RESULT`, and `FINISHED_AT` in one transaction, after the summary or report was written through update. Termination uses `move <task-id> archived --result cancelled|duplicate|wontfix --reason <reason> --decision <user-decision-reference>` (`--duplicate-of <replacement-id>` for duplicate); archiving a completed card uses `--result completed` with reason and decision reference; trash uses `move <task-id> trash --result trashed --reason <reason> --decision <user-decision-reference>`. These references record the authorization basis; the tool does not verify user intent. `--expect-revision` is available on move when the transition must match a previously read snapshot.
 - After a card enters todo, its contract stays frozen even if withdrawn to backlog. A user-authorized contract change uses update with `--contract-decision-file <UTF8-decision>` and the expected revision; Kander records the decision and old/new frozen fields in the protected `CONTRACT_DECISIONS` section. This never authorizes changing managed metadata or language.
-- A process interrupted during publication leaves a recoverable transaction. Readers report the unfinished operation without repairing it; ask the service operator to stop the server and run `kander-server maintain --project NAME` to finish prepared writes and moves. A recovery conflict preserves the evidence and both copies; never guess a primary copy or delete one. Transactions protect commands and agents that follow this protocol, not arbitrary local processes editing files directly.
+- A process interrupted during publication leaves a recoverable transaction. Readers report the unfinished operation without repairing it; ask the service operator to stop the server and run `kander server maintain --project NAME` to finish prepared writes and moves. A recovery conflict preserves the evidence and both copies; never guess a primary copy or delete one. Transactions protect commands and agents that follow this protocol, not arbitrary local processes editing files directly.
 
 ## Archived Review Evidence
 
@@ -156,8 +163,8 @@ Before creating, completing, updating, or reviewing card content, read `snippets
 
 ### Explicit Migration and Maintenance
 
-- Offline `kander-server maintain --project NAME` migrates legacy `<task-id>.md` files to `<task-id>/spec.md`, adding `SIZE` and rewriting only the relative links needed to keep their targets; all other bytes are preserved, and repeated maintenance reports zero migrations. `list`, `show`, `check`, and `subscribe` read legacy files without migrating them (missing SIZE means small for a file, large for a directory); read commands never migrate.
-- Before migration, pause all executing agents, external editors, notifications, and archive writers, including older binaries, and keep that window open through recovery and migration. When working or review cards exist and migration is needed, maintenance refuses by default and lists the affected IDs; only after all writers are paused, `kander-server maintain --project NAME --maintenance` acknowledges the preconditions, also for recovery of an interrupted migration. No agent is terminated automatically.
+- Offline `kander server maintain --project NAME` migrates legacy `<task-id>.md` files to `<task-id>/spec.md`, adding `SIZE` and rewriting only the relative links needed to keep their targets; all other bytes are preserved, and repeated maintenance reports zero migrations. `list`, `show`, `check`, and `subscribe` read legacy files without migrating them (missing SIZE means small for a file, large for a directory); read commands never migrate.
+- Before migration, pause all executing agents, external editors, notifications, and archive writers, including older binaries, and keep that window open through recovery and migration. When working or review cards exist and migration is needed, maintenance refuses by default and lists the affected IDs; only after all writers are paused, `kander server maintain --project NAME --maintenance` acknowledges the preconditions, also for recovery of an interrupted migration. No agent is terminated automatically.
 - An interrupted migration leaves a managed pending transaction that only explicit offline service maintenance replays; no reader repairs the board. Never guess a primary copy, delete unknown artifacts, or hide an unfinished operation by renaming it. `guard-write` recognizes stale state paths and the old `.md` spelling but makes no external write atomic; use update.
 
 ### Post-Creation Self-Review

@@ -1,11 +1,11 @@
-# Packs client and server builds into one Microsoft Store .msixbundle.
+# Packs kander builds into one Microsoft Store .msixbundle.
 # Runs under PowerShell 7 on Windows with the Windows 10/11 SDK (makeappx.exe,
 # and signtool.exe for -TestSign). The Release workflow runs it on a GitHub
 # Actions Windows runner; see docs/windows-msix-store.md.
 #
 #   pwsh packaging/msix/build-msix.ps1 -Version 1.0.0 -BinDir dist -OutDir out
 #
-# BinDir holds <arch>\kander.exe and <arch>\kander-server.exe for every architecture in -Arches.
+# BinDir holds <arch>\kander.exe for every architecture in -Arches.
 #
 # The Store identity comes from Partner Center > Product identity through
 # KANDER_MSIX_IDENTITY_NAME, KANDER_MSIX_PUBLISHER and
@@ -116,9 +116,7 @@ try {
         if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw "missing $exe" }
         $layout = Join-Path $work "layout\$arch"
         New-Item -ItemType Directory -Force -Path $layout | Out-Null
-        $serverExe = Join-Path $BinDir "$arch\kander-server.exe"
-        if (-not (Test-Path -LiteralPath $serverExe -PathType Leaf)) { throw "missing $serverExe" }
-        Copy-Item -LiteralPath $exe, $serverExe -Destination $layout
+        Copy-Item -LiteralPath $exe -Destination $layout
         Copy-Item -LiteralPath (Join-Path $packagingDir 'Assets') -Destination $layout -Recurse
         $values = @{
             IDENTITY_NAME          = $identityName

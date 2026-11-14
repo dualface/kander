@@ -128,7 +128,7 @@ func runServiceNotify(args []string, required bool) int {
 			return fail(err)
 		}
 	}
-	if remote.Enabled(cfg) {
+	if remote.ServiceSelected(cfg, required) {
 		request, err := launch.NotifyRemote(positional[0], message, messageFile, pane, messageSet, timeout, dispatchOptions)
 		if err != nil {
 			return fail(err)

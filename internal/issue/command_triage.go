@@ -104,7 +104,7 @@ func runTriageMode(factory func() IssueProvider, args []string, stdout, stderr i
 			return 1
 		}
 	}
-	if remote.Enabled(cfg) {
+	if remote.ServiceSelected(cfg, required) {
 		cwd, cwdErr := os.Getwd()
 		if cwdErr != nil {
 			fmt.Fprintln(stderr, formatTriageError(cwdErr))

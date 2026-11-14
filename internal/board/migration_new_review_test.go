@@ -87,7 +87,7 @@ func TestLegacyDirectoryGuard(t *testing.T) {
 	root := tempBoard(t)
 	legacyMigrationCard(t, root, "backlog", linkA, false, "# Original\n")
 	verdict, err := GuardWrite(root, filepath.Join(root, "backlog", linkA, "plan.md"))
-	if err != nil || verdict.Allowed || !strings.Contains(verdict.Reason, "kander-server maintain --project NAME") {
+	if err != nil || verdict.Allowed || !strings.Contains(verdict.Reason, "kander server maintain --project NAME") {
 		t.Fatal(verdict, err)
 	}
 }

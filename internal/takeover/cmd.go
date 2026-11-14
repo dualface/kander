@@ -98,7 +98,7 @@ func runServiceDismiss(args []string, required bool) int {
 			return fail(err)
 		}
 	}
-	if remote.Enabled(cfg) {
+	if remote.ServiceSelected(cfg, required) {
 		if err := commandRemoteDismiss(cfg, positional[0], timeout); err != nil {
 			return fail(err)
 		}

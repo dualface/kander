@@ -85,7 +85,7 @@ func runResultMode(factory func() IssueProvider, args []string, stdout, stderr i
 			return 1
 		}
 	}
-	if remote.Enabled(cfg) {
+	if remote.ServiceSelected(cfg, required) {
 		cwd, e := os.Getwd()
 		if e != nil {
 			err = e

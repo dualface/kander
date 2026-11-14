@@ -22,6 +22,7 @@ type Runner func(args []string) int
 
 var commandNames = []string{
 	"doctor",
+	"server",
 	"config",
 	"version",
 	"install",

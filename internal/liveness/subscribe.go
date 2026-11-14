@@ -449,7 +449,7 @@ func runServiceSubscribe(args []string, required bool) int {
 			return 1
 		}
 	}
-	if remote.Enabled(cfg) {
+	if remote.ServiceSelected(cfg, required) {
 		cwd, err := os.Getwd()
 		if err != nil {
 			_ = writeSubscriptionDiagnostic(os.Stderr, "kander: "+err.Error())

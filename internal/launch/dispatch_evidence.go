@@ -260,7 +260,7 @@ func runServiceDispatch(args []string, required bool) int {
 			return fail(err)
 		}
 	}
-	if remote.Enabled(cfg) {
+	if remote.ServiceSelected(cfg, required) {
 		return runRemoteDispatch(args, cfg)
 	}
 	if len(args) != 2 || (args[0] != "prepare" && args[0] != "authorize-wrap-up") {

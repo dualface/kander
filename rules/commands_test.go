@@ -170,6 +170,7 @@ func TestCommandIndexWordLimits(t *testing.T) {
 // contract documents must all be parsed by one of them, and every "--flag" literal in them
 // must be documented by a command that lists the function.
 var parserFunctions = map[string][]string{
+	"server":      {"cmd/kander/server.go:runServer", "internal/server/main.go:runImport", "internal/server/maintenance.go:runMaintain", "internal/server/projects_cmd.go:listProjects"},
 	"config":      {"internal/menu/commands.go:parseConfigArgs"},
 	"doctor":      {"internal/menu/commands.go:Doctor"},
 	"version":     {"internal/cli/cli.go:runVersion"},
@@ -218,6 +219,29 @@ func functionFlagLiterals(t *testing.T, ref string) map[string]bool {
 		}
 		found = true
 		ast.Inspect(f.Body, func(n ast.Node) bool {
+			// flag.FlagSet registers names without the leading dashes.
+			if call, ok := n.(*ast.CallExpr); ok {
+				if method, ok := call.Fun.(*ast.SelectorExpr); ok {
+					receiver, ok := method.X.(*ast.Ident)
+					if ok && receiver.Name == "flags" {
+						index := -1
+						switch method.Sel.Name {
+						case "String", "Bool", "Duration":
+							index = 0
+						case "StringVar", "BoolVar", "DurationVar":
+							index = 1
+						}
+						if index >= 0 && len(call.Args) > index {
+							if name, ok := call.Args[index].(*ast.BasicLit); ok && name.Kind == token.STRING {
+								value := "--" + strings.Trim(name.Value, "\"`")
+								if flagLiteral.MatchString(value) {
+									out[value] = true
+								}
+							}
+						}
+					}
+				}
+			}
 			lit, ok := n.(*ast.BasicLit)
 			if !ok || lit.Kind != token.STRING {
 				return true

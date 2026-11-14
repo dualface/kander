@@ -261,7 +261,7 @@ func runServiceCoordinator(args []string, required bool) int {
 	if err = cfg.Rules.CheckTaskGroup("coordinator"); err != nil {
 		return fail(err)
 	}
-	if remote.Enabled(cfg) {
+	if remote.ServiceSelected(cfg, required) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		return runRemoteCoordinator(ctx, cfg, args)

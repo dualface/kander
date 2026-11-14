@@ -137,7 +137,7 @@ jobs:
           Assert-Rejects '1.0.0-rc1' 'stable X.Y.Z release'
           Assert-Rejects '1.70000.0' 'exceeds 65535'
 
-      - name: Build client and server
+      - name: Build kander
         if: steps.mode.outputs.build == 'true'
         env:
           VERSION: ${{ steps.mode.outputs.version }}
@@ -147,8 +147,6 @@ jobs:
             $env:CGO_ENABLED = '0'; $env:GOOS = 'windows'; $env:GOARCH = $arch
             go build -trimpath -ldflags $ldflags -o "msix-bin/$arch/kander.exe" ./cmd/kander
             if ($LASTEXITCODE -ne 0) { throw "client build failed for windows/$arch" }
-            go build -trimpath -ldflags $ldflags -o "msix-bin/$arch/kander-server.exe" ./cmd/kander-server
-            if ($LASTEXITCODE -ne 0) { throw "server build failed for windows/$arch" }
           }
 
       - name: Pack MSIX bundle

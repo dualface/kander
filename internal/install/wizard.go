@@ -204,9 +204,7 @@ func mapWizardErr(err error) error {
 
 func printResult(result Result) {
 	fmt.Println(config.Text("install.installed"))
-	if result.ServerBinary != "" {
-		fmt.Println(result.ServerBinary)
-	}
+
 	if result.DestBinary == "" {
 		fmt.Println(config.Text("install.existing_entry", result.RunBinary))
 	}

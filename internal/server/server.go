@@ -1,4 +1,4 @@
-// Package server is kander-server: the single-instance board server of the
+// Package server implements kander server: the single-instance board server of the
 // distributed architecture. It owns every board below its data directory,
 // decides task ownership with leases, and serves the /api/v1 contract of
 // internal/api. It runs no Git, stores no code, and offers no generic file or
@@ -28,8 +28,8 @@ var projectIDFor = api.ProjectID
 
 // Defaults of the lease protocol; the server decides time.
 const (
-	DefaultTTL           = 90 * time.Second
-	DefaultRenewInterval = 15 * time.Second
+	DefaultTTL           = api.DefaultTTL
+	DefaultRenewInterval = api.DefaultRenewInterval
 )
 
 // Options configure one server instance.
@@ -57,6 +57,11 @@ type Server struct {
 	log                *slog.Logger
 	clock              func() time.Time
 	version            string
+	listen             string
+	startedAt          time.Time
+	adminToken         string
+	shutdown           chan struct{}
+	shutdownOnce       sync.Once
 	secret             []byte
 	lock               *fs.ExclusiveLock
 	lockFile           *os.File
@@ -77,7 +82,7 @@ func Open(o Options) (*Server, error) {
 	}
 	s := &Server{
 		maintenance: o.maintenance, data: o.DataDir, ttl: o.TTL, renew: o.RenewInterval, log: o.Logger, clock: o.Now, version: o.Version,
-		projects: map[string]*project{}, byName: map[string]string{},
+		projects: map[string]*project{}, byName: map[string]string{}, shutdown: make(chan struct{}), startedAt: time.Now().UTC(),
 	}
 	if s.ttl <= 0 {
 		s.ttl = DefaultTTL
@@ -109,9 +114,13 @@ func Open(o Options) (*Server, error) {
 	cancel()
 	if err != nil {
 		file.Close()
-		return nil, errors.New("server data directory " + s.data + " is in use by another kander-server")
+		return nil, errors.New("server data directory " + s.data + " is in use by another kander server")
 	}
 	s.lock, s.lockFile = lock, file
+	if err := s.loadAdminToken(); err != nil {
+		s.Close()
+		return nil, err
+	}
 	if err := s.load(); err != nil {
 		s.Close()
 		return nil, err

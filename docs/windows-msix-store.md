@@ -131,4 +131,4 @@ Record each result:
 
 ## v2 service component
 
-The v2 bundle includes `kander-server.exe` beside `kander.exe` for both architectures. A hidden application entry exposes the `kander-server.exe` execution alias without adding a second Start menu tile. Packaging refuses a missing component. The server detects package identity too and refuses self-copy and self-update; Store replacement owns both files. The test bundle does not install a background service. Operators choose service lifetime and the private service data directory explicitly. Alpha release tags skip MSIX, preserving the v1 stable channel.
+The v2 bundle contains only `kander.exe` for both architectures. One application and one execution alias expose client commands and `kander server`. The Store owns replacement; packaged processes refuse self-copy and self-update. `kander server start` can detach a background process, with authenticated loopback HTTP stop and logs in the private data directory. The package installs no boot service. Alpha release tags skip MSIX, preserving the v1 stable channel.

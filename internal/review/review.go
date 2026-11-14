@@ -80,7 +80,7 @@ func runReview(args []string, required bool) (exitCode int) {
 				return 2
 			}
 		}
-		if remote.Enabled(cfg) {
+		if remote.ServiceSelected(cfg, required) {
 			session, openErr := remote.Open(context.Background(), cfg, rest[0])
 			if openErr != nil {
 				userError(openErr.Error())

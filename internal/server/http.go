@@ -22,6 +22,7 @@ const maxWait = 60 * time.Second
 // Handler returns the /api/v1 routes.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	s.adminRoutes(mux)
 	mux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSONResponse(w, http.StatusOK, api.Health{Status: "alive", Ready: s.ready.Load()})
 	})

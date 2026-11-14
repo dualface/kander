@@ -47,7 +47,7 @@ func TestStartProblemChecksInOrder(t *testing.T) {
 		wantReads int
 	}{
 		{"todo gate before config", directory, strings.Replace(startProblemCard, "Goal", "<FILL_IN>", 1), groupsOn, readFailed, "GOAL", nil, 0},
-		{"card form before config", legacy, startProblemCard, groupsOn, readFailed, "kander-server maintain --project NAME", nil, 0},
+		{"card form before config", legacy, startProblemCard, groupsOn, readFailed, "kander server maintain --project NAME", nil, 0},
 		{"task group switches", directory, startProblemCard, config.Rules{config.RuleGit: true}, nil, "GROUP", nil, 1},
 		{"config read fails last", directory, startProblemCard, nil, readFailed, "", readFailed, 1},
 		{"startable", directory, startProblemCard, groupsOn, nil, "", nil, 1},

@@ -1,4 +1,4 @@
-// Package api is the /api/v1 wire contract shared by kander-server and the
+// Package api is the /api/v1 wire contract shared by the server and the
 // kander client: resource types, request bodies, stable error codes, and the
 // protocol version handshake. It holds no behavior beyond validation helpers,
 // so both sides depend on it one way and never on each other.

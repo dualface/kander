@@ -33,8 +33,12 @@ const (
 	EnvClientHome             = "KANDER_CLIENT_HOME"
 )
 
-// ErrNotConfigured reports a client without server.url or project.name.
-var ErrNotConfigured = errors.New("server.url and project.name are not configured")
+// ErrNotConfigured reports a client without project.name.
+var ErrNotConfigured error = bindingError{}
+
+type bindingError struct{}
+
+func (bindingError) Error() string { return config.Text("remote.not_configured") }
 
 // Enabled reports whether cfg selects the server mode.
 func Enabled(cfg *config.Config) bool { return cfg != nil && cfg.Server.URL != "" }
@@ -42,11 +46,15 @@ func Enabled(cfg *config.Config) bool { return cfg != nil && cfg.Server.URL != "
 // RequireBinding validates the mandatory runtime service boundary. Storage
 // compatibility callers do not use this entrance.
 func RequireBinding(cfg *config.Config) error {
-	if !Enabled(cfg) || cfg.Project.Name == "" {
+	if cfg == nil || cfg.Project.Name == "" {
 		return ErrNotConfigured
 	}
 	return nil
 }
+
+// ServiceSelected keeps optional storage callers local while mandatory binary
+// entrances use the effective URL even without an explicit server.url.
+func ServiceSelected(cfg *config.Config, required bool) bool { return required || Enabled(cfg) }
 
 // Session is one opened project on one server.
 type Session struct {
@@ -174,7 +182,7 @@ func ProjectDir(dir string) string {
 
 // Open resolves the project of cfg and checks protocol compatibility.
 func Open(ctx context.Context, cfg *config.Config, dir string) (*Session, error) {
-	if !Enabled(cfg) || cfg.Project.Name == "" {
+	if cfg == nil || cfg.Project.Name == "" {
 		return nil, ErrNotConfigured
 	}
 	home, err := Home()
@@ -185,12 +193,18 @@ func Open(ctx context.Context, cfg *config.Config, dir string) (*Session, error)
 	if err != nil {
 		return nil, err
 	}
-	c, err := client.New(cfg.Server.URL, id)
+	c, err := client.New(config.ServerURL(cfg), id)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := c.CheckCompatible(ctx); err != nil {
+	prompted, err := prepareServer(ctx, c, cfg)
+	if err != nil {
 		return nil, err
+	}
+	if prompted {
+		fresh, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		ctx = fresh
 	}
 	repository, err := ResolveGitRemote(ctx, dir)
 	if err != nil {
@@ -200,7 +214,7 @@ func Open(ctx context.Context, cfg *config.Config, dir string) (*Session, error)
 	if err != nil {
 		return nil, err
 	}
-	return &Session{ServerURL: cfg.Server.URL, Client: c, Project: c.Project(info.ID), Info: info, Home: home}, nil
+	return &Session{ServerURL: config.ServerURL(cfg), Client: c, Project: c.Project(info.ID), Info: info, Home: home}, nil
 }
 
 // Credential is one execution's claim on this host. The worker renews it

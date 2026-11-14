@@ -41,7 +41,7 @@ func runDispositionMode(args []string, required bool) int {
 			return dispositionFailure(err)
 		}
 	}
-	if remote.Enabled(cfg) {
+	if remote.ServiceSelected(cfg, required) {
 		return runRemoteDisposition(cfg, args)
 	}
 	action, cwd, input := args[0], args[1], args[2]

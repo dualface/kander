@@ -11,11 +11,12 @@ import (
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/server"
+	"github.com/dualface/kander/internal/version"
 )
 
 func newTUIService(t *testing.T, source string) string {
 	t.Helper()
-	srv, err := server.Open(server.Options{DataDir: t.TempDir(), Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	srv, err := server.Open(server.Options{Version: version.String(), DataDir: t.TempDir(), Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if err != nil {
 		t.Fatal(err)
 	}

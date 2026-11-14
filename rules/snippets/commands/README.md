@@ -2,40 +2,48 @@
 
 Before running any `kander` command in this session, read `<rules root>/snippets/commands/README.md` once. Before the first use of a command, read its contract file.
 
-`--help` prints the Syntax block and the contract path. The final block equals `KANDER-KANBAN-RULES.md` "Command Contract".
+`--help` prints Syntax and contract path. The final block matches `KANDER-KANBAN-RULES.md` "Command Contract".
 
-Read first: `show`, `update`, `move`, `check`.
+First: `show`, `update`, `move`, `check`.
 
 | Command | Purpose | Users | Contract |
 | --- | --- | --- | --- |
-| `config` | Print effective configuration | every agent, at session start | `snippets/commands/config.md` |
-| `doctor` | Check and repair the installation | user | `snippets/commands/doctor.md` |
-| `version` | Print the version | user | `snippets/commands/version.md` |
-| `install` | Interactive installer | user | `snippets/commands/install.md` |
-| `uninstall` | Remove injected rules | user | `snippets/commands/uninstall.md` |
-| `terminal` | List and test launchers | user | `snippets/commands/terminal.md` |
-| `init` | Create or recover board | user, maintenance | `snippets/commands/init.md` |
-| `list` | List cards by state | card creator, user | `snippets/commands/list.md` |
-| `show` | Print a card and its revision | every agent on a card | `snippets/commands/show.md` |
-| `new` | Create a card in `backlog/` | card creator | `snippets/commands/new.md` |
-| `move` | Move a card between states | executing agent, orchestrator, creator | `snippets/commands/move.md` |
-| `pick` | Move a `backlog/` card to `todo/` | creator, orchestrator | `snippets/commands/pick.md` |
-| `update` | Publish a card document | executing agent, creator | `snippets/commands/update.md` |
-| `start` | Launch an executing agent | creator, orchestrator | `snippets/commands/start.md` |
-| `orchestrate` | Hand a plan to an orchestrator session | creator | `snippets/commands/orchestrate.md` |
-| `resume` | Wake or take over an executing agent | orchestrator (via notify), user | `snippets/commands/resume.md` |
-| `notify` | Dispatch items back to the executing agent | orchestrator | `snippets/commands/notify.md` |
-| `dispatch` | Inspect and end durable dispatches | orchestrator | `snippets/commands/dispatch.md` |
-| `dismiss` | Exit an agent and its container | orchestrator, user | `snippets/commands/dismiss.md` |
-| `check` | Validate cards, probe liveness, Git checks | executing agent, orchestrator | `snippets/commands/check.md` |
+| `server` | Administer the service | user | `snippets/commands/server.md` |
+| `config` | Print configuration | agents initially | `snippets/commands/config.md` |
+| `doctor` | Repair installation | user | `snippets/commands/doctor.md` |
+| `version` | Print version | user | `snippets/commands/version.md` |
+| `install` | Installer | user | `snippets/commands/install.md` |
+| `uninstall` | Uninstall rules | user | `snippets/commands/uninstall.md` |
+| `terminal` | Test launchers | user | `snippets/commands/terminal.md` |
+| `init` | Initialize board | user, maintenance | `snippets/commands/init.md` |
+| `list` | List cards by state | creator, user | `snippets/commands/list.md` |
+| `show` | Print card/revision | executors | `snippets/commands/show.md` |
+| `new` | Create backlog card | creator | `snippets/commands/new.md` |
+| `move` | Move a card | executor, orchestrator, creator | `snippets/commands/move.md` |
+| `pick` | Pick a backlog card | creator, orchestrator | `snippets/commands/pick.md` |
+| `update` | Publish document | executor, creator | `snippets/commands/update.md` |
+| `start` | Launch an executor | creator, orchestrator | `snippets/commands/start.md` |
+| `orchestrate` | Launch an orchestrator | creator | `snippets/commands/orchestrate.md` |
+| `resume` | Resume execution | orchestrator (via notify), user | `snippets/commands/resume.md` |
+| `notify` | Dispatch to executor | orchestrator | `snippets/commands/notify.md` |
+| `dispatch` | Manage dispatches | orchestrator | `snippets/commands/dispatch.md` |
+| `dismiss` | Exit agent/container | orchestrator, user | `snippets/commands/dismiss.md` |
+| `check` | Validate cards/liveness/Git | executor, orchestrator | `snippets/commands/check.md` |
 | `guard-write` | Advisory pre-write check | agent hooks | `snippets/commands/guard-write.md` |
-| `subscribe` | Stream group events | orchestrator | `snippets/commands/subscribe.md` |
-| `coordinator` | Durable group checkpoints | orchestrator | `snippets/commands/coordinator.md` |
-| `review` | Run a reviewer, manage evidence | main agent, orchestrator | `snippets/commands/review.md` |
-| `issue` | Import and triage GitHub issues | user, issue session | `snippets/commands/issue.md` |
+| `subscribe` | Stream events | orchestrator | `snippets/commands/subscribe.md` |
+| `coordinator` | Group checkpoints | orchestrator | `snippets/commands/coordinator.md` |
+| `review` | Review and manage evidence | main agent, orchestrator | `snippets/commands/review.md` |
+| `issue` | Manage GitHub issues | user, issue session | `snippets/commands/issue.md` |
 
 ```text
 kander config [--json]
+kander server start [--data DIR] [--listen ADDR] [--ttl D] [--renew D] [--foreground]
+kander server stop
+kander server restart
+kander server status [--json]
+kander server import [--data DIR] --project NAME [--remote URL] --from KANBAN_DIR
+kander server maintain [--data DIR] --project NAME [--maintenance]
+kander server projects [--data DIR] [--json]
 kander doctor
 kander version
 kander install
