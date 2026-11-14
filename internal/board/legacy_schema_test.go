@@ -118,7 +118,7 @@ func TestNewCardUsesCanonicalTokensOnly(t *testing.T) {
 		t.Fatal("template lost its placeholder")
 	}
 	for _, legacy := range legacyToken {
-		if strings.Contains(text, legacy) {
+		if strings.Contains(text, "\n- "+legacy+":") || strings.Contains(text, "\n## "+legacy+"\n") {
 			t.Fatalf("new card still carries the legacy token %s", legacy)
 		}
 	}

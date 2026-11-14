@@ -323,7 +323,7 @@ func TestIssueImportHostileIssueCannotChangeTheCard(t *testing.T) {
 		t.Fatalf("remote text changed TYPE to %q", value)
 	}
 	goal, ok := board.SectionBody(text, board.SectionGoal)
-	if !ok || !strings.HasPrefix(goal, "Resolve GitHub issue #7 in dualface/kander") {
+	if !ok || !strings.HasPrefix(goal, "- "+config.LanguageConstraint("zh-CN")+"\n\nResolve GitHub issue #7 in dualface/kander") {
 		t.Fatalf("GOAL body was replaced: %q", goal)
 	}
 	if !strings.HasPrefix(text, "# Crash") || strings.Count(text, "# Crash") != 1 {

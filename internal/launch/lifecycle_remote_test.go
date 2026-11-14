@@ -160,7 +160,11 @@ func TestRemoteStartCreatesExecutionWorktreeAndPublishesItsActualHead(t *testing
 	lifecycleGit(t, source, "branch", "v2", head)
 	bare := filepath.Join(t.TempDir(), "common.git")
 	lifecycleGit(t, source, "clone", "--bare", source, bare)
-	_, session, card, forbidden, _ := remoteLifecycleFixture(t, "managed-execution-worktree", bare)
+	cfg, session, card, forbidden, fakeRoot := remoteLifecycleFixture(t, "managed-execution-worktree", bare)
+	cfg.AgentLanguage = "ja"
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
 	root, err := session.LocalDataRoot()
 	if err != nil {
 		t.Fatal(err)
@@ -171,6 +175,8 @@ func TestRemoteStartCreatesExecutionWorktreeAndPublishesItsActualHead(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
+	command := lastCommand(t, fakeRoot)
+	assertTaskLanguage(t, command, taskFileFromCommand(t, command), "en")
 	credential, found, err := session.Credential(card.TaskID)
 	if err != nil || !found || credential.Worktree != worktree || credential.Branch == "" || credential.BaseCommit != head {
 		t.Fatalf("managed workspace: %+v %v", credential, err)

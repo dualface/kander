@@ -59,6 +59,7 @@ func TestRemoteResultLaunchUsesFrozenCardAndPreservesUnknownTaskFile(t *testing.
 		t.Fatal("recovery attempted another terminal operation")
 	}
 	command := lastCommand(t, root)
+	assertTaskLanguage(t, command, journal.Value.TaskFile, "ja")
 	if !strings.Contains(command, remote.EnvExecutionID+"="+journal.Value.ExecutionID) {
 		t.Fatal("result session inherited task authority")
 	}

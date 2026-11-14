@@ -230,6 +230,9 @@ func TestWorkerDeliversRequestsOnce(t *testing.T) {
 	if len(h.lines) != 1 || !strings.Contains(h.lines[0], r.ID) || strings.Contains(h.lines[0], "\n") {
 		t.Fatalf("one single-line delivery expected: %q", h.lines)
 	}
+	if !strings.HasSuffix(h.lines[0], "done|rejected [note])") {
+		t.Fatalf("worker appended text after the request protocol: %q", h.lines[0])
+	}
 	requests, err := b.Requests(t.Context(), c.TaskID)
 	if err != nil || requests[0].Status != api.RequestAccepted {
 		t.Fatalf("a delivered request is accepted: %+v %v", requests, err)

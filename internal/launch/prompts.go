@@ -92,12 +92,6 @@ func resolvePromptLanguage(cardText string, paths config.InstallPaths) (string, 
 	return cfg.AgentLanguage, nil
 }
 
-// PromptLanguage returns the agent communication language of a card for notify direct delivery,
-// resolved the same way as the launch prompts.
-func PromptLanguage(paths config.InstallPaths, cardText string) (string, error) {
-	return resolvePromptLanguage(cardText, paths)
-}
-
 // promptLanguageDirective renders the fixed language instruction embedded in launch prompts.
 func promptLanguageDirective(paths config.InstallPaths, language string) (string, error) {
 	return render(paths, "language.md", map[string]string{"Language": language})
@@ -238,9 +232,8 @@ func phaseSnippets(paths config.InstallPaths, refs ...snippetRef) string {
 }
 
 // headedTaskFileInstruction renders the head of kind and the one-line instruction in one call,
-// ending with the reminder to communicate in language. The reminder rides only on the delivered
-// line, never in the task file.
-func headedTaskFileInstruction(paths config.InstallPaths, kind, taskID, target string, count int, language, path string) (string, error) {
+// with the language requirement kept in the task file.
+func headedTaskFileInstruction(paths config.InstallPaths, kind, taskID, target string, count int, path string) (string, error) {
 	head, err := promptHead(paths, kind, taskID, target, count)
 	if err != nil {
 		return "", err
@@ -249,7 +242,7 @@ func headedTaskFileInstruction(paths config.InstallPaths, kind, taskID, target s
 	if err != nil {
 		return "", err
 	}
-	return config.WithLanguageReminder(line, language), nil
+	return line, nil
 }
 
 func startAgentPrompt(taskID string, paths config.InstallPaths, taskGroup, cardText string) (string, error) {

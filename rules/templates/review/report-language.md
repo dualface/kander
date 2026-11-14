@@ -1,1 +1,1 @@
-Write the report prose in the language "{{.Language}}"; keep the fixed section names, finding IDs, severity labels, claim labels, file paths, identifiers, and quoted code exactly as they are.
+Hard requirement for every conversation related to this review: communicate with the user in "{{.Language}}". Write the report prose in the language "{{.Language}}"; keep the fixed section names, finding IDs, severity labels, claim labels, file paths, identifiers, and quoted code exactly as they are.

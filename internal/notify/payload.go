@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 
 	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/process"
 )
@@ -55,15 +54,15 @@ func removeNotifyMessage(path string) error {
 	return os.Remove(filepath.Dir(path))
 }
 
-// notifyInstruction renders the line pasted into the agent pane. It ends with the reminder to
-// communicate in language; the message file it names never carries that reminder. The line
+// notifyInstruction renders the line pasted into the agent pane. The language
+// requirement belongs to the message file. The line
 // never carries the acknowledgement marker: the pane echoes it whether or not the agent
 // submitted it, so only the message file names the marker (see withAckRequest).
-func notifyInstruction(entry board.Entry, messagePath, language string) string {
+func notifyInstruction(entry board.Entry, messagePath string) string {
 	line := t(
 		"notify.kander_notify_read_first_output_exactly_then_handle_task", process.AgentPath(messagePath), entry.TaskID,
 	)
-	return config.WithLanguageReminder(line, language)
+	return line
 }
 
 func ackMarker() string {

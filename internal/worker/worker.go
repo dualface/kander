@@ -22,7 +22,6 @@ import (
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
-	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/remote"
 )
@@ -352,15 +351,6 @@ func (w *loop) deliver(ctx context.Context, log *slog.Logger, project *client.Pr
 			continue
 		}
 		line := requestLine(c.TaskID, r)
-		language := board.MetadataFrom(task.Text, board.FieldLanguage)
-		if language == "" {
-			if cfg, err := config.Load(false); err == nil {
-				language = cfg.AgentLanguage
-			}
-		}
-		if reminder := config.LanguageReminder(language); reminder != "" {
-			line += " " + reminder
-		}
 		if err := w.o.Deliver(window, session, line); err != nil {
 			log.Warn("request delivery outcome unresolved; automatic retry suppressed", "request", r.ID, "error", err)
 			continue

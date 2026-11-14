@@ -21,10 +21,10 @@ The rules root is the directory containing `KANDER-AGENTS.md`. It decides the sc
 
 ## Language Details
 
-- `agent_language` in the configuration is the language for the user: every reply, card title and body, execution record, completion report, review report, and the messages passed to `kander notify` and `kander resume`. When the value is missing or empty, use the language the user writes in.
-- A task card's `LANGUAGE` field overrides the configuration for everything about that card. `kander new` records the configured value at creation; cards without the field use the configuration.
-- Commit messages, code comments, and identifiers follow the project's own conventions.
-- `language` in the configuration only selects the interface language of the `kander` command itself.
+- `agent_language` governs all user-facing replies, card titles and bodies, execution records, completion and review reports, and `notify`/`resume` messages; if missing or empty, use the user's language.
+- Card `LANGUAGE` overrides configuration; `kander new` freezes it at creation. Cards without it use configuration. New and imported cards state this hard requirement for every related conversation. Task files supply it for old cards; delivery lines need no language suffix.
+- Commit messages, comments, and identifiers follow project conventions.
+- `language` selects only Kander's interface language.
 
 ## Optional Modules
 

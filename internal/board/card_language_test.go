@@ -37,6 +37,9 @@ func TestNewCardRecordsConfiguredAgentLanguage(t *testing.T) {
 		t.Fatalf("code=%d %s", code, stderr)
 	}
 	text := readCard(t, root, todayID("lang-config"))
+	if !strings.Contains(text, "## GOAL\n\n- "+config.LanguageConstraint("ja")+"\n") {
+		t.Fatalf("missing card language requirement: %s", text)
+	}
 	if got := MetadataFrom(text, FieldLanguage); got != "ja" {
 		t.Fatalf("configured language=%q", got)
 	}
@@ -90,6 +93,9 @@ func TestLargeCardRecordsAgentLanguage(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join(root, "backlog", todayID("lang-large"), "spec.md"))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "## GOAL\n\n- "+config.LanguageConstraint("de")+"\n") {
+		t.Fatalf("missing large card language requirement: %s", data)
 	}
 	if got := MetadataFrom(string(data), FieldLanguage); got != "de" {
 		t.Fatalf("large card language=%q", got)

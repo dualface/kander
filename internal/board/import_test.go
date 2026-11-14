@@ -82,6 +82,7 @@ func TestImportTaskPublishesOneBacklogCard(t *testing.T) {
 		"- TYPE: Bug",
 		"- SIZE: small",
 		"- LANGUAGE: zh-CN",
+		"- 本任务所有相关会话的硬性约束：使用 zh-CN 语言与用户交流。",
 		"## GOAL",
 		"## USER_DECISIONS",
 		"## EXPECTED_OUTCOME",

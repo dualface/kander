@@ -61,14 +61,14 @@ func TestStartChatHandsTheMessageWithoutBoardWrites(t *testing.T) {
 	if !strings.HasPrefix(result.Address, "tmux:") {
 		t.Fatalf("address must carry the launcher prefix for focus: %q", result.Address)
 	}
-	if *body != message {
-		t.Fatalf("task file body must be the message verbatim: %q", *body)
+	if !strings.HasSuffix(*body, "\n\n"+message) {
+		t.Fatalf("task file body must preserve the message verbatim: %q", *body)
 	}
 	data, err := os.ReadFile(*taskFile)
 	if err != nil {
 		t.Fatalf("task file handed to the agent must stay: %v", err)
 	}
-	if !strings.HasPrefix(string(data), message+"\n") {
+	if !strings.Contains(string(data), "\n\n"+message+"\n") {
 		t.Fatalf("task file content=%q", data)
 	}
 	if !strings.HasPrefix(filepath.Base(*taskFile), "kander-chat-") {

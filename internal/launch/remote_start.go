@@ -209,11 +209,7 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 			_ = removeTaskFile(taskFile)
 		}
 	}()
-	language, err := resolvePromptLanguage(original, paths)
-	if err != nil {
-		return result, err
-	}
-	prompt, err := headedTaskFileInstruction(paths, verb, task.TaskID, "", 0, language, taskFile)
+	prompt, err := headedTaskFileInstruction(paths, verb, task.TaskID, "", 0, taskFile)
 	if err != nil {
 		return result, err
 	}

@@ -46,7 +46,8 @@ func PreviewChat() (ChatPreview, error) {
 }
 
 // StartChat starts one session that owns no card and hands it the message. The
-// message is written verbatim to a temporary task file and the agent receives
+// message is preserved verbatim after the language requirement in a temporary
+// task file, and the agent receives
 // only the one-line instruction to read it. The board is never read or
 // written. A failed start closes the container it created and removes the
 // task file.
@@ -86,7 +87,11 @@ func StartChat(request ChatRequest) (result ChatResult, err error) {
 	if err != nil {
 		return result, err
 	}
-	taskFile, err := createTaskFile(request.Message, "kander-chat-", taskFileTrailer(paths))
+	directive, err := promptLanguageDirective(paths, cfg.AgentLanguage)
+	if err != nil {
+		return result, err
+	}
+	taskFile, err := createTaskFile(directive+"\n\n"+request.Message, "kander-chat-", taskFileTrailer(paths))
 	if err != nil {
 		return result, err
 	}
@@ -96,7 +101,7 @@ func StartChat(request ChatRequest) (result ChatResult, err error) {
 			_ = removeTaskFile(taskFile)
 		}
 	}()
-	prompt, err := headedTaskFileInstruction(paths, "chat", "", "", 0, cfg.AgentLanguage, taskFile)
+	prompt, err := headedTaskFileInstruction(paths, "chat", "", "", 0, taskFile)
 	if err != nil {
 		return result, err
 	}

@@ -219,11 +219,7 @@ func deliverDispatchContext(parent context.Context, root, task, id, paneOverride
 			}
 			return reconcileDispatch(root, task, id, err)
 		}
-		language, err := launch.PromptLanguage(paths, s.Text)
-		if err != nil {
-			return reconcileDispatch(root, task, id, err)
-		}
-		instruction := notifyInstruction(s.Entry, path, language)
+		instruction := notifyInstruction(s.Entry, path)
 		if err = sendDispatch(ctx, target, instruction); err != nil {
 			return reconcileDispatch(root, task, id, err)
 		}

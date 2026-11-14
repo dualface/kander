@@ -6,5 +6,6 @@
   "menu.agent_language_choice.ko": "韓国語",
   "menu.agent_language_choice.es": "スペイン語",
   "menu.agent_language_choice.fr": "フランス語",
-  "menu.agent_language_choice.de": "ドイツ語"
+  "menu.agent_language_choice.de": "ドイツ語",
+  "agent_language.task_constraint": "本タスクに関連するすべての会話の必須要件：{{.V0}} でユーザーとやり取りしてください。"
 }

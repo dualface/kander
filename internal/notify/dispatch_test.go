@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/launch"
 )
 
@@ -28,6 +27,7 @@ func durableNotifyFixture(t *testing.T, duration time.Duration) (string, string,
 }
 
 func TestPromptEchoDoesNotCountAsAcknowledgement(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	// Allow dispatch preparation and terminal probing to finish on slower CI runners.
 	root, task, d := durableNotifyFixture(t, 10*time.Second)
 	out, _, err := capture(t, func() error { return deliverDispatch(root, task, d.Input.ID, "") })
@@ -53,17 +53,12 @@ func TestPromptEchoDoesNotCountAsAcknowledgement(t *testing.T) {
 	}
 	prompt, _ := os.ReadFile(filepath.Join(root, "herdr.log.prompt"))
 	assertAckOnlyInMessageFile(t, string(prompt))
-	paths, err := config.CurrentInstallPaths()
+	messagePath := messagePathPattern.FindString(string(prompt))
+	payload, err := os.ReadFile(messagePath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	language, err := launch.PromptLanguage(paths, s.Text)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if reminder := config.LanguageReminder(language); reminder == "" || !strings.HasSuffix(strings.TrimSpace(string(prompt)), ". "+reminder) {
-		t.Fatalf("dispatch line lacks the %q reminder: %s", language, prompt)
-	}
+	assertPastedTaskLanguage(t, root, string(payload), "zh-CN")
 	_, _, err = capture(t, func() error {
 		return commandNotify(root, task, "different payload", "", "", true, 61, launch.DispatchOptions{ID: d.Input.ID})
 	})
