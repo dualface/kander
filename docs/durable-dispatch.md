@@ -124,7 +124,7 @@ Fix dispatches enforce that the executor receives exact, structured review findi
 
 ### Standard Wrap-up
 
-This is the local form, without a configured server. Binds the closed review final commit with the commit integrated into the mainline branch. `git.branch_mode` of the checkout at `cwd` (its project overlay included) selects the mainline branch: `develop` for `main-develop` (the default), `main` for `main-only`. `target_ref` must be `refs/heads/<mainline>` or `refs/remotes/origin/<mainline>`; the example uses `main-develop`:
+This is the legacy local-board form, kept for storage compatibility; every v2 client, including one on the default loopback server, uses the distributed form below. Binds the closed review final commit with the commit integrated into the mainline branch. `git.branch_mode` of the checkout at `cwd` (its project overlay included) selects the mainline branch: `develop` for `main-develop` (the default), `main` for `main-only`. `target_ref` must be `refs/heads/<mainline>` or `refs/remotes/origin/<mainline>`; the example uses `main-develop`:
 
 ```json
 {
@@ -148,7 +148,7 @@ The system verifies:
 
 ### Distributed Wrap-up
 
-With a configured server the evidence names the published final integration. Copy it from `kander coordinator integration-show <target-ref>`: `id` → `integration_id`, `request.execution_id` → `integration_execution`, `generation` → `integration_generation`, `request.commit` → `source_commit`, `observed_target` → `target_commit`, `request.target_ref` → `target_ref`. The client stores `cwd` as `project:<id>`.
+In distributed mode, which every v2 client uses (an omitted `server.url` selects the default loopback server), the evidence names the published final integration. Copy it from `kander coordinator integration-show <target-ref>`: `id` → `integration_id`, `request.execution_id` → `integration_execution`, `generation` → `integration_generation`, `request.commit` → `source_commit`, `observed_target` → `target_commit`, `request.target_ref` → `target_ref`. The client stores `cwd` as `project:<id>`.
 
 ```json
 {

@@ -116,7 +116,7 @@ kander dispatch show <task-id> <id>
 
 ### 通常の Wrap-up
 
-サーバーを設定していない場合のローカル形式です。レビュー済みの最終コミットとメインラインブランチへの統合コミットをバインドします。メインラインブランチは `cwd` のチェックアウト（プロジェクト設定を含む）の `git.branch_mode` で決まります：`main-develop`（既定）は `develop`、`main-only` は `main`。`target_ref` は `refs/heads/<メインライン>` または `refs/remotes/origin/<メインライン>` です。例は `main-develop` です：
+ストレージ互換のために残した旧ローカルボード形式です。v2 クライアントはすべて（既定の loopback サーバーを使う場合も含め）下記の分散形式を使います。レビュー済みの最終コミットとメインラインブランチへの統合コミットをバインドします。メインラインブランチは `cwd` のチェックアウト（プロジェクト設定を含む）の `git.branch_mode` で決まります：`main-develop`（既定）は `develop`、`main-only` は `main`。`target_ref` は `refs/heads/<メインライン>` または `refs/remotes/origin/<メインライン>` です。例は `main-develop` です：
 
 ```json
 {
@@ -140,7 +140,7 @@ kander dispatch show <task-id> <id>
 
 ### 分散 Wrap-up
 
-サーバーを設定している場合、証拠は公開済みの最終統合を指します。`kander coordinator integration-show <target-ref>` からコピーします：`id` → `integration_id`、`request.execution_id` → `integration_execution`、`generation` → `integration_generation`、`request.commit` → `source_commit`、`observed_target` → `target_commit`、`request.target_ref` → `target_ref`。クライアントは `cwd` を `project:<id>` として記録します。
+v2 クライアントはすべて分散モードです（`server.url` を省略すると既定の loopback サーバーを使います）。証拠は公開済みの最終統合を指します。`kander coordinator integration-show <target-ref>` からコピーします：`id` → `integration_id`、`request.execution_id` → `integration_execution`、`generation` → `integration_generation`、`request.commit` → `source_commit`、`observed_target` → `target_commit`、`request.target_ref` → `target_ref`。クライアントは `cwd` を `project:<id>` として記録します。
 
 ```json
 {

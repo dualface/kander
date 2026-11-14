@@ -116,7 +116,7 @@ kander dispatch show <task-id> <id>
 
 ### 标准收尾派发
 
-以下是未配置服务端时的本地形式。将已审查通过的最终 Commit 与已集成进主线分支的 Commit 建立绑定。主线分支由 `cwd` 所在检出（含其项目配置）的 `git.branch_mode` 决定：`main-develop`（默认）为 `develop`，`main-only` 为 `main`。`target_ref` 必须是 `refs/heads/<主线分支>` 或 `refs/remotes/origin/<主线分支>`；示例为 `main-develop`：
+以下是为存储兼容保留的旧版本地看板形式；所有 v2 客户端（包括使用默认 loopback 服务端的客户端）都使用下文的分布式形式。将已审查通过的最终 Commit 与已集成进主线分支的 Commit 建立绑定。主线分支由 `cwd` 所在检出（含其项目配置）的 `git.branch_mode` 决定：`main-develop`（默认）为 `develop`，`main-only` 为 `main`。`target_ref` 必须是 `refs/heads/<主线分支>` 或 `refs/remotes/origin/<主线分支>`；示例为 `main-develop`：
 
 ```json
 {
@@ -140,7 +140,7 @@ kander dispatch show <task-id> <id>
 
 ### 分布式收尾
 
-配置了服务端时，证据指向已发布的最终集成。从 `kander coordinator integration-show <target-ref>` 复制：`id` → `integration_id`，`request.execution_id` → `integration_execution`，`generation` → `integration_generation`，`request.commit` → `source_commit`，`observed_target` → `target_commit`，`request.target_ref` → `target_ref`。客户端把 `cwd` 写为 `project:<id>`。
+所有 v2 客户端都处于分布式模式（省略 `server.url` 时使用默认 loopback 服务端），证据指向已发布的最终集成。从 `kander coordinator integration-show <target-ref>` 复制：`id` → `integration_id`，`request.execution_id` → `integration_execution`，`generation` → `integration_generation`，`request.commit` → `source_commit`，`observed_target` → `target_commit`，`request.target_ref` → `target_ref`。客户端把 `cwd` 写为 `project:<id>`。
 
 ```json
 {
