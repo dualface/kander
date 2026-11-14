@@ -39,6 +39,8 @@ Every active task card must go through an explicit review plan before moving to 
 
 Before a card enters `done`, it must have a sealed review plan. An empty review index never implies a pass.
 
+The decisions of this section and of sections 5 and 6 (cycle rebinding, dropped required batches, recovery records, member obligations, plan extension, batch advance, view, close, and resolution) are made by the generated decision kernels `internal/statemachine/reviewobligation` and `internal/statemachine/reviewplan`. Their Lean definitions and proofs live in `formal/`; see [Formal verification](formal-verification.md). The board projects its records into kernel states and persists what the kernel accepts; the behavior described here is the same.
+
 ### Plan Management Commands
 
 ```sh

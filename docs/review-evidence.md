@@ -33,7 +33,7 @@ A run names every batch member except members that left the plan (see [Member ex
 
 The task context of a later run must equal the frozen one. The error names the published snapshot, or the run's `inputs/task-context.md` in the control directory before publication. A replay with changed inputs conflicts, and the error names both ways out: restore the inputs, or use a new run ID. A worktree other than the plan's `cwd` is refused, and the only way out is to recreate the worktree at that path.
 
-Fixes do not open a new batch. Advancing the target requires an advance file:
+Fixes do not open a new batch. Advancing the target requires an advance file (the board decides the advance through the generated plan kernel; see [Formal verification](formal-verification.md)):
 
 ```json
 {

@@ -43,6 +43,8 @@
 
 卡片移入 `done` 必须持有已封存（sealed）的审查计划。空的审查索引绝不等于审查通过。
 
+本节以及第 5、6 节中的判定（周期重绑、被删除的 required batch、恢复记录、成员义务、计划扩展、batch 目标推进、视图聚合、关闭与解决）由生成的决策核 `internal/statemachine/reviewobligation` 与 `internal/statemachine/reviewplan` 做出。它们的 Lean 定义与证明位于 `formal/`，见 [形式化验证](formal-verification.md)。看板把持久化记录投影为决策核状态，并持久化决策核接受的结果；此处描述的行为不变。
+
 ### 计划管理命令
 
 ```sh

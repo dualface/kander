@@ -14,6 +14,7 @@ The toolchain lives in `formal/`; the generated kernels live in `internal/statem
 | `formal/KanderFormal/Semantics.lean` | `eval`, `step`, `run`, `Reachable`, the generic theorems |
 | `formal/KanderFormal/Typing.lean` | The type checker `Machine.wellTyped` and its consequences |
 | `formal/KanderFormal/Obligations.lean` | The proof obligation template `SafetyCert` and shape lemmas |
+| `formal/KanderFormal/EvalLemmas.lean` | Evaluation lemmas for the binder, array, and Boolean forms |
 | `formal/KanderFormal/Machines/*.lean` | Machine definitions (the single source of each machine) |
 | `formal/KanderFormal/Proofs/*.lean` | Machine proofs |
 | `formal/KanderFormal/Registry.lean` | Registered machines, vector bounds, audited theorems |
@@ -100,6 +101,8 @@ Each machine registers, in its `Proofs/` file:
 3. `reachable_inv`, derived through `SafetyCert.reachable`: every reachable state satisfies the invariant, for every parameter value.
 4. Machine-specific safety properties as corollaries of the invariant (for the example, `reachable_sealed_passed`).
 
+A machine with arrays or binders is easier to prove through a model: Lean functions for its state and events, an encoding into a machine state, and one theorem that every event the definition accepts on an encoded state decodes to a model event and yields the encoding of the model's result (`step_enc` in `Proofs/ReviewObligationModel.lean`). `EvalLemmas.lean` turns the evaluation of `any`, `first`, `setOf`, `mapOf`, array updates, and Boolean operators into ordinary Lean values. Machine-specific theorems are then proved on the model and carried over through the encoding.
+
 `Obligations.lean` provides the shape lemmas (`conforms_bool`, `conforms_nat`, `conforms_enum`, `conforms_map_enum`, `conforms_set`, `bindArgs_nil`, `bindArgs_cons`) that turn a conforming state and event into explicit components. `Proofs/Example.lean` shows the pattern: an explicit state constructor `mk`, a `shape` lemma, and one case per event that evaluates the guard and assignments with `simp`.
 
 Proofs never use `sorry`, custom axioms, or `native_decide`. The axiom audit (`formal/Audit.lean`) checks every declaration of every `KanderFormal` module, not only the registered ones, and allows only `propext`, `Classical.choice`, and `Quot.sound`. It also fails when a registered theorem is missing or a machine registers none.
@@ -162,6 +165,39 @@ Both scripts put `~/.elan/bin` on `PATH` when it exists. To install the pinned t
 
 A DSL extension (a new type or expression) must extend `eval`, `infer`, the generic theorems, the Go emitter, the test emitter, and the vector encoding together, and keep the example machine passing. Later cards may extend the language and the generated interface but must not break them.
 
+## Review Obligations and Review Plans (M9 to M11)
+
+Two machines replace the hand-written decisions of `internal/board` for review plans, batches, and obligations:
+
+| Machine | Definition | Kernel | Scope |
+| --- | --- | --- | --- |
+| `reviewobligation` | `Machines/ReviewObligation.lean` | `internal/statemachine/reviewobligation` | One plan member: the batches of its plan as it sees them, cycle binding, rebind position, drop obligations, dropped roles, the recovery record of a reset, completion |
+| `reviewplan` | `Machines/ReviewPlan.lean` | `internal/statemachine/reviewplan` | One plan: creation, extension shape and admission, append, seal, rebind, target sync, drop, release, resolution, run, advance, view, close |
+
+Members share no obligation state: a plan event (an appended batch, a close, a drop) is one event of each member's kernel. Where a plan decision depends on members (a sealed plan admitting a batch, the seal, a close needing every cycle bound, the completion gate of the other members), the plan event takes the member kernels' query results as an argument. Integrity facts (a CAS, a view hash, a run chain, Git evidence, finding and disposition conclusions of M7 and M8) are Boolean event arguments the shell computes; the kernel computes none of them and refuses the event when one fails.
+
+Proofs, for every role list and every batch bound:
+
+| Theorem | Statement |
+| --- | --- |
+| `ReviewObligation.debt_safety` | Whenever the machine accepts a completion, the independent observer of the history finds no review owed |
+| `ReviewObligation.evidence_floor` | At a completion every debt of a drop or a planned reset is paid by a closed batch added after it arose, and the no-plan record by a review of the current cycle |
+| `ReviewObligation.release_once` | A released no-plan recovery record is not released again |
+| `ReviewObligation.reachable_inv` | Every reachable state encodes a well-formed model state related to the observer of a history that reaches it |
+| `ReviewObligation.counter_dropReleased`, `counter_releaseDrop` | The two counterexample traces of the replaced prototype refuse completion |
+| `ReviewObligation.witness_members`, `witness_twoResets`, `witness_releasedRole` | Its three witness traces complete (two members as two single-card traces) |
+| `ReviewPlan.integrity_refused` | An advance, close, or resolution with a failed integrity fact is refused and leaves the state unchanged |
+| `ReviewPlan.sealed_append`, `sealed_seal`, `sealed_admit` | A sealed plan takes a batch only when a member owes one, never with another seal |
+| `ReviewPlan.reachable_inv` | A reachable state without a plan is the initial state |
+
+The independent observer (`Proofs/ReviewObligationObserver.lean`) reads only the event history. It gives every batch an identity in the order batches were added and keeps debts with their provenance: a drop of required batches and a planned reset owe one review per role, paid only by a closed batch with an identity at least that of the debt; a reset with no plan leaves a no-plan record kept across its release, which once a role applies needs a review of the current cycle; a rebind owes a batch from the member's first open batch on. The machine instead keeps positions and floors that a drop moves to the new end of the plan; `Proofs/ReviewObligationSafety.lean` proves the two agree. The observer follows the "Changed rule" of the prototype it replaces, with production's role set: a plan requires the union of its batches' roles, and a no-plan record remembers the roles a drop took out of the plan.
+
+The hand-written shell is `internal/board/review_kernel.go`: it projects the plan, batch, closure, drop obligation, and recovery records into kernel states, runs kernel events, and persists what they accept in the existing record formats. Refinement tests check every production entrance that goes through a kernel: `internal/board/review_kernel_entrance_test.go` asserts that the projection after each write equals the kernel step from the projection before, and that a refused write leaves it unchanged; `internal/board/review_kernel_refinement_test.go` walks every kernel state within a depth breadth first and drives the shell functions to each, comparing the projection after every step (`KANDER_OBLIGATION_REFINEMENT_FULL=1` raises the depth from 6 to 8).
+
+The differential vectors of both machines use an explicit alphabet and depth 5: the full alphabet of every Boolean fact combination is too large to walk, and depth 5 keeps the replay within a few seconds.
+
+Background: the TLA+ and Python prototype `experiments/review-obligations/` explored these obligations with bounded model checking. It is replaced by the machines above and removed; its counterexample and witness traces are Lean theorems now.
+
 ## v2 State Machine Inventory
 
 M1 to M14 are the machines of `20261103-state-machine-simplification-audit-task`. Group A is `20261114-formal-kernel-foundation-group`; groups B, C, and D are created after group A integrates into `v2`.
@@ -177,9 +213,9 @@ M1 to M14 are the machines of `20261103-state-machine-simplification-audit-task`
 | M6 | Review run execution and per-card publication | C |
 | M7 | Report interpretation and legacy mapping | C |
 | M8 | Finding assignment, author disposition, withdrawal | C |
-| M9 | Review batch target advance, aggregation, closure | A (`20261114-formal-review-obligations-task`) |
-| M10 | Review plan, cycle binding, unplanned batch admission | A (`20261114-formal-review-obligations-task`) |
-| M11 | Review obligations: new cycle, drop, reset | A (`20261114-formal-review-obligations-task`) |
+| M9 | Review batch target advance, aggregation, closure | Proved and generated: `reviewplan` (A, `20261114-formal-review-obligations-task`) |
+| M10 | Review plan, cycle binding, unplanned batch admission | Proved and generated: `reviewplan`, `reviewobligation` (A, `20261114-formal-review-obligations-task`) |
+| M11 | Review obligations: new cycle, drop, reset | Proved and generated: `reviewobligation` (A, `20261114-formal-review-obligations-task`) |
 | M12 | Coordinator authority, mirror, recovery, Git witnesses | C |
 | M13 | Board multi-file transactions, revisions, form migration recovery | Assumption, not proved |
 | M14 | Archive evidence cleanup | Assumption, not proved |
