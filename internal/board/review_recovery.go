@@ -41,10 +41,6 @@ func planRequiredRoles(p ReviewPlan) []string {
 	return slices.Sorted(maps.Keys(roles))
 }
 
-func unionRoles(lists ...[]string) []string {
-	return slices.Compact(slices.Sorted(slices.Values(slices.Concat(lists...))))
-}
-
 // stageRecoveryReview runs a reset through the member's kernel and writes the
 // record it leaves: one with no role and no plan for a member with no plan, and
 // one for the whole plan as it stands for a member with a plan, with the roles of
