@@ -6,5 +6,6 @@
   "menu.agent_language_choice.ko": "Korean",
   "menu.agent_language_choice.es": "Spanish",
   "menu.agent_language_choice.fr": "French",
-  "menu.agent_language_choice.de": "German"
+  "menu.agent_language_choice.de": "German",
+  "agent_language.task_constraint": "Hard requirement for every conversation related to this task: communicate with the user in \"{{.V0}}\"."
 }

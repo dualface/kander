@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/dualface/kander/internal/config"
 )
 
 const fakeDevin = `#!/bin/sh
@@ -66,17 +64,13 @@ func TestDevinReviewUsesArgvInstructionWithoutDevinHome(t *testing.T) {
 	if stdin := readFile(t, h.stdinLog); strings.Contains(stdin, "task file at ") {
 		t.Fatalf("stdin should not carry the instruction, got %q", stdin)
 	}
-	language, langErr := reportLanguageFromConfig()
-	if langErr != nil {
-		t.Fatal(langErr)
-	}
 	instruction := ""
 	for _, arg := range argv {
 		if strings.Contains(arg, "task file at ") {
 			instruction = arg
 		}
 	}
-	if reminder := config.LanguageReminder(language); reminder == "" || !strings.HasSuffix(instruction, "follow it exactly. "+reminder) {
-		t.Fatalf("argv instruction lacks the %q reminder: %q", language, instruction)
+	if !strings.HasSuffix(instruction, "follow it exactly.") {
+		t.Fatalf("argv instruction carries extra text: %q", instruction)
 	}
 }

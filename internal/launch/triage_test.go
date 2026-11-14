@@ -131,7 +131,7 @@ func TestStartTriageLaunchesBackgroundSessionWithoutBoardWrites(t *testing.T) {
 	if !strings.Contains(lastCommand(t, root), "claude") {
 		t.Fatalf("command=%s", lastCommand(t, root))
 	}
-	assertLanguageReminder(t, lastCommand(t, root), taskFile, configuredAgentLanguage(t))
+	assertTaskLanguage(t, lastCommand(t, root), taskFile, configuredAgentLanguage(t))
 
 	for _, state := range board.States {
 		entries, err := os.ReadDir(filepath.Join(root, state))
@@ -230,7 +230,7 @@ func TestTriagePromptResolvesTheIssueRulesPathFromScope(t *testing.T) {
 	for _, lang := range []string{"cn", "en", "ja"} {
 		t.Run(lang, func(t *testing.T) {
 			t.Setenv(config.EnvLang, lang)
-			body, _, err := triageAgentPrompt(request, paths)
+			body, err := triageAgentPrompt(request, paths)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -265,14 +265,14 @@ func TestTriagePromptImportsOnlyWithoutABoundCard(t *testing.T) {
 	for _, lang := range []string{"cn", "en", "ja"} {
 		t.Run(lang, func(t *testing.T) {
 			t.Setenv(config.EnvLang, lang)
-			body, _, err := triageAgentPrompt(unbound, paths)
+			body, err := triageAgentPrompt(unbound, paths)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if !strings.Contains(body, "issue import 42") {
 				t.Fatalf("unbound prompt is missing the import instruction:\n%s", body)
 			}
-			body, _, err = triageAgentPrompt(bound, paths)
+			body, err = triageAgentPrompt(bound, paths)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -377,7 +377,7 @@ func TestResultSessionPromptAndLaunchCleanup(t *testing.T) {
 					t.Fatal("failed start retained task file")
 				}
 			} else {
-				assertLanguageReminder(t, lastCommand(t, root), taskFile, "ja")
+				assertTaskLanguage(t, lastCommand(t, root), taskFile, "ja")
 			}
 			after, _ := os.ReadFile(filepath.Join(dir, "spec.md"))
 			if string(after) != spec {

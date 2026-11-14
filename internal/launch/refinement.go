@@ -9,21 +9,21 @@ import (
 
 // refinementAgentPrompt grants only contract editing. Read the live card so its
 // frozen language takes precedence over the current configuration.
-func refinementAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (string, string, error) {
+func refinementAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (string, error) {
 	card, err := board.TaskPayload(request.Root, request.CardID)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 	if card.State != "backlog" {
-		return "", "", issue.NewError(issue.ErrorInvalidQuery, "card", issue.Sanitize(request.CardID))
+		return "", issue.NewError(issue.ErrorInvalidQuery, "card", issue.Sanitize(request.CardID))
 	}
 	language, err := resolvePromptLanguage(card.Document, paths)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 	preamble, err := rulesAndLanguage(paths, language)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 	body, err := render(paths, "refine.md", map[string]any{
 		"Preamble": preamble, "CardID": request.CardID,
@@ -32,5 +32,5 @@ func refinementAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths
 		"MarkdownPath": process.AgentPath(request.MarkdownPath),
 		"Command":      commandName(paths),
 	})
-	return body, language, err
+	return body, err
 }

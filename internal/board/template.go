@@ -4,6 +4,8 @@ import (
 	"embed"
 	"strings"
 	"text/template"
+
+	"github.com/dualface/kander/internal/config"
 )
 
 //go:embed templates/*.md.tmpl
@@ -35,24 +37,26 @@ type templateBodies struct {
 }
 
 type templateData struct {
-	Title       string
-	Type        string
-	Size        string
-	Language    string
-	Created     string
-	Placeholder string
-	F           templateFields
-	S           templateSections
-	Bodies      templateBodies
+	Title              string
+	Type               string
+	Size               string
+	Language           string
+	LanguageConstraint string
+	Created            string
+	Placeholder        string
+	F                  templateFields
+	S                  templateSections
+	Bodies             templateBodies
 }
 
 func newTemplateData(title, taskType, language, created string) templateData {
 	return templateData{
-		Title:       title,
-		Type:        taskType,
-		Language:    language,
-		Created:     created,
-		Placeholder: Placeholder,
+		Title:              title,
+		Type:               taskType,
+		Language:           language,
+		LanguageConstraint: config.LanguageConstraint(language),
+		Created:            created,
+		Placeholder:        Placeholder,
 		F: templateFields{
 			Type: FieldType, Size: FieldSize, TaskGroup: FieldTaskGroup, Language: FieldLanguage, CreatedAt: FieldCreatedAt,
 			Owner: FieldOwner, Session: FieldSession, Window: FieldWindow,

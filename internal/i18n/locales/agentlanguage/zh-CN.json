@@ -6,5 +6,6 @@
   "menu.agent_language_choice.ko": "韩语",
   "menu.agent_language_choice.es": "西班牙语",
   "menu.agent_language_choice.fr": "法语",
-  "menu.agent_language_choice.de": "德语"
+  "menu.agent_language_choice.de": "德语",
+  "agent_language.task_constraint": "本任务所有相关会话的硬性约束：使用 {{.V0}} 语言与用户交流。"
 }

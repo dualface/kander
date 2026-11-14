@@ -15,7 +15,7 @@ When `rules.task_intake=true`, read `KANDER-TASK-INTAKE-RULES.md` before the fir
 
 ## Language
 
-`agent_language` in the configuration is the language for the user: every reply, card, record, report, and the messages passed to `kander notify` and `kander resume`; when it is missing or empty, use the language the user writes in. A task card's `LANGUAGE` field overrides it for everything about that card; a card without the field uses the configuration. Commit messages, code comments, and identifiers follow the project's own conventions.
+`agent_language` in the configuration is the language for the user: every reply, card, record, report, and the messages passed to `kander notify` and `kander resume`; when it is missing or empty, use the language the user writes in. The language requirement is binding for every conversation related to the task, including resumed sessions and notifications; it does not need to be repeated on each delivered instruction. A task card's `LANGUAGE` field overrides it for everything about that card; a card without the field uses the configuration. Commit messages, code comments, and identifiers follow the project's own conventions.
 
 ## Always Binding
 

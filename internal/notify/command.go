@@ -107,11 +107,7 @@ func commandNotifyLegacy(root, taskID, message, messageFile, pane string, messag
 			return err
 		}
 		messagePath = path
-		language, err := launch.PromptLanguage(paths, text)
-		if err != nil {
-			return err
-		}
-		instruction := notifyInstruction(entry, messagePath, language)
+		instruction := notifyInstruction(entry, messagePath)
 		var confirmed bool
 		confirmed, acknowledgementDetail, err = directNotify(target, instruction, marker, target.Timeout)
 		directChannel = directChannelName(target.Backend)

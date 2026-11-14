@@ -24,6 +24,8 @@ Read this file before creating, completing, updating, or reviewing a card. It de
 
 ## GOAL
 
+- Hard requirement for every conversation related to this task: communicate with the user in "<LANGUAGE>".
+
 <what to change and why>
 
 ## USER_DECISIONS
@@ -73,6 +75,7 @@ Read this file before creating, completing, updating, or reviewing a card. It de
 
 ### Contract and Records
 
+- Preserve the generated hard language requirement in `GOAL`. It applies to every conversation related to the task, derives from `LANGUAGE`, and is not a second language setting. Old cards without the sentence remain valid; their task files supply the requirement.
 - `LANGUAGE` is the language for everything written for the user about this card: title and body, records, reports, review reports, and the messages passed to `kander notify` and `kander resume`. `kander new` fills it from the configured `agent_language` or `--language <value>`; it is fixed at creation and overrides the configuration, and an old card without it falls back to the configuration per `KANDER-AGENTS.md` "Language".
 - Manual claiming and `start` write `OWNER`, `STARTED_AT`, `SESSION`, and `WINDOW` per `KANDER-KANBAN-RULES.md` "Controlled Documents and Recovery"; manually claimed cards leave `SESSION` and `WINDOW` empty. Update `TASK_BRANCH` through the controlled body entrance (`N/A` without a branch). The command fills `FINISHED_AT` on entering `done/`, and the move options fill the result atomically on entering `done/`, `archived/`, or `trash/`.
 - Once a card enters `todo/`, `GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `OUT_OF_SCOPE`, `SIZE`, and task group relations are frozen; changing any needs an explicit user decision first. One exception: while the card is in `working/` or `review/`, the executing agent ticks acceptance criteria through ordinary `update`, without a decision file. A tick toggles only the line-start marker of a top-level item between `- [ ] ` and `- [x] `; any other change, including an uppercase `[X]` or an indented item, is a contract change. `THREAT_MODEL` is part of the review task context but not frozen; refine it through ordinary `update` and note the change in `DISCUSSION`.

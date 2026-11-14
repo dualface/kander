@@ -114,11 +114,7 @@ func StartOrchestrator(request OrchestrateRequest) (result OrchestrateResult, er
 			_ = removeTaskFile(taskFile)
 		}
 	}()
-	language, err := orchestrateLanguage(texts, paths)
-	if err != nil {
-		return result, err
-	}
-	prompt, err := headedTaskFileInstruction(paths, "orchestrate", "", "", len(tasks), language, taskFile)
+	prompt, err := headedTaskFileInstruction(paths, "orchestrate", "", "", len(tasks), taskFile)
 	if err != nil {
 		return result, err
 	}

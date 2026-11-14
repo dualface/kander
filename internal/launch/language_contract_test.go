@@ -11,19 +11,16 @@ import (
 	"github.com/dualface/kander/internal/config"
 )
 
-// assertLanguageReminder checks that the delivered command carries the reminder for language right
-// after the task-file instruction, and that the task file on disk does not.
-func assertLanguageReminder(t *testing.T, command, taskFile, language string) {
+// assertTaskLanguage checks that the language contract travels in the task file,
+// while the delivered command ends at the task-file instruction.
+func assertTaskLanguage(t *testing.T, command, taskFile, language string) {
 	t.Helper()
-	reminder := config.LanguageReminder(language)
-	if reminder == "" {
-		t.Fatalf("no reminder for %q", language)
+	if strings.Contains(command, "follow it exactly. ") {
+		t.Fatalf("delivered line carries a suffix: %s", command)
 	}
-	if !strings.Contains(command, "follow it exactly. "+reminder) {
-		t.Fatalf("delivered line lacks the %q reminder: %s", language, command)
-	}
-	if body := mustRead(t, taskFile); strings.Contains(body, reminder) {
-		t.Fatalf("task file carries the reminder:\n%s", body)
+	body := mustRead(t, taskFile)
+	if !strings.Contains(body, `Hard requirement for every conversation related to this task: communicate with the user in "`+language+`".`) {
+		t.Fatalf("task file lacks the %q language contract:\n%s", language, body)
 	}
 }
 
@@ -37,28 +34,20 @@ func configuredAgentLanguage(t *testing.T) string {
 	return cfg.AgentLanguage
 }
 
-func TestHeadedTaskFileInstructionEndsWithLanguageReminder(t *testing.T) {
+func TestHeadedTaskFileInstructionEndsAtFileProtocol(t *testing.T) {
 	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(t.TempDir(), "rules")}
 	for _, kind := range []string{"start", "resume", "takeover", "orchestrate", "triage", "refine", "result", "chat"} {
-		plain, err := headedTaskFileInstruction(paths, kind, "20260101-a-task", "dualface/kander#42", 2, "", "/tmp/task.md")
+		line, err := headedTaskFileInstruction(paths, kind, "20260101-a-task", "dualface/kander#42", 2, "/tmp/task.md")
 		if err != nil {
 			t.Fatal(err)
 		}
-		line, err := headedTaskFileInstruction(paths, kind, "20260101-a-task", "dualface/kander#42", 2, "ja", "/tmp/task.md")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if line != plain+" "+config.LanguageReminder("ja") || strings.ContainsAny(line, "\r\n") {
+		if !strings.HasSuffix(line, "follow it exactly.") || strings.ContainsAny(line, "\r\n") {
 			t.Fatalf("%s line=%q", kind, line)
-		}
-		invalid, err := headedTaskFileInstruction(paths, kind, "20260101-a-task", "dualface/kander#42", 2, "ja\x1b[0m", "/tmp/task.md")
-		if err != nil || invalid != plain {
-			t.Fatalf("%s: an invalid language must leave the line unchanged: %q %v", kind, invalid, err)
 		}
 	}
 }
 
-func TestCardLaunchesDeliverTheCardLanguageReminder(t *testing.T) {
+func TestCardLaunchesCarryTheCardLanguageContract(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("tmux fakes are POSIX")
 	}
@@ -72,7 +61,7 @@ func TestCardLaunchesDeliverTheCardLanguageReminder(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd := lastCommand(t, root)
-	assertLanguageReminder(t, cmd, taskFileFromCommand(t, cmd), "ko")
+	assertTaskLanguage(t, cmd, taskFileFromCommand(t, cmd), "ko")
 
 	working := filepath.Join(root, "working", filepath.Base(filepath.Dir(path)), "spec.md")
 	setBranch(t, working)
@@ -85,7 +74,7 @@ func TestCardLaunchesDeliverTheCardLanguageReminder(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd = lastCommand(t, root)
-	assertLanguageReminder(t, cmd, taskFileFromCommand(t, cmd), "ko")
+	assertTaskLanguage(t, cmd, taskFileFromCommand(t, cmd), "ko")
 
 	reviewed := filepath.Join(root, "review", filepath.Base(filepath.Dir(path)), "spec.md")
 	snapshot, err := board.ReadSnapshot(root, taskID)
@@ -96,14 +85,14 @@ func TestCardLaunchesDeliverTheCardLanguageReminder(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd = lastCommand(t, root)
-	assertLanguageReminder(t, cmd, taskFileFromCommand(t, cmd), "ko")
+	assertTaskLanguage(t, cmd, taskFileFromCommand(t, cmd), "ko")
 
 	agent := "grok"
 	if _, _, err := capture(t, func() error { return commandResume(root, &agent, "", taskID, "继续", "", true, 61) }); err != nil {
 		t.Fatal(err)
 	}
 	cmd = lastCommand(t, root)
-	assertLanguageReminder(t, cmd, taskFileFromCommand(t, cmd), "ko")
+	assertTaskLanguage(t, cmd, taskFileFromCommand(t, cmd), "ko")
 }
 
 func TestInvalidCardLanguageDeliversNoReminder(t *testing.T) {
@@ -132,7 +121,7 @@ func TestOrchestrateLanguageFallsBackToConfigWhenCardsDisagree(t *testing.T) {
 	}
 }
 
-func TestStartOrchestratorDeliversTheConfiguredReminderForMixedCards(t *testing.T) {
+func TestStartOrchestratorCarriesConfiguredLanguageForMixedCards(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("tmux fakes are POSIX")
 	}
@@ -144,10 +133,10 @@ func TestStartOrchestratorDeliversTheConfiguredReminderForMixedCards(t *testing.
 		t.Fatal(err)
 	}
 	cmd := lastCommand(t, root)
-	assertLanguageReminder(t, cmd, taskFileFromCommand(t, cmd), configuredAgentLanguage(t))
+	assertTaskLanguage(t, cmd, taskFileFromCommand(t, cmd), configuredAgentLanguage(t))
 }
 
-func TestStartChatDeliversTheConfiguredReminder(t *testing.T) {
+func TestStartChatCarriesTheConfiguredLanguageContract(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("tmux fakes are POSIX")
 	}
@@ -165,5 +154,5 @@ func TestStartChatDeliversTheConfiguredReminder(t *testing.T) {
 	cmd := lastCommand(t, root)
 	taskFile := taskFileFromCommand(t, cmd)
 	t.Cleanup(func() { _ = os.Remove(taskFile) })
-	assertLanguageReminder(t, cmd, taskFile, "fr")
+	assertTaskLanguage(t, cmd, taskFile, "fr")
 }
