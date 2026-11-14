@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/internal/statemachine/executionledger"
 )
 
 // ErrExecutionSuperseded reports that a takeover, an adoption or a reclaim ended
@@ -304,6 +305,16 @@ func requireIdentityWrite(tx *Transaction, s Snapshot, v *Version) error {
 	return tx.requireFullExecution(s)
 }
 
+// fencedLedger projects the card for a fenced entrance and names the record
+// the cursor v is bound to.
+func fencedLedger(s Snapshot, l *executionLedger, v *Version) (*ledgerKernel, uint64, error) {
+	k, err := projectLedger(s, *l)
+	if err != nil {
+		return nil, 0, err
+	}
+	return k, k.fence(*l, s, v.fence), nil
+}
+
 func applyExecResolved(text, resolved string) (string, error) {
 	if resolved == "" {
 		return text, nil
@@ -323,6 +334,13 @@ func RecordExecutionWindowWithTransaction(root string, entry Entry, window, reso
 		}
 		if MetadataFrom(s.Text, FieldWindow) == window {
 			return text, nil
+		}
+		k, fence, err := fencedLedger(s, l, entry.Version)
+		if err != nil {
+			return "", err
+		}
+		if !k.step(executionledger.Field{Fence: fence, Text: true}) {
+			return "", coordinatorError("start success binding")
 		}
 		updated := *l.current
 		updated.Window = window
@@ -351,6 +369,13 @@ func RecordExecutionSessionWithTransaction(ctx context.Context, root string, ent
 		if err != nil {
 			return "", err
 		}
+		k, fence, err := fencedLedger(s, l, entry.Version)
+		if err != nil {
+			return "", err
+		}
+		if !k.step(executionledger.Field{Fence: fence, Text: true}) {
+			return "", coordinatorError("start success binding")
+		}
 		updated := *l.current
 		updated.Session = after
 		if err = putCurrentRecord(tx, s, l, updated); err != nil {
@@ -372,6 +397,13 @@ func RecordExecutionProcessWithTransaction(root string, entry Entry, process Exe
 			return "", err
 		} else if ok {
 			return "", coordinatorError("immutable start original")
+		}
+		k, fence, err := fencedLedger(s, l, entry.Version)
+		if err != nil {
+			return "", err
+		}
+		if !k.step(executionledger.Field{Fence: fence, Text: false}) {
+			return "", coordinatorError("start success binding")
 		}
 		if err := tx.PutGroup(taskStartGroup, path, reviewJSON(process)); err != nil {
 			return "", err
@@ -407,11 +439,21 @@ func BeginTakeoverWithTransaction(root string, entry Entry, in TakeoverInput, ex
 	}
 	result, err := executionWriteGuarded(context.Background(), root, entry, func(tx *Transaction, s Snapshot, l *executionLedger) (string, error) {
 		cur := l.current
-		if cur.ExecutionTerminal() {
-			return "", coordinatorError("start success binding")
+		k, kfence, err := fencedLedger(s, l, v)
+		if err != nil {
+			return "", err
 		}
-		if cur.StartUnfinished() && strings.TrimSpace(in.Decision) == "" {
-			return "", kanbanError("board.takeover_decision_required", l.task, cur.Status)
+		decided := strings.TrimSpace(in.Decision) != ""
+		// The refusals that do not depend on the new card text come first, before
+		// any dispatch is staged.
+		var refusal error
+		if cur.ExecutionTerminal() {
+			refusal = coordinatorError("start success binding")
+		} else if cur.StartUnfinished() && !decided {
+			refusal = kanbanError("board.takeover_decision_required", l.task, cur.Status)
+		}
+		if probe := *k; refusal != nil && !probe.step(executionledger.Takeover{Fence: kfence, Decision: decided}) {
+			return "", refusal
 		}
 		source, released, err := stageTakeoverDispatch(tx, s, in.Dispatch, in.Decision)
 		if err != nil {
@@ -427,6 +469,9 @@ func BeginTakeoverWithTransaction(root string, entry Entry, in TakeoverInput, ex
 		revision := s.Revision
 		if text != s.Text {
 			revision++
+		}
+		if !k.step(executionledger.Takeover{Fence: kfence, Decision: decided, Changes: text != s.Text}) {
+			return "", firstError(refusal, coordinatorError("start success binding"))
 		}
 		if err = storeLegacyTakeover(tx, s, l); err != nil {
 			return "", err
@@ -469,7 +514,11 @@ func UnresolveExecutionWithTransaction(root string, entry Entry, window, reason 
 	}
 	return executionWrite(context.Background(), root, entry, func(tx *Transaction, s Snapshot, l *executionLedger) (string, error) {
 		cur := l.current
-		if !v.fence.launcher || cur.Status != ExecutionPending || v.revision < cur.Revision {
+		k, fence, err := fencedLedger(s, l, v)
+		if err != nil {
+			return "", err
+		}
+		if !k.step(executionledger.Unresolve{Fence: fence, At: v.revision, Launcher: v.fence.launcher, Window: window != "" && window != MetadataFrom(s.Text, FieldWindow)}) {
 			return "", coordinatorError("start unresolved binding")
 		}
 		text, revision := s.Text, s.Revision
@@ -522,14 +571,24 @@ func AdoptExecutionWithTransaction(root string, observed Snapshot, decision stri
 	owner, session, window := cardExecutionFacts(observed)
 	return executionWrite(context.Background(), root, observed.Entry, func(tx *Transaction, s Snapshot, l *executionLedger) (string, error) {
 		cur := l.current
-		if !cur.StartUnfinished() {
-			return "", kanbanError("board.adopt_needs_unfinished_start", l.task, cur.Status)
+		adoptable := CheckAdoptable(s, *cur)
+		o, ses, w := cardExecutionFacts(s)
+		same := o == owner && ses == session && w == window
+		var refusal error
+		switch {
+		case !cur.StartUnfinished():
+			refusal = kanbanError("board.adopt_needs_unfinished_start", l.task, cur.Status)
+		case adoptable != nil:
+			refusal = adoptable
+		case !same:
+			refusal = coordinatorError("start adoption binding")
 		}
-		if err := CheckAdoptable(s, *cur); err != nil {
+		k, fence, err := fencedLedger(s, l, observed.Entry.Version)
+		if err != nil {
 			return "", err
 		}
-		if o, ses, w := cardExecutionFacts(s); o != owner || ses != session || w != window {
-			return "", coordinatorError("start adoption binding")
+		if !k.step(executionledger.Adopt{Fence: fence, Decision: true, Identity: adoptable == nil && same}) {
+			return "", firstError(refusal, coordinatorError("start adoption binding"))
 		}
 		r := *cur
 		r.Schema, r.Status, r.FinishedRevision, r.Failure = executionSchema, ExecutionRunning, s.Revision, ""
@@ -545,9 +604,9 @@ func AdoptExecutionWithTransaction(root string, observed Snapshot, decision stri
 // ConfirmTaskStart records launcher success. The card stays unchanged, so a fast
 // executor keeps its revision. The cursor's fence stops a stale launcher.
 func ConfirmTaskStartWithTransaction(root string, entry Entry, extensions ...TransactionExtension) error {
-	return confirmExecution(root, entry, func(tx *Transaction, s Snapshot, l *executionLedger) (string, error) {
+	return confirmExecution(root, entry, false, func(Snapshot, *executionLedger) bool { return true }, func(tx *Transaction, s Snapshot, l *executionLedger) (string, error) {
 		return "", finishConfirm(tx, s, s.Text, s.Revision, l)
-	}, func(l *executionLedger) error { return nil }, extensions...)
+	}, extensions...)
 }
 
 // ConfirmTaskStartSession replaces a launch-time provisional session and records
@@ -557,37 +616,40 @@ func ConfirmTaskStartSessionWithTransaction(root string, entry Entry, before, af
 	if before == "" || after == "" || before == after {
 		return coordinatorError("start discovered session binding")
 	}
-	return confirmExecution(root, entry, func(tx *Transaction, s Snapshot, l *executionLedger) (string, error) {
-		if MetadataFrom(s.Text, FieldSession) != before || l.current.Session != before {
-			return "", coordinatorError("start success binding")
+	return confirmExecution(root, entry, true, func(s Snapshot, l *executionLedger) bool {
+		if l.current.Status == ExecutionRunning {
+			return l.current.Session == after
 		}
+		return MetadataFrom(s.Text, FieldSession) == before && l.current.Session == before
+	}, func(tx *Transaction, s Snapshot, l *executionLedger) (string, error) {
 		text, err := setMetadata(s.Text, FieldSession, after)
 		if err != nil {
 			return "", err
 		}
 		l.current.Session = after
 		return text, finishConfirm(tx, s, text, s.Revision+1, l)
-	}, func(l *executionLedger) error {
-		if l.current.Session != after {
-			return coordinatorError("start success binding")
-		}
-		return nil
 	}, extensions...)
 }
 
 // confirmExecution runs a confirmation. An already running record of this fence
-// is a retry: replay checks it and writes nothing.
-func confirmExecution(root string, entry Entry, confirm func(*Transaction, Snapshot, *executionLedger) (string, error), replay func(*executionLedger) error, extensions ...TransactionExtension) error {
+// is a retry that writes nothing. matches reports whether the card and the record
+// show the identity the confirmation names, for a pending record or a retry;
+// session marks a confirmation that writes SESSION.
+func confirmExecution(root string, entry Entry, session bool, matches func(Snapshot, *executionLedger) bool, confirm func(*Transaction, Snapshot, *executionLedger) (string, error), extensions ...TransactionExtension) error {
 	if entry.Version == nil {
 		return coordinatorError("start cursor missing")
 	}
 	_, err := executionWrite(context.Background(), root, entry, func(tx *Transaction, s Snapshot, l *executionLedger) (string, error) {
-		cur := l.current
-		if cur.ExecutionTerminal() || cur.Status == ExecutionUnresolved || cur.Owner != MetadataFrom(s.Text, FieldOwner) {
+		k, fence, err := fencedLedger(s, l, entry.Version)
+		if err != nil {
+			return "", err
+		}
+		match := l.current.Owner == MetadataFrom(s.Text, FieldOwner) && matches(s, l)
+		if !k.step(executionledger.Confirm{Fence: fence, Match: match, Session: session}) {
 			return "", coordinatorError("start success binding")
 		}
-		if cur.Status == ExecutionRunning {
-			return "", replay(l)
+		if l.current.Status == ExecutionRunning {
+			return "", nil
 		}
 		return confirm(tx, s, l)
 	}, extensions...)

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/internal/statemachine/executionledger"
 )
 
 // taskStartGroup keeps its historical name: the execution ledger extends the
@@ -591,11 +592,32 @@ func stageExecutionMove(tx *Transaction, s Snapshot, target, text string, o Move
 			}
 		}
 	}
+	k, err := projectLedger(s, l)
+	if err != nil {
+		return err
+	}
+	var refusal error
 	if s.Entry.State != "review" && l.current != nil && len(l.chain) > l.synthesized && (!l.current.ExecutionTerminal() || s.Revision < l.current.FinishedRevision) {
-		return coordinatorError("unfinished or confirmed prior start")
+		refusal = coordinatorError("unfinished or confirmed prior start")
 	}
 	if r.Kind == ExecutionStart && r.Owner == "" {
-		return coordinatorError("start owner required")
+		refusal = firstError(refusal, coordinatorError("start owner required"))
+	}
+	var event executionledger.Event
+	switch {
+	case o.start != nil:
+		event = executionledger.Start{At: s.Revision, Chain: refusal == nil}
+	case s.Entry.State == "review":
+		event = executionledger.Reclaim{At: s.Revision, Decision: handoff != nil && strings.TrimSpace(handoff.Decision) != "", Proof: handoff != nil}
+	default:
+		released, err := cycleReleased(s)
+		if err != nil {
+			return err
+		}
+		event = executionledger.Claim{At: s.Revision, Owner: o.Owner != "", Decision: strings.TrimSpace(o.Decision) != "", Released: released, Chain: refusal == nil}
+	}
+	if !k.step(event) {
+		return firstError(refusal, coordinatorError("execution claim refused"))
 	}
 	if err := putRecordOriginal(tx, r, name); err != nil {
 		return err
@@ -618,8 +640,36 @@ func stageExecutionRollback(tx *Transaction, s Snapshot, text, state string, fen
 	if cur == nil || !fence.launcher || cur.ID != fence.RecordID || cur.Status != ExecutionPending {
 		return stageWindowRestore(tx, s, text, &l)
 	}
+	k, err := projectLedger(s, l)
+	if err != nil {
+		return err
+	}
+	var refusal error
 	if cur.Cycle != planCycle(s) || s.Revision < cur.Revision || cur.Kind == ExecutionStart && state != "todo" {
-		return coordinatorError("start rollback binding")
+		refusal = coordinatorError("start rollback binding")
+	}
+	event := executionledger.Rollback{Fence: k.fence(l, s, fence), At: s.Revision, Launcher: fence.launcher, ToTodo: state == "todo"}
+	var replaced ExecutionRecord
+	var status string
+	if cur.Kind == ExecutionTakeover {
+		var ok bool
+		if replaced, ok, err = readRecordJSON(tx, executionPath(s.Entry.TaskID, cur.PreviousID, statusOriginal(ExecutionHandedOff))); err != nil {
+			return err
+		}
+		for _, link := range slices.Backward(l.chain) {
+			if link.Kind == TransitionHandoff && link.ToRecord == cur.ID {
+				status = link.FromStatus
+				break
+			}
+		}
+		if !ok || status == "" {
+			refusal = firstError(refusal, coordinatorError("start rollback binding"))
+		} else {
+			event.RestoredKind, event.RestoredStatus = kernelKinds[replaced.Kind], kernelStatuses[status]
+		}
+	}
+	if !k.step(event) {
+		return firstError(refusal, coordinatorError("start rollback binding"))
 	}
 	rolled := *cur
 	rolled.Schema, rolled.Status, rolled.FinishedRevision = executionSchema, ExecutionRolledBack, s.Revision+1
@@ -634,23 +684,6 @@ func stageExecutionRollback(tx *Transaction, s Snapshot, text, state string, fen
 	if err := putRetiredOriginal(tx, rolled, statusOriginal(ExecutionRolledBack)); err != nil {
 		return err
 	}
-	replaced, ok, err := readRecordJSON(tx, executionPath(s.Entry.TaskID, cur.PreviousID, statusOriginal(ExecutionHandedOff)))
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return coordinatorError("start rollback binding")
-	}
-	var status string
-	for _, link := range slices.Backward(l.chain) {
-		if link.Kind == TransitionHandoff && link.ToRecord == cur.ID {
-			status = link.FromStatus
-			break
-		}
-	}
-	if status == "" {
-		return coordinatorError("start rollback binding")
-	}
 	restored := ExecutionRecord{Schema: executionSchema, ID: tx.record.ID, TaskID: s.Entry.TaskID, PreviousID: cur.ID, Cycle: cur.Cycle, Kind: replaced.Kind, Status: status, Owner: t.NewOwner, Session: t.NewSession, Window: t.NewWindow, Process: replaced.Process, Revision: s.Revision + 1, Failure: replaced.Failure}
 	t.ToRecord = restored.ID
 	if err := publishRecord(tx, restored); err != nil {
@@ -662,10 +695,15 @@ func stageExecutionRollback(tx *Transaction, s Snapshot, text, state string, fen
 // stageWindowRestore lets a failed relaunch restore WINDOW; it never moves
 // ownership, because no record of this caller changed ownership.
 func stageWindowRestore(tx *Transaction, s Snapshot, text string, l *executionLedger) error {
-	if MetadataFrom(text, FieldOwner) != MetadataFrom(s.Text, FieldOwner) || MetadataFrom(text, FieldSession) != MetadataFrom(s.Text, FieldSession) || planCycle(Snapshot{Entry: s.Entry, Text: text}) != planCycle(s) {
+	same := MetadataFrom(text, FieldOwner) == MetadataFrom(s.Text, FieldOwner) && MetadataFrom(text, FieldSession) == MetadataFrom(s.Text, FieldSession) && planCycle(Snapshot{Entry: s.Entry, Text: text}) == planCycle(s)
+	before, after := MetadataFrom(s.Text, FieldWindow), MetadataFrom(text, FieldWindow)
+	accepted, err := ledgerStep(s, *l, executionledger.Restore{At: s.Revision, Same: same, Changed: before != after})
+	if err != nil {
+		return err
+	}
+	if !accepted {
 		return coordinatorError("start rollback binding")
 	}
-	before, after := MetadataFrom(s.Text, FieldWindow), MetadataFrom(text, FieldWindow)
 	if before == after {
 		return nil
 	}

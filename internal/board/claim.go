@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/internal/statemachine/executionledger"
 )
 
 type claimRecord struct {
@@ -74,25 +75,59 @@ func stageReclaim(tx *Transaction, s Snapshot, target, text string, o MoveOption
 			released = &releases[i]
 		}
 	}
-	if released == nil && s.Entry.State != "review" {
-		if o.Decision != "" {
-			return "", nil, kanbanError("board.transaction_invalid", "--decision")
+	l, err := readExecutionLedger(tx, s)
+	if err != nil {
+		return "", nil, err
+	}
+	decided := strings.TrimSpace(o.Decision) != ""
+	if s.Entry.State != "review" {
+		// The previous record is the start entrance's to judge; this decision
+		// covers the decision reference and the release only.
+		var refusal error
+		switch {
+		case released != nil:
+			refusal = kanbanError("board.transaction_decision_required")
+		case o.Decision != "":
+			refusal = kanbanError("board.transaction_invalid", "--decision")
+		}
+		accepted, err := ledgerStep(s, l, executionledger.Claim{At: s.Revision, Owner: true, Decision: o.Decision != "", Released: released != nil, Chain: true})
+		if err != nil {
+			return "", nil, err
+		}
+		if !accepted && refusal != nil {
+			return "", nil, refusal
 		}
 		return text, nil, nil
 	}
-	if s.Entry.State != "review" || strings.TrimSpace(o.Decision) == "" {
-		return "", nil, kanbanError("board.transaction_decision_required")
-	}
 	handoff := lifecycleHandoff{Kind: "reclaim", OldCycle: planCycle(s), NewCycle: planCycle(Snapshot{Entry: s.Entry, Text: text}), Decision: o.Decision, Owner: o.Owner, CardRevision: s.Revision + 1}
-	if released != nil {
-		if err := verifyCardRelease(tx, s, *released); err != nil {
-			return "", nil, err
+	var refusal error
+	if !decided {
+		refusal = kanbanError("board.transaction_decision_required")
+	} else if released != nil {
+		if refusal = verifyCardRelease(tx, s, *released); refusal == nil {
+			handoff.DispatchID = released.Termination.Authorization.DispatchID
 		}
-		handoff.DispatchID = released.Termination.Authorization.DispatchID
-	} else if err := verifyDispatchlessHandoff(tx, s, releases, handoff); err != nil {
+	} else {
+		refusal = verifyDispatchlessHandoff(tx, s, releases, handoff)
+	}
+	accepted, err := ledgerStep(s, l, executionledger.Reclaim{At: s.Revision, Decision: decided, Proof: decided && refusal == nil})
+	if err != nil {
 		return "", nil, err
 	}
+	if !accepted {
+		return "", nil, firstError(refusal, kanbanError("board.transaction_decision_required"))
+	}
 	return appendLifecycleRecord(text, "LIFECYCLE_DECISION", lifecycleJSON(handoff)), &handoff, nil
+}
+
+// cycleReleased reports whether a dispatch release ended a binding in the
+// card's current cycle.
+func cycleReleased(s Snapshot) (bool, error) {
+	releases, err := cardReleases(s)
+	if err != nil {
+		return false, err
+	}
+	return slices.ContainsFunc(releases, func(r DispatchRelease) bool { return r.Cycle == planCycle(s) }), nil
 }
 
 // verifyDispatchlessHandoff proves that the old cycle never held a dispatch.

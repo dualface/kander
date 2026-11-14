@@ -115,10 +115,9 @@ func (p *project) mutationGuard(id string, h holder, terminate bool) func(*board
 		if !claimedState(snapshot.Entry.State) && h.token == "" && h.generation == 0 {
 			return nil
 		}
-		_, err = p.requireHolder(id, h)
-		if err != nil && terminate && api.IsCode(err, api.CodeLeaseInvalid) {
-			return nil
-		}
+		// A user-authorized termination may end a task whose lease the server
+		// answers CodeLeaseInvalid for; the claim kernel decides.
+		_, _, err = p.holderDecision(id, h, claimedState(snapshot.Entry.State), writeEvent(terminate))
 		return err
 	}
 }

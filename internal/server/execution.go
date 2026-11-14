@@ -109,7 +109,16 @@ func (p *project) execution(key, id string, u api.ExecutionUpdate, h holder) out
 		if err != nil {
 			return outcome{err: err}
 		}
-		claim, err := p.requireHolder(id, h)
+		// A lease release and a launch rollback change the claim record; every
+		// other launcher fact only needs the live holder.
+		event := writeEvent(false)
+		switch u.Action {
+		case api.ExecutionRelease:
+			event = releaseEvent
+		case api.ExecutionRollback:
+			event = rollbackEvent
+		}
+		claim, _, err := p.holderDecision(id, h, true, event)
 		if err != nil {
 			return outcome{err: err}
 		}

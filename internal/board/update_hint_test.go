@@ -47,7 +47,7 @@ func TestUpdateRejectionsCarryRecoveryHint(t *testing.T) {
 			if c.next == old {
 				t.Fatal("fixture did not change the card")
 			}
-			_, err := validSpecUpdate(old, c.next, c.state, "")
+			_, err := validSpecUpdate("20260101-hint-task", old, c.next, c.state, "")
 			if err == nil || !strings.Contains(err.Error(), config.Text(c.hint)) {
 				t.Fatalf("missing %s: %v", c.hint, err)
 			}

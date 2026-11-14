@@ -5,6 +5,9 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+
+	"github.com/dualface/kander/internal/statemachine/cardlifecycle"
+	"github.com/dualface/kander/internal/statemachine/executionledger"
 )
 
 // Recovery modes. The column of the member selects the mode.
@@ -165,19 +168,37 @@ func RecoverCoordinatorWithTransaction(ctx context.Context, root string, r Coord
 // stay: the takeover that follows replaces them and closes the old container.
 func stageRecoverReset(tx *Transaction, s Snapshot, r CoordinatorRecover, record *CoordinatorRecovery) (m CoordinatorMember, err error) {
 	id := s.Entry.TaskID
-	if authFrom(s.Text) != (ExecutionAuthorization{}) {
-		return m, kanbanError("board.recover_dispatch_bound", id, MetadataFrom(s.Text, "DISPATCH_ID"))
+	unbound := authFrom(s.Text) == (ExecutionAuthorization{})
+	var refusal error
+	if !unbound {
+		refusal = kanbanError("board.recover_dispatch_bound", id, MetadataFrom(s.Text, "DISPATCH_ID"))
 	}
 	l, err := readExecutionLedger(tx, s)
 	if err != nil {
 		return m, err
 	}
 	// A reset would make the starter step aside and leave its executor unmanaged.
-	if l.current != nil && l.current.Status == ExecutionPending {
-		return m, kanbanError("board.recover_start_pending", id)
+	settled := l.current == nil || l.current.Status != ExecutionPending
+	if !settled {
+		refusal = firstError(refusal, kanbanError("board.recover_start_pending", id))
+	}
+	card, err := projectCard(tx, s)
+	if err != nil {
+		return m, err
+	}
+	// The caller matched the checkpoint CAS and found the member blocked.
+	if _, ok := lifecycleStep(card, cardlifecycle.Recover{Cas: true, Blocked: true, Unbound: unbound, Settled: settled}); !ok {
+		return m, firstError(refusal, kanbanError("board.recover_state", id, s.Entry.State))
 	}
 	if err = storeLegacyTakeover(tx, s, &l); err != nil {
 		return m, err
+	}
+	k, err := projectLedger(s, l)
+	if err != nil {
+		return m, err
+	}
+	if !k.step(executionledger.Recover{At: s.Revision, Unbound: unbound, Cas: true}) {
+		return m, firstError(refusal, kanbanError("board.recover_state", id, s.Entry.State))
 	}
 	rounds, err := dispatchRounds(tx, s)
 	if err != nil {

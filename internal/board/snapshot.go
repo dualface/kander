@@ -2,6 +2,8 @@ package board
 
 import (
 	"context"
+
+	"github.com/dualface/kander/internal/statemachine/cardlifecycle"
 )
 
 // Scan reads a coordinated committed view with blocking lock acquisition.
@@ -77,6 +79,14 @@ func RollbackDocumentWithTransaction(root string, entry Entry, text, state strin
 		}
 		if authFrom(text) != authFrom(s.Text) {
 			return dispatchError(entry.TaskID)
+		}
+		if state != "" && state != entry.State {
+			// The cursor is exact and unadvanced, so this caller owns the card
+			// it restores; the kernel decides the column it may return to.
+			k, _ := columnState(s.Entry.State)
+			if _, ok := lifecycleStep(k, cardlifecycle.Rollback{ToTodo: state == "todo", Owns: true}); !ok || state != "todo" {
+				return coordinatorError("start rollback binding")
+			}
 		}
 		if err = stageExecutionRollback(tx, s, text, state, v.fence); err != nil {
 			return err
@@ -186,7 +196,8 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 			moved = s.Entry
 			return nil
 		}
-		if !allowedMove(entry.State, target) && !(options.Authorization.DispatchID != "" && target == "working" && entry.State == "working") {
+		sameColumn := options.Authorization.DispatchID != "" && target == "working" && entry.State == "working"
+		if !allowedMove(entry.State, target) && !(sameColumn && allowedDispatchMove(entry.State, true)) {
 			return kanbanError("board.move_not_allowed", entry.State, target)
 		}
 		updated, e := moveMetadata(s.Text, entry.State, target, options)

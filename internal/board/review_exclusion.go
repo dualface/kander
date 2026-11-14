@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/dualface/kander/internal/statemachine/cardlifecycle"
 	"github.com/dualface/kander/internal/statemachine/reviewobligation"
 	"github.com/dualface/kander/internal/statemachine/reviewplan"
 )
@@ -50,7 +51,13 @@ func memberExcluded(tx *Transaction, id string) (bool, error) {
 // stageMemberExclusion writes the record of a member that ends without done. The
 // done-to-trash path writes one too: the card no longer counts as delivered.
 func stageMemberExclusion(tx *Transaction, s Snapshot, target, text string, o MoveOptions) error {
-	if target != "archived" && target != "trash" || target == "archived" && s.Entry.State == "done" {
+	k, known := columnState(s.Entry.State)
+	to, ok := kernelColumn(target)
+	if !known || !ok {
+		return nil
+	}
+	// A move the kernel never excludes on needs no plan read.
+	if probe, _ := lifecycleStep(k, cardlifecycle.Move{To: to, Member: true}); !probe.Excluded {
 		return nil
 	}
 	id := s.Entry.TaskID
@@ -59,7 +66,7 @@ func stageMemberExclusion(tx *Transaction, s Snapshot, target, text string, o Mo
 		return err
 	}
 	group := TaskGroupFrom(text)
-	if !planned && group == "" {
+	if next, _ := lifecycleStep(k, cardlifecycle.Move{To: to, Member: planned || group != ""}); !next.Excluded {
 		return nil
 	}
 	next := Snapshot{Entry: s.Entry, Text: text}

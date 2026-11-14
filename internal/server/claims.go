@@ -3,7 +3,6 @@ package server
 import (
 	"crypto/hmac"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/hex"
 	"strconv"
 	"time"
@@ -87,33 +86,9 @@ func claimedState(state string) bool { return state == "working" || state == "re
 
 // requireHolder checks that h is the live holder of a claimed task. Callers
 // hold the project lock, so the check and the following board write are one
-// atomic step with respect to every other server operation.
+// atomic step with respect to every other server operation. The decision is
+// the claim kernel's write event (claim_kernel.go).
 func (p *project) requireHolder(task string, h holder) (claimRecord, error) {
-	if h.invalid != nil {
-		return claimRecord{}, h.invalid
-	}
-	if h.members != nil {
-		proof, found := h.members[task]
-		if !found {
-			return claimRecord{}, apiError(api.CodeHeldByOther, "a separate claim proof is required for task "+task)
-		}
-		h.token, h.generation = proof.Token, proof.Generation
-	}
-	r, found, err := p.readClaim(task)
-	if err != nil {
-		return r, err
-	}
-	if !found || r.Status != api.ClaimActive {
-		return r, apiError(api.CodeLeaseInvalid, "task "+task+" has no active claim; an explicit takeover is required")
-	}
-	if h.token == "" || subtle.ConstantTimeCompare([]byte(tokenHash(h.token)), []byte(r.TokenHash)) != 1 {
-		return r, apiError(api.CodeHeldByOther, "task "+task+" is claimed by another execution")
-	}
-	if h.generation != r.Generation {
-		return r, apiError(api.CodeLeaseInvalid, "claim generation "+strconv.FormatUint(h.generation, 10)+" is not current")
-	}
-	if !p.server.now().Before(r.ExpiresAt) {
-		return r, apiError(api.CodeLeaseInvalid, "the lease of task "+task+" expired; an explicit takeover is required")
-	}
-	return r, nil
+	r, _, err := p.holderDecision(task, h, true, writeEvent(false))
+	return r, err
 }

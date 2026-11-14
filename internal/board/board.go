@@ -25,16 +25,6 @@ var (
 		"archived": {},
 	}
 
-	transitions = map[string]map[string]struct{}{
-		"backlog":  {"todo": {}, "archived": {}, "trash": {}},
-		"todo":     {"backlog": {}, "working": {}, "archived": {}, "trash": {}},
-		"working":  {"review": {}, "done": {}, "archived": {}, "trash": {}},
-		"review":   {"working": {}, "done": {}, "archived": {}, "trash": {}},
-		"done":     {"archived": {}, "trash": {}},
-		"archived": {},
-		"trash":    {},
-	}
-
 	legacyStates = []string{"backlog", "todo", "working", "done", "archived", "trash"}
 
 	taskIDRe    = regexp.MustCompile(`^\d{8}-[a-z0-9]+(?:-[a-z0-9]+)*-task$`)
@@ -160,15 +150,6 @@ func wrapFS(err error, id string, args ...any) error {
 		return err
 	}
 	return &Error{Code: id, Message: t(id, args...)}
-}
-
-func allowedMove(from, to string) bool {
-	next, ok := transitions[from]
-	if !ok {
-		return false
-	}
-	_, ok = next[to]
-	return ok
 }
 
 func stateIndex(state string) int {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/statemachine/serverclaim"
 )
 
 // project is one registered project: its board below the data directory and
@@ -80,14 +81,23 @@ func (p *project) reconcileClaims() error {
 			continue
 		}
 		state := view.Entries[id].State
-		changed := false
-		switch {
-		case r.Status == claimPending && claimedState(state) && p.ownerMatches(view.Entries[id], r):
-			r.Status, r.RenewedAt, r.ExpiresAt = api.ClaimActive, p.server.now(), p.server.now().Add(p.server.ttl)
-			changed = true
-		case r.Status == claimPending, r.Status == api.ClaimActive && !claimedState(state):
+		k, err := p.projectClaim(r, true, claimedState(state))
+		if err != nil {
+			return err
+		}
+		before := k.state.Status
+		owner := r.Status == claimPending && claimedState(state) && p.ownerMatches(view.Entries[id], r)
+		if !k.step(serverclaim.Reconcile{Owner: owner}) {
+			return apiError(api.CodeLeaseInvalid, "claim reconciliation refused for task "+id)
+		}
+		changed := k.state.Status != before
+		switch k.state.Status {
+		case serverclaim.StatusActive:
+			if changed {
+				r.Status, r.RenewedAt, r.ExpiresAt = api.ClaimActive, p.server.now(), p.server.now().Add(p.server.ttl)
+			}
+		case serverclaim.StatusReleased:
 			r.Status = api.ClaimReleased
-			changed = true
 		}
 		if changed {
 			p.log().Info("claim reconciled", "task", id, "generation", r.Generation, "status", r.Status)
@@ -284,13 +294,17 @@ func (p *project) move(key, id string, req api.Move, h holder) outcome {
 		claimed := false
 		if claimedState(from) {
 			terminate := req.State == "archived" || req.State == "trash"
-			r, err := p.requireHolder(entry.TaskID, h)
 			// A user-authorized termination may end a task whose lease was
 			// lost; a live lease of another execution still refuses it.
-			if err != nil && !(terminate && api.IsCode(err, api.CodeLeaseInvalid)) {
+			event := writeEvent(false)
+			if !claimedState(req.State) {
+				event = leaveEvent(terminate)
+			}
+			r, found, err := p.holderDecision(entry.TaskID, h, true, event)
+			if err != nil {
 				return outcome{err: err}
 			}
-			claim, claimed = r, err == nil || r.TaskID != ""
+			claim, claimed = r, found
 		}
 		var nextClaim *claimRecord
 		if claimed && !claimedState(req.State) {
@@ -440,10 +454,15 @@ func (p *project) claim(key, id string, req api.ClaimRequest) outcome {
 		if err != nil {
 			return outcome{err: err}
 		}
-		if claimedState(entry.State) {
-			return outcome{err: apiError(api.CodeHeldByOther, "task "+entry.TaskID+" is already claimed")}
+		k, err := p.projectClaim(previous, found, claimedState(entry.State))
+		if err != nil {
+			return outcome{err: err}
 		}
-		if found && (previous.ExecutionID == req.ExecutionID || previous.Generation == ^uint64(0)) {
+		fresh := !(found && (previous.ExecutionID == req.ExecutionID || previous.Generation == ^uint64(0)))
+		if !k.step(serverclaim.Claim{Fresh: fresh}) {
+			if claimedState(entry.State) {
+				return outcome{err: apiError(api.CodeHeldByOther, "task "+entry.TaskID+" is already claimed")}
+			}
 			return outcome{err: apiError(api.CodeLeaseInvalid, "a new claim requires a fresh execution identity and generation")}
 		}
 
@@ -531,7 +550,7 @@ func (p *project) renew(id string, h holder) (api.Renewal, error) {
 	var r claimRecord
 	err = board.WithTransaction(p.board, board.LockScope{Groups: []string{serviceGroup}}, func(tx *board.Transaction) error {
 		var err error
-		r, err = p.requireHolder(id, h)
+		r, _, err = p.holderDecision(id, h, true, renewEvent)
 		if err != nil {
 			return err
 		}
@@ -574,26 +593,52 @@ func (p *project) takeover(key, id string, req api.ClaimRequest, h holder) outco
 			return outcome{err: err}
 		}
 		now := p.server.now()
-		ownedRestart := found && previous.Status == api.ClaimActive && now.Before(previous.ExpiresAt)
+		k, err := p.projectClaim(previous, found, true)
+		if err != nil {
+			return outcome{err: err}
+		}
+		// A valid lease is preempted by nobody; only its holder restarts its
+		// own stopped executor. The refusal is the first check that fails, in
+		// the order the server has always checked.
+		var refusal error
+		restart := false
+		ownedRestart := serverclaim.Valid(k.state, k.params)
 		if ownedRestart {
-			if h.token == "" {
-				return outcome{err: apiError(api.CodeLeaseActive, "the lease of task "+t.TaskID+" is still active")}
-			}
-			if h.clientID != previous.ClientID {
-				return outcome{err: apiError(api.CodeHeldByOther, "only the current client may restart its stopped executor")}
-			}
-			if _, err := p.requireHolder(t.TaskID, h); err != nil {
-				return outcome{err: err}
-			}
-			if req.ClientID != previous.ClientID || req.ExpectedRevision != t.Revision || req.PreviousPresence == nil || req.PreviousPresence.Status != "stopped" || !p.validObservationTicket(t.TaskID, req.ExpectedRevision, previous.Generation, req.ObservationTicket) {
-				return outcome{err: apiError(api.CodeEvidenceIncomplete, "an owned restart requires a fresh stopped observation, version and private holder proof")}
+			ht, herr := h.forTask(t.TaskID)
+			hg, htg := k.headers(previous, found, ht)
+			evidence := req.ClientID == previous.ClientID && req.ExpectedRevision == t.Revision && req.PreviousPresence != nil && req.PreviousPresence.Status == "stopped" && p.validObservationTicket(t.TaskID, req.ExpectedRevision, previous.Generation, req.ObservationTicket)
+			restart = h.token != "" && h.clientID == previous.ClientID && evidence
+			switch {
+			case h.token == "":
+				refusal = apiError(api.CodeLeaseActive, "the lease of task "+t.TaskID+" is still active")
+			case h.clientID != previous.ClientID:
+				refusal = apiError(api.CodeHeldByOther, "only the current client may restart its stopped executor")
+			case herr != nil:
+				refusal = herr
+			case hg != k.state.Gen || htg != k.state.Gen:
+				refusal = p.holderError(t.TaskID, previous, found, ht)
+			case !evidence:
+				refusal = apiError(api.CodeEvidenceIncomplete, "an owned restart requires a fresh stopped observation, version and private holder proof")
 			}
 		}
-		if previous.Generation != req.ExpectedGeneration {
-			return outcome{err: apiError(api.CodeLeaseInvalid, "the observed generation is not current")}
+		if refusal == nil && previous.Generation != req.ExpectedGeneration {
+			refusal = apiError(api.CodeLeaseInvalid, "the observed generation is not current")
 		}
-		if previous.Generation == ^uint64(0) || previous.ExecutionID != "" && previous.ExecutionID == req.ExecutionID {
-			return outcome{err: apiError(api.CodeLeaseInvalid, "takeover requires a fresh execution identity and generation")}
+		fresh := !(previous.Generation == ^uint64(0) || previous.ExecutionID != "" && previous.ExecutionID == req.ExecutionID)
+		if refusal == nil && !fresh {
+			refusal = apiError(api.CodeLeaseInvalid, "takeover requires a fresh execution identity and generation")
+		}
+		expected := req.ExpectedGeneration
+		if expected != previous.Generation {
+			expected = k.state.Gen + 1
+		}
+		ht, _ := h.forTask(t.TaskID)
+		hg, htg := k.headers(previous, found, ht)
+		if !k.step(serverclaim.Takeover{Expected: expected, Fresh: fresh, Restart: restart, G: hg, Tg: htg}) {
+			if refusal == nil {
+				refusal = apiError(api.CodeLeaseInvalid, "the observed generation is not current")
+			}
+			return outcome{err: refusal}
 		}
 
 		r := claimRecord{
