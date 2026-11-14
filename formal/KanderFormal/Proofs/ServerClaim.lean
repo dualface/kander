@@ -112,10 +112,12 @@ theorem step_renew (p : Params) (x : Cl) (g tg : Nat) :
       if g ≤ p "maxGen" ∧ tg ≤ p "maxGen" ∧ Holder x g tg then some (enc { x with live := true }) else none := by
   by_cases h1 : g ≤ p "maxGen" <;> by_cases h2 : tg ≤ p "maxGen" <;> cl_simp [h1, h2, Holder] <;> ite_close
 
-theorem step_write (p : Params) (x : Cl) (g tg : Nat) :
-    step M p (enc x) ⟨"write", [natV g, natV tg]⟩ =
-      if g ≤ p "maxGen" ∧ tg ≤ p "maxGen" ∧ Holder x g tg then some (enc x) else none := by
-  by_cases h1 : g ≤ p "maxGen" <;> by_cases h2 : tg ≤ p "maxGen" <;> cl_simp [h1, h2, Holder] <;> ite_close
+theorem step_write (p : Params) (x : Cl) (g tg : Nat) (terminate : Bool) :
+    step M p (enc x) ⟨"write", [natV g, natV tg, boolV terminate]⟩ =
+      if g ≤ p "maxGen" ∧ tg ≤ p "maxGen" ∧ (Holder x g tg ∨ terminate = true ∧ LeaseInvalid x g tg) then
+        some (enc x) else none := by
+  by_cases h1 : g ≤ p "maxGen" <;> by_cases h2 : tg ≤ p "maxGen" <;>
+    cl_simp [h1, h2, Holder, LeaseInvalid] <;> ite_close
 
 theorem step_leave (p : Params) (x : Cl) (g tg : Nat) (terminate : Bool) :
     step M p (enc x) ⟨"leave", [natV g, natV tg, boolV terminate]⟩ =
@@ -192,7 +194,7 @@ theorem holder_args {p : Params} {vs : List Val} {args : List (String × Val)}
 types. -/
 theorem accepted_cases {p : Params} {s s' : State} {e : Event} (h : step M p s e = some s') :
     (∃ fr, e = ⟨"claim", [boolV fr]⟩) ∨ (∃ g tg, e = ⟨"renew", [natV g, natV tg]⟩) ∨
-      (∃ g tg, e = ⟨"write", [natV g, natV tg]⟩) ∨
+      (∃ g tg t, e = ⟨"write", [natV g, natV tg, boolV t]⟩) ∨
       (∃ g tg t, e = ⟨"leave", [natV g, natV tg, boolV t]⟩) ∨
       (∃ g tg, e = ⟨"release", [natV g, natV tg]⟩) ∨ (∃ g tg, e = ⟨"rollback", [natV g, natV tg]⟩) ∨
       (∃ ex fr rs g tg, e = ⟨"takeover", [natV ex, boolV fr, boolV rs, natV g, natV tg]⟩) ∨
@@ -204,7 +206,14 @@ theorem accepted_cases {p : Params} {s s' : State} {e : Event} (h : step M p s e
   rcases events_cases hmem with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · obtain ⟨fr, rfl⟩ := args_b hb; exact .inl ⟨fr, rfl⟩
   · obtain ⟨g, tg, rfl⟩ := holder_args hb; exact .inr (.inl ⟨g, tg, rfl⟩)
-  · obtain ⟨g, tg, rfl⟩ := holder_args hb; exact .inr (.inr (.inl ⟨g, tg, rfl⟩))
+  · obtain ⟨v1, vs1, _, rfl, c1, h1, -⟩ := bindArgs_cons hb
+    obtain ⟨v2, vs2, _, rfl, c2, h2, -⟩ := bindArgs_cons h1
+    obtain ⟨v3, vs3, _, rfl, c3, h3, -⟩ := bindArgs_cons h2
+    obtain ⟨rfl, -⟩ := bindArgs_nil h3
+    obtain ⟨g, rfl⟩ := nat_arg c1
+    obtain ⟨tg, rfl⟩ := nat_arg c2
+    obtain ⟨t, rfl⟩ := conforms_bool c3
+    exact .inr (.inr (.inl ⟨g, tg, t, rfl⟩))
   · obtain ⟨v1, vs1, _, rfl, c1, h1, -⟩ := bindArgs_cons hb
     obtain ⟨v2, vs2, _, rfl, c2, h2, -⟩ := bindArgs_cons h1
     obtain ⟨v3, vs3, _, rfl, c3, h3, -⟩ := bindArgs_cons h2
@@ -233,13 +242,18 @@ theorem accepted_cases {p : Params} {s s' : State} {e : Event} (h : step M p s e
 and one token: two accepted holder writes name the same generation, the
 current one. -/
 theorem holder_unique (p : Params) (x : Cl) {g1 tg1 g2 tg2 : Nat}
-    (h1 : step M p (enc x) ⟨"write", [natV g1, natV tg1]⟩ ≠ none)
-    (h2 : step M p (enc x) ⟨"write", [natV g2, natV tg2]⟩ ≠ none) :
+    (h1 : step M p (enc x) ⟨"write", [natV g1, natV tg1, boolV false]⟩ ≠ none)
+    (h2 : step M p (enc x) ⟨"write", [natV g2, natV tg2, boolV false]⟩ ≠ none) :
     g1 = x.gen ∧ g2 = x.gen ∧ tg1 = x.gen ∧ tg2 = x.gen := by
   rw [step_write] at h1 h2
   split at h1
   · split at h2
-    · rename_i a b; exact ⟨a.2.2.2.2.1, b.2.2.2.2.1, a.2.2.2.1, b.2.2.2.1⟩
+    · rename_i a b
+      obtain ⟨-, -, ⟨-, ha2, ha3, -⟩ | ⟨ha, -⟩⟩ := a
+      · obtain ⟨-, -, ⟨-, hb2, hb3, -⟩ | ⟨hb, -⟩⟩ := b
+        · exact ⟨ha3, hb3, ha2, hb2⟩
+        · cases hb
+      · cases ha
     · exact absurd rfl h2
   · exact absurd rfl h1
 
@@ -250,7 +264,7 @@ one. -/
 theorem gen_monotone {p : Params} {x y : Cl} {e : Event} {s' : State} (hs : x.st < 5)
     (h : step M p (enc x) e = some s') (hy : s' = enc y) :
     x.gen ≤ y.gen ∧ (e.name = "takeover" → y.gen = x.gen + 1) := by
-  rcases accepted_cases h with ⟨fr, rfl⟩ | ⟨g, tg, rfl⟩ | ⟨g, tg, rfl⟩ | ⟨g, tg, t, rfl⟩ | ⟨g, tg, rfl⟩ |
+  rcases accepted_cases h with ⟨fr, rfl⟩ | ⟨g, tg, rfl⟩ | ⟨g, tg, w, rfl⟩ | ⟨g, tg, t, rfl⟩ | ⟨g, tg, rfl⟩ |
     ⟨g, tg, rfl⟩ | ⟨ex, fr, rs, g, tg, rfl⟩ | rfl | ⟨m, rfl⟩ | ⟨o, rfl⟩
   · rw [step_claim p x] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp
   · rw [step_renew] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp
@@ -273,7 +287,7 @@ generation's is refused. A refused event leaves the state unchanged
 theorem stale_holder_refused (p : Params) (x : Cl) (g tg : Nat)
     (h : g ≠ x.gen ∨ tg ≠ x.gen) :
     step M p (enc x) ⟨"renew", [natV g, natV tg]⟩ = none ∧
-      step M p (enc x) ⟨"write", [natV g, natV tg]⟩ = none ∧
+      step M p (enc x) ⟨"write", [natV g, natV tg, boolV false]⟩ = none ∧
       step M p (enc x) ⟨"release", [natV g, natV tg]⟩ = none ∧
       step M p (enc x) ⟨"rollback", [natV g, natV tg]⟩ = none ∧
       step M p (enc x) ⟨"leave", [natV g, natV tg, boolV false]⟩ = none := by
@@ -285,17 +299,18 @@ theorem stale_holder_refused (p : Params) (x : Cl) (g tg : Nat)
   · rw [step_rollback p x]; simp [hh]
   · rw [step_leave p x]; simp [hh]
 
-/-- Theorem 5 for terminations: a move into `archived` or `trash` whose token
-belongs to another generation is refused while a valid claim exists. -/
+/-- Theorem 5 for terminations: a move into `archived` or `trash`, and the
+write check of its transaction, whose token belongs to another generation is
+refused while a valid claim exists. -/
 theorem stale_terminate_refused (p : Params) (x : Cl) (g tg : Nat)
     (hv : Valid x) (h : tg ≠ x.gen) (t : Bool) :
-    step M p (enc x) ⟨"leave", [natV g, natV tg, boolV t]⟩ = none := by
-  rw [step_leave p x]
+    step M p (enc x) ⟨"leave", [natV g, natV tg, boolV t]⟩ = none ∧
+      step M p (enc x) ⟨"write", [natV g, natV tg, boolV t]⟩ = none := by
   have hh : ¬Holder x g tg := fun ⟨_, h2, _, _⟩ => h h2
   have hl : ¬LeaseInvalid x g tg := by
     obtain ⟨h1, h2⟩ := hv
     intro hl; rcases hl with hl | ⟨hl, -⟩ <;> contradiction
-  simp [hh, hl]
+  exact ⟨by rw [step_leave p x]; simp [hh, hl], by rw [step_write]; simp [hh, hl]⟩
 
 /-- Theorem 5 for takeovers: a takeover that observed another generation is
 refused. -/
@@ -334,7 +349,7 @@ theorem step_inv (p : Params) (s s' : State) (e : Event) (hi : Inv p s)
   obtain ⟨x, rfl, hs, hg⟩ := shape hc
   obtain ⟨P1, P2, P3⟩ := hp x rfl
   intro y hy
-  rcases accepted_cases h with ⟨fr, rfl⟩ | ⟨g, tg, rfl⟩ | ⟨g, tg, rfl⟩ | ⟨g, tg, t, rfl⟩ | ⟨g, tg, rfl⟩ |
+  rcases accepted_cases h with ⟨fr, rfl⟩ | ⟨g, tg, rfl⟩ | ⟨g, tg, w, rfl⟩ | ⟨g, tg, t, rfl⟩ | ⟨g, tg, rfl⟩ |
     ⟨g, tg, rfl⟩ | ⟨ex, fr, rs, g, tg, rfl⟩ | rfl | ⟨m, rfl⟩ | ⟨o, rfl⟩
   · rw [step_claim p x] at h; split at h <;> cases h; have := enc_inj hy; subst this; props_close
   · rw [step_renew] at h; split at h <;> cases h; have := enc_inj hy; subst this; props_close

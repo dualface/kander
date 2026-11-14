@@ -19,8 +19,10 @@ var vectorEvents = []Event{
 	Claim{Fresh: false},
 	Renew{G: 1, Tg: 1},
 	Renew{G: 0, Tg: 0},
-	Write{G: 1, Tg: 1},
-	Write{G: 2, Tg: 2},
+	Write{G: 1, Tg: 1, Terminate: false},
+	Write{G: 2, Tg: 2, Terminate: false},
+	Write{G: 0, Tg: 0, Terminate: true},
+	Write{G: 0, Tg: 1, Terminate: true},
 	Leave{G: 1, Tg: 1, Terminate: false},
 	Leave{G: 0, Tg: 0, Terminate: true},
 	Leave{G: 1, Tg: 1, Terminate: true},
@@ -59,7 +61,7 @@ func encodeEvent(e Event) string {
 	case Renew:
 		return vectortest.Event("renew", "g", vectortest.Uint(ev.G), "tg", vectortest.Uint(ev.Tg))
 	case Write:
-		return vectortest.Event("write", "g", vectortest.Uint(ev.G), "tg", vectortest.Uint(ev.Tg))
+		return vectortest.Event("write", "g", vectortest.Uint(ev.G), "tg", vectortest.Uint(ev.Tg), "terminate", vectortest.Bool(ev.Terminate))
 	case Leave:
 		return vectortest.Event("leave", "g", vectortest.Uint(ev.G), "tg", vectortest.Uint(ev.Tg), "terminate", vectortest.Bool(ev.Terminate))
 	case Release:

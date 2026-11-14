@@ -47,6 +47,8 @@ var vectorEvents = []Event{
 	Rollback{Fence: 2, At: 2, Launcher: true, ToTodo: false, RestoredKind: KindClaim, RestoredStatus: StatusRunning},
 	Field{Fence: 1, Text: true},
 	Field{Fence: 2, Text: false},
+	Restore{At: 1, Same: true, Changed: true},
+	Restore{At: 1, Same: false, Changed: true},
 }
 
 func encodeParams(p Params) string {
@@ -95,6 +97,8 @@ func encodeEvent(e Event) string {
 		return vectortest.Event("rollback", "fence", vectortest.Uint(ev.Fence), "at", vectortest.Uint(ev.At), "launcher", vectortest.Bool(ev.Launcher), "toTodo", vectortest.Bool(ev.ToTodo), "restoredKind", vectortest.Str(kindNames[ev.RestoredKind]), "restoredStatus", vectortest.Str(statusNames[ev.RestoredStatus]))
 	case Field:
 		return vectortest.Event("field", "fence", vectortest.Uint(ev.Fence), "text", vectortest.Bool(ev.Text))
+	case Restore:
+		return vectortest.Event("restore", "at", vectortest.Uint(ev.At), "same", vectortest.Bool(ev.Same), "changed", vectortest.Bool(ev.Changed))
 	}
 	return "null"
 }

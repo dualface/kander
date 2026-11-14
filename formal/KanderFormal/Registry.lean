@@ -142,7 +142,7 @@ def ledgerEvents : List Event :=
     ⟨"adopt", [natV 1, t, t]⟩, ⟨"takeover", [natV 1, t, t]⟩, ⟨"takeover", [natV 1, x, x]⟩,
     ⟨"rollback", [natV 1, natV 1, t, t, enumV 0, enumV 0]⟩,
     ⟨"rollback", [natV 2, natV 2, t, x, enumV 2, enumV 2]⟩,
-    ⟨"field", [natV 1, t]⟩, ⟨"field", [natV 2, x]⟩ ]
+    ⟨"field", [natV 1, t]⟩, ⟨"field", [natV 2, x]⟩, ⟨"restore", [natV 1, t, t]⟩, ⟨"restore", [natV 1, x, t]⟩ ]
 
 /-- The server claim vector alphabet: holder requests of the first generations,
 of no generation, and of an older one; terminations; takeovers with the
@@ -151,7 +151,8 @@ def serverEvents : List Event :=
   let t := boolV true
   let x := boolV false
   let g (n : Nat) : List Val := [natV n, natV n]
-  [ ⟨"claim", [t]⟩, ⟨"claim", [x]⟩, ⟨"renew", g 1⟩, ⟨"renew", g 0⟩, ⟨"write", g 1⟩, ⟨"write", g 2⟩,
+  [ ⟨"claim", [t]⟩, ⟨"claim", [x]⟩, ⟨"renew", g 1⟩, ⟨"renew", g 0⟩, ⟨"write", g 1 ++ [x]⟩, ⟨"write", g 2 ++ [x]⟩,
+    ⟨"write", g 0 ++ [t]⟩, ⟨"write", [natV 0, natV 1, t]⟩,
     ⟨"leave", g 1 ++ [x]⟩, ⟨"leave", g 0 ++ [t]⟩, ⟨"leave", g 1 ++ [t]⟩, ⟨"release", g 1⟩, ⟨"rollback", g 1⟩,
     ⟨"takeover", [natV 1, t, x] ++ g 0⟩, ⟨"takeover", [natV 1, t, t] ++ g 1⟩,
     ⟨"takeover", [natV 0, t, x] ++ g 0⟩, ⟨"takeover", [natV 2, t, x] ++ g 0⟩,

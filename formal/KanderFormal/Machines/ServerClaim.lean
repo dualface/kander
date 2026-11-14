@@ -64,13 +64,15 @@ def renewEvent : EventDecl where
   guard := holder
   assigns := [("live", tt)]
 
-/-- Every other write the holder makes (`requireHolder` and its callers): a
-document, a move inside `working` and `review`, a launcher fact, a delivery, a
-review, or a dispatch request. The claim record stays. -/
+/-- Every other write that presents a claim (`requireHolder`, and
+`mutationGuard` inside the write's transaction): a document, a move inside
+`working` and `review`, a launcher fact, a delivery, a review, or a dispatch
+request. A termination (`terminate`) also passes on a lease the server answers
+`CodeLeaseInvalid` for. The claim record stays. -/
 def writeEvent : EventDecl where
   name := "write"
-  args := holderArgs
-  guard := holder
+  args := holderArgs ++ [boolArg "terminate"]
+  guard := orE holder (andE (a "terminate") leaseInvalid)
   assigns := []
 
 /-- `project.move` out of `working` or `review`. The holder may move; a

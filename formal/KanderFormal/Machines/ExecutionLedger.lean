@@ -12,8 +12,8 @@ decisions (`claim` lines of `LIFECYCLE_DECISION`, `cycle`), and the card
 revision the current record was written at (`recRev`).
 
 A writer names the execution it acts for in one of two ways. A move, a start,
-a rollback, and a recovery hold a card revision (`at`) and compare it with the
-card. The other entrances hold a record fence (`fence`, the position of the
+a rollback, a window restore, and a recovery hold a card revision (`at`) and
+compare it with the card. The other entrances hold a record fence (`fence`, the position of the
 record their cursor is bound to) and compare it with the current record; they
 never compare the card revision, so a fast executor's own updates do not fail
 its launcher's confirmation. The integrity facts a shell computes (an owner
@@ -224,15 +224,24 @@ def rollbackEvent : EventDecl where
     ("recRev", .ite (a "toTodo") (f "recRev") (inc (f "rev")))
   ]
 
-/-- `RecordExecutionWindow`, `RecordExecutionSession`, `RecordExecutionProcess`,
-and the window restore of a rollback by another caller: one fact of the current
-record changes. A write of the card (`text`) needs a card in `working` or
+/-- `RecordExecutionWindow`, `RecordExecutionSession`, `RecordExecutionProcess`:
+one fact of the current record changes. A write of the card (`text`) needs a card in `working` or
 `review`; a process identity changes no card text. -/
 def fieldEvent : EventDecl where
   name := "field"
   args := [fenceArg, boolArg "text"]
   guard := andE fenced (orE (notE (a "text")) held)
   assigns := [("seq", inc (f "seq")), ("rev", .ite (a "text") (inc (f "rev")) (f "rev"))]
+
+/-- `stageWindowRestore`: a rollback by a caller that owns no pending record
+restores WINDOW only, at its exact card revision, when OWNER, SESSION, and the
+cycle are unchanged (`same`). A changed WINDOW (`changed`) adds a window-update
+link. The card text is written either way. -/
+def restoreEvent : EventDecl where
+  name := "restore"
+  args := [atArg, boolArg "same", boolArg "changed"]
+  guard := andE atRev (a "same")
+  assigns := [("seq", .ite (a "changed") (inc (f "seq")) (f "seq")), ("rev", inc (f "rev"))]
 
 def executionLedgerMachine : Machine where
   name := "executionledger"
@@ -253,7 +262,7 @@ def executionLedgerMachine : Machine where
     { name := "recRev", ty := .scalar (.nat "maxRev"), init := .scalar (.nat 0) }
   ]
   events := [claimEvent, startEvent, reclaimEvent, recoverEvent, relocateEvent, writeEvent, confirmEvent,
-    unresolveEvent, adoptEvent, takeoverEvent, rollbackEvent, fieldEvent]
+    unresolveEvent, adoptEvent, takeoverEvent, rollbackEvent, fieldEvent, restoreEvent]
   queries := [
     { name := "ended", ty := .base .bool, body := ended },
     { name := "startUnfinished", ty := .base .bool, body := unfinished }

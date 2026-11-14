@@ -95,6 +95,7 @@ theorem find_adopt : M.findEvent "adopt" = some adoptEvent := rfl
 theorem find_takeover : M.findEvent "takeover" = some takeoverEvent := rfl
 theorem find_rollback : M.findEvent "rollback" = some rollbackEvent := rfl
 theorem find_field : M.findEvent "field" = some fieldEvent := rfl
+theorem find_restore : M.findEvent "restore" = some restoreEvent := rfl
 theorem ctors_col : M.ctorsOf "col" = some ["todo", "working", "review", "closed"] := rfl
 theorem ctors_status : M.ctorsOf "status" =
     some ["none", "pending", "running", "unresolved", "rolledBack", "handedOff"] := rfl
@@ -113,11 +114,11 @@ theorem ty_recRev : M.fieldTy "recRev" = some (.scalar (.nat "maxRev")) := rfl
 
 macro "led_simp" "[" ts:Lean.Parser.Tactic.simpLemma,* "]" : tactic =>
   `(tactic| simp [step, find_claim, find_start, find_reclaim, find_recover, find_relocate, find_write,
-      find_confirm, find_unresolve, find_adopt, find_takeover, find_rollback, find_field, ctors_col, ctors_status,
+      find_confirm, find_unresolve, find_adopt, find_takeover, find_rollback, find_field, find_restore, ctors_col, ctors_status,
       ctors_kind, size_col, size_status, size_kind, ty_col, ty_kind, ty_status, ty_record, ty_seq, ty_rev, ty_cycle,
       ty_recRev, lookup, claimEvent, startEvent,
       reclaimEvent, recoverEvent, relocateEvent, writeEvent, confirmEvent, unresolveEvent, adoptEvent,
-      takeoverEvent, rollbackEvent, fieldEvent, newRecord, allOf, isCol, statusIs, kindIs, col, held, atRev, fenced,
+      takeoverEvent, rollbackEvent, fieldEvent, restoreEvent, newRecord, allOf, isCol, statusIs, kindIs, col, held, atRev, fenced,
       ended, unfinished, atArg, fenceArg, boolArg, inc, eq, bindArgs, Ty.conforms, STy.conforms,
       eval, evalCmp, natAdd, natSub, boolAnd, boolOr, boolNot, indexOf, enumV, boolV, natV, f, a,
       nat, tt, ff, andE, orE, notE, evalAssigns, applyUpdates, enc, or_assoc,
@@ -287,12 +288,22 @@ theorem step_field (p : Params) (x : Led) (hb : Bounded p x) (fence : Nat) (text
   by_cases hf : fence ≤ p "maxSeq" <;> cases text <;>
     led_close [hf, Fenced, hb.rev, hb.rc, hb.seq, hb.cyc, hb.rr, hb.col]
 
+set_option maxHeartbeats 2000000 in
+theorem step_restore (p : Params) (x : Led) (hb : Bounded p x) (at_ : Nat) (same changed : Bool) :
+    step M p (enc x) ⟨"restore", [natV at_, boolV same, boolV changed]⟩ =
+      if at_ ≤ p "maxRev" ∧ at_ = x.rev ∧ same = true ∧ (changed = true → x.seq + 1 ≤ p "maxSeq") ∧
+          x.rev + 1 ≤ p "maxRev" then
+        some (enc ⟨x.col, x.kd, x.st, x.rc, if changed then x.seq + 1 else x.seq, x.rev + 1, x.cyc, x.rr⟩)
+      else none := by
+  by_cases hat : at_ ≤ p "maxRev" <;> cases changed <;>
+    led_close [hat, hb.rev, hb.rc, hb.seq, hb.cyc, hb.rr, hb.col]
+
 /-! ## The events an accepted step ran -/
 
 theorem events_cases {ev : EventDecl} (h : ev ∈ M.events) :
     ev = claimEvent ∨ ev = startEvent ∨ ev = reclaimEvent ∨ ev = recoverEvent ∨ ev = relocateEvent ∨
       ev = writeEvent ∨ ev = confirmEvent ∨ ev = unresolveEvent ∨ ev = adoptEvent ∨ ev = takeoverEvent ∨
-      ev = rollbackEvent ∨ ev = fieldEvent := by
+      ev = rollbackEvent ∨ ev = fieldEvent ∨ ev = restoreEvent := by
   simpa [executionLedgerMachine] using h
 
 theorem nat_arg {p : Params} {b : String} {v : Val} (h : Ty.conforms M p (.scalar (.nat b)) v = true) :
@@ -320,12 +331,13 @@ theorem accepted_cases {p : Params} {s s' : State} {e : Event} (h : step M p s e
       (∃ fe d i, e = ⟨"adopt", [natV fe, boolV d, boolV i]⟩) ∨
       (∃ fe d c, e = ⟨"takeover", [natV fe, boolV d, boolV c]⟩) ∨
       (∃ fe at_ l t rk rs, e = ⟨"rollback", [natV fe, natV at_, boolV l, boolV t, enumV rk, enumV rs]⟩) ∨
-      (∃ fe t, e = ⟨"field", [natV fe, boolV t]⟩) := by
+      (∃ fe t, e = ⟨"field", [natV fe, boolV t]⟩) ∨
+      (∃ at_ sa c, e = ⟨"restore", [natV at_, boolV sa, boolV c]⟩) := by
   obtain ⟨ev, args, hmem, hname, hb⟩ := accepted_event h
   obtain ⟨n, vs⟩ := e
   simp only at hname hb
   subst hname
-  rcases events_cases hmem with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+  rcases events_cases hmem with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · obtain ⟨v1, vs1, _, rfl, c1, h1, -⟩ := bindArgs_cons hb
     obtain ⟨bs, rfl, hl⟩ := args_bools (by simp [boolArg]) h1
     obtain ⟨n1, rfl⟩ := nat_arg c1
@@ -396,7 +408,12 @@ theorem accepted_cases {p : Params} {s s' : State} {e : Event} (h : step M p s e
     obtain ⟨bs, rfl, hl⟩ := args_bools (by simp [boolArg]) h1
     obtain ⟨n1, rfl⟩ := nat_arg c1
     match bs, hl with
-    | [t], _ => exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr ⟨n1, t, rfl⟩))))))))))
+    | [t], _ => exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inl ⟨n1, t, rfl⟩)))))))))))
+  · obtain ⟨v1, vs1, _, rfl, c1, h1, -⟩ := bindArgs_cons hb
+    obtain ⟨bs, rfl, hl⟩ := args_bools (by simp [boolArg]) h1
+    obtain ⟨n1, rfl⟩ := nat_arg c1
+    match bs, hl with
+    | [sa, c], _ => exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr ⟨n1, sa, c, rfl⟩)))))))))))
 
 /-! ## Theorem 5: stale writers -/
 
@@ -414,7 +431,7 @@ theorem step_rollback (p : Params) (x : Led) (hb : Bounded p x) (fence at_ rk rs
     · exact absurd rfl hs
 
 /-- Theorem 5, revision-checked writes: a claim, a start, a reclaim, a recovery,
-a move, a card write, or a rollback whose card revision is not the card's is
+a move, a card write, a rollback, or a window restore whose card revision is not the card's is
 refused, and an unresolve whose cursor is older than the current record is
 refused. A refused event leaves the state unchanged (`run_refused_unchanged`). -/
 theorem stale_revision_refused (p : Params) (x : Led) (hb : Bounded p x) (at_ : Nat) (h : at_ ≠ x.rev) :
@@ -424,8 +441,10 @@ theorem stale_revision_refused (p : Params) (x : Led) (hb : Bounded p x) (at_ : 
       (∀ u c, step M p (enc x) ⟨"recover", [natV at_, boolV u, boolV c]⟩ = none) ∧
       (∀ to, step M p (enc x) ⟨"relocate", [natV at_, enumV to]⟩ = none) ∧
       step M p (enc x) ⟨"write", [natV at_]⟩ = none ∧
-      (∀ fe l t rk rs, step M p (enc x) ⟨"rollback", [natV fe, natV at_, boolV l, boolV t, enumV rk, enumV rs]⟩ = none) := by
-  refine ⟨fun o d r c => ?_, fun c => ?_, fun d pr => ?_, fun u c => ?_, fun to => ?_, ?_, fun fe l t rk rs => ?_⟩
+      (∀ fe l t rk rs, step M p (enc x) ⟨"rollback", [natV fe, natV at_, boolV l, boolV t, enumV rk, enumV rs]⟩ = none) ∧
+      (∀ sa c, step M p (enc x) ⟨"restore", [natV at_, boolV sa, boolV c]⟩ = none) := by
+  refine ⟨fun o d r c => ?_, fun c => ?_, fun d pr => ?_, fun u c => ?_, fun to => ?_, ?_, fun fe l t rk rs => ?_,
+    fun sa c => ?_⟩
   · rw [step_claim p x hb]; simp [h]
   · rw [step_start p x hb]; simp [h]
   · rw [step_reclaim p x hb]; simp [h]
@@ -433,6 +452,7 @@ theorem stale_revision_refused (p : Params) (x : Led) (hb : Bounded p x) (at_ : 
   · rw [step_relocate p x hb]; simp [h]
   · rw [step_write p x hb]; simp [h]
   · exact Classical.byContradiction fun hs => h (step_rollback p x hb fe at_ rk rs l t hs).2.1
+  · rw [step_restore p x hb]; simp [h]
 
 theorem unresolve_stale (p : Params) (x : Led) (hb : Bounded p x) (fence at_ : Nat) (l w : Bool) (h : at_ < x.rr) :
     step M p (enc x) ⟨"unresolve", [natV fence, natV at_, boolV l, boolV w]⟩ = none := by
@@ -497,7 +517,7 @@ theorem step_inv (p : Params) (s s' : State) (e : Event) (hi : Inv p s)
   intro y hy
   rcases accepted_cases h with ⟨at_, o, d, r, c, rfl⟩ | ⟨at_, c, rfl⟩ | ⟨at_, d, pr, rfl⟩ | ⟨at_, u, c, rfl⟩ |
     ⟨at_, to, rfl⟩ | ⟨at_, rfl⟩ | ⟨fe, m, se, rfl⟩ | ⟨fe, at_, l, w, rfl⟩ | ⟨fe, d, i, rfl⟩ | ⟨fe, d, c, rfl⟩ |
-    ⟨fe, at_, l, t, rk, rs, rfl⟩ | ⟨fe, t, rfl⟩
+    ⟨fe, at_, l, t, rk, rs, rfl⟩ | ⟨fe, t, rfl⟩ | ⟨at_, sa, ch, rfl⟩
   · rw [step_claim p x hb] at h
     cases o <;> simp only [Bool.false_eq_true, ite_false, ite_true] at h <;>
       (split at h <;> cases h; have := enc_inj hy; subst this; props_close)
@@ -520,6 +540,8 @@ theorem step_inv (p : Params) (s s' : State) (e : Event) (hi : Inv p s)
       props_close
   · rw [step_field p x hb] at h; split at h <;> cases h; have := enc_inj hy; subst this
     cases t <;> props_close
+  · rw [step_restore p x hb] at h; split at h <;> cases h; have := enc_inj hy; subst this
+    cases ch <;> props_close
 
 /-- The execution ledger machine's proof obligation certificate. -/
 def cert : SafetyCert M where
