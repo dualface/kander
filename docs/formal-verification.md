@@ -16,7 +16,7 @@ The toolchain lives in `formal/`; the generated kernels live in `internal/statem
 | `formal/KanderFormal/Obligations.lean` | The proof obligation template `SafetyCert` and shape lemmas |
 | `formal/KanderFormal/EvalLemmas.lean` | Evaluation lemmas for the binder, array, and Boolean forms |
 | `formal/KanderFormal/Machines/*.lean` | Machine definitions (the single source of each machine) |
-| `formal/KanderFormal/Proofs/*.lean` | Machine proofs |
+| `formal/KanderFormal/Proofs/*.lean` | Machine proofs; `Proofs/Scalar.lean` holds the helpers of machines whose fields and arguments are all scalars |
 | `formal/KanderFormal/Registry.lean` | Registered machines, vector bounds, audited theorems |
 | `formal/KanderFormal/Gen/*.lean` | Go emitter, test emitter, vector emitter, JSON encoding, SHA-256 |
 | `formal/Main.lean` | The `kander-formal` executable (`gen`) |
@@ -199,15 +199,49 @@ The differential vectors of both machines use an explicit alphabet and depth 5: 
 
 Background: the TLA+ and Python prototype `experiments/review-obligations/` explored these obligations with bounded model checking. It is replaced by the machines above and removed; its counterexample and witness traces are Lean theorems now.
 
+## Card Lifecycle, Execution Ownership, and Server Claims (M1, M2)
+
+Three machines replace the hand-written decisions of card columns, contract freezing, member exclusion, the execution ledger, and the v2 server claim record:
+
+| Machine | Definition | Kernel | Scope |
+| --- | --- | --- | --- |
+| `cardlifecycle` | `Machines/CardLifecycle.lean` | `internal/statemachine/cardlifecycle` | One card: its column, whether its contract is frozen, its `CONTRACT_DECISIONS` records, and its member exclusion |
+| `executionledger` | `Machines/ExecutionLedger.lean` | `internal/statemachine/executionledger` | One card's execution ledger: the kind and status of the current record, the record position, the transition count, the card revision, the claim lines, and the revision of the current record |
+| `serverclaim` | `Machines/ServerClaim.lean` | `internal/statemachine/serverclaim` | One task's claim record on the v2 server: whether the card is in `working` or `review`, the status, the generation, and whether the lease has not expired |
+
+The split follows the theorems: the transition table and the contract freeze involve only the card, the stale-writer refusals of the ledger involve only the ledger, and "at most one valid claim" involves only the claim record, so each invariant stays small and no product machine is needed. A server entrance that changes both a claim and the ledger (a claim, a takeover, a launch rollback) runs both kernels from its shell. All fields and arguments are scalars; `Proofs/Scalar.lean` turns an accepted step into its event and arguments, and each event has a lemma that evaluates `step` on an encoded state to an explicit `if`, on which the theorems are proved. The kernels take integrity facts the shells compute (a verified release, a recovery CAS, a dispatch authorization, an owner that matches, an observation ticket) as Boolean arguments, as the review kernels do.
+
+`kander pick` is the move into `todo`, so `move` covers it. Lease expiry and a pending record of an earlier binary are environment events with no timing assumption. The ledger's `relocate` and `write` events describe the moves and card writes that change no execution fact; they keep the revision of the projection exact, and the refinement tests step them, while the production decision of those moves is the `cardlifecycle` transition table.
+
+Proofs, for every parameter value:
+
+| Theorem | Statement |
+| --- | --- |
+| `CardLifecycle.move_accepted_iff`, `pick_accepted_iff` | (1) An ordinary move, and a pick, is accepted exactly when its source and target columns are a row of the transition table |
+| `CardLifecycle.rollback_spec`, `dispatchMove_spec`, `recover_spec` | (2) The preconditions and result column of a start rollback (`working` to `todo`; a takeover rollback keeps the column), a same-column dispatch move (`working`, authorized), and a recovery reset (`working` or `review` to `working`, with its CAS, a blocked member, no dispatch binding, and no pending start) |
+| `ServerClaim.holder_unique`, `reachable_valid_held` | (3) `requireHolder` accepts only the current generation and its token, so at most one claim is valid; a valid claim belongs to a card in `working` or `review` |
+| `ServerClaim.gen_monotone` | (4) No accepted event lowers the generation; a takeover raises it by one |
+| `ServerClaim.stale_holder_refused`, `stale_terminate_refused`, `stale_takeover_refused`; `ExecutionLedger.stale_revision_refused`, `unresolve_stale`, `stale_fence_refused` | (5) A holder write of another generation, a termination with an older token while a claim is valid, and a takeover that observed another generation are refused; a revision-checked ledger write (claim, start, reclaim, recovery, move, write, rollback, window restore) at another revision, an unresolve older than the record, and a fenced write (confirm, unresolve, adopt, takeover, rollback, field) of another record are refused. Refused events leave the state unchanged (`run_refused_unchanged`) |
+| `CardLifecycle.frozen_change`, `reachable_frozen_change`, `decisions_only_update` | (6) Once a card left `backlog`, an update that changes a frozen field only ticks acceptance items in `working` or `review`, or carries a decision and adds one `CONTRACT_DECISIONS` record; no other event changes the record count |
+| `CardLifecycle.reachable_inv`, `ExecutionLedger.reachable_inv`, `ServerClaim.reachable_inv` | (7) The invariants hold in every reachable state: a card outside `backlog` is frozen, an excluded member is in `archived` or `trash`; a ledger card in `backlog` or `todo` has no record that owns it, only a start or a takeover is pending, and claim lines never outnumber records; a valid claim is on a claimed card and a record exists exactly when its generation is positive |
+
+Theorem (5) states the behavior of v2 as it is (contract decision of 2026-11-14 on `20261114-formal-card-lifecycle-task`): a termination needs no holder proof once no claim is valid, and the fenced ledger entrances never compare the card revision, so a fast executor's own updates do not fail its launcher's confirmation.
+
+The shells are `internal/board/lifecycle_kernel.go`, `internal/board/execution_kernel.go`, and `internal/server/claim_kernel.go`. They project the card (column, `contract_frozen` of the version record, decision records, exclusion record), the ledger (current record, chain, revision, claim lines), and the claim record (status, generation, the server clock against `ExpiresAt`) into kernel states; map claim headers to the generation the header and the token belong to (the token is still compared by hash in constant time); step the kernels; persist what they accept; and select the existing error for a refused event in the order the entrance has always checked. Three projection rules matter: history before the first stored ledger link never holds a card in `backlog` or `todo`, as before; the archive cleanup (M14) removes an archived card's exclusion record after its move commits, so the exclusion flag of an archived card is not projected; `RecordExecutionBranch` writes no ledger link and stays outside the kernel. One unreachable call is now refused: a rollback of a takeover attempt into `todo`, which no caller makes.
+
+`internal/board/lifecycle_kernel_entrance_test.go` and `internal/server/claim_kernel_test.go` drive every entrance that runs a kernel on a temporary board or server and assert `projection(after) = Step(projection(before), event)`, or for a refused entrance an error, a kernel refusal, and an unchanged projection; each theorem has at least one refused scenario there.
+
+The differential vectors use explicit alphabets: `cardlifecycle` and `serverclaim` replay every sequence of depth 5, `executionledger` of depth 4, because its 30 events would make depth 5 walk about 24 million sequences.
+
 ## v2 State Machine Inventory
 
 M1 to M14 are the machines of `20261103-state-machine-simplification-audit-task`. Group A is `20261114-formal-kernel-foundation-group`; groups B, C, and D are created after group A integrates into `v2`.
 
 | Machine | Scope | Owner |
 | --- | --- | --- |
-| M1 | Card lifecycle, contract freezing, member exclusion | A (`20261114-formal-card-lifecycle-task`) |
-| M2 | Execution ownership: start, claim, takeover, execution chain | A (`20261114-formal-card-lifecycle-task`) |
-| v2 server single-card claim record and lease expiry (`internal/server/claims.go`) | Execution ownership on the server | A, with M2 |
+| M1 | Card lifecycle, contract freezing, member exclusion | Proved and generated: `cardlifecycle` (A, `20261114-formal-card-lifecycle-task`) |
+| M2 | Execution ownership: start, claim, takeover, execution chain | Proved and generated: `executionledger` (A, `20261114-formal-card-lifecycle-task`) |
+| v2 server single-card claim record and lease expiry (`internal/server/claims.go`) | Execution ownership on the server | Proved and generated: `serverclaim` (A, `20261114-formal-card-lifecycle-task`) |
 | M3 | Durable dispatch, rounds, accept and complete receipts | B |
 | M4 | Wrap-up-only capability grant | B |
 | M5 | Settlement of completed dispatches | B |
