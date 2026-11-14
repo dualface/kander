@@ -174,17 +174,18 @@ Two machines replace the hand-written decisions of `internal/board` for review p
 | `reviewobligation` | `Machines/ReviewObligation.lean` | `internal/statemachine/reviewobligation` | One plan member: the batches of its plan as it sees them, cycle binding, rebind position, drop obligations, dropped roles, the recovery record of a reset, completion |
 | `reviewplan` | `Machines/ReviewPlan.lean` | `internal/statemachine/reviewplan` | One plan: creation, extension shape and admission, append, seal, rebind, target sync, drop, release, resolution, run, advance, view, close |
 
-Members share no obligation state: a plan event (an appended batch, a close, a drop) is one event of each member's kernel. Where a plan decision depends on members (a sealed plan admitting a batch, the seal, a close needing every cycle bound, the completion gate of the other members), the plan event takes the member kernels' query results as an argument. Integrity facts (a CAS, a view hash, a run chain, Git evidence, finding and disposition conclusions of M7 and M8) are Boolean event arguments the shell computes; the kernel computes none of them and refuses the event when one fails.
+Members share no obligation state: a plan event (an appended batch, a close, a drop) is one event of each member's kernel. Where a plan decision depends on members (a sealed plan admitting a batch, the seal, a close needing every cycle bound, the completion gate of the other members), the plan event takes the member kernels' query results as an argument. Integrity facts (a CAS, a view hash, a run chain, Git evidence, finding and disposition conclusions of M7 and M8) are Boolean event arguments the shell computes; the kernel computes none of them and refuses the event when one fails. A close also tells each member's kernel which required roles have a conclusion covering the member's current cycle; the kernel refuses to close a batch that names the member while one is missing. Whether a drop leaves obligations on a member is the kernel event `dropTakes`; the shell writes the obligation records of the members it accepts.
 
 Proofs, for every role list and every batch bound:
 
 | Theorem | Statement |
 | --- | --- |
 | `ReviewObligation.debt_safety` | Whenever the machine accepts a completion, the independent observer of the history finds no review owed |
-| `ReviewObligation.evidence_floor` | At a completion every debt of a drop or a planned reset is paid by a closed batch added after it arose, and the no-plan record by a review of the current cycle |
+| `ReviewObligation.evidence_floor` | At a completion every debt of a drop or a planned reset is paid by a closed batch added after it arose, closed in the debt's cycle or later on a conclusion that covered the cycle current at the close; the no-plan record by a review of the current cycle |
 | `ReviewObligation.release_once` | A released no-plan recovery record is not released again |
 | `ReviewObligation.reachable_inv` | Every reachable state encodes a well-formed model state related to the observer of a history that reaches it |
 | `ReviewObligation.counter_dropReleased`, `counter_releaseDrop` | The two counterexample traces of the replaced prototype refuse completion |
+| `ReviewObligation.counter_staleClose` | After a reset, a batch that names the member cannot close on a conclusion that does not cover the current cycle |
 | `ReviewObligation.witness_members`, `witness_twoResets`, `witness_releasedRole` | Its three witness traces complete (two members as two single-card traces) |
 | `ReviewPlan.integrity_refused` | An advance, close, or resolution with a failed integrity fact is refused and leaves the state unchanged |
 | `ReviewPlan.sealed_append`, `sealed_seal`, `sealed_admit` | A sealed plan takes a batch only when a member owes one, never with another seal |
