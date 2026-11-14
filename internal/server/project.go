@@ -346,11 +346,16 @@ func (p *project) move(key, id string, req api.Move, h holder) outcome {
 						return err
 					}
 					task.MoveReceipt.Dispatch = &d
+					if req.State == "done" {
+						if err := p.stageCompletedProposal(tx, id, d); err != nil {
+							return err
+						}
+					}
 				}
 				return nil
 			}),
-			Replayed: &replayed,
-			Result:   req.Result, Reason: req.Reason, Decision: req.Decision, DuplicateOf: req.DuplicateOf, ExpectedRevision: req.ExpectedRevision, Authorization: req.Authorization, DeliveryCommit: businessCommit, Disposition: req.Disposition,
+			Replayed: &replayed, ServiceCompletion: true,
+			Result: req.Result, Reason: req.Reason, Decision: req.Decision, DuplicateOf: req.DuplicateOf, ExpectedRevision: req.ExpectedRevision, Authorization: req.Authorization, DeliveryCommit: businessCommit, Disposition: req.Disposition,
 		})
 		if err != nil {
 			return outcome{err: err}

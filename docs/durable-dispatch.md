@@ -124,7 +124,7 @@ Fix dispatches enforce that the executor receives exact, structured review findi
 
 ### Standard Wrap-up
 
-Binds the closed review final commit with the commit integrated into the mainline branch. `git.branch_mode` of the checkout at `cwd` (its project overlay included) selects the mainline branch: `develop` for `main-develop` (the default), `main` for `main-only`. `target_ref` must be `refs/heads/<mainline>` or `refs/remotes/origin/<mainline>`; the example uses `main-develop`:
+This is the local form, without a configured server. Binds the closed review final commit with the commit integrated into the mainline branch. `git.branch_mode` of the checkout at `cwd` (its project overlay included) selects the mainline branch: `develop` for `main-develop` (the default), `main` for `main-only`. `target_ref` must be `refs/heads/<mainline>` or `refs/remotes/origin/<mainline>`; the example uses `main-develop`:
 
 ```json
 {
@@ -145,6 +145,29 @@ The system verifies:
 1. `source_commit` equals the sealed review plan's final target commit.
 2. `source_commit` is an ancestor of `target_commit`.
 3. `target_commit` is contained within `target_ref`.
+
+### Distributed Wrap-up
+
+With a configured server the evidence names the published final integration. Copy it from `kander coordinator integration-show <target-ref>`: `id` → `integration_id`, `request.execution_id` → `integration_execution`, `generation` → `integration_generation`, `request.commit` → `source_commit`, `observed_target` → `target_commit`, `request.target_ref` → `target_ref`. The client stores `cwd` as `project:<id>`.
+
+```json
+{
+  "wrap_up": {
+    "git": {
+      "integration_id": "i-<64-hex>",
+      "integration_execution": "<request.execution_id>",
+      "integration_generation": 3,
+      "source_commit": "<request.commit>",
+      "target_commit": "<observed_target>",
+      "target_ref": "refs/heads/develop",
+      "author": "coordinator",
+      "basis": "published final integration receipt"
+    }
+  }
+}
+```
+
+A missing identity field fails before any request or dispatch is created and names the field; a differing value names the receipt value. Completion is verified in the client: in the recorded worktree, or after cleanup in the current checkout of the same project. The immutable `refs/heads/kander/<project>/...` evidence refs are never deleted with task branches. See [Distributed Git integration](distributed-integration.md).
 
 ### Wrap-up on Behalf (Executor Exit Exception)
 

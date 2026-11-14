@@ -116,7 +116,7 @@ kander dispatch show <task-id> <id>
 
 ### 标准收尾派发
 
-将已审查通过的最终 Commit 与已集成进主线分支的 Commit 建立绑定。主线分支由 `cwd` 所在检出（含其项目配置）的 `git.branch_mode` 决定：`main-develop`（默认）为 `develop`，`main-only` 为 `main`。`target_ref` 必须是 `refs/heads/<主线分支>` 或 `refs/remotes/origin/<主线分支>`；示例为 `main-develop`：
+以下是未配置服务端时的本地形式。将已审查通过的最终 Commit 与已集成进主线分支的 Commit 建立绑定。主线分支由 `cwd` 所在检出（含其项目配置）的 `git.branch_mode` 决定：`main-develop`（默认）为 `develop`，`main-only` 为 `main`。`target_ref` 必须是 `refs/heads/<主线分支>` 或 `refs/remotes/origin/<主线分支>`；示例为 `main-develop`：
 
 ```json
 {
@@ -137,6 +137,29 @@ kander dispatch show <task-id> <id>
 1. `source_commit` 严格等于封存审查计划的最终目标 Commit。
 2. `source_commit` 确实是 `target_commit` 的直接祖先。
 3. `target_commit` 包含在指定的 `target_ref` 分支中。
+
+### 分布式收尾
+
+配置了服务端时，证据指向已发布的最终集成。从 `kander coordinator integration-show <target-ref>` 复制：`id` → `integration_id`，`request.execution_id` → `integration_execution`，`generation` → `integration_generation`，`request.commit` → `source_commit`，`observed_target` → `target_commit`，`request.target_ref` → `target_ref`。客户端把 `cwd` 写为 `project:<id>`。
+
+```json
+{
+  "wrap_up": {
+    "git": {
+      "integration_id": "i-<64-hex>",
+      "integration_execution": "<request.execution_id>",
+      "integration_generation": 3,
+      "source_commit": "<request.commit>",
+      "target_commit": "<observed_target>",
+      "target_ref": "refs/heads/develop",
+      "author": "coordinator",
+      "basis": "已发布的最终集成回执"
+    }
+  }
+}
+```
+
+缺少标识字段时，在创建任何请求或派发之前失败，并指出字段名；值不一致时指出回执中的值。完成校验在客户端进行：使用记录的工作树，清理后使用当前所在的同项目 checkout。不可变的 `refs/heads/kander/<project>/...` 证据引用不随任务分支删除。详见 [Distributed Git integration](distributed-integration.md)。
 
 ### 代行收尾例外（Executor Exit Exception）
 

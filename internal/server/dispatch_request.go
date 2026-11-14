@@ -63,3 +63,33 @@ func (p *project) stagePreparedProposal(tx *board.Transaction, request *api.Coll
 	request.Revision++
 	return stageJSON(tx, requestName(request.TaskID, request.ID), request)
 }
+
+// stageCompletedProposal settles the proposal a completion move fulfilled. The
+// move into done releases the claim, so the holder can no longer answer the
+// request itself; the completed dispatch of the same generation is the fact
+// that settles it. An exact replay of that completion settles a request left
+// accepted by an earlier server. Nothing else changes a request here.
+func (p *project) stageCompletedProposal(tx *board.Transaction, task string, d board.Dispatch) error {
+	if d.State != board.DispatchCompleted {
+		return nil
+	}
+	claim, found, err := p.readClaim(task)
+	if err != nil || !found {
+		return err
+	}
+	requests, err := p.readRequests(task)
+	if err != nil {
+		return err
+	}
+	for _, request := range requests {
+		if request.Dispatch == nil || request.Dispatch.ID != d.Input.ID || request.Status != api.RequestAccepted || request.TargetGeneration != claim.Generation {
+			continue
+		}
+		request.Status, request.Note, request.UpdatedAt = api.RequestDone, "the proposed dispatch completed with its task; settled by the completion receipt", p.server.now()
+		request.Revision++
+		if err := stageJSON(tx, requestName(task, request.ID), request); err != nil {
+			return err
+		}
+	}
+	return nil
+}

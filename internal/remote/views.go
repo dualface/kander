@@ -173,14 +173,11 @@ func (s *Session) MoveTask(ctx context.Context, id string, request api.Move) (ap
 		if err != nil {
 			return api.Task{}, err
 		}
-		dir := credential.Worktree
-		if dir == "" {
-			dir, err = os.Getwd()
-		}
-		if err != nil {
-			return api.Task{}, err
-		}
 		if value.Phase != "not-applicable" {
+			dir, err := s.completionCheckout(ctx, credential.Worktree)
+			if err != nil {
+				return api.Task{}, err
+			}
 			if err := s.VerifyIntegration(ctx, dir, value); err != nil {
 				return api.Task{}, err
 			}
@@ -197,4 +194,30 @@ func (s *Session) LocalDataRoot() (string, error) {
 		return "", err
 	}
 	return root, nil
+}
+
+// completionCheckout selects the clone that verifies a completion. Cleanup may
+// already have removed the recorded execution worktree; another checkout whose
+// origin is the registered project remote keeps the same Git checks, and a
+// clone of another project never qualifies.
+func (s *Session) completionCheckout(ctx context.Context, recorded string) (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	for _, dir := range []string{recorded, cwd} {
+		if dir == "" {
+			continue
+		}
+		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+			continue
+		}
+		if verifiedRemote(ctx, dir, s.Info.Remote) == nil {
+			return dir, nil
+		}
+	}
+	if recorded == "" {
+		recorded = "-"
+	}
+	return "", &api.Error{Code: api.CodeEvidenceIncomplete, Message: config.Text("remote.wrap_up_checkout_required", recorded, s.Info.Remote)}
 }

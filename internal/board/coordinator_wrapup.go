@@ -33,8 +33,8 @@ type WrapUpGitVerifier func(ctx context.Context, root string, facts CoordinatorG
 var wrapUpGitVerifier atomic.Pointer[WrapUpGitVerifier]
 
 // SetWrapUpGitVerifier installs the Git-aware check of a wrap-up completion. Board
-// never runs Git itself; a binary without a verifier leaves the first check to
-// the next reconcile.
+// never runs Git itself; a binary without a verifier, and a service move
+// (MoveOptions.ServiceCompletion), leave the first check to the next reconcile.
 func SetWrapUpGitVerifier(fn WrapUpGitVerifier) { wrapUpGitVerifier.Store(&fn) }
 
 func wrapUpEvidenceName(id string) string { return "wrap-up-git/" + id + ".json" }

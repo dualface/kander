@@ -109,6 +109,11 @@ type MoveOptions struct {
 	DeliveryCommit   string
 	Disposition      *ArtifactReference
 	Replayed         *bool
+	// ServiceCompletion marks a move made by the service, which proves a
+	// wrap-up through its published integration receipt and never runs Git.
+	// The process-wide wrap-up Git verifier serves client checkouts only, so a
+	// binary that links both sides must not run it for the service.
+	ServiceCompletion bool
 	// Pruned receives the cleanup that follows a committed move into
 	// archived; its Err never turns the move into a failure.
 	Pruned *PruneReport
@@ -143,8 +148,10 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 	var wrapUp *wrapUpCompletion
 	if target == "done" {
 		// Git runs here, before any lock of this move is taken.
-		if wrapUp, err = verifyWrapUpCompletion(root, entry, options); err != nil {
-			return moved, err
+		if !options.ServiceCompletion {
+			if wrapUp, err = verifyWrapUpCompletion(root, entry, options); err != nil {
+				return moved, err
+			}
 		}
 		scope, err = reviewGateScope(root, entry.TaskID, true, entryWarningLog(entry))
 		if err != nil {

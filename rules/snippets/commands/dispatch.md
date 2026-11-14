@@ -37,7 +37,7 @@ kander dispatch settle <task-id> <dispatch-id> <dispatch-revision>
 - An explicit UTF-8 intent for `dispatch prepare` contains `dispatch_id` (optional), `task_id`, `kind`, `message`, `base`, optional `references` (task ID plus card-relative `path`), `created_at`, and `confirm_by`. The default acceptance deadline is 120 seconds after creation (new notify/resume requests use their timeout); it never resets on restart or retry and is not a work-completion deadline. A round that expired with no receipt has no renewal: a retry reports the pending or conflict result, and the only way out is `dispatch fail|cancel`, then a new ID.
 - New fix intents require `evidence.fix`: a batch ID, nonempty run/finding references with exact `previous_run_id`, and references to all existing author originals on those findings with their lineage (author, run/finding ID, record ID, task ID, card-relative path). A disposition not yet written is not required. The current batch target must match base. A reference may name a run at base or at an earlier target on the batch's advance chain (the recorded `previous_target`/`target` links from the initial target to the current target); the check reads batch records only, never Git. The assignment must include the task, and all published originals must verify; superseded rounds, missing or foreign findings, and incomplete publication reject before sending. Legacy prose uses only the review producer's explicit mapping.
 - Pass bindings with `--evidence-file <JSON>` to notify/resume, or as `evidence` in `dispatch prepare`. Same-ID retries retain the frozen binding (omit the evidence file); later author records never rewrite an earlier dispatch; generic `references` never substitute for evidence. Historical unbound intents stay readable but cannot be sent as new fix or wrap-up actions.
-- New wrap-up intents require `evidence.wrap_up.git` with absolute CWD, source_commit, target_commit, target_ref (`refs/heads/<mainline branch>` or `refs/remotes/origin/<mainline branch>`, where `git.branch_mode` of the checkout at CWD selects `develop` or `main`), author, and basis.
+- New local wrap-up intents (no configured server) require `evidence.wrap_up.git` with absolute CWD, source_commit, target_commit, target_ref (`refs/heads/<mainline branch>` or `refs/remotes/origin/<mainline branch>`, where `git.branch_mode` of the checkout at CWD selects `develop` or `main`), author, and basis.
   - The command binds the base of the first planned batch and the closed final target of the last batch (kept in sync by `review advance` and `--advance-file`, see `snippets/review-evidence-gate.md` "Review Evidence Completion Gate"). It verifies source and target ancestry into the selected mainline reference and rereads that ref.
   - `source_commit` must equal the dispatch base, so pass `--base <source_commit>` whenever it differs from the HEAD of the directory the command runs in. By default source equals that closed final target; include no additional unreviewed commits.
   - After an authorized rebase, supply `rebased_base`: the command verifies base ancestry and compares the complete patch of the recorded range with the rebased range, normalizing only blob hashes and hunk offsets. A different patch rejects, and the orchestrator stops and reports per `snippets/orchestrate-integrate.md` "Merge-Back and Cleanup Preconditions".
@@ -70,3 +70,39 @@ kander dispatch settle <task-id> <dispatch-id> <dispatch-revision>
 In server mode every formal dispatch mutation carries the live task credential and its separate business epoch. Card changes, dispatch originals and exact operation receipts share one server transaction. `show` is a shared read. A foreign `prepare` creates a generation- and card-version-bound collaboration proposal containing the typed input; its output is a request with `status=open`, not a prepared dispatch. Inspect it with `kander request show <task-id> <request-id> --json`. The holder must still inspect evidence before preparing work.
 
 For a registered Git remote, working-to-review CLI and TUI moves publish the full delivery SHA to an immutable generation-specific remote ref and confirm that ref before the move. A missing commit, failed fetch, changed content revision or replaced execution blocks advancement. A task takeover must name its inspected dispatch context; a completed binding can settle atomically with the handoff, while retaining an unfinished binding grants no permission to repeat business effects. Lease loss alone never substitutes for the fresh stopped observation of accepted-round reauthorization.
+
+**Distributed wrap-up evidence**
+
+With a configured server, wrap-up evidence names the published final integration instead of a machine path and a mainline ref. `evidence.wrap_up.git` requires `integration_id`, `integration_execution`, `integration_generation`, `source_commit`, `target_commit`, `target_ref`, `author`, and `basis`. The client writes `cwd` as `project:<project-id>` and fills `dispatch_id`, `task_id`, the artifact reference, and the review range itself. Copy every value from the public receipt that `kander coordinator integration-show <target-ref>` prints:
+
+| Evidence field | Receipt field |
+| --- | --- |
+| `integration_id` | `id` |
+| `integration_execution` | `request.execution_id` |
+| `integration_generation` | `generation` |
+| `source_commit` | `request.commit` |
+| `target_commit` | `observed_target` |
+| `target_ref` | `request.target_ref` (a `refs/heads/...` name; never `refs/remotes/origin/...`) |
+
+```json
+{
+  "wrap_up": {
+    "git": {
+      "integration_id": "i-<64-hex receipt id>",
+      "integration_execution": "<request.execution_id>",
+      "integration_generation": 3,
+      "source_commit": "<request.commit, the closed final review target>",
+      "target_commit": "<observed_target>",
+      "target_ref": "refs/heads/develop",
+      "author": "coordinator",
+      "basis": "published final integration receipt"
+    }
+  }
+}
+```
+
+- Pass `--base <source_commit>` as for local evidence. The receipt must be `integrated`, `released`, with purpose `deliver`; `request.already_contained=true` is a valid receipt. Distributed evidence carries no `rebased_base`.
+- A missing identity field fails before any request or dispatch is created, and the error names each missing field and this mapping. A value that differs from the receipt fails and names the receipt value. Neither is a statement that the integration itself is unresolved. A complete matching receipt is still verified in full: the service checks the immutable execution, its member generation and the closed review target, and the client fetches the integration source and delivery refs and rereads the actual remote target.
+- Completion verification runs in the client, never in the service. It uses the recorded execution worktree, or, once cleanup removed it, the current directory when that is a checkout whose `origin` is the registered project remote. A clone of another project, or a checkout that cannot fetch the evidence, refuses completion. Run `move done` from a checkout of the project after cleanup; the epoch and holder checks are unchanged.
+- The immutable refs below `refs/heads/kander/<project-id>/` in the common remote (task deliveries and integration sources) are evidence, not task branches. Cleanup deletes task and group branches only; never delete these refs, because completion, review, and coordinator verification fetch them later.
+- When a completing `move done` of a dispatch releases the claim, the service settles the collaboration request that proposed that dispatch for the same generation as `done` in the same transaction; the released holder does not answer it. An exact replay of that completed move settles such a request an earlier server left `accepted`; any other payload settles nothing.

@@ -116,7 +116,7 @@ kander dispatch show <task-id> <id>
 
 ### 通常の Wrap-up
 
-レビュー済みの最終コミットとメインラインブランチへの統合コミットをバインドします。メインラインブランチは `cwd` のチェックアウト（プロジェクト設定を含む）の `git.branch_mode` で決まります：`main-develop`（既定）は `develop`、`main-only` は `main`。`target_ref` は `refs/heads/<メインライン>` または `refs/remotes/origin/<メインライン>` です。例は `main-develop` です：
+サーバーを設定していない場合のローカル形式です。レビュー済みの最終コミットとメインラインブランチへの統合コミットをバインドします。メインラインブランチは `cwd` のチェックアウト（プロジェクト設定を含む）の `git.branch_mode` で決まります：`main-develop`（既定）は `develop`、`main-only` は `main`。`target_ref` は `refs/heads/<メインライン>` または `refs/remotes/origin/<メインライン>` です。例は `main-develop` です：
 
 ```json
 {
@@ -137,6 +137,29 @@ kander dispatch show <task-id> <id>
 1. `source_commit` が封印されたレビュー計画の最終コミットと一致すること。
 2. `source_commit` が `target_commit` の祖先であること。
 3. `target_commit` が指定の `target_ref` に含まれること。
+
+### 分散 Wrap-up
+
+サーバーを設定している場合、証拠は公開済みの最終統合を指します。`kander coordinator integration-show <target-ref>` からコピーします：`id` → `integration_id`、`request.execution_id` → `integration_execution`、`generation` → `integration_generation`、`request.commit` → `source_commit`、`observed_target` → `target_commit`、`request.target_ref` → `target_ref`。クライアントは `cwd` を `project:<id>` として記録します。
+
+```json
+{
+  "wrap_up": {
+    "git": {
+      "integration_id": "i-<64-hex>",
+      "integration_execution": "<request.execution_id>",
+      "integration_generation": 3,
+      "source_commit": "<request.commit>",
+      "target_commit": "<observed_target>",
+      "target_ref": "refs/heads/develop",
+      "author": "coordinator",
+      "basis": "公開済み最終統合レシート"
+    }
+  }
+}
+```
+
+識別フィールドが欠けている場合は、リクエストやディスパッチを作成する前に失敗し、フィールド名を示します。値が異なる場合はレシートの値を示します。完了の検証はクライアントで行います：記録されたワークツリー、またはクリーンアップ後は現在の同一プロジェクトのチェックアウトを使います。不変の `refs/heads/kander/<project>/...` 証拠参照はタスクブランチと一緒に削除しません。詳細は [Distributed Git integration](distributed-integration.md) を参照してください。
 
 ### 代理 Wrap-up 例外（プロセス停止時）
 
