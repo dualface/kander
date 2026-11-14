@@ -39,6 +39,10 @@ structure Rel (nr : Nat) (st : St) (o : Obs) : Prop where
   debtSince : ∀ d ∈ o.debts, d.since ≤ o.nextId
   debtPlanned : o.debts ≠ [] → o.planned = true
   cyc : ∀ s, o.cycSince = some s → st.cycNeed = true ∧ posOf o.batches s ≤ st.cycFrom ∧ s ≤ o.nextId
+  covered : ∀ x ∈ o.batches, x.closed = true → x.has = true → ∀ r, r < nr → x.req r = true → x.covered r = true
+  added : ∀ x ∈ o.batches, x.addedCycle ≤ o.cycle ∧ (x.closed = true → x.addedCycle ≤ x.closedCycle)
+  debtCycle : ∀ d ∈ o.debts, d.cycle ≤ o.cycle
+  debtAdded : ∀ d ∈ o.debts, ∀ x ∈ o.batches, d.since ≤ x.id → d.cycle ≤ x.addedCycle
 
 theorem rel_init (nr : Nat) : Rel nr initSt obsInit where
   planned := rfl
@@ -65,6 +69,10 @@ theorem rel_init (nr : Nat) : Rel nr initSt obsInit where
   debtSince := by simp [obsInit]
   debtPlanned := by simp [obsInit]
   cyc := by simp [obsInit]
+  covered := by simp [obsInit]
+  added := by simp [obsInit]
+  debtCycle := by simp [obsInit]
+  debtAdded := by simp [obsInit]
 
 theorem wf_init (b : Nat) : WF b initSt := ⟨Nat.zero_le _, Nat.zero_le _, fun _ => Nat.zero_le _, by decide, Nat.zero_le _⟩
 
@@ -89,16 +97,20 @@ theorem anyReq_iff_live (R : Rel nr st o) {r : Nat} (hr : r < nr) : anyReq st 0 
 
 /-- A batch at a machine position at or above the position of `s` pays a debt
 from `s` on. -/
-theorem paid_of (R : Rel nr st o) {d : Debt} {fl : Nat} (hfl : posOf o.batches d.since ≤ fl) (hr : d.role < nr)
-    (h : anyFrom st fl (fun i => st.has i && (st.req i d.role && st.closed i)) = true) : Paid o d := by
+theorem paid_of (R : Rel nr st o) {d : Debt} (hd : d ∈ o.debts) {fl : Nat} (hfl : posOf o.batches d.since ≤ fl)
+    (hr : d.role < nr) (h : anyFrom st fl (fun i => st.has i && (st.req i d.role && st.closed i)) = true) :
+    Paid o d := by
   obtain ⟨i, hi1, hi2, hg⟩ := anyFrom_iff.mp h
   rw [R.count] at hi2
   simp only [Bool.and_eq_true] at hg
   obtain ⟨h1, h2, h3⟩ := hg
-  refine ⟨o.batches[i], List.getElem_mem hi2, le_id_of_posOf R.sorted hi2 (Nat.le_trans hfl hi1), ?_, ?_, ?_⟩
-  · rwa [← R.has i hi2]
-  · rwa [← R.req i hi2 _ hr]
-  · rwa [← R.closed i hi2]
+  have hm := List.getElem_mem hi2
+  have hid := le_id_of_posOf R.sorted hi2 (Nat.le_trans hfl hi1)
+  have ha : o.batches[i].has = true := by rwa [← R.has i hi2]
+  have hq : o.batches[i].req d.role = true := by rwa [← R.req i hi2 _ hr]
+  have hc : o.batches[i].closed = true := by rwa [← R.closed i hi2]
+  exact ⟨o.batches[i], hm, hid, ha, hq, hc,
+    Nat.le_trans (R.debtAdded d hd _ hm hid) ((R.added _ hm).2 hc), R.covered _ hm hc ha d.role hr hq⟩
 
 theorem noneOf_false {g : Nat → Bool} (h : noneOf nr g = true) {r : Nat} (hr : r < nr) : g r = false := by
   simp only [noneOf, decide_eq_true_eq] at h; exact h r hr
@@ -114,7 +126,7 @@ theorem clear_of_doneReady (R : Rel nr st o) (h : doneReadyS nr st = true) : Cle
     · obtain ⟨hrec', hfl⟩ := R.dropDebt d hd hk
       have := noneOf_false hdrop hr
       simp only [dropOwedR, hrec', Bool.true_and, Bool.not_eq_false', ite_true] at this
-      exact paid_of R hfl hr this
+      exact paid_of R hd hfl hr this
     · obtain ⟨h2, hfl⟩ := R.recDebt d hd hk
       have hin : recRoleIn st d.role = true := by
         have : recDebtRole o d.role = true := List.any_eq_true.mpr ⟨d, hd, by simp [hk]⟩
@@ -129,7 +141,7 @@ theorem clear_of_doneReady (R : Rel nr st o) (h : doneReadyS nr st = true) : Cle
         · exact h1
       have := noneOf_false hrec2 hr
       simp only [recMissing, hin, Bool.true_and, Bool.not_eq_false', recReviewed, h2, ite_true] at this
-      exact paid_of R hfl hr this
+      exact paid_of R hd hfl hr this
   · have h1 : st.recKind = 1 := R.np.mpr hnp
     have happ : ∀ r, r < nr → recRoleIn st r = (o.npRoles r || liveReq o r) := fun r hr => by
       simp [recRoleIn, h1, R.npRoles h1 r hr, anyReq_iff_live R hr]
@@ -200,6 +212,10 @@ theorem rel_create (R : Rel nr st o) : Rel nr (post nr st .create) (observe nr o
   debtSince := R.debtSince
   debtPlanned := fun _ => rfl
   cyc := R.cyc
+  covered := R.covered
+  added := R.added
+  debtCycle := R.debtCycle
+  debtAdded := R.debtAdded
 
 theorem rel_releaseRecovery (R : Rel nr st o) : Rel nr (post nr st .releaseRecovery) (observe nr o .releaseRecovery) :=
   { R with npReleased := fun _ => rfl }
@@ -254,6 +270,10 @@ theorem rel_releaseDrop (R : Rel nr st o) : Rel nr (post nr st .releaseDrop) (ob
   debtPlanned := fun h => R.debtPlanned (by
     intro hn; apply h; simp [observe, hn])
   cyc := R.cyc
+  covered := R.covered
+  added := R.added
+  debtCycle := fun d hd => R.debtCycle d (List.mem_filter.mp hd).1
+  debtAdded := fun d hd => R.debtAdded d (List.mem_filter.mp hd).1
 
 theorem rel_newCycle (R : Rel nr st o) : Rel nr (post nr st .newCycle) (observe nr o .newCycle) where
   planned := R.planned
@@ -285,6 +305,10 @@ theorem rel_newCycle (R : Rel nr st o) : Rel nr (post nr st .newCycle) (observe 
   debtSince := R.debtSince
   debtPlanned := R.debtPlanned
   cyc := R.cyc
+  covered := R.covered
+  added := fun x hx => ⟨Nat.le_succ_of_le (R.added x hx).1, (R.added x hx).2⟩
+  debtCycle := fun d hd => Nat.le_succ_of_le (R.debtCycle d hd)
+  debtAdded := R.debtAdded
 
 theorem snoc_cases {α : Type} {l : List α} {x : α} {i : Nat} (h : i < (l ++ [x]).length) :
     (∃ hi : i < l.length, (l ++ [x])[i] = l[i]) ∨ (i = l.length ∧ (l ++ [x])[i] = x) := by
@@ -375,6 +399,25 @@ theorem rel_addBatch {m : Bool} {rs : Nat → Bool} (R : Rel nr st o) :
     intro s hs
     obtain ⟨h1, h2, h3⟩ := R.cyc s hs
     exact ⟨h1, by simp only [observe]; rw [posOf_append_of_le h3]; exact h2, Nat.le_succ_of_le h3⟩
+  case covered =>
+    intro x hx
+    simp only [observe, List.mem_append, List.mem_singleton] at hx
+    rcases hx with hx | rfl
+    · exact R.covered x hx
+    · intro hc; simp at hc
+  case added =>
+    intro x hx
+    simp only [observe, List.mem_append, List.mem_singleton] at hx
+    rcases hx with hx | rfl
+    · exact R.added x hx
+    · exact ⟨Nat.le_refl _, by simp⟩
+  case debtCycle => exact R.debtCycle
+  case debtAdded =>
+    intro d hd x hx hs
+    simp only [observe, List.mem_append, List.mem_singleton] at hx
+    rcases hx with hx | rfl
+    · exact R.debtAdded d hd x hx hs
+    · exact R.debtCycle d hd
 
 theorem posOf_eq_ids {l l' : List OBatch} (h : l.map OBatch.id = l'.map OBatch.id) (s : Nat) :
     posOf l s = posOf l' s := by
@@ -390,11 +433,11 @@ theorem modify_ids {l : List OBatch} {k : Nat} {g : OBatch → OBatch} (hg : ∀
     simp only [List.getElem_map, List.getElem_modify]
     split <;> simp [hg]
 
-theorem rel_close {k : Nat} {cs : Nat → Bool} (R : Rel nr st o) (hg : Guard nr b st (.close k cs)) :
-    Rel nr (post nr st (.close k cs)) (observe nr o (.close k cs)) := by
-  obtain ⟨-, -, hk, -⟩ := hg
+theorem rel_close {k : Nat} {cs cv : Nat → Bool} (R : Rel nr st o) (hg : Guard nr b st (.close k cs cv)) :
+    Rel nr (post nr st (.close k cs cv)) (observe nr o (.close k cs cv)) := by
+  obtain ⟨-, -, hk, -, hcov⟩ := hg
   have hc := R.count
-  have hids := modify_ids (l := o.batches) (k := k) (g := closeB o.cycle cs) (fun _ => rfl)
+  have hids := modify_ids (l := o.batches) (k := k) (g := closeB o.cycle cs cv) (fun _ => rfl)
   have hpos := posOf_eq_ids hids
   constructor
   case planned => exact R.planned
@@ -428,9 +471,9 @@ theorem rel_close {k : Nat} {cs : Nat → Bool} (R : Rel nr st o) (hg : Guard nr
   case sorted =>
     intro i j hi hj hij
     simp only [observe, List.length_modify] at hi hj
-    have hi' : ((o.batches.modify k (closeB o.cycle cs))[i]'(by simpa using hi)).id = o.batches[i].id := by
+    have hi' : ((o.batches.modify k (closeB o.cycle cs cv))[i]'(by simpa using hi)).id = o.batches[i].id := by
       simp only [List.getElem_modify]; split <;> rfl
-    have hj' : ((o.batches.modify k (closeB o.cycle cs))[j]'(by simpa using hj)).id = o.batches[j].id := by
+    have hj' : ((o.batches.modify k (closeB o.cycle cs cv))[j]'(by simpa using hj)).id = o.batches[j].id := by
       simp only [List.getElem_modify]; split <;> rfl
     simp only [observe]
     rw [hi', hj']
@@ -440,7 +483,7 @@ theorem rel_close {k : Nat} {cs : Nat → Bool} (R : Rel nr st o) (hg : Guard nr
     simp only [observe] at hx
     obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hx
     have hi2 : i < o.batches.length := by simpa using hi
-    have : ((o.batches.modify k (closeB o.cycle cs))[i]'hi).id = o.batches[i].id := by
+    have : ((o.batches.modify k (closeB o.cycle cs cv))[i]'hi).id = o.batches[i].id := by
       simp only [List.getElem_modify]; split <;> rfl
     rw [this]; exact R.ids _ (List.getElem_mem hi2)
   case cycles =>
@@ -474,26 +517,62 @@ theorem rel_close {k : Nat} {cs : Nat → Bool} (R : Rel nr st o) (hg : Guard nr
     intro s hs
     obtain ⟨h1, h2, h3⟩ := R.cyc s hs
     exact ⟨h1, by simp only [observe]; rw [hpos]; exact h2, h3⟩
+  case covered =>
+    intro x hx
+    simp only [observe] at hx
+    obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hx
+    have hi2 : i < o.batches.length := by simpa using hi
+    simp only [List.getElem_modify]
+    split
+    · rename_i hki
+      subst hki
+      intro _ hh r hr hq
+      simp only [closeB] at hh hq ⊢
+      exact hcov (by rw [R.has _ hi2]; exact hh) r hr (by rw [R.req _ hi2 r hr]; exact hq)
+    · exact R.covered _ (List.getElem_mem hi2)
+  case added =>
+    intro x hx
+    simp only [observe] at hx
+    obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hx
+    have hi2 : i < o.batches.length := by simpa using hi
+    have ha := R.added _ (List.getElem_mem hi2)
+    simp only [List.getElem_modify]
+    split
+    · exact ⟨ha.1, fun _ => ha.1⟩
+    · exact ha
+  case debtCycle => exact R.debtCycle
+  case debtAdded =>
+    intro d hd x hx hs
+    simp only [observe] at hx
+    obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hx
+    have hi2 : i < o.batches.length := by simpa using hi
+    have e : ((o.batches.modify k (closeB o.cycle cs cv))[i]'hi).id = o.batches[i].id ∧
+        ((o.batches.modify k (closeB o.cycle cs cv))[i]'hi).addedCycle = o.batches[i].addedCycle := by
+      simp only [List.getElem_modify]; split <;> exact ⟨rfl, rfl⟩
+    rw [e.1] at hs
+    rw [e.2]
+    exact R.debtAdded d hd _ (List.getElem_mem hi2) hs
 
-theorem mem_debtsFor {nr' : Nat} {k : DebtKind} {s : Nat} {g : Nat → Bool} {d : Debt} :
-    d ∈ debtsFor nr' k s g ↔ d.kind = k ∧ d.role < nr' ∧ g d.role = true ∧ d.since = s := by
+
+theorem mem_debtsFor {nr' : Nat} {k : DebtKind} {s c : Nat} {g : Nat → Bool} {d : Debt} :
+    d ∈ debtsFor nr' k s c g ↔ d.kind = k ∧ d.role < nr' ∧ g d.role = true ∧ d.since = s ∧ d.cycle = c := by
   simp only [debtsFor, List.mem_filterMap, List.mem_range]
   constructor
   · rintro ⟨r, hr, h⟩
     split at h
-    · cases h; rename_i hg; exact ⟨rfl, hr, hg, rfl⟩
+    · cases h; rename_i hg; exact ⟨rfl, hr, hg, rfl, rfl⟩
     · cases h
-  · rintro ⟨h1, h2, h3, h4⟩
+  · rintro ⟨h1, h2, h3, h4, h5⟩
     exact ⟨d.role, h2, by simp [h3]; cases d; simp_all⟩
 
-theorem anyRole_debtsFor {nr' : Nat} {k : DebtKind} {s : Nat} {g : Nat → Bool} {r : Nat} :
-    ((debtsFor nr' k s g).any fun d => d.kind == .recovery && d.role == r) =
+theorem anyRole_debtsFor {nr' : Nat} {k : DebtKind} {s c : Nat} {g : Nat → Bool} {r : Nat} :
+    ((debtsFor nr' k s c g).any fun d => d.kind == .recovery && d.role == r) =
       (decide (k = .recovery) && decide (r < nr') && g r) := by
   apply Bool.eq_iff_iff.mpr
   simp only [List.any_eq_true, mem_debtsFor, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq]
   constructor
   · rintro ⟨d, ⟨h1, h2, h3, -⟩, h5, rfl⟩; exact ⟨⟨h1 ▸ h5, h2⟩, h3⟩
-  · rintro ⟨⟨h1, h2⟩, h3⟩; exact ⟨⟨k, r, s⟩, ⟨rfl, h2, h3, rfl⟩, h1, rfl⟩
+  · rintro ⟨⟨h1, h2⟩, h3⟩; exact ⟨⟨k, r, s, c⟩, ⟨rfl, h2, h3, rfl, rfl⟩, h1, rfl⟩
 
 theorem resetRole_eq (R : Rel nr st o) (hw : WF b st) {r : Nat} (hr : r < nr) : resetRoleS st r = resetRoles o r := by
   simp only [resetRoleS, resetRoles, anyReq_iff_live R hr, R.dropped r hr, Bool.or_assoc]
@@ -565,6 +644,10 @@ theorem rel_reset (R : Rel nr st o) (hw : WF b st) : Rel nr (post nr st .reset) 
     case debtSince => simp [hnd]
     case debtPlanned => simp [hnd]
     case cyc => exact R.cyc
+    case covered => exact R.covered
+    case added => exact fun x hx => ⟨Nat.le_succ_of_le (R.added x hx).1, (R.added x hx).2⟩
+    case debtCycle => simp [hnd]
+    case debtAdded => simp [hnd]
   · have hst : st.planned = true := by rw [hpl, hp]
     cases ha : (List.range nr).any (resetRoles o)
     · -- under a plan with no role: the record stays as it is
@@ -595,6 +678,10 @@ theorem rel_reset (R : Rel nr st o) (hw : WF b st) : Rel nr (post nr st .reset) 
       case debtSince => exact R.debtSince
       case debtPlanned => exact fun _ => rfl
       case cyc => exact R.cyc
+      case covered => exact R.covered
+      case added => exact fun x hx => ⟨Nat.le_succ_of_le (R.added x hx).1, (R.added x hx).2⟩
+      case debtCycle => exact fun d hd => Nat.le_succ_of_le (R.debtCycle d hd)
+      case debtAdded => exact R.debtAdded
     · -- under a plan with roles: planned recovery from the end of the plan
       have hkp : resetKeepsS nr st = false := by simp [resetKeepsS, hst, hk, ha]
       simp only [post, resetS, observe, hp, hst, hkp, ha, Bool.not_true, Bool.false_eq_true, ite_false, ite_true]
@@ -633,7 +720,7 @@ theorem rel_reset (R : Rel nr st o) (hw : WF b st) : Rel nr (post nr st .reset) 
         · have h1 := posOf_le_length o.batches d.since
           have h2 := R.count
           exact ⟨rfl, by simp only; omega⟩
-        · obtain ⟨-, -, -, hs⟩ := mem_debtsFor.mp hd
+        · obtain ⟨-, -, -, hs, -⟩ := mem_debtsFor.mp hd
           have h2 := R.count
           exact ⟨rfl, by simp only; rw [hs, posOf_all R.ids]; omega⟩
       case dropDebt =>
@@ -651,9 +738,23 @@ theorem rel_reset (R : Rel nr st o) (hw : WF b st) : Rel nr (post nr st .reset) 
         intro d hd
         rcases List.mem_append.mp hd with hd | hd
         · exact R.debtSince d hd
-        · exact Nat.le_of_eq (mem_debtsFor.mp hd).2.2.2
+        · exact Nat.le_of_eq (mem_debtsFor.mp hd).2.2.2.1
       case debtPlanned => exact fun _ => rfl
       case cyc => exact R.cyc
+      case covered => exact R.covered
+      case added => exact fun x hx => ⟨Nat.le_succ_of_le (R.added x hx).1, (R.added x hx).2⟩
+      case debtCycle =>
+        intro d hd
+        rcases List.mem_append.mp hd with hd | hd
+        · exact Nat.le_succ_of_le (R.debtCycle d hd)
+        · exact Nat.le_of_eq (mem_debtsFor.mp hd).2.2.2.2
+      case debtAdded =>
+        intro d hd x hx hs
+        rcases List.mem_append.mp hd with hd | hd
+        · exact R.debtAdded d hd x hx hs
+        · have := (mem_debtsFor.mp hd).2.2.2.1
+          have := R.ids x hx
+          omega
 
 /-- `anyFrom` over the machine's positions from `k` is `any` over the
 observer's batches from `k`. -/
@@ -743,6 +844,10 @@ theorem rel_rebind (R : Rel nr st o) :
   case debtRoles => exact R.debtRoles
   case debtSince => exact R.debtSince
   case debtPlanned => exact R.debtPlanned
+  case covered => exact R.covered
+  case added => exact R.added
+  case debtCycle => exact R.debtCycle
+  case debtAdded => exact R.debtAdded
   case cyc =>
     intro s hs
     simp only [observe, post, rebindS] at hs ⊢
@@ -856,7 +961,7 @@ theorem rel_drop {k : Nat} {d : Bool} (R : Rel nr st o) (hg : Guard nr b st (.dr
         show posOf (o.batches.take k) e.since ≤ (dropS st k d).dropFloor e.role
         simp only [dropS]
         split <;> (try split) <;> omega
-      · obtain ⟨-, hr, hm, hs⟩ := mem_debtsFor.mp he
+      · obtain ⟨-, hr, hm, hs, -⟩ := mem_debtsFor.mp he
         have hmr : memReq st k e.role = true := by rw [memReq_eq R hr]; exact hm
         have ht : dropTakesS st d = true := by
           simp only [Bool.and_eq_true, Bool.not_eq_true'] at htk
@@ -885,7 +990,7 @@ theorem rel_drop {k : Nat} {d : Bool} (R : Rel nr st o) (hg : Guard nr b st (.dr
     split at he
     · rcases List.mem_append.mp he with he | he
       · exact R.debtSince e he
-      · exact Nat.le_of_eq (mem_debtsFor.mp he).2.2.2
+      · exact Nat.le_of_eq (mem_debtsFor.mp he).2.2.2.1
     · exact R.debtSince e he
   case debtPlanned =>
     intro _
@@ -899,6 +1004,28 @@ theorem rel_drop {k : Nat} {d : Bool} (R : Rel nr st o) (hg : Guard nr b st (.dr
     show posOf (o.batches.take k) s ≤ (dropS st k d).cycFrom
     simp only [dropS]
     split <;> omega
+  case covered => exact fun x hx => R.covered x (List.mem_of_mem_take hx)
+  case added => exact fun x hx => R.added x (List.mem_of_mem_take hx)
+  case debtCycle =>
+    intro e he
+    simp only [observe] at he
+    split at he
+    · rcases List.mem_append.mp he with he | he
+      · exact R.debtCycle e he
+      · exact Nat.le_of_eq (mem_debtsFor.mp he).2.2.2.2
+    · exact R.debtCycle e he
+  case debtAdded =>
+    intro e he x hx hs
+    have hx' := List.mem_of_mem_take hx
+    simp only [observe] at he
+    split at he
+    · rcases List.mem_append.mp he with he | he
+      · exact R.debtAdded e he x hx' hs
+      · have := (mem_debtsFor.mp he).2.2.2.1
+        have := R.ids x hx'
+        omega
+    · exact R.debtAdded e he x hx' hs
+
 
 theorem wf_post {e : Ev} (hw : WF b st) (hg : Guard nr b st e) : WF b (post nr st e) := by
   obtain ⟨w1, w2, w3, w4, w5⟩ := hw
@@ -922,6 +1049,7 @@ theorem wf_post {e : Ev} (hw : WF b st) (hg : Guard nr b st e) : WF b (post nr s
     obtain ⟨-, -, hk, -⟩ := hg
     refine ⟨?_, ?_, fun r => ?_, w4, ?_⟩ <;> simp only [post, dropS] <;> (try split) <;> (try split) <;>
       first | omega | exact w3 r | (have := w3 r; omega)
+  | dropTakes d => exact ⟨w1, w2, w3, w4, w5⟩
   | releaseDrop => exact ⟨w1, w2, fun r => by simp [post, releaseDropS, fillFn], w4, w5⟩
   | releaseRecovery => exact ⟨w1, w2, w3, w4, w5⟩
   | done c => exact ⟨w1, w2, w3, w4, w5⟩
@@ -936,6 +1064,7 @@ theorem rel_post {e : Ev} (R : Rel nr st o) (hw : WF b st) (hg : Guard nr b st e
   | reset => exact rel_reset R hw
   | rebind => exact rel_rebind R
   | drop k d => exact rel_drop R hg
+  | dropTakes d => exact R
   | releaseDrop => exact rel_releaseDrop R
   | releaseRecovery => exact rel_releaseRecovery R
   | done c => exact rel_done R

@@ -82,13 +82,16 @@ theorem debt_safety {roles : List String} {p : Params} {hs : List Event} {s s' :
   exact clear_of_doneReady R hg.1
 
 /-- Theorem 2, evidence floor safety: at an accepted completion every debt a drop
-or a planned reset left is paid by a closed batch that names the member,
-requires the role, and was added after the debt arose; and every role the no-plan
-record applies to was reviewed by a conclusion of the current cycle. -/
+or a planned reset left is paid by a closed batch that names the member and
+requires the role, added after the debt arose, closed in the debt's cycle or a
+later one, whose conclusion of the role covered the cycle current at the close;
+and every role the no-plan record applies to was reviewed by a conclusion of the
+current cycle. -/
 theorem evidence_floor {roles : List String} {p : Params} {hs : List Event} {s s' : State} {e : Event}
     (h : Hist (Mr roles) p hs s) (hstep : step (Mr roles) p s e = some s') (hn : e.name = "done") :
     let o := obsOf roles.length (decoded hs)
-    (∀ d ∈ o.debts, ∃ b ∈ o.batches, d.since ≤ b.id ∧ b.has = true ∧ b.req d.role = true ∧ b.closed = true) ∧
+    (∀ d ∈ o.debts, ∃ b ∈ o.batches, d.since ≤ b.id ∧ b.has = true ∧ b.req d.role = true ∧ b.closed = true ∧
+        d.cycle ≤ b.closedCycle ∧ b.covered d.role = true) ∧
       (o.npRecord = true → ∀ r, r < roles.length → (o.npRoles r || liveReq o r) = true →
         ∃ b ∈ o.batches, b.has = true ∧ b.req r = true ∧ b.closed = true ∧ b.closedCycle = o.cycle ∧
           b.conc r = true) := by
@@ -154,7 +157,8 @@ def rolesV (pmqa security : Bool) : Val := .set [pmqa, security]
 def evReset : Event := ⟨"reset", []⟩
 def evCreate : Event := ⟨"create", []⟩
 def evAdd (member : Bool) (roles : Val) : Event := ⟨"addBatch", [boolV member, roles]⟩
-def evClose (at_ : Nat) (current : Val) : Event := ⟨"close", [natV at_, current]⟩
+/-- A close whose conclusions reviewed and cover the current cycle. -/
+def evClose (at_ : Nat) (current : Val) : Event := ⟨"close", [natV at_, current, current]⟩
 def evRebind : Event := ⟨"rebind", []⟩
 def evDrop (keep : Nat) (decision : Bool) : Event := ⟨"drop", [natV keep, boolV decision]⟩
 def evReleaseDrop : Event := ⟨"releaseDrop", []⟩
@@ -204,6 +208,18 @@ reset → planNA → close → releaseRecovery → appendRequired → close → 
 def witnessReleasedRole : List Event :=
   [evReset, evCreate, evAdd true (rolesV false false), evClose 0 (rolesV false false), evReleaseRecovery,
     evAdd true (rolesV true false), evClose 1 (rolesV true false)]
+
+/-- A close of a batch that names the member on a conclusion that does not cover
+the current cycle is refused: after a reset, the batch that would pay the
+recovery cannot close on the old cycle's review. -/
+def staleClose : List Event :=
+  [evCreate, evAdd true (rolesV true false), evClose 0 (rolesV true false), evReset, evRebind,
+    evAdd true (rolesV true false)]
+
+theorem counter_staleClose :
+    (runList M p3 (initial M p3) staleClose).isSome = true ∧
+      (runList M p3 (initial M p3) (staleClose ++ [⟨"close", [natV 1, rolesV false false, rolesV false false]⟩])).isSome =
+        false := by decide
 
 theorem witness_members : completes witnessMemberA = true ∧ completes witnessMemberB = true := by decide
 theorem witness_twoResets : completes witnessTwoResets = true := by decide

@@ -47,14 +47,17 @@ var vectorEvents = []Event{
 	AddBatch{Member: true, Roles: 1},
 	AddBatch{Member: true, Roles: 0},
 	AddBatch{Member: false, Roles: 2},
-	Close{At: 0, Current: 3},
-	Close{At: 0, Current: 0},
-	Close{At: 1, Current: 1},
+	Close{At: 0, Current: 3, Covered: 3},
+	Close{At: 0, Current: 0, Covered: 0},
+	Close{At: 1, Current: 1, Covered: 1},
+	Close{At: 1, Current: 0, Covered: 1},
 	NewCycle{},
 	Reset{},
 	Rebind{},
 	Drop{Keep: 1, Decision: false},
 	Drop{Keep: 1, Decision: true},
+	DropTakes{Decision: false},
+	DropTakes{Decision: true},
 	ReleaseDrop{},
 	ReleaseRecovery{},
 	Done{PlanClear: true},
@@ -96,7 +99,7 @@ func encodeEvent(e Event) string {
 	case AddBatch:
 		return vectortest.Event("addBatch", "member", vectortest.Bool(ev.Member), "roles", encodeRoleSet(ev.Roles))
 	case Close:
-		return vectortest.Event("close", "at", vectortest.Uint(ev.At), "current", encodeRoleSet(ev.Current))
+		return vectortest.Event("close", "at", vectortest.Uint(ev.At), "current", encodeRoleSet(ev.Current), "covered", encodeRoleSet(ev.Covered))
 	case NewCycle:
 		return vectortest.Event("newCycle")
 	case Reset:
@@ -105,6 +108,8 @@ func encodeEvent(e Event) string {
 		return vectortest.Event("rebind")
 	case Drop:
 		return vectortest.Event("drop", "keep", vectortest.Uint(ev.Keep), "decision", vectortest.Bool(ev.Decision))
+	case DropTakes:
+		return vectortest.Event("dropTakes", "decision", vectortest.Bool(ev.Decision))
 	case ReleaseDrop:
 		return vectortest.Event("releaseDrop")
 	case ReleaseRecovery:

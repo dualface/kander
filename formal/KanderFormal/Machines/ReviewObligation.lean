@@ -155,12 +155,19 @@ def addBatchEvent : EventDecl where
   ]
 
 /-- The batch at `at` closes; `current` are the roles whose conclusion run
-reviewed the member's current cycle. Every member must be bound to its current
-cycle. -/
+reviewed the member's current cycle (a run bound to that cycle), and `covered`
+the roles whose conclusion run covers it (`runCoversCycle`, which also accepts a
+run of an older binary while the card had one cycle). Every member must be bound
+to its current cycle, and a batch that names the member closes only when every
+role it requires has a covering conclusion (`requireCurrentConclusions`). -/
 def closeEvent : EventDecl where
   name := "close"
-  args := [{ name := "at", ty := .scalar (.nat "maxBatch") }, { name := "current", ty := .set "role" }]
-  guard := andE (f "planned") (andE (f "bound") (andE (lt (a "at") count) (notE (.aget (f "closed") (a "at")))))
+  args := [{ name := "at", ty := .scalar (.nat "maxBatch") }, { name := "current", ty := .set "role" },
+    { name := "covered", ty := .set "role" }]
+  guard := andE (f "planned") (andE (f "bound") (andE (lt (a "at") count) (andE (notE (.aget (f "closed") (a "at")))
+    (orE (notE (.aget (f "has") (a "at")))
+      (eq (.setOf "role" (andE (.mem (.aget (f "req") (a "at")) (.bvar 0)) (notE (.mem (a "covered") (.bvar 0)))))
+        noRoles)))))
   assigns := [
     ("closed", .aput (f "closed") (a "at") tt),
     ("cur", .aput (f "cur") (a "at") (a "current"))
@@ -247,6 +254,16 @@ def dropEvent : EventDecl where
     ("recFloor", iteE (andE (eq (f "rec") (recC "planned")) (lt (a "keep") (f "recFloor"))) (a "keep") (f "recFloor"))
   ]
 
+/-- Whether a drop with `decision` leaves obligations on the member: no user
+decision came with it, and the member still takes obligations. Accepted exactly
+when the drop adds them (`dropTakes` above); it changes nothing, and the shell
+writes the obligation records of the members it accepts. -/
+def dropTakesEvent : EventDecl where
+  name := "dropTakes"
+  args := [{ name := "decision", ty := .scalar .bool }]
+  guard := dropTakes
+  assigns := []
+
 /-- A user decision releases the drop obligations naming the member. It refuses
 a member with none, so a decision never stands with no effect. -/
 def releaseDropEvent : EventDecl where
@@ -302,7 +319,7 @@ def obligationMachine (roles : List String) : Machine where
     { name := "recReleased", ty := .scalar .bool, init := boolV false }
   ]
   events := [createEvent, addBatchEvent, closeEvent, newCycleEvent, resetEvent, rebindEvent, dropEvent,
-    releaseDropEvent, releaseRecoveryEvent, doneEvent]
+    dropTakesEvent, releaseDropEvent, releaseRecoveryEvent, doneEvent]
   queries := [
     { name := "planRoles", ty := .set "role", body := planRoles },
     { name := "recoveryRoles", ty := .set "role", body := recoveryRoles },

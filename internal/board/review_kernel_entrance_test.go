@@ -69,7 +69,7 @@ func TestReviewEntrancesRefineKernels(t *testing.T) {
 		return err
 	})
 	refines(t, root, ids, kernelSteps{
-		members: bothMembers(ids, reviewobligation.Close{At: 0, Current: pmqaRoles}),
+		members: bothMembers(ids, reviewobligation.Close{At: 0, Current: pmqaRoles, Covered: pmqaRoles}),
 		plan:    []reviewplan.Event{reviewplan.Aggregate{At: 0, Published: true, Lineage: true, Ledger: true}, closeFacts(0)},
 	}, false, func() error {
 		_, err := deadEndClose(t, root, "batch", map[string]ReviewRoleConclusion{"PMQA": passRole(run)}, nil)
@@ -137,8 +137,8 @@ func TestReviewEntrancesRefineKernels(t *testing.T) {
 	refines(t, root, ids, kernelSteps{
 		members: map[string][]reviewobligation.Event{
 			// A conclusion run binds the cycles of its batch's members only.
-			ids[0]: {reviewobligation.Close{At: 1, Current: noRoles}},
-			ids[1]: {reviewobligation.Close{At: 1, Current: pmqaRoles}},
+			ids[0]: {reviewobligation.Close{At: 1, Current: noRoles, Covered: noRoles}},
+			ids[1]: {reviewobligation.Close{At: 1, Current: pmqaRoles, Covered: pmqaRoles}},
 		},
 		plan: []reviewplan.Event{reviewplan.Run{At: 1}, reviewplan.Aggregate{At: 1, Published: true, Lineage: true, Ledger: true}, closeFacts(1)},
 	}, false, func() error {
@@ -202,7 +202,7 @@ func TestReleasedRecoveryRefinesKernels(t *testing.T) {
 				plan:    []reviewplan.Event{reviewplan.Create{Batches: 1, CoversAll: true, Chain: true, NoUnplannedRuns: true, MembersFree: true}},
 			}, false, func() error { return CreateReviewPlan(root, p) })
 			refines(t, root, ids, kernelSteps{
-				members: bothMembers(ids, reviewobligation.Close{At: 0, Current: noRoles}),
+				members: bothMembers(ids, reviewobligation.Close{At: 0, Current: noRoles, Covered: noRoles}),
 				plan:    []reviewplan.Event{reviewplan.Aggregate{At: 0, Published: true, Lineage: true, Ledger: true}, closeFacts(0)},
 			}, false, func() error {
 				_, err := deadEndClose(t, root, "batch", map[string]ReviewRoleConclusion{}, nil)

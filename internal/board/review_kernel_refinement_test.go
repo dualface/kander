@@ -315,7 +315,7 @@ func kernelFixtureEvents(s reviewobligation.State) []reviewobligation.Event {
 		reviewobligation.Done{PlanClear: true},
 	}
 	for i := uint64(0); i < s.Count; i++ {
-		events = append(events, reviewobligation.Close{At: i, Current: s.Req[i]})
+		events = append(events, reviewobligation.Close{At: i, Current: s.Req[i], Covered: s.Req[i]})
 	}
 	for keep := uint64(1); keep < s.Count; keep++ {
 		events = append(events, reviewobligation.Drop{Keep: keep, Decision: false}, reviewobligation.Drop{Keep: keep, Decision: true})

@@ -634,6 +634,35 @@ func closeGitEvidence(v ReviewBatchView, b ReviewBatch, p ReviewPlan, r ReviewCl
 	return nil
 }
 
+// coveringRoles lists the required roles of batch b whose conclusion run in
+// closure c covers the current cycle of member id (`runCoversCycle`).
+func coveringRoles(tx *Transaction, b ReviewPlanBatch, c ReviewClosure, id string) (reviewobligation.RoleSet, error) {
+	var set reviewobligation.RoleSet
+	for role, requirement := range b.Requirements {
+		if requirement != "required" {
+			continue
+		}
+		run := c.Request.Roles[role].RunID
+		at := slices.IndexFunc(c.View.Runs, func(rv ReviewRunView) bool { return rv.Run.RunID == run })
+		if at < 0 {
+			continue
+		}
+		covers, err := runCoversCycle(tx, c.View.Runs[at].Run, id)
+		if err != nil {
+			return 0, err
+		}
+		if !covers {
+			continue
+		}
+		r, err := kernelRole(role)
+		if err != nil {
+			return 0, err
+		}
+		set = set.With(r)
+	}
+	return set, nil
+}
+
 // closeMemberKernels runs the close of the batch at position at through the
 // kernel of every member that stayed in the plan, with the roles whose
 // conclusion run reviewed the member's current cycle.
@@ -658,7 +687,11 @@ func closeMemberKernels(tx *Transaction, p ReviewPlan, at int, c ReviewClosure) 
 		if err != nil {
 			return err
 		}
-		if !k.step(reviewobligation.Close{At: uint64(at), Current: current}) {
+		covered, err := coveringRoles(tx, p.Batches[at], c, id)
+		if err != nil {
+			return err
+		}
+		if !k.step(reviewobligation.Close{At: uint64(at), Current: current, Covered: covered}) {
 			return errKernelState(id)
 		}
 	}

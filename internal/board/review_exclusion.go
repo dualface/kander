@@ -340,43 +340,41 @@ func dropPlanBatches(tx *Transaction, pk *planKernel, p *ReviewPlan, ids []strin
 		return firstError(refusal, reviewError("drop_batches refused"))
 	}
 	var before, after []*memberKernel
+	takes := map[string]bool{}
 	for _, id := range p.TaskIDs {
 		k, err := loadMemberKernel(tx, *p, true, id, kernelBound(*p))
 		if err != nil {
 			return err
 		}
 		pre := *k
+		// Accepted when the drop leaves obligations on this member; it changes nothing.
+		_, takes[id] = reviewobligation.Step(pre.state, reviewobligation.DropTakes{Decision: decision != ""}, pre.params)
 		if !k.step(reviewobligation.Drop{Keep: uint64(keep), Decision: decision != ""}) {
 			return errKernelState(id)
 		}
 		before, after = append(before, &pre), append(after, k)
 	}
 	p.Batches, p.Sealed = slices.Clone(p.Batches[:keep]), pk.state.Sealed
-	return persistDrop(tx, p, tail, keep, decision, before, after)
+	return persistDrop(tx, p, tail, keep, takes, before, after)
 }
 
 // persistDrop writes what the kernels decided for a drop in the plan and the
-// recovery records: every obligation moves to the new end of the plan, the
-// dropped required batches leave obligations on the members that take them, and
-// the members' remembered roles, rebound positions, and recovery records follow
-// their kernels.
-func persistDrop(tx *Transaction, p *ReviewPlan, tail []ReviewPlanBatch, keep int, decision string, before, after []*memberKernel) error {
+// recovery records: every obligation moves to the new end of the plan, each
+// dropped required batch leaves an obligation record naming the members whose
+// kernel took obligations, and the members' remembered roles, rebound positions,
+// and recovery records follow their kernels.
+func persistDrop(tx *Transaction, p *ReviewPlan, tail []ReviewPlanBatch, keep int, takes map[string]bool, before, after []*memberKernel) error {
 	kept := slices.Clone(p.DropObligations)
 	for i := range kept {
 		kept[i].FromBatch = min(kept[i].FromBatch, keep)
 	}
 	p.DropObligations = kept
-	takes := map[string]bool{}
-	for _, k := range before {
-		takes[k.id] = reviewobligation.TakesObligations(k.state, k.params)
-	}
-	if decision == "" {
-		for _, b := range tail {
-			roles := planRequiredRoles(ReviewPlan{Batches: []ReviewPlanBatch{b}})
-			members := slices.DeleteFunc(slices.Clone(b.TaskIDs), func(id string) bool { return !takes[id] })
-			if len(roles) > 0 && len(members) > 0 {
-				p.DropObligations = append(p.DropObligations, ReviewDropObligation{BatchID: b.BatchID, FromBatch: keep, Roles: roles, TaskIDs: members})
-			}
+	for _, b := range tail {
+		roles := planRequiredRoles(ReviewPlan{Batches: []ReviewPlanBatch{b}})
+		members := slices.DeleteFunc(slices.Clone(b.TaskIDs), func(id string) bool { return !takes[id] })
+		// An obligation record with no role or no member would discharge nothing.
+		if len(roles) > 0 && len(members) > 0 {
+			p.DropObligations = append(p.DropObligations, ReviewDropObligation{BatchID: b.BatchID, FromBatch: keep, Roles: roles, TaskIDs: members})
 		}
 	}
 	p.DroppedRoles = maps.Clone(p.DroppedRoles)

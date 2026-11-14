@@ -488,31 +488,48 @@ def closeS (st : St) (k : Nat) (cs : Nat → Bool) : St :=
     closed := upd st.closed k true
     cur := upd st.cur k cs }
 
-theorem acc_close {k : Nat} {cs : Nat → Bool} (hw : WF B st) (hargs : args = [("at", natV k), ("current", setV n cs)])
+theorem acc_close {k : Nat} {cs cv : Nat → Bool} (hw : WF B st)
+    (hargs : args = [("at", natV k), ("current", setV n cs), ("covered", setV n cv)])
     (hg : eval (E roles p st args []) closeEvent.guard = some (boolV true))
     (hu : evalAssigns (E roles p st args []) closeEvent.assigns = some us) :
     st.planned = true ∧ st.bound = true ∧ k < st.count ∧ st.closed k = false ∧
+      (st.has k = true → ∀ r, r < n → st.req k r = true → cv r = true) ∧
       applyUpdates (enc n B st) us = enc n B (closeS st k cs) := by
   subst hargs
-  have hk : eval (E roles p st [("at", natV k), ("current", setV n cs)] []) (a "at") = some (natV k) := by ev
-  have hC : eval (E roles p st [("at", natV k), ("current", setV n cs)] []) (a "current") = some (setV n cs) := by ev
+  have hk : ∀ bnd, eval (E roles p st [("at", natV k), ("current", setV n cs), ("covered", setV n cv)] bnd) (a "at") =
+      some (natV k) := by intro bnd; ev
+  have hC : eval (E roles p st [("at", natV k), ("current", setV n cs), ("covered", setV n cv)] []) (a "current") =
+      some (setV n cs) := by ev
   obtain ⟨g1, g2⟩ := eval_and_true hg
   obtain ⟨g2, g3⟩ := eval_and_true g2
   obtain ⟨g3, g4⟩ := eval_and_true g3
+  obtain ⟨g4, g5⟩ := eval_and_true g4
   have hp := leaf g1 ev_planned
   have hb := leaf g2 ev_boundF
-  have hlt := leaf g3 (eval_lt hk ev_field_count)
+  have hlt := leaf g3 (eval_lt (hk []) ev_field_count)
   simp only [decide_eq_true_eq] at hlt
   have hkb : k < B := Nat.lt_of_lt_of_le hlt hw.count
-  have hcl := leaf g4 (eval_not (ev_aget ev_closed hk hkb))
+  have hcl := leaf g4 (eval_not (ev_aget ev_closed (hk []) hkb))
   simp only [Bool.not_eq_true'] at hcl
+  have hset : eval (E roles p st [("at", natV k), ("current", setV n cs), ("covered", setV n cv)] [])
+      (.setOf "role" (andE (.mem (.aget (f "req") (a "at")) (.bvar 0)) (notE (.mem (a "covered") (.bvar 0))))) =
+      some (setV n fun r => st.req k r && !cv r) :=
+    eval_setOf size_role fun r hr => by ev; simp [hkb, setMem_setV hr, boolNot, boolV]
+  have heq := eval_eq hset ev_noRoles0
+  rw [decide_setV_none] at heq
+  have hcov := leaf g5 (eval_or (eval_not (ev_aget ev_has (hk []) hkb)) heq)
+  have hcov' : st.has k = true → ∀ r, r < n → st.req k r = true → cv r = true := by
+    intro hh r hr hq
+    simp only [hh, Bool.not_true, Bool.false_or, noneOf, decide_eq_true_eq] at hcov
+    have := hcov r hr
+    simpa [hq] using this
   obtain ⟨v1, us1, rfl, h1, hm1⟩ := assigns_cons (evalAssigns_spec hu)
   obtain ⟨v2, us2, rfl, h2, hm2⟩ := assigns_cons hm1
   rw [assigns_nil hm2]
-  have e1 := eval_val_eq h1 (ev_aput ev_closed hk ev_tt hkb)
-  have e2 := eval_val_eq h2 (ev_aput (e := setV n) ev_cur hk hC hkb)
+  have e1 := eval_val_eq h1 (ev_aput ev_closed (hk []) ev_tt hkb)
+  have e2 := eval_val_eq h2 (ev_aput (e := setV n) ev_cur (hk []) hC hkb)
   subst e1 e2
-  exact ⟨hp, hb, hlt, hcl, by simp [applyUpdates, enc, lookup, closeS]⟩
+  exact ⟨hp, hb, hlt, hcl, hcov', by simp [applyUpdates, enc, lookup, closeS]⟩
 
 def newCycleS (st : St) : St :=
   { st with
@@ -707,6 +724,18 @@ theorem acc_drop {k : Nat} {d : Bool} (hw : WF B st) (hargs : args = [("keep", n
   simp only [applyUpdates, enc, lookup, List.map]
   simp [dropS, setV]
 
+theorem acc_dropTakes {d : Bool} (hargs : args = [("decision", boolV d)])
+    (hg : eval (E roles p st args []) dropTakesEvent.guard = some (boolV true))
+    (hu : evalAssigns (E roles p st args []) dropTakesEvent.assigns = some us) :
+    dropTakesS st d = true ∧ applyUpdates (enc n B st) us = enc n B st := by
+  subst hargs
+  have hdec : eval (E roles p st [("decision", boolV d)] []) (a "decision") = some (boolV d) := by ev
+  have h := leaf hg (eval_and (eval_not hdec) (eval_not ev_done))
+  have hm := evalAssigns_spec hu
+  simp only [dropTakesEvent] at hm
+  cases hm
+  exact ⟨h, by simp [applyUpdates, lookup]⟩
+
 def releaseDropS (st : St) : St :=
   { st with
     dropRec := fun _ => false
@@ -782,11 +811,12 @@ end
 inductive Ev where
   | create
   | addBatch (m : Bool) (rs : Nat → Bool)
-  | close (k : Nat) (cs : Nat → Bool)
+  | close (k : Nat) (cs cv : Nat → Bool)
   | newCycle
   | reset
   | rebind
   | drop (k : Nat) (d : Bool)
+  | dropTakes (d : Bool)
   | releaseDrop
   | releaseRecovery
   | done (c : Bool)
@@ -796,11 +826,13 @@ def decodeEv (e : Event) : Option Ev :=
   match e.name, e.args with
   | "create", [] => some .create
   | "addBatch", [.scalar (.bool m), .set bs] => some (.addBatch m fun r => bs.getD r false)
-  | "close", [.scalar (.nat k), .set bs] => some (.close k fun r => bs.getD r false)
+  | "close", [.scalar (.nat k), .set bs, .set cs] =>
+    some (.close k (fun r => bs.getD r false) (fun r => cs.getD r false))
   | "newCycle", [] => some .newCycle
   | "reset", [] => some .reset
   | "rebind", [] => some .rebind
   | "drop", [.scalar (.nat k), .scalar (.bool d)] => some (.drop k d)
+  | "dropTakes", [.scalar (.bool d)] => some (.dropTakes d)
   | "releaseDrop", [] => some .releaseDrop
   | "releaseRecovery", [] => some .releaseRecovery
   | "done", [.scalar (.bool c)] => some (.done c)
@@ -810,11 +842,13 @@ def decodeEv (e : Event) : Option Ev :=
 def Guard (nr b : Nat) (st : St) : Ev → Prop
   | .create => st.planned = false ∧ st.done = false
   | .addBatch m _ => st.planned = true ∧ st.count < b ∧ (st.done && m) = false
-  | .close k _ => st.planned = true ∧ st.bound = true ∧ k < st.count ∧ st.closed k = false
+  | .close k _ cv => st.planned = true ∧ st.bound = true ∧ k < st.count ∧ st.closed k = false ∧
+    (st.has k = true → ∀ r, r < nr → st.req k r = true → cv r = true)
   | .newCycle => st.done = false
   | .reset => st.done = false
   | .rebind => st.planned = true ∧ st.bound = false ∧ st.done = false
   | .drop k _ => st.planned = true ∧ 1 ≤ k ∧ k < st.count ∧ anyFrom st k st.closed = false
+  | .dropTakes d => dropTakesS st d = true
   | .releaseDrop => st.planned = true ∧ noneOf nr st.dropRec = false
   | .releaseRecovery => st.planned = true ∧ st.recKind = 1 ∧ st.recReleased = false ∧ noneOf nr (recRoleIn st) = true
   | .done c => doneReadyS nr st = true ∧ c = true
@@ -823,18 +857,20 @@ def Guard (nr b : Nat) (st : St) : Ev → Prop
 def post (nr : Nat) (st : St) : Ev → St
   | .create => { st with planned := true, bound := true }
   | .addBatch m rs => addBatchS st m rs
-  | .close k cs => closeS st k cs
+  | .close k cs _ => closeS st k cs
   | .newCycle => newCycleS st
   | .reset => resetS nr st
   | .rebind => rebindS st
   | .drop k d => dropS st k d
+  | .dropTakes _ => st
   | .releaseDrop => releaseDropS st
   | .releaseRecovery => { st with recReleased := true }
   | .done _ => { st with done := true }
 
 theorem events_cases {roles : List String} {ev : EventDecl} (h : ev ∈ (Mr roles).events) :
     ev = createEvent ∨ ev = addBatchEvent ∨ ev = closeEvent ∨ ev = newCycleEvent ∨ ev = resetEvent ∨
-      ev = rebindEvent ∨ ev = dropEvent ∨ ev = releaseDropEvent ∨ ev = releaseRecoveryEvent ∨ ev = doneEvent := by
+      ev = rebindEvent ∨ ev = dropEvent ∨ ev = dropTakesEvent ∨ ev = releaseDropEvent ∨ ev = releaseRecoveryEvent ∨
+      ev = doneEvent := by
   simpa [Mr, obligationMachine] using h
 
 theorem size_role' {roles : List String} : (Mr roles).enumSize "role" = some roles.length := rfl
@@ -874,7 +910,7 @@ theorem step_enc {roles : List String} {p : Params} {st : St} {e : Event} {s' : 
   simp only at hname hargs
   subst hname
   have hmem := lookup_map_mem hev
-  rcases events_cases hmem with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+  rcases events_cases hmem with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · obtain ⟨rfl, rfl⟩ := bindArgs_nil hargs
     obtain ⟨h1, h2, h3⟩ := acc_create hg hu
     exact ⟨.create, rfl, ⟨h1, h2⟩, h3⟩
@@ -887,11 +923,13 @@ theorem step_enc {roles : List String} {p : Params} {st : St} {e : Event} {s' : 
     exact ⟨_, rfl, ⟨h1, h2, h3⟩, h4⟩
   · obtain ⟨v1, vs1, a1, rfl, c1, h1, rfl⟩ := bindArgs_cons hargs
     obtain ⟨v2, vs2, a2, rfl, c2, h2, rfl⟩ := bindArgs_cons h1
-    obtain ⟨rfl, rfl⟩ := bindArgs_nil h2
+    obtain ⟨v3, vs3, a3, rfl, c3, h3, rfl⟩ := bindArgs_cons h2
+    obtain ⟨rfl, rfl⟩ := bindArgs_nil h3
     obtain ⟨k, rfl, -⟩ := nat_arg c1
     obtain ⟨bs, rfl, hl⟩ := set_arg c2
-    obtain ⟨h1, h2, h3, h4, h5⟩ := acc_close hw (by rw [set_of_list hl]) hg hu
-    exact ⟨_, rfl, ⟨h1, h2, h3, h4⟩, h5⟩
+    obtain ⟨cs, rfl, hc⟩ := set_arg c3
+    obtain ⟨h1, h2, h3, h4, h5, h6⟩ := acc_close hw (by rw [set_of_list hl, set_of_list hc]) hg hu
+    exact ⟨_, rfl, ⟨h1, h2, h3, h4, h5⟩, h6⟩
   · obtain ⟨rfl, rfl⟩ := bindArgs_nil hargs
     obtain ⟨h1, h2⟩ := acc_newCycle rfl hg hu
     exact ⟨.newCycle, rfl, h1, h2⟩
@@ -908,6 +946,11 @@ theorem step_enc {roles : List String} {p : Params} {st : St} {e : Event} {s' : 
     obtain ⟨d, rfl⟩ := bool_arg c2
     obtain ⟨h1, h2, h3, h4, h5⟩ := acc_drop hw rfl hg hu
     exact ⟨.drop k d, rfl, ⟨h1, h2, h3, h4⟩, h5⟩
+  · obtain ⟨v1, vs1, a1, rfl, c1, h1, rfl⟩ := bindArgs_cons hargs
+    obtain ⟨rfl, rfl⟩ := bindArgs_nil h1
+    obtain ⟨d, rfl⟩ := bool_arg c1
+    obtain ⟨h1, h2⟩ := acc_dropTakes rfl hg hu
+    exact ⟨.dropTakes d, rfl, h1, h2⟩
   · obtain ⟨rfl, rfl⟩ := bindArgs_nil hargs
     obtain ⟨h1, h2, h3⟩ := acc_releaseDrop rfl hg hu
     exact ⟨.releaseDrop, rfl, ⟨h1, h2⟩, h3⟩

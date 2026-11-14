@@ -24,11 +24,17 @@ namespace KanderFormal.Proofs.ReviewObligation
 /-- A batch as the observer records it. -/
 structure OBatch where
   id : Nat
+  /-- The cycle in which the batch was added. -/
+  addedCycle : Nat
   has : Bool
   req : Nat → Bool
   closed : Bool
   closedCycle : Nat
+  /-- The roles whose conclusion run reviewed the member's cycle at the close,
+  bound to it. -/
   conc : Nat → Bool
+  /-- The roles whose conclusion run covered the member's cycle at the close. -/
+  covered : Nat → Bool
 
 inductive DebtKind where
   | drop
@@ -36,11 +42,12 @@ inductive DebtKind where
   deriving DecidableEq
 
 /-- One owed review: of `role`, by a closed batch with an identity of at least
-`since`. -/
+`since`, in the cycle the debt arose in or a later one. -/
 structure Debt where
   kind : DebtKind
   role : Nat
   since : Nat
+  cycle : Nat
 
 structure Obs where
   planned : Bool
@@ -89,25 +96,25 @@ def resetRoles (o : Obs) (r : Nat) : Bool :=
   (if o.npRecord then o.npRoles r else recDebtRole o r) || liveReq o r || o.dropped r
 
 /-- One debt of `kind` for each of the first `nr` roles that `g` names. -/
-def debtsFor (nr : Nat) (kind : DebtKind) (since : Nat) (g : Nat → Bool) : List Debt :=
-  (List.range nr).filterMap fun r => if g r then some ⟨kind, r, since⟩ else none
+def debtsFor (nr : Nat) (kind : DebtKind) (since cycle : Nat) (g : Nat → Bool) : List Debt :=
+  (List.range nr).filterMap fun r => if g r then some ⟨kind, r, since, cycle⟩ else none
 
 /-- The first open batch that names the member, if any. -/
 def firstOpenId (o : Obs) : Option Nat := (o.batches.find? fun b => b.has && !b.closed).map OBatch.id
 
 /-- The observer's record of a closure in `cycle` with conclusions `cs`. -/
-def closeB (cycle : Nat) (cs : Nat → Bool) (x : OBatch) : OBatch :=
-  { x with closed := true, closedCycle := cycle, conc := cs }
+def closeB (cycle : Nat) (cs cv : Nat → Bool) (x : OBatch) : OBatch :=
+  { x with closed := true, closedCycle := cycle, conc := cs, covered := cv }
 
 def observe (nr : Nat) (o : Obs) : Ev → Obs
   | .create => { o with planned := true, bound := true }
   | .addBatch m rs =>
     { o with
-      batches := o.batches ++ [⟨o.nextId, m, rs, false, 0, fun _ => false⟩]
+      batches := o.batches ++ [⟨o.nextId, o.cycle, m, rs, false, 0, fun _ => false, fun _ => false⟩]
       nextId := o.nextId + 1 }
-  | .close k cs =>
+  | .close k cs cv =>
     { o with
-      batches := o.batches.modify k (closeB o.cycle cs) }
+      batches := o.batches.modify k (closeB o.cycle cs cv) }
   | .newCycle => { o with cycle := o.cycle + 1, bound := false }
   | .reset =>
     if !o.planned then
@@ -116,7 +123,7 @@ def observe (nr : Nat) (o : Obs) : Ev → Obs
       { o with
         cycle := o.cycle + 1
         bound := false
-        debts := o.debts ++ debtsFor nr .recovery o.nextId (resetRoles o)
+        debts := o.debts ++ debtsFor nr .recovery o.nextId (o.cycle + 1) (resetRoles o)
         npRecord := false }
     else { o with cycle := o.cycle + 1, bound := false }
   | .rebind =>
@@ -126,17 +133,20 @@ def observe (nr : Nat) (o : Obs) : Ev → Obs
   | .drop k d =>
     { o with
       batches := o.batches.take k
-      debts := if !d && !o.done then o.debts ++ debtsFor nr .drop o.nextId (tailMemberReq o k) else o.debts
+      debts := if !d && !o.done then o.debts ++ debtsFor nr .drop o.nextId o.cycle (tailMemberReq o k) else o.debts
       dropped := fun r => o.dropped r || tailMemberReq o k r
       npRoles := if o.npRecord then fun r => o.npRoles r || tailReq o k r else o.npRoles }
+  | .dropTakes _ => o
   | .releaseDrop => { o with debts := o.debts.filter fun d => d.kind != .drop }
   | .releaseRecovery => { o with npReleased := true }
   | .done _ => { o with done := true }
 
 /-- A debt is paid by a closed batch that names the member, requires the role,
-and was added after the debt arose. -/
+was added after the debt arose, closed in the debt's cycle or a later one, and
+whose conclusion of the role covered the cycle current at the close. -/
 def Paid (o : Obs) (d : Debt) : Prop :=
-  ∃ b ∈ o.batches, d.since ≤ b.id ∧ b.has = true ∧ b.req d.role = true ∧ b.closed = true
+  ∃ b ∈ o.batches, d.since ≤ b.id ∧ b.has = true ∧ b.req d.role = true ∧ b.closed = true ∧
+    d.cycle ≤ b.closedCycle ∧ b.covered d.role = true
 
 /-- A role reviewed in the current cycle: a closed batch names the member,
 requires the role, and its conclusion of the role reviewed this cycle. -/
