@@ -140,6 +140,78 @@ func TestClaimEntrancesRefineTheKernel(t *testing.T) {
 		_, err := p.Move(ctx, "", id, api.Move{State: "archived", Result: "cancelled", Reason: "late", Decision: "old"}, &own)
 		return err
 	})
+	// The current token with a header of another generation is the exemption
+	// theorem 5 leaves to v2 (counterexample C): the termination passes.
+	current := client.Claim{Token: next.Token, Generation: 1}
+	c.refines(id, serverclaim.Leave{G: 3, Tg: 2, Terminate: true}, true, func() error {
+		_, err := p.Move(ctx, "", id, api.Move{State: "archived", Result: "cancelled", Reason: "header", Decision: "user:end"}, &current)
+		return err
+	})
+}
+
+// A launcher adoption is a holder write that keeps the claim record.
+func TestAdoptionRefinesTheKernel(t *testing.T) {
+	s, h := openTest(t, t.TempDir(), nil)
+	defer s.Close()
+	defer h.Close()
+	p, id := prepareTodo(t, h.URL)
+	c := claimProbe{t: t, s: s, p: p}
+	ctx := t.Context()
+	g, err := p.Claim(ctx, "", id, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-start", Owner: "claude", Start: &api.StartInput{Session: "claude pending"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	own := client.Claim{Token: g.Token, Generation: 1}
+	if _, err := p.Execution(ctx, "", id, api.ExecutionUpdate{Action: api.ExecutionUnresolve, Reason: "late step failed"}, own); err != nil {
+		t.Fatal(err)
+	}
+	state, err := p.ExecutionState(ctx, id, own)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adopt := api.ExecutionUpdate{Action: api.ExecutionAdopt, Decision: "user:adopt", ExpectedRevision: state.Task.Revision, ObservationTicket: state.ObservationTicket, Presence: &api.AgentObservation{Status: "alive", ObservedAt: time.Now()}}
+	c.refines(id, serverclaim.Write{G: 1, Tg: 1}, true, func() error { _, err := p.Execution(ctx, "", id, adopt, own); return err })
+	if state, err = p.ExecutionState(ctx, id, own); err != nil || state.Record.Status != board.ExecutionRunning {
+		t.Fatalf("adoption: %+v %v", state.Record, err)
+	}
+}
+
+// A generation beyond the kernel's uint32 parameters keeps every decision: the
+// holder renews and writes, another token is refused, and startup
+// reconciliation still reads the record.
+func TestLargeGenerationKeepsDecisions(t *testing.T) {
+	for _, gen := range []uint64{1 << 40, ^uint64(0) - 1} {
+		dir := t.TempDir()
+		s, h := openTest(t, dir, nil)
+		p, id := prepareTodo(t, h.URL)
+		proj, _ := s.project(p.ID())
+		view, _ := board.LoadBoard(proj.board)
+		entry, _ := board.Locate(view, id)
+		if _, err := board.MoveWithOptions(entry, proj.board, "working", board.MoveOptions{Owner: "claude"}); err != nil {
+			t.Fatal(err)
+		}
+		r := claimRecord{TaskID: id, ClientID: "host-a", ExecutionID: "exec-big", Owner: "claude", Generation: gen, Status: api.ClaimActive, ExpiresAt: time.Now().Add(time.Hour)}
+		token := s.token(proj.info.ID, id, r.ExecutionID, gen)
+		r.TokenHash = tokenHash(token)
+		if err := proj.writeClaim(r); err != nil {
+			t.Fatal(err)
+		}
+		h.Close()
+		s.Close()
+		s, h = openTest(t, dir, nil)
+		c, _ := client.New(h.URL, "host-a")
+		p = c.Project(p.ID())
+		own := client.Claim{Token: token, Generation: gen}
+		if _, err := p.Renew(t.Context(), id, own); err != nil {
+			t.Fatalf("generation %d: renewal refused: %v", gen, err)
+		}
+		_, err := p.Renew(t.Context(), id, client.Claim{Token: token, Generation: gen - 1})
+		if !api.IsCode(err, api.CodeLeaseInvalid) {
+			t.Fatalf("generation %d: an older header: %v", gen, err)
+		}
+		h.Close()
+		s.Close()
+	}
 }
 
 // A lease release and a launch rollback refine the kernel, and so does the

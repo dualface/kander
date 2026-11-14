@@ -2,7 +2,6 @@ package server
 
 import (
 	"crypto/subtle"
-	"math"
 	"strconv"
 
 	"github.com/dualface/kander/internal/api"
@@ -37,14 +36,23 @@ func (p *project) projectClaim(r claimRecord, found, held bool) (*claimKernel, e
 		if !ok {
 			return nil, apiError(api.CodeLeaseInvalid, "claim record status "+strconv.Quote(r.Status)+" is unknown")
 		}
-		k.state.Status, k.state.Gen, k.state.Live = status, r.Generation, p.server.now().Before(r.ExpiresAt)
+		k.state.Status, k.state.Gen, k.state.Live = status, kernelGeneration(r.Generation), p.server.now().Before(r.ExpiresAt)
 	}
 	// One above the generation, so a claim or a takeover can take the next one.
-	if k.state.Gen >= math.MaxUint32 {
-		return nil, apiError(api.CodeLeaseInvalid, "claim generation "+strconv.FormatUint(k.state.Gen, 10)+" is out of range")
-	}
 	k.params = serverclaim.Params{MaxGen: uint32(k.state.Gen + 1)}
 	return k, nil
+}
+
+// kernelGeneration keeps a generation within the kernel's uint32 parameters.
+// The kernel only compares a generation with the record's and adds one, and the
+// headers map to the record's projected generation or the one after it, so
+// every generation from 2^31 on projects to 1 without changing a decision. The
+// server still refuses only the overflow of the last uint64 generation.
+func kernelGeneration(gen uint64) uint64 {
+	if gen < 1<<31 {
+		return gen
+	}
+	return 1
 }
 
 func (k *claimKernel) step(e serverclaim.Event) bool {
