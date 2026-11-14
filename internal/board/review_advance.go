@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/dualface/kander/internal/statemachine/reviewplan"
 )
 
 type ReviewBatchAdvance struct {
@@ -118,32 +120,44 @@ func AdvanceReviewBatchWithTransaction(root string, x ReviewBatchAdvance, extens
 		if err != nil {
 			return err
 		}
-		if !ok || b.Revision != x.ExpectedRevision {
+		if !ok {
 			return reviewError("batch revision CAS conflict")
 		}
-		var closed ReviewClosure
-		exists, err := readReviewJSON(tx, closureName(x.BatchID), &closed)
+		k, at, err := batchKernel(tx, b)
 		if err != nil {
 			return err
 		}
-		if exists {
-			return reviewError("batch already closed")
-		}
 		a := x.Advance
-		if a.PreviousTarget != b.TargetCommit || a.Target == a.PreviousTarget || !validCommit(a.Target) || strings.TrimSpace(a.Reason) == "" {
-			return reviewError("batch target CAS conflict")
+		f := reviewplan.Advance{At: uint64(at), Revision: b.Revision == x.ExpectedRevision}
+		var refusal error
+		switch {
+		case !f.Revision:
+			refusal = reviewError("batch revision CAS conflict")
+		case k.state.Closed[at]:
+			refusal = reviewError("batch already closed")
 		}
-		if err = requireNoSuccessorBatch(tx, b); err != nil {
-			return err
+		if refusal == nil {
+			if f.Target = a.PreviousTarget == b.TargetCommit && a.Target != a.PreviousTarget && validCommit(a.Target) && strings.TrimSpace(a.Reason) != ""; !f.Target {
+				refusal = reviewError("batch target CAS conflict")
+			}
 		}
-		if err = validateReviewAdvanceAttribution(a, b.TaskIDs); err != nil {
-			return err
+		for _, check := range []struct {
+			fact *bool
+			run  func() error
+		}{
+			{&f.NoSuccessor, func() error { return requireNoSuccessorBatch(tx, b) }},
+			{&f.Attribution, func() error { return validateReviewAdvanceAttribution(a, b.TaskIDs) }},
+			{&f.Settled, func() error { return settledReviewBatch(tx, b.BatchID) }},
+			{&f.Dispositions, func() error { return requireAuthorDispositions(tx, b) }},
+		} {
+			if refusal != nil {
+				break
+			}
+			refusal = check.run()
+			*check.fact = refusal == nil
 		}
-		if err = settledReviewBatch(tx, b.BatchID); err != nil {
-			return err
-		}
-		if err = requireAuthorDispositions(tx, b); err != nil {
-			return err
+		if !k.step(f) {
+			return firstError(refusal, reviewError("batch advance refused"))
 		}
 		b.Advances = append(b.Advances, a)
 		b.TargetCommit = a.Target

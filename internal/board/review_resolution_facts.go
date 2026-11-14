@@ -31,7 +31,7 @@ func ReviewBatchResolutionFacts(root string, x ReviewPlanExtension) (value Revie
 // ReviewBatchResolutionFactsInTransaction reads only the locked plan/batch
 // originals, allowing a service to recheck the client's exact inspected facts.
 func ReviewBatchResolutionFactsInTransaction(tx *Transaction, x ReviewPlanExtension) (value ReviewResolutionFacts, err error) {
-	plan, facts, err := resolutionEntry(tx, x)
+	plan, facts, err := resolutionEntry(tx, x, previewGit)
 	if err != nil {
 		return value, err
 	}

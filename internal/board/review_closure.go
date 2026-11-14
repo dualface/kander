@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/internal/statemachine/reviewobligation"
+	"github.com/dualface/kander/internal/statemachine/reviewplan"
 )
 
 type ReviewRunView struct {
@@ -115,54 +117,71 @@ func batchRuns(tx *Transaction, b ReviewBatch) ([]ReviewRun, error) {
 	slices.SortFunc(result, func(a, b ReviewRun) int { return strings.Compare(a.RunID, b.RunID) })
 	return result, nil
 }
+
+// aggregateReviewBatch builds the view of b from its originals. The plan kernel
+// accepts the view only when every run's publication verifies, every finding
+// lineage holds, and every disposition ledger reads; the first that failed names
+// the refusal. The view reads no plan state, so the batch is projected alone.
 func aggregateReviewBatch(tx *Transaction, b ReviewBatch) (ReviewBatchView, error) {
 	view := ReviewBatchView{Schema: 1, Batch: b, Runs: []ReviewRunView{}}
 	runs, err := batchRuns(tx, b)
 	if err != nil {
 		return view, err
 	}
-	for _, run := range runs {
-		if err = verifyPublishedReview(tx, run); err != nil {
-			return view, err
-		}
-		rv := ReviewRunView{Run: run, Records: []ReviewDisposition{}}
-		if run.ExecutionStatus == "ok" {
-			findings, err := runFindings(tx, run)
-			if errors.Is(err, errInterpretationPending) {
-				rv.FindingsStatus = "pending"
-				view.Runs = append(view.Runs, rv)
-				continue
+	f := reviewplan.Aggregate{Published: true, Lineage: true, Ledger: true}
+	refusal := func() error {
+		for _, run := range runs {
+			if err := verifyPublishedReview(tx, run); err != nil {
+				f.Published, f.Lineage, f.Ledger = false, false, false
+				return err
 			}
-			if err != nil {
-				return view, err
-			}
-			if err = validateFindingLineage(tx, run, findings); err != nil {
-				return view, err
-			}
-			ledger, err := readDispositionLedger(tx, run, true)
-			if err != nil {
-				return view, err
-			}
-			if run.FindingsSchema == FindingsSchemaReceiver {
-				rv.FindingsStatus = "ready"
-				var interpretation ReviewInterpretation
-				exists, err := readReviewJSON(tx, interpretationName(run.RunID), &interpretation)
+			rv := ReviewRunView{Run: run, Records: []ReviewDisposition{}}
+			if run.ExecutionStatus == "ok" {
+				findings, err := runFindings(tx, run)
+				if errors.Is(err, errInterpretationPending) {
+					rv.FindingsStatus = "pending"
+					view.Runs = append(view.Runs, rv)
+					continue
+				}
+				if err == nil {
+					err = validateFindingLineage(tx, run, findings)
+				}
 				if err != nil {
-					return view, err
+					f.Lineage, f.Ledger = false, false
+					return err
 				}
-				if exists {
-					rv.Interpretation = &interpretation
+				ledger, err := readDispositionLedger(tx, run, true)
+				if err != nil {
+					f.Ledger = false
+					return err
 				}
+				if run.FindingsSchema == FindingsSchemaReceiver {
+					rv.FindingsStatus = "ready"
+					var interpretation ReviewInterpretation
+					exists, err := readReviewJSON(tx, interpretationName(run.RunID), &interpretation)
+					if err != nil {
+						f.Ledger = false
+						return err
+					}
+					if exists {
+						rv.Interpretation = &interpretation
+					}
+				}
+				rv.Findings = &findings
+				rv.Assignment = &ledger.Assignment
+				rv.Records = ledger.Records
+				rv.Withdrawn = withdrawnRecords(ledger)
 			}
-			rv.Findings = &findings
-			rv.Assignment = &ledger.Assignment
-			rv.Records = ledger.Records
-			rv.Withdrawn = withdrawnRecords(ledger)
+			view.Runs = append(view.Runs, rv)
 		}
-		view.Runs = append(view.Runs, rv)
+		return nil
+	}()
+	if !batchViewKernel().step(f) {
+		return view, firstError(refusal, reviewError("batch view refused"))
 	}
 	return view, nil
 }
+
 func validateFindingLineage(tx *Transaction, run ReviewRun, f ReviewFindings) error {
 	previousItems := map[string]bool{}
 	if run.PreviousRunID != "" {
@@ -521,35 +540,45 @@ func CloseReviewBatchWithTransaction(root string, r ReviewCloseRequest, evidence
 		if e != nil {
 			return e
 		}
-		if e = verifyPlanCopies(tx, p); e != nil {
-			return e
-		}
-		if e = validatePreviousClosure(tx, b); e != nil {
-			return e
-		}
-		v, e := aggregateReviewBatch(tx, b)
+		at := slices.IndexFunc(p.Batches, func(pb ReviewPlanBatch) bool { return pb.BatchID == b.BatchID })
+		pk, e := projectPlan(tx, p, kernelBound(p))
 		if e != nil {
 			return e
 		}
-		edges, statuses, e := ReviewClosureEdges(v, r)
-		if e != nil {
-			return e
+		f := reviewplan.Close{At: uint64(at)}
+		var refusal error
+		hold := func(fact *bool, err error) {
+			if refusal == nil {
+				*fact, refusal = err == nil, err
+			}
 		}
-		if noGitReviewBatch(b.Base, b.TargetCommit, b.Requirements) != (strings.TrimSpace(evidence.NotApplicable) != "") {
-			return reviewError("Git N/A evidence binding")
+		hold(&f.Bound, verifyPlanCopies(tx, p))
+		if refusal == nil {
+			hold(&f.PreviousClosed, validatePreviousClosure(tx, b))
 		}
-		if e = verifyMechanicalEvidence(v, r, evidence); e != nil {
-			return e
+		var v ReviewBatchView
+		if refusal == nil {
+			// The view is its own kernel event; a refused view refuses the close.
+			if v, e = aggregateReviewBatch(tx, b); e != nil {
+				return e
+			}
+			f.Revision = r.BatchID == b.BatchID && r.ExpectedRevision == b.Revision
+			f.ViewHash = r.ViewHash == ReviewViewDigest(v)
 		}
-		if !SameReviewCWD(evidence.CWD, p.CWD) || evidence.Head != b.TargetCommit || !reflect.DeepEqual(edges, evidence.Edges) {
-			return reviewError("Git evidence binding")
+		var edges []ReviewGitEdge
+		var statuses map[string]string
+		if refusal == nil {
+			edges, statuses, e = ReviewClosureEdges(v, r)
+			hold(&f.Conclusions, e)
 		}
-		if _, e = time.Parse(time.RFC3339Nano, evidence.VerifiedAt); e != nil {
-			return reviewError("Git verification timestamp")
+		if refusal == nil {
+			hold(&f.Git, closeGitEvidence(v, b, p, r, evidence, edges))
 		}
-		existing, e := readReviewJSON(tx, closureName(b.BatchID), &c)
-		if e != nil {
-			return e
+		existing := false
+		if refusal == nil {
+			if existing, e = readReviewJSON(tx, closureName(b.BatchID), &c); e != nil {
+				return e
+			}
 		}
 		if existing {
 			if !reflect.DeepEqual(c.Request, r) {
@@ -557,10 +586,16 @@ func CloseReviewBatchWithTransaction(root string, r ReviewCloseRequest, evidence
 			}
 			return verifyClosureCopies(tx, c)
 		}
-		if e = requireCurrentConclusions(tx, b, r); e != nil {
-			return e
+		if refusal == nil {
+			hold(&f.Current, requireCurrentConclusions(tx, b, r))
+		}
+		if !pk.step(f) {
+			return firstError(refusal, reviewError("batch close refused"))
 		}
 		c = ReviewClosure{Schema: 1, PlanID: p.PlanID, BatchID: b.BatchID, TargetCommit: b.TargetCommit, Request: r, Git: evidence, RoleStatuses: statuses, View: v, ClosedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+		if e = closeMemberKernels(tx, p, at, c); e != nil {
+			return e
+		}
 		targets, e := reviewCopyTargets(tx, b.TaskIDs)
 		if e != nil {
 			return e
@@ -580,6 +615,56 @@ func CloseReviewBatchWithTransaction(root string, r ReviewCloseRequest, evidence
 	}, extensions...)
 	return
 }
+
+// closeGitEvidence checks the Git evidence of a close: the N/A binding, the
+// mechanical fixes, the checkout, head and edges, and the verification time.
+func closeGitEvidence(v ReviewBatchView, b ReviewBatch, p ReviewPlan, r ReviewCloseRequest, evidence ReviewGitEvidence, edges []ReviewGitEdge) error {
+	if noGitReviewBatch(b.Base, b.TargetCommit, b.Requirements) != (strings.TrimSpace(evidence.NotApplicable) != "") {
+		return reviewError("Git N/A evidence binding")
+	}
+	if err := verifyMechanicalEvidence(v, r, evidence); err != nil {
+		return err
+	}
+	if !SameReviewCWD(evidence.CWD, p.CWD) || evidence.Head != b.TargetCommit || !reflect.DeepEqual(edges, evidence.Edges) {
+		return reviewError("Git evidence binding")
+	}
+	if _, err := time.Parse(time.RFC3339Nano, evidence.VerifiedAt); err != nil {
+		return reviewError("Git verification timestamp")
+	}
+	return nil
+}
+
+// closeMemberKernels runs the close of the batch at position at through the
+// kernel of every member that stayed in the plan, with the roles whose
+// conclusion run reviewed the member's current cycle.
+func closeMemberKernels(tx *Transaction, p ReviewPlan, at int, c ReviewClosure) error {
+	for _, id := range p.TaskIDs {
+		excluded, err := memberExcluded(tx, id)
+		if err != nil {
+			return err
+		}
+		if excluded {
+			continue
+		}
+		s, err := tx.Snapshot(id)
+		if err != nil {
+			return err
+		}
+		k, err := loadMemberKernel(tx, p, true, id, kernelBound(p))
+		if err != nil {
+			return err
+		}
+		current, err := currentRoles(p.Batches[at], c, true, id, planCycle(s))
+		if err != nil {
+			return err
+		}
+		if !k.step(reviewobligation.Close{At: uint64(at), Current: current}) {
+			return errKernelState(id)
+		}
+	}
+	return nil
+}
+
 func verifyClosureCopies(tx *Transaction, c ReviewClosure) error {
 	// A member that left after the closure keeps its copies, and one that left
 	// before it never took them. Neither is damage.

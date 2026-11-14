@@ -255,6 +255,38 @@ func unplannedBatchKernel(tx *Transaction, b ReviewBatch) (*planKernel, error) {
 	return &planKernel{state: st, params: params}, nil
 }
 
+// batchKernel is the plan kernel that holds batch b and its position: the
+// projection of its plan, or of the batch alone when it is unplanned.
+func batchKernel(tx *Transaction, b ReviewBatch) (*planKernel, int, error) {
+	if b.PlanID == "" {
+		k, err := unplannedBatchKernel(tx, b)
+		return k, 0, err
+	}
+	var p ReviewPlan
+	ok, err := readReviewJSON(tx, planName(b.PlanID), &p)
+	if err != nil {
+		return nil, 0, err
+	}
+	if !ok || p.PlanID != b.PlanID {
+		return nil, 0, reviewError("batch review plan required")
+	}
+	at := slices.IndexFunc(p.Batches, func(pb ReviewPlanBatch) bool { return pb.BatchID == b.BatchID })
+	if at < 0 {
+		return nil, 0, reviewError("unplanned batch")
+	}
+	k, err := projectPlan(tx, p, kernelBound(p))
+	return k, at, err
+}
+
+// batchViewKernel holds one batch at position 0 for the events that read no
+// plan state beyond the batch.
+func batchViewKernel() *planKernel {
+	params := reviewplan.Params{MaxBatch: 1}
+	st := reviewplan.Initial(params)
+	st.Planned, st.Count = true, 1
+	return &planKernel{state: st, params: params}
+}
+
 func (k *planKernel) step(e reviewplan.Event) bool {
 	next, ok := reviewplan.Step(k.state, e, k.params)
 	k.state = next

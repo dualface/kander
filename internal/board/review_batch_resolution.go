@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/dualface/kander/internal/statemachine/reviewplan"
 )
 
 // ReviewBatchResolutionRequest is the extend-plan operation that accepts an
@@ -108,34 +110,62 @@ func resolutionScope(root string, x ReviewPlanExtension) ([]string, error) {
 
 // resolutionEntry validates one request against the plan. It holds everything the
 // gate does not repeat: the CAS, the repeat refusal and the card publications.
-func resolutionEntry(tx *Transaction, x ReviewPlanExtension) (ReviewPlan, batchResolutionFacts, error) {
+// The plan kernel decides the resolution; the first fact that failed names the
+// refusal. Git is the evidence check of the caller, true for the preview.
+func resolutionEntry(tx *Transaction, x ReviewPlanExtension, git func(ReviewPlan, batchResolutionFacts) error) (ReviewPlan, batchResolutionFacts, error) {
 	var p ReviewPlan
 	var facts batchResolutionFacts
 	ok, err := readReviewJSON(tx, planName(x.PlanID), &p)
 	if err != nil {
 		return p, facts, err
 	}
-	if !ok || p.Revision != x.ExpectedRevision {
+	if !ok {
 		return p, facts, reviewError("plan extension CAS/sealed conflict")
 	}
-	// The cycle may be stale: review progress cannot name rebind_cycles while the
-	// unplanned batch fails the gate, so the resolution has to come first.
-	if err = verifyPlanCopiesFor(tx, p, false); err != nil {
-		return p, facts, err
+	f := reviewplan.Resolve{Cas: p.Revision == x.ExpectedRevision}
+	var refusal error
+	if !f.Cas {
+		refusal = reviewError("plan extension CAS/sealed conflict")
 	}
-	if resolvedBatch(p, x.ResolveBatch.BatchID) != nil {
-		return p, facts, reviewError(t("board.review_resolve_repeat", x.ResolveBatch.BatchID, p.PlanID))
-	}
-	if facts, err = batchResolutionCheck(tx, p, *x.ResolveBatch); err != nil {
-		return p, facts, err
-	}
-	for _, run := range facts.runs {
-		if err = verifyPublishedReview(tx, run); err != nil {
+	if refusal == nil {
+		// The cycle may be stale: review progress cannot name rebind_cycles while
+		// the unplanned batch fails the gate, so the resolution has to come first.
+		if err = verifyPlanCopiesFor(tx, p, false); err != nil {
 			return p, facts, err
 		}
+		if f.Fresh = resolvedBatch(p, x.ResolveBatch.BatchID) == nil; !f.Fresh {
+			refusal = reviewError(t("board.review_resolve_repeat", x.ResolveBatch.BatchID, p.PlanID))
+		}
+	}
+	if refusal == nil {
+		facts, refusal = batchResolutionCheck(tx, p, *x.ResolveBatch)
+		f.Covered = refusal == nil
+	}
+	if refusal == nil {
+		f.Published = true
+		for _, run := range facts.runs {
+			if refusal = verifyPublishedReview(tx, run); refusal != nil {
+				f.Published = false
+				break
+			}
+		}
+	}
+	if refusal == nil {
+		refusal = git(p, facts)
+		f.Git = refusal == nil
+	}
+	pk, err := projectPlan(tx, p, kernelBound(p))
+	if err != nil {
+		return p, facts, err
+	}
+	if !pk.step(f) {
+		return p, facts, firstError(refusal, reviewError("resolve_batch refused"))
 	}
 	return p, facts, nil
 }
+
+// previewGit stands for the Git evidence a preview has not verified yet.
+func previewGit(ReviewPlan, batchResolutionFacts) error { return nil }
 
 // ReviewBatchResolutionEdges validates a request and returns the Git claims the
 // review layer must verify before it calls ResolveReviewBatch.
@@ -145,7 +175,7 @@ func ReviewBatchResolutionEdges(root string, x ReviewPlanExtension) (edges []Rev
 		return nil, err
 	}
 	err = WithTransaction(root, reviewScope(ids, true), func(tx *Transaction) error {
-		_, facts, e := resolutionEntry(tx, x)
+		_, facts, e := resolutionEntry(tx, x, previewGit)
 		edges = facts.edges
 		return e
 	})
@@ -167,15 +197,17 @@ func ResolveReviewBatchWithTransaction(root string, x ReviewPlanExtension, git R
 	}
 	return WithTransaction(root, reviewScope(ids, false), func(tx *Transaction) error {
 		defer func() { tx.SetOperationResult(map[string]string{"plan_id": x.PlanID}) }()
-		p, facts, err := resolutionEntry(tx, x)
+		p, facts, err := resolutionEntry(tx, x, func(p ReviewPlan, facts batchResolutionFacts) error {
+			if !SameReviewCWD(git.CWD, p.CWD) || !reflect.DeepEqual(facts.edges, git.Edges) {
+				return reviewError("Git evidence binding")
+			}
+			if _, err := time.Parse(time.RFC3339Nano, git.VerifiedAt); err != nil {
+				return reviewError("Git verification timestamp")
+			}
+			return nil
+		})
 		if err != nil {
 			return err
-		}
-		if !SameReviewCWD(git.CWD, p.CWD) || !reflect.DeepEqual(facts.edges, git.Edges) {
-			return reviewError("Git evidence binding")
-		}
-		if _, err = time.Parse(time.RFC3339Nano, git.VerifiedAt); err != nil {
-			return reviewError("Git verification timestamp")
 		}
 		previous := p
 		now := time.Now().UTC().Format(time.RFC3339Nano)
