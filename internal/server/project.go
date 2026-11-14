@@ -628,8 +628,9 @@ func (p *project) takeover(key, id string, req api.ClaimRequest, h holder) outco
 		if refusal == nil && !fresh {
 			refusal = apiError(api.CodeLeaseInvalid, "takeover requires a fresh execution identity and generation")
 		}
-		expected := req.ExpectedGeneration
-		if expected != previous.Generation {
+		// The observed generation maps like a header: the record's, or another.
+		expected := k.state.Gen
+		if req.ExpectedGeneration != previous.Generation {
 			expected = k.state.Gen + 1
 		}
 		ht, _ := h.forTask(t.TaskID)

@@ -2,6 +2,7 @@ package server
 
 import (
 	"crypto/subtle"
+	"math"
 	"strconv"
 
 	"github.com/dualface/kander/internal/api"
@@ -24,35 +25,57 @@ var claimStatuses = map[string]serverclaim.Status{
 type claimKernel struct {
 	state  serverclaim.State
 	params serverclaim.Params
+	// base shifts generations from 2^31 on into the kernel's uint32
+	// parameters; 0 below, where the projection is the generation itself.
+	base uint64
 }
 
 // projectClaim is the kernel state of a task's claim record: whether the card
 // is in working or review, the record's status (none without a record), its
 // generation, and whether the server clock is before its lease expiry.
 func (p *project) projectClaim(r claimRecord, found, held bool) (*claimKernel, error) {
+	return p.projectClaimAt(r, found, held, nil)
+}
+
+// projectClaimAt projects with the generation base of an operation. The kernel
+// only compares generations and adds one, which a common shift keeps, so an
+// operation fixes the base from the record before it (a generation from 2^31
+// on projects to 1) and maps the record, the request's generations, and the
+// result with it. The server still refuses only the overflow of the last
+// uint64 generation.
+func (p *project) projectClaimAt(r claimRecord, found, held bool, base *uint64) (*claimKernel, error) {
 	k := &claimKernel{state: serverclaim.State{Held: held}}
+	switch {
+	case base != nil:
+		k.base = *base
+	case found && r.Generation >= 1<<31:
+		k.base = r.Generation
+	}
 	if found {
 		status, ok := claimStatuses[r.Status]
 		if !ok {
 			return nil, apiError(api.CodeLeaseInvalid, "claim record status "+strconv.Quote(r.Status)+" is unknown")
 		}
-		k.state.Status, k.state.Gen, k.state.Live = status, kernelGeneration(r.Generation), p.server.now().Before(r.ExpiresAt)
+		k.state.Status, k.state.Gen, k.state.Live = status, k.gen(r.Generation), p.server.now().Before(r.ExpiresAt)
+	}
+	if k.state.Gen >= math.MaxUint32 {
+		return nil, apiError(api.CodeLeaseInvalid, "claim generation "+strconv.FormatUint(r.Generation, 10)+" is out of the operation's range")
 	}
 	// One above the generation, so a claim or a takeover can take the next one.
 	k.params = serverclaim.Params{MaxGen: uint32(k.state.Gen + 1)}
 	return k, nil
 }
 
-// kernelGeneration keeps a generation within the kernel's uint32 parameters.
-// The kernel only compares a generation with the record's and adds one, and the
-// headers map to the record's projected generation or the one after it, so
-// every generation from 2^31 on projects to 1 without changing a decision. The
-// server still refuses only the overflow of the last uint64 generation.
-func kernelGeneration(gen uint64) uint64 {
-	if gen < 1<<31 {
-		return gen
+// gen maps a generation with the operation's base: unchanged without a base,
+// else its distance from the base plus one, and 0 below the base.
+func (k *claimKernel) gen(g uint64) uint64 {
+	switch {
+	case k.base == 0:
+		return g
+	case g < k.base:
+		return 0
 	}
-	return 1
+	return g - k.base + 1
 }
 
 func (k *claimKernel) step(e serverclaim.Event) bool {

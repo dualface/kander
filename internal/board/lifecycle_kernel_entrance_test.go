@@ -17,7 +17,16 @@ type kernelView struct {
 
 func observeKernels(t *testing.T, root, id string) kernelView {
 	t.Helper()
+	v, _ := observeKernelsAt(t, root, id, nil)
+	return v
+}
+
+// observeKernelsAt projects with the ledger bases of an operation, or with the
+// bases the card fixes when base is nil, and returns the bases it used.
+func observeKernelsAt(t *testing.T, root, id string, base *ledgerBase) (kernelView, ledgerBase) {
+	t.Helper()
 	var v kernelView
+	var used ledgerBase
 	err := WithTransaction(root, LockScope{Groups: []string{taskStartGroup, reviewControlGroup}, Tasks: []string{id}, ReadOnly: true}, func(tx *Transaction) error {
 		s, err := tx.Snapshot(id)
 		if err != nil {
@@ -30,32 +39,33 @@ func observeKernels(t *testing.T, root, id string) kernelView {
 		if err != nil {
 			return err
 		}
-		k, err := projectLedger(s, l)
+		k, err := projectLedgerAt(s, l, base)
 		if err != nil {
 			return err
 		}
-		v.ledger = k.state
+		v.ledger, used = k.state, k.base
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return v
+	return v, used
 }
 
 // lifecycleSteps are the kernel events of one entrance, in order, built from
 // the projection before it runs.
 type lifecycleSteps func(before kernelView) ([]cardlifecycle.Event, []executionledger.Event)
 
-// lifecycleRefines runs fn and asserts that the projection after it equals the
-// kernel steps from the projection before it. A refused entrance must fail, its
-// first kernel event must be refused, and both projections must stay.
+// lifecycleRefines runs fn and asserts that the projection after it, with the
+// ledger bases fixed before it, equals the kernel steps from the projection
+// before it. A refused entrance must fail, its first kernel event must be
+// refused, and both projections must stay.
 func lifecycleRefines(t *testing.T, root, id string, steps lifecycleSteps, accepted bool, fn func() error) {
 	t.Helper()
-	before := observeKernels(t, root, id)
+	before, base := observeKernelsAt(t, root, id, nil)
 	card, ledger := steps(before)
 	err := fn()
-	after := observeKernels(t, root, id)
+	after, _ := observeKernelsAt(t, root, id, &base)
 	if !accepted {
 		if err == nil {
 			t.Fatal("refused entrance succeeded")
@@ -69,7 +79,7 @@ func lifecycleRefines(t *testing.T, root, id string, steps lifecycleSteps, accep
 			}
 		}
 		if len(ledger) > 0 {
-			params := ledgerParams(before.ledger)
+			params, _ := ledgerParams(before.ledger)
 			if _, ok := executionledger.Step(before.ledger, ledger[0], params); ok {
 				t.Fatalf("ledger kernel accepts %T on %+v", ledger[0], before.ledger)
 			}
@@ -86,7 +96,7 @@ func lifecycleRefines(t *testing.T, root, id string, steps lifecycleSteps, accep
 			t.Fatalf("card kernel refuses %T on %+v", e, want.card)
 		}
 	}
-	params := ledgerParams(before.ledger)
+	params, _ := ledgerParams(before.ledger)
 	for _, e := range ledger {
 		var ok bool
 		if want.ledger, ok = executionledger.Step(want.ledger, e, params); !ok {
@@ -391,5 +401,33 @@ func TestLargeRevisionsKeepLedgerDecisions(t *testing.T) {
 		if _, ok := executionledger.Step(k.state, c.e, k.params); ok != c.want {
 			t.Fatalf("%+v on %+v: %v, want %v", c.e, k.state, ok, c.want)
 		}
+	}
+}
+
+// A fenced field write on a card whose revision is beyond the kernel's uint32
+// parameters refines the ledger kernel with the operation's revision base.
+func TestLargeRevisionFieldWriteRefinesKernels(t *testing.T) {
+	root := tempBoard(t)
+	s := coordinatorTodo(t, root, "lifecycle-large")
+	id := s.Entry.TaskID
+	moved, err := BeginTaskStart(s.Entry, root, TaskStartInput{Owner: "codex", Session: "codex"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	version, err := readVersion(root, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	version.Revision = 1 << 40
+	if err = writeJSON(root, control(root, "versions", id+".json"), version, true); err != nil {
+		t.Fatal(err)
+	}
+	cursor := transactionSnapshot(t, root, id).Entry
+	cursor.Version.fence = moved.Version.fence
+	lifecycleRefines(t, root, id, func(v kernelView) ([]cardlifecycle.Event, []executionledger.Event) {
+		return nil, []executionledger.Event{executionledger.Field{Fence: v.ledger.Record, Text: true}}
+	}, true, func() error { _, err := RecordExecutionWindow(root, cursor, "tmux:s:w:p", ""); return err })
+	if got := transactionSnapshot(t, root, id).Revision; got != 1<<40+1 {
+		t.Fatalf("revision %d", got)
 	}
 }

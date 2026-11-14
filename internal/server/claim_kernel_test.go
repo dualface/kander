@@ -21,6 +21,14 @@ type claimProbe struct {
 
 func (c claimProbe) state(id string) serverclaim.State {
 	c.t.Helper()
+	st, _ := c.stateAt(id, nil)
+	return st
+}
+
+// stateAt projects with the generation base of an operation, or with the base
+// the record fixes when base is nil, and returns the base it used.
+func (c claimProbe) stateAt(id string, base *uint64) (serverclaim.State, uint64) {
+	c.t.Helper()
 	proj, err := c.s.project(c.p.ID())
 	if err != nil {
 		c.t.Fatal(err)
@@ -37,20 +45,21 @@ func (c claimProbe) state(id string) serverclaim.State {
 	if err != nil {
 		c.t.Fatal(err)
 	}
-	k, err := proj.projectClaim(r, found, claimedState(entry.State))
+	k, err := proj.projectClaimAt(r, found, claimedState(entry.State), base)
 	if err != nil {
 		c.t.Fatal(err)
 	}
-	return k.state
+	return k.state, k.base
 }
 
-// refines runs fn and asserts projection(after) = Step(projection(before), e)
-// when accepted, or an error, a kernel refusal, and an unchanged projection.
+// refines runs fn and asserts projection(after) = Step(projection(before), e),
+// both with the generation base fixed before fn, when accepted, or an error, a
+// kernel refusal, and an unchanged projection.
 func (c claimProbe) refines(id string, e serverclaim.Event, accepted bool, fn func() error) {
 	c.t.Helper()
-	before := c.state(id)
+	before, base := c.stateAt(id, nil)
 	err := fn()
-	after := c.state(id)
+	after, _ := c.stateAt(id, &base)
 	want, ok := serverclaim.Step(before, e, serverclaim.Params{MaxGen: uint32(before.Gen + 1)})
 	switch {
 	case ok != accepted:
@@ -176,11 +185,12 @@ func TestAdoptionRefinesTheKernel(t *testing.T) {
 	}
 }
 
-// A generation beyond the kernel's uint32 parameters keeps every decision: the
-// holder renews and writes, another token is refused, and startup
-// reconciliation still reads the record.
+// A generation beyond the kernel's uint32 parameters keeps every decision and
+// refines the kernel: startup reconciliation reads the record, the holder
+// renews, an older header is refused, and after the lease expires a takeover
+// that observed the generation gets the next one.
 func TestLargeGenerationKeepsDecisions(t *testing.T) {
-	for _, gen := range []uint64{1 << 40, ^uint64(0) - 1} {
+	for _, gen := range []uint64{1 << 31, 1 << 40, ^uint64(0) - 2} {
 		dir := t.TempDir()
 		s, h := openTest(t, dir, nil)
 		p, id := prepareTodo(t, h.URL)
@@ -190,7 +200,10 @@ func TestLargeGenerationKeepsDecisions(t *testing.T) {
 		if _, err := board.MoveWithOptions(entry, proj.board, "working", board.MoveOptions{Owner: "claude"}); err != nil {
 			t.Fatal(err)
 		}
-		r := claimRecord{TaskID: id, ClientID: "host-a", ExecutionID: "exec-big", Owner: "claude", Generation: gen, Status: api.ClaimActive, ExpiresAt: time.Now().Add(time.Hour)}
+		var at atomic.Int64
+		at.Store(time.Date(2026, 11, 14, 12, 0, 0, 0, time.UTC).UnixNano())
+		now := func() time.Time { return time.Unix(0, at.Load()) }
+		r := claimRecord{TaskID: id, ClientID: "host-a", ExecutionID: "exec-big", Owner: "claude", Generation: gen, Status: api.ClaimActive, ExpiresAt: now().Add(time.Hour)}
 		token := s.token(proj.info.ID, id, r.ExecutionID, gen)
 		r.TokenHash = tokenHash(token)
 		if err := proj.writeClaim(r); err != nil {
@@ -198,16 +211,28 @@ func TestLargeGenerationKeepsDecisions(t *testing.T) {
 		}
 		h.Close()
 		s.Close()
-		s, h = openTest(t, dir, nil)
-		c, _ := client.New(h.URL, "host-a")
-		p = c.Project(p.ID())
+		s, h = openTest(t, dir, now)
+		cl, _ := client.New(h.URL, "host-a")
+		p = cl.Project(p.ID())
+		c := claimProbe{t: t, s: s, p: p}
 		own := client.Claim{Token: token, Generation: gen}
-		if _, err := p.Renew(t.Context(), id, own); err != nil {
-			t.Fatalf("generation %d: renewal refused: %v", gen, err)
-		}
-		_, err := p.Renew(t.Context(), id, client.Claim{Token: token, Generation: gen - 1})
-		if !api.IsCode(err, api.CodeLeaseInvalid) {
-			t.Fatalf("generation %d: an older header: %v", gen, err)
+		c.refines(id, serverclaim.Renew{G: 1, Tg: 1}, true, func() error { _, err := p.Renew(t.Context(), id, own); return err })
+		c.refines(id, serverclaim.Renew{G: 2, Tg: 1}, false, func() error {
+			_, err := p.Renew(t.Context(), id, client.Claim{Token: token, Generation: gen - 1})
+			if !api.IsCode(err, api.CodeLeaseInvalid) {
+				t.Fatalf("generation %d: an older header: %v", gen, err)
+			}
+			return err
+		})
+		at.Add(int64(2 * time.Hour))
+		takeover := api.ClaimRequest{ClientID: "host-b", ExecutionID: "exec-next", Owner: "codex", Decision: "user:takeover", ExpectedGeneration: gen}
+		var next api.ClaimGrant
+		c.refines(id, serverclaim.Takeover{Expected: 1, Fresh: true, G: 2, Tg: 2}, true, func() (err error) {
+			next, err = p.Takeover(t.Context(), "", id, takeover)
+			return err
+		})
+		if next.Claim.Generation != gen+1 {
+			t.Fatalf("generation %d: takeover granted %d", gen, next.Claim.Generation)
 		}
 		h.Close()
 		s.Close()
