@@ -69,7 +69,9 @@ func kernelBound(p ReviewPlan) uint32 { return uint32(len(p.Batches) + 1) }
 
 // errKernelState reports a projected state on which a kernel query is
 // undefined, which a state reached by accepted events never is.
-func errKernelState(id string) error { return reviewError("review obligation state out of range: " + id) }
+func errKernelState(id string) error {
+	return reviewError("review obligation state out of range: " + id)
+}
 
 // projectObligation is the obligation kernel state of member id under plan p.
 // With planned false the member has no plan and p is ignored.
