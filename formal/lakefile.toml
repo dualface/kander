@@ -1,0 +1,10 @@
+name = "kanderFormal"
+version = "0.1.0"
+defaultTargets = ["KanderFormal", "kander-formal"]
+
+[[lean_lib]]
+name = "KanderFormal"
+
+[[lean_exe]]
+name = "kander-formal"
+root = "Main"
