@@ -7,7 +7,7 @@ Proof obligations of the review obligation machine.
 The theorems hold for every role list and every value of `maxBatch`, through
 the model (`ReviewObligationModel.lean`), the independent observer
 (`ReviewObligationObserver.lean`), and the simulation between them
-(`ReviewObligationSafety.lean`).
+(`ReviewObligationRel.lean` and `ReviewObligationSafety.lean`).
 -/
 namespace KanderFormal.Proofs.ReviewObligation
 
