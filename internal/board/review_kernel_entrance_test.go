@@ -140,7 +140,7 @@ func TestReviewEntrancesRefineKernels(t *testing.T) {
 			ids[0]: {reviewobligation.Close{At: 1, Current: noRoles}},
 			ids[1]: {reviewobligation.Close{At: 1, Current: pmqaRoles}},
 		},
-		plan:    []reviewplan.Event{reviewplan.Run{At: 1}, reviewplan.Aggregate{At: 1, Published: true, Lineage: true, Ledger: true}, closeFacts(1)},
+		plan: []reviewplan.Event{reviewplan.Run{At: 1}, reviewplan.Aggregate{At: 1, Published: true, Lineage: true, Ledger: true}, closeFacts(1)},
 	}, false, func() error {
 		in := archiveInput(third.TaskIDs, "third-run", "PMQA")
 		in.BatchID, in.Base, in.Commit = third.BatchID, third.Base, third.TargetCommit
