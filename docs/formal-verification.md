@@ -117,7 +117,7 @@ For each registered machine `m`, `kander-formal gen` writes three files below `i
   - `Event`, a sealed interface, and one struct per event (`type Claim struct{}`, `type Review struct { Role Role; Pass bool }`); the choice of one struct per event keeps arguments typed and makes the event set closed;
   - `Initial(p Params) State`;
   - `Step(s State, e Event, p Params) (State, bool)`: a refused event, including an argument outside its range, returns `s` and `false`;
-  - one function per query, `func Q(s State, p Params) T`, or `(result T, ok bool)` when the body contains a subtraction.
+  - one function per query, `func Q(s State, p Params) T`, or `(result T, ok bool)` when the body can be undefined: it contains a subtraction or an array read or update (`aget`, `aput`).
 - `zz_generated_test.go`: the vector alphabet as Go values, canonical JSON encoders, and `TestVectors`.
 - `testdata/vectors.jsonl`: the differential vectors.
 
