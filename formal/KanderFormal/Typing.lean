@@ -37,10 +37,20 @@ def STyOk (m : Machine) : STy → Bool
   | .enum e => m.hasEnum e
   | .nat b => m.hasParam b
 
+/-- An array element is a scalar or a set. -/
 def TyOk (m : Machine) : Ty → Bool
   | .scalar t => m.STyOk t
   | .map k v => m.hasEnum k && m.STyOk v
   | .set e => m.hasEnum e
+  | .arr b (.scalar t) => m.hasParam b && m.STyOk t
+  | .arr b (.set e) => m.hasParam b && m.hasEnum e
+  | .arr _ _ => false
+
+/-- Event arguments are scalars or sets. -/
+def ArgTyOk (m : Machine) : Ty → Bool
+  | .scalar t => m.STyOk t
+  | .set e => m.hasEnum e
+  | _ => false
 
 def EBaseOk (m : Machine) : EBase → Bool
   | .enum e => m.hasEnum e
@@ -50,6 +60,9 @@ def ETyOk (m : Machine) : ETy → Bool
   | .base b => m.EBaseOk b
   | .map k v => m.hasEnum k && m.EBaseOk v
   | .set e => m.hasEnum e
+  | .arr (.base b) => m.EBaseOk b
+  | .arr (.set e) => m.hasEnum e
+  | .arr _ => false
 
 end Machine
 
@@ -57,16 +70,17 @@ def tBool : ETy := .base .bool
 def tNat : ETy := .base .nat
 
 /-- Infers the type of an expression; `none` for an ill-typed expression.
-`args` are the declared arguments of the enclosing event. -/
-def infer (m : Machine) (args : List ArgDecl) : Expr → Option ETy
+`args` are the declared arguments of the enclosing event; `bvars` are the types
+of the bound variables in scope, innermost first. -/
+def infer (m : Machine) (args : List ArgDecl) (bvars : List EBase) : Expr → Option ETy
   | .boolLit _ => some tBool
   | .enumLit e c => if ((m.ctorsOf e).getD []).contains c then some (.base (.enum e)) else none
   | .natLit n => if n < natLitLimit then some tNat else none
   | .field f => (m.fieldTy f).map Ty.erase
   | .param x => if m.hasParam x then some tNat else none
-  | .arg a => (lookup a (args.map fun d => (d.name, d.ty))).map fun t => .base t.erase
+  | .arg a => (lookup a (args.map fun d => (d.name, d.ty))).map Ty.erase
   | .cmp op a b =>
-    match infer m args a, infer m args b with
+    match infer m args bvars a, infer m args bvars b with
     | some ta, some tb =>
       if ta ≠ tb then none
       else match op with
@@ -74,38 +88,72 @@ def infer (m : Machine) (args : List ArgDecl) : Expr → Option ETy
         | _ => if ta = tNat then some tBool else none
     | _, _ => none
   | .add a b | .sub a b =>
-    match infer m args a, infer m args b with
+    match infer m args bvars a, infer m args bvars b with
     | some (.base .nat), some (.base .nat) => some tNat
     | _, _ => none
   | .and a b | .or a b =>
-    match infer m args a, infer m args b with
+    match infer m args bvars a, infer m args bvars b with
     | some (.base .bool), some (.base .bool) => some tBool
     | _, _ => none
   | .not a =>
-    match infer m args a with
+    match infer m args bvars a with
     | some (.base .bool) => some tBool
     | _ => none
   | .ite c t e =>
-    match infer m args c, infer m args t, infer m args e with
+    match infer m args bvars c, infer m args bvars t, infer m args bvars e with
     | some (.base .bool), some tt, some te => if tt = te then some tt else none
     | _, _, _ => none
   | .get a k =>
-    match infer m args a, infer m args k with
+    match infer m args bvars a, infer m args bvars k with
     | some (.map k' v), some (.base (.enum e)) => if k' = e then some (.base v) else none
     | _, _ => none
   | .put a k v =>
-    match infer m args a, infer m args k, infer m args v with
+    match infer m args bvars a, infer m args bvars k, infer m args bvars v with
     | some (.map k' w), some (.base (.enum e)), some (.base w') =>
       if k' = e ∧ w = w' then some (.map k' w) else none
     | _, _, _ => none
   | .mem s x =>
-    match infer m args s, infer m args x with
+    match infer m args bvars s, infer m args bvars x with
     | some (.set e), some (.base (.enum e')) => if e = e' then some tBool else none
     | _, _ => none
   | .insert s x | .erase s x =>
-    match infer m args s, infer m args x with
+    match infer m args bvars s, infer m args bvars x with
     | some (.set e), some (.base (.enum e')) => if e = e' then some (.set e) else none
     | _, _ => none
+  | .aget a i =>
+    match infer m args bvars a, infer m args bvars i with
+    | some (.arr t), some (.base .nat) => some t
+    | _, _ => none
+  | .aput a i v =>
+    match infer m args bvars a, infer m args bvars i, infer m args bvars v with
+    | some (.arr t), some (.base .nat), some t' => if t = t' then some (.arr t) else none
+    | _, _, _ => none
+  | .afill a lo v =>
+    match infer m args bvars a, infer m args bvars lo, infer m args bvars v with
+    | some (.arr t), some (.base .nat), some t' => if t = t' then some (.arr t) else none
+    | some (.map k w), some (.base .nat), some (.base w') => if w = w' then some (.map k w) else none
+    | _, _, _ => none
+  | .any lo hi body =>
+    match infer m args bvars lo, infer m args bvars hi, infer m args (.nat :: bvars) body with
+    | some (.base .nat), some (.base .nat), some (.base .bool) => some tBool
+    | _, _, _ => none
+  | .first lo hi body =>
+    match infer m args bvars lo, infer m args bvars hi, infer m args (.nat :: bvars) body with
+    | some (.base .nat), some (.base .nat), some (.base .bool) => some tNat
+    | _, _, _ => none
+  | .setOf e body =>
+    if m.hasEnum e then
+      match infer m args (.enum e :: bvars) body with
+      | some (.base .bool) => some (.set e)
+      | _ => none
+    else none
+  | .mapOf k body =>
+    if m.hasEnum k then
+      match infer m args (.enum k :: bvars) body with
+      | some (.base t) => some (.map k t)
+      | _ => none
+    else none
+  | .bvar k => bvars[k]?.map .base
 
 /-- Parameters fixed at zero: a value that conforms here conforms for every
 parameter value (`Ty.conforms_zero`). -/
@@ -116,16 +164,22 @@ namespace Machine
 def eventOk (m : Machine) (ev : EventDecl) : Bool :=
   validIdent ev.name &&
   nodupB (ev.args.map ArgDecl.name) &&
-  ev.args.all (fun a => validIdent a.name && m.STyOk a.ty) &&
-  infer m ev.args ev.guard == some tBool &&
+  ev.args.all (fun a => validIdent a.name && m.ArgTyOk a.ty) &&
+  infer m ev.args [] ev.guard == some tBool &&
   nodupB (ev.assigns.map Prod.fst) &&
   ev.assigns.all fun (f, x) =>
     match m.fieldTy f with
-    | some t => infer m ev.args x == some t.erase
+    | some t => infer m ev.args [] x == some t.erase
     | none => false
 
 def queryOk (m : Machine) (q : QueryDecl) : Bool :=
-  validIdent q.name && m.ETyOk q.ty && infer m [] q.body == some q.ty
+  validIdent q.name && m.ETyOk q.ty && infer m [] [] q.body == some q.ty
+
+/-- The declared initial value conforms with every parameter at zero; for an
+array field it is the element value. -/
+def initOk (m : Machine) : Ty → Val → Bool
+  | .arr _ t, v => t.conforms m zeroParams v
+  | t, v => t.conforms m zeroParams v
 
 def wellTyped (m : Machine) : Bool :=
   validIdent m.name &&
@@ -134,7 +188,7 @@ def wellTyped (m : Machine) : Bool :=
     decide (d.ctors.length ≤ enumCtorLimit) && nodupB d.ctors && d.ctors.all validIdent) &&
   nodupB m.params && m.params.all validIdent &&
   nodupB (m.fields.map FieldDecl.name) &&
-  m.fields.all (fun d => validIdent d.name && m.TyOk d.ty && d.ty.conforms m zeroParams d.init) &&
+  m.fields.all (fun d => validIdent d.name && m.TyOk d.ty && m.initOk d.ty d.init) &&
   nodupB (m.events.map EventDecl.name) && m.events.all m.eventOk &&
   nodupB (m.queries.map QueryDecl.name) && m.queries.all m.queryOk
 
@@ -182,30 +236,56 @@ theorem STy.conforms_zero {m : Machine} {p : Params} :
   | .bool, .enum _, h | .bool, .nat _, h | .enum _, .bool _, h | .enum _, .nat _, h
   | .nat _, .bool _, h | .nat _, .enum _, h => by simp [STy.conforms] at h
 
+/-- A value of a type without arrays that conforms with every parameter at
+zero conforms for every parameter value. Arrays are excluded: their length is
+a parameter. -/
 theorem Ty.conforms_zero {m : Machine} {p : Params} :
-    ∀ {t : Ty} {v : Val}, t.conforms m zeroParams v = true → t.conforms m p v = true
-  | .scalar _, .scalar _, h => STy.conforms_zero h
-  | .map _ _, .map vs, h => by
+    ∀ {t : Ty} {v : Val}, (∀ b t', t ≠ .arr b t') → t.conforms m zeroParams v = true → t.conforms m p v = true
+  | .scalar _, .scalar _, _, h => STy.conforms_zero h
+  | .map _ _, .map vs, _, h => by
     simp only [Ty.conforms, Bool.and_eq_true, List.all_eq_true] at h ⊢
     exact ⟨h.1, fun x hx => STy.conforms_zero (h.2 x hx)⟩
-  | .set _, .set _, h => h
-  | .scalar _, .map _, h | .scalar _, .set _, h | .map _ _, .scalar _, h | .map _ _, .set _, h
-  | .set _, .scalar _, h | .set _, .map _, h => by simp [Ty.conforms] at h
+  | .set _, .set _, _, h => h
+  | .arr b t', _, hn, _ => absurd rfl (hn b t')
+  | .scalar _, .map _, _, h | .scalar _, .set _, _, h | .map _ _, .scalar _, _, h | .map _ _, .set _, _, h
+  | .set _, .scalar _, _, h | .set _, .map _, _, h | .scalar _, .arr _, _, h | .map _ _, .arr _, _, h
+  | .set _, .arr _, _, h => by simp [Ty.conforms] at h
+
+theorem conforms_replicate {m : Machine} {p : Params} {t : Ty} {v : Val} (h : t.conforms m p v = true) :
+    ∀ n, (List.replicate n v).all (Ty.conforms m p t) = true
+  | 0 => rfl
+  | n + 1 => by simp [List.replicate_succ, h, conforms_replicate h n]
+
+/-- A declared initial value accepted by `Machine.initOk` gives a conforming
+initial value for every parameter value. -/
+theorem initVal_conforms {m : Machine} {p : Params} {t : Ty} {v : Val}
+    (hok : m.TyOk t = true) (h : m.initOk t v = true) : t.conforms m p (initVal p t v) = true := by
+  match t, hok, h with
+  | .scalar _, _, h => exact Ty.conforms_zero (by intros; simp) h
+  | .map _ _, _, h => exact Ty.conforms_zero (by intros; simp) h
+  | .set _, _, h => exact Ty.conforms_zero (by intros; simp) h
+  | .arr b (.scalar t'), _, h =>
+    have hz := Ty.conforms_zero (p := p) (t := .scalar t') (by intros; simp) h
+    simp [initVal, Ty.conforms, conforms_replicate hz]
+  | .arr b (.set e), _, h =>
+    have hz := Ty.conforms_zero (p := p) (t := .set e) (by intros; simp) h
+    simp [initVal, Ty.conforms, conforms_replicate hz]
+  | .arr _ (.map _ _), hok, _ | .arr _ (.arr _ _), hok, _ => simp [Machine.TyOk] at hok
 
 /-- The initial state of a well-typed machine conforms for every parameter
 value. -/
 theorem initial_conforms {m : Machine} (h : m.wellTyped = true) (p : Params) :
-    m.StateConforms p (initial m) := by
+    m.StateConforms p (initial m p) := by
   refine ⟨by simp [initial], ?_⟩
   intro f v hl
   simp only [initial] at hl
-  rw [lookup_map f FieldDecl.name FieldDecl.init] at hl
+  rw [lookup_map f FieldDecl.name (fun d => initVal p d.ty d.init)] at hl
   simp only [Option.map_eq_some_iff] at hl
   obtain ⟨d, hd, rfl⟩ := hl
   refine ⟨d.ty, by simp [Machine.fieldTy, Machine.findField, hd], ?_⟩
   simp only [Machine.wellTyped, Bool.and_eq_true, List.all_eq_true] at h
   have hdok := h.1.1.1.1.2 d (lookup_map_mem hd)
-  exact Ty.conforms_zero hdok.2
+  exact initVal_conforms hdok.1.2 hdok.2
 
 /-- Generic theorem 3 for well-typed machines: assignments read the pre-state. -/
 theorem wellTyped_assign_reads_prestate {m : Machine} {p : Params} {s s' : State} {e : Event}
@@ -213,7 +293,7 @@ theorem wellTyped_assign_reads_prestate {m : Machine} {p : Params} {s s' : State
     (h : step m p s e = some s') (hev : m.findEvent e.name = some ev)
     (hmem : (f, x) ∈ ev.assigns) (hf : f ∈ s.map Prod.fst) :
     ∃ args v, bindArgs m p ev.args e.args = some args ∧
-      eval ⟨m, p, s, args⟩ x = some v ∧ lookup f s' = some v :=
+      eval ⟨m, p, s, args, []⟩ x = some v ∧ lookup f s' = some v :=
   step_assign_reads_prestate h hev (wellTyped_assigns_nodup hwt hev) hmem hf
 
 end KanderFormal

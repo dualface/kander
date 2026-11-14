@@ -11,7 +11,7 @@ namespace KanderFormal
 
 structure SafetyCert (m : Machine) where
   Inv : Params → State → Prop
-  init : ∀ p, Inv p (initial m)
+  init : ∀ p, Inv p (initial m p)
   step : ∀ p s s' e, Inv p s → KanderFormal.step m p s e = some s' → Inv p s'
 
 theorem SafetyCert.reachable {m : Machine} (c : SafetyCert m) {p : Params} {s : State}
@@ -37,20 +37,20 @@ theorem conforms_bool {m : Machine} {p : Params} {v : Val}
     (h : Ty.conforms m p (.scalar .bool) v = true) : ∃ b, v = boolV b := by
   match v with
   | .scalar (.bool b) => exact ⟨b, rfl⟩
-  | .scalar (.enum _) | .scalar (.nat _) | .map _ | .set _ => simp [Ty.conforms, STy.conforms] at h
+  | .scalar (.enum _) | .scalar (.nat _) | .map _ | .set _ | .arr _ => simp [Ty.conforms, STy.conforms] at h
 
 theorem conforms_nat {m : Machine} {p : Params} {b : String} {v : Val}
     (h : Ty.conforms m p (.scalar (.nat b)) v = true) : ∃ n, v = natV n ∧ n ≤ p b := by
   match v with
   | .scalar (.nat n) => simp [Ty.conforms, STy.conforms] at h; exact ⟨n, rfl, h⟩
-  | .scalar (.enum _) | .scalar (.bool _) | .map _ | .set _ => simp [Ty.conforms, STy.conforms] at h
+  | .scalar (.enum _) | .scalar (.bool _) | .map _ | .set _ | .arr _ => simp [Ty.conforms, STy.conforms] at h
 
 theorem conforms_enum {m : Machine} {p : Params} {e : String} {v : Val} {n : Nat}
     (hn : m.enumSize e = some n) (h : Ty.conforms m p (.scalar (.enum e)) v = true) :
     ∃ i, v = enumV i ∧ i < n := by
   match v with
   | .scalar (.enum i) => simp [Ty.conforms, STy.conforms, hn] at h; exact ⟨i, rfl, h⟩
-  | .scalar (.nat _) | .scalar (.bool _) | .map _ | .set _ => simp [Ty.conforms, STy.conforms] at h
+  | .scalar (.nat _) | .scalar (.bool _) | .map _ | .set _ | .arr _ => simp [Ty.conforms, STy.conforms] at h
 
 theorem enum_scalars {m : Machine} {p : Params} {e : String} {ne : Nat}
     (he : m.enumSize e = some ne) :
@@ -81,14 +81,14 @@ theorem conforms_map_enum {m : Machine} {p : Params} {k e : String} {v : Val} {n
     obtain ⟨hlen, hall⟩ := h
     obtain ⟨is, rfl, hlt⟩ := enum_scalars he hall
     exact ⟨is, rfl, by simpa using hlen.symm, hlt⟩
-  | .scalar _ | .set _ => simp [Ty.conforms] at h
+  | .scalar _ | .set _ | .arr _ => simp [Ty.conforms] at h
 
 theorem conforms_set {m : Machine} {p : Params} {e : String} {v : Val} {n : Nat}
     (hn : m.enumSize e = some n) (h : Ty.conforms m p (.set e) v = true) :
     ∃ bs, v = .set bs ∧ bs.length = n := by
   match v with
   | .set bs => simp [Ty.conforms, hn] at h; exact ⟨bs, rfl, h.symm⟩
-  | .scalar _ | .map _ => simp [Ty.conforms] at h
+  | .scalar _ | .map _ | .arr _ => simp [Ty.conforms] at h
 
 theorem bindArgs_nil {m : Machine} {p : Params} {vs : List Val} {args : List (String × Val)}
     (h : bindArgs m p [] vs = some args) : vs = [] ∧ args = [] := by
@@ -98,7 +98,7 @@ theorem bindArgs_nil {m : Machine} {p : Params} {vs : List Val} {args : List (St
 
 theorem bindArgs_cons {m : Machine} {p : Params} {d : ArgDecl} {ds : List ArgDecl} {vs : List Val}
     {args : List (String × Val)} (h : bindArgs m p (d :: ds) vs = some args) :
-    ∃ v vs' args', vs = v :: vs' ∧ (Ty.scalar d.ty).conforms m p v = true ∧
+    ∃ v vs' args', vs = v :: vs' ∧ d.ty.conforms m p v = true ∧
       bindArgs m p ds vs' = some args' ∧ args = (d.name, v) :: args' := by
   match vs with
   | [] => simp [bindArgs] at h

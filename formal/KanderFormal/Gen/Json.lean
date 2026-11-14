@@ -30,6 +30,7 @@ def encodeVal (m : Machine) : ETy → Val → String
     jsonObj ((List.range vs.length).zip vs |>.map fun (i, x) => (ctorName m k i, encodeScalar m t x))
   | .set e, .set bs =>
     jsonArr ((List.range bs.length).zip bs |>.filterMap fun (i, b) => if b then some (jsonStr (ctorName m e i)) else none)
+  | .arr t, .arr vs => jsonArr (vs.map (encodeVal m t))
   | _, _ => "null"
 
 def encodeState (m : Machine) (s : State) : String :=
@@ -37,7 +38,7 @@ def encodeState (m : Machine) (s : State) : String :=
 
 def encodeEvent (m : Machine) (e : Event) : String :=
   let args := match m.findEvent e.name with
-    | some ev => (ev.args.zip e.args).map fun (d, v) => (d.name, encodeVal m (.base d.ty.erase) v)
+    | some ev => (ev.args.zip e.args).map fun (d, v) => (d.name, encodeVal m d.ty.erase v)
     | none => []
   jsonObj [("event", jsonStr e.name), ("args", jsonObj args)]
 

@@ -73,10 +73,10 @@ theorem events_cases {ev : EventDecl} (h : ev ∈ M.events) :
     ev = claimEvent ∨ ev = reviewEvent ∨ ev = releaseEvent ∨ ev = finishEvent ∨ ev = bumpEvent := by
   simpa [exampleMachine] using h
 
-theorem init : Inv p (initial M) := by
+theorem init : Inv p (initial M p) := by
   refine ⟨initial_conforms wellTyped p, ?_⟩
   intro ph ep i j x y z h
-  obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ := mk_inj (h.symm.trans (rfl : initial M = mk 0 0 0 0 false false false)).symm
+  obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ := mk_inj (h.symm.trans (rfl : initial M p = mk 0 0 0 0 false false false)).symm
   exact ⟨by simp, by simp, by simp, by simp, by simp⟩
 
 theorem ctors_phase : M.ctorsOf "phase" = some ["idle", "claimed", "done"] := rfl

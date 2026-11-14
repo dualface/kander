@@ -1,9 +1,10 @@
 import KanderFormal.Dsl
 
 /-
-The example machine. It exists only to exercise the toolchain: every value
-type, every expression form, a nat event argument, and a query that can fail.
-Production code does not use it.
+The example machine. It exists only to exercise the toolchain: every scalar,
+map, and set form, a nat event argument, and a query that can fail. Arrays,
+binders, and set arguments are exercised by the review machines. Production
+code does not use it.
 
 A card is claimed for an epoch, collects one verdict per review role, and is
 sealed when every role passed.
@@ -26,7 +27,7 @@ def claimEvent : EventDecl where
 
 def reviewEvent : EventDecl where
   name := "review"
-  args := [{ name := "role", ty := .enum "role" }, { name := "pass", ty := .bool }]
+  args := [{ name := "role", ty := .scalar (.enum "role") }, { name := "pass", ty := .scalar .bool }]
   guard := .cmp .eq (.field "phase") (.enumLit "phase" "claimed")
   assigns := [
     ("reviews", .put (.field "reviews") (.arg "role")
@@ -50,7 +51,7 @@ def finishEvent : EventDecl where
 
 def bumpEvent : EventDecl where
   name := "bump"
-  args := [{ name := "to", ty := .nat "maxEpoch" }]
+  args := [{ name := "to", ty := .scalar (.nat "maxEpoch") }]
   guard := .and (.cmp .eq (.field "phase") (.enumLit "phase" "idle"))
     (.and (.cmp .gt (.arg "to") (.field "epoch")) (.cmp .ge (.arg "to") (.natLit 1)))
   assigns := [("epoch", .arg "to")]

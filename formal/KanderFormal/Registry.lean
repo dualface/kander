@@ -17,6 +17,9 @@ structure VectorBounds where
   paramSets : List (List (String × Nat))
   /-- Values tried for every `nat` event argument. -/
   natDomain : List Nat
+  /-- When not empty, the event alphabet, replacing every event with every
+  argument combination; for machines whose full alphabet is too large to walk. -/
+  events : List Event := []
   deriving Inhabited
 
 structure Entry where

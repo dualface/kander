@@ -7,12 +7,14 @@ function, reachability, and the generic theorems that hold for every machine.
 namespace KanderFormal
 
 /-- The evaluation environment of one event or query. `state` is always the
-pre-state of the event. -/
+pre-state of the event. `bound` holds the variables of the enclosing `any`,
+`first`, `setOf`, and `mapOf`, innermost first. -/
 structure Env where
   m : Machine
   params : Params
   state : State
   args : List (String × Val)
+  bound : List Val
 
 def boolV (b : Bool) : Val := .scalar (.bool b)
 def natV (n : Nat) : Val := .scalar (.nat n)
@@ -64,6 +66,48 @@ def setWith (b : Bool) : Val → Val → Option Val
   | .set bs, .scalar (.enum i) => if i < bs.length then some (.set (bs.set i b)) else none
   | _, _ => none
 
+def arrGet : Val → Val → Option Val
+  | .arr vs, .scalar (.nat i) => vs[i]?
+  | _, _ => none
+
+def arrPut : Val → Val → Val → Option Val
+  | .arr vs, .scalar (.nat i), x => if i < vs.length then some (.arr (vs.set i x)) else none
+  | _, _, _ => none
+
+/-- Sets every entry at index `lo` or above. -/
+def fillFrom : Val → Val → Val → Option Val
+  | .arr vs, .scalar (.nat lo), x =>
+    some (.arr ((List.range vs.length).zip vs |>.map fun (i, v) => if lo ≤ i then x else v))
+  | .map vs, .scalar (.nat lo), .scalar x =>
+    some (.map ((List.range vs.length).zip vs |>.map fun (i, v) => if lo ≤ i then x else v))
+  | _, _, _ => none
+
+/-- The Boolean results of `f` at each index of `is`; `none` when one of them is
+undefined or not a Boolean. Every index is evaluated. -/
+def boolsAt (f : Nat → Option Val) : List Nat → Option (List Bool)
+  | [] => some []
+  | i :: is => (f i).bind fun v =>
+    match v with
+    | .scalar (.bool b) => (boolsAt f is).map (b :: ·)
+    | _ => none
+
+/-- The scalar results of `f` at each index of `is`; `none` when one of them is
+undefined or not a scalar. Every index is evaluated. -/
+def scalarsAt (f : Nat → Option Val) : List Nat → Option (List Scalar)
+  | [] => some []
+  | i :: is => (f i).bind fun v =>
+    match v with
+    | .scalar x => (scalarsAt f is).map (x :: ·)
+    | _ => none
+
+/-- The first index of `is` whose flag in `bs` is set, else `dflt`. -/
+def firstSet (dflt : Nat) : List Nat → List Bool → Nat
+  | i :: is, b :: bs => if b then i else firstSet dflt is bs
+  | _, _ => dflt
+
+/-- The indices `lo ≤ i < hi`. -/
+def indexRange (lo hi : Nat) : List Nat := List.range' lo (hi - lo)
+
 /-- Expression evaluation. `and` and `or` evaluate both operands; `ite`
 evaluates only the selected branch. `none` means the expression is undefined
 (an ill-typed operand, or a subtraction below zero), which refuses the event. -/
@@ -91,13 +135,35 @@ def eval (env : Env) : Expr → Option Val
   | .mem s x => (eval env s).bind fun a => (eval env x).bind fun b => setMem a b
   | .insert s x => (eval env s).bind fun a => (eval env x).bind fun b => setWith true a b
   | .erase s x => (eval env s).bind fun a => (eval env x).bind fun b => setWith false a b
+  | .aget a i => (eval env a).bind fun x => (eval env i).bind fun y => arrGet x y
+  | .aput a i v => (eval env a).bind fun x => (eval env i).bind fun y =>
+      (eval env v).bind fun z => arrPut x y z
+  | .afill a lo v => (eval env a).bind fun x => (eval env lo).bind fun y =>
+      (eval env v).bind fun z => fillFrom x y z
+  | .any lo hi body => (eval env lo).bind fun l => (eval env hi).bind fun h =>
+      match l, h with
+      | .scalar (.nat l), .scalar (.nat h) =>
+        (boolsAt (fun i => eval { env with bound := natV i :: env.bound } body) (indexRange l h)).map
+          fun bs => boolV (bs.any id)
+      | _, _ => none
+  | .first lo hi body => (eval env lo).bind fun l => (eval env hi).bind fun h =>
+      match l, h with
+      | .scalar (.nat l), .scalar (.nat h) =>
+        (boolsAt (fun i => eval { env with bound := natV i :: env.bound } body) (indexRange l h)).map
+          fun bs => natV (firstSet h (indexRange l h) bs)
+      | _, _ => none
+  | .setOf e body => (env.m.enumSize e).bind fun n =>
+      (boolsAt (fun i => eval { env with bound := enumV i :: env.bound } body) (List.range n)).map .set
+  | .mapOf k body => (env.m.enumSize k).bind fun n =>
+      (scalarsAt (fun i => eval { env with bound := enumV i :: env.bound } body) (List.range n)).map .map
+  | .bvar k => env.bound[k]?
 
 /-- Binds event arguments to their names, refusing a wrong count or a value that
 does not conform to its declared type (for example a number above its bound). -/
 def bindArgs (m : Machine) (p : Params) : List ArgDecl → List Val → Option (List (String × Val))
   | [], [] => some []
   | d :: ds, v :: vs =>
-    if (Ty.scalar d.ty).conforms m p v then (bindArgs m p ds vs).map ((d.name, v) :: ·) else none
+    if d.ty.conforms m p v then (bindArgs m p ds vs).map ((d.name, v) :: ·) else none
   | _, _ => none
 
 /-- Evaluates every right-hand side in the pre-state environment and checks the
@@ -114,14 +180,20 @@ def evalAssigns (env : Env) : List (String × Expr) → Option (List (String × 
 def applyUpdates (s : State) (us : List (String × Val)) : State :=
   s.map fun (f, v) => (f, (lookup f us).getD v)
 
-def initial (m : Machine) : State :=
-  m.fields.map fun d => (d.name, d.init)
+/-- The initial value of a field: its declared initial value, or for an array
+field an array of `p bound` copies of it. -/
+def initVal (p : Params) : Ty → Val → Val
+  | .arr b _, v => .arr (List.replicate (p b) v)
+  | _, v => v
+
+def initial (m : Machine) (p : Params) : State :=
+  m.fields.map fun d => (d.name, initVal p d.ty d.init)
 
 /-- One event: `some` with the post-state when accepted, `none` when refused. -/
 def step (m : Machine) (p : Params) (s : State) (e : Event) : Option State :=
   (m.findEvent e.name).bind fun ev =>
     (bindArgs m p ev.args e.args).bind fun args =>
-      let env : Env := ⟨m, p, s, args⟩
+      let env : Env := ⟨m, p, s, args, []⟩
       (eval env ev.guard).bind fun g =>
         if g = boolV true then (evalAssigns env ev.assigns).map (applyUpdates s) else none
 
@@ -133,10 +205,10 @@ def run (m : Machine) (p : Params) (s : State) (e : Event) : State × Bool :=
   | none => (s, false)
 
 def evalQuery (m : Machine) (p : Params) (s : State) (q : QueryDecl) : Option Val :=
-  eval ⟨m, p, s, []⟩ q.body
+  eval ⟨m, p, s, [], []⟩ q.body
 
 inductive Reachable (m : Machine) (p : Params) : State → Prop
-  | init : Reachable m p (initial m)
+  | init : Reachable m p (initial m p)
   | step {s s' : State} (e : Event) : Reachable m p s → step m p s e = some s' → Reachable m p s'
 
 /-! ## Helper lemmas -/
@@ -279,8 +351,8 @@ targets take that as a hypothesis, which `Machine.wellTyped` guarantees
 theorem step_accepted {m : Machine} {p : Params} {s s' : State} {e : Event}
     (h : step m p s e = some s') :
     ∃ ev args us, m.findEvent e.name = some ev ∧ bindArgs m p ev.args e.args = some args ∧
-      eval ⟨m, p, s, args⟩ ev.guard = some (boolV true) ∧
-      evalAssigns ⟨m, p, s, args⟩ ev.assigns = some us ∧ s' = applyUpdates s us := by
+      eval ⟨m, p, s, args, []⟩ ev.guard = some (boolV true) ∧
+      evalAssigns ⟨m, p, s, args, []⟩ ev.assigns = some us ∧ s' = applyUpdates s us := by
   simp only [step, Option.bind_eq_some_iff] at h
   obtain ⟨ev, hev, args, hargs, g, hg, h⟩ := h
   split at h
@@ -319,7 +391,7 @@ theorem step_assign_reads_prestate {m : Machine} {p : Params} {s s' : State} {e 
     (h : step m p s e = some s') (hev : m.findEvent e.name = some ev)
     (hnd : (ev.assigns.map Prod.fst).Nodup) (hmem : (f, x) ∈ ev.assigns) (hf : f ∈ s.map Prod.fst) :
     ∃ args v, bindArgs m p ev.args e.args = some args ∧
-      eval ⟨m, p, s, args⟩ x = some v ∧ lookup f s' = some v := by
+      eval ⟨m, p, s, args, []⟩ x = some v ∧ lookup f s' = some v := by
   obtain ⟨ev', args, us, hev', hargs, _, hus, rfl⟩ := step_accepted h
   rw [hev] at hev'; cases hev'
   obtain ⟨v, hv, hl⟩ := lookup_of_assignsMatch (evalAssigns_spec hus) hnd hmem
@@ -344,12 +416,12 @@ value is never wrapped or clamped. -/
 theorem step_refuses_out_of_bound {m : Machine} {p : Params} {s : State} {e : Event}
     {ev : EventDecl} {args : List (String × Val)} {f : String} {x : Expr} {v : Val} {t : Ty}
     (hev : m.findEvent e.name = some ev) (hargs : bindArgs m p ev.args e.args = some args)
-    (hmem : (f, x) ∈ ev.assigns) (hv : eval ⟨m, p, s, args⟩ x = some v)
+    (hmem : (f, x) ∈ ev.assigns) (hv : eval ⟨m, p, s, args, []⟩ x = some v)
     (ht : m.fieldTy f = some t) (hbad : t.conforms m p v = false) :
     step m p s e = none := by
-  have hnone := evalAssigns_none_of_bad (env := ⟨m, p, s, args⟩) hv ht hbad hmem
+  have hnone := evalAssigns_none_of_bad (env := ⟨m, p, s, args, []⟩) hv ht hbad hmem
   simp only [step, hev, hargs, Option.bind_some]
-  cases eval ⟨m, p, s, args⟩ ev.guard with
+  cases eval ⟨m, p, s, args, []⟩ ev.guard with
   | none => rfl
   | some g =>
     simp only [Option.bind_some]

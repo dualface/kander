@@ -35,8 +35,8 @@ A machine is a Lean value of type `Machine` (a deep embedding). Names are lowerC
 
 - `enums`: named enums with 1 to 64 constructors.
 - `params`: natural number parameters. Every parameter value is allowed; a statement quantified over `Params` holds for all of them.
-- `fields`: state fields with a declared type and an initial value. Initial values are literals; a bounded natural number starts at 0 (it must conform when every parameter is 0, see `Ty.conforms_zero`).
-- `events`: a name, typed arguments, a Boolean guard, and a list of assignments `(field, expression)`. Assignments are simultaneous: every right-hand side reads the pre-state, and a field is assigned at most once.
+- `fields`: state fields with a declared type and an initial value. Initial values are literals; a bounded natural number starts at 0 (it must conform when every parameter is 0, see `Ty.conforms_zero`). The initial value of an array field is the value of every element, because the length is a parameter (`initVal`); the initial state therefore depends on the parameters (`initial m p`).
+- `events`: a name, typed arguments (scalars or sets), a Boolean guard, and a list of assignments `(field, expression)`. Assignments are simultaneous: every right-hand side reads the pre-state, and a field is assigned at most once.
 - `queries`: derived values, a name, an expression type, and a body over state and parameters.
 
 ### Value Types
@@ -48,6 +48,7 @@ A machine is a Lean value of type `Machine` (a deep embedding). Names are lowerC
 | `.scalar (.nat b)` | A natural number `n ≤ p b` for parameter `b` | `uint64` (parameters are `uint32`) |
 | `.map k t` | One scalar of type `t` per constructor of enum `k` | `[KCount]T` |
 | `.set e` | A finite set of constructors of enum `e` | `type ESet uint64` with `Has`, `With`, `Without` |
+| `.arr b t` | Exactly `p b` elements of `t` (a scalar or a set) for parameter `b` | `[]T` |
 
 ### Expressions
 
@@ -61,8 +62,16 @@ A machine is a Lean value of type `Machine` (a deep embedding). Names are lowerC
 | `ite c t e` | Only the selected branch is evaluated |
 | `get m k`, `put m k v` | Map read and functional update |
 | `mem s x`, `insert s x`, `erase s x` | Set membership and functional update |
+| `aget a i`, `aput a i v` | Array read and functional update; an index outside the array is undefined |
+| `afill a lo v` | The array or map `a` with every entry at index `lo` or above set to `v` |
+| `any lo hi body` | Whether `body` holds for some `i` with `lo ≤ i < hi` |
+| `first lo hi body` | The least such `i` for which `body` holds, else `hi` |
+| `setOf e body`, `mapOf k body` | The set of constructors of `e` for which `body` holds; the map from each constructor of `k` to `body` |
+| `bvar k` | The variable of the `k`-th enclosing `any`, `first`, `setOf`, or `mapOf`, 0 being the innermost |
 
-An undefined expression (subtraction below zero) refuses the event, or makes a query return `ok = false`. A well-typed machine has no other undefined expression.
+`any`, `first`, `setOf`, and `mapOf` evaluate `body` for every index or constructor; one undefined evaluation makes the whole expression undefined.
+
+An undefined expression (subtraction below zero, an array index outside the array) refuses the event, or makes a query return `ok = false`. A well-typed machine has no other undefined expression.
 
 ## Semantics and Generic Theorems
 
@@ -109,13 +118,13 @@ For each registered machine `m`, `kander-formal gen` writes three files below `i
 - `zz_generated_test.go`: the vector alphabet as Go values, canonical JSON encoders, and `TestVectors`.
 - `testdata/vectors.jsonl`: the differential vectors.
 
-Generated code uses no reflection and no allocation in `Step`. Every compound expression is bound to its own temporary, so gofmt has nothing to rewrite. Naturals are `uint64` inside the kernel; literals stay below 2^32, parameters are `uint32`, and there is no multiplication, so no expression overflows.
+Generated code uses no reflection. `Step` allocates only for array updates: `aput` and `afill` copy the array (`slices.Clone`) and never write the caller's state. `any`, `first`, `setOf`, and `mapOf` become loops. Every compound expression is bound to its own temporary, so gofmt has nothing to rewrite. Naturals are `uint64` inside the kernel; literals stay below 2^32, parameters are `uint32`, and there is no multiplication, so no expression overflows.
 
 The hand-written shell around a kernel only projects persisted records into a kernel `State`, persists, and runs transactions, processes, and network calls. Every decision the kernel covers goes through the generated `Step` or a generated query.
 
 ## Differential Vectors
 
-The registry declares, per machine, a depth (at least 4 for the example), the parameter sets, and the values tried for natural number arguments. The alphabet is every event with every argument combination from those domains (enum arguments use every constructor, Boolean arguments both values).
+The registry declares, per machine, a depth (at least 4 for the example), the parameter sets, and the values tried for natural number arguments. The alphabet is every event with every argument combination from those domains (enum arguments use every constructor, Boolean arguments both values, set arguments every subset). A machine whose full alphabet is too large to walk registers its alphabet as an explicit event list instead.
 
 `Gen/Vectors.lean` evaluates the Lean semantics on every state reachable within `depth - 1` events from each parameter set's initial state, for every event of the alphabet, and writes one JSON line per step: the parameter set index, the state, the event index, whether it was accepted, the next state, and the query results of the state. The first line is a header with the machine name, depth, parameter sets, and alphabet.
 

@@ -29,6 +29,7 @@ def goType : ETy → String
   | .base b => goBase b
   | .map k v => "[" ++ goCount k ++ "]" ++ goBase v
   | .set e => goSet e
+  | .arr t => "[]" ++ goType t
 
 def tab (n : Nat) : String := String.ofList (List.replicate n '\t')
 
@@ -58,6 +59,8 @@ def goValLit (m : Machine) : ETy → Val → String
 structure EmitCtx where
   m : Machine
   args : List ArgDecl
+  /-- Go names and types of the bound variables in scope, innermost first. -/
+  bvars : List (String × EBase) := []
   /-- How argument `a` is read, e.g. `ev.A`. -/
   argRef : String → String
   /-- The statement that refuses: `return s, false` in a step function. -/
@@ -97,7 +100,7 @@ def cmpOp : CmpOp → String
 
 def typeOf (e : Expr) : EmitM ETy := do
   let c ← read
-  match infer c.m c.args e with
+  match infer c.m c.args (c.bvars.map Prod.snd) e with
   | some t => return t
   | none => throw s!"ill-typed expression {repr e}"
 
@@ -160,16 +163,95 @@ partial def emitExpr (e : Expr) : EmitM String := do
   | .erase s x => do
     let a ← emitExpr s; let b ← emitExpr x
     bind (a ++ ".Without(" ++ b ++ ")")
+  | .aget a i => do
+    let x ← emitExpr a; let y ← emitExpr i
+    emitLine ("if " ++ y ++ " >= uint64(len(" ++ x ++ ")) {"); emitFail; emitLine "}"
+    bind (x ++ "[" ++ y ++ "]")
+  | .aput a i v => do
+    let x ← emitExpr a; let y ← emitExpr i; let z ← emitExpr v
+    emitLine ("if " ++ y ++ " >= uint64(len(" ++ x ++ ")) {"); emitFail; emitLine "}"
+    let t ← bind ("slices.Clone(" ++ x ++ ")")
+    emitLine (t ++ "[" ++ y ++ "] = " ++ z)
+    return t
+  | .afill a lo v => do
+    let ty ← typeOf a
+    let x ← emitExpr a; let y ← emitExpr lo; let z ← emitExpr v
+    let t ← match ty with
+      | .arr _ => bind ("slices.Clone(" ++ x ++ ")")
+      | _ => bind x
+    let i ← fresh
+    emitLine ("for " ++ i ++ " := range " ++ t ++ " {")
+    withIndent do
+      emitLine ("if uint64(" ++ i ++ ") >= " ++ y ++ " {")
+      withIndent (emitLine (t ++ "[" ++ i ++ "] = " ++ z))
+      emitLine "}"
+    emitLine "}"
+    return t
+  | .any lo hi body => do
+    let l ← emitExpr lo; let h ← emitExpr hi
+    let t ← bind "false"
+    let i ← fresh
+    emitLine ("for " ++ i ++ " := " ++ l ++ "; " ++ i ++ " < " ++ h ++ "; " ++ i ++ "++ {")
+    withIndent do
+      let b ← withReader (fun c => { c with bvars := (i, .nat) :: c.bvars }) (emitExpr body)
+      emitLine (t ++ " = " ++ t ++ " || " ++ b)
+    emitLine "}"
+    return t
+  | .first lo hi body => do
+    let l ← emitExpr lo; let h ← emitExpr hi
+    let t ← bind h
+    let i ← fresh
+    emitLine ("for " ++ i ++ " := " ++ l ++ "; " ++ i ++ " < " ++ h ++ "; " ++ i ++ "++ {")
+    withIndent do
+      let b ← withReader (fun c => { c with bvars := (i, .nat) :: c.bvars }) (emitExpr body)
+      emitLine ("if " ++ b ++ " && " ++ t ++ " == " ++ h ++ " {")
+      withIndent (emitLine (t ++ " = " ++ i))
+      emitLine "}"
+    emitLine "}"
+    return t
+  | .setOf en body => do
+    let t ← fresh
+    emitLine ("var " ++ t ++ " " ++ goSet en)
+    let i ← fresh
+    emitLine ("for " ++ i ++ " := " ++ goEnum en ++ "(0); " ++ i ++ " < " ++ goCount en ++ "; " ++ i ++ "++ {")
+    withIndent do
+      let b ← withReader (fun c => { c with bvars := (i, .enum en) :: c.bvars }) (emitExpr body)
+      emitLine ("if " ++ b ++ " {")
+      withIndent (emitLine (t ++ " = " ++ t ++ ".With(" ++ i ++ ")"))
+      emitLine "}"
+    emitLine "}"
+    return t
+  | .mapOf k body => do
+    let ty ← typeOf e
+    let t ← fresh
+    emitLine ("var " ++ t ++ " " ++ goType ty)
+    let i ← fresh
+    emitLine ("for " ++ i ++ " := " ++ goEnum k ++ "(0); " ++ i ++ " < " ++ goCount k ++ "; " ++ i ++ "++ {")
+    withIndent do
+      let b ← withReader (fun c => { c with bvars := (i, .enum k) :: c.bvars }) (emitExpr body)
+      emitLine (t ++ "[" ++ i ++ "] = " ++ b)
+    emitLine "}"
+    return t
+  | .bvar k => do
+    match c.bvars[k]? with
+    | some (n, _) => return n
+    | none => throw s!"unbound variable {k}"
 
 /-- Refuses a value outside the declared bound (`Ty.conforms`). -/
 def emitBoundCheck (atom : String) : Ty → EmitM Unit
   | .scalar (.nat b) => do
     emitLine ("if " ++ atom ++ " > uint64(p." ++ capitalize b ++ ") {"); emitFail; emitLine "}"
-  | .map _ (.nat b) => do
+  | .map _ (.nat b) | .arr _ (.scalar (.nat b)) => do
     emitLine ("for _, v := range " ++ atom ++ " {")
     withIndent do
       emitLine ("if v > uint64(p." ++ capitalize b ++ ") {"); emitFail; emitLine "}"
     emitLine "}"
+  | _ => pure ()
+
+/-- Refuses an array whose length is not its parameter. -/
+def emitLengthCheck (atom : String) : Ty → EmitM Unit
+  | .arr b _ => do
+    emitLine ("if uint64(len(" ++ atom ++ ")) != uint64(p." ++ capitalize b ++ ") {"); emitFail; emitLine "}"
   | _ => pure ()
 
 def runEmit (c : EmitCtx) (k : EmitM α) : Except String (α × Array String) := do
@@ -178,10 +260,44 @@ def runEmit (c : EmitCtx) (k : EmitM α) : Except String (α × Array String) :=
 
 /-! ## Declarations -/
 
+/-- The enums of the sets a type mentions. -/
+def tySets : Ty → List String
+  | .set e => [e]
+  | .arr _ t => tySets t
+  | _ => []
+
+def eTySets : ETy → List String
+  | .set e => [e]
+  | .arr t => eTySets t
+  | _ => []
+
+/-- The enums of the set comprehensions in an expression. -/
+partial def exprSets : Expr → List String
+  | .setOf e body => e :: exprSets body
+  | .mapOf _ body => exprSets body
+  | .cmp _ a b | .add a b | .sub a b | .and a b | .or a b | .get a b | .mem a b | .insert a b
+  | .erase a b | .aget a b => exprSets a ++ exprSets b
+  | .not a => exprSets a
+  | .ite a b c | .put a b c | .aput a b c | .afill a b c | .any a b c | .first a b c =>
+    exprSets a ++ exprSets b ++ exprSets c
+  | _ => []
+
+def machineExprs (m : Machine) : List Expr :=
+  m.events.flatMap (fun ev => ev.guard :: ev.assigns.map Prod.snd) ++ m.queries.map QueryDecl.body
+
 def setEnums (m : Machine) : List String :=
-  let fromFields := m.fields.filterMap fun d => match d.ty with | .set e => some e | _ => none
-  let fromQueries := m.queries.filterMap fun q => match q.ty with | .set e => some e | _ => none
-  m.enums.map EnumDecl.name |>.filter fun e => fromFields.contains e || fromQueries.contains e
+  let used := m.fields.flatMap (tySets ·.ty) ++ m.queries.flatMap (eTySets ·.ty) ++
+    m.events.flatMap (fun ev => ev.args.flatMap (tySets ·.ty)) ++ (machineExprs m).flatMap exprSets
+  m.enums.map EnumDecl.name |>.filter used.contains
+
+/-- Whether the generated kernel clones arrays. -/
+partial def usesClone : Expr → Bool
+  | .aput _ _ _ | .afill _ _ _ => true
+  | .cmp _ a b | .add a b | .sub a b | .and a b | .or a b | .get a b | .mem a b | .insert a b
+  | .erase a b | .aget a b => usesClone a || usesClone b
+  | .not a | .setOf _ a | .mapOf _ a => usesClone a
+  | .ite a b c | .put a b c | .any a b c | .first a b c => usesClone a || usesClone b || usesClone c
+  | _ => false
 
 def enumDecl (d : EnumDecl) : List String :=
   let t := goEnum d.name
@@ -208,15 +324,16 @@ def eventStruct (ev : EventDecl) : List String :=
   ["// " ++ n ++ " is the " ++ ev.name ++ " event."] ++
   (if ev.args.isEmpty then ["type " ++ n ++ " struct{}"]
    else ["type " ++ n ++ " struct {"] ++
-     structLines (ev.args.map fun a => (capitalize a.name, goBase a.ty.erase)) ++ ["}"]) ++
+     structLines (ev.args.map fun a => (capitalize a.name, goType a.ty.erase)) ++ ["}"]) ++
   ["", "func (" ++ n ++ ") isEvent() {}", ""]
 
 def argCheck (a : ArgDecl) : EmitM Unit := do
   let r := "ev." ++ capitalize a.name
   match a.ty with
-  | .enum e => do emitLine ("if " ++ r ++ " >= " ++ goCount e ++ " {"); emitFail; emitLine "}"
-  | .nat b => do emitLine ("if " ++ r ++ " > uint64(p." ++ capitalize b ++ ") {"); emitFail; emitLine "}"
-  | .bool => pure ()
+  | .scalar (.enum e) => do emitLine ("if " ++ r ++ " >= " ++ goCount e ++ " {"); emitFail; emitLine "}"
+  | .scalar (.nat b) => do emitLine ("if " ++ r ++ " > uint64(p." ++ capitalize b ++ ") {"); emitFail; emitLine "}"
+  | .set e => do emitLine ("if " ++ r ++ ">>" ++ goCount e ++ " != 0 {"); emitFail; emitLine "}"
+  | _ => pure ()
 
 def stepFunc (m : Machine) (ev : EventDecl) : Except String (List String) := do
   let n := capitalize ev.name
@@ -229,7 +346,7 @@ def stepFunc (m : Machine) (ev : EventDecl) : Except String (List String) := do
     for (f, x) in ev.assigns do
       let a ← emitExpr x
       match m.fieldTy f with
-      | some t => emitBoundCheck a t
+      | some t => do emitLengthCheck a t; emitBoundCheck a t
       | none => throw s!"unknown field {f}"
       results := results.push (f, a)
     emitLine "next := s"
@@ -240,11 +357,11 @@ def stepFunc (m : Machine) (ev : EventDecl) : Except String (List String) := do
 
 /-- A query whose body can be undefined returns `(value, ok)`. -/
 partial def mayFail : Expr → Bool
-  | .sub _ _ => true
+  | .sub _ _ | .aget _ _ | .aput _ _ _ => true
   | .cmp _ a b | .add a b | .and a b | .or a b | .get a b | .mem a b | .insert a b | .erase a b =>
     mayFail a || mayFail b
-  | .not a => mayFail a
-  | .ite a b c | .put a b c => mayFail a || mayFail b || mayFail c
+  | .not a | .setOf _ a | .mapOf _ a => mayFail a
+  | .ite a b c | .put a b c | .afill a b c | .any a b c | .first a b c => mayFail a || mayFail b || mayFail c
   | _ => false
 
 def queryFunc (m : Machine) (q : QueryDecl) : Except String (List String) := do
@@ -267,6 +384,22 @@ def checkNames (m : Machine) : Except String Unit := do
   if !nodupB names then throw s!"generated Go identifiers collide in {m.name}: {names}"
   if m.events.isEmpty then throw s!"machine {m.name} declares no event"
 
+def isZeroVal : Val → Bool
+  | .scalar (.bool b) => !b
+  | .scalar (.enum i) | .scalar (.nat i) => i == 0
+  | .set bs => bs.all (!·)
+  | _ => false
+
+/-- The statements of `Initial` that set field `d`. -/
+def initLines (m : Machine) (d : FieldDecl) : List String :=
+  let f := "s." ++ capitalize d.name
+  match d.ty with
+  | .arr b t =>
+    ["\t" ++ f ++ " = make(" ++ goType (.arr t.erase) ++ ", p." ++ capitalize b ++ ")"] ++
+    (if isZeroVal d.init then [] else
+      ["\tfor i := range " ++ f ++ " {", "\t\t" ++ f ++ "[i] = " ++ goValLit m t.erase d.init, "\t}"])
+  | t => ["\t" ++ f ++ " = " ++ goValLit m t.erase d.init]
+
 def header (sourcePath digest : String) : List String :=
   ["// Code generated by kander-formal; DO NOT EDIT.",
     "// Source: formal/" ++ sourcePath,
@@ -281,6 +414,7 @@ def kernelFile (m : Machine) (sourcePath digest : String) : Except String String
     ["// Package " ++ m.name ++ " is the decision kernel of the " ++ m.name ++ " state machine,",
       "// generated from its Lean definition.",
       "package " ++ m.name, ""] ++
+    (if (machineExprs m).any usesClone then ["import \"slices\"", ""] else []) ++
     m.enums.flatMap enumDecl ++ (setEnums m).flatMap setDecl ++
     ["// Params holds the machine parameters.", "type Params struct {"] ++
     structLines (m.params.map fun x => (capitalize x, "uint32")) ++ ["}", "",
@@ -289,7 +423,7 @@ def kernelFile (m : Machine) (sourcePath digest : String) : Except String String
     "// Event is one of the event types of this package.", "type Event interface {", "\tisEvent()", "}", ""] ++
     m.events.flatMap eventStruct ++
     ["// Initial returns the initial state.", "func Initial(p Params) State {", "\tvar s State"] ++
-    m.fields.map (fun d => "\ts." ++ capitalize d.name ++ " = " ++ goValLit m d.ty.erase d.init) ++
+    m.fields.flatMap (initLines m) ++
     ["\treturn s", "}", "",
       "// Step applies e to s. A refused event returns s unchanged and false.",
       "func Step(s State, e Event, p Params) (State, bool) {", "\tswitch ev := e.(type) {"] ++

@@ -18,26 +18,36 @@ namespace KanderFormal.Gen
 
 open KanderFormal.Registry
 
-def scalarDomain (m : Machine) (natDomain : List Nat) : STy → List Val
-  | .bool => [boolV false, boolV true]
-  | .enum e => (List.range ((m.enumSize e).getD 0)).map enumV
-  | .nat _ => natDomain.map natV
+/-- The values tried for an argument: every Boolean, enum constructor, and
+subset, and the configured naturals. -/
+def argDomain (m : Machine) (natDomain : List Nat) : Ty → List Val
+  | .scalar .bool => [boolV false, boolV true]
+  | .scalar (.enum e) => (List.range ((m.enumSize e).getD 0)).map enumV
+  | .scalar (.nat _) => natDomain.map natV
+  | .set e =>
+    let n := (m.enumSize e).getD 0
+    (List.range (2 ^ n)).map fun k => .set ((List.range n).map k.testBit)
+  | _ => []
 
 def argTuples (m : Machine) (natDomain : List Nat) : List ArgDecl → List (List Val)
   | [] => [[]]
   | d :: ds =>
-    (scalarDomain m natDomain d.ty).flatMap fun v => (argTuples m natDomain ds).map (v :: ·)
+    (argDomain m natDomain d.ty).flatMap fun v => (argTuples m natDomain ds).map (v :: ·)
 
-/-- Every event the replay tries, in event then argument order. -/
+/-- Every event with every argument combination, in event then argument order. -/
 def alphabet (m : Machine) (natDomain : List Nat) : List Event :=
   m.events.flatMap fun ev => (argTuples m natDomain ev.args).map fun args => ⟨ev.name, args⟩
+
+/-- The events the replay tries: the registered alphabet, or every event. -/
+def vectorAlphabet (en : Entry) : List Event :=
+  if en.vectors.events.isEmpty then alphabet en.machine en.vectors.natDomain else en.vectors.events
 
 def paramsOf (ps : List (String × Nat)) : Params := fun x => (lookup x ps).getD 0
 
 /-- States reachable within `n` events, in breadth-first discovery order. -/
 def reachableWithin (m : Machine) (p : Params) (events : List Event) (n : Nat) : Array State := Id.run do
-  let mut seen : Array State := #[initial m]
-  let mut frontier : Array State := #[initial m]
+  let mut seen : Array State := #[initial m p]
+  let mut frontier : Array State := #[initial m p]
   for _ in [0:n] do
     let mut next : Array State := #[]
     for s in frontier do
@@ -52,7 +62,7 @@ def reachableWithin (m : Machine) (p : Params) (events : List Event) (n : Nat) :
 def vectorLines (en : Entry) : List String := Id.run do
   let m := en.machine
   let b := en.vectors
-  let events := alphabet m b.natDomain
+  let events := vectorAlphabet en
   let header := jsonObj [("machine", jsonStr m.name), ("depth", toString b.depth),
     ("params", jsonArr (b.paramSets.map fun ps => encodeParams m (paramsOf ps))),
     ("events", jsonArr (events.map (encodeEvent m)))]
