@@ -2,8 +2,9 @@ package board
 
 import (
 	"fmt"
-	"maps"
 	"slices"
+
+	"github.com/dualface/kander/internal/statemachine/reviewobligation"
 )
 
 const (
@@ -28,65 +29,13 @@ type ReviewObligationRelease struct {
 	TaskIDs []string `json:"task_ids"`
 }
 
-// keepDropObligations moves the obligations of p to the new end of the plan and adds
-// those of the dropped batches. A user decision leaves none for this drop.
-func keepDropObligations(tx *Transaction, p *ReviewPlan, dropped []ReviewPlanBatch, from int, decision string) error {
-	kept := slices.Clone(p.DropObligations)
-	for i := range kept {
-		kept[i].FromBatch = min(kept[i].FromBatch, from)
-	}
-	p.DropObligations = kept
-	if decision != "" {
-		return nil
-	}
-	for _, b := range dropped {
-		roles := planRequiredRoles(ReviewPlan{Batches: []ReviewPlanBatch{b}})
-		members := make([]string, 0, len(b.TaskIDs))
-		for _, id := range b.TaskIDs {
-			excluded, err := memberExcluded(tx, id)
-			if err != nil {
-				return err
-			}
-			if excluded {
-				continue
-			}
-			s, err := tx.Snapshot(id)
-			if err != nil {
-				return err
-			}
-			if s.Entry.State == "working" || s.Entry.State == "review" {
-				members = append(members, id)
-			}
-		}
-		if len(roles) > 0 && len(members) > 0 {
-			p.DropObligations = append(p.DropObligations, ReviewDropObligation{BatchID: b.BatchID, FromBatch: from, Roles: roles, TaskIDs: members})
-		}
-	}
-	return nil
-}
-
-// recordDroppedRoles adds the required roles of the dropped batches to the record of
-// each of their members, with or without a decision.
-func recordDroppedRoles(p *ReviewPlan, dropped []ReviewPlanBatch) {
-	p.DroppedRoles = maps.Clone(p.DroppedRoles)
-	for _, b := range dropped {
-		roles := planRequiredRoles(ReviewPlan{Batches: []ReviewPlanBatch{b}})
-		if len(roles) == 0 {
-			continue
-		}
-		if p.DroppedRoles == nil {
-			p.DroppedRoles = map[string][]string{}
-		}
-		for _, id := range b.TaskIDs {
-			p.DroppedRoles[id] = unionRoles(p.DroppedRoles[id], roles)
-		}
-	}
-}
-
-// dropObligationsOwed lists the undischarged obligations as `<member>/<role>`. With
-// mustClose a batch discharges one only after it closed; the seal also accepts a
-// batch that is only planned, because done still waits for it.
+// dropObligationsOwed lists the undischarged obligations as `<member>/<role>`, in
+// the order of the persisted obligations. With mustClose a batch discharges one
+// only after it closed; the seal also accepts a batch that is only planned, because
+// done still waits for it. The kernel decides each obligation on the member's state
+// with that obligation alone.
 func dropObligationsOwed(tx *Transaction, p ReviewPlan, mustClose bool) ([]string, error) {
+	kernels := map[string]*memberKernel{}
 	var owed []string
 	for _, o := range p.DropObligations {
 		for _, id := range o.TaskIDs {
@@ -97,12 +46,23 @@ func dropObligationsOwed(tx *Transaction, p ReviewPlan, mustClose bool) ([]strin
 			if excluded {
 				continue
 			}
+			k := kernels[id]
+			if k == nil {
+				if k, err = loadMemberKernel(tx, p, true, id, kernelBound(p)); err != nil {
+					return nil, err
+				}
+				kernels[id] = k
+			}
+			roles, err := k.obligationOwed(o, mustClose)
+			if err != nil {
+				return nil, err
+			}
 			for _, role := range o.Roles {
-				covered, err := batchCoversRole(tx, p, o.FromBatch, id, role, mustClose)
+				r, err := kernelRole(role)
 				if err != nil {
 					return nil, err
 				}
-				if item := id + "/" + role; !covered && !slices.Contains(owed, item) {
+				if item := id + "/" + role; roles.Has(r) && !slices.Contains(owed, item) {
 					owed = append(owed, item)
 				}
 			}
@@ -111,82 +71,107 @@ func dropObligationsOwed(tx *Transaction, p ReviewPlan, mustClose bool) ([]strin
 	return owed, nil
 }
 
-func batchCoversRole(tx *Transaction, p ReviewPlan, from int, id, role string, mustClose bool) (bool, error) {
-	for i, b := range p.Batches {
-		if i < from || !containsID(b.TaskIDs, id) || !slices.Contains(planRequiredRoles(ReviewPlan{Batches: []ReviewPlanBatch{b}}), role) {
-			continue
-		}
-		if !mustClose {
-			return true, nil
-		}
-		var c ReviewClosure
-		closed, err := readReviewJSON(tx, closureName(b.BatchID), &c)
-		if closed || err != nil {
-			return closed, err
-		}
+// obligationOwed is the kernel's answer for one persisted obligation: the roles
+// of o no batch discharges, on the member's state with o as its only obligation.
+func (k *memberKernel) obligationOwed(o ReviewDropObligation, mustClose bool) (reviewobligation.RoleSet, error) {
+	alone := *k
+	roles, err := kernelRoleSet(o.Roles)
+	if err != nil {
+		return 0, err
 	}
-	return false, nil
+	alone.state.DropRec = roles
+	for r := range alone.state.DropFloor {
+		alone.state.DropFloor[r] = uint64(o.FromBatch)
+	}
+	if mustClose {
+		return queryKernel(&alone, reviewobligation.DropOwedClosed)
+	}
+	return queryKernel(&alone, reviewobligation.DropOwedPlanned)
 }
 
-// releaseObligation applies a user decision. It refuses a member with nothing to
-// release, so a decision never stands in the history with no effect.
-func releaseObligation(tx *Transaction, p *ReviewPlan, r ReviewObligationRelease, decision string) error {
-	if decision == "" {
-		return reviewError(t("board.review_release_decision"))
+// releaseFacts is what one release_obligation request establishes: the member
+// kernels after the release, and the first refusal in the order the request is
+// checked.
+type releaseFacts struct {
+	decision, members, accepted bool
+	kernels                     []*memberKernel
+	err                         error
+}
+
+// releaseObligation runs a user decision through the kernels of the named members.
+// A member with nothing to release refuses it, so a decision never stands in the
+// history with no effect.
+func releaseObligation(tx *Transaction, p ReviewPlan, r ReviewObligationRelease, decision string) (f releaseFacts, err error) {
+	f.decision, f.members, f.accepted = decision != "", true, true
+	if !f.decision {
+		f.err = reviewError(t("board.review_release_decision"))
 	}
 	ids, err := normalizedReviewTasks(r.TaskIDs)
 	if err != nil {
-		return err
+		f.accepted, f.err = false, firstError(f.err, err)
+		return f, nil
 	}
 	for _, id := range ids {
 		if !containsID(p.TaskIDs, id) {
-			return reviewError("foreign plan member")
+			f.members, f.err = false, firstError(f.err, reviewError("foreign plan member"))
+			continue
 		}
+		k, err := loadMemberKernel(tx, p, true, id, kernelBound(p))
+		if err != nil {
+			return f, err
+		}
+		var refusal error
 		switch r.Kind {
 		case releaseDropped:
-			if !releaseDropObligation(p, id) {
-				return reviewError(t("board.review_release_nothing", r.Kind, id))
+			if !k.step(reviewobligation.ReleaseDrop{}) {
+				refusal = reviewError(t("board.review_release_nothing", r.Kind, id))
 			}
 		case releaseRecovery:
-			if err = releaseRecoveryReview(tx, *p, id, decision); err != nil {
-				return err
+			roles, ok := reviewobligation.RecoveryRoles(k.state, k.params)
+			releasable := reviewobligation.RecoveryReleasable(k.state, k.params)
+			switch {
+			case k.step(reviewobligation.ReleaseRecovery{}):
+			case !ok:
+				refusal = errKernelState(id)
+			case releasable:
+				refusal = reviewError(t("board.review_release_recovery_roles", id, fmt.Sprint(roleNames(roles))))
+			default:
+				refusal = reviewError(t("board.review_release_nothing", releaseRecovery, id))
 			}
 		default:
-			return reviewError(fmt.Sprintf("release_obligation kind: %q", r.Kind))
+			refusal = reviewError(fmt.Sprintf("release_obligation kind: %q", r.Kind))
+		}
+		if refusal != nil {
+			f.accepted, f.err = false, firstError(f.err, refusal)
+			continue
+		}
+		f.kernels = append(f.kernels, k)
+	}
+	return f, nil
+}
+
+// persistRelease writes what the accepted release changed: the member leaves
+// every drop obligation, or its recovery record takes the decision.
+func persistRelease(tx *Transaction, p *ReviewPlan, kind, decision string, kernels []*memberKernel) error {
+	for _, k := range kernels {
+		if kind == releaseDropped {
+			kept := make([]ReviewDropObligation, 0, len(p.DropObligations))
+			for _, o := range p.DropObligations {
+				if o.TaskIDs = slices.DeleteFunc(slices.Clone(o.TaskIDs), func(member string) bool { return member == k.id }); len(o.TaskIDs) > 0 {
+					kept = append(kept, o)
+				}
+			}
+			p.DropObligations = kept
+			continue
+		}
+		var o RecoveryReview
+		if _, err := readReviewJSON(tx, recoveryReviewName(k.id), &o); err != nil {
+			return err
+		}
+		o.ReleaseDecision = decision
+		if err := tx.PutGroup(reviewControlGroup, recoveryReviewName(k.id), reviewJSON(o)); err != nil {
+			return err
 		}
 	}
 	return nil
-}
-
-func releaseDropObligation(p *ReviewPlan, id string) bool {
-	released := false
-	kept := make([]ReviewDropObligation, 0, len(p.DropObligations))
-	for _, o := range p.DropObligations {
-		members := slices.DeleteFunc(slices.Clone(o.TaskIDs), func(member string) bool { return member == id })
-		released = released || len(members) < len(o.TaskIDs)
-		if o.TaskIDs = members; len(members) > 0 {
-			kept = append(kept, o)
-		}
-	}
-	p.DropObligations = kept
-	return released
-}
-
-// releaseRecoveryReview accepts only the record of a member that had no plan when it
-// was reset, under a plan that requires nothing. A plan that requires a role takes
-// the review: after a recovery N/A never stands in for one, and neither does this.
-func releaseRecoveryReview(tx *Transaction, p ReviewPlan, id, decision string) error {
-	var o RecoveryReview
-	ok, err := readReviewJSON(tx, recoveryReviewName(id), &o)
-	if err != nil {
-		return err
-	}
-	if !ok || o.PlanID != "" || o.ReleaseDecision != "" {
-		return reviewError(t("board.review_release_nothing", releaseRecovery, id))
-	}
-	if roles := recoveryRoles(p, o); len(roles) > 0 {
-		return reviewError(t("board.review_release_recovery_roles", id, fmt.Sprint(roles)))
-	}
-	o.ReleaseDecision = decision
-	return tx.PutGroup(reviewControlGroup, recoveryReviewName(id), reviewJSON(o))
 }

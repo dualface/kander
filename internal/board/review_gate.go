@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/internal/statemachine/reviewobligation"
 	"os"
 	"reflect"
 	"slices"
@@ -127,7 +128,14 @@ func validateTaskReviewMode(tx *Transaction, id string, completion, importHistor
 		if e != nil {
 			return progress, e
 		}
-		if open && cycleBatchMissing(p, member) {
+		if !open {
+			continue
+		}
+		missing, e := cycleBatchMissing(tx, p, member)
+		if e != nil {
+			return progress, e
+		}
+		if missing {
 			progress.Pending = append(progress.Pending, "cycle-batch:"+member)
 			progress.NextActions = append(progress.NextActions, ReviewNextAction{Action: "append-cycle-batch", RunIDs: []string{}, TaskID: member})
 		}
@@ -163,11 +171,13 @@ func validateTaskReviewMode(tx *Transaction, id string, completion, importHistor
 			progress.NextActions = append(progress.NextActions, ReviewNextAction{Action: "append-required-batch", Role: role, RunIDs: []string{}, TaskID: member})
 		}
 	}
-	covered := false
-	for _, b := range p.Batches {
-		if containsID(b.TaskIDs, id) {
-			covered = true
-		}
+	own, err := loadMemberKernel(tx, p, true, id, kernelBound(p))
+	if err != nil {
+		return progress, err
+	}
+	covered, err := queryKernel(own, reviewobligation.Assigned)
+	if err != nil {
+		return progress, err
 	}
 	if !covered {
 		progress.Pending = append(progress.Pending, "unassigned-member")
@@ -287,6 +297,10 @@ func validateTaskReviewMode(tx *Transaction, id string, completion, importHistor
 		if completion || s.Entry.State == "done" {
 			return progress, reviewError(unclosedReviewError(progress.Pending))
 		}
+	}
+	// A card that already took no obligation has no completion to enter.
+	if completion && reviewobligation.TakesObligations(own.state, own.params) && !own.step(reviewobligation.Done{PlanClear: true}) {
+		return progress, reviewError("review obligations refuse completion: " + id)
 	}
 	return progress, nil
 }

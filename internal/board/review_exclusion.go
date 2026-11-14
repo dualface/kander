@@ -2,8 +2,12 @@ package board
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
+
+	"github.com/dualface/kander/internal/statemachine/reviewobligation"
+	"github.com/dualface/kander/internal/statemachine/reviewplan"
 )
 
 // ReviewExclusion is the producer record of a plan or task group member that left
@@ -252,13 +256,15 @@ func withdrawnRecords(l dispositionLedger) []ReviewDisposition {
 }
 
 // cycleBatchOwed reports a batch a sealed plan must still take: one of ids has a
-// rebound cycle with no batch, or a recovery that needs an actual review.
+// rebound cycle with no batch, or a recovery that needs an actual review
+// (`cycleBatchOwed`).
 func cycleBatchOwed(tx *Transaction, p ReviewPlan, ids []string) (bool, error) {
 	for _, id := range ids {
-		if cycleBatchMissing(p, id) {
-			return true, nil
+		k, err := loadMemberKernel(tx, p, true, id, kernelBound(p))
+		if err != nil {
+			return false, err
 		}
-		_, owed, err := recoveryReviewOwed(tx, p, id)
+		owed, err := queryKernel(k, reviewobligation.CycleBatchOwed)
 		if owed || err != nil {
 			return owed, err
 		}
@@ -266,43 +272,15 @@ func cycleBatchOwed(tx *Transaction, p ReviewPlan, ids []string) (bool, error) {
 	return false, nil
 }
 
-// cycleBatchMissing reports a member whose rebound cycle has no batch. A batch from
-// the recorded position on covers the cycle, so dropping it owes the batch again.
-func cycleBatchMissing(p ReviewPlan, id string) bool {
-	from, ok := p.CycleBatchFrom[id]
-	if !ok {
-		return false
+// cycleBatchMissing reports a member whose rebound cycle has no batch
+// (`cycleMissing`). A batch from the recorded position on covers the cycle, so
+// dropping it owes the batch again.
+func cycleBatchMissing(tx *Transaction, p ReviewPlan, id string) (bool, error) {
+	k, err := loadMemberKernel(tx, p, true, id, kernelBound(p))
+	if err != nil {
+		return false, err
 	}
-	for i, b := range p.Batches {
-		if i >= from && containsID(b.TaskIDs, id) {
-			return false
-		}
-	}
-	return true
-}
-
-// cycleBatchStart returns the position from which a batch reviews the new cycle of
-// a member: its first open batch, or the end of the plan when every batch of the
-// member closed. A rebind alone must not pass done. A member of no batch has no
-// closed review to reuse, and the seal covers it. An open batch may already hold a
-// run of the old cycle; requireCurrentConclusions keeps it from closing on that run.
-func cycleBatchStart(tx *Transaction, p ReviewPlan, id string) (int, bool, error) {
-	found := false
-	for i, b := range p.Batches {
-		if !containsID(b.TaskIDs, id) {
-			continue
-		}
-		found = true
-		var c ReviewClosure
-		closed, err := readReviewJSON(tx, closureName(b.BatchID), &c)
-		if err != nil {
-			return 0, false, err
-		}
-		if !closed {
-			return i, true, nil
-		}
-	}
-	return len(p.Batches), found, nil
+	return queryKernel(k, reviewobligation.CycleMissing)
 }
 
 // putPlanCopies publishes the plan to every member that still takes a copy.
@@ -321,49 +299,113 @@ func putPlanCopies(tx *Transaction, p ReviewPlan) error {
 
 // dropPlanBatches removes a trailing run of batches no run has reached, so a
 // predecessor can advance. The batch records stay, so a dropped ID cannot come
-// back with another base, and the plan reopens: only a later seal ends it. A dropped
-// required batch stays owed unless a user decision comes with the drop.
-func dropPlanBatches(tx *Transaction, p *ReviewPlan, ids []string, decision string) error {
-	if len(ids) >= len(p.Batches) {
-		return reviewError("drop_batches must leave one batch")
+// back with another base, and the plan reopens: only a later seal ends it. The
+// plan kernel decides the drop; each member's kernel decides what it leaves on
+// the member: a dropped required batch stays owed unless a user decision comes
+// with the drop.
+func dropPlanBatches(tx *Transaction, pk *planKernel, p *ReviewPlan, ids []string, decision string) error {
+	n := len(ids)
+	trailing := n < len(p.Batches)
+	var refusal error
+	if !trailing {
+		refusal = reviewError("drop_batches must leave one batch")
 	}
-	tail := p.Batches[len(p.Batches)-len(ids):]
-	for i, pb := range tail {
-		if pb.BatchID != ids[i] {
-			return reviewError("drop_batches must name the trailing batches in plan order")
+	var tail []ReviewPlanBatch
+	if trailing {
+		tail = p.Batches[len(p.Batches)-n:]
+		for i, pb := range tail {
+			if pb.BatchID != ids[i] {
+				trailing, refusal = false, reviewError("drop_batches must name the trailing batches in plan order")
+				break
+			}
 		}
-		var b ReviewBatch
-		ok, err := readReviewJSON(tx, reviewBatchName(pb.BatchID), &b)
+	}
+	keep := len(p.Batches) - n
+	if trailing {
+		for i, pb := range tail {
+			var b ReviewBatch
+			ok, err := readReviewJSON(tx, reviewBatchName(pb.BatchID), &b)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return reviewError("planned batch missing")
+			}
+			if at := keep + i; pk.state.Closed[at] || pk.state.Touched[at] {
+				refusal = firstError(refusal, reviewError("drop_batches accepts only a batch with no run: "+pb.BatchID))
+			}
+		}
+	}
+	if !pk.step(reviewplan.Drop{N: uint64(n), Cas: true, Trailing: trailing}) {
+		return firstError(refusal, reviewError("drop_batches refused"))
+	}
+	var before, after []*memberKernel
+	for _, id := range p.TaskIDs {
+		k, err := loadMemberKernel(tx, *p, true, id, kernelBound(*p))
 		if err != nil {
 			return err
 		}
-		if !ok {
-			return reviewError("planned batch missing")
+		pre := *k
+		if !k.step(reviewobligation.Drop{Keep: uint64(keep), Decision: decision != ""}) {
+			return errKernelState(id)
 		}
-		runs, err := batchRuns(tx, b)
-		if err != nil {
+		before, after = append(before, &pre), append(after, k)
+	}
+	p.Batches, p.Sealed = slices.Clone(p.Batches[:keep]), pk.state.Sealed
+	return persistDrop(tx, p, tail, keep, decision, before, after)
+}
+
+// persistDrop writes what the kernels decided for a drop in the plan and the
+// recovery records: every obligation moves to the new end of the plan, the
+// dropped required batches leave obligations on the members that take them, and
+// the members' remembered roles, rebound positions, and recovery records follow
+// their kernels.
+func persistDrop(tx *Transaction, p *ReviewPlan, tail []ReviewPlanBatch, keep int, decision string, before, after []*memberKernel) error {
+	kept := slices.Clone(p.DropObligations)
+	for i := range kept {
+		kept[i].FromBatch = min(kept[i].FromBatch, keep)
+	}
+	p.DropObligations = kept
+	takes := map[string]bool{}
+	for _, k := range before {
+		takes[k.id] = reviewobligation.TakesObligations(k.state, k.params)
+	}
+	if decision == "" {
+		for _, b := range tail {
+			roles := planRequiredRoles(ReviewPlan{Batches: []ReviewPlanBatch{b}})
+			members := slices.DeleteFunc(slices.Clone(b.TaskIDs), func(id string) bool { return !takes[id] })
+			if len(roles) > 0 && len(members) > 0 {
+				p.DropObligations = append(p.DropObligations, ReviewDropObligation{BatchID: b.BatchID, FromBatch: keep, Roles: roles, TaskIDs: members})
+			}
+		}
+	}
+	p.DroppedRoles = maps.Clone(p.DroppedRoles)
+	for i, k := range after {
+		pre := before[i].state
+		if k.state.DroppedRoles != pre.DroppedRoles {
+			if p.DroppedRoles == nil {
+				p.DroppedRoles = map[string][]string{}
+			}
+			p.DroppedRoles[k.id] = roleNames(k.state.DroppedRoles)
+		}
+		if _, ok := p.CycleBatchFrom[k.id]; ok {
+			p.CycleBatchFrom[k.id] = int(k.state.CycFrom)
+		}
+		if k.state.RecRoles == pre.RecRoles && k.state.RecFloor == pre.RecFloor {
+			continue
+		}
+		var o RecoveryReview
+		if _, err := readReviewJSON(tx, recoveryReviewName(k.id), &o); err != nil {
 			return err
 		}
-		var c ReviewClosure
-		closed, err := readReviewJSON(tx, closureName(pb.BatchID), &c)
-		if err != nil {
+		if o.PlanID == "" {
+			o.Roles = roleNames(k.state.RecRoles)
+		} else {
+			o.FromBatch = int(k.state.RecFloor)
+		}
+		if err := tx.PutGroup(reviewControlGroup, recoveryReviewName(k.id), reviewJSON(o)); err != nil {
 			return err
 		}
-		if closed || len(runs) > 0 || len(b.Advances) > 0 {
-			return reviewError("drop_batches accepts only a batch with no run: " + pb.BatchID)
-		}
 	}
-	keep := len(p.Batches) - len(ids)
-	if err := keepDropObligations(tx, p, tail, keep, decision); err != nil {
-		return err
-	}
-	recordDroppedRoles(p, tail)
-	droppedRoles := planRequiredRoles(ReviewPlan{Batches: tail})
-	p.Batches = slices.Clone(p.Batches[:keep])
-	p.Sealed = false
-	// The next batch lands at the new end, so a cycle owed past it must accept it.
-	for id, from := range p.CycleBatchFrom {
-		p.CycleBatchFrom[id] = min(from, len(p.Batches))
-	}
-	return moveRecoveryReviews(tx, *p, droppedRoles)
+	return nil
 }

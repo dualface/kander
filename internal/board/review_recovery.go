@@ -3,6 +3,8 @@ package board
 import (
 	"maps"
 	"slices"
+
+	"github.com/dualface/kander/internal/statemachine/reviewobligation"
 )
 
 // RecoveryReview is what a reset leaves on the member's review: the roles its plan
@@ -43,114 +45,56 @@ func unionRoles(lists ...[]string) []string {
 	return slices.Compact(slices.Sorted(slices.Values(slices.Concat(lists...))))
 }
 
-// stageRecoveryReview replaces the record of a member with one for the whole plan
-// as it stands, with the roles the member's dropped batches required: neither a drop
-// decision nor a release ends a recovery, in either order. A later recovery covers an
-// earlier one: the roles only grow, so the roles of the record stay even when a drop
-// took them out of the plan, and the position only moves on.
+// stageRecoveryReview runs a reset through the member's kernel and writes the
+// record it leaves: one with no role and no plan for a member with no plan, and
+// one for the whole plan as it stands for a member with a plan, with the roles of
+// the old record and the roles the member's dropped batches required. Neither a
+// drop decision nor a release ends a recovery, in either order. When the plan
+// requires no role, the old record stays as it is.
 func stageRecoveryReview(tx *Transaction, id, recovery string) error {
 	p, exists, err := readTaskPlan(tx, id)
 	if err != nil {
 		return err
 	}
-	if !exists {
-		return tx.PutGroup(reviewControlGroup, recoveryReviewName(id), reviewJSON(RecoveryReview{Schema: 1, TaskID: id, RecoveryID: recovery, Roles: []string{}}))
-	}
-	var old RecoveryReview
-	if _, err = readReviewJSON(tx, recoveryReviewName(id), &old); err != nil {
+	k, err := loadMemberKernel(tx, p, exists, id, kernelBound(p))
+	if err != nil {
 		return err
 	}
-	roles := unionRoles(old.Roles, planRequiredRoles(p), p.DroppedRoles[id])
-	if len(roles) == 0 {
+	keeps, err := queryKernel(k, reviewobligation.ResetKeepsRecord)
+	if err != nil {
+		return err
+	}
+	if !k.step(reviewobligation.Reset{}) {
+		return reviewError("recovery of a member that left its review: " + id)
+	}
+	switch {
+	case keeps:
 		return nil
+	case k.state.Rec == reviewobligation.RecoveryNoPlan:
+		return tx.PutGroup(reviewControlGroup, recoveryReviewName(id), reviewJSON(RecoveryReview{Schema: 1, TaskID: id, RecoveryID: recovery, Roles: []string{}}))
+	default:
+		return tx.PutGroup(reviewControlGroup, recoveryReviewName(id), reviewJSON(RecoveryReview{Schema: 1, TaskID: id, PlanID: p.PlanID, RecoveryID: recovery, FromBatch: int(k.state.RecFloor), Roles: roleNames(k.state.RecRoles)}))
 	}
-	return tx.PutGroup(reviewControlGroup, recoveryReviewName(id), reviewJSON(RecoveryReview{Schema: 1, TaskID: id, PlanID: p.PlanID, RecoveryID: recovery, FromBatch: len(p.Batches), Roles: roles}))
-}
-
-// moveRecoveryReviews follows a drop of trailing batches. The next batch lands at
-// the new end, so a recovery owed past it must accept it. Every batch left stays
-// below that position, so none of them counts. A record with no PlanID reads its
-// roles from the plan, so it keeps the roles the drop took out.
-func moveRecoveryReviews(tx *Transaction, p ReviewPlan, droppedRoles []string) error {
-	for _, id := range p.TaskIDs {
-		var o RecoveryReview
-		ok, err := readReviewJSON(tx, recoveryReviewName(id), &o)
-		if err != nil {
-			return err
-		}
-		switch {
-		case !ok:
-			continue
-		case o.PlanID == "":
-			o.Roles = unionRoles(o.Roles, droppedRoles)
-		case o.PlanID != p.PlanID || o.FromBatch <= len(p.Batches):
-			continue
-		default:
-			o.FromBatch = len(p.Batches)
-		}
-		if err = tx.PutGroup(reviewControlGroup, recoveryReviewName(id), reviewJSON(o)); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// recoveryRoles lists the roles a record owes under p.
-func recoveryRoles(p ReviewPlan, o RecoveryReview) []string {
-	if o.PlanID != "" {
-		return o.Roles
-	}
-	return unionRoles(o.Roles, planRequiredRoles(p))
 }
 
 // recoveryReviewOwed reports a member whose recovery still needs an actual review,
-// and the roles that review misses. A record with no role has none to name.
+// and the roles that review misses (`recoveryOwed` and `recoveryMissing`).
 func recoveryReviewOwed(tx *Transaction, p ReviewPlan, id string) (missing []string, owed bool, err error) {
-	var o RecoveryReview
-	ok, err := readReviewJSON(tx, recoveryReviewName(id), &o)
-	if err != nil || !ok {
+	k, err := loadMemberKernel(tx, p, true, id, kernelBound(p))
+	if err != nil {
 		return nil, false, err
 	}
-	if o.Schema != 1 || o.TaskID != id || o.PlanID != "" && len(o.Roles) == 0 {
-		return nil, false, reviewError("invalid recovery review: " + id)
+	roles, err := queryKernel(k, reviewobligation.RecoveryMissing)
+	if err != nil {
+		return nil, false, err
 	}
-	roles := recoveryRoles(p, o)
-	if len(roles) == 0 {
-		return nil, o.ReleaseDecision == "", nil
+	if owed, err = queryKernel(k, reviewobligation.RecoveryOwed); err != nil {
+		return nil, false, err
 	}
-	from := o.FromBatch
-	if o.PlanID != p.PlanID {
-		from = 0
+	if roles != 0 {
+		missing = roleNames(roles)
 	}
-	cycle := ""
-	if o.PlanID == "" {
-		s, err := tx.Snapshot(id)
-		if err != nil {
-			return nil, false, err
-		}
-		cycle = planCycle(s)
-	}
-	reviewed := map[string]bool{}
-	for i, b := range p.Batches {
-		if i < from || !containsID(b.TaskIDs, id) {
-			continue
-		}
-		var c ReviewClosure
-		closed, err := readReviewJSON(tx, closureName(b.BatchID), &c)
-		if err != nil {
-			return nil, false, err
-		}
-		if !closed {
-			continue
-		}
-		for role, requirement := range b.Requirements {
-			if requirement == "required" && (cycle == "" || closedInCycle(c, role, id, cycle)) {
-				reviewed[PinRole(role)] = true
-			}
-		}
-	}
-	missing = slices.DeleteFunc(slices.Clone(roles), func(role string) bool { return reviewed[role] })
-	return missing, len(missing) > 0, nil
+	return missing, owed, nil
 }
 
 // closedInCycle reports a closure whose conclusion run of role reviewed cycle. A
