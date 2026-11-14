@@ -115,8 +115,13 @@ partial def emitExpr (e : Expr) : EmitM String := do
   | .param x => return "uint64(p." ++ capitalize x ++ ")"
   | .arg a => return c.argRef a
   | .cmp op a b => do
+    let ty ← typeOf a
     let x ← emitExpr a; let y ← emitExpr b
-    bind (x ++ " " ++ cmpOp op ++ " " ++ y)
+    -- Go slices are not comparable: arrays compare by content.
+    match ty, op with
+    | .arr _, .eq => bind ("slices.Equal(" ++ x ++ ", " ++ y ++ ")")
+    | .arr _, .ne => bind ("!slices.Equal(" ++ x ++ ", " ++ y ++ ")")
+    | _, _ => bind (x ++ " " ++ cmpOp op ++ " " ++ y)
   | .add a b => do
     let x ← emitExpr a; let y ← emitExpr b
     bind (x ++ " + " ++ y)
@@ -290,14 +295,7 @@ def setEnums (m : Machine) : List String :=
     m.events.flatMap (fun ev => ev.args.flatMap (tySets ·.ty)) ++ (machineExprs m).flatMap exprSets
   m.enums.map EnumDecl.name |>.filter used.contains
 
-/-- Whether the generated kernel clones arrays. -/
-partial def usesClone : Expr → Bool
-  | .aput _ _ _ | .afill _ _ _ => true
-  | .cmp _ a b | .add a b | .sub a b | .and a b | .or a b | .get a b | .mem a b | .insert a b
-  | .erase a b | .aget a b => usesClone a || usesClone b
-  | .not a | .setOf _ a | .mapOf _ a => usesClone a
-  | .ite a b c | .put a b c | .any a b c | .first a b c => usesClone a || usesClone b || usesClone c
-  | _ => false
+
 
 def enumDecl (d : EnumDecl) : List String :=
   let t := goEnum d.name
@@ -414,7 +412,8 @@ def kernelFile (m : Machine) (sourcePath digest : String) : Except String String
     ["// Package " ++ m.name ++ " is the decision kernel of the " ++ m.name ++ " state machine,",
       "// generated from its Lean definition.",
       "package " ++ m.name, ""] ++
-    (if (machineExprs m).any usesClone then ["import \"slices\"", ""] else []) ++
+    (if (steps.flatten ++ queries.flatten).any (fun l => (l.splitOn "slices.").length > 1)
+      then ["import \"slices\"", ""] else []) ++
     m.enums.flatMap enumDecl ++ (setEnums m).flatMap setDecl ++
     ["// Params holds the machine parameters.", "type Params struct {"] ++
     structLines (m.params.map fun x => (capitalize x, "uint32")) ++ ["}", "",

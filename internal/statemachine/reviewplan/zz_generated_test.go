@@ -106,9 +106,19 @@ func encodeQueryAllClosed(s State, p Params) string {
 	return vectortest.Bool(v)
 }
 
+func encodeQueryUntouched(s State, p Params) string {
+	return vectortest.Bool(Untouched(s, p))
+}
+
+func encodeQueryAnyClosed(s State, p Params) string {
+	return vectortest.Bool(AnyClosed(s, p))
+}
+
 func encodeQueries(s State, p Params) string {
 	return vectortest.Object(
 		"allClosed", encodeQueryAllClosed(s, p),
+		"untouched", encodeQueryUntouched(s, p),
+		"anyClosed", encodeQueryAnyClosed(s, p),
 	)
 }
 

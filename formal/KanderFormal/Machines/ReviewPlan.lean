@@ -232,7 +232,11 @@ def reviewPlanMachine : Machine where
     releaseEvent, resolveEvent, runEvent, advanceEvent, aggregateEvent, closeEvent]
   queries := [
     { name := "allClosed", ty := .base .bool,
-      body := notE (.any (nat 0) count (notE (.aget (f "closed") (.bvar 0)))) }
+      body := notE (.any (nat 0) count (notE (.aget (f "closed") (.bvar 0)))) },
+    { name := "untouched", ty := .base .bool,
+      body := .cmp .eq (f "touched") (.afill (f "touched") (nat 0) ff) },
+    { name := "anyClosed", ty := .base .bool,
+      body := .cmp .ne (f "closed") (.afill (f "closed") (nat 0) ff) }
   ]
 
 end KanderFormal.Machines.ReviewPlan

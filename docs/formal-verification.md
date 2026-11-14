@@ -57,7 +57,7 @@ A machine is a Lean value of type `Machine` (a deep embedding). Names are lowerC
 | --- | --- |
 | `boolLit`, `enumLit e c`, `natLit n` | Literals; `n < 2^32` |
 | `field f`, `param x`, `arg a` | Pre-state field, parameter, event argument |
-| `cmp op a b` | `eq`, `ne` on any type; `lt`, `le`, `gt`, `ge` on naturals |
+| `cmp op a b` | `eq`, `ne` on any type (arrays compare by content); `lt`, `le`, `gt`, `ge` on naturals |
 | `add a b`, `sub a b` | Natural addition; subtraction below zero is undefined |
 | `and`, `or`, `not` | Boolean; both operands of `and`/`or` are evaluated |
 | `ite c t e` | Only the selected branch is evaluated |
