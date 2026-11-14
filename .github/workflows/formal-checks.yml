@@ -1,0 +1,69 @@
+name: formal-checks
+
+on:
+  push:
+    branches: [v2, 'group/**']
+    paths:
+      - 'formal/**'
+      - 'internal/statemachine/**'
+      - 'scripts/formal-check.sh'
+      - 'scripts/formal-gen.sh'
+      - '.github/workflows/formal-checks.yml'
+  pull_request:
+    branches: [v2]
+    paths:
+      - 'formal/**'
+      - 'internal/statemachine/**'
+      - 'scripts/formal-check.sh'
+      - 'scripts/formal-gen.sh'
+      - '.github/workflows/formal-checks.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: formal-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  formal:
+    name: Lean proofs and generated kernels
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # Pinned downloads; keep LEAN_VERSION equal to formal/lean-toolchain.
+      ELAN_VERSION: v4.2.4
+      ELAN_SHA256: 42b94d4244e8353142c456ec0e4ca6528fd898a6c604d4059f494e706e431f63
+      LEAN_VERSION: 4.35.0
+      LEAN_SHA256: 7289597a44543246c9227b8cae501767e095ce17f6d448b95fc4a8dc97268f6d
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Verify the pinned Lean version
+        run: test "$(cat formal/lean-toolchain)" = "leanprover/lean4:v${LEAN_VERSION}"
+      - name: Install elan and Lean (SHA-256 verified)
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          curl -sSfLO "https://github.com/leanprover/elan/releases/download/${ELAN_VERSION}/elan-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${ELAN_SHA256}  elan-x86_64-unknown-linux-gnu.tar.gz" | sha256sum -c -
+          curl -sSfLO "https://github.com/leanprover/lean4/releases/download/v${LEAN_VERSION}/lean-${LEAN_VERSION}-linux.tar.zst"
+          echo "${LEAN_SHA256}  lean-${LEAN_VERSION}-linux.tar.zst" | sha256sum -c -
+          tar xzf elan-x86_64-unknown-linux-gnu.tar.gz
+          ./elan-init -y --default-toolchain none --no-modify-path
+          # Install the verified archive under the name elan resolves for
+          # formal/lean-toolchain, so elan never downloads Lean itself.
+          dest="$HOME/.elan/toolchains/leanprover--lean4---v${LEAN_VERSION}"
+          mkdir -p "$dest"
+          tar --zstd -xf "lean-${LEAN_VERSION}-linux.tar.zst" -C "$dest" --strip-components=1
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - uses: actions/cache@v4
+        with:
+          path: formal/.lake
+          key: formal-lake-${{ env.LEAN_VERSION }}-${{ hashFiles('formal/**/*.lean', 'formal/lakefile.toml', 'formal/lake-manifest.json') }}
+          restore-keys: formal-lake-${{ env.LEAN_VERSION }}-
+      - name: Formal check
+        run: ./scripts/formal-check.sh
