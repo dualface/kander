@@ -606,15 +606,15 @@ func stageExecutionMove(tx *Transaction, s Snapshot, target, text string, o Move
 	var event executionledger.Event
 	switch {
 	case o.start != nil:
-		event = executionledger.Start{At: s.Revision, Chain: refusal == nil}
+		event = executionledger.Start{At: k.at(s.Revision), Chain: refusal == nil}
 	case s.Entry.State == "review":
-		event = executionledger.Reclaim{At: s.Revision, Decision: handoff != nil && strings.TrimSpace(handoff.Decision) != "", Proof: handoff != nil}
+		event = executionledger.Reclaim{At: k.at(s.Revision), Decision: handoff != nil && strings.TrimSpace(handoff.Decision) != "", Proof: handoff != nil}
 	default:
 		released, err := cycleReleased(s)
 		if err != nil {
 			return err
 		}
-		event = executionledger.Claim{At: s.Revision, Owner: o.Owner != "", Decision: strings.TrimSpace(o.Decision) != "", Released: released, Chain: refusal == nil}
+		event = executionledger.Claim{At: k.at(s.Revision), Owner: o.Owner != "", Decision: strings.TrimSpace(o.Decision) != "", Released: released, Chain: refusal == nil}
 	}
 	if !k.step(event) {
 		return firstError(refusal, coordinatorError("execution claim refused"))
@@ -648,7 +648,7 @@ func stageExecutionRollback(tx *Transaction, s Snapshot, text, state string, fen
 	if cur.Cycle != planCycle(s) || s.Revision < cur.Revision || cur.Kind == ExecutionStart && state != "todo" {
 		refusal = coordinatorError("start rollback binding")
 	}
-	event := executionledger.Rollback{Fence: k.fence(l, s, fence), At: s.Revision, Launcher: fence.launcher, ToTodo: state == "todo"}
+	event := executionledger.Rollback{Fence: k.fence(l, s, fence), At: k.at(s.Revision), Launcher: fence.launcher, ToTodo: state == "todo"}
 	var replaced ExecutionRecord
 	var status string
 	if cur.Kind == ExecutionTakeover {
@@ -697,7 +697,9 @@ func stageExecutionRollback(tx *Transaction, s Snapshot, text, state string, fen
 func stageWindowRestore(tx *Transaction, s Snapshot, text string, l *executionLedger) error {
 	same := MetadataFrom(text, FieldOwner) == MetadataFrom(s.Text, FieldOwner) && MetadataFrom(text, FieldSession) == MetadataFrom(s.Text, FieldSession) && planCycle(Snapshot{Entry: s.Entry, Text: text}) == planCycle(s)
 	before, after := MetadataFrom(s.Text, FieldWindow), MetadataFrom(text, FieldWindow)
-	accepted, err := ledgerStep(s, *l, executionledger.Restore{At: s.Revision, Same: same, Changed: before != after})
+	accepted, err := ledgerStep(s, *l, func(k *ledgerKernel) executionledger.Event {
+		return executionledger.Restore{At: k.at(s.Revision), Same: same, Changed: before != after}
+	})
 	if err != nil {
 		return err
 	}

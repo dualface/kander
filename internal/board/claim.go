@@ -90,7 +90,9 @@ func stageReclaim(tx *Transaction, s Snapshot, target, text string, o MoveOption
 		case o.Decision != "":
 			refusal = kanbanError("board.transaction_invalid", "--decision")
 		}
-		accepted, err := ledgerStep(s, l, executionledger.Claim{At: s.Revision, Owner: true, Decision: o.Decision != "", Released: released != nil, Chain: true})
+		accepted, err := ledgerStep(s, l, func(k *ledgerKernel) executionledger.Event {
+			return executionledger.Claim{At: k.at(s.Revision), Owner: true, Decision: o.Decision != "", Released: released != nil, Chain: true}
+		})
 		if err != nil {
 			return "", nil, err
 		}
@@ -110,7 +112,9 @@ func stageReclaim(tx *Transaction, s Snapshot, target, text string, o MoveOption
 	} else {
 		refusal = verifyDispatchlessHandoff(tx, s, releases, handoff)
 	}
-	accepted, err := ledgerStep(s, l, executionledger.Reclaim{At: s.Revision, Decision: decided, Proof: decided && refusal == nil})
+	accepted, err := ledgerStep(s, l, func(k *ledgerKernel) executionledger.Event {
+		return executionledger.Reclaim{At: k.at(s.Revision), Decision: decided, Proof: decided && refusal == nil}
+	})
 	if err != nil {
 		return "", nil, err
 	}

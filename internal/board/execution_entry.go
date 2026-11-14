@@ -518,7 +518,7 @@ func UnresolveExecutionWithTransaction(root string, entry Entry, window, reason 
 		if err != nil {
 			return "", err
 		}
-		if !k.step(executionledger.Unresolve{Fence: fence, At: v.revision, Launcher: v.fence.launcher, Window: window != "" && window != MetadataFrom(s.Text, FieldWindow)}) {
+		if !k.step(executionledger.Unresolve{Fence: fence, At: k.at(v.revision), Launcher: v.fence.launcher, Window: window != "" && window != MetadataFrom(s.Text, FieldWindow)}) {
 			return "", coordinatorError("start unresolved binding")
 		}
 		text, revision := s.Text, s.Revision

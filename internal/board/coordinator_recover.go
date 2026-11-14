@@ -197,7 +197,7 @@ func stageRecoverReset(tx *Transaction, s Snapshot, r CoordinatorRecover, record
 	if err != nil {
 		return m, err
 	}
-	if !k.step(executionledger.Recover{At: s.Revision, Unbound: unbound, Cas: true}) {
+	if !k.step(executionledger.Recover{At: k.at(s.Revision), Unbound: unbound, Cas: true}) {
 		return m, firstError(refusal, kanbanError("board.recover_state", id, s.Entry.State))
 	}
 	rounds, err := dispatchRounds(tx, s)

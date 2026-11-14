@@ -69,7 +69,7 @@ func lifecycleRefines(t *testing.T, root, id string, steps lifecycleSteps, accep
 			}
 		}
 		if len(ledger) > 0 {
-			params, _ := ledgerParams(before.ledger)
+			params := ledgerParams(before.ledger)
 			if _, ok := executionledger.Step(before.ledger, ledger[0], params); ok {
 				t.Fatalf("ledger kernel accepts %T on %+v", ledger[0], before.ledger)
 			}
@@ -86,7 +86,7 @@ func lifecycleRefines(t *testing.T, root, id string, steps lifecycleSteps, accep
 			t.Fatalf("card kernel refuses %T on %+v", e, want.card)
 		}
 	}
-	params, _ := ledgerParams(before.ledger)
+	params := ledgerParams(before.ledger)
 	for _, e := range ledger {
 		var ok bool
 		if want.ledger, ok = executionledger.Step(want.ledger, e, params); !ok {
@@ -329,4 +329,67 @@ func TestDispatchSameColumnMoveRefinesKernels(t *testing.T) {
 	lifecycleRefines(t, root, id, func(v kernelView) ([]cardlifecycle.Event, []executionledger.Event) {
 		return []cardlifecycle.Event{cardlifecycle.DispatchMove{Authorized: true}}, []executionledger.Event{executionledger.Write{At: v.ledger.Rev}}
 	}, true, func() error { _, err := dispatchMove(t, root, d, "working"); return err })
+}
+
+// A plain start confirmation refines the ledger kernel; a retry is a replay.
+func TestPlainConfirmRefinesKernels(t *testing.T) {
+	root := tempBoard(t)
+	s := coordinatorTodo(t, root, "lifecycle-confirm")
+	id := s.Entry.TaskID
+	moved, err := BeginTaskStart(s.Entry, root, TaskStartInput{Owner: "codex", Session: "codex"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	confirm := func(v kernelView) ([]cardlifecycle.Event, []executionledger.Event) {
+		return nil, []executionledger.Event{executionledger.Confirm{Fence: v.ledger.Record, Match: true}}
+	}
+	lifecycleRefines(t, root, id, confirm, true, func() error { return ConfirmTaskStart(root, moved) })
+	lifecycleRefines(t, root, id, confirm, true, func() error { return ConfirmTaskStart(root, moved) })
+}
+
+// The first write after an old takeover stores its handoff link; the
+// projection already counts it, so the write refines the ledger kernel.
+func TestLegacyTakeoverFirstWriteRefinesKernels(t *testing.T) {
+	root := tempBoard(t)
+	s := legacyTakenOverCard(t, root, "lifecycle-legacy")
+	id := s.Entry.TaskID
+	lifecycleRefines(t, root, id, func(v kernelView) ([]cardlifecycle.Event, []executionledger.Event) {
+		return nil, []executionledger.Event{executionledger.Field{Fence: v.ledger.Record, Text: true}}
+	}, true, func() error {
+		_, err := RecordExecutionWindow(root, bound(t, root, id).Entry, "tmux:drifted", "")
+		return err
+	})
+}
+
+// Revisions and counters beyond the kernel's uint32 parameters keep every
+// decision: the exact revision is current, an older one is stale, and a cursor
+// older than the record cannot unresolve it.
+func TestLargeRevisionsKeepLedgerDecisions(t *testing.T) {
+	const rev = uint64(1) << 40
+	s := Snapshot{Entry: Entry{TaskID: "20261114-large-task", State: "working"}, Revision: rev, Text: "x"}
+	cur := ExecutionRecord{ID: "big", Cycle: planCycle(s), Kind: ExecutionStart, Status: ExecutionPending, Revision: rev - 3}
+	chain := make([]ExecutionTransition, 1<<10)
+	for i := range chain {
+		chain[i] = ExecutionTransition{FromRecord: "big", ToRecord: "big"}
+	}
+	k, err := projectLedger(s, executionLedger{task: s.Entry.TaskID, current: &cur, chain: chain})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fence := k.fence(executionLedger{current: &cur}, s, ExecutionFence{RecordID: "big", Cycle: cur.Cycle})
+	for _, c := range []struct {
+		e    executionledger.Event
+		want bool
+	}{
+		{executionledger.Write{At: k.at(rev)}, true},
+		{executionledger.Write{At: k.at(rev - 1)}, false},
+		{executionledger.Write{At: k.at(rev - 1<<31)}, false},
+		{executionledger.Unresolve{Fence: fence, At: k.at(rev - 2), Launcher: true}, true},
+		{executionledger.Unresolve{Fence: fence, At: k.at(rev - 4), Launcher: true}, false},
+		{executionledger.Unresolve{Fence: fence + 1, At: k.at(rev), Launcher: true}, false},
+	} {
+		if _, ok := executionledger.Step(k.state, c.e, k.params); ok != c.want {
+			t.Fatalf("%+v on %+v: %v, want %v", c.e, k.state, ok, c.want)
+		}
+	}
 }
