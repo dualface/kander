@@ -41,7 +41,7 @@ kander terminal list
 kander terminal test <name> [--keep] [--skip-focus]
 kander init [--maintenance] [project-path]
 kander list [--mobile|--json [--agent-status]] [backlog|todo|working|review|done|archived|trash]
-kander show [--json] <task-id>
+kander show [--json] [--document <relative-path>] <task-id>
 kander new [--large] [--language <agent language>] <feature|bug|chore|research> <slug> <title...>
 kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--owner <agent> [--decision <reference>]] [--result <result>] [--reason <reason> --decision <reference>] [--duplicate-of <task-id>] [--expect-revision <revision>] [--dispatch-id <id> --execution-epoch <epoch>] [--delivery-commit <full-SHA>] [--disposition <card-relative-path>]
 kander pick [task-id]
@@ -133,6 +133,7 @@ Before creating, completing, updating, or reviewing card content, read `snippets
 
 ### Controlled Documents and Recovery
 
+- Read a card document only through `kander show`: `kander show <task-id>` for `spec.md`, and `kander show --document <relative-path> <task-id>` for `plan.md`, `report.md`, an ordinary attachment, or a read-only file below `reviews/` or `dispatches/`. Never read any document by the `Path` that `show` prints: that path locates the card and is not a way to read a document, and the board may live on another host. Write the ordinary documents (`spec.md`, `plan.md`, `report.md`, ordinary attachments) only with `kander update`.
 - Use `update --document spec.md` for every card body. Both scales accept `plan.md`, `report.md`, and ordinary attachments, including relative subdirectories. Legacy file cards are read-only: mutation commands fail before side effects and direct the caller to offline `kander server maintain --project NAME`; never bypass this with an older binary or direct editing.
 - Paths must be canonical, relative, and free of traversal, symlinks, and reparse points. Never edit managed `reviews/`, `dispatches/`, manifests, indexes, or control records through update; dedicated producers own them.
 - Full-body replacements preserve `LANGUAGE`, `OWNER`, `SESSION`, `WINDOW`, creation/start/completion timestamps, `RESULT`, execution metadata, and managed indexes. Keep `TASK_BRANCH` and ordinary implementation and summary records current through update.

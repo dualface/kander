@@ -63,13 +63,13 @@ Read this file before creating, completing, updating, or reviewing a card. It de
 
 ### Large Task Documents
 
-- `SIZE: large` selects the large-task contract. `spec.md` holds the metadata and the contract sections `GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `THREAT_MODEL`, `OUT_OF_SCOPE`, `DISCUSSION`. Plan content and storage follow "Required Plan for New Cards". `report.md` is created on completion, never empty, with actual changes, final commits, verification, deviations, unresolved issues, risks, and the acceptance conclusion.
+- `SIZE: large` selects the large-task contract. `spec.md` holds the metadata and the contract sections `GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `THREAT_MODEL`, `OUT_OF_SCOPE`, `DISCUSSION`. Plan content and storage follow "Required Plan for New Cards". `report.md` is created on completion, never empty, with actual changes, final commits, verification, deviations, unresolved issues, risks, and the acceptance conclusion. Read `plan.md`, `report.md`, and any other attachment with `kander show --document <relative-path> <task-id>`.
 
 ### Required Plan for New Cards
 
 - Every new card must save a detailed plan before creation self-review, even when left in `backlog/`, regardless of module settings or execution choice. Cards predating this requirement need no backfill; a missing plan alone never blocks their continuation or completion.
 - Preserve the confirmed technical approach, ordered steps, affected modules and paths, interfaces, data flows, constraints, dependencies, verification, and applicable release, integration, and rollback steps. Include confirmed choices, trade-offs, and stated reasons. Mark unresolved questions; never present proposals as user decisions.
-- Small cards use `IMPLEMENTATION`; large cards use `plan.md`, linked from `spec.md` under `DISCUSSION`. Publish through `update`. Confirmed directions and trade-offs also belong in `USER_DECISIONS`; plans never authorize changing frozen contract fields.
+- Small cards use `IMPLEMENTATION`; large cards use `plan.md`, linked from `spec.md` under `DISCUSSION`. Publish through `update`, and read a saved plan with `kander show --document plan.md <task-id>`. Confirmed directions and trade-offs also belong in `USER_DECISIONS`; plans never authorize changing frozen contract fields.
 - The card and attachments must let an agent outside the discussion execute without recovering the conversation or repeating settled design decisions. Summaries or conversation references alone are insufficient. Use structured prose, not transcripts; compressing execution history must preserve still-applicable plan details.
 - For multiple cards, each saves its own plan and necessary shared decisions, contracts, dependencies, and integration steps. Together they preserve the full confirmed plan. Temporary handover notes never replace these records.
 
