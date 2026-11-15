@@ -56,7 +56,10 @@ func (p *project) dispatchWrite(key, action, task string, input api.DispatchComm
 			if !ok {
 				return apiError(api.CodeInternal, "dispatch producer omitted its transaction result")
 			}
-			if w := dispatch.Input.Evidence.WrapUp; w != nil {
+			// end and settle only release the binding and never consume the
+			// integration evidence, so a successor generation can end a round
+			// whose integration belongs to an earlier generation.
+			if w := dispatch.Input.Evidence.WrapUp; w != nil && action != "end" && action != "settle" {
 				if err := p.wrapUpIntegration(tx, task, h.generation, w.Git); err != nil {
 					return err
 				}
