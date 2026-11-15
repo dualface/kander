@@ -241,6 +241,7 @@ get)
   printf '%s\n' '{"address":"t8","labels":{},"reported":false,"state":"live","status":null}'; fi ;;
 ls) printf '%s\n' '{"hidden_finished":0,"terminals":[{"address":"t8","state":"live"}]}' ;;
 kill|rm) printf '%s\n' '{"error":{"kind":"not_found","message":"t8 was removed"}}' >&2; exit 3 ;;
+send) printf 'send-env[%s] %s\n' "$HC_TERMINAL_ID" "$4" >> ` + process.AgentPath(log) + `; printf '{}\n' ;;
 *) printf '{}\n' ;;
 esac
 `
@@ -255,6 +256,30 @@ func reportApp(t *testing.T, getFile, app string) {
 	body := `{"address":"t8","labels":{},"reported":true,"state":"live","status":{"app":"` + app + `","state":"idle"}}`
 	if err := os.WriteFile(getFile, []byte(body+"\n"), 0o600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// hc tags text sent from inside an hc terminal as <hc from="...">, so an agent
+// reads the pane prompt as another terminal's message. The prompt delivery
+// must run hc without the calling terminal, while the other sends may keep it.
+func TestHerdrCorePaneDeliveryDropsCallerTerminal(t *testing.T) {
+	root, bin, _, cfg := programStatusFixture(t, "herdr-core")
+	cfg.Agents["panecore"] = paneCoreAgent(bin)
+	log, getFile := writeStatefulHC(t, bin, root)
+	reportApp(t, getFile, "panecore-app")
+	t.Setenv("HC_TERMINAL_ID", "t2b")
+	taskID, _ := makeTodo(t, root, "pstatus-pane-env")
+	if _, _, err := capture(t, func() error { return commandStart(root, "panecore", "herdr-core", taskID) }); err != nil {
+		t.Fatalf("start: %v\n%s", err, mustRead(t, log))
+	}
+	var prompts []string
+	for _, line := range strings.Split(mustRead(t, log), "\n") {
+		if strings.HasPrefix(line, "send-env[") && strings.Contains(line, "UTF-8") {
+			prompts = append(prompts, line)
+		}
+	}
+	if len(prompts) != 1 || !strings.HasPrefix(prompts[0], "send-env[] ") {
+		t.Fatalf("prompt sends=%q", prompts)
 	}
 }
 

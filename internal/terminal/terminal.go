@@ -23,6 +23,10 @@ type Runner func(ctx context.Context, program string, args []string) (probe.Resu
 // InputRunner executes an argv command with finite stdin, then closes stdin.
 type InputRunner func(ctx context.Context, program string, args []string, input string) (probe.Result, error)
 
+// EnvRunner executes an argv command whose environment lacks the variables in
+// unset.
+type EnvRunner func(ctx context.Context, program string, args []string, unset []string) (probe.Result, error)
+
 // Conn binds a resolved backend executable to the runner used for one call.
 type Conn struct {
 	Program string
@@ -30,6 +34,10 @@ type Conn struct {
 	// RunInput handles steps with literal stdin. Nil uses ProbeInputRunner,
 	// which owns the process tree and bounds its runtime and output.
 	RunInput InputRunner
+	// RunEnv handles steps that declare unset_env. Nil uses ProbeEnvRunner,
+	// which owns the process tree and bounds its runtime. Such a step never
+	// falls back to Run.
+	RunEnv EnvRunner
 }
 
 // Capabilities describe what a backend can do; callers degrade on these flags.

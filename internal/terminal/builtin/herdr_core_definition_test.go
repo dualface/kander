@@ -10,6 +10,7 @@ import (
 
 	"github.com/dualface/kander/internal/probe"
 	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/internal/terminal/terminaltest"
 )
 
 func herdrCoreBackendForTest(t *testing.T, env map[string]string) terminal.Backend {
@@ -128,6 +129,9 @@ func TestHerdrCoreDefinitionArgvAndParsing(t *testing.T) {
 				t.Fatal(err)
 			}
 			assertCalls(t, r.calls, tc.want)
+			if wantUnset := tc.name == "deliver"; wantUnset != (len(r.unset) == 1 && slices.Equal(r.unset[0], []string{"HC_TERMINAL_ID"})) {
+				t.Fatalf("unset_env lists=%q", r.unset)
+			}
 		})
 	}
 }
@@ -395,5 +399,25 @@ func TestHerdrCoreDefinitionCreateCopiesPlacement(t *testing.T) {
 				t.Fatalf("order=%q", r.calls)
 			}
 		})
+	}
+}
+
+// hc wraps text sent from inside an hc terminal in an <hc from="..."> tag,
+// which turns an agent slash command such as /exit into plain prose. The fake
+// rejects a send whose environment still names the sender terminal, as the
+// tag would be added.
+func TestHerdrCoreDeliveryDropsSenderTerminal(t *testing.T) {
+	send := []string{"send", "--json", "t8", "/exit"}
+	fake := terminaltest.New(t,
+		terminaltest.Reply{Args: send, EnvSet: "HC_TERMINAL_ID", Code: 1, Stderr: "tagged as sent from a terminal"},
+		terminaltest.Reply{Args: send, Stdout: `{"started":true,"status":"idle","turn":1}`},
+	)
+	t.Setenv("HC_TERMINAL_ID", "t2b")
+	conn := terminal.Conn{Program: fake.Program, Run: terminal.ProbeRunner}
+	if err := herdrCoreBackendForTest(t, nil).DeliverText(t.Context(), conn, "t8", "/exit"); err != nil {
+		t.Fatal(err)
+	}
+	if calls := fake.Calls(t); len(calls) != 1 || !slices.Equal(calls[0], send) {
+		t.Fatalf("calls=%q", calls)
 	}
 }

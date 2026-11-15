@@ -421,6 +421,9 @@
             "{pane}",
             "{text}"
           ],
+          "unset_env": [
+            "HC_TERMINAL_ID"
+          ],
           "messages": {
             "exec": {
               "id": "herdr_core.invocation_failed",

@@ -97,7 +97,7 @@ func Check(backend terminal.Backend, options Options, out io.Writer) (result err
 		return err
 	}
 	c := &checker{backend: backend, options: options, out: out, cwd: cwd, nonce: hex.EncodeToString(token[:])}
-	c.conn = terminal.Conn{Program: backend.Executable(), Run: c.trace, RunInput: c.traceInput}
+	c.conn = terminal.Conn{Program: backend.Executable(), Run: c.trace, RunInput: c.traceInput, RunEnv: c.traceEnv}
 	defer func() {
 		defer func() {
 			if !c.created || c.closed {
@@ -163,21 +163,28 @@ func (c *checker) status(name, skip string, err error) {
 }
 
 func (c *checker) trace(ctx context.Context, program string, args []string) (probe.Result, error) {
-	return c.traceCommand(ctx, program, args, "")
+	return c.traceCommand(ctx, program, args, "", nil)
 }
 
 func (c *checker) traceInput(ctx context.Context, program string, args []string, input string) (probe.Result, error) {
-	return c.traceCommand(ctx, program, args, input)
+	return c.traceCommand(ctx, program, args, input, nil)
 }
 
-func (c *checker) traceCommand(ctx context.Context, program string, args []string, input string) (probe.Result, error) {
+func (c *checker) traceEnv(ctx context.Context, program string, args, unset []string) (probe.Result, error) {
+	return c.traceCommand(ctx, program, args, "", unset)
+}
+
+func (c *checker) traceCommand(ctx context.Context, program string, args []string, input string, unset []string) (probe.Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	var res probe.Result
 	var err error
-	if input == "" {
+	switch {
+	case len(unset) > 0:
+		res, err = terminal.ProbeEnvRunner(ctx, program, args, unset)
+	case input == "":
 		res, err = terminal.ProbeRunner(ctx, program, args)
-	} else {
+	default:
 		res, err = terminal.ProbeInputRunner(ctx, program, args, input)
 	}
 	argv, _ := json.Marshal(append([]string{program}, args...))

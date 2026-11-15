@@ -2,7 +2,10 @@ package terminal
 
 import (
 	"context"
+	"os"
 	"os/exec"
+	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -19,6 +22,30 @@ func ProbeRunner(ctx context.Context, program string, args []string) (probe.Resu
 // stdin. Four MiB per stream bounds full terminal-list responses.
 func ProbeInputRunner(ctx context.Context, program string, args []string, input string) (probe.Result, error) {
 	return probe.CaptureInput(ctx, program, args, input, 4<<20)
+}
+
+// ProbeEnvRunner runs a command like ProbeRunner, with every variable named in
+// unset removed from the inherited environment. Names compare exactly, except
+// on Windows where environment names are case-insensitive.
+func ProbeEnvRunner(ctx context.Context, program string, args []string, unset []string) (probe.Result, error) {
+	return probe.CaptureWithEnv(ctx, program, args, withoutEnv(os.Environ(), unset, runtime.GOOS == "windows"))
+}
+
+// withoutEnv returns environ without the variables in unset; foldCase makes
+// the name comparison case-insensitive.
+func withoutEnv(environ, unset []string, foldCase bool) []string {
+	same := func(a, b string) bool { return a == b }
+	if foldCase {
+		same = strings.EqualFold
+	}
+	kept := make([]string, 0, len(environ))
+	for _, entry := range environ {
+		name, _, _ := strings.Cut(entry, "=")
+		if !slices.ContainsFunc(unset, func(target string) bool { return same(name, target) }) {
+			kept = append(kept, entry)
+		}
+	}
+	return kept
 }
 
 // SpawnRunner runs a plain child process. It enforces only a deadline present
