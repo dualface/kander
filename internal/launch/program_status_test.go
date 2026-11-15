@@ -266,6 +266,9 @@ func TestHerdrCoreStartRecordsTerminal(t *testing.T) {
 	log, _ := writeStatefulHC(t, bin, root)
 	t.Setenv("KANDER_CONFIG", filepath.Join(root, "custom-config.json"))
 	t.Setenv("KANBAN_DIR", root)
+	// Without a calling terminal the launch copies no placement labels, so
+	// a run inside an hc terminal cannot add a get call before run.
+	t.Setenv("HC_TERMINAL_ID", "")
 	taskID, _ := makeTodo(t, root, "pstatus-launch")
 	if _, _, err := capture(t, func() error { return commandStart(root, "claude", "herdr-core", taskID) }); err != nil {
 		t.Fatalf("start: %v\n%s", err, mustRead(t, log))

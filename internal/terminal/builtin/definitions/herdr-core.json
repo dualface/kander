@@ -66,6 +66,20 @@
     "create_container": {
       "steps": [
         {
+          "when": "!field_missing:env.HC_TERMINAL_ID",
+          "argv": [
+            "get",
+            "--json",
+            "{env.HC_TERMINAL_ID}"
+          ],
+          "store": "caller",
+          "on_error": "continue",
+          "fields": {
+            "space": "json_regex:labels:[{,]\"herdr\\.space\":\"([A-Za-z0-9_-]+)\"[,}]",
+            "tab": "json_regex:labels:[{,]\"herdr\\.tab\":\"([A-Za-z0-9_-]+)\"[,}]"
+          }
+        },
+        {
           "argv": [
             "run",
             "--bg",
@@ -118,6 +132,22 @@
               ]
             }
           }
+        },
+        {
+          "when": [
+            [
+              "!field_missing:step.caller.space",
+              "!field_missing:step.caller.tab"
+            ]
+          ],
+          "argv": [
+            "label",
+            "--json",
+            "{step.new.text}",
+            "herdr.space={step.caller.space}",
+            "herdr.tab={step.caller.tab}"
+          ],
+          "on_error": "continue"
         }
       ],
       "result": {
