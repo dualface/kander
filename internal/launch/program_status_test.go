@@ -307,7 +307,7 @@ func TestHerdrCoreStartRecordsTerminal(t *testing.T) {
 	}
 	calls := strings.Split(strings.TrimSpace(mustRead(t, log)), "\n")
 	run := calls[0]
-	for _, want := range []string{"run --bg --no-parent --rm --json --cwd " + filepath.Dir(root) + " --name ", " --label kander-window=kb-",
+	for _, want := range []string{"run --bg --no-parent --rm --json --cwd " + filepath.Dir(root) + " --name ", " --label kander.window=kb-",
 		" -- /usr/bin/env PATH=", " KANBAN_DIR=" + root, " KANDER_CONFIG=" + filepath.Join(root, "custom-config.json"), " /bin/sh"} {
 		if !strings.Contains(run, want) {
 			t.Fatalf("run call %q lacks %q", run, want)
@@ -320,7 +320,7 @@ func TestHerdrCoreStartRecordsTerminal(t *testing.T) {
 	var sent, labeled bool
 	for _, call := range calls {
 		sent = sent || strings.HasPrefix(call, "send --json t8 cd -- ") && strings.Contains(call, "&& exec "+claude+" ")
-		labeled = labeled || strings.HasPrefix(call, "label --json t8 kander-session=")
+		labeled = labeled || strings.HasPrefix(call, "label --json t8 kander.session=")
 	}
 	if !sent || !labeled {
 		t.Fatalf("agent command or session label missing:\n%s", strings.Join(calls, "\n"))

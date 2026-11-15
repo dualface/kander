@@ -31,6 +31,18 @@ is no shell interpolation.
 - `parse` is one of three primitives: the raw buffer, a dotted JSON object
   path that must yield a string, or a regular expression with exactly one
   capturing group. The regex is compiled at validation time.
+- A dotted path splits at every `.`. Inside one key, `\.` is a literal dot and
+  `\\` a literal backslash; a `\` followed by any other character, a trailing
+  single `\`, and an empty key are validation errors. A path without a
+  backslash keeps its meaning. Every dotted path of this format shares the
+  rule: `json_field` in `parse` and in conditions, and, in terminal
+  definitions, `json_regex:<path>:<pattern>`, `json_array:<path>`, `poll.until`
+  and the `stdout_json`/`stderr_json` error rules. Terminal definitions and
+  executing-agent definitions (the embedded ones and a user's `agents.<name>`
+  overrides) use the same splitter. In a JSON definition file the backslash is
+  itself escaped, so the path `labels.kander\.session`, which selects the key
+  `kander.session` inside `labels`, is written
+  `"json_field:labels.kander\\.session"`.
 - Callers restrict `source` through dedicated entries: review accepts
   `stdout` | `file` and rejects `stderr`; terminal accepts `stdout` | `stderr`
   and rejects `file`.

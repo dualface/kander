@@ -17,7 +17,7 @@ import (
 func writeFakeHCStatus(t *testing.T, fakeBin, status string) string {
 	t.Helper()
 	program := filepath.Join(fakeBin, "hc")
-	body := `{"address":"t8","labels":{"kander-session":"s1"},"state":"live","status":` + status + `}`
+	body := `{"address":"t8","labels":{"kander.session":"s1"},"state":"live","status":` + status + `}`
 	if err := os.WriteFile(program, []byte("#!/bin/sh\nprintf '%s\\n' '"+body+"'\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
