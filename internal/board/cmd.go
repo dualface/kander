@@ -164,6 +164,13 @@ func RunListWithAgentStatus(args []string, observe AgentStatusFunc) int {
 // RunShow implements kander show.
 func RunShow(args []string) int {
 	args, machine := takeFlag(args, "--json")
+	args, document, withDocument, err := takeOnceValueFlag(args, "--document")
+	if errors.Is(err, errOptionGivenTwice) {
+		return usageFail("show", "board.option_given_twice", "--document")
+	}
+	if err != nil {
+		return usageFail("show", "board.option_requires_a_value", "--document")
+	}
 	if len(args) != 1 || strings.HasPrefix(args[0], "-") {
 		return usageFail("show", "board.task_id_required")
 	}
@@ -172,6 +179,16 @@ func RunShow(args []string) int {
 		return fail(err)
 	}
 
+	if withDocument {
+		snapshot, text, err := ReadDocumentSnapshot(root, args[0], document)
+		if err == nil {
+			err = printDocument(snapshot, document, text, machine)
+		}
+		if err != nil {
+			return fail(err)
+		}
+		return 0
+	}
 	snapshot, err := ReadSnapshot(root, args[0])
 	if err != nil {
 		return fail(err)
