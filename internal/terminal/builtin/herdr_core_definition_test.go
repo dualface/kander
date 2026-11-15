@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"regexp"
 	"slices"
@@ -328,17 +329,41 @@ func TestHerdrCoreDefinitionCreateCopiesPlacement(t *testing.T) {
 	callerGet := func(labels, msg string) string {
 		return `{"address":"t3","labels":` + labels + `,"state":"live","status":{"app":"claude-code","msg":"` + msg + `","state":"idle"}}`
 	}
+	withWhere := func(where string) string {
+		b, err := json.Marshal(map[string]string{"herdr.space": "sp-1_A", "herdr.tab": "tb-2_b", "where": where})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
 	cases := []struct {
 		name      string
 		env       map[string]string
 		get       probe.Result
 		label     probe.Result
-		wantLabel []string
+		wantLabel [][]string
 	}{
 		{"both labels", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: callerGet(placed, "")}, probe.Result{Stdout: `{}`},
-			[]string{"label", "--json", "t9", "herdr.space=sp-1_A", "herdr.tab=tb-2_b"}},
+			[][]string{[]string{"label", "--json", "t9", "herdr.space=sp-1_A", "herdr.tab=tb-2_b"}, []string{"label", "--json", "t9", "where=kander / 1"}}},
 		{"label copy fails", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: callerGet(placed, "")}, probe.Result{Code: 5, Stderr: `{"error":{"kind":"unavailable","message":"down"}}`},
-			[]string{"label", "--json", "t9", "herdr.space=sp-1_A", "herdr.tab=tb-2_b"}},
+			[][]string{[]string{"label", "--json", "t9", "herdr.space=sp-1_A", "herdr.tab=tb-2_b"}, []string{"label", "--json", "t9", "where=kander / 1"}}},
+		{"where with special characters", map[string]string{"HC_TERMINAL_ID": "t3"},
+			probe.Result{Stdout: callerGet(withWhere(`kander "q" \ / 中文`), "")}, probe.Result{Stdout: `{}`},
+			[][]string{{"label", "--json", "t9", "herdr.space=sp-1_A", "herdr.tab=tb-2_b"}, {"label", "--json", "t9", `where=kander "q" \ / 中文`}}},
+		{"where missing", map[string]string{"HC_TERMINAL_ID": "t3"},
+			probe.Result{Stdout: callerGet(`{"herdr.space":"sp1","herdr.tab":"tb1"}`, "")}, probe.Result{Stdout: `{}`},
+			[][]string{{"label", "--json", "t9", "herdr.space=sp1", "herdr.tab=tb1"}}},
+		{"where null", map[string]string{"HC_TERMINAL_ID": "t3"},
+			probe.Result{Stdout: callerGet(`{"herdr.space":"sp1","herdr.tab":"tb1","where":null}`, "")}, probe.Result{Stdout: `{}`},
+			[][]string{{"label", "--json", "t9", "herdr.space=sp1", "herdr.tab=tb1"}}},
+		{"where empty", map[string]string{"HC_TERMINAL_ID": "t3"},
+			probe.Result{Stdout: callerGet(`{"herdr.space":"sp1","herdr.tab":"tb1","where":""}`, "")}, probe.Result{Stdout: `{}`},
+			[][]string{{"label", "--json", "t9", "herdr.space=sp1", "herdr.tab=tb1"}}},
+		{"where with a newline", map[string]string{"HC_TERMINAL_ID": "t3"},
+			probe.Result{Stdout: callerGet(`{"herdr.space":"sp1","herdr.tab":"tb1","where":"a\nb"}`, "")}, probe.Result{Stdout: `{}`},
+			[][]string{{"label", "--json", "t9", "herdr.space=sp1", "herdr.tab=tb1"}}},
+		{"only where", map[string]string{"HC_TERMINAL_ID": "t3"},
+			probe.Result{Stdout: callerGet(`{"where":"kander / 1"}`, "")}, probe.Result{}, nil},
 		{"no caller terminal id", nil, probe.Result{Stdout: callerGet(placed, "")}, probe.Result{}, nil},
 		{"get fails", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Code: 3, Stderr: hcNotFound}, probe.Result{}, nil},
 		{"get is not JSON", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: "not json"}, probe.Result{}, nil},
@@ -392,7 +417,7 @@ func TestHerdrCoreDefinitionCreateCopiesPlacement(t *testing.T) {
 				assertCalls(t, labels, nil)
 				return
 			}
-			assertCalls(t, labels, [][]string{tc.wantLabel})
+			assertCalls(t, labels, tc.wantLabel)
 			// The caller is read before the terminal is created, the labels
 			// are copied after it.
 			if r.calls[0][0] != "get" || r.calls[1][0] != "run" || r.calls[2][0] != "label" {

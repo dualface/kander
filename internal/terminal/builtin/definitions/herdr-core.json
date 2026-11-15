@@ -76,7 +76,8 @@
           "on_error": "continue",
           "fields": {
             "space": "json_regex:labels:[{,]\"herdr\\.space\":\"([A-Za-z0-9_-]+)\"[,}]",
-            "tab": "json_regex:labels:[{,]\"herdr\\.tab\":\"([A-Za-z0-9_-]+)\"[,}]"
+            "tab": "json_regex:labels:[{,]\"herdr\\.tab\":\"([A-Za-z0-9_-]+)\"[,}]",
+            "where": "json_field:labels.where"
           }
         },
         {
@@ -146,6 +147,22 @@
             "{step.new.text}",
             "herdr.space={step.caller.space}",
             "herdr.tab={step.caller.tab}"
+          ],
+          "on_error": "continue"
+        },
+        {
+          "when": [
+            [
+              "!field_missing:step.caller.space",
+              "!field_missing:step.caller.tab",
+              "!field_missing:step.caller.where"
+            ]
+          ],
+          "argv": [
+            "label",
+            "--json",
+            "{step.new.text}",
+            "where={step.caller.where}"
           ],
           "on_error": "continue"
         }
