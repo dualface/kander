@@ -31,8 +31,12 @@ func validateFieldParser(parse string) error {
 }
 
 func parseJSONRegex(path, pattern, text string) (string, error) {
+	parts, err := process.SplitDottedPath(path)
+	if err != nil {
+		return "", err
+	}
 	value := json.RawMessage(text)
-	for part := range strings.SplitSeq(path, ".") {
+	for _, part := range parts {
 		var object map[string]json.RawMessage
 		if err := json.Unmarshal(value, &object); err != nil {
 			return "", err

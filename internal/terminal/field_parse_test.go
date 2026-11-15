@@ -1,9 +1,11 @@
 package terminal
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/dualface/kander/internal/process"
+	"github.com/dualface/kander/internal/terminal/terminaltest"
 )
 
 func TestScopedJSONFieldValidation(t *testing.T) {
@@ -33,12 +35,53 @@ func TestScopedJSONFieldValidation(t *testing.T) {
 	}
 }
 
+func TestScopedJSONFieldEscapedPath(t *testing.T) {
+	fields := map[string]string{
+		"session": `json_regex:labels.kander\.session:^(null|"(?:[^"\\]|\\.)*")$`,
+		"nested":  `json_regex:kander.session:^(null|".*")$`,
+	}
+	for _, tc := range []struct {
+		name, text, session, nested string
+	}{
+		{"flat-key", `{"labels":{"kander.session":"s1"}}`, `"s1"`, "null"},
+		{"old-label", `{"labels":{"kander-session":"s1"}}`, "null", "null"},
+		{"nested-object", `{"kander":{"session":"s2"},"labels":{}}`, "null", `"s2"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := parseFields(fields, process.SourceStdout, tc.text)
+			if got["session"] != tc.session || got["nested"] != tc.nested {
+				t.Fatalf("fields=%q; want session=%q nested=%q", got, tc.session, tc.nested)
+			}
+		})
+	}
+}
+
+func TestDeclarativeRowsEscapedPath(t *testing.T) {
+	resetLanguage(t)
+	op := strings.NewReplacer(
+		`json_array:agents`, `json_array:a\\.b.agents`,
+		`json_field:agent_session.value`, `json_field:agent_session.v\\.x`,
+	).Replace(agentListOp)
+	backend := declarativeOp(t, OpAgentList, op, withAgentIdentity)
+	fake := terminaltest.New(t, reply(`{"result":{"a.b":{"agents":[{"pane_id":"w1:p1","agent":"claude","agent_session":{"v.x":"s1"}}]}}}`, "agent", "list"))
+	panes, err := backend.AgentList(t.Context(), fakeConn(fake))
+	if err != nil || len(panes) != 1 || panes[0].Pane != "w1:p1" || panes[0].AgentSession != "s1" {
+		t.Fatalf("panes=%+v err=%v", panes, err)
+	}
+	missing := terminaltest.New(t, reply(`{"result":{"a":{"b":{"agents":[]}}}}`, "agent", "list"))
+	if _, err := backend.AgentList(t.Context(), fakeConn(missing)); err == nil {
+		t.Fatal("rows path a.b matched the nested objects instead of the key a.b")
+	}
+}
+
 func TestScopedJSONFieldDefinitionValidation(t *testing.T) {
 	for _, tc := range []struct {
 		parse string
 		valid bool
 	}{
-		{`json_regex:labels.kander-session:^(null|".*")$`, true},
+		{`json_regex:labels.kander\.session:^(null|".*")$`, true},
+		{`json_regex:labels.kander\x:(x)`, false},
+		{`json_regex:labels.kander\:(x)`, false},
 		{`json_regex:address:^"(t[0-9a-z]+)"$`, true},
 		{`json_regex::(x)`, false},
 		{`json_regex:a..b:(x)`, false},

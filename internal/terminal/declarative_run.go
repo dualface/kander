@@ -489,7 +489,11 @@ func extractOutput(spec *process.OutputSpec, result probe.Result) (string, Error
 	if _, ok := doc.(map[string]any); !ok {
 		return "", KindNotObject, err
 	}
-	for _, key := range strings.Split(path, ".") {
+	keys, splitErr := process.SplitDottedPath(path)
+	if splitErr != nil {
+		return "", KindMissingResult, err
+	}
+	for _, key := range keys {
 		object, ok := doc.(map[string]any)
 		if !ok {
 			return "", KindMissingResult, err
@@ -667,7 +671,11 @@ func (e *execution) rowTexts(rows *Rows) ([]string, error) {
 	if err := json.Unmarshal([]byte(text), &doc); err != nil {
 		return nil, &probe.Error{Message: e.renderOr(rows.Messages.Missing, nil, "terminal.rows_missing")}
 	}
-	for _, key := range strings.Split(path, ".") {
+	keys, err := process.SplitDottedPath(path)
+	if err != nil {
+		return nil, &probe.Error{Message: e.renderOr(rows.Messages.Missing, nil, "terminal.rows_missing")}
+	}
+	for _, key := range keys {
 		object, _ := doc.(map[string]any)
 		doc = object[key]
 	}
