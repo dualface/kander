@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.4.1 — 2026-11-16
 
 - Definition paths (terminal definitions and executing-agent output definitions): a backslash now escapes a dot or a backslash inside one key, so `labels.kander\.session` names the key `kander.session` of `labels` (written `labels.kander\\.session` in a JSON file). Paths without a backslash mean what they did before; a path that contains a backslash followed by another character, or ends with a single backslash, is now rejected when the definition loads.
 - Breaking (herdr-core): the labels Kander writes on herdr-core terminals are renamed to the `kander.*` namespace, `kander-window` to `kander.window` and `kander-session` to `kander.session`. Kander no longer reads the old `kander-session` label and does not migrate existing terminals, so an herdr-core agent that was started by an earlier version and is still running is no longer recognized by `kander check`, `kander notify`, takeover or the TUI status marks after the upgrade.
