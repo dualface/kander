@@ -92,7 +92,7 @@
             "--name",
             "{label_name}",
             "--label",
-            "kander-window={label}",
+            "kander.window={label}",
             "--",
             "/usr/bin/env",
             "PATH={env.PATH}",
@@ -255,7 +255,7 @@
             "label",
             "--json",
             "{pane}",
-            "kander-session="
+            "kander.session="
           ],
           "messages": {
             "exec": {
@@ -285,7 +285,7 @@
             "label",
             "--json",
             "{pane}",
-            "kander-session={value}"
+            "kander.session={value}"
           ],
           "messages": {
             "exec": {
@@ -325,7 +325,7 @@
             "state": "json_field:state",
             "app": "json_field:status.app",
             "status": "json_field:status.state",
-            "session": "json_field:labels.kander-session"
+            "session": "json_field:labels.kander\\.session"
           },
           "expect": [
             [
@@ -543,7 +543,7 @@
             "state": "json_field:state",
             "app": "json_field:status.app",
             "status": "json_field:status.state",
-            "session": "json_field:labels.kander-session"
+            "session": "json_field:labels.kander\\.session"
           },
           "expect": [
             [
@@ -658,7 +658,7 @@
           "state": "json_field:state",
           "app": "json_field:status.app",
           "status": "json_field:status.state",
-          "session": "json_field:labels.kander-session",
+          "session": "json_field:labels.kander\\.session",
           "valid_address": "json_regex:address:^\"((?:[^/:\\s\"\\\\]+/)?t[0-9a-z]+)\"$",
           "local": "json_regex:address:^\"(t[0-9a-z]+)\"$",
           "valid_state": "json_regex:state:^\"(live|finished|lost)\"$",
@@ -666,7 +666,7 @@
           "valid_app": "json_regex:status.app:^(null|\"(?:[^\"\\\\]|\\\\.)*\")$",
           "valid_status_state": "json_regex:status.state:^(null|\"(?:[^\"\\\\]|\\\\.)*\")$",
           "valid_labels": "json_regex:labels:^(null|\\{.*\\})$",
-          "valid_session": "json_regex:labels.kander-session:^(null|\"(?:[^\"\\\\]|\\\\.)*\")$"
+          "valid_session": "json_regex:labels.kander\\.session:^(null|\"(?:[^\"\\\\]|\\\\.)*\")$"
         },
         "expect": [
           [
@@ -906,7 +906,7 @@
           "state": "json_field:state",
           "app": "json_field:status.app",
           "status": "json_field:status.state",
-          "session": "json_field:labels.kander-session",
+          "session": "json_field:labels.kander\\.session",
           "valid_address": "json_regex:address:^\"((?:[^/:\\s\"\\\\]+/)?t[0-9a-z]+)\"$",
           "local": "json_regex:address:^\"(t[0-9a-z]+)\"$",
           "valid_state": "json_regex:state:^\"(live|finished|lost)\"$",
@@ -914,7 +914,7 @@
           "valid_app": "json_regex:status.app:^(null|\"(?:[^\"\\\\]|\\\\.)*\")$",
           "valid_status_state": "json_regex:status.state:^(null|\"(?:[^\"\\\\]|\\\\.)*\")$",
           "valid_labels": "json_regex:labels:^(null|\\{.*\\})$",
-          "valid_session": "json_regex:labels.kander-session:^(null|\"(?:[^\"\\\\]|\\\\.)*\")$"
+          "valid_session": "json_regex:labels.kander\\.session:^(null|\"(?:[^\"\\\\]|\\\\.)*\")$"
         },
         "expect": [
           [

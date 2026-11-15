@@ -16,7 +16,7 @@ func writeFakeHC(t *testing.T, fakeBin, root, status string) string {
 	t.Helper()
 	log := filepath.Join(root, "hc.log")
 	exited := filepath.Join(root, "hc.exited")
-	live := `{"address":"t8","labels":{"kander-session":"s1"},"state":"live","status":` + status + `}`
+	live := `{"address":"t8","labels":{"kander.session":"s1"},"state":"live","status":` + status + `}`
 	script := `#!/bin/sh
 printf '%s\n' "$*" >> ` + log + `
 gone() { printf '%s\n' '{"error":{"kind":"not_found","message":"no terminal"}}' >&2; exit 3; }

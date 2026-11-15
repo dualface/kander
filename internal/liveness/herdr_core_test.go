@@ -61,7 +61,7 @@ func TestHerdrCoreRuntimeStateRules(t *testing.T) {
 	var inputs []AgentStatusInput
 	var rows []json.RawMessage
 	for _, tc := range cases {
-		body := `{"address":"` + tc.pane + `","labels":{"kander-session":"s1"},"state":"` + tc.state + `","status":` + tc.status + `}`
+		body := `{"address":"` + tc.pane + `","labels":{"kander.session":"s1"},"state":"` + tc.state + `","status":` + tc.status + `}`
 		if err := os.WriteFile(filepath.Join(dir, tc.pane+".json"), []byte(body), 0o600); err != nil {
 			t.Fatal(err)
 		}

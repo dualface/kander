@@ -83,7 +83,7 @@ func TestHerdrCoreDefinitionArgvAndParsing(t *testing.T) {
 		},
 			`{"started":null,"status":null,"turn":0}`, [][]string{{"send", "--json", "t8", "cd -- '/work dir' && exec /abs/claude 'task file'"}}},
 		{"marker", func(c terminal.Conn) error { return backend.SetSessionMarker(c, "t8", "s1") },
-			`{}`, [][]string{{"label", "--json", "t8", "kander-session=s1"}}},
+			`{}`, [][]string{{"label", "--json", "t8", "kander.session=s1"}}},
 		{"facts", func(c terminal.Conn) error {
 			got, e := backend.PaneFacts(ctx, c, "t8")
 			want := terminal.PaneFacts{SessionMarker: "s1", AgentSession: "s1", AgentStatus: "idle", Container: "t8", ProgramStatus: true, AgentApp: "claude-code"}
@@ -91,7 +91,7 @@ func TestHerdrCoreDefinitionArgvAndParsing(t *testing.T) {
 				t.Fatalf("facts=%+v", got)
 			}
 			return e
-		}, hcGet("live", `{"app":"claude-code","state":"idle"}`, `{"kander-session":"s1"}`), [][]string{{"get", "--json", "t8"}}},
+		}, hcGet("live", `{"app":"claude-code","state":"idle"}`, `{"kander.session":"s1"}`), [][]string{{"get", "--json", "t8"}}},
 		{"read", func(c terminal.Conn) error {
 			got, e := backend.ReadOutput(ctx, c, "t8")
 			if e == nil && got != "line one\nline two" {
@@ -114,7 +114,7 @@ func TestHerdrCoreDefinitionArgvAndParsing(t *testing.T) {
 				t.Fatalf("address=%+v", got)
 			}
 			return e
-		}, `{"jsonrpc":"2.0","id":1,"result":{"hidden_finished":0,"terminals":[{"address":"t8","state":"live","labels":{"kander-session":"s1"}}]}}`, [][]string{{"connect", "--json"}}},
+		}, `{"jsonrpc":"2.0","id":1,"result":{"hidden_finished":0,"terminals":[{"address":"t8","state":"live","labels":{"kander.session":"s1"}}]}}`, [][]string{{"connect", "--json"}}},
 		{"exists", func(c terminal.Conn) error {
 			got, e := backend.ContainerExists(ctx, c, address)
 			if e == nil && !got {
@@ -162,7 +162,7 @@ func TestHerdrCoreDefinitionCreate(t *testing.T) {
 		t.Fatalf("name=%q", name)
 	}
 	want := []string{"run", "--bg", "--no-parent", "--rm", "--json", "--cwd", "/work", "--name", name,
-		"--label", "kander-window=kb-Add herdr-core 启动器", "--", "/usr/bin/env",
+		"--label", "kander.window=kb-Add herdr-core 启动器", "--", "/usr/bin/env",
 		"PATH=/usr/bin:/home/u/.local/bin", "KANDER_CONFIG=/cfg/config.json", "/bin/sh"}
 	assertCalls(t, r.calls, [][]string{want})
 	if opaque := terminal.FormatAddress(backend, got); opaque != "herdr-core:t8" {
@@ -375,7 +375,7 @@ func TestHerdrCoreDefinitionCreateCopiesPlacement(t *testing.T) {
 		{"illegal character", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: callerGet(`{"herdr.space":"sp 1","herdr.tab":"tb1"}`, "")}, probe.Result{}, nil},
 		{"non-string value", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: callerGet(`{"herdr.space":1,"herdr.tab":"tb1"}`, "")}, probe.Result{}, nil},
 		{"forged text outside labels", map[string]string{"HC_TERMINAL_ID": "t3"},
-			probe.Result{Stdout: callerGet(`{"kander-window":"w"}`, `{\"herdr.space\":\"x\",\"herdr.tab\":\"y\"}`)}, probe.Result{}, nil},
+			probe.Result{Stdout: callerGet(`{"kander.window":"w"}`, `{\"herdr.space\":\"x\",\"herdr.tab\":\"y\"}`)}, probe.Result{}, nil},
 		{"forged text inside a label value", map[string]string{"HC_TERMINAL_ID": "t3"},
 			probe.Result{Stdout: callerGet(`{"note":"{\"herdr.space\":\"x\",\"herdr.tab\":\"y\"}"}`, "")}, probe.Result{}, nil},
 	}
