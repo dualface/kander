@@ -69,7 +69,7 @@ All routes live below `/api/v1`. Every domain request sends `Kander-Protocol: <n
 | `GET /projects/{p}/tasks[?state=]` | Task list with claim views and the event cursor it is consistent with |
 | `POST /projects/{p}/tasks` | `kander new` |
 | `GET /projects/{p}/tasks/{t}` | `kander show` |
-| `GET`, `PUT /projects/{p}/tasks/{t}/documents/{path}` | Read or publish `spec.md`, `plan.md`, `report.md`, attachments |
+| `GET`, `PUT /projects/{p}/tasks/{t}/documents/{path}` | Read (`kander show --document`) or publish (`kander update --document`) `spec.md`, `plan.md`, `report.md`, attachments |
 | `POST /projects/{p}/tasks/{t}/deliveries`, `GET .../deliveries/{sha}` | Authenticated publication facts for a commit available from the common remote |
 | `GET .../tasks/{t}/dispatches/{id}`, `POST .../dispatches/actions/{action}` | Controlled dispatch preparation, attempts, reauthorization, terminal decisions, settlement and wrap-up grants |
 | `POST /projects/{p}/tasks/{t}/move` | State moves other than claims |

@@ -179,6 +179,16 @@ func encode(value any) int {
 // RunShow implements kander show in server mode.
 func RunShow(args []string) int {
 	args, machine := takeFlag(args, "--json")
+	once := 0
+	for _, arg := range args {
+		if arg == "--document" {
+			once++
+		}
+	}
+	args, document, withDocument, err := takeValue(args, "--document")
+	if err != nil || once > 1 {
+		return printUsage("show")
+	}
 	if len(args) != 1 || strings.HasPrefix(args[0], "-") {
 		return printUsage("show")
 	}
@@ -191,6 +201,17 @@ func RunShow(args []string) int {
 	operationCtx, finishOperation := s.OperationContext(ctx)
 	defer finishOperation()
 	ctx = operationCtx
+	if withDocument {
+		d, err := s.Project.Document(ctx, args[0], document)
+		if err != nil {
+			return fail(err)
+		}
+		if machine {
+			return encode(d)
+		}
+		io.WriteString(stdout, d.Text)
+		return 0
+	}
 	t, err := s.Project.Show(ctx, args[0])
 	if err != nil {
 		return fail(err)
