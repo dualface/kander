@@ -126,6 +126,8 @@ Optional `agent_list` reports every agent pane in one call, so an observer of ma
 
 An argv step may provide `stdin`: literal UTF-8 text, at most 64 KiB, with no NUL. It is never interpolated or passed through a shell. The runner closes stdin after the text. `Conn.RunInput` supplies an injectable input runner; when absent, `ProbeInputRunner` owns the process tree, uses the caller deadline or the default probe budget, and bounds each output stream to 4 MiB. Truncated output fails the step before parsing. Steps without `stdin` continue to use `Conn.Run`. A fail step cannot declare `stdin`.
 
+An argv step may provide `unset_env`: one to 16 distinct environment variable names (`[A-Za-z_][A-Za-z0-9_]*`) the command does not inherit. Everything else of the caller's environment is kept; a variable that is not set is ignored. It is a fixed list, not a scripting feature: there is no way to set or compute a variable. A step with `unset_env` never uses `Conn.Run`: it runs through `Conn.RunEnv`, and when that is nil through `ProbeEnvRunner`, which owns the process tree and uses the caller deadline or the default probe budget (a step `timeout` stays on the context). Names compare exactly on POSIX and case-insensitively on Windows. No caller-chosen runner can ignore the list, because the step does not pass through it. `unset_env` cannot be combined with `stdin` and a fail step cannot declare it. Adding it keeps `schema_version` 1. The embedded `herdr-core` definition uses it on `deliver_text` to drop `HC_TERMINAL_ID`, so hc does not tag delivered text with `<hc from="…">`.
+
 ```text
 {
   "store": "<name>",
@@ -133,6 +135,7 @@ An argv step may provide `stdin`: literal UTF-8 text, at most 64 KiB, with no NU
   "argv": ["<template>", ...],          // or
   "fail": <message>,
   "stdin": "<literal UTF-8 input followed by EOF>", // optional, argv steps only
+  "unset_env": ["<VAR>", ...],          // optional, argv steps only, 1 to 16 names, not with stdin
   "output": {"source": "stdout" | "stderr", "parse": "<primitive>"},
   "fields": {"<field>": "<primitive>"},
   "expect": <conditions>,

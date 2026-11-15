@@ -145,7 +145,7 @@ func TestHerdrCoreDeliveryBudget(t *testing.T) {
 			defer cancel()
 		}
 		calls := 0
-		conn := terminal.Conn{Program: "hc", Run: func(ctx context.Context, _ string, _ []string) (probe.Result, error) {
+		conn := terminal.Conn{Program: "hc", RunEnv: func(ctx context.Context, _ string, _ []string, _ []string) (probe.Result, error) {
 			calls++
 			deadline, ok := ctx.Deadline()
 			if !ok || (!short && time.Until(deadline) < 60*time.Second) {

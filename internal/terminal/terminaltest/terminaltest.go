@@ -31,6 +31,10 @@ type Reply struct {
 	Sleep  time.Duration `json:"sleep,omitempty"`
 	// Times limits how often the reply matches; zero is unlimited.
 	Times int `json:"times,omitempty"`
+	// EnvSet restricts the reply to invocations whose environment holds a
+	// non-empty value for this variable, so a test can reject a command that
+	// kept a variable it should have dropped.
+	EnvSet string `json:"env_set,omitempty"`
 }
 
 // Main runs the fake and exits when this process was launched as one.
@@ -51,7 +55,7 @@ func serve(dir string, args []string) int {
 	replies := readReplies(dir)
 	for index := range replies {
 		reply := &replies[index]
-		if !hasPrefix(args, reply.Args) || !consume(dir, index, reply.Times) {
+		if !hasPrefix(args, reply.Args) || (reply.EnvSet != "" && os.Getenv(reply.EnvSet) == "") || !consume(dir, index, reply.Times) {
 			continue
 		}
 		time.Sleep(reply.Sleep)

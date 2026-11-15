@@ -169,11 +169,15 @@ type Step struct {
 	When  Conditions `json:"when,omitempty"`
 	Argv  []string   `json:"argv,omitempty"`
 	// Stdin is literal input, without placeholder expansion, followed by EOF.
-	Stdin  string              `json:"stdin,omitempty"`
-	Fail   *Message            `json:"fail,omitempty"`
-	Output *process.OutputSpec `json:"output,omitempty"`
-	Fields map[string]string   `json:"fields,omitempty"`
-	Expect Conditions          `json:"expect,omitempty"`
+	Stdin string `json:"stdin,omitempty"`
+	// UnsetEnv names environment variables the command does not inherit.
+	// Such a step runs only through Conn.RunEnv, never Conn.Run, so no runner
+	// can ignore the list.
+	UnsetEnv []string            `json:"unset_env,omitempty"`
+	Fail     *Message            `json:"fail,omitempty"`
+	Output   *process.OutputSpec `json:"output,omitempty"`
+	Fields   map[string]string   `json:"fields,omitempty"`
+	Expect   Conditions          `json:"expect,omitempty"`
 	// GoneWhen (pane_facts and container_exists only) reports the target as
 	// gone when a successful command's output satisfies it, for terminals
 	// that answer a closed target with exit 0 and empty fields.

@@ -382,7 +382,13 @@ func (e *execution) attempt(ctx context.Context, step *Step, argv []string) (pro
 	for {
 		var result probe.Result
 		var runErr error
-		if step.Stdin != "" {
+		if len(step.UnsetEnv) > 0 {
+			run := e.conn.RunEnv
+			if run == nil {
+				run = ProbeEnvRunner
+			}
+			result, runErr = run(ctx, e.conn.Program, argv, step.UnsetEnv)
+		} else if step.Stdin != "" {
 			run := e.conn.RunInput
 			if run == nil {
 				run = ProbeInputRunner

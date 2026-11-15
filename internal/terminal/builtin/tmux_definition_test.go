@@ -19,6 +19,8 @@ import (
 // function, so a test pins the exact command lines the definition produces.
 type recorder struct {
 	calls [][]string
+	// unset holds the unset_env list of each call, nil for a plain step.
+	unset [][]string
 	reply func(args []string) probe.Result
 }
 
@@ -32,6 +34,10 @@ func (r *recorder) conn() terminal.Conn {
 	}
 	return terminal.Conn{Program: "tmux", Run: run, RunInput: func(ctx context.Context, program string, args []string, input string) (probe.Result, error) {
 		return run(ctx, program, args)
+	}, RunEnv: func(ctx context.Context, program string, args, unset []string) (probe.Result, error) {
+		res, err := run(ctx, program, args)
+		r.unset = append(r.unset, unset)
+		return res, err
 	}}
 }
 

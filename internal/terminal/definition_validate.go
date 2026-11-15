@@ -550,6 +550,34 @@ func (v validator) steps(field, op string, steps []Step, names scope) (scope, er
 	return names, nil
 }
 
+// maxUnsetEnv bounds the unset_env list of one step.
+const maxUnsetEnv = 16
+
+// unsetEnv checks a step's unset_env: portable variable names, no duplicates,
+// a bounded count, and no stdin (RunEnv carries no input).
+func (v validator) unsetEnv(step *Step) error {
+	if step.UnsetEnv == nil {
+		return nil
+	}
+	if len(step.UnsetEnv) == 0 || len(step.UnsetEnv) > maxUnsetEnv {
+		return v.fieldErr("unset_env", "must hold 1 to %d names", maxUnsetEnv)
+	}
+	if step.Stdin != "" {
+		return v.fieldErr("unset_env", "cannot be combined with stdin")
+	}
+	seen := make(map[string]bool, len(step.UnsetEnv))
+	for _, name := range step.UnsetEnv {
+		if !envNamePattern.MatchString(name) {
+			return v.fieldErr("unset_env", "%q is not a valid environment variable name", name)
+		}
+		if seen[name] {
+			return v.fieldErr("unset_env", "%q is listed twice", name)
+		}
+		seen[name] = true
+	}
+	return nil
+}
+
 func (v validator) step(op string, step *Step, names scope) (scope, error) {
 	if err := v.conditions("when", step.When, names); err != nil {
 		return nil, err
@@ -559,7 +587,7 @@ func (v validator) step(op string, step *Step, names scope) (scope, error) {
 	}
 	if step.Fail != nil {
 		if step.Stdin != "" || step.Store != "" || step.Output != nil || step.Fields != nil || step.Expect != nil || step.Poll != nil ||
-			step.OnError != "" || step.Timeout != "" || step.Delay != "" || step.StopOnSuccess || step.Messages != (StepMessages{}) {
+			step.OnError != "" || step.Timeout != "" || step.Delay != "" || step.StopOnSuccess || step.Messages != (StepMessages{}) || step.UnsetEnv != nil {
 			return nil, v.fieldErr("fail", "a fail step declares only when and fail")
 		}
 		return names, v.message("fail", step.Fail, names)
@@ -569,6 +597,9 @@ func (v validator) step(op string, step *Step, names scope) (scope, error) {
 	}
 	if len(step.Stdin) > 64<<10 || strings.ContainsRune(step.Stdin, '\x00') {
 		return nil, v.fieldErr("stdin", "must be at most 64 KiB and contain no NUL")
+	}
+	if err := v.unsetEnv(step); err != nil {
+		return nil, err
 	}
 	if err := v.argv("argv", step.Argv, names); err != nil {
 		return nil, err
