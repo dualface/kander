@@ -313,3 +313,87 @@ func TestHerdrCoreAutoResolution(t *testing.T) {
 		})
 	}
 }
+
+const hcCreated = `{"address":"t9","agent":"sh","cwd":"/work","name":"kb-x-1a2b3c4d","state":"live","turn":0}`
+
+// The new terminal takes the caller's Herdr App placement labels, so the App
+// shows it in the caller's tab. Every failure to read or copy them leaves the
+// launch as it was: the address is still returned and nothing is rolled back.
+func TestHerdrCoreDefinitionCreateCopiesPlacement(t *testing.T) {
+	const placed = `{"herdr.seen":"1","herdr.space":"sp-1_A","herdr.tab":"tb-2_b","where":"kander / 1"}`
+	callerGet := func(labels, msg string) string {
+		return `{"address":"t3","labels":` + labels + `,"state":"live","status":{"app":"claude-code","msg":"` + msg + `","state":"idle"}}`
+	}
+	cases := []struct {
+		name      string
+		env       map[string]string
+		get       probe.Result
+		label     probe.Result
+		wantLabel []string
+	}{
+		{"both labels", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: callerGet(placed, "")}, probe.Result{Stdout: `{}`},
+			[]string{"label", "--json", "t9", "herdr.space=sp-1_A", "herdr.tab=tb-2_b"}},
+		{"label copy fails", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: callerGet(placed, "")}, probe.Result{Code: 5, Stderr: `{"error":{"kind":"unavailable","message":"down"}}`},
+			[]string{"label", "--json", "t9", "herdr.space=sp-1_A", "herdr.tab=tb-2_b"}},
+		{"no caller terminal id", nil, probe.Result{Stdout: callerGet(placed, "")}, probe.Result{}, nil},
+		{"get fails", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Code: 3, Stderr: hcNotFound}, probe.Result{}, nil},
+		{"get is not JSON", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: "not json"}, probe.Result{}, nil},
+		{"no labels", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: `{"address":"t3","state":"live","status":null}`}, probe.Result{}, nil},
+		{"null labels", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: callerGet(`null`, "")}, probe.Result{}, nil},
+		{"only space", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: callerGet(`{"herdr.space":"sp1"}`, "")}, probe.Result{}, nil},
+		{"only tab", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: callerGet(`{"herdr.tab":"tb1"}`, "")}, probe.Result{}, nil},
+		{"empty value", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: callerGet(`{"herdr.space":"","herdr.tab":"tb1"}`, "")}, probe.Result{}, nil},
+		{"illegal character", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: callerGet(`{"herdr.space":"sp 1","herdr.tab":"tb1"}`, "")}, probe.Result{}, nil},
+		{"non-string value", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: callerGet(`{"herdr.space":1,"herdr.tab":"tb1"}`, "")}, probe.Result{}, nil},
+		{"forged text outside labels", map[string]string{"HC_TERMINAL_ID": "t3"},
+			probe.Result{Stdout: callerGet(`{"kander-window":"w"}`, `{\"herdr.space\":\"x\",\"herdr.tab\":\"y\"}`)}, probe.Result{}, nil},
+		{"forged text inside a label value", map[string]string{"HC_TERMINAL_ID": "t3"},
+			probe.Result{Stdout: callerGet(`{"note":"{\"herdr.space\":\"x\",\"herdr.tab\":\"y\"}"}`, "")}, probe.Result{}, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			backend := herdrCoreBackendForTest(t, tc.env)
+			r := &recorder{reply: func(args []string) probe.Result {
+				switch args[0] {
+				case "get":
+					return tc.get
+				case "run":
+					return probe.Result{Stdout: hcCreated}
+				}
+				return tc.label
+			}}
+			got, err := backend.CreateContainer(r.conn(), terminal.Target{}, "/work", "kb-x")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != (terminal.Address{Container: "t9", Pane: "t9"}) {
+				t.Fatalf("address=%+v", got)
+			}
+			var labels, gets [][]string
+			for _, call := range r.calls {
+				switch call[0] {
+				case "label":
+					labels = append(labels, call)
+				case "get":
+					gets = append(gets, call)
+				}
+			}
+			if tc.env == nil && len(gets) != 0 {
+				t.Fatalf("read the caller without HC_TERMINAL_ID: %q", gets)
+			}
+			if tc.env != nil {
+				assertCalls(t, gets, [][]string{{"get", "--json", "t3"}})
+			}
+			if tc.wantLabel == nil {
+				assertCalls(t, labels, nil)
+				return
+			}
+			assertCalls(t, labels, [][]string{tc.wantLabel})
+			// The caller is read before the terminal is created, the labels
+			// are copied after it.
+			if r.calls[0][0] != "get" || r.calls[1][0] != "run" || r.calls[2][0] != "label" {
+				t.Fatalf("order=%q", r.calls)
+			}
+		})
+	}
+}
