@@ -191,12 +191,42 @@ func validateDottedPath(path string) error {
 	if strings.IndexFunc(path, unicode.IsControl) >= 0 {
 		return errors.New("dotted path contains a control character")
 	}
-	for _, part := range strings.Split(path, ".") {
-		if part == "" {
-			return fmt.Errorf("dotted path %q has an empty segment", path)
+	_, err := SplitDottedPath(path)
+	return err
+}
+
+// SplitDottedPath splits a definition JSON path into object keys. A `.`
+// separates keys; `\.` is a literal dot and `\\` a literal backslash inside
+// one key. Any other character after `\`, a trailing `\`, and an empty key
+// are errors. A path without a backslash splits exactly at every dot.
+func SplitDottedPath(path string) ([]string, error) {
+	var keys []string
+	var key strings.Builder
+	for i := 0; i < len(path); i++ {
+		switch c := path[i]; c {
+		case '.':
+			keys = append(keys, key.String())
+			key.Reset()
+		case '\\':
+			i++
+			if i == len(path) {
+				return nil, fmt.Errorf("dotted path %q ends with a lone backslash", path)
+			}
+			if path[i] != '.' && path[i] != '\\' {
+				return nil, fmt.Errorf("dotted path %q has an invalid escape; only \\. and \\\\ are allowed", path)
+			}
+			key.WriteByte(path[i])
+		default:
+			key.WriteByte(c)
 		}
 	}
-	return nil
+	keys = append(keys, key.String())
+	for _, k := range keys {
+		if k == "" {
+			return nil, fmt.Errorf("dotted path %q has an empty segment", path)
+		}
+	}
+	return keys, nil
 }
 
 func validateLineCondition(field string, index int, cond LineCondition) error {
@@ -340,8 +370,12 @@ func matchCondition(doc any, cond LineCondition) bool {
 }
 
 func walkPath(doc any, path string) (any, bool) {
+	keys, err := SplitDottedPath(path)
+	if err != nil {
+		return nil, false
+	}
 	cur := doc
-	for _, key := range strings.Split(path, ".") {
+	for _, key := range keys {
 		obj, ok := cur.(map[string]any)
 		if !ok {
 			return nil, false

@@ -3,6 +3,7 @@ package process
 import (
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -409,5 +410,57 @@ func TestDecodeOutputSpecRejectsUnknownFields(t *testing.T) {
 	_, err := DecodeOutputSpec([]byte(`{"source":"stdout","parse":"raw","extra":true}`))
 	if err == nil {
 		t.Fatal("expected unknown field error")
+	}
+}
+
+func TestSplitDottedPath(t *testing.T) {
+	for _, tc := range []struct {
+		path string
+		want []string
+	}{
+		{`a.b`, []string{"a", "b"}},
+		{`a\.b`, []string{"a.b"}},
+		{`a\\b`, []string{`a\b`}},
+		{`labels.kander\.session`, []string{"labels", "kander.session"}},
+		{`a\\.b`, []string{`a\`, "b"}},
+		{`a\\\.b`, []string{`a\.b`}},
+		{`plain`, []string{"plain"}},
+	} {
+		got, err := SplitDottedPath(tc.path)
+		if err != nil || !slices.Equal(got, tc.want) {
+			t.Errorf("SplitDottedPath(%q) = %q, %v; want %q", tc.path, got, err, tc.want)
+		}
+	}
+}
+
+func TestSplitDottedPathRejectsBadPaths(t *testing.T) {
+	for _, path := range []string{`a\x`, `a\`, `\`, `a\b.c`, `a..b`, `.a`, `a.`, `a\..`, ``} {
+		if got, err := SplitDottedPath(path); err == nil {
+			t.Errorf("SplitDottedPath(%q) = %q, nil; want an error", path, got)
+		}
+	}
+}
+
+func TestEscapedPathsInOutputSpecs(t *testing.T) {
+	doc := `{"labels":{"kander.session":"s1","a\\b":"x"},"kander":{"session":"nested"}}`
+	for _, tc := range []struct{ parse, want string }{
+		{`json_field:labels.kander\\.session`, "s1"},
+		{`json_field:labels.a\\\\b`, "x"},
+		{`json_field:kander.session`, "nested"},
+	} {
+		spec := mustSpec(t, `{"source":"stdout","parse":"`+tc.parse+`"}`)
+		if got, err := ParseTerminalOutput(spec, doc); err != nil || got != tc.want {
+			t.Errorf("%s = %q, %v; want %q", tc.parse, got, err, tc.want)
+		}
+	}
+	for _, parse := range []string{`json_field:labels.kander\\x`, `json_field:labels\\`} {
+		if _, err := DecodeOutputSpec([]byte(`{"source":"stdout","parse":"` + parse + `"}`)); err == nil {
+			t.Errorf("%s decoded without an error", parse)
+		}
+	}
+
+	cond := mustSpec(t, `{"source":"stdout","format":"ndjson","parse":"json_field:v","success":[{"json_field":"labels.kander\\.session","equals":"s1"}]}`)
+	if got, err := ParseTerminalOutput(cond, `{"v":"ok","labels":{"kander.session":"s1"}}`); err != nil || got != "ok" {
+		t.Errorf("escaped success condition = %q, %v", got, err)
 	}
 }
