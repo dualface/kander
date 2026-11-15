@@ -7,6 +7,7 @@
 - herdr-core launcher: a new terminal now also copies the calling terminal's non-empty `where` label (the display name of its space and tab) with a separate `hc label` call, after the `herdr.space` and `herdr.tab` copy. A missing or empty `where`, or a failed copy, leaves the launch and the placement labels unchanged.
 - Fix (herdr-core): text delivered to an agent terminal is no longer wrapped in `<hc from="…">…</hc>`. Run from inside an hc terminal, `hc send` tagged the text as another terminal's message, so a delivered `/exit` reached Claude as ordinary prose and `kander dismiss` could not end the agent; `notify` direct delivery and the pane prompt at launch carried the tag too. The `herdr-core` delivery step now runs `hc send` without `HC_TERMINAL_ID`.
 - Terminal definitions (schema version 1, optional addition): an argv step may declare `unset_env`, a list of up to 16 environment variable names the command does not inherit. Such a step runs through `Conn.RunEnv` (default `ProbeEnvRunner`), never `Conn.Run`.
+- `kander show --document <relative-path> <task-id>` prints one document of a card: `plan.md`, `report.md`, an ordinary attachment, or a read-only file below `reviews/` or `dispatches/`; `--json` returns `path`, `text`, `revision`, and `entry`. Without `--document`, `show` prints what it did before. The released rules now tell agents to read card documents only through this command, and the execution rules tell an agent to read a large card's `plan.md` before it starts.
 
 ## v1.4.0 — 2026-11-15
 

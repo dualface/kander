@@ -22,9 +22,9 @@ Read first: `show`, `update`, `move`, `check`.
 | `pick` | Move a `backlog/` card to `todo/` | creator, orchestrator | `snippets/commands/pick.md` |
 | `update` | Publish a card document | executing agent, creator | `snippets/commands/update.md` |
 | `start` | Launch an executing agent | creator, orchestrator | `snippets/commands/start.md` |
-| `orchestrate` | Hand a plan to an orchestrator session | creator | `snippets/commands/orchestrate.md` |
+| `orchestrate` | Hand a plan to an orchestrator | creator | `snippets/commands/orchestrate.md` |
 | `resume` | Wake or take over an executing agent | orchestrator (via notify), user | `snippets/commands/resume.md` |
-| `notify` | Dispatch items back to the executing agent | orchestrator | `snippets/commands/notify.md` |
+| `notify` | Dispatch items back to the agent | orchestrator | `snippets/commands/notify.md` |
 | `dispatch` | Inspect and end durable dispatches | orchestrator | `snippets/commands/dispatch.md` |
 | `dismiss` | Exit an agent and its container | orchestrator, user | `snippets/commands/dismiss.md` |
 | `check` | Validate cards, probe liveness, Git checks | executing agent, orchestrator | `snippets/commands/check.md` |
@@ -44,7 +44,7 @@ kander terminal list
 kander terminal test <name> [--keep] [--skip-focus]
 kander init [--maintenance] [project-path]
 kander list [--mobile|--json [--agent-status]] [backlog|todo|working|review|done|archived|trash]
-kander show [--json] <task-id>
+kander show [--json] [--document <relative-path>] <task-id>
 kander new [--large] [--language <agent language>] <feature|bug|chore|research> <slug> <title...>
 kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--owner <agent> [--decision <reference>]] [--result <result>] [--reason <reason> --decision <reference>] [--duplicate-of <task-id>] [--expect-revision <revision>] [--dispatch-id <id> --execution-epoch <epoch>] [--delivery-commit <full-SHA>] [--disposition <card-relative-path>]
 kander pick [task-id]
