@@ -19,7 +19,8 @@ import (
 // function, so a test pins the exact command lines the definition produces.
 type recorder struct {
 	calls [][]string
-	// unset holds the unset_env list of each call, nil for a plain step.
+	// unset holds the unset_env argument of each RunEnv call only; plain Run
+	// and RunInput calls add no entry, so it does not align with calls.
 	unset [][]string
 	reply func(args []string) probe.Result
 }
