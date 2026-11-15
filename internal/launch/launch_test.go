@@ -121,6 +121,8 @@ func setupBoard(t *testing.T) (root, home, fakeBin string) {
 	t.Setenv("PATH", fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("TMUX", "/tmp/fake-tmux,1,0")
 	t.Setenv("TMUX_PANE", "%7")
+	// A run inside an hc terminal must not make auto resolve to herdr-core.
+	t.Setenv("HC_TERMINAL_ID", "")
 	t.Setenv("KANBAN_TMUX_LOG", tmuxLog)
 	loadEffective = func() (*config.Config, error) { return envConfig("codex", "tmux", nil), nil }
 	currentInstallPaths = func() (config.InstallPaths, error) {
