@@ -397,9 +397,40 @@ The shell is `internal/board/coordinator_kernel.go` (projections and event build
 
 `internal/board/coordinator_kernel_entrance_test.go` drives each entrance on a temporary board and asserts `projection(after) = Step(projection(before), event)`, or for a refused entrance an error, a kernel refusal, and an unchanged checkpoint; each theorem has at least one refused scenario there. The differential vectors use explicit alphabets of 34 events each (`coordinator` and `coordmember`) at depth 4, and the full alphabet of 12 events (`wrapupwitness`) at depth 5.
 
+## Server Group Leases (D1)
+
+One machine replaces the hand-written accept and refuse decisions of the coordination lease of a task group on the v2 server (`group-claims/<group>.json`), and the claim machine of M2 gets one event for the lost member recovery:
+
+| Machine | Definition | Kernel | Scope |
+| --- | --- | --- | --- |
+| `servergrouplease` | `Machines/ServerGroupLease.lean` | `internal/statemachine/servergrouplease` | One group's lease record: its status (`none`, `active`, `lost`, `released`), its generation, and whether its lease has not expired |
+| `serverclaim` (extended) | `Machines/ServerClaim.lean` | `internal/statemachine/serverclaim` | The new event `audit`: the audit generation a lost member recovery gives the claim record of a claimed card |
+
+A group has no card, so the lease machine has no `held` field; the member cards of a group write and recover through their own claim kernels. The group events take the result of those kernels as the Boolean arguments `members` and `member`, and the server clock, the client and execution identities (`sameExec`, `sameClient`), the token comparison, the parse of the claim headers (`hdr`), the explicit decision, and the request checks (`stopped`, `unknown`, `execOk`) as Boolean arguments the shell computes. Headers and tokens are mapped as for the single card claim (`g` and `tg` are the generation the header and the token belong to; any other generation maps to the one after the record's). Lease expiry is the environment event `expire`; `live` is the shell's comparison of the clock with `ExpiresAt`.
+
+The events are `claim` (a new record, a takeover, or the reuse of a valid lease), `renew`, `observe` (an observation of status `stopped` ends the lease), `release`, `require` (`requireGroup` as a guard: before a group write and in its `Before` callback, the integration actor, the group check of a lost member recovery), `writeAfter` (the check after a group write, with the member cards' holders as `members`), `recoverOwned` (the readiness of an owned recovery), and `recoverLost` (the request side and the group holder of a lost member recovery). The queries are `valid` (an active lease that has not expired) and `shown` (the status a view shows: an active record whose lease expired is `lost`).
+
+Proofs, for every generation bound:
+
+| Theorem | Statement |
+| --- | --- |
+| `ServerGroupLease.require_iff`, `holder_unique`, `holder_required` | (1) `requireGroup` accepts exactly the request whose generation header and token both belong to the current generation, on an active record with a lease that has not expired; two accepted requests name the same generation. Every event that presents the claim headers needs the same holder |
+| `ServerGroupLease.gen_monotone`, `gen_change`, `claim_reuse_keeps` | (2) No accepted event lowers the generation; it changes only at a claim that is not a reuse, by exactly one; a reuse keeps the record |
+| `ServerGroupLease.claim_same_exec_refused`, `claim_reuse_needs_holder`, `claim_takeover_spec`, `claim_takeover_result`, `claim_room_refused`, `claim_decision_needed`, `claim_valid_refused` | (3) A claim that names the lease's own execution identity is refused unless the same client reuses a valid lease, and a reuse also needs `requireGroup` to accept; this refusal does not look at the lease, the generation, or the decision. A takeover needs a lease that is not valid, the observed generation, room below the last `uint64`, and a decision when a record exists; it takes the next generation with a live lease |
+| `ServerGroupLease.observe_stopped_spec`, `observe_other_keeps`, `release_spec`, `ended_refuses_holder` | (4) An observation of status `stopped` and a release need the current holder; the first makes the lease `lost` and expired, the second `released`; afterwards no request is accepted as the holder |
+| `ServerGroupLease.write_after_spec`, `write_after_members_refused`, `stale_refused` | (5) The check after a group write needs the current holder and the holders of every member card the transaction changed that was in `working` or `review` before it; a request of another generation is refused by every holder check |
+| `ServerGroupLease.recover_owned_spec`, `recover_owned_refused` | (6) An owned recovery needs the current holder, an observation of status `stopped`, for a claimed member its holder and a valid observation ticket, and no unfinished start |
+| `ServerGroupLease.recover_lost_spec`; `ServerClaim.audit_iff`, `audit_result`, `audit_refused_valid`, `audit_refused_stale` | (7) A lost member recovery needs the current holder, an explicit decision, an `unknown` observation, and a valid execution identity; the member's claim record gets the generation after the observed one, status `released`, and no lease, and only when the card is claimed, the request observed the record's generation, the execution identity is fresh and below the last generation, the record is not pending, and no lease is valid |
+| (generic) `run_refused_unchanged` | (8) A refused event leaves the state unchanged |
+| `ServerGroupLease.reachable_inv`, `reachable_valid_gen` | (9) In every reachable state a record exists exactly when its generation is positive, a missing record has no lease, and a valid lease has a positive generation |
+
+The checks that stay in the shell, as in the single card claim: the card revision of a lost member recovery (`revision_conflict`, and `tx.Expect` inside the transaction), the identity of the record between the two reads of one operation, the unfinished start of a lost member recovery, the validation of the request body, the idempotent replay, the clock, the token derivation and its constant-time comparison, the observation ticket signature, the coordinator checkpoint (M12) calls, and the persistence. The shell is `internal/server/group_lease_kernel.go` (projection with the generation shift of M2, header mapping, the error of a refused request, `groupClaimView`, the claim `audit` event). The entrances are `requireGroup`, `claimGroup` (including its transaction `Before` callback), `renewGroup`, `updateGroupLease` (`observeGroup`, `releaseGroup`), `groupWrite` (before, `Before`, `After`), `ownedRecoveryReady` (the readiness of the route `recover`), `recoverLostMember` (including `validate` and its member claim), and `groupView`. A refused request answers the error of the first failing check in the order the server has always made them, taken from the kernel's own projection, so it agrees with the kernel when the clock moves on during an operation. The integration actor (`integrationActor`) reaches the lease through `requireGroup`; `currentIntegrationActor` still reads the record by hand and belongs to D4, which can ask `projectGroup(record, found, nil).valid()`.
+
+`internal/server/group_lease_kernel_test.go` drives every entrance on a temporary server and asserts `projection(after) = Step(projection(before), event)`, or for a refused entrance an error code, a kernel refusal, and an unchanged projection; it covers the generations 2^31, 2^40, `^uint64(0) - 2` and `^uint64(0)`. The differential vectors of `servergrouplease` use an explicit alphabet of 30 events at depth 5; those of `serverclaim` gain three `audit` events and keep every earlier row.
+
 ## v2 State Machine Inventory
 
-M1 to M14 are the machines of `20261103-state-machine-simplification-audit-task`. Group A is `20261114-formal-kernel-foundation-group`; group B is `20261116-formal-dispatch-group`; group C is `20261116-formal-review-evidence-group`; group D is created after group C integrates into `v2`.
+M1 to M14 are the machines of `20261103-state-machine-simplification-audit-task`. Group A is `20261114-formal-kernel-foundation-group`; group B is `20261116-formal-dispatch-group`; group C is `20261116-formal-review-evidence-group`; group D is `20261117-formal-server-group` (D1, `20261117-formal-server-group-lease-task`, is the first card).
 
 | Machine | Scope | Owner |
 | --- | --- | --- |
@@ -418,7 +449,7 @@ M1 to M14 are the machines of `20261103-state-machine-simplification-audit-task`
 | M12 | Coordinator authority, mirror, recovery, Git witnesses | Proved and generated: `coordinator`, `coordmember`, `wrapupwitness` (C, `20261116-formal-coordinator-task`) |
 | M13 | Board multi-file transactions, revisions, form migration recovery | Assumption, not proved |
 | M14 | Archive evidence cleanup | Assumption, not proved |
-| v2 server group leases (`internal/server/group_leases.go`) | Group coordination leases | D |
+| v2 server group leases (`internal/server/group_leases.go`, `group_observation.go`, `groups.go`, `group_recovery.go`) | Group coordination leases | Proved and generated: `servergrouplease`, and the `audit` event of `serverclaim` (D1, `20261117-formal-server-group-lease-task`) |
 | v2 server integration operation (`internal/server/integration*.go`) | Group integration | D |
 | v2 server issue results (`internal/server/issue_results.go`) | Issue result publication | D |
 | v2 server deliveries and dispatch requests (`internal/server/deliveries.go`, `dispatch_request.go`, `requests.go`) | Delivery records and requested dispatches | D |
