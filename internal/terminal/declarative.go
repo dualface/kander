@@ -354,7 +354,7 @@ func (b *DeclarativeBackend) CreateContainer(conn Conn, target Target, cwd, labe
 	result, err := b.launchOp(OpCreateContainer, conn, map[string]string{
 		"session": target.Session, "session_exists": strconv.FormatBool(target.SessionExists), "workspace": target.Workspace,
 		"project": target.Project, "project_key": ProjectKey(target.Project), "cwd": cwd, "cwd_resolved": resolvedPath(cwd), "label": label,
-		"label_name": LabelName(label),
+		"label_name": LabelName(label), "title": containerTitle(target, label),
 	})
 	if err != nil {
 		return Address{}, err

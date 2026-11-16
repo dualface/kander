@@ -90,6 +90,9 @@ type Target struct {
 	SessionExists bool
 	Workspace     string
 	Project       string
+	// Title is the display title of the new container, such as a tab name.
+	// Empty means the container label.
+	Title string
 }
 
 // PrepareRequest carries the caller-owned environment of a launch preflight.

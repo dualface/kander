@@ -236,3 +236,37 @@ func TestConformanceSkipFocusStillDelivers(t *testing.T) {
 		t.Fatal(output.String())
 	}
 }
+
+type placingBackend struct {
+	terminal.Backend
+	placed  []terminal.Address
+	labels  []string
+	warning string
+}
+
+func (b *placingBackend) PlaceContainer(_ terminal.Conn, address terminal.Address, _ terminal.Target, label string) string {
+	b.placed, b.labels = append(b.placed, address), append(b.labels, label)
+	return b.warning
+}
+
+// The conformance check places the container it created, like a launch does,
+// and reports a placement problem as a warning that does not fail the check.
+func TestConformancePlacesTheCreatedContainer(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("real conformance commands require POSIX sh")
+	}
+	for _, warning := range []string{"", "tab not named"} {
+		backend, _ := fixture(t, "")
+		placing := &placingBackend{Backend: backend, warning: warning}
+		var output bytes.Buffer
+		if err := Check(placing, Options{SkipFocus: true}, &output); err != nil {
+			t.Fatalf("%v\n%s", err, output.String())
+		}
+		if len(placing.placed) != 1 || placing.placed[0] != (terminal.Address{Container: "c1", Pane: "p1"}) || !strings.HasPrefix(placing.labels[0], "kander-test-") {
+			t.Fatalf("placed=%+v labels=%q", placing.placed, placing.labels)
+		}
+		if got := strings.Contains(output.String(), "warning: tab not named"); got != (warning != "") {
+			t.Fatalf("warning printed=%v for %q\n%s", got, warning, output.String())
+		}
+	}
+}

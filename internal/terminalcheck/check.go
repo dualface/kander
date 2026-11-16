@@ -270,10 +270,18 @@ func (c *checker) prepare(_ bool) (string, error) {
 }
 func (c *checker) create(_ bool) (string, error) {
 	var err error
-	c.address, err = c.backend.CreateContainer(c.conn, c.target, c.cwd, "kander-test-"+c.nonce)
+	label := "kander-test-" + c.nonce
+	c.address, err = c.backend.CreateContainer(c.conn, c.target, c.cwd, label)
 	c.created = c.address.Container != ""
 	if err == nil && (c.address.Container == "" || c.address.Pane == "") {
 		err = c.mismatch("container/pane", c.address)
+	}
+	// Launches place the container right after creating it, so the check does
+	// too; a placement problem is a warning, as it is for a launch.
+	if placer, ok := c.backend.(terminal.ContainerPlacer); ok && err == nil {
+		if warning := placer.PlaceContainer(c.conn, c.address, c.target, label); warning != "" {
+			c.print("warning: " + warning)
+		}
 	}
 	return "", err
 }
