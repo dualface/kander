@@ -16,7 +16,7 @@ The toolchain lives in `formal/`; the generated kernels live in `internal/statem
 | `formal/KanderFormal/Obligations.lean` | The proof obligation template `SafetyCert` and shape lemmas |
 | `formal/KanderFormal/EvalLemmas.lean` | Evaluation lemmas for the binder, array, and Boolean forms |
 | `formal/KanderFormal/Machines/*.lean` | Machine definitions (the single source of each machine) |
-| `formal/KanderFormal/Proofs/*.lean` | Machine proofs; `Proofs/Scalar.lean` holds the helpers of machines whose fields and arguments are all scalars |
+| `formal/KanderFormal/Proofs/*.lean` | Machine proofs; `Proofs/Scalar.lean` holds the helpers of machines whose fields and arguments are all scalars; the dispatch machine's proofs span `Dispatch.lean` (encoding and event lemmas), `DispatchForms.lean` (the forms of an accepted step), `DispatchSafety.lean` (theorems 1 to 9), and `DispatchGrant.lean` (theorems 10 and 11) |
 | `formal/KanderFormal/Registry.lean` | Registered machines, vector bounds, audited theorems |
 | `formal/KanderFormal/Gen/*.lean` | Go emitter, test emitter, vector emitter, JSON encoding, SHA-256 |
 | `formal/Main.lean` | The `kander-formal` executable (`gen`) |
@@ -233,15 +233,17 @@ The shells are `internal/board/lifecycle_kernel.go`, `internal/board/execution_k
 
 The differential vectors use explicit alphabets: `cardlifecycle` and `serverclaim` replay every sequence of depth 5, `executionledger` of depth 4, because its 30 events would make depth 5 walk about 24 million sequences.
 
-## Durable Dispatch Rounds (M3)
+## Durable Dispatch Rounds, Wrap-Up Grants, and Settlements (M3 to M5)
 
-One machine replaces the hand-written acceptance and refusal decisions of the dispatch rounds of a card:
+One machine replaces the hand-written acceptance and refusal decisions of the dispatch rounds of a card, of the wrap-up-only grant a round can hold, and of the settlement of a completed binding:
 
 | Machine | Definition | Kernel | Scope |
 | --- | --- | --- | --- |
-| `dispatch` | `Machines/Dispatch.lean` | `internal/statemachine/dispatch` | The slot a card offers one round of dispatch: the round, its epoch, whether the card binding is set, the phase and kind of the round, whether its release was written, and whether the record holds the receipt of its acceptance and the receipt of its completion (the content of a receipt is not modeled) |
+| `dispatch` | `Machines/Dispatch.lean` | `internal/statemachine/dispatch` | The slot a card offers one round of dispatch: the round, its epoch, whether the card binding is set, the phase and kind of the round, whether its release was written, and whether the record holds the receipt of its acceptance and the receipt of its completion (the content of a receipt is not modeled), whether the round holds a wrap-up grant, and whether its completed binding was settled |
 
-The events are `prepare` (a new round) and `retry` (the same ID with an equal input), `attempt` (`BeginDispatchAttempt`), `reauthorize` (`ReauthorizeDispatch`), `accept` (the move into `working`), `complete` (the move into `review` or `done`), `end` (`EndDispatch`, fail or cancel, with the release), `cancel` (the unfinished binding at a move into `archived` or `trash`), `retain` (a takeover that keeps the round), and `exec` (`requireExecution`, for author and non-author writes). The round number abstracts the dispatch ID, whose global uniqueness stays with the registry. A release keeps the pair `(round, epoch)` of the record while the card binding is empty. The wrap-up grant and the settlement of a completed binding (M4, M5) are not modeled yet; their checks stay hand-written and run where they always ran.
+The events are `prepare` (a new round) and `retry` (the same ID with an equal input), `attempt` (`BeginDispatchAttempt`), `reauthorize` (`ReauthorizeDispatch`), `accept` (the move into `working`), `complete` (the move into `review` or `done`), `end` (`EndDispatch`, fail or cancel, with the release), `cancel` (the unfinished binding at a move into `archived` or `trash`), `retain` (a takeover that keeps the round), and `exec` (`requireExecution`, for author and non-author writes). The round number abstracts the dispatch ID, whose global uniqueness stays with the registry. A release keeps the pair `(round, epoch)` of the record while the card binding is empty.
+
+The wrap-up grant (M4) adds `authorizeWrapUp` (`AuthorizeDispatchWrapUp`: a fresh confirmed exit, outcome `stopped`, or `reclaimed` with a decision; the epoch rises by one, the round returns to `prepared`, and both receipts are cleared), `full` (`requireFullExecution`: a start rollback, an execution identity write, or an author conclusion), and `wrapUpWrite` (`validateWrapUpUpdate`: no contract decision, and an append to `spec.md` or the dedicated record path). `attempt` and `reauthorize` refuse a round that holds a grant. The settlement (M5) adds `settle` (`SettleDispatch`), `terminateSettle` (the move of a completed binding into `archived` or `trash`), and `takeoverSettle` (the `settle-completed` mode of a takeover). A settlement keeps the round completed and its delivery commit, and only empties the card binding; it never releases. The grant and the settlement describe the current round, and a new `prepare` clears both.
 
 A request presents an authorization pair; the kernel compares it with the binding. The shell passes as Boolean arguments what it computes and the kernel does not: the server clock against the acceptance deadline, the plan cycle of the round, the card and record revisions, the integrity of stored receipts and originals, the result of the wrap-up evidence checks, whether a start is unfinished, whether the epoch is below the last `uint64`, and whether a decision was recorded.
 
@@ -257,18 +259,25 @@ Proofs, for every round and epoch bound:
 | `Dispatch.end_spec`, `end_once`, `release_once` | (6) Ending an accepted round needs a decision, a failed or cancelled round is released only with a decision and its own phase, a release empties the binding, and a round is released once |
 | `Dispatch.reauthorize_spec` | (7) A reauthorization raises the epoch by one, returns the round to `prepared`, and clears both receipts; an accepted round needs fresh stopped evidence, any other an unexpired deadline |
 | `Dispatch.cycle_refused` | (8) A round of another plan cycle is refused by `attempt`, `reauthorize`, `accept`, `complete`, `end`, `cancel`, and `retain`; `prepare` and `exec` carry no cycle |
-| `Dispatch.reachable_inv`, `reachable_unbound`, `reachable_receipts` | (9) In every reachable state the phase and the epoch exist exactly once a round exists, a binding names a round, a release belongs to a failed or cancelled round and an empty binding, an empty binding is the initial state or a released round, and the receipts follow the phase: none while prepared or uncertain, the acceptance receipt once accepted, both once completed, no completion receipt on a failed or cancelled round |
+| `Dispatch.reachable_inv`, `reachable_unbound`, `reachable_unbound_settled`, `reachable_receipts`, `reachable_grant_kind` | (9) In every reachable state the phase and the epoch exist exactly once a round exists, a binding names a round, a release belongs to a failed or cancelled round and an empty binding, an empty binding is the initial state, a released round, or a settled one (`reachable_unbound` names the states that are not settled), the receipts follow the phase: none while prepared or uncertain, the acceptance receipt once accepted, both once completed, no completion receipt on a failed or cancelled round, a grant belongs to a round of kind wrap-up, and a settlement belongs to a completed round that is neither bound nor released |
+| `Dispatch.authorize_spec` | (10) A grant is accepted only for an open round of kind wrap-up on a card in `working` or `review` that holds no grant, with a fresh exit whose outcome is `stopped` or `reclaimed` with a decision; it raises the epoch by one, returns the round to `prepared`, clears both receipts, and sets the grant |
+| `Dispatch.grant_refused`, `wrapUpWrite_spec` | (10) While a round holds a grant, `attempt`, `reauthorize`, a second grant, a full-execution write, and a write with a contract decision are refused and the state stays; a write the grant allows has no contract decision and appends to `spec.md` or writes the record path with no other content |
+| `Dispatch.authorize_fences_previous`, `grant_complete_done`, `authorize_complete_done` | (10) After a grant, `accept`, `complete`, `end`, and executor writes that present the epoch before it are refused; a round that holds a grant completes only into `done` |
+| `Dispatch.settle_spec`, `terminate_settle_spec`, `takeover_settle_spec`, `settle_once` | (11) A settlement acts on a completed round that is not settled, from `settle` also on a card in `working` or `review`; the round stays completed, the binding is empty, and a round settles at most once |
+| `Dispatch.settled_fences`, `release_settle_exclusive` | (11) After a settlement, `accept`, `complete`, `end`, and executor writes that present the pair of the round are refused; a release and a settlement never meet in one round |
+| `Dispatch.cycle_refused_grant` | (11) A round of another plan cycle is refused by `authorizeWrapUp`, `settle`, `terminateSettle`, and `takeoverSettle` |
 
-The shell is `internal/board/dispatch_kernel.go`, with the entrances in `dispatch.go` (`prepareDispatch`, `BeginDispatchAttempt`, `ReauthorizeDispatch`), `dispatch_receipt.go` (`requireExecution`, `stageDispatchMove`, `stageDispatchTermination`), `dispatch_release.go` (`EndDispatch`), and `dispatch_takeover.go` (the `retain` mode). Projection rules:
+The shell is `internal/board/dispatch_kernel.go`, with the entrances in `dispatch.go` (`prepareDispatch`, `BeginDispatchAttempt`, `ReauthorizeDispatch`), `dispatch_receipt.go` (`requireExecution`, `stageDispatchMove`, `stageDispatchTermination`), `dispatch_release.go` (`EndDispatch`), `dispatch_takeover.go` (the `retain` and `settle-completed` modes), `dispatch_wrapup.go` (`AuthorizeDispatchWrapUp`, `requireFullExecution`, `validateWrapUpUpdate`), and `dispatch_settlement.go` (`SettleDispatch`). The coordinator check of a wrap-up, the integration evidence, the exit observation and its 30-second window, and the reading and writing of originals stay in the shell, and the kernel takes their results as Boolean arguments. Projection rules:
 
 1. The round is relative: 1 when the card has a binding or the entrance holds a record, else 0. A new round adds one to the round of the state before it.
 2. The epoch of the state is the card's `EXECUTION_EPOCH` when bound, else the epoch of the held record, else 0. `DISPATCH_ID` and `EXECUTION_EPOCH` are written and cleared together, so a card never has an epoch without a binding. As in M2, an operation fixes a shift from the state before it (an epoch from 2^31 on projects to 1) and maps the state, the presented epochs, and the result with it. The ceiling of the `uint64` representation is the `room` argument.
 3. A presented ID or epoch projects to the binding's round or epoch when it equals it, to another non-empty value when it does not, and to 0 when empty.
 4. The two receipt flags project to whether the held record has an acceptance receipt and a completion receipt.
-5. A card without binding projects to the empty state, unless the entrance holds the released record.
-6. Checks that the original code ran in a fixed order keep it: an entrance runs the kernel on a state that no other fact can refuse (a probe) to answer one fact at a time, so a request that fails several returns the error of the first, as before. The last step runs on the projected state.
+5. The grant flag projects to whether the held record has a wrap-up authority, and the settled flag to whether it has a settlement.
+6. A card without binding projects to the empty state, unless the entrance holds the released record.
+7. Checks that the original code ran in a fixed order keep it: an entrance runs the kernel on a state that no other fact can refuse (a probe) to answer one fact at a time, so a request that fails several returns the error of the first, as before. The last step runs on the projected state.
 
-`internal/board/dispatch_kernel_entrance_test.go` drives each entrance on a temporary board and asserts `projection(after) = Step(projection(before), event)`, or for a refused entrance an error, a kernel refusal, and an unchanged projection; each theorem has at least one refused scenario there. The differential vectors use an explicit alphabet of 44 events at depth 4.
+`internal/board/dispatch_kernel_entrance_test.go` and `dispatch_grant_kernel_test.go` drive each entrance on a temporary board and assert `projection(after) = Step(projection(before), event)`, or for a refused entrance an error, a kernel refusal, and an unchanged projection; each theorem has at least one refused scenario there, and the grant and settlement entrances also assert the error of the first refused check. The differential vectors use an explicit alphabet of 67 events at depth 4. A settled round is four events from the initial state, so the vectors cover the events that settle but not the events a settled round refuses; the proofs (`settle_once`, `settled_fences`) and the refinement tests cover those.
 
 ## v2 State Machine Inventory
 
@@ -280,8 +289,8 @@ M1 to M14 are the machines of `20261103-state-machine-simplification-audit-task`
 | M2 | Execution ownership: start, claim, takeover, execution chain | Proved and generated: `executionledger` (A, `20261114-formal-card-lifecycle-task`) |
 | v2 server single-card claim record and lease expiry (`internal/server/claims.go`) | Execution ownership on the server | Proved and generated: `serverclaim` (A, `20261114-formal-card-lifecycle-task`) |
 | M3 | Durable dispatch, rounds, accept and complete receipts | Proved and generated: `dispatch` (B, `20261116-formal-dispatch-rounds-task`) |
-| M4 | Wrap-up-only capability grant | B |
-| M5 | Settlement of completed dispatches | B |
+| M4 | Wrap-up-only capability grant | Proved and generated: `dispatch` (B, `20261116-formal-dispatch-grant-settlement-task`) |
+| M5 | Settlement of completed dispatches | Proved and generated: `dispatch` (B, `20261116-formal-dispatch-grant-settlement-task`) |
 | M6 | Review run execution and per-card publication | C |
 | M7 | Report interpretation and legacy mapping | C |
 | M8 | Finding assignment, author disposition, withdrawal | C |
