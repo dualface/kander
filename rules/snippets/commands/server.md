@@ -11,7 +11,7 @@ kander server start [--data DIR] [--listen ADDR] [--ttl D] [--renew D] [--foregr
 kander server stop
 kander server restart
 kander server status [--json]
-kander server import [--data DIR] --project NAME [--remote URL] --from KANBAN_DIR
+kander server import [--data DIR] --project NAME [--remote URL] [--from KANBAN_DIR]
 kander server maintain [--data DIR] --project NAME [--maintenance]
 kander server projects [--data DIR] [--json]
 ```
@@ -25,13 +25,13 @@ kander server projects [--data DIR] [--json]
 - `status`: read the server's actual URL, version, PID, data directory, log path, project count, and listen/lease settings. `--json` prints those fields as JSON.
 - `stop`: authenticate through a current-user private management key and gracefully shut down a loopback server. Wait up to 10 seconds. Already stopped is success.
 - `restart`: read the running server's data directory, listen address and lease settings, stop it, then start it with those settings.
-- `import`: explicitly import a paused v1 board into an empty service project under the exclusive data directory lock.
+- `import`: explicitly import a paused v1 board into an empty service project. When no process holds the data directory lock, it imports offline under that lock. When a local server serves the data directory, that server performs the import and keeps serving. `--from` defaults to the board v1 commands locate: `KANBAN_DIR`, then the main worktree's `kanban/`, then an upward search.
 - `maintain`: offline legacy file-card maintenance. `--maintenance` acknowledges that all writers and executors are paused.
 - `projects`: list the registry without writing or requiring a running server.
 
 ## Preconditions
 
-`stop` and `restart` require a loopback URL. Status and control target `server.url`, defaulting to `http://127.0.0.1:7878`. Offline import and maintenance require that no server holds the data directory lock. Service routes retain the trusted-network boundary; only shutdown adds loopback and management-key authentication.
+`stop` and `restart` require a loopback URL. Status and control target `server.url`, defaulting to `http://127.0.0.1:7878`. Maintenance requires that no server holds the data directory lock. Import requires either a free lock or a loopback `server.url` whose server reports the same data directory. Service routes retain the trusted-network boundary; only shutdown and import add loopback and management-key authentication.
 
 ## Effects
 
@@ -39,8 +39,8 @@ Start creates a resident process unless `--foreground` is supplied. Stop uses HT
 
 ## Output
 
-Control commands report the service and its storage paths. Offline commands retain structured import/maintenance results and registry listing. Status fails when the service is unreachable. A failed background start reports the log path and its last 20 lines and terminates only the child it launched.
+Control commands report the service and its storage paths. Import prints the same structured result offline and online, including the absolute `source` it used. Offline commands retain structured maintenance results and registry listing. Status fails when the service is unreachable. A failed background start reports the log path and its last 20 lines and terminates only the child it launched.
 
 ## Rejections
 
-Unknown or extra arguments are usage errors. Invalid lease settings, refused shutdown authentication, unsafe paths and unavailable servers fail explicitly. Shutdown requests from non-loopback peers are refused even with a correct key.
+Unknown or extra arguments are usage errors. Invalid lease settings, refused shutdown authentication, unsafe paths and unavailable servers fail explicitly. Shutdown and import requests from non-loopback peers are refused even with a correct key. Import fails without changing data when its source board cannot be located, when the lock is held but no server answers at `server.url`, when `server.url` is not a loopback URL, when the server serves another data directory, or when the running server predates online import (restart it first).

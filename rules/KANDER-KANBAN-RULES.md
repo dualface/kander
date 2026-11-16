@@ -30,7 +30,7 @@ kander server start [--data DIR] [--listen ADDR] [--ttl D] [--renew D] [--foregr
 kander server stop
 kander server restart
 kander server status [--json]
-kander server import [--data DIR] --project NAME [--remote URL] --from KANBAN_DIR
+kander server import [--data DIR] --project NAME [--remote URL] [--from KANBAN_DIR]
 kander server maintain [--data DIR] --project NAME [--maintenance]
 kander server projects [--data DIR] [--json]
 kander doctor
