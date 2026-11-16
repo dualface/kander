@@ -79,11 +79,14 @@ func TestImportReporterRewritesOneLineOnATerminal(t *testing.T) {
 	r := newImportReporter(&out, true)
 	r.Report(api.ImportProgress{Phase: api.ImportPhaseScan, Done: 1000, Total: 20000})
 	r.Report(api.ImportProgress{Phase: api.ImportPhaseCheck})
+	if _, err := r.Write([]byte("log line\n")); err != nil {
+		t.Fatal(err)
+	}
 	r.Notice("cancelled")
 	r.Finish()
 	got := out.String()
-	if strings.Count(got, "\n") != 2 || strings.Count(got, "\r") != 2 {
-		t.Fatalf("one rewritten line and one notice expected: %q", got)
+	if strings.Count(got, "\n") != 3 || strings.Count(got, "\r") != 2 || !strings.Contains(got, "\nlog line\n") {
+		t.Fatalf("two status rewrites, then a log line and a notice on their own lines: %q", got)
 	}
 	short := config.Text("server.import_progress_check")
 	long := config.Text("server.import_progress_scan_count", 1000, 20000)

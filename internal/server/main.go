@@ -111,7 +111,9 @@ func importCommand(args []string, stdout, stderr io.Writer, tty bool, signals ch
 		fmt.Fprintln(stderr, "usage: kander server import [--data DIR] --project NAME [--remote URL] [--from KANBAN_DIR]")
 		return 2
 	}
-	logger := slog.New(slog.NewJSONHandler(stderr, nil))
+	// The log lines share stderr with the status line, so they go through the reporter.
+	report := newImportReporter(stderr, tty)
+	logger := slog.New(slog.NewJSONHandler(report, nil))
 	dir, err := dataDir(*data)
 	if err != nil {
 		logger.Error("data directory", "error", err)
@@ -122,7 +124,6 @@ func importCommand(args []string, stdout, stderr io.Writer, tty bool, signals ch
 		logger.Error("source board", "error", err)
 		return 1
 	}
-	report := newImportReporter(stderr, tty)
 	interrupt := watchImportInterrupt(report, signals)
 	defer interrupt.stop()
 	result, online, err := importBoard(interrupt.ctx, dir, *name, *remoteURL, source, importRun{logger: logger, report: report.Report, offline: &interrupt.offline})

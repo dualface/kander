@@ -71,6 +71,14 @@ func (r *importReporter) Notice(text string) {
 	fmt.Fprintln(r.w, text)
 }
 
+// Write lets a logger share the stream: a log line starts below any status line.
+func (r *importReporter) Write(p []byte) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.closeStatus()
+	return r.w.Write(p)
+}
+
 // Finish ends the status line so later output starts on a new line.
 func (r *importReporter) Finish() {
 	r.mu.Lock()
