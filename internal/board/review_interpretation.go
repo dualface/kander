@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/dualface/kander/internal/statemachine/reviewfindings"
 )
 
 // FindingsSchemaReceiver keeps report formatting separate from execution facts.
@@ -113,21 +115,6 @@ func readInterpretation(tx *Transaction, run ReviewRun, report []byte) (ReviewIn
 	return m, exists, nil
 }
 
-func receiverFindings(tx *Transaction, run ReviewRun, report []byte) (ReviewFindings, error) {
-	m, exists, err := readInterpretation(tx, run, report)
-	if err != nil {
-		return ReviewFindings{}, err
-	}
-	if exists {
-		return m.Findings, nil
-	}
-	f, err := ParseReviewFindings(report)
-	if err != nil {
-		return f, fmt.Errorf("%w: %w", errInterpretationPending, reviewError("report needs review interpret: "+err.Error()))
-	}
-	return f, nil
-}
-
 // InterpretReview publishes one immutable interpretation atomically to every
 // member. It never changes the original run, report, manifest, or execution exit.
 func InterpretReviewWithTransaction(root string, m ReviewInterpretation, extensions ...TransactionExtension) error {
@@ -154,21 +141,31 @@ func InterpretReviewWithTransaction(root string, m ReviewInterpretation, extensi
 		if err != nil {
 			return err
 		}
+		facts, _, _ := reportFindingsFacts(report)
+		facts.interp = exists
 		if exists {
+			// A stored interpretation is replayed whether or not the batch is closed.
 			m.RecordedAt = old.RecordedAt
-			if !reflect.DeepEqual(old, m) {
+			st := projectReviewFindings(run, facts)
+			if _, ok := stepFindings(st, reviewfindings.Interpret{Valid: true, Same: reflect.DeepEqual(old, m), Lineage: true}); !ok {
 				return reviewError("immutable interpretation conflict")
 			}
-			return validateFindingLineage(tx, run, m.Findings)
+			lineage := validateFindingLineage(tx, run, m.Findings)
+			if _, ok := stepFindings(st, reviewfindings.Interpret{Valid: true, Same: true, Lineage: lineage == nil}); !ok {
+				return firstError(lineage, reviewError("interpretation replay refused"))
+			}
+			return nil
 		}
 		if _, err = reviewRunForMutation(tx, m.RunID); err != nil {
 			return err
 		}
-		if _, err = ParseReviewFindings(report); err == nil {
+		st := projectReviewFindings(run, facts)
+		if !reviewfindings.InterpWritable(st, findingsParams) {
 			return reviewError("structured findings already available; interpretation cannot replace them")
 		}
-		if err = validateFindingLineage(tx, run, m.Findings); err != nil {
-			return err
+		lineage := validateFindingLineage(tx, run, m.Findings)
+		if _, ok := stepFindings(st, reviewfindings.Interpret{Valid: true, Same: true, Lineage: lineage == nil}); !ok {
+			return firstError(lineage, reviewError("interpretation refused"))
 		}
 		m.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		targets, err := reviewCopyTargets(tx, run.TaskIDs)
@@ -195,12 +192,12 @@ func ReviewNeedsInterpretation(root, runID string) (pending bool, err error) {
 		if err := verifyPublishedReview(tx, run); err != nil {
 			return err
 		}
-		_, err := runFindings(tx, run)
-		if errors.Is(err, errInterpretationPending) {
-			pending = true
-			return nil
+		v, err := loadReviewFindings(tx, run)
+		if err != nil {
+			return fmt.Errorf("%s: %w", run.RunID, err)
 		}
-		return err
+		pending = reviewfindings.Pending(v.state, findingsParams)
+		return nil
 	})
 	return
 }

@@ -6,6 +6,9 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/dualface/kander/internal/statemachine/reviewdisposition"
+	"github.com/dualface/kander/internal/statemachine/reviewfindings"
 )
 
 // ReviewAssignment attributes every parsed item explicitly, including shared findings.
@@ -65,44 +68,28 @@ func dispositionPath(d ReviewDisposition) string {
 	return "reviews/" + d.RunID + "/dispositions/" + d.RecordID + ".json"
 }
 func dispositionKey(d ReviewDisposition) string { return d.FindingID + "/" + d.TaskID }
-func runFindings(tx *Transaction, run ReviewRun) (findings ReviewFindings, err error) {
+
+// runFindingsView is the kernel state of the run with the findings of its
+// source. A run whose findings are not available returns the pending or parse
+// error with the run's ID in front.
+func runFindingsView(tx *Transaction, run ReviewRun) (v reviewFindingsView, err error) {
 	defer func() {
 		if err != nil {
 			err = fmt.Errorf("%s: %w", run.RunID, err)
 		}
 	}()
-	data, ok, err := tx.ReadGroup(reviewControlGroup, "runs/"+run.RunID+"/originals/report.md")
-	if err != nil {
-		return ReviewFindings{}, err
+	if v, err = loadReviewFindings(tx, run); err != nil {
+		return reviewFindingsView{}, err
 	}
-	if !ok || ReviewDigest(data) != run.Hashes["report.md"] {
-		return ReviewFindings{}, reviewError("missing report original")
+	if !v.available() {
+		return v, v.unavailable()
 	}
-	if run.FindingsSchema == FindingsSchemaReceiver {
-		return receiverFindings(tx, run, data)
-	}
-	f, parseErr := ParseReviewFindings(data)
-	if parseErr == nil {
-		return f, nil
-	}
-	if run.FindingsSchema > 0 {
-		return f, parseErr
-	}
-	var mapping LegacyFindingMap
-	ok, err = readReviewJSON(tx, "runs/"+run.RunID+"/legacy-map.json", &mapping)
-	if err != nil {
-		return f, err
-	}
-	if !ok {
-		return f, parseErr
-	}
-	if mapping.RunID != run.RunID {
-		return f, reviewError("legacy map run")
-	}
-	if err = validateLegacyMap(mapping, data); err != nil {
-		return f, err
-	}
-	return mapping.Findings, nil
+	return v, nil
+}
+
+func runFindings(tx *Transaction, run ReviewRun) (ReviewFindings, error) {
+	v, err := runFindingsView(tx, run)
+	return v.findings, err
 }
 
 // reviewRunForConsumption validates the successful immutable run and every
@@ -119,14 +106,15 @@ func reviewRunForConsumption(tx *Transaction, runID string) (run ReviewRun, err 
 	return
 }
 
+// reviewRunForMutation is the consumption check plus the kernel's decision that
+// the batch of the run is still open.
 func reviewRunForMutation(tx *Transaction, runID string) (run ReviewRun, err error) {
 	run, err = reviewRunForConsumption(tx, runID)
 	if err != nil {
 		return
 	}
-	var closed ReviewClosure
-	ok, err := readReviewJSON(tx, closureName(run.BatchID), &closed)
-	if err == nil && ok {
+	closed, err := reviewBatchClosed(tx, run)
+	if err == nil && !reviewfindings.Writable(projectReviewFindings(run, findingsFacts{closed: closed}), findingsParams) {
 		err = reviewError("batch already closed")
 	}
 	return
@@ -141,7 +129,7 @@ func MapLegacyReviewWithTransaction(root string, m LegacyFindingMap, extensions 
 		if err != nil {
 			return err
 		}
-		if run.FindingsSchema > 0 {
+		if !reviewfindings.LegacySchema(projectReviewFindings(run, findingsFacts{}), findingsParams) {
 			return reviewError("new reports cannot use legacy mapping")
 		}
 		data, _, err := tx.ReadGroup(reviewControlGroup, "runs/"+m.RunID+"/originals/report.md")
@@ -162,10 +150,18 @@ func MapLegacyReviewWithTransaction(root string, m LegacyFindingMap, extensions 
 		}
 		if exists {
 			m.RecordedAt = old.RecordedAt
-			if reflect.DeepEqual(old, m) {
-				return nil
+		}
+		facts, _, _ := reportFindingsFacts(data)
+		facts.legacy = exists
+		event := reviewfindings.MapLegacy{Valid: true, Same: !exists || reflect.DeepEqual(old, m), Lineage: true}
+		if _, ok := stepFindings(projectReviewFindings(run, facts), event); !ok {
+			if exists {
+				return reviewError("immutable legacy map")
 			}
-			return reviewError("immutable legacy map")
+			return reviewError("legacy mapping refused")
+		}
+		if exists {
+			return nil
 		}
 		m.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		targets, err := reviewCopyTargets(tx, run.TaskIDs)
@@ -193,14 +189,21 @@ func AssignReviewFindingsWithTransaction(root string, a ReviewAssignment, extens
 		if a.BatchID != run.BatchID || strings.TrimSpace(a.Author) == "" || strings.TrimSpace(a.Basis) == "" || a.Items == nil {
 			return reviewError("assignment provenance")
 		}
-		f, err := runFindings(tx, run)
+		v, err := runFindingsView(tx, run)
 		if err != nil {
 			return err
 		}
+		f := v.findings
 		if err = validateFindingLineage(tx, run, f); err != nil {
 			return err
 		}
-		if len(a.Items) != len(f.all()) {
+		// Each fact is judged by the kernel with every other fact holding, in the
+		// order the entrance always checked them; the provenance came first.
+		facts := reviewfindings.Assign{Provenance: true, Lineage: true, Covers: true, Members: true, Active: true, Owners: true, Same: true}
+		allows := func(e reviewfindings.Assign) bool { _, ok := stepFindings(v.state, e); return ok }
+		covers := facts
+		covers.Covers = len(a.Items) == len(f.all())
+		if !allows(covers) {
 			return reviewError("assignment items must use finding IDs as keys and task IDs as values, covering every finding")
 		}
 		a.Owners = map[string]string{}
@@ -211,14 +214,18 @@ func AssignReviewFindingsWithTransaction(root string, a ReviewAssignment, extens
 			}
 			a.Items[item.ID] = ids
 			for _, id := range ids {
-				if !containsID(run.TaskIDs, id) {
+				member := facts
+				member.Members = containsID(run.TaskIDs, id)
+				if !allows(member) {
 					return reviewError("foreign assignment")
 				}
 				excluded, err := memberExcluded(tx, id)
 				if err != nil {
 					return err
 				}
-				if excluded {
+				active := facts
+				active.Active = !excluded
+				if !allows(active) {
 					return reviewError("assigned card left the plan: " + id)
 				}
 				s, err := tx.Snapshot(id)
@@ -226,7 +233,9 @@ func AssignReviewFindingsWithTransaction(root string, a ReviewAssignment, extens
 					return err
 				}
 				owner := MetadataFrom(s.Text, FieldOwner)
-				if strings.TrimSpace(owner) == "" {
+				owned := facts
+				owned.Owners = strings.TrimSpace(owner) != ""
+				if !allows(owned) {
 					return reviewError("assigned card owner required")
 				}
 				a.Owners[id] = owner
@@ -239,10 +248,17 @@ func AssignReviewFindingsWithTransaction(root string, a ReviewAssignment, extens
 		}
 		if exists {
 			a.RecordedAt = old.Assignment.RecordedAt
-			if reflect.DeepEqual(a, old.Assignment) {
-				return nil
+		}
+		v.state.Assigned = exists
+		facts.Same = !exists || reflect.DeepEqual(a, old.Assignment)
+		if !allows(facts) {
+			if exists {
+				return reviewError("immutable assignment conflict")
 			}
-			return reviewError("immutable assignment conflict")
+			return reviewError("assignment refused")
+		}
+		if exists {
+			return nil
 		}
 		a.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		targets, err := reviewCopyTargets(tx, run.TaskIDs)
@@ -257,7 +273,24 @@ func AssignReviewFindingsWithTransaction(root string, a ReviewAssignment, extens
 		return tx.PutGroup(reviewControlGroup, ledgerName(run.RunID), reviewJSON(dispositionLedger{Assignment: a, Records: []ReviewDisposition{}}))
 	}, extensions...)
 }
+
+// validateDisposition validates d against its run, finding, and assignment. The
+// facts that depend on the pair (the assignment, the status rules for the tier,
+// and the role of a waiver) are judged by the disposition kernel with every other
+// fact holding and the record chain empty, in the order the checks have always
+// run; the text and evidence facts stay hand-written.
 func validateDisposition(d ReviewDisposition, run ReviewRun, item ReviewFinding, a ReviewAssignment) error {
+	pair := pairState(a, item.ID, d.TaskID, false)
+	gate, security, withdrawn := mustFix(item.Tier), securityReviewRole(run.Role), d.Status == "withdrawn"
+	allows := func(status reviewdisposition.Status, gate, security bool) bool {
+		e := recordEvent(d, gate, security, reviewdisposition.DupNone, reviewdisposition.RefEmpty)
+		if submit, ok := e.(reviewdisposition.Submit); ok {
+			submit.Status = status
+			e = submit
+		}
+		_, ok := stepPair(pair, e)
+		return ok
+	}
 	switch {
 	case !ValidReviewID(d.RecordID):
 		return reviewError("disposition record_id must start with a lowercase letter or digit and then use only [a-z0-9-]")
@@ -267,7 +300,7 @@ func validateDisposition(d ReviewDisposition, run ReviewRun, item ReviewFinding,
 		return reviewError("disposition batch_id must equal the review run batch")
 	case d.FindingID != item.ID:
 		return reviewError("disposition finding_id must equal the finding")
-	case !containsID(a.Items[item.ID], d.TaskID):
+	case !allows(reviewdisposition.StatusConfirmed, true, true):
 		return reviewError("disposition task_id is not assigned finding " + d.FindingID)
 	case d.Author != a.Owners[d.TaskID] && d.SubmittedRevision == 0:
 		return reviewError(fmt.Sprintf("disposition author %q is not assignment owner %q for task %s", d.Author, a.Owners[d.TaskID], d.TaskID))
@@ -282,20 +315,21 @@ func validateDisposition(d ReviewDisposition, run ReviewRun, item ReviewFinding,
 	case strings.TrimSpace(d.Basis) == "":
 		return reviewError("disposition basis is required")
 	}
-	if d.Status != "confirmed" && d.Status != "fixed" && d.Status != "rejected" && d.Status != "unverifiable" && d.Status != "waived" && d.Status != "deferred" && d.Status != "withdrawn" {
+	status := kernelDispositionStatus(d.Status)
+	if status == reviewdisposition.StatusOther {
 		return reviewError("disposition status")
 	}
-	if !mustFix(item.Tier) && d.Status != "fixed" && d.Status != "deferred" && d.Status != "rejected" && d.Status != "withdrawn" {
+	if !gate && !withdrawn && !allows(status, false, true) {
 		return reviewError("non-blocking status")
 	}
-	if d.Status == "withdrawn" {
+	if withdrawn {
 		if d.Withdrawal == nil || strings.TrimSpace(d.Withdrawal.ExclusionID) == "" || strings.TrimSpace(d.Withdrawal.Decision) == "" {
 			return reviewError("withdrawn requires withdrawal.exclusion_id and withdrawal.decision")
 		}
 	} else if d.Withdrawal != nil {
 		return reviewError("withdrawal without withdrawn status")
 	}
-	if mustFix(item.Tier) && d.Status == "deferred" {
+	if gate && !withdrawn && !allows(status, true, true) {
 		return reviewError("must-fix cannot be deferred")
 	}
 	if d.Status == "fixed" && !validCommit(d.FixCommit) {
@@ -311,7 +345,7 @@ func validateDisposition(d ReviewDisposition, run ReviewRun, item ReviewFinding,
 		return reviewError("mechanical category")
 	}
 	if d.Status == "waived" {
-		if run.Role != "CSA" && run.Role != "Hacker" && run.Role != "Security" || d.Waiver == nil || strings.TrimSpace(d.Waiver.Decision) == "" {
+		if !allows(status, true, security) || d.Waiver == nil || strings.TrimSpace(d.Waiver.Decision) == "" {
 			return reviewError("waiver only for applicable security role decisions")
 		}
 		if d.Waiver.Policy != "accepted-risk" && d.Waiver.Policy != "timed-out" {
@@ -372,7 +406,9 @@ func SubmitReviewDispositionWithTransaction(root string, d ReviewDisposition, ex
 }
 
 // appendDisposition validates d against the assignment and adds it to the ledger.
-// fresh is false when the same record already exists.
+// fresh is false when the same record already exists. The disposition kernel
+// decides whether d is that same record, a conflicting one, or a new record that
+// names the last record of its chain.
 func appendDisposition(tx *Transaction, run ReviewRun, d *ReviewDisposition) (ledger dispositionLedger, fresh bool, err error) {
 	exists, err := readReviewJSON(tx, ledgerName(d.RunID), &ledger)
 	if err != nil {
@@ -391,25 +427,36 @@ func appendDisposition(tx *Transaction, run ReviewRun, d *ReviewDisposition) (le
 			item = f
 		}
 	}
+	last := ""
+	for _, record := range ledger.Records {
+		if dispositionKey(record) == dispositionKey(*d) {
+			last = record.RecordID
+		}
+	}
 	if err = validateDisposition(*d, run, item, ledger.Assignment); err != nil {
 		return ledger, false, err
 	}
-	previous := ""
+	dup := reviewdisposition.DupNone
 	for _, record := range ledger.Records {
 		if record.RecordID == d.RecordID {
 			d.RecordedAt = record.RecordedAt
 			d.SubmittedRevision = record.SubmittedRevision
+			dup = reviewdisposition.DupConflict
 			if reflect.DeepEqual(*d, record) {
-				return ledger, false, nil
+				dup = reviewdisposition.DupSame
 			}
-			return ledger, false, reviewError("immutable author record")
-		}
-		if dispositionKey(record) == dispositionKey(*d) {
-			previous = record.RecordID
+			break
 		}
 	}
-	if d.PreviousRecordID != previous {
+	event := recordEvent(*d, mustFix(item.Tier), securityReviewRole(run.Role), dup, chainRef(d.PreviousRecordID, last))
+	if _, ok := stepPair(pairState(ledger.Assignment, d.FindingID, d.TaskID, last != ""), event); !ok {
+		if dup == reviewdisposition.DupConflict {
+			return ledger, false, reviewError("immutable author record")
+		}
 		return ledger, false, reviewError("disposition predecessor CAS conflict")
+	}
+	if dup == reviewdisposition.DupSame {
+		return ledger, false, nil
 	}
 	d.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	ledger.Records = append(ledger.Records, *d)
@@ -435,18 +482,27 @@ func withdrawReviewFinding(tx *Transaction, run ReviewRun, d ReviewDisposition, 
 	return tx.PutGroup(reviewControlGroup, ledgerName(d.RunID), reviewJSON(ledger))
 }
 
+// requireWithdrawalBinding has the disposition kernel judge the three facts of a
+// withdrawal in order: the record carries one, the member is excluded, and the
+// withdrawal names its exclusion. The probe holds every other fact.
 func requireWithdrawalBinding(tx *Transaction, d ReviewDisposition) error {
-	if d.Withdrawal == nil {
+	allows := func(declared, excluded, named bool) bool {
+		_, ok := stepPair(reviewdisposition.State{Assigned: true}, reviewdisposition.Withdraw{Dup: reviewdisposition.DupNone,
+			Ref: reviewdisposition.RefEmpty, Expect: true, Declared: declared, Excluded: excluded, Named: named, Ledger: true,
+			Available: true, Shape: true, AuthorOk: true, FieldsOk: true, Bound: true, EvidenceOk: true, WaiverOk: true})
+		return ok
+	}
+	if !allows(d.Withdrawal != nil, true, true) {
 		return reviewError("withdrawn requires withdrawal.exclusion_id and withdrawal.decision")
 	}
 	e, excluded, err := readMemberExclusion(tx, d.TaskID)
 	if err != nil {
 		return err
 	}
-	if !excluded {
+	if !allows(true, excluded, true) {
 		return reviewError("withdrawn is only for an excluded member: " + d.TaskID)
 	}
-	if e.ExclusionID != d.Withdrawal.ExclusionID {
+	if !allows(true, true, e.ExclusionID == d.Withdrawal.ExclusionID) {
 		return reviewError("withdrawal must name the exclusion of " + d.TaskID + ": " + e.ExclusionID)
 	}
 	return nil
@@ -519,10 +575,16 @@ func readDispositionLedger(tx *Transaction, run ReviewRun, complete bool) (dispo
 	}
 	latest, seen := map[string]string{}, map[string]bool{}
 	for _, d := range l.Records {
+		chain := latest[dispositionKey(d)] != ""
 		if err = validateDisposition(d, run, items[d.FindingID], l.Assignment); err != nil {
 			return l, err
 		}
-		if seen[d.RecordID] || latest[dispositionKey(d)] != d.PreviousRecordID {
+		dup := reviewdisposition.DupNone
+		if seen[d.RecordID] {
+			dup = reviewdisposition.DupConflict
+		}
+		event := recordEvent(d, mustFix(items[d.FindingID].Tier), securityReviewRole(run.Role), dup, chainRef(d.PreviousRecordID, latest[dispositionKey(d)]))
+		if _, ok := stepPair(pairState(l.Assignment, d.FindingID, d.TaskID, chain), event); !ok {
 			return l, reviewError("author record lineage")
 		}
 		seen[d.RecordID] = true
