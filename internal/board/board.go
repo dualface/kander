@@ -99,6 +99,9 @@ type Problem struct {
 	Path         string
 	Message      string
 	RelatedPaths []string
+	// Key, when set, identifies a problem that the checks report once for each
+	// card they check although it concerns one batch; an import reports it once.
+	Key string
 }
 
 // TaskDependencies holds the prerequisites of one card and the expansion of its task groups.

@@ -40,7 +40,15 @@ func CheckBoardForImportProblems(root string) (ImportCheck, error) {
 
 func classifyImportProblems(board Board, problems []Problem) ImportCheck {
 	var check ImportCheck
+	seen := map[string]struct{}{}
 	for _, problem := range problems {
+		if problem.Key != "" {
+			// A batch problem reached through several cards is one problem.
+			if _, again := seen[problem.Key]; again {
+				continue
+			}
+			seen[problem.Key] = struct{}{}
+		}
 		if ids, ok := closedProblemTasks(board, problem); ok {
 			check.Warnings = append(check.Warnings, ImportFinding{TaskIDs: ids, Message: problem.Message})
 			continue

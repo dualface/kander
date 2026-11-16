@@ -25,7 +25,7 @@ func CheckReviewEvidence(root string, ids []string) (problems []Problem, err err
 	sort.Strings(ids)
 	var active *Transaction
 	add := func(id string, e error) {
-		problems = append(problems, Problem{Path: id, Message: id + ": " + e.Error(), RelatedPaths: batchTaskIDs(active, e)})
+		problems = append(problems, reviewProblem(active, id, id+": "+e.Error(), e))
 	}
 	receiverRuns := map[string]ReviewRun{}
 	err = WithTransaction(root, reviewScope(ids, true), func(tx *Transaction) error {

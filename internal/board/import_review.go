@@ -1,6 +1,9 @@
 package board
 
-import "errors"
+import (
+	"errors"
+	"slices"
+)
 
 // batchError ties a review evidence error to the batch it concerns, so a check
 // can name the cards of that batch and not only the card it was checking.
@@ -11,36 +14,45 @@ type batchError struct {
 
 func (e *batchError) Unwrap() error { return e.error }
 
-// batchTaskIDs returns the cards of the batch err concerns, or nil when err
-// concerns no batch or the batch cannot be read.
-func batchTaskIDs(tx *Transaction, err error) []string {
+// reviewProblem is the check problem of card id for err. An error that
+// concerns a batch belongs to the cards of that batch alone, however many cards
+// of the plan the check reached it from. A batch whose cards cannot be read
+// stays with the card checked.
+func reviewProblem(tx *Transaction, id, message string, err error) Problem {
+	problem := Problem{Path: id, Message: message}
 	var concerned *batchError
 	if tx == nil || !errors.As(err, &concerned) {
-		return nil
+		return problem
 	}
 	var batch ReviewBatch
-	if ok, e := readReviewJSON(tx, reviewBatchName(concerned.BatchID), &batch); e != nil || !ok {
-		return nil
+	if ok, e := readReviewJSON(tx, reviewBatchName(concerned.BatchID), &batch); e != nil || !ok || len(batch.TaskIDs) == 0 {
+		return problem
 	}
-	return batch.TaskIDs
+	members := slices.Sorted(slices.Values(batch.TaskIDs))
+	problem.Path, problem.RelatedPaths, problem.Key = members[0], members[1:], err.Error()
+	return problem
 }
 
 func checkImportReviewGate(root string, ids []string) (problems []Problem) {
 	for _, id := range ids {
-		var related []string
+		var problem *Problem
 		scope, err := reviewGateScope(root, id, false)
 		if err == nil {
 			scope.ReadOnly = true
 			err = WithTransaction(root, scope, func(tx *Transaction) error {
 				_, err := validateTaskReviewMode(tx, id, false, true)
 				if err != nil {
-					related = batchTaskIDs(tx, err)
+					found := reviewProblem(tx, id, err.Error(), err)
+					problem = &found
 				}
 				return err
 			})
 		}
 		if err != nil {
-			problems = append(problems, Problem{Path: id, Message: err.Error(), RelatedPaths: related})
+			if problem == nil {
+				problem = &Problem{Path: id, Message: err.Error()}
+			}
+			problems = append(problems, *problem)
 		}
 	}
 	return problems
