@@ -154,8 +154,8 @@ func stageDispatchMove(tx *Transaction, s Snapshot, target string, o MoveOptions
 // Explicit lifecycle decisions remain available for bound cards. They cancel
 // an unfinished grant in the same transaction, never authorize further work. A
 // completed binding has nothing left to cancel: it is settled instead, which
-// also empties the authorization. The kernel decides the cancellation; the
-// settlement is not modeled yet.
+// also empties the authorization. The kernel decides both: the cancellation, and
+// the settlement as the event of a completed round.
 func stageDispatchTermination(tx *Transaction, s Snapshot, o MoveOptions) (settled bool, err error) {
 	current := authFrom(s.Text)
 	if current.DispatchID == "" {
@@ -179,10 +179,14 @@ func stageDispatchTermination(tx *Transaction, s Snapshot, o MoveOptions) (settl
 	if !v.allows(open, cancel(cycleErr == nil)) {
 		return false, cycleErr
 	}
-	if d.State == DispatchCompleted {
+	v = projectDispatch(s, &d)
+	if v.state.Phase == dispatchkernel.PhaseCompleted {
+		c := cancel(true)
+		if _, ok := v.next(dispatchkernel.TerminateSettle{Reasoned: c.Reasoned, AuthOk: c.AuthOk, Cycle: true}); !ok {
+			return false, dispatchError(current.DispatchID)
+		}
 		return true, stageDispatchSettlement(tx, s, d, o.Decision)
 	}
-	v = projectDispatch(s, &d)
 	next, ok := v.next(cancel(true))
 	if !ok {
 		return false, dispatchError(current.DispatchID)

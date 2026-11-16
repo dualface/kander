@@ -31,6 +31,8 @@ import (
 //     the shell's. A reauthorization clears both.
 //   - A released round leaves no trace on the card: a card without binding projects
 //     to the empty state unless the entrance holds the released record.
+//   - Grant and Settled are the record's: a wrap-up authority was issued, and the
+//     binding was settled. They are set only when the entrance holds the record.
 
 var kernelDispatchPhases = map[DispatchState]dispatchkernel.Phase{
 	DispatchPrepared: dispatchkernel.PhasePrepared, DispatchUnknown: dispatchkernel.PhaseUnknown,
@@ -95,6 +97,8 @@ func projectDispatchBase(s Snapshot, d *Dispatch, base *uint64) *dispatchView {
 		v.state.Phase, v.state.Kind = kernelDispatchPhases[d.State], kernelDispatchKinds[d.Input.Kind]
 		v.state.Released = d.Release != nil
 		v.state.AcceptedReceipt, v.state.CompletedReceipt = d.Accepted != nil, d.Completed != nil
+		v.state.Grant = d.WrapUpAuthority != nil
+		v.state.Settled = d.Settlement != nil
 	}
 	v.base = counterBase(v.epoch)
 	if base != nil {

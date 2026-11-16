@@ -383,16 +383,20 @@ func BeginDispatchAttemptWithTransaction(root, task, id string, expected uint64,
 		if e != nil {
 			return e
 		}
-		if d.WrapUpAuthority != nil {
-			return dispatchEvidenceError("wrap-up-only grant cannot launch or deliver")
-		}
-		if e = refuseBlockedWrapUp(tx, d.Input); e != nil {
-			return e
-		}
 		v := projectDispatch(s, &d)
 		round, epoch := v.pair(d.Authorization)
 		attempt := func(cas, cycle, before bool) dispatchkernel.Attempt {
 			return dispatchkernel.Attempt{AuthRound: round, AuthEpoch: epoch, Cas: cas, Cycle: cycle, Evidence: true, Before: before}
+		}
+		// A wrap-up grant never launches or delivers: the first check, before the
+		// coordinator and the cycle. The probe holds the grant and no other refusal.
+		granted := v.permissive(d.Authorization, dispatchkernel.PhasePrepared, v.state.Kind)
+		granted.Grant = v.state.Grant
+		if !v.allows(granted, attempt(true, true, true)) {
+			return dispatchEvidenceError("wrap-up-only grant cannot launch or deliver")
+		}
+		if e = refuseBlockedWrapUp(tx, d.Input); e != nil {
+			return e
 		}
 		cycleErr := requireDispatchCycle(d, s)
 		if !v.allows(v.permissive(d.Authorization, dispatchkernel.PhasePrepared, v.state.Kind), attempt(true, cycleErr == nil, true)) {
@@ -430,15 +434,14 @@ func ReauthorizeDispatchWithTransaction(root, task, id string, expected uint64, 
 		if e != nil {
 			return e
 		}
-		if d.WrapUpAuthority != nil {
-			return dispatchError(id)
-		}
 		v := projectDispatch(s, &d)
 		round, epoch := v.pair(d.Authorization)
 		reauthorize := func(cycle, fresh, before bool) dispatchkernel.Reauthorize {
 			return dispatchkernel.Reauthorize{AuthRound: round, AuthEpoch: epoch, Cas: d.Revision == expected,
 				Room: d.Authorization.Epoch != ^uint64(0), Cycle: cycle, Fresh: fresh, Before: before}
 		}
+		// The first check holds the grant too: a wrap-up grant is never upgraded to
+		// full execution, and it returns the same error as the other refusals.
 		if !v.allows(v.state, reauthorize(true, true, true)) {
 			return dispatchError(id)
 		}

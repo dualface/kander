@@ -3,6 +3,8 @@ package board
 import (
 	"reflect"
 	"time"
+
+	dispatchkernel "github.com/dualface/kander/internal/statemachine/dispatch"
 )
 
 // DispatchSettlement ends a completed binding. The dispatch stays completed and
@@ -16,7 +18,9 @@ type DispatchSettlement struct {
 }
 
 // SettleDispatch gives a completed binding of the current cycle a direct exit.
-// Without it the only way out was to prepare another dispatch and end it.
+// Without it the only way out was to prepare another dispatch and end it. The
+// kernel decides: the revision, the binding, the completed phase, no earlier
+// settlement, and the column, then the cycle.
 func SettleDispatchWithTransaction(root, task, id string, expected uint64, extensions ...TransactionExtension) error {
 	return WithTransaction(root, LockScope{Tasks: []string{task}}, func(tx *Transaction) error {
 		d, err := readDispatch(tx, task, id)
@@ -27,11 +31,16 @@ func SettleDispatchWithTransaction(root, task, id string, expected uint64, exten
 		if err != nil {
 			return err
 		}
-		if d.Revision != expected || authFrom(s.Text) != d.Authorization || d.State != DispatchCompleted || d.Settlement != nil || s.Entry.State != "working" && s.Entry.State != "review" {
+		v := projectDispatch(s, &d)
+		round, epoch := v.pair(d.Authorization)
+		settle := dispatchkernel.Settle{AuthRound: round, AuthEpoch: epoch, Cas: d.Revision == expected, Col: kernelDispatchCol(s.Entry.State), Cycle: true}
+		if !v.allows(v.state, settle) {
 			return dispatchError(id)
 		}
-		if err = requireDispatchCycle(d, s); err != nil {
-			return err
+		cycleErr := requireDispatchCycle(d, s)
+		settle.Cycle = cycleErr == nil
+		if _, ok := v.next(settle); !ok {
+			return cycleErr
 		}
 		if err = stageDispatchSettlement(tx, s, d, ""); err != nil {
 			return err

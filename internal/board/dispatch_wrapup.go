@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	dispatchkernel "github.com/dualface/kander/internal/statemachine/dispatch"
 )
 
 // DispatchIntegration is produced by the Git-aware launch layer. Board verifies
@@ -135,29 +137,45 @@ func AuthorizeDispatchWrapUpWithTransaction(root, task, id string, expected uint
 		if e != nil {
 			return e
 		}
-		if d.Input.Kind != "wrap-up" || d.Revision != expected || d.Authorization != authFrom(s.Text) || d.State == DispatchCompleted || d.State == DispatchFailed || d.State == DispatchCancelled || d.WrapUpAuthority != nil || d.Authorization.Epoch == ^uint64(0) || (s.Entry.State != "review" && s.Entry.State != "working") || strings.TrimSpace(author) == "" || strings.TrimSpace(reason) == "" {
+		// The kernel decides the grant. The checks run in the order they have always
+		// run, each probe holding one group of facts with the others true: the
+		// conflict facts, the coordinator and the cycle, the exit, then the evidence.
+		v := projectDispatch(s, &d)
+		round, epoch := v.pair(d.Authorization)
+		authorize := dispatchkernel.AuthorizeWrapUp{AuthRound: round, AuthEpoch: epoch, Cas: d.Revision == expected,
+			Room: d.Authorization.Epoch != ^uint64(0), Col: kernelDispatchCol(s.Entry.State),
+			Named: strings.TrimSpace(author) != "" && strings.TrimSpace(reason) != "", Cycle: true,
+			Outcome: dispatchkernel.ExitStopped, Decided: true, Fresh: true, Evidence: true}
+		if !v.allows(v.state, authorize) {
 			return dispatchEvidenceError("wrap-up authority conflict: " + t("board.wrap_up_grant_hint"))
 		}
 		if e = refuseBlockedWrapUp(tx, d.Input); e != nil {
 			return e
 		}
-		if e = requireDispatchCycle(d, s); e != nil {
-			return e
+		cycleErr := requireDispatchCycle(d, s)
+		authorize.Cycle = cycleErr == nil
+		if !v.allows(v.state, authorize) {
+			return cycleErr
 		}
-		if (exit.Outcome != "stopped" && exit.Outcome != "reclaimed") || exit.Outcome == "reclaimed" && strings.TrimSpace(exit.Decision) == "" || !validDispatchExit(s, exit, time.Now()) {
+		authorize.Outcome, authorize.Decided = kernelExitOutcome(exit), strings.TrimSpace(exit.Decision) != ""
+		authorize.Fresh = validDispatchExit(s, exit, time.Now())
+		if !v.allows(v.state, authorize) {
 			return dispatchEvidenceError("fresh confirmed exit required")
 		}
-		if e = validateDispatchEvidence(tx, d.Input, false); e != nil {
-			return e
+		evidenceErr := validateDispatchEvidence(tx, d.Input, false)
+		authorize.Evidence = evidenceErr == nil
+		next, ok := v.next(authorize)
+		if !ok {
+			return evidenceErr
 		}
 		if e = tx.Put(task, dispatchPath(id, "execution-"+strconv.FormatUint(d.Authorization.Epoch, 10)), reviewJSON(d)); e != nil {
 			return e
 		}
 		now := time.Now().UTC()
-		grant := WrapUpAuthority{Epoch: d.Authorization.Epoch + 1, Previous: d.Authorization, Author: author, Reason: reason, Exit: exit, IssuedAt: now, ConfirmBy: now.Add(120 * time.Second)}
-		d.Authorization.Epoch++
+		grant := WrapUpAuthority{Epoch: v.real(next.Epoch), Previous: d.Authorization, Author: author, Reason: reason, Exit: exit, IssuedAt: now, ConfirmBy: now.Add(120 * time.Second)}
+		d.Authorization.Epoch = grant.Epoch
 		d.Revision++
-		d.State = DispatchPrepared
+		d.State = dispatchStates[next.Phase]
 		d.Accepted, d.Completed = nil, nil
 		d.Attempts = 0
 		d.WrapUpAuthority = &grant
@@ -203,51 +221,77 @@ func validateWrapUpAuthority(tx *Transaction, d Dispatch) error {
 	return nil
 }
 
+// kernelExitOutcome maps the outcome of an exit observation to the kernel's.
+func kernelExitOutcome(exit WrapUpExitEvidence) dispatchkernel.Exit {
+	switch exit.Outcome {
+	case "stopped":
+		return dispatchkernel.ExitStopped
+	case "reclaimed":
+		return dispatchkernel.ExitReclaimed
+	}
+	return dispatchkernel.ExitOther
+}
+
+// requireFullExecution refuses a write that needs full execution (a start
+// rollback, an execution identity write, an author conclusion) while the card's
+// binding names a round that holds a wrap-up grant. The kernel decides; a card
+// without binding has no record to read.
 func (tx *Transaction) requireFullExecution(s Snapshot) error {
-	a := authFrom(s.Text)
-	if a.DispatchID == "" {
-		return nil
+	v := projectDispatch(s, nil)
+	if v.state.Bound {
+		d, err := readDispatch(tx, s.Entry.TaskID, v.binding.DispatchID)
+		if err != nil {
+			return err
+		}
+		v = projectDispatch(s, &d)
 	}
-	d, err := readDispatch(tx, s.Entry.TaskID, a.DispatchID)
-	if err != nil {
-		return err
-	}
-	if d.WrapUpAuthority != nil {
+	if _, ok := v.next(dispatchkernel.Full{}); !ok {
 		return dispatchEvidenceError("wrap-up-only authority cannot modify code, runtime identity or author conclusions")
 	}
 	return nil
 }
 
+// validateWrapUpUpdate limits a document write under a wrap-up grant to records:
+// no contract decision, and an append to spec.md or the dedicated record path.
+// The kernel decides; the facts it takes are computed in the order the checks
+// have always run, each probe holding one fact with the others true, and the
+// content of the record path is read only when the kernel needs it.
 func (tx *Transaction) validateWrapUpUpdate(s Snapshot, o UpdateOptions) error {
-	a := authFrom(s.Text)
-	if a.DispatchID == "" {
-		return nil
+	v := projectDispatch(s, nil)
+	if v.state.Bound {
+		d, err := readDispatch(tx, s.Entry.TaskID, v.binding.DispatchID)
+		if err != nil {
+			return err
+		}
+		v = projectDispatch(s, &d)
 	}
-	d, err := readDispatch(tx, s.Entry.TaskID, a.DispatchID)
-	if err != nil || d.WrapUpAuthority == nil {
-		return err
-	}
-	if o.ContractDecision != "" {
+	write := dispatchkernel.WrapUpWrite{Contract: o.ContractDecision != "", Spec: o.Document == "spec.md", Appends: true, Path: true, Same: true}
+	if !v.allows(v.state, write) {
 		return dispatchEvidenceError("wrap-up cannot change contract")
 	}
+	write.Contract = false
 	// Dedicated append-only records keep predecessor text and authorship intact.
-	if o.Document == "spec.md" {
-		prefix := strings.TrimRight(s.Text, "\n") + "\n\n## WRAP_UP_RECORDS\n\n"
-		if !strings.HasPrefix(o.Text, prefix) || strings.TrimSpace(strings.TrimPrefix(o.Text, prefix)) == "" {
-			return dispatchEvidenceError("wrap-up spec update must append WRAP_UP_RECORDS: " + t("board.wrap_up_grant_hint"))
-		}
-		return nil
+	prefix := strings.TrimRight(s.Text, "\n") + "\n\n## WRAP_UP_RECORDS\n\n"
+	write.Appends = strings.HasPrefix(o.Text, prefix) && strings.TrimSpace(strings.TrimPrefix(o.Text, prefix)) != ""
+	if !v.allows(v.state, write) {
+		return dispatchEvidenceError("wrap-up spec update must append WRAP_UP_RECORDS: " + t("board.wrap_up_grant_hint"))
 	}
-	if o.Document != "wrap-up/"+d.Input.ID+"-"+strconv.FormatUint(a.Epoch, 10)+".md" {
+	write.Path = o.Document == "wrap-up/"+v.binding.DispatchID+"-"+strconv.FormatUint(v.binding.Epoch, 10)+".md"
+	if !v.allows(v.state, write) {
 		return dispatchEvidenceError("wrap-up-only record path required: " + t("board.wrap_up_grant_hint"))
+	}
+	write.Same = false
+	if v.allows(v.state, write) {
+		return nil
 	}
 	// Do not overwrite a prior record even within the same authorization.
 	raw, err := tx.Read(s.Entry.TaskID, o.Document)
-	if err == nil && raw != o.Text {
-		return dispatchEvidenceError("immutable wrap-up record")
-	}
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
+	}
+	write.Same = err != nil || raw == o.Text
+	if !v.allows(v.state, write) {
+		return dispatchEvidenceError("immutable wrap-up record")
 	}
 	return nil
 }

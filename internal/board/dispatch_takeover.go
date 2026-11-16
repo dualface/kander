@@ -50,7 +50,8 @@ func stageTakeoverDispatch(tx *Transaction, s Snapshot, context *DispatchTakeove
 		}
 		return s.Text, false, nil
 	case "settle-completed":
-		if dispatch.State != DispatchCompleted || dispatch.Settlement != nil {
+		settle := dispatchkernel.TakeoverSettle{AuthRound: round, AuthEpoch: epoch, Decided: strings.TrimSpace(decision) != "", Rev: true, Rec: true, Cycle: true}
+		if _, ok := projectDispatch(s, &dispatch).next(settle); !ok {
 			return "", false, dispatchError(dispatch.Input.ID)
 		}
 		if err := stageDispatchSettlement(tx, s, dispatch, decision); err != nil {
