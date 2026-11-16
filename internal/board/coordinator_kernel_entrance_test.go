@@ -552,3 +552,34 @@ func TestWrapUpWitnessIsImmutable(t *testing.T) {
 		t.Fatal("an invalid record passed")
 	}
 }
+
+// Theorem 3: a member blocked by one observation is accepted again by the next
+// correct one, and the kernel's acceptance clears the block.
+func TestCoordinatorAcceptedReconcileClearsTheBlock(t *testing.T) {
+	root := tempBoard(t)
+	id := recoveryMember(t, root, "clears")
+	other := recoveryMember(t, root, "clears-other")
+	c := coordinatorReconcile(t, root, coordinatorClaim(t, root, id, other))
+	r := coordinatorRequest(t, root, c)
+	o := r.Members[id]
+	o.DispatchID, o.Epoch = "stale-round", 1
+	r.Members[id] = o
+	blocked, err := ReconcileCoordinator(context.Background(), root, r, nil)
+	if err != nil || !mirrorState(blocked.Members[id]).Blocked || groupState(blocked).Blocked != 1 {
+		t.Fatalf("%+v %v", blocked.Members[id], err)
+	}
+	next := coordinatorReconcile(t, root, blocked)
+	k := newMirrorKernel(blocked.Members[id])
+	step, ok := k.accept(transactionSnapshot(t, root, id), blocked.Members[id], next.Members[id])
+	if !ok || step.Blocked || step != mirrorState(next.Members[id]) || groupState(next).Blocked != 0 {
+		t.Fatalf("%+v %v", step, ok)
+	}
+	// The mirror the block kept is the mirror before it, whatever the member did.
+	if kept := blocked.Members[id]; kept.Blocked == nil || mirrorState(kept) != func() coordmember.State {
+		s := mirrorState(c.Members[id])
+		s.Blocked = true
+		return s
+	}() {
+		t.Fatalf("a block moved the mirror: %+v", kept)
+	}
+}
