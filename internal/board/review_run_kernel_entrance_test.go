@@ -116,6 +116,15 @@ func TestReviewRunEntrancesRefineKernel(t *testing.T) {
 	refineRun(t, root, "kernel-run", ids, allMembers(ids, reviewrun.StorePrompt{Same: false}), store("prompt"))
 	refineRun(t, root, "kernel-run", ids, allMembers(ids, reviewrun.StorePrompt{Same: true}), store("prompt"))
 	refuseRun(t, root, "kernel-run", ids, reviewrun.StorePrompt{Same: false}, store("other"))
+	storeNamed := func(name, data string) func() error {
+		return func() error { return StoreReviewArtifact(root, "kernel-run", name, []byte(data)) }
+	}
+	refineRun(t, root, "kernel-run", ids, allMembers(ids, reviewrun.StoreContract{Same: false}), storeNamed("review-contract.md", "contract"))
+	refineRun(t, root, "kernel-run", ids, allMembers(ids, reviewrun.StoreContract{Same: true}), storeNamed("review-contract.md", "contract"))
+	refuseRun(t, root, "kernel-run", ids, reviewrun.StoreContract{Same: false}, storeNamed("review-contract.md", "other"))
+	refineRun(t, root, "kernel-run", ids, allMembers(ids, reviewrun.StoreEvidence{Same: false}), storeNamed("evidence.txt", "evidence"))
+	refineRun(t, root, "kernel-run", ids, allMembers(ids, reviewrun.StoreEvidence{Same: true}), storeNamed("evidence.txt", "evidence"))
+	refuseRun(t, root, "kernel-run", ids, reviewrun.StoreEvidence{Same: false}, storeNamed("evidence.txt", "other"))
 
 	// The phase updates of the driver, and a roll back to prepared.
 	update := func(phase, launch string) func() error {
@@ -263,11 +272,81 @@ func TestReviewRunPublicationRefinesKernel(t *testing.T) {
 	}
 }
 
-// UpdateReviewRun replaces the run with the one the caller presents, including
-// its Published map: the kernel models only the fields the entrance advances, and
-// no production caller changes the others. This test pins the known difference
-// recorded in docs/formal-verification.md (M6).
-func TestUpdateReviewRunReplacesPublicationFields(t *testing.T) {
+// The atomic publication is the first publication of a finalized run: every
+// member stages, or skips when it left, in one transaction, and a refused
+// atomic publication writes nothing.
+func TestReviewRunAtomicPublicationRefinesKernel(t *testing.T) {
+	root := tempBoard(t)
+	ids := []string{gateCard(t, root, "atomic-kernel-stays"), gateCard(t, root, "atomic-kernel-leaves")}
+	gatePlan(t, root, ids, archiveRequirements())
+	if _, _, err := PrepareReviewRun(root, archiveInput(ids, "atomic-kernel", "PMQA"), nil, nil, archiveOriginals(), "test"); err != nil {
+		t.Fatal(err)
+	}
+	run, err := ReadReviewRun(root, "atomic-kernel")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run.LaunchStatus, run.ExecutionStatus = "started", "ok"
+	if _, err = FinalizeReviewRun(root, run, structuredReport(emptyFindings())); err != nil {
+		t.Fatal(err)
+	}
+	deadEndExit(t, root, ids[1], "archived")
+	events := map[string]reviewrun.Event{
+		ids[0]: reviewrun.Stage{SameInput: true, GroupOk: true, MemberOk: true, Integrity: true},
+		ids[1]: reviewrun.Skip{SameInput: true, GroupOk: true, Excluded: true},
+	}
+	refineRun(t, root, "atomic-kernel", ids, events, func() error {
+		_, err := PublishReviewRunAtomic(root, "atomic-kernel")
+		return err
+	})
+	if err = ReviewPublicationComplete(root, "atomic-kernel"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The uploaded finalization of a service run shares the transaction of the
+// finalization, so it refines the same event; a second one is refused. The
+// originals of a run are readable only once it is finalized.
+func TestFinalizeUploadedReviewAndOriginalsRefineKernel(t *testing.T) {
+	root := tempBoard(t)
+	ids := []string{gateCard(t, root, "upload-kernel")}
+	gatePlan(t, root, ids, archiveRequirements())
+	if _, _, err := PrepareReviewRun(root, archiveInput(ids, "upload-kernel", "PMQA"), nil, nil, archiveOriginals(), "test"); err != nil {
+		t.Fatal(err)
+	}
+	read := func() error { _, err := ReadReviewOriginal(root, "upload-kernel", "report.md"); return err }
+	if err := read(); err == nil {
+		t.Fatal("an original of a run that is not finalized was read")
+	}
+	if reviewrun.Final(runStates(t, root, "upload-kernel", ids)[ids[0]], reviewrun.Params{}) {
+		t.Fatal("the kernel reads the originals of a run that is not finalized")
+	}
+	files := map[string][]byte{"output.raw": []byte("raw"), "stdout.log": []byte("out"), "error.log": []byte("err")}
+	upload := func() error {
+		run, err := ReadReviewRun(root, "upload-kernel")
+		if err != nil {
+			return err
+		}
+		run.LaunchStatus, run.ExecutionStatus = "started", "ok"
+		_, err = FinalizeUploadedReview(root, run, []byte("PASS\n"), files)
+		return err
+	}
+	refineRun(t, root, "upload-kernel", ids, allMembers(ids, okFinalize()), upload)
+	refuseRun(t, root, "upload-kernel", ids, okFinalize(), upload)
+	if err := read(); err != nil {
+		t.Fatal(err)
+	}
+	if !reviewrun.Final(runStates(t, root, "upload-kernel", ids)[ids[0]], reviewrun.Params{}) {
+		t.Fatal("the kernel refuses to read the originals of a finalized run")
+	}
+}
+
+// UpdateReviewRun and FinalizeReviewRun replace the run with the one the caller
+// presents, including its Published and SkippedMembers: the kernel models only
+// the fields the entrances advance, and no production caller changes the others.
+// This test pins the known difference recorded in docs/formal-verification.md
+// (M6).
+func TestReviewRunEntrancesReplacePublicationFields(t *testing.T) {
 	root := tempBoard(t)
 	ids := []string{gateCard(t, root, "run-kernel-forged")}
 	gatePlan(t, root, ids, archiveRequirements())
@@ -276,11 +355,26 @@ func TestUpdateReviewRunReplacesPublicationFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	run.Published = map[string]bool{ids[0]: true}
+	run.SkippedMembers = []string{ids[0]}
 	if err = UpdateReviewRun(root, run); err != nil {
 		t.Fatal(err)
 	}
 	got, err := ReadReviewRun(root, "forged-run")
-	if err != nil || got.Phase != "prepared" || !got.Published[ids[0]] {
+	if err != nil || got.Phase != "prepared" || !got.Published[ids[0]] || len(got.SkippedMembers) != 1 {
+		t.Fatalf("%+v %v", got, err)
+	}
+	// A finalization stores the publication fields it is given too.
+	run.Published, run.SkippedMembers = map[string]bool{}, nil
+	if err = UpdateReviewRun(root, run); err != nil {
+		t.Fatal(err)
+	}
+	run.LaunchStatus, run.ExecutionStatus = "started", "ok"
+	run.Published, run.SkippedMembers = map[string]bool{ids[0]: true}, []string{ids[0]}
+	if run, err = FinalizeReviewRun(root, run, []byte("PASS\n")); err != nil {
+		t.Fatal(err)
+	}
+	got, err = ReadReviewRun(root, "forged-run")
+	if err != nil || got.Phase != "finalized" || !got.Published[ids[0]] || len(got.SkippedMembers) != 1 {
 		t.Fatalf("%+v %v", got, err)
 	}
 }

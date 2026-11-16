@@ -87,7 +87,9 @@ def finalizing (l e : Nat) (zero reason : Bool) : Event :=
 
 /-- The call sequences `archiveExecution` makes on a run: the normal sequence
 (prepared, launching, running, finalize), a launch failure, which finalizes from
-`launching` with the launch status reset to not started, and the recovery of an
+`launching` with the launch status reset to not started, a failure before the
+launch (the private runtime directory cannot be created, or the reviewer cannot be
+prepared), which finalizes from `prepared` as not started, and the recovery of an
 unfinished run, which finalizes it as interrupted from `prepared`, `launching`,
 and `running`. The sequences end with an `ok` finalization, a failure, a launch
 failure, and an interruption. -/
@@ -95,6 +97,7 @@ def archiveSequences : List (List Event) := [
   [prepared, launching, running, finalizing 2 1 true false],
   [prepared, launching, running, finalizing 2 3 false true],
   [prepared, launching, finalizing 0 2 false true],
+  [prepared, finalizing 0 2 false true],
   [prepared, finalizing 0 4 false true],
   [prepared, launching, finalizing 1 4 false true],
   [prepared, launching, running, finalizing 2 4 false true],
@@ -106,7 +109,7 @@ theorem archive_sequences_accepted (p : Params) :
     ∀ seq ∈ archiveSequences, (runSeq p (initial M p) seq).isSome = true := by
   intro seq hseq
   simp only [archiveSequences, List.mem_cons, List.not_mem_nil, or_false] at hseq
-  rcases hseq with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rfl
+  rcases hseq with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rfl
 
 /-! ## Theorem 2: an accepted `ok` finalization has its facts -/
 
