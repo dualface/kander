@@ -5,6 +5,8 @@ import KanderFormal.Proofs.CardLifecycle
 import KanderFormal.Proofs.ExecutionLedger
 import KanderFormal.Proofs.ServerClaim
 import KanderFormal.Proofs.ServerGroupLease
+import KanderFormal.Proofs.ServerRequestProposal
+import KanderFormal.Proofs.ServerDelivery
 import KanderFormal.Proofs.Dispatch
 import KanderFormal.Proofs.DispatchForms
 import KanderFormal.Proofs.DispatchSafety
@@ -195,6 +197,53 @@ def groupLeaseEvents : List Event :=
     ⟨"recoverOwned", h true 1 1 ++ [t, t, x, t, x]⟩,
     ⟨"recoverLost", h true 1 1 ++ [t, t, t]⟩, ⟨"recoverLost", h true 1 1 ++ [x, t, t]⟩,
     ⟨"expire", []⟩ ]
+
+/-- The server request vector alphabet. Holder requests are `(holder, cgen, answer, expected, sameNote, window,
+card)` for the claim generations 1 and 2; the answers are `accepted`, `done`, `rejected`, and the two statuses that are
+no answers (`open`, `superseded`). Creations try a plain request and a proposal at the first generations and
+revisions, a proposal flag that disagrees with its revision, and every missing claim fact. -/
+def requestEvents : List Event :=
+  let t := boolV true
+  let x := boolV false
+  let n := natV
+  let answers : List (List Val) :=
+    [ [t, n 1, enumV 2, n 0, t, t, n 1], [t, n 1, enumV 2, n 0, x, t, n 1], [t, n 1, enumV 3, n 0, t, t, n 1],
+      [t, n 1, enumV 3, n 0, x, t, n 1], [t, n 1, enumV 4, n 0, t, t, n 1], [t, n 1, enumV 4, n 0, x, t, n 1],
+      [t, n 1, enumV 2, n 0, t, x, n 1], [t, n 1, enumV 2, n 0, t, t, n 2], [x, n 1, enumV 2, n 0, t, t, n 1],
+      [t, n 2, enumV 2, n 0, t, t, n 1], [t, n 1, enumV 2, n 1, t, t, n 1], [t, n 1, enumV 2, n 2, t, t, n 1],
+      [t, n 1, enumV 1, n 0, t, t, n 1], [t, n 1, enumV 5, n 0, t, t, n 1] ]
+  [ ⟨"bind", [t, n 1, n 1]⟩, ⟨"bind", [x, n 1, n 1]⟩, ⟨"bind", [t, n 0, n 1]⟩, ⟨"bind", [t, n 1, n 2]⟩,
+    ⟨"create", [t, t, t, n 1, n 1, x, n 0]⟩, ⟨"create", [t, t, t, n 1, n 1, t, n 1]⟩,
+    ⟨"create", [t, t, t, n 2, n 2, t, n 2]⟩, ⟨"create", [t, t, t, n 1, n 1, t, n 0]⟩,
+    ⟨"create", [t, t, t, n 1, n 1, x, n 1]⟩, ⟨"create", [x, t, t, n 1, n 1, x, n 0]⟩,
+    ⟨"create", [t, x, t, n 1, n 1, x, n 0]⟩, ⟨"create", [t, t, x, n 1, n 1, x, n 0]⟩,
+    ⟨"create", [t, t, t, n 1, n 2, x, n 0]⟩,
+    ⟨"recreate", [t, t, t, n 1, n 1, n 1, t]⟩, ⟨"recreate", [t, t, t, n 1, n 1, n 2, t]⟩,
+    ⟨"recreate", [t, t, t, n 1, n 1, n 1, x]⟩, ⟨"recreate", [t, t, t, n 2, n 2, n 1, t]⟩,
+    ⟨"recreate", [t, t, t, n 2, n 2, n 2, t]⟩, ⟨"recreate", [x, t, t, n 1, n 1, n 1, t]⟩,
+    ⟨"recreate", [t, t, x, n 1, n 1, n 1, t]⟩, ⟨"recreate", [t, t, t, n 1, n 2, n 1, t]⟩ ] ++
+  answers.map (fun args => ⟨"answerSame", args⟩) ++ answers.map (fun args => ⟨"answer", args⟩) ++
+  [ ⟨"supersede", [n 1]⟩, ⟨"supersede", [n 2]⟩, ⟨"supersede", [n 3]⟩,
+    ⟨"prepare", [t, t, n 1, t, n 1, t]⟩, ⟨"prepare", [x, t, n 1, t, n 1, t]⟩, ⟨"prepare", [t, x, n 1, t, n 1, t]⟩,
+    ⟨"prepare", [t, t, n 2, t, n 1, t]⟩, ⟨"prepare", [t, t, n 1, x, n 1, t]⟩, ⟨"prepare", [t, t, n 1, t, n 2, t]⟩,
+    ⟨"prepare", [t, t, n 1, t, n 1, x]⟩, ⟨"prepare", [t, t, n 2, t, n 2, t]⟩,
+    ⟨"complete", [t, t, t, n 1]⟩, ⟨"complete", [x, t, t, n 1]⟩, ⟨"complete", [t, x, t, n 1]⟩,
+    ⟨"complete", [t, t, x, n 1]⟩, ⟨"complete", [t, t, t, n 2]⟩ ]
+
+/-- The server delivery vector alphabet. Publishes are `(holder, exec, baseline, gen, cgen, rev, card)` for the
+first generations and revisions, with every fact failing in turn; guards are `(holder, exec, cgen, card)`. -/
+def deliveryEvents : List Event :=
+  let t := boolV true
+  let x := boolV false
+  let n := natV
+  [ ⟨"publish", [t, t, x, n 1, n 1, n 1, n 1]⟩, ⟨"publish", [t, t, t, n 1, n 1, n 1, n 1]⟩,
+    ⟨"publish", [t, t, x, n 2, n 2, n 1, n 1]⟩, ⟨"publish", [t, t, x, n 1, n 1, n 2, n 2]⟩,
+    ⟨"publish", [x, t, x, n 1, n 1, n 1, n 1]⟩, ⟨"publish", [t, x, x, n 1, n 1, n 1, n 1]⟩,
+    ⟨"publish", [t, t, x, n 1, n 2, n 1, n 1]⟩, ⟨"publish", [t, t, x, n 1, n 1, n 1, n 2]⟩,
+    ⟨"publish", [t, t, x, n 0, n 0, n 1, n 1]⟩, ⟨"publish", [t, t, x, n 1, n 1, n 0, n 0]⟩,
+    ⟨"other", []⟩,
+    ⟨"guard", [t, t, n 1, n 1]⟩, ⟨"guard", [t, t, n 2, n 1]⟩, ⟨"guard", [t, t, n 1, n 2]⟩,
+    ⟨"guard", [t, t, n 2, n 2]⟩, ⟨"guard", [x, t, n 1, n 1]⟩, ⟨"guard", [t, x, n 1, n 1]⟩ ]
 
 /-- The dispatch vector alphabet. Authorization pairs: `(1, 1)` is the first
 round at its first epoch, `(1, 2)` its reauthorization, `(2, 1)` the next round,
@@ -494,6 +543,80 @@ def entries : List Entry := [
       ``KanderFormal.Proofs.ServerGroupLease.step_inv,
       ``KanderFormal.Proofs.ServerGroupLease.reachable_inv,
       ``KanderFormal.Proofs.ServerGroupLease.reachable_valid_gen
+    ] },
+  { machine := Machines.ServerRequest.serverRequestMachine
+    source := "KanderFormal/Machines/ServerRequest.lean"
+    vectors := { depth := 4, paramSets := [[("maxGen", 2), ("maxRev", 3)]], natDomain := [], events := requestEvents }
+    theorems := [
+      ``KanderFormal.Proofs.ServerRequest.wellTyped,
+      ``KanderFormal.Proofs.ServerRequest.create_spec,
+      ``KanderFormal.Proofs.ServerRequest.create_result,
+      ``KanderFormal.Proofs.ServerRequest.create_refused,
+      ``KanderFormal.Proofs.ServerRequest.bind_spec,
+      ``KanderFormal.Proofs.ServerRequest.bind_refused,
+      ``KanderFormal.Proofs.ServerRequest.flow,
+      ``KanderFormal.Proofs.ServerRequest.settled_frozen,
+      ``KanderFormal.Proofs.ServerRequest.answer_same_spec,
+      ``KanderFormal.Proofs.ServerRequest.answer_same_keeps,
+      ``KanderFormal.Proofs.ServerRequest.answer_same_accepted,
+      ``KanderFormal.Proofs.ServerRequest.answer_spec,
+      ``KanderFormal.Proofs.ServerRequest.answer_result,
+      ``KanderFormal.Proofs.ServerRequest.settled_answer,
+      ``KanderFormal.Proofs.ServerRequest.answer_exclusive,
+      ``KanderFormal.Proofs.ServerRequest.answer_bumps,
+      ``KanderFormal.Proofs.ServerRequest.answer_expected,
+      ``KanderFormal.Proofs.ServerRequest.answer_accept_proposal,
+      ``KanderFormal.Proofs.ServerRequest.answer_holder,
+      ``KanderFormal.Proofs.ServerRequest.superseded_unanswerable,
+      ``KanderFormal.Proofs.ServerRequest.stale_unanswerable,
+      ``KanderFormal.Proofs.ServerRequest.non_holder_unanswerable,
+      ``KanderFormal.Proofs.ServerRequest.supersede_spec,
+      ``KanderFormal.Proofs.ServerRequest.supersede_result,
+      ``KanderFormal.Proofs.ServerRequest.supersede_others,
+      ``KanderFormal.Proofs.ServerRequest.supersede_then_unanswerable,
+      ``KanderFormal.Proofs.ServerRequest.recreate_spec,
+      ``KanderFormal.Proofs.ServerRequest.recreate_keeps,
+      ``KanderFormal.Proofs.ServerRequest.recreate_refused,
+      ``KanderFormal.Proofs.ServerRequest.proposal_immutable,
+      ``KanderFormal.Proofs.ServerRequest.prepare_spec,
+      ``KanderFormal.Proofs.ServerRequest.prepare_result,
+      ``KanderFormal.Proofs.ServerRequest.prepare_bumps_accepted,
+      ``KanderFormal.Proofs.ServerRequest.prepare_binds,
+      ``KanderFormal.Proofs.ServerRequest.prepare_refused,
+      ``KanderFormal.Proofs.ServerRequest.complete_spec,
+      ``KanderFormal.Proofs.ServerRequest.complete_result,
+      ``KanderFormal.Proofs.ServerRequest.complete_refused,
+      ``KanderFormal.Proofs.ServerRequest.init,
+      ``KanderFormal.Proofs.ServerRequest.step_inv,
+      ``KanderFormal.Proofs.ServerRequest.reachable_inv,
+      ``KanderFormal.Proofs.ServerRequest.reachable_revision,
+      ``KanderFormal.Proofs.ServerRequest.reachable_answered,
+      ``KanderFormal.Proofs.ServerRequest.reachable_proposal_bound
+    ] },
+  { machine := Machines.ServerDelivery.serverDeliveryMachine
+    source := "KanderFormal/Machines/ServerDelivery.lean"
+    vectors := { depth := 5, paramSets := [[("maxGen", 2), ("maxRev", 2)]], natDomain := [], events := deliveryEvents }
+    theorems := [
+      ``KanderFormal.Proofs.ServerDelivery.wellTyped,
+      ``KanderFormal.Proofs.ServerDelivery.publish_spec,
+      ``KanderFormal.Proofs.ServerDelivery.publish_result,
+      ``KanderFormal.Proofs.ServerDelivery.publish_refused,
+      ``KanderFormal.Proofs.ServerDelivery.publish_purpose,
+      ``KanderFormal.Proofs.ServerDelivery.keeps_query,
+      ``KanderFormal.Proofs.ServerDelivery.publish_replaces_keeps,
+      ``KanderFormal.Proofs.ServerDelivery.publish_first_keeps_nothing,
+      ``KanderFormal.Proofs.ServerDelivery.publish_latest,
+      ``KanderFormal.Proofs.ServerDelivery.other_spec,
+      ``KanderFormal.Proofs.ServerDelivery.guard_spec,
+      ``KanderFormal.Proofs.ServerDelivery.guard_keeps,
+      ``KanderFormal.Proofs.ServerDelivery.guard_refused,
+      ``KanderFormal.Proofs.ServerDelivery.guard_after_publish,
+      ``KanderFormal.Proofs.ServerDelivery.baseline_never_guards,
+      ``KanderFormal.Proofs.ServerDelivery.init,
+      ``KanderFormal.Proofs.ServerDelivery.step_inv,
+      ``KanderFormal.Proofs.ServerDelivery.reachable_inv,
+      ``KanderFormal.Proofs.ServerDelivery.reachable_bound,
+      ``KanderFormal.Proofs.ServerDelivery.reachable_latest_record
     ] },
   { machine := Machines.Dispatch.dispatchMachine
     source := "KanderFormal/Machines/Dispatch.lean"
