@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.4.2 — 2026-11-16
 
 - herdr-core launcher: every task agent and orchestrator agent now opens in its own new tab of the calling terminal's Herdr App space, instead of a pane in the caller's tab. The tab is named for the task: the card title for `start`, resume takeover and notify recovery (control characters removed, at most 40 characters, longer titles end in `…`), the first `kander orchestrate` argument followed by ` +<number of the other arguments>` for an orchestrator, and the existing window label for chat, issue triage and refinement. Naming goes through the `herdr-app` layout document with a versioned write; when the tab cannot be placed or named (including a Herdr App that is not connected to the core, which costs each launch a bounded wait: the tab is polled for 5 seconds, each `hc` call is capped at 3 seconds and the whole step at 15 seconds), the launch still succeeds and prints a warning. A caller without `herdr.space` places nothing, as before. `kander terminal test herdr-core` run inside an Herdr App terminal also opens a tab for its test terminal.
 - Breaking (herdr-core): the new terminal no longer gets the calling terminal's `herdr.tab` or `where` label. This reverses the `where` copy added in v1.4.1 and the tab copy added in v1.4.0; Herdr App writes the new tab's `where` itself.
