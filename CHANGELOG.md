@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- herdr-core launcher: every task agent and orchestrator agent now opens in its own new tab of the calling terminal's Herdr App space, instead of a pane in the caller's tab. The tab is named for the task: the card title for `start`, resume takeover and notify recovery (control characters removed, at most 40 characters, longer titles end in `…`), the first `kander orchestrate` argument followed by ` +<number of the other arguments>` for an orchestrator, and the existing window label for chat, issue triage and refinement. Naming goes through the `herdr-app` layout document with a versioned write; when the tab cannot be placed or named (including a Herdr App that is not connected to the core, which costs each launch up to 5 seconds), the launch still succeeds and prints a warning. A caller without `herdr.space` places nothing, as before. `kander terminal test herdr-core` run inside an Herdr App terminal also opens a tab for its test terminal.
+- Breaking (herdr-core): the new terminal no longer gets the calling terminal's `herdr.tab` or `where` label. This reverses the `where` copy added in v1.4.1 and the tab copy added in v1.4.0; Herdr App writes the new tab's `where` itself.
+- Terminal definitions (schema version 1, optional additions): the hook mount point `place_container` runs after `create_container` through the new optional `terminal.ContainerPlacer` interface and may turn a problem into a launch warning; `create_container` receives `{title}`, the display title of the container (`terminal.Target.Title`, or the container label when empty).
+
 ## v1.4.1 — 2026-11-16
 
 - Definition paths (terminal definitions and executing-agent output definitions): a backslash now escapes a dot or a backslash inside one key, so `labels.kander\.session` names the key `kander.session` of `labels` (written `labels.kander\\.session` in a JSON file). Paths without a backslash mean what they did before; a path that contains a backslash followed by another character, or ends with a single backslash, is now rejected when the definition loads.
