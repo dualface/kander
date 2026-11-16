@@ -5,6 +5,9 @@ import KanderFormal.Proofs.CardLifecycle
 import KanderFormal.Proofs.ExecutionLedger
 import KanderFormal.Proofs.ServerClaim
 import KanderFormal.Proofs.Dispatch
+import KanderFormal.Proofs.DispatchForms
+import KanderFormal.Proofs.DispatchSafety
+import KanderFormal.Proofs.DispatchGrant
 
 /-
 The registry of machines: what the generator emits, the bounds of the
@@ -187,7 +190,30 @@ def dispatchEvents : List Event :=
     ⟨"cancel", [t, t, t]⟩, ⟨"cancel", [x, t, t]⟩, ⟨"cancel", [t, x, t]⟩,
     ⟨"retain", a 1 1 ++ [t, t, t, t]⟩, ⟨"retain", a 1 2 ++ [t, t, t, t]⟩, ⟨"retain", a 1 1 ++ [x, t, t, t]⟩,
     ⟨"exec", a 1 1 ++ [t, t, x]⟩, ⟨"exec", a 1 1 ++ [t, t, t]⟩, ⟨"exec", a 1 1 ++ [t, x, x]⟩,
-    ⟨"exec", a 0 0 ++ [t, t, x]⟩, ⟨"exec", a 1 2 ++ [t, t, x]⟩ ]
+    ⟨"exec", a 0 0 ++ [t, t, x]⟩, ⟨"exec", a 1 2 ++ [t, t, x]⟩,
+    -- The wrap-up grant: a stopped, a reclaimed with and without a decision, and
+    -- another exit, in a working and another column, with a stale exit, a stale
+    -- revision, a failed integrity fact, and the epoch the grant raises to.
+    ⟨"authorizeWrapUp", a 1 1 ++ [t, t, enumV 0, t, t, enumV 0, x, t, t]⟩,
+    ⟨"authorizeWrapUp", a 1 1 ++ [t, t, enumV 2, t, t, enumV 0, x, t, t]⟩,
+    ⟨"authorizeWrapUp", a 1 1 ++ [t, t, enumV 0, t, t, enumV 1, t, t, t]⟩,
+    ⟨"authorizeWrapUp", a 1 1 ++ [t, t, enumV 0, t, t, enumV 1, x, t, t]⟩,
+    ⟨"authorizeWrapUp", a 1 1 ++ [t, t, enumV 0, t, t, enumV 2, t, t, t]⟩,
+    ⟨"authorizeWrapUp", a 1 1 ++ [t, t, enumV 0, t, t, enumV 0, x, x, t]⟩,
+    ⟨"authorizeWrapUp", a 1 1 ++ [x, t, enumV 0, t, t, enumV 0, x, t, t]⟩,
+    ⟨"authorizeWrapUp", a 1 1 ++ [t, t, enumV 0, t, t, enumV 0, x, t, x]⟩,
+    ⟨"authorizeWrapUp", a 1 2 ++ [t, t, enumV 0, t, t, enumV 0, x, t, t]⟩,
+    ⟨"attempt", a 1 2 ++ [t, t, t, t]⟩,
+    -- The full-execution write and the record writes: a contract decision, a spec
+    -- append that does and does not append, and a record path that is and is not
+    -- free of other content.
+    ⟨"full", []⟩,
+    ⟨"wrapUpWrite", [t, t, t, x, x]⟩, ⟨"wrapUpWrite", [x, t, t, x, x]⟩, ⟨"wrapUpWrite", [x, t, x, t, t]⟩,
+    ⟨"wrapUpWrite", [x, x, x, t, t]⟩, ⟨"wrapUpWrite", [x, x, x, x, t]⟩,
+    -- The settlement of a completed binding from the three sources.
+    ⟨"settle", a 1 1 ++ [t, enumV 0, t]⟩, ⟨"settle", a 1 1 ++ [t, enumV 1, t]⟩, ⟨"settle", a 1 1 ++ [t, enumV 2, t]⟩,
+    ⟨"terminateSettle", [t, t, t]⟩, ⟨"terminateSettle", [x, t, t]⟩,
+    ⟨"takeoverSettle", a 1 1 ++ [t, t, t, t]⟩, ⟨"takeoverSettle", a 1 2 ++ [t, t, t, t]⟩ ]
 
 def entries : List Entry := [
   { machine := Machines.exampleMachine
@@ -301,7 +327,22 @@ def entries : List Entry := [
       ``KanderFormal.Proofs.Dispatch.step_inv,
       ``KanderFormal.Proofs.Dispatch.reachable_inv,
       ``KanderFormal.Proofs.Dispatch.reachable_unbound,
-      ``KanderFormal.Proofs.Dispatch.reachable_receipts
+      ``KanderFormal.Proofs.Dispatch.reachable_receipts,
+      ``KanderFormal.Proofs.Dispatch.reachable_unbound_settled,
+      ``KanderFormal.Proofs.Dispatch.authorize_spec,
+      ``KanderFormal.Proofs.Dispatch.grant_refused,
+      ``KanderFormal.Proofs.Dispatch.wrapUpWrite_spec,
+      ``KanderFormal.Proofs.Dispatch.authorize_fences_previous,
+      ``KanderFormal.Proofs.Dispatch.grant_complete_done,
+      ``KanderFormal.Proofs.Dispatch.authorize_complete_done,
+      ``KanderFormal.Proofs.Dispatch.settle_spec,
+      ``KanderFormal.Proofs.Dispatch.terminate_settle_spec,
+      ``KanderFormal.Proofs.Dispatch.takeover_settle_spec,
+      ``KanderFormal.Proofs.Dispatch.settle_once,
+      ``KanderFormal.Proofs.Dispatch.settled_fences,
+      ``KanderFormal.Proofs.Dispatch.release_settle_exclusive,
+      ``KanderFormal.Proofs.Dispatch.reachable_grant_kind,
+      ``KanderFormal.Proofs.Dispatch.cycle_refused_grant
     ] }
 ]
 

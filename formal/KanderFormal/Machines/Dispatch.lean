@@ -23,8 +23,16 @@ does. Facts the shell computes are Boolean arguments: the server clock against
 the acceptance deadline (`before`), the cycle of the round against the plan
 cycle (`cycle`), revision checks (`cas`, `rev`), the integrity of the stored
 receipts and originals (`rec`, `evidence`, `disp`, `same`), and the epoch
-ceiling of the uint64 representation (`room`). The wrap-up grant and the
-settlement of a completed binding are not modeled here.
+ceiling of the uint64 representation (`room`).
+
+The wrap-up grant (`grant`) is the cleanup-and-records-only authority a round of
+kind wrap-up can hold from `AuthorizeDispatchWrapUp`; it is set once, fences the
+previous epoch, and refuses `attempt`, `reauthorize`, a second grant, and the
+full-execution and non-record writes. A settlement (`settled`) ends a completed
+binding without releasing it: the round stays completed and keeps its receipt,
+and only the card binding goes away. Both flags describe the current round and
+reset when `prepare` starts the next one. A grant clears the receipts of its
+round, as a reauthorization does.
 -/
 namespace KanderFormal.Machines.Dispatch
 
@@ -50,6 +58,7 @@ def all : List Expr → Expr
 def phaseIs (c : String) : Expr := eq (f "phase") (.enumLit "phase" c)
 def kindIs (c : String) : Expr := eq (f "kind") (.enumLit "kind" c)
 def phaseLit (c : String) : Expr := .enumLit "phase" c
+def exitIs (c : String) : Expr := eq (a "outcome") (.enumLit "exit" c)
 
 /-- The round is open: prepared, uncertain, or accepted. -/
 def isOpen : Expr := orE (phaseIs "prepared") (orE (phaseIs "unknown") (phaseIs "accepted"))
@@ -86,7 +95,8 @@ def prepareEvent : EventDecl where
   assigns := [("round", inc (f "round")),
     ("epoch", .ite (f "bound") (inc (f "epoch")) (.natLit 1)),
     ("bound", tt), ("phase", phaseLit "prepared"), ("kind", a "kind"), ("released", .boolLit false),
-    ("acceptedReceipt", .boolLit false), ("completedReceipt", .boolLit false)]
+    ("acceptedReceipt", .boolLit false), ("completedReceipt", .boolLit false),
+    ("grant", .boolLit false), ("settled", .boolLit false)]
 
 /-- `prepareDispatch` of an ID the registry knows: the same input returns the
 stored round and changes nothing. -/
@@ -97,20 +107,21 @@ def retryEvent : EventDecl where
   assigns := []
 
 /-- `BeginDispatchAttempt`: an uncertain send of a round that was prepared or
-already attempted, before its acceptance deadline. -/
+already attempted, before its acceptance deadline. A wrap-up grant never
+launches or delivers. -/
 def attemptEvent : EventDecl where
   name := "attempt"
   args := authArgs ++ [boolArg "cas", boolArg "cycle", boolArg "evidence", boolArg "before"]
-  guard := all [a "cas", fenced, a "cycle", a "evidence", isPending, a "before"]
+  guard := all [notE (f "grant"), a "cas", fenced, a "cycle", a "evidence", isPending, a "before"]
   assigns := [("phase", phaseLit "unknown")]
 
 /-- `ReauthorizeDispatch`: the next epoch of an open round. An accepted round
 needs a fresh confirmed exit (`fresh`); any other needs the old deadline to be
-in the future (`before`). -/
+in the future (`before`). A wrap-up grant is never upgraded to full execution. -/
 def reauthorizeEvent : EventDecl where
   name := "reauthorize"
   args := authArgs ++ [boolArg "cas", boolArg "room", boolArg "cycle", boolArg "fresh", boolArg "before"]
-  guard := all [a "cas", fenced, isOpen, a "room", a "cycle",
+  guard := all [notE (f "grant"), a "cas", fenced, isOpen, a "room", a "cycle",
     .ite (phaseIs "accepted") (a "fresh") (a "before")]
   assigns := [("epoch", inc (f "epoch")), ("phase", phaseLit "prepared"),
     ("acceptedReceipt", .boolLit false), ("completedReceipt", .boolLit false)]
@@ -175,12 +186,78 @@ def execEvent : EventDecl where
     (all [fenced, a "rec", orE (phaseIs "accepted") (a "before"), isOpen, imp (a "author") (phaseIs "accepted")])
   assigns := []
 
+/-- `AuthorizeDispatchWrapUp`: the cleanup-and-records-only grant of an open round
+of kind wrap-up, on a card in `working` or `review` (`col`), that holds no grant
+yet. The previous executor must have stopped: a fresh confirmed exit (`fresh`)
+whose outcome is `stopped`, or `reclaimed` with a decision. The grant raises the
+epoch by one, which fences the previous executor, and returns the round to
+`prepared` with its receipts cleared. -/
+def authorizeWrapUpEvent : EventDecl where
+  name := "authorizeWrapUp"
+  args := authArgs ++ [boolArg "cas", boolArg "room", enumArg "col" "col", boolArg "named", boolArg "cycle",
+    enumArg "outcome" "exit", boolArg "decided", boolArg "fresh", boolArg "evidence"]
+  guard := all [a "cas", fenced, kindIs "wrapUp", isOpen, notE (f "grant"), a "room",
+    ne (a "col") (.enumLit "col" "other"), a "named", a "cycle",
+    orE (exitIs "stopped") (andE (exitIs "reclaimed") (a "decided")), a "fresh", a "evidence"]
+  assigns := [("epoch", inc (f "epoch")), ("phase", phaseLit "prepared"), ("acceptedReceipt", .boolLit false),
+    ("completedReceipt", .boolLit false), ("grant", tt)]
+
+/-- `requireFullExecution`: a write that needs full execution (a start rollback,
+an execution identity write, an author conclusion). A card that no wrap-up grant
+holds takes it; a grant owns no identity and no author conclusion. -/
+def fullEvent : EventDecl where
+  name := "full"
+  args := []
+  guard := orE (notE (f "bound")) (notE (f "grant"))
+  assigns := []
+
+/-- `validateWrapUpUpdate`: a document write under a wrap-up grant may append a
+non-empty `WRAP_UP_RECORDS` section to `spec.md` (`appends`), or write the
+dedicated record path (`path`) that holds no other content (`same`), and never
+carries a contract decision (`contract`). A card that no grant holds takes any
+write. -/
+def wrapUpWriteEvent : EventDecl where
+  name := "wrapUpWrite"
+  args := [boolArg "contract", boolArg "spec", boolArg "appends", boolArg "path", boolArg "same"]
+  guard := orE (notE (andE (f "bound") (f "grant")))
+    (andE (notE (a "contract")) (.ite (a "spec") (a "appends") (andE (a "path") (a "same"))))
+  assigns := []
+
+/-- `SettleDispatch`: a direct exit of a completed binding that is not settled yet,
+for a card in `working` or `review`. The round stays completed; the card binding
+goes away. -/
+def settleEvent : EventDecl where
+  name := "settle"
+  args := authArgs ++ [boolArg "cas", enumArg "col" "col", boolArg "cycle"]
+  guard := all [a "cas", fenced, phaseIs "completed", notE (f "settled"),
+    ne (a "col") (.enumLit "col" "other"), a "cycle"]
+  assigns := [("bound", .boolLit false), ("settled", tt)]
+
+/-- `stageDispatchTermination` on a move into `archived` or `trash` of a completed
+binding: the binding is settled instead of cancelled. Production does not check
+for a settlement here, because a settlement clears the binding in the same
+transaction (`settled` implies no binding, see `Props`). -/
+def terminateSettleEvent : EventDecl where
+  name := "terminateSettle"
+  args := [boolArg "reasoned", boolArg "authOk", boolArg "cycle"]
+  guard := all [f "bound", a "reasoned", a "authOk", a "cycle", phaseIs "completed"]
+  assigns := [("bound", .boolLit false), ("settled", tt)]
+
+/-- `stageTakeoverDispatch` in mode `settle-completed`: the handoff settles a
+completed round that is not settled yet. -/
+def takeoverSettleEvent : EventDecl where
+  name := "takeoverSettle"
+  args := authArgs ++ [boolArg "decided", boolArg "rev", boolArg "rec", boolArg "cycle"]
+  guard := all [fenced, a "decided", a "rev", a "rec", a "cycle", phaseIs "completed", notE (f "settled")]
+  assigns := [("bound", .boolLit false), ("settled", tt)]
+
 def dispatchMachine : Machine where
   name := "dispatch"
   enums := [
     { name := "phase", ctors := ["none", "prepared", "unknown", "accepted", "completed", "failed", "cancelled"] },
     { name := "kind", ctors := ["fix", "sync", "wrapUp"] },
-    { name := "col", ctors := ["working", "review", "other"] }
+    { name := "col", ctors := ["working", "review", "other"] },
+    { name := "exit", ctors := ["stopped", "reclaimed", "other"] }
   ]
   params := ["maxRound", "maxEpoch"]
   fields := [
@@ -191,12 +268,16 @@ def dispatchMachine : Machine where
     { name := "kind", ty := .scalar (.enum "kind"), init := .scalar (.enum 0) },
     { name := "released", ty := .scalar .bool, init := .scalar (.bool false) },
     { name := "acceptedReceipt", ty := .scalar .bool, init := .scalar (.bool false) },
-    { name := "completedReceipt", ty := .scalar .bool, init := .scalar (.bool false) }
+    { name := "completedReceipt", ty := .scalar .bool, init := .scalar (.bool false) },
+    { name := "grant", ty := .scalar .bool, init := .scalar (.bool false) },
+    { name := "settled", ty := .scalar .bool, init := .scalar (.bool false) }
   ]
   events := [prepareEvent, retryEvent, attemptEvent, reauthorizeEvent, acceptEvent, completeEvent, endEvent,
-    cancelEvent, retainEvent, execEvent]
+    cancelEvent, retainEvent, execEvent, authorizeWrapUpEvent, fullEvent, wrapUpWriteEvent, settleEvent,
+    terminateSettleEvent, takeoverSettleEvent]
   queries := [
-    { name := "holds", ty := .base .bool, body := andE (f "bound") isOpen }
+    { name := "holds", ty := .base .bool, body := andE (f "bound") isOpen },
+    { name := "granted", ty := .base .bool, body := andE (f "bound") (f "grant") }
   ]
 
 end KanderFormal.Machines.Dispatch

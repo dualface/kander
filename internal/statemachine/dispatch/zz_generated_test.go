@@ -14,6 +14,8 @@ var kindNames = [KindCount]string{"fix", "sync", "wrapUp"}
 
 var colNames = [ColCount]string{"working", "review", "other"}
 
+var exitNames = [ExitCount]string{"stopped", "reclaimed", "other"}
+
 var vectorParams = []Params{
 	{MaxRound: 3, MaxEpoch: 3},
 }
@@ -63,6 +65,29 @@ var vectorEvents = []Event{
 	Exec{AuthRound: 1, AuthEpoch: 1, Rec: true, Before: false, Author: false},
 	Exec{AuthRound: 0, AuthEpoch: 0, Rec: true, Before: true, Author: false},
 	Exec{AuthRound: 1, AuthEpoch: 2, Rec: true, Before: true, Author: false},
+	AuthorizeWrapUp{AuthRound: 1, AuthEpoch: 1, Cas: true, Room: true, Col: ColWorking, Named: true, Cycle: true, Outcome: ExitStopped, Decided: false, Fresh: true, Evidence: true},
+	AuthorizeWrapUp{AuthRound: 1, AuthEpoch: 1, Cas: true, Room: true, Col: ColOther, Named: true, Cycle: true, Outcome: ExitStopped, Decided: false, Fresh: true, Evidence: true},
+	AuthorizeWrapUp{AuthRound: 1, AuthEpoch: 1, Cas: true, Room: true, Col: ColWorking, Named: true, Cycle: true, Outcome: ExitReclaimed, Decided: true, Fresh: true, Evidence: true},
+	AuthorizeWrapUp{AuthRound: 1, AuthEpoch: 1, Cas: true, Room: true, Col: ColWorking, Named: true, Cycle: true, Outcome: ExitReclaimed, Decided: false, Fresh: true, Evidence: true},
+	AuthorizeWrapUp{AuthRound: 1, AuthEpoch: 1, Cas: true, Room: true, Col: ColWorking, Named: true, Cycle: true, Outcome: ExitOther, Decided: true, Fresh: true, Evidence: true},
+	AuthorizeWrapUp{AuthRound: 1, AuthEpoch: 1, Cas: true, Room: true, Col: ColWorking, Named: true, Cycle: true, Outcome: ExitStopped, Decided: false, Fresh: false, Evidence: true},
+	AuthorizeWrapUp{AuthRound: 1, AuthEpoch: 1, Cas: false, Room: true, Col: ColWorking, Named: true, Cycle: true, Outcome: ExitStopped, Decided: false, Fresh: true, Evidence: true},
+	AuthorizeWrapUp{AuthRound: 1, AuthEpoch: 1, Cas: true, Room: true, Col: ColWorking, Named: true, Cycle: true, Outcome: ExitStopped, Decided: false, Fresh: true, Evidence: false},
+	AuthorizeWrapUp{AuthRound: 1, AuthEpoch: 2, Cas: true, Room: true, Col: ColWorking, Named: true, Cycle: true, Outcome: ExitStopped, Decided: false, Fresh: true, Evidence: true},
+	Attempt{AuthRound: 1, AuthEpoch: 2, Cas: true, Cycle: true, Evidence: true, Before: true},
+	Full{},
+	WrapUpWrite{Contract: true, Spec: true, Appends: true, Path: false, Same: false},
+	WrapUpWrite{Contract: false, Spec: true, Appends: true, Path: false, Same: false},
+	WrapUpWrite{Contract: false, Spec: true, Appends: false, Path: true, Same: true},
+	WrapUpWrite{Contract: false, Spec: false, Appends: false, Path: true, Same: true},
+	WrapUpWrite{Contract: false, Spec: false, Appends: false, Path: false, Same: true},
+	Settle{AuthRound: 1, AuthEpoch: 1, Cas: true, Col: ColWorking, Cycle: true},
+	Settle{AuthRound: 1, AuthEpoch: 1, Cas: true, Col: ColReview, Cycle: true},
+	Settle{AuthRound: 1, AuthEpoch: 1, Cas: true, Col: ColOther, Cycle: true},
+	TerminateSettle{Reasoned: true, AuthOk: true, Cycle: true},
+	TerminateSettle{Reasoned: false, AuthOk: true, Cycle: true},
+	TakeoverSettle{AuthRound: 1, AuthEpoch: 1, Decided: true, Rev: true, Rec: true, Cycle: true},
+	TakeoverSettle{AuthRound: 1, AuthEpoch: 2, Decided: true, Rev: true, Rec: true, Cycle: true},
 }
 
 func encodeParams(p Params) string {
@@ -82,6 +107,8 @@ func encodeState(s State) string {
 		"released", vectortest.Bool(s.Released),
 		"acceptedReceipt", vectortest.Bool(s.AcceptedReceipt),
 		"completedReceipt", vectortest.Bool(s.CompletedReceipt),
+		"grant", vectortest.Bool(s.Grant),
+		"settled", vectortest.Bool(s.Settled),
 	)
 }
 
@@ -107,6 +134,18 @@ func encodeEvent(e Event) string {
 		return vectortest.Event("retain", "authRound", vectortest.Uint(ev.AuthRound), "authEpoch", vectortest.Uint(ev.AuthEpoch), "decided", vectortest.Bool(ev.Decided), "rev", vectortest.Bool(ev.Rev), "rec", vectortest.Bool(ev.Rec), "cycle", vectortest.Bool(ev.Cycle))
 	case Exec:
 		return vectortest.Event("exec", "authRound", vectortest.Uint(ev.AuthRound), "authEpoch", vectortest.Uint(ev.AuthEpoch), "rec", vectortest.Bool(ev.Rec), "before", vectortest.Bool(ev.Before), "author", vectortest.Bool(ev.Author))
+	case AuthorizeWrapUp:
+		return vectortest.Event("authorizeWrapUp", "authRound", vectortest.Uint(ev.AuthRound), "authEpoch", vectortest.Uint(ev.AuthEpoch), "cas", vectortest.Bool(ev.Cas), "room", vectortest.Bool(ev.Room), "col", vectortest.Str(colNames[ev.Col]), "named", vectortest.Bool(ev.Named), "cycle", vectortest.Bool(ev.Cycle), "outcome", vectortest.Str(exitNames[ev.Outcome]), "decided", vectortest.Bool(ev.Decided), "fresh", vectortest.Bool(ev.Fresh), "evidence", vectortest.Bool(ev.Evidence))
+	case Full:
+		return vectortest.Event("full")
+	case WrapUpWrite:
+		return vectortest.Event("wrapUpWrite", "contract", vectortest.Bool(ev.Contract), "spec", vectortest.Bool(ev.Spec), "appends", vectortest.Bool(ev.Appends), "path", vectortest.Bool(ev.Path), "same", vectortest.Bool(ev.Same))
+	case Settle:
+		return vectortest.Event("settle", "authRound", vectortest.Uint(ev.AuthRound), "authEpoch", vectortest.Uint(ev.AuthEpoch), "cas", vectortest.Bool(ev.Cas), "col", vectortest.Str(colNames[ev.Col]), "cycle", vectortest.Bool(ev.Cycle))
+	case TerminateSettle:
+		return vectortest.Event("terminateSettle", "reasoned", vectortest.Bool(ev.Reasoned), "authOk", vectortest.Bool(ev.AuthOk), "cycle", vectortest.Bool(ev.Cycle))
+	case TakeoverSettle:
+		return vectortest.Event("takeoverSettle", "authRound", vectortest.Uint(ev.AuthRound), "authEpoch", vectortest.Uint(ev.AuthEpoch), "decided", vectortest.Bool(ev.Decided), "rev", vectortest.Bool(ev.Rev), "rec", vectortest.Bool(ev.Rec), "cycle", vectortest.Bool(ev.Cycle))
 	}
 	return "null"
 }
@@ -115,9 +154,14 @@ func encodeQueryHolds(s State, p Params) string {
 	return vectortest.Bool(Holds(s, p))
 }
 
+func encodeQueryGranted(s State, p Params) string {
+	return vectortest.Bool(Granted(s, p))
+}
+
 func encodeQueries(s State, p Params) string {
 	return vectortest.Object(
 		"holds", encodeQueryHolds(s, p),
+		"granted", encodeQueryGranted(s, p),
 	)
 }
 
