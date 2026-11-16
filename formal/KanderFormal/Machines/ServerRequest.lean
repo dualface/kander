@@ -16,8 +16,12 @@ lease has not expired. `card` is the card revision a check compares with the
 revision a request binds. Comparisons of strings and JSON (the client, the
 acceptance window, the immutable dispatch material, the note) are Boolean
 arguments (`same`, `sameNote`, `material`, `match`, `window`). `holder` is the
-result of `requireHolder` (the claim kernel's `write` event); the shell does not
-reach a request event without it.
+result of `requireHolder` (the claim kernel's `write` event); the shell passes it to
+the events that need the holder (`answerSame`, `answer`, `prepare`) and reaches
+them only after `requireHolder` accepted. `bind`, `create` and `recreate` are
+called by collaborators and `supersede` and `complete` by the handoff and the
+completion transactions; none of them has a holder argument. That one dispatch
+ID has at most one proposal is the machine `ServerProposal.lean`.
 
 Revisions and generations are compared and the request revision is increased
 by one; nothing else is computed. The shell maps them into the kernel range the

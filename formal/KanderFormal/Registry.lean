@@ -7,6 +7,7 @@ import KanderFormal.Proofs.ServerClaim
 import KanderFormal.Proofs.ServerGroupLease
 import KanderFormal.Proofs.ServerRequestProposal
 import KanderFormal.Proofs.ServerDelivery
+import KanderFormal.Proofs.ServerProposal
 import KanderFormal.Proofs.Dispatch
 import KanderFormal.Proofs.DispatchForms
 import KanderFormal.Proofs.DispatchSafety
@@ -617,6 +618,24 @@ def entries : List Entry := [
       ``KanderFormal.Proofs.ServerDelivery.reachable_inv,
       ``KanderFormal.Proofs.ServerDelivery.reachable_bound,
       ``KanderFormal.Proofs.ServerDelivery.reachable_latest_record
+    ] },
+  { machine := Machines.ServerProposal.serverProposalMachine
+    source := "KanderFormal/Machines/ServerProposal.lean"
+    vectors := { depth := 5, paramSets := [[("maxCount", 2)]], natDomain := [] }
+    theorems := [
+      ``KanderFormal.Proofs.ServerProposal.wellTyped,
+      ``KanderFormal.Proofs.ServerProposal.admit_spec,
+      ``KanderFormal.Proofs.ServerProposal.admit_result,
+      ``KanderFormal.Proofs.ServerProposal.admit_once,
+      ``KanderFormal.Proofs.ServerProposal.admit_repeat_exclusive,
+      ``KanderFormal.Proofs.ServerProposal.repeat_spec,
+      ``KanderFormal.Proofs.ServerProposal.lookup_spec,
+      ``KanderFormal.Proofs.ServerProposal.lookup_ambiguous,
+      ``KanderFormal.Proofs.ServerProposal.ambiguous_not_admitted,
+      ``KanderFormal.Proofs.ServerProposal.init,
+      ``KanderFormal.Proofs.ServerProposal.step_inv,
+      ``KanderFormal.Proofs.ServerProposal.reachable_inv,
+      ``KanderFormal.Proofs.ServerProposal.reachable_unique
     ] },
   { machine := Machines.Dispatch.dispatchMachine
     source := "KanderFormal/Machines/Dispatch.lean"

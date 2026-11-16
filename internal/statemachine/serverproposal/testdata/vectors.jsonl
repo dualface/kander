@@ -1,0 +1,7 @@
+{"machine":"serverproposal","depth":5,"params":[{"maxCount":2}],"events":[{"event":"admit","args":{}},{"event":"repeat","args":{}},{"event":"lookup","args":{}}]}
+{"params":0,"state":{"count":0},"event":0,"accepted":true,"next":{"count":1},"queries":{"taken":false,"single":false}}
+{"params":0,"state":{"count":0},"event":1,"accepted":false,"next":{"count":0},"queries":{"taken":false,"single":false}}
+{"params":0,"state":{"count":0},"event":2,"accepted":false,"next":{"count":0},"queries":{"taken":false,"single":false}}
+{"params":0,"state":{"count":1},"event":0,"accepted":false,"next":{"count":1},"queries":{"taken":true,"single":true}}
+{"params":0,"state":{"count":1},"event":1,"accepted":true,"next":{"count":1},"queries":{"taken":true,"single":true}}
+{"params":0,"state":{"count":1},"event":2,"accepted":true,"next":{"count":1},"queries":{"taken":true,"single":true}}
