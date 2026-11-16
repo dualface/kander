@@ -93,27 +93,35 @@ func (p *project) saveIssueResult(ctx context.Context, key string, input api.Iss
 		if err != nil {
 			return outcome{err: err}
 		}
-		if input.WorkDigest == "" || input.WorkDigest != work.Digest {
+		// The issue result kernel decides the work digest, the revision compare-and-swap,
+		// the room for the next revision, both store relations, and the transaction
+		// guard; each check asks it with every other fact holding, in the order the
+		// save has always made them.
+		workCurrent := input.WorkDigest != "" && input.WorkDigest == work.Digest
+		if _, ok := newIssueRevision(0).save(0, workCurrent, true, true); !ok {
 			return outcome{err: apiError(api.CodeRevisionConflict, "issue result work changed since inspection")}
 		}
 		previous, err := p.readIssueResult(ctx, input.Query, repository, number)
 		if err != nil {
 			return outcome{err: err}
 		}
-		if previous.Revision != input.ExpectedRevision || previous.Revision == ^uint64(0) {
+		revision := newIssueRevision(previous.Revision)
+		if _, ok := revision.save(input.ExpectedRevision, true, true, true); !ok {
 			return outcome{err: apiError(api.CodeRevisionConflict, "issue result resource version changed")}
 		}
 		var store issue.ResultStore
 		if err := board.DecodeReviewJSON(input.Store, &store); err != nil {
 			return outcome{err: err}
 		}
-		if err := issue.ValidateResultStoreUpdate(previous.Store, store); err != nil {
-			return outcome{err: err}
+		relations := issue.ValidateResultStoreUpdate(previous.Store, store)
+		if relations == nil {
+			relations = issue.ValidateResultStoreWork(previous.Store, store, work)
 		}
-		if err := issue.ValidateResultStoreWork(previous.Store, store, work); err != nil {
-			return outcome{err: err}
+		nextRevision, ok := revision.save(input.ExpectedRevision, true, relations == nil, true)
+		if !ok {
+			return outcome{err: relations}
 		}
-		next := issueResultRecord{Revision: previous.Revision + 1, Store: store}
+		next := issueResultRecord{Revision: nextRevision, Store: store}
 		resultState, err := issueResultState(next, work)
 		if err != nil {
 			return outcome{err: err}
@@ -134,7 +142,7 @@ func (p *project) saveIssueResult(ctx context.Context, key string, input api.Iss
 			}
 			versions[id] = snapshot.Revision
 		}
-		guard := func(tx *board.Transaction) error {
+		held := func(tx *board.Transaction) error {
 			reader := tx.ReadOnly()
 			for _, id := range ids {
 				if _, err := reader.Expect(id, "", versions[id]); err != nil {
@@ -147,6 +155,15 @@ func (p *project) saveIssueResult(ctx context.Context, key string, input api.Iss
 			}
 			if current.Digest != work.Digest || !reflect.DeepEqual(current.Excluded, work.Excluded) {
 				return apiError(api.CodeRevisionConflict, "issue result membership or evidence changed")
+			}
+			return nil
+		}
+		// The guard runs before the write and again after it; the kernel accepts the
+		// save only while it holds.
+		guard := func(tx *board.Transaction) error {
+			err := held(tx)
+			if _, ok := revision.save(input.ExpectedRevision, true, true, err == nil); !ok {
+				return err
 			}
 			return nil
 		}

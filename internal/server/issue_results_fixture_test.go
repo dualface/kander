@@ -28,6 +28,7 @@ type issueResultProvider struct {
 	posts, closes             int
 	postUnknown, closeUnknown bool
 	postRejected              bool
+	closeRejected             bool
 }
 
 func (p *issueResultProvider) ReadResult(context.Context, issue.Repository, int) (issue.ResultRemote, error) {
@@ -55,6 +56,9 @@ func (p *issueResultProvider) CloseResult(context.Context, issue.Repository, int
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.closes++
+	if p.closeRejected {
+		return &issue.ResultWriteRejection{Err: errors.New("definite provider refusal to close")}
+	}
 	p.value.State, p.value.StateVersion = "closed", "42:closed"
 	if p.closeUnknown {
 		return errors.New("simulated lost close response")
