@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -581,5 +582,133 @@ func TestCoordinatorAcceptedReconcileClearsTheBlock(t *testing.T) {
 		return s
 	}() {
 		t.Fatalf("a block moved the mirror: %+v", kept)
+	}
+}
+
+// Theorem 8, entrance: `wrapUpCompletion.stage` writes the witness only for the
+// epoch the Git check ran for. A stale epoch is a transaction conflict that
+// writes nothing; the right epoch writes once; a second stage is immutable.
+func TestWrapUpCompletionStageChecksTheEpoch(t *testing.T) {
+	root := tempBoard(t)
+	a := coordinatorCard(t, root, "stage-a").Entry.TaskID
+	b := coordinatorCard(t, root, "stage-b").Entry.TaskID
+	ids := []string{a, b}
+	coordinatorClaim(t, root, ids...)
+	gatePlan(t, root, ids, noReviewRequirements())
+	if _, err := gateClose(t, root, map[string]ReviewRoleConclusion{}); err != nil {
+		t.Fatal(err)
+	}
+	d := prepareTestDispatch(t, root, coordinatorWrapInput(t, root, a, "wrap-stage"))
+	path := control(root, "groups", coordinatorGroup, wrapUpEvidenceName(d.Input.ID))
+	scope := LockScope{Tasks: ids, Groups: []string{coordinatorGroup, reviewControlGroup, dispatchRegistry}, ExclusiveBoard: true}
+	stage := func(epoch uint64) error {
+		ev := newWrapUpEvidence(d, wrapUpVerifiedByCompletion)
+		ev.Epoch = epoch
+		return WithTransaction(root, scope, func(tx *Transaction) error {
+			return (&wrapUpCompletion{group: coordinatorGroup, evidence: ev}).stage(tx, a)
+		})
+	}
+	written := func() bool {
+		_, err := os.Stat(path)
+		return err == nil
+	}
+	var e *Error
+	if err := stage(d.Authorization.Epoch + 1); !errors.As(err, &e) || e.Code != "board.transaction_conflict" {
+		t.Fatalf("a stale epoch: %v", err)
+	}
+	if written() {
+		t.Fatal("a stale epoch wrote the witness")
+	}
+	if _, ok := newWitnessKernel(false).step(wrapupwitness.Complete{EpochSame: false, Verified: true}); ok {
+		t.Fatal("the kernel took a stale epoch")
+	}
+	want, ok := newWitnessKernel(false).step(wrapupwitness.Complete{EpochSame: true, Verified: true})
+	if err := stage(d.Authorization.Epoch); err != nil || !ok || !written() || want != newWitnessKernel(written()).state {
+		t.Fatalf("%v %+v", err, want)
+	}
+	stored, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = stage(d.Authorization.Epoch); err == nil || !strings.Contains(err.Error(), "immutable wrap-up Git evidence") {
+		t.Fatalf("a second write: %v", err)
+	}
+	if again, e := os.ReadFile(path); e != nil || string(again) != string(stored) {
+		t.Fatal("a second write changed the witness")
+	}
+}
+
+// Theorem 4, entrance: a member in archived or trash takes the kernel's
+// `acceptTerminal`. With no dispatch round the round position stays; with rounds
+// it becomes their number. A card below the mirror or a chain below its position
+// is refused.
+func TestCoordinatorTerminalMemberRefinesKernel(t *testing.T) {
+	root := tempBoard(t)
+	a := coordinatorCard(t, root, "terminal-rounds").Entry.TaskID
+	b := coordinatorCard(t, root, "terminal-plain").Entry.TaskID
+	// A third member stays active: archiving every member would clean the group.
+	rest := coordinatorCard(t, root, "terminal-rest").Entry.TaskID
+	c := coordinatorClaim(t, root, a, b, rest)
+	d := prepareTestDispatch(t, root, dispatchInput(transactionSnapshot(t, root, a), "terminal-round"))
+	c = coordinatorReconcile(t, root, c)
+	for _, state := range []string{"working", "review"} {
+		if _, err := dispatchMove(t, root, d, state); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, id := range []string{a, b} {
+		if _, err := MoveWithOptions(transactionSnapshot(t, root, id).Entry, root, "archived", MoveOptions{Result: "cancelled", Reason: "stop", Decision: "user"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	next := coordinatorReconcile(t, root, c)
+	for id, hasRounds := range map[string]bool{a: true, b: false} {
+		old, m := c.Members[id], next.Members[id]
+		s := transactionSnapshot(t, root, id)
+		step, ok := newMirrorKernel(old).acceptTerminal(s, old, m, hasRounds)
+		if !ok || step != mirrorState(m) || step.Col != coordmember.ColArchived || step.Blocked {
+			t.Fatalf("%s: %+v %v want %+v", id, step, ok, mirrorState(m))
+		}
+		if hasRounds && (m.DispatchSeq != 1 || step.Dseq != 1) {
+			t.Fatalf("%s: rounds not counted: %+v", id, m)
+		}
+		if !hasRounds && m.DispatchSeq != old.DispatchSeq {
+			t.Fatalf("%s: the round position moved with no rounds: %+v", id, m)
+		}
+	}
+	// The refusals of a terminal member: a card below the mirror, and a chain
+	// below the mirror's position.
+	old := next.Members[a]
+	old.Revision += 5
+	regressed := next.Members[b]
+	regressed.TransitionSeq = ledgerOf(t, root, b).end() + 3
+	err := WithTransaction(root, LockScope{Tasks: []string{a, b}, Groups: []string{taskStartGroup, reviewControlGroup, dispatchRegistry}, ReadOnly: true}, func(tx *Transaction) error {
+		for id, tc := range map[string]struct {
+			mirror CoordinatorMember
+			msg    string
+		}{a: {old, "member revision or execution cycle changed"}, b: {regressed, "execution chain regressed"}} {
+			s, e := tx.Snapshot(id)
+			if e != nil {
+				return e
+			}
+			if _, e = reconcileTerminalMember(context.Background(), tx, s, tc.mirror, CoordinatorObservation{Revision: s.Revision}); id == b && (e == nil || !strings.Contains(e.Error(), tc.msg)) {
+				t.Fatalf("%s: %v", id, e)
+			}
+			if id == a {
+				if !newMirrorKernel(tc.mirror).refuseRevision(s.Revision) {
+					t.Fatal("the kernel took a card below its mirror")
+				}
+				if _, e = reconcileCoordinatorMember(context.Background(), tx, &coordinatorPass{}, id, tc.mirror, CoordinatorObservation{Revision: s.Revision}); e == nil || !strings.Contains(e.Error(), tc.msg) {
+					t.Fatalf("%s: %v", id, e)
+				}
+			}
+			if id == b && !newMirrorKernel(tc.mirror).refuseChain(ledgerOf(t, root, b).end(), false) {
+				t.Fatal("the kernel took a chain below the mirror")
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }

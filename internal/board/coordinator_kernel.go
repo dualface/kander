@@ -41,21 +41,13 @@ import (
 //
 // Projection of a mirror: the column is the state of the card (backlog and todo
 // are one column), and the card revision, chain position, and dispatch position
-// are the stored values, shifted from 2^31 on so that order is kept.
+// are the stored values, shifted by revisionBase (execution_kernel.go) from 2^31
+// on so that order is kept.
 
 // kernelMax is the bound every counter parameter of a coordinator kernel
 // carries. A value above it is clamped to it, which keeps every comparison with a
 // projected state value.
 const kernelMax = math.MaxUint32
-
-// shiftBase returns the base that keeps the order of values from exactBelow on:
-// 0 below it, else the value less 2^30.
-func shiftBase(v uint64) uint64 {
-	if v < exactBelow {
-		return 0
-	}
-	return v - 1<<30
-}
 
 func clampKernel(v uint64) uint64 { return min(v, kernelMax) }
 
@@ -203,7 +195,7 @@ type mirrorKernel struct {
 // newMirrorKernel projects a mirror. The bases come from the mirror itself, so
 // every value the operation compares with it keeps its order.
 func newMirrorKernel(old CoordinatorMember) *mirrorKernel {
-	k := &mirrorKernel{rev: shiftBase(old.Revision), tseq: shiftBase(old.TransitionSeq), dseq: shiftBase(old.DispatchSeq)}
+	k := &mirrorKernel{rev: revisionBase(old.Revision), tseq: revisionBase(old.TransitionSeq), dseq: revisionBase(old.DispatchSeq)}
 	k.params = coordmember.Params{MaxRev: kernelMax, MaxSeq: kernelMax}
 	k.state = coordmember.State{Col: memberCol(old.State), Rev: k.revOf(old.Revision), Tseq: k.tseqOf(old.TransitionSeq),
 		Dseq: k.dseqOf(old.DispatchSeq), Blocked: old.Blocked != nil, Confirmed: old.Confirmed != nil}
