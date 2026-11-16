@@ -21,29 +21,33 @@ theorem wellTyped : M.wellTyped = true := by decide
 structure Rq where
   ds : Nat
   acc : Nat
+  did : Nat
 
-def enc (x : Rq) : State := [("ds", enumV x.ds), ("acc", enumV x.acc)]
+def enc (x : Rq) : State := [("ds", enumV x.ds), ("acc", enumV x.acc), ("did", natV x.did)]
 
 theorem enc_inj {x y : Rq} (h : enc x = enc y) : x = y := by
-  obtain ⟨_, _⟩ := x
-  obtain ⟨_, _⟩ := y
-  simp [enc, enumV] at h
-  obtain ⟨rfl, rfl⟩ := h
+  obtain ⟨_, _, _⟩ := x
+  obtain ⟨_, _, _⟩ := y
+  simp [enc, enumV, natV] at h
+  obtain ⟨rfl, rfl, rfl⟩ := h
   rfl
 
-theorem shape {p : Params} {s : State} (h : M.StateConforms p s) : ∃ x, s = enc x ∧ x.ds < 8 ∧ x.acc < 5 := by
+theorem shape {p : Params} {s : State} (h : M.StateConforms p s) : ∃ x, s = enc x ∧ x.ds < 8 ∧ x.acc < 5 ∧ x.did ≤ p "maxId" := by
   obtain ⟨hn, hc⟩ := h
   match s, hn with
-  | [(_, v1), (_, v2)], hn =>
+  | [(_, v1), (_, v2), (_, v3)], hn =>
     simp [issueResultDecisionMachine] at hn
-    obtain ⟨rfl, rfl⟩ := hn
+    obtain ⟨rfl, rfl, rfl⟩ := hn
     obtain ⟨t1, ht1, c1⟩ := hc "ds" v1 (by simp [lookup])
     obtain ⟨t2, ht2, c2⟩ := hc "acc" v2 (by simp [lookup])
+    obtain ⟨t3, ht3, c3⟩ := hc "did" v3 (by simp [lookup])
     cases (rfl : M.fieldTy "ds" = some (.scalar (.enum "dstat"))).symm.trans ht1
     cases (rfl : M.fieldTy "acc" = some (.scalar (.enum "scan"))).symm.trans ht2
+    cases (rfl : M.fieldTy "did" = some (.scalar (.nat "maxId"))).symm.trans ht3
     obtain ⟨d, rfl, hd⟩ := conforms_enum (rfl : M.enumSize "dstat" = some 8) c1
     obtain ⟨c, rfl, hcc⟩ := conforms_enum (rfl : M.enumSize "scan" = some 5) c2
-    exact ⟨⟨d, c⟩, rfl, hd, hcc⟩
+    obtain ⟨di, rfl, hdi⟩ := conforms_nat c3
+    exact ⟨⟨d, c, di⟩, rfl, hd, hcc, hdi⟩
 
 /-! ## Events on an encoded state -/
 
@@ -62,12 +66,13 @@ theorem size_dstat : M.enumSize "dstat" = some 8 := rfl
 theorem size_scan : M.enumSize "scan" = some 5 := rfl
 theorem ty_ds : M.fieldTy "ds" = some (.scalar (.enum "dstat")) := rfl
 theorem ty_acc : M.fieldTy "acc" = some (.scalar (.enum "scan")) := rfl
+theorem ty_did : M.fieldTy "did" = some (.scalar (.nat "maxId")) := rfl
 
 macro "dc_simp" "[" ts:Lean.Parser.Tactic.simpLemma,* "]" : tactic =>
   `(tactic| simp [step, find_appendNo, find_appendYes, find_closeDone, find_closeRejected, find_reconcile,
-      find_visit, find_settle, find_valid, ctors_dstat, ctors_scan, size_dstat, size_scan, ty_ds, ty_acc, lookup,
+      find_visit, find_settle, find_valid, ctors_dstat, ctors_scan, size_dstat, size_scan, ty_ds, ty_acc, ty_did, lookup,
       appendNoEvent, appendYesEvent, closeDoneEvent, closeRejectedEvent, reconcileEvent, visitEvent, settleEvent,
-      validEvent, classify, consentStatus, dsIs, dsC, decIs, accIs, scanC, boolArg, dstatArg, bindArgs, Ty.conforms,
+      validEvent, classify, consentStatus, dsIs, dsC, decIs, accIs, scanC, boolArg, dstatArg, idArg, zero, bindArgs, Ty.conforms,
       STy.conforms, eval, evalCmp, boolAnd, boolOr, boolNot, indexOf, enumV, boolV, natV, f, a, tt, andE, orE, notE,
       eq, ne, evalAssigns, applyUpdates, enc, or_assoc, and_assoc, Bool.and_assoc, Bool.or_assoc, map_ite,
       ite_and_self, ite_ite_none, $ts,*])
@@ -76,13 +81,15 @@ macro "ite_close" : tactic =>
   `(tactic| ((try split) <;> (try split) <;> first | rfl | (exfalso; simp_all; done) | (simp_all; done) |
     (exfalso; simp_all; omega)))
 
-theorem step_appendNo (p : Params) (x : Rq) :
-    step M p (enc x) ⟨"appendNo", []⟩ = if x.ds = 0 then some (enc { x with ds := 1 }) else none := by
-  dc_simp [] <;> ite_close
+theorem step_appendNo (p : Params) (x : Rq) (ndid : Nat) :
+    step M p (enc x) ⟨"appendNo", [natV ndid]⟩ =
+      if ndid ≤ p "maxId" ∧ x.ds = 0 ∧ ndid ≠ 0 then some (enc { x with ds := 1, did := ndid }) else none := by
+  by_cases hn : ndid ≤ p "maxId" <;> dc_simp [hn] <;> ite_close
 
-theorem step_appendYes (p : Params) (x : Rq) :
-    step M p (enc x) ⟨"appendYes", []⟩ = if x.ds = 0 then some (enc { x with ds := 2 }) else none := by
-  dc_simp [] <;> ite_close
+theorem step_appendYes (p : Params) (x : Rq) (ndid : Nat) :
+    step M p (enc x) ⟨"appendYes", [natV ndid]⟩ =
+      if ndid ≤ p "maxId" ∧ x.ds = 0 ∧ ndid ≠ 0 then some (enc { x with ds := 2, did := ndid }) else none := by
+  by_cases hn : ndid ≤ p "maxId" <;> dc_simp [hn] <;> ite_close
 
 theorem step_closeDone (p : Params) (x : Rq) :
     step M p (enc x) ⟨"closeDone", []⟩ = if x.ds = 2 then some (enc { x with ds := 3 }) else none := by

@@ -21,6 +21,18 @@ digest, evidence version, commits, checks) is not modeled: the shell compares it
 and passes the result as a Boolean argument. The remote identities are positive
 by the provider contract, so a record that gets a remote comment has `cpos`.
 
+The identity witnesses make the comparison facts of the check events derivable
+from the transitions of the client events, instead of facts the shell assumes.
+`bod` is the identity of the record's body and author, `cid` of its remote
+comment (0 while it has none), `chk` of its verification evidence, `wk` of the
+work set it was assessed against, `cw` the identity of the current work set the
+store was read against, `fh` the identity of its failure log and `fp` that of
+the log before the last failure was appended, and `sound` that its author is
+positive, its outcomes are known, and its version is the one its assessment
+computes. Identities are abstract: an event that writes a new body
+brings a new identity, and the shell projects the identity of a text as a hash
+of it, so that equal texts have equal identities.
+
 The check events `update`, `work`, `idKeep`, `valid`, and `issueNeeded` change
 nothing. They are the decisions of `ValidateResultStoreUpdate`,
 `ValidateResultStoreWork`, and `ValidateResultStore` for one record of the old
@@ -54,6 +66,7 @@ def scanIs (c : String) : Expr := eq (a "scan") (.enumLit "scan" c)
 
 def boolArg (n : String) : ArgDecl := { name := n, ty := .scalar .bool }
 def numArg (n : String) : ArgDecl := { name := n, ty := .scalar (.nat "maxN") }
+def idArg (n : String) : ArgDecl := { name := n, ty := .scalar (.nat "maxId") }
 def rstatArg (n : String) : ArgDecl := { name := n, ty := .scalar (.enum "rstat") }
 def scanArg (n : String) : ArgDecl := { name := n, ty := .scalar (.enum "scan") }
 
@@ -76,18 +89,18 @@ store's issue identity, when it has one, is the remote's (`same`); the store
 then has the identity. -/
 def readEvent : EventDecl where
   name := "read"
-  args := [boolArg "remoteOk", boolArg "same"]
-  guard := andE (a "remoteOk") (orE (notE (f "iid")) (a "same"))
-  assigns := [("iid", tt)]
+  args := [boolArg "remoteOk", boolArg "same", idArg "nw"]
+  guard := andE (a "remoteOk") (andE (orE (notE (f "iid")) (a "same")) (ne (a "nw") zero))
+  assigns := [("iid", tt), ("cw", a "nw")]
 
 /-- `InspectResult`: an `uncertain` record whose comment appears in the complete
 remote observation (`found`: same author, same body, positive ID) is `published`
 and records the comment ID. -/
 def reconcileEvent : EventDecl where
   name := "reconcile"
-  args := [boolArg "found"]
-  guard := andE (stIs "uncertain") (a "found")
-  assigns := [("st", stC "published"), ("cpos", tt), ("unc", dec (f "unc"))]
+  args := [boolArg "found", idArg "ncid"]
+  guard := andE (stIs "uncertain") (andE (a "found") (ne (a "ncid") zero))
+  assigns := [("st", stC "published"), ("cpos", tt), ("unc", dec (f "unc")), ("cid", a "ncid")]
 
 /-- `ApplyResult`: a record that is not `rejected` is assessed again. No record
 may be `uncertain`. The record keeps its status. -/
@@ -95,7 +108,7 @@ def reassessEvent : EventDecl where
   name := "reassess"
   args := []
   guard := andE (eq (f "unc") zero) pubOrEq
-  assigns := []
+  assigns := [("wk", f "cw")]
 
 /-- `ApplyResult`: a new record, or one that replaces a `rejected` record, is
 written as `uncertain` before the remote comment is posted. No record may be
@@ -103,37 +116,43 @@ written as `uncertain` before the remote comment is posted. No record may be
 is valid (`bodyOk`); a fully resolved assessment has only `met` outcomes. -/
 def intentEvent : EventDecl where
   name := "intent"
-  args := [boolArg "nfull", boolArg "nmet", boolArg "dup", boolArg "bodyOk"]
+  args := [boolArg "nfull", boolArg "nmet", boolArg "dup", boolArg "bodyOk", idArg "nbod", idArg "nchk",
+    boolArg "nsound"]
   guard := andE (f "iid") (andE (eq (f "unc") zero) (andE fresh (andE (notE (a "dup"))
-    (andE (a "bodyOk") (orE (notE (a "nfull")) (a "nmet"))))))
+    (andE (a "bodyOk") (andE (orE (notE (a "nfull")) (a "nmet")) (andE (ne (a "nbod") zero)
+      (a "nsound")))))))
   assigns := [("st", stC "uncertain"), ("unc", inc (f "unc")), ("full", a "nfull"), ("met", a "nmet"),
-    ("cpos", ff), ("nd", zero)]
+    ("cpos", ff), ("nd", zero), ("bod", a "nbod"), ("cid", zero), ("chk", a "nchk"), ("wk", f "cw"),
+    ("sound", tt)]
 
 /-- `ApplyResult`: the agent names an existing comment (`found` in the complete
 observation) as equivalent. The new record is `equivalent` and has no
 decisions. -/
 def equivalentEvent : EventDecl where
   name := "equivalent"
-  args := [boolArg "nfull", boolArg "nmet", boolArg "found"]
+  args := [boolArg "nfull", boolArg "nmet", boolArg "found", idArg "nbod", idArg "ncid", idArg "nchk",
+    boolArg "nsound"]
   guard := andE (f "iid") (andE (eq (f "unc") zero) (andE fresh (andE (a "found")
-    (orE (notE (a "nfull")) (a "nmet")))))
-  assigns := [("st", stC "equivalent"), ("cpos", tt), ("full", a "nfull"), ("met", a "nmet"), ("nd", zero)]
+    (andE (orE (notE (a "nfull")) (a "nmet")) (andE (ne (a "nbod") zero) (andE (ne (a "ncid") zero)
+      (a "nsound")))))))
+  assigns := [("st", stC "equivalent"), ("cpos", tt), ("full", a "nfull"), ("met", a "nmet"), ("nd", zero),
+    ("bod", a "nbod"), ("cid", a "ncid"), ("chk", a "nchk"), ("wk", f "cw"), ("sound", tt)]
 
 /-- `ApplyResult`: the provider accepted the comment and returned the same
 author and body (`ok`). -/
 def publishEvent : EventDecl where
   name := "publish"
-  args := [boolArg "ok"]
-  guard := andE (stIs "uncertain") (a "ok")
-  assigns := [("st", stC "published"), ("cpos", tt), ("unc", dec (f "unc"))]
+  args := [boolArg "ok", idArg "ncid"]
+  guard := andE (stIs "uncertain") (andE (a "ok") (ne (a "ncid") zero))
+  assigns := [("st", stC "published"), ("cpos", tt), ("unc", dec (f "unc")), ("cid", a "ncid")]
 
 /-- `ApplyResult`: the provider definitely rejected the comment. The record is
 `rejected` and gets one more failure. -/
 def rejectEvent : EventDecl where
   name := "reject"
-  args := []
-  guard := stIs "uncertain"
-  assigns := [("st", stC "rejected"), ("unc", dec (f "unc")), ("nf", inc (f "nf"))]
+  args := [idArg "nfh"]
+  guard := andE (stIs "uncertain") (ne (a "nfh") zero)
+  assigns := [("st", stC "rejected"), ("unc", dec (f "unc")), ("nf", inc (f "nf")), ("fp", f "fh"), ("fh", a "nfh")]
 
 /-- `DecideResult`: the decision is appended after the record gate, a remote
 that is still open, a scan of the earlier decisions that blocks nothing, and
@@ -157,9 +176,9 @@ def keepEvent : EventDecl where
 record gets one more failure. -/
 def failCloseEvent : EventDecl where
   name := "failClose"
-  args := []
-  guard := pubOrEq
-  assigns := [("nf", inc (f "nf"))]
+  args := [idArg "nfh"]
+  guard := andE pubOrEq (ne (a "nfh") zero)
+  assigns := [("nf", inc (f "nf")), ("fp", f "fh"), ("fh", a "nfh")]
 
 /-- Another record of the store becomes `uncertain`. -/
 def otherIntentEvent : EventDecl where
@@ -242,7 +261,7 @@ def issueResultMachine : Machine where
   name := "issueresult"
   enums := [{ name := "rstat", ctors := ["none", "uncertain", "published", "equivalent", "rejected", "other"] },
     { name := "scan", ctors := ["open", "uncertain", "refusal", "consent", "returned"] }]
-  params := ["maxN"]
+  params := ["maxN", "maxId"]
   fields := [
     { name := "st", ty := .scalar (.enum "rstat"), init := .scalar (.enum 0) },
     { name := "unc", ty := .scalar (.nat "maxN"), init := .scalar (.nat 0) },
@@ -251,7 +270,15 @@ def issueResultMachine : Machine where
     { name := "met", ty := .scalar .bool, init := .scalar (.bool false) },
     { name := "cpos", ty := .scalar .bool, init := .scalar (.bool false) },
     { name := "nf", ty := .scalar (.nat "maxN"), init := .scalar (.nat 0) },
-    { name := "nd", ty := .scalar (.nat "maxN"), init := .scalar (.nat 0) }
+    { name := "nd", ty := .scalar (.nat "maxN"), init := .scalar (.nat 0) },
+    { name := "bod", ty := .scalar (.nat "maxId"), init := .scalar (.nat 0) },
+    { name := "cid", ty := .scalar (.nat "maxId"), init := .scalar (.nat 0) },
+    { name := "chk", ty := .scalar (.nat "maxId"), init := .scalar (.nat 0) },
+    { name := "wk", ty := .scalar (.nat "maxId"), init := .scalar (.nat 0) },
+    { name := "cw", ty := .scalar (.nat "maxId"), init := .scalar (.nat 0) },
+    { name := "fh", ty := .scalar (.nat "maxId"), init := .scalar (.nat 0) },
+    { name := "fp", ty := .scalar (.nat "maxId"), init := .scalar (.nat 0) },
+    { name := "sound", ty := .scalar .bool, init := .scalar (.bool false) }
   ]
   events := [readEvent, reconcileEvent, reassessEvent, intentEvent, equivalentEvent, publishEvent, rejectEvent,
     decideEvent, keepEvent, failCloseEvent, otherIntentEvent, otherSettleEvent, updateEvent, workEvent, idKeepEvent,

@@ -13,27 +13,35 @@ var rstatNames = [RstatCount]string{"none", "uncertain", "published", "equivalen
 var scanNames = [ScanCount]string{"open", "uncertain", "refusal", "consent", "returned"}
 
 var vectorParams = []Params{
-	{MaxN: 2},
+	{MaxN: 2, MaxId: 2},
 }
 
 var vectorEvents = []Event{
-	Read{RemoteOk: true, Same: true},
-	Read{RemoteOk: true, Same: false},
-	Read{RemoteOk: false, Same: true},
-	Reconcile{Found: true},
-	Reconcile{Found: false},
+	Read{RemoteOk: true, Same: true, Nw: 1},
+	Read{RemoteOk: true, Same: false, Nw: 1},
+	Read{RemoteOk: false, Same: true, Nw: 1},
+	Read{RemoteOk: true, Same: true, Nw: 2},
+	Read{RemoteOk: true, Same: true, Nw: 0},
+	Reconcile{Found: true, Ncid: 1},
+	Reconcile{Found: false, Ncid: 1},
+	Reconcile{Found: true, Ncid: 0},
 	Reassess{},
-	Intent{Nfull: false, Nmet: false, Dup: false, BodyOk: true},
-	Intent{Nfull: true, Nmet: true, Dup: false, BodyOk: true},
-	Intent{Nfull: true, Nmet: false, Dup: false, BodyOk: true},
-	Intent{Nfull: false, Nmet: false, Dup: true, BodyOk: true},
-	Intent{Nfull: false, Nmet: false, Dup: false, BodyOk: false},
-	Equivalent{Nfull: false, Nmet: false, Found: true},
-	Equivalent{Nfull: true, Nmet: true, Found: true},
-	Equivalent{Nfull: false, Nmet: false, Found: false},
-	Publish{Ok: true},
-	Publish{Ok: false},
-	Reject{},
+	Intent{Nfull: false, Nmet: false, Dup: false, BodyOk: true, Nbod: 1, Nchk: 1, Nsound: true},
+	Intent{Nfull: true, Nmet: true, Dup: false, BodyOk: true, Nbod: 2, Nchk: 1, Nsound: true},
+	Intent{Nfull: true, Nmet: false, Dup: false, BodyOk: true, Nbod: 1, Nchk: 1, Nsound: true},
+	Intent{Nfull: false, Nmet: false, Dup: true, BodyOk: true, Nbod: 1, Nchk: 1, Nsound: true},
+	Intent{Nfull: false, Nmet: false, Dup: false, BodyOk: false, Nbod: 1, Nchk: 1, Nsound: true},
+	Intent{Nfull: false, Nmet: false, Dup: false, BodyOk: true, Nbod: 0, Nchk: 1, Nsound: true},
+	Intent{Nfull: false, Nmet: false, Dup: false, BodyOk: true, Nbod: 1, Nchk: 1, Nsound: false},
+	Equivalent{Nfull: false, Nmet: false, Found: true, Nbod: 1, Ncid: 1, Nchk: 1, Nsound: true},
+	Equivalent{Nfull: true, Nmet: true, Found: true, Nbod: 2, Ncid: 2, Nchk: 1, Nsound: true},
+	Equivalent{Nfull: false, Nmet: false, Found: false, Nbod: 1, Ncid: 1, Nchk: 1, Nsound: true},
+	Equivalent{Nfull: false, Nmet: false, Found: true, Nbod: 1, Ncid: 0, Nchk: 1, Nsound: true},
+	Publish{Ok: true, Ncid: 1},
+	Publish{Ok: false, Ncid: 1},
+	Publish{Ok: true, Ncid: 0},
+	Reject{Nfh: 1},
+	Reject{Nfh: 0},
 	Decide{DigestOk: true, Closed: false, Scan: ScanOpen, FieldsOk: true},
 	Decide{DigestOk: false, Closed: false, Scan: ScanOpen, FieldsOk: true},
 	Decide{DigestOk: true, Closed: true, Scan: ScanOpen, FieldsOk: true},
@@ -43,7 +51,9 @@ var vectorEvents = []Event{
 	Keep{DigestOk: true, Closed: false, Scan: ScanReturned},
 	Keep{DigestOk: true, Closed: false, Scan: ScanOpen},
 	Keep{DigestOk: false, Closed: true, Scan: ScanOpen},
-	FailClose{},
+	FailClose{Nfh: 1},
+	FailClose{Nfh: 2},
+	FailClose{Nfh: 0},
 	OtherIntent{},
 	OtherSettle{},
 	Update{Present: true, NewSt: RstatPublished, IdentSame: true, NfNew: 0, PrefixF: true, NdNew: 0},
@@ -72,6 +82,7 @@ var vectorEvents = []Event{
 func encodeParams(p Params) string {
 	return vectortest.Object(
 		"maxN", vectortest.Uint(uint64(p.MaxN)),
+		"maxId", vectortest.Uint(uint64(p.MaxId)),
 	)
 }
 
@@ -85,31 +96,39 @@ func encodeState(s State) string {
 		"cpos", vectortest.Bool(s.Cpos),
 		"nf", vectortest.Uint(s.Nf),
 		"nd", vectortest.Uint(s.Nd),
+		"bod", vectortest.Uint(s.Bod),
+		"cid", vectortest.Uint(s.Cid),
+		"chk", vectortest.Uint(s.Chk),
+		"wk", vectortest.Uint(s.Wk),
+		"cw", vectortest.Uint(s.Cw),
+		"fh", vectortest.Uint(s.Fh),
+		"fp", vectortest.Uint(s.Fp),
+		"sound", vectortest.Bool(s.Sound),
 	)
 }
 
 func encodeEvent(e Event) string {
 	switch ev := e.(type) {
 	case Read:
-		return vectortest.Event("read", "remoteOk", vectortest.Bool(ev.RemoteOk), "same", vectortest.Bool(ev.Same))
+		return vectortest.Event("read", "remoteOk", vectortest.Bool(ev.RemoteOk), "same", vectortest.Bool(ev.Same), "nw", vectortest.Uint(ev.Nw))
 	case Reconcile:
-		return vectortest.Event("reconcile", "found", vectortest.Bool(ev.Found))
+		return vectortest.Event("reconcile", "found", vectortest.Bool(ev.Found), "ncid", vectortest.Uint(ev.Ncid))
 	case Reassess:
 		return vectortest.Event("reassess")
 	case Intent:
-		return vectortest.Event("intent", "nfull", vectortest.Bool(ev.Nfull), "nmet", vectortest.Bool(ev.Nmet), "dup", vectortest.Bool(ev.Dup), "bodyOk", vectortest.Bool(ev.BodyOk))
+		return vectortest.Event("intent", "nfull", vectortest.Bool(ev.Nfull), "nmet", vectortest.Bool(ev.Nmet), "dup", vectortest.Bool(ev.Dup), "bodyOk", vectortest.Bool(ev.BodyOk), "nbod", vectortest.Uint(ev.Nbod), "nchk", vectortest.Uint(ev.Nchk), "nsound", vectortest.Bool(ev.Nsound))
 	case Equivalent:
-		return vectortest.Event("equivalent", "nfull", vectortest.Bool(ev.Nfull), "nmet", vectortest.Bool(ev.Nmet), "found", vectortest.Bool(ev.Found))
+		return vectortest.Event("equivalent", "nfull", vectortest.Bool(ev.Nfull), "nmet", vectortest.Bool(ev.Nmet), "found", vectortest.Bool(ev.Found), "nbod", vectortest.Uint(ev.Nbod), "ncid", vectortest.Uint(ev.Ncid), "nchk", vectortest.Uint(ev.Nchk), "nsound", vectortest.Bool(ev.Nsound))
 	case Publish:
-		return vectortest.Event("publish", "ok", vectortest.Bool(ev.Ok))
+		return vectortest.Event("publish", "ok", vectortest.Bool(ev.Ok), "ncid", vectortest.Uint(ev.Ncid))
 	case Reject:
-		return vectortest.Event("reject")
+		return vectortest.Event("reject", "nfh", vectortest.Uint(ev.Nfh))
 	case Decide:
 		return vectortest.Event("decide", "digestOk", vectortest.Bool(ev.DigestOk), "closed", vectortest.Bool(ev.Closed), "scan", vectortest.Str(scanNames[ev.Scan]), "fieldsOk", vectortest.Bool(ev.FieldsOk))
 	case Keep:
 		return vectortest.Event("keep", "digestOk", vectortest.Bool(ev.DigestOk), "closed", vectortest.Bool(ev.Closed), "scan", vectortest.Str(scanNames[ev.Scan]))
 	case FailClose:
-		return vectortest.Event("failClose")
+		return vectortest.Event("failClose", "nfh", vectortest.Uint(ev.Nfh))
 	case OtherIntent:
 		return vectortest.Event("otherIntent")
 	case OtherSettle:

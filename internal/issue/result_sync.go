@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -29,7 +30,7 @@ func InspectResult(ctx context.Context, provider ResultProvider, root string, re
 			if record.Status == "uncertain" {
 				for _, comment := range remote.Comments {
 					if comment.AuthorID == record.ActorID && comment.Body == record.Body && comment.ID > 0 {
-						next, ok := resultStep(projectRecord(*store, version), rk.Reconcile{Found: true})
+						next, ok := resultStep(projectRecord(*store, version, workID(work)), rk.Reconcile{Found: true, Ncid: commentID(comment.ID)})
 						if !ok {
 							return errResultInconsistent()
 						}
@@ -151,7 +152,7 @@ func ApplyResult(ctx context.Context, provider ResultProvider, root string, repo
 		if err != nil {
 			return err
 		}
-		state := projectRecord(*store, version)
+		state := projectRecord(*store, version, workID(work))
 		met := allMet(proposal.Outcomes)
 		uncertain := resultError("publication uncertain; inspect remote before any further write")
 		if record := store.Records[version]; record != nil && record.Status != "rejected" {
@@ -168,7 +169,7 @@ func ApplyResult(ctx context.Context, provider ResultProvider, root string, repo
 			return save()
 		}
 		// No record may be uncertain before a new one is written.
-		if _, ok := resultStep(state, rk.Intent{Nfull: proposal.FullyResolved, Nmet: met, BodyOk: true}); !ok {
+		if _, ok := resultStep(state, rk.Intent{Nfull: proposal.FullyResolved, Nmet: met, BodyOk: true, Nbod: 1, Nchk: 1, Nsound: true}); !ok {
 			return uncertain
 		}
 		checks := append([]ResultCheck{}, proposal.Checks...)
@@ -185,7 +186,12 @@ func ApplyResult(ctx context.Context, provider ResultProvider, root string, repo
 					break
 				}
 			}
-			next, ok := resultStep(state, rk.Equivalent{Nfull: proposal.FullyResolved, Nmet: met, Found: found != nil})
+			if found != nil {
+				record.Body, record.ActorID, record.CommentID = found.Body, found.AuthorID, found.ID
+			}
+			next, ok := resultStep(state, rk.Equivalent{Nfull: proposal.FullyResolved, Nmet: met, Found: found != nil,
+				Nbod: bodyID(record.Body, record.ActorID), Ncid: commentID(record.CommentID), Nchk: checksID(record.Checks),
+				Nsound: soundRecord(record, store.TaskID)})
 			if !ok {
 				if found == nil {
 					return resultError("equivalent comment absent from current complete observation")
@@ -193,9 +199,6 @@ func ApplyResult(ctx context.Context, provider ResultProvider, root string, repo
 				return errResultInconsistent()
 			}
 			record.Status = statusOf(next.St)
-			record.Body = found.Body
-			record.ActorID = found.AuthorID
-			record.CommentID = found.ID
 			store.Records[version] = record
 			out = *record
 			return save()
@@ -208,7 +211,15 @@ func ApplyResult(ctx context.Context, provider ResultProvider, root string, repo
 			}
 		}
 		bodyErr := validateResultBody(proposal.Body)
-		next, ok := resultStep(state, rk.Intent{Nfull: proposal.FullyResolved, Nmet: met, Dup: duplicate, BodyOk: bodyErr == nil})
+		if !duplicate && bodyErr == nil {
+			var nonce [24]byte
+			if _, err := rand.Read(nonce[:]); err != nil {
+				return err
+			}
+			record.Body = proposal.Body + "\n\n<!-- kander-result:" + hex.EncodeToString(nonce[:]) + " -->"
+		}
+		next, ok := resultStep(state, rk.Intent{Nfull: proposal.FullyResolved, Nmet: met, Dup: duplicate, BodyOk: bodyErr == nil,
+			Nbod: bodyID(record.Body, record.ActorID), Nchk: checksID(record.Checks), Nsound: soundRecord(record, store.TaskID)})
 		if !ok {
 			if duplicate {
 				return resultError("completion evidence unchanged; reference the existing result comment instead of publishing another assessment")
@@ -218,11 +229,6 @@ func ApplyResult(ctx context.Context, provider ResultProvider, root string, repo
 			}
 			return errResultInconsistent()
 		}
-		var nonce [24]byte
-		if _, err := rand.Read(nonce[:]); err != nil {
-			return err
-		}
-		record.Body = proposal.Body + "\n\n<!-- kander-result:" + hex.EncodeToString(nonce[:]) + " -->"
 		record.Status = statusOf(next.St)
 		store.Records[version] = record
 		if err := save(); err != nil {
@@ -232,17 +238,18 @@ func ApplyResult(ctx context.Context, provider ResultProvider, root string, repo
 		if err != nil {
 			var rejected *ResultWriteRejection
 			if errors.As(err, &rejected) {
-				next, ok := resultStep(projectRecord(*store, version), rk.Reject{})
+				failures := append(slices.Clone(record.Failures), ResultFailure{Action: "comment", Detail: Sanitize(err.Error())})
+				next, ok := resultStep(projectRecord(*store, version, workID(work)), rk.Reject{Nfh: failuresID(failures)})
 				if !ok {
 					return errors.Join(err, errResultInconsistent())
 				}
 				record.Status = statusOf(next.St)
-				record.Failures = append(record.Failures, ResultFailure{Action: "comment", Detail: Sanitize(err.Error())})
+				record.Failures = failures
 				return errors.Join(err, save())
 			}
 			return err
 		}
-		next, ok = resultStep(projectRecord(*store, version), rk.Publish{Ok: comment.ID > 0 && comment.AuthorID == record.ActorID && comment.Body == record.Body})
+		next, ok = resultStep(projectRecord(*store, version, workID(work)), rk.Publish{Ok: comment.ID > 0 && comment.AuthorID == record.ActorID && comment.Body == record.Body, Ncid: commentID(comment.ID)})
 		if !ok {
 			return resultError("publication response mismatch; outcome remains uncertain")
 		}
@@ -270,7 +277,7 @@ func DecideResult(ctx context.Context, provider ResultProvider, root string, rep
 			return resultError("close target changed; inspect and request a new decision")
 		}
 		record := store.Records[decision.Version]
-		state := projectRecord(*store, decision.Version)
+		state := projectRecord(*store, decision.Version, workID(work))
 		digestOk := record != nil && record.CardDigest == work.Digest
 		// The gate: a record that is published or equivalent, of the current work, and fully resolved.
 		if _, ok := resultStep(state, rk.Keep{DigestOk: digestOk, Closed: true}); !ok {
@@ -299,9 +306,9 @@ func DecideResult(ctx context.Context, provider ResultProvider, root string, rep
 		}
 		var appended dk.State
 		if decision.Decision == "yes" {
-			appended, _ = decisionStep(dk.Initial(decisionKernelParams), dk.AppendYes{})
+			appended, _ = decisionStep(dk.Initial(decisionKernelParams), dk.AppendYes{Ndid: decisionID(ResultCloseRecord{StateVersion: remote.StateVersion, Decision: decision.Decision, UserReference: decision.UserReference})})
 		} else {
-			appended, _ = decisionStep(dk.Initial(decisionKernelParams), dk.AppendNo{})
+			appended, _ = decisionStep(dk.Initial(decisionKernelParams), dk.AppendNo{Ndid: decisionID(ResultCloseRecord{StateVersion: remote.StateVersion, Decision: decision.Decision, UserReference: decision.UserReference})})
 		}
 		record.Decisions = append(record.Decisions, ResultCloseRecord{StateVersion: remote.StateVersion, Decision: decision.Decision, UserReference: decision.UserReference, Status: decisionStatusOf(appended.Ds)})
 		if err := save(); err != nil {
@@ -316,12 +323,13 @@ func DecideResult(ctx context.Context, provider ResultProvider, root string, rep
 			var rejected *ResultWriteRejection
 			if errors.As(err, &rejected) {
 				closed, ok := decisionStep(dk.State{Ds: dstatOf(last.Status)}, dk.CloseRejected{})
-				_, okFail := resultStep(projectRecord(*store, decision.Version), rk.FailClose{})
+				failures := append(slices.Clone(record.Failures), ResultFailure{Action: "close", Detail: Sanitize(err.Error())})
+				_, okFail := resultStep(projectRecord(*store, decision.Version, workID(work)), rk.FailClose{Nfh: failuresID(failures)})
 				if !ok || !okFail {
 					return errors.Join(err, errResultInconsistent())
 				}
 				last.Status = decisionStatusOf(closed.Ds)
-				record.Failures = append(record.Failures, ResultFailure{Action: "close", Detail: Sanitize(err.Error())})
+				record.Failures = failures
 				return errors.Join(err, save())
 			}
 			return err

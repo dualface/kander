@@ -304,7 +304,7 @@ func readResult(ctx context.Context, provider ResultProvider, root string, repos
 		return work, remote, err
 	}
 	remoteOk := remote.SourceKey == store.SourceKey && remote.IssueID > 0 && remote.ActorID > 0 && remote.Revision != "" && remote.StateVersion != "" && (remote.State == "open" || remote.State == "closed")
-	if _, ok := resultStep(rk.State{Iid: store.IssueID > 0}, rk.Read{RemoteOk: remoteOk, Same: store.IssueID == remote.IssueID}); !ok {
+	if _, ok := resultStep(rk.State{Iid: store.IssueID > 0}, rk.Read{RemoteOk: remoteOk, Same: store.IssueID == remote.IssueID, Nw: workID(work)}); !ok {
 		return work, remote, resultError("remote identity or state mismatch")
 	}
 	store.IssueID = remote.IssueID

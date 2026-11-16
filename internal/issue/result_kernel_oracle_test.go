@@ -248,6 +248,17 @@ func TestResultStoreValidatorsAgreeWithTheOriginals(t *testing.T) {
 	check := func(label string, ms ...storeMutation) {
 		next := apply(ms...)
 		single := len(ms) == 1
+		// A comparison fact read off the kernel projections implies the comparison of the records.
+		if next.Records[version] != nil {
+			got := projectedFacts(projectRecord(previous, version, workID(work)), projectRecord(next, version, workID(work)))
+			want := compareRecords(previous.Records[version], next.Records[version], work)
+			// The facts of the projections describe one save that appends at most one failure, so a
+			// fact they hold is a comparison that holds; the converse is not claimed.
+			if got.identSame && !want.identSame || got.prefix && !want.prefix || got.checksSame && !want.checksSame ||
+				got.workSame && !want.workSame {
+				t.Errorf("%s: facts of the projections %+v, comparisons of the records %+v", label, got, want)
+			}
+		}
 		for name, pair := range map[string][2]error{
 			"store":  {ValidateResultStore(next, previous.SourceKey, id), legacyValidateResultStore(next, previous.SourceKey, id)},
 			"update": {ValidateResultStoreUpdate(previous, next), legacyValidateResultStoreUpdate(previous, next)},

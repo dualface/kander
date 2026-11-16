@@ -236,90 +236,107 @@ theorem issueNeeded_spec (p : Params) (x : Rq) (hr ip : Bool) :
 
 /-- Theorem 5: `ApplyResult` writes nothing while any record of the store is
 `uncertain`: no new record, no equivalent record, and no reassessment. -/
-theorem apply_refused_uncertain (p : Params) (x : Rq) (hu : x.unc ≠ 0) :
-    (∀ nf nm dp bo, step M p (enc x) ⟨"intent", [boolV nf, boolV nm, boolV dp, boolV bo]⟩ = none) ∧
-    (∀ nf nm fo, step M p (enc x) ⟨"equivalent", [boolV nf, boolV nm, boolV fo]⟩ = none) ∧
+theorem apply_refused_uncertain (p : Params) (x : Rq) (hcw : x.cw ≤ p "maxId") (hu : x.unc ≠ 0) :
+    (∀ nf nm dp bo nb nk ns, step M p (enc x) ⟨"intent", [boolV nf, boolV nm, boolV dp, boolV bo, natV nb, natV nk,
+      boolV ns]⟩ = none) ∧
+    (∀ nf nm fo nb nc nk ns, step M p (enc x) ⟨"equivalent", [boolV nf, boolV nm, boolV fo, natV nb, natV nc,
+      natV nk, boolV ns]⟩ = none) ∧
     step M p (enc x) ⟨"reassess", []⟩ = none := by
-  refine ⟨fun nf nm dp bo => ?_, fun nf nm fo => ?_, ?_⟩
-  · rw [step_intent]; apply ite_none; intro c; obtain ⟨-, -, c3, -⟩ := c; exact hu c3
-  · rw [step_equivalent]; apply ite_none; intro c; obtain ⟨-, c2, -⟩ := c; exact hu c2
-  · rw [step_reassess]; apply ite_none; intro c; exact hu c.1
+  refine ⟨fun nf nm dp bo nb nk ns => ?_, fun nf nm fo nb nc nk ns => ?_, ?_⟩
+  · rw [step_intent p x hcw]; apply ite_none; intro c; obtain ⟨-, -, -, -, c5, -⟩ := c; exact hu c5
+  · rw [step_equivalent p x hcw]; apply ite_none; intro c; obtain ⟨-, -, -, -, c5, -⟩ := c; exact hu c5
+  · rw [step_reassess p x hcw]; apply ite_none; intro c; exact hu c.1
 
 /-- Theorem 5: on a reachable state, an `uncertain` record blocks every
 `ApplyResult` write. -/
 theorem apply_refused_uncertain_record {p : Params} {x : Rq} (hr : Reachable M p (enc x)) (hs : x.st = 1) :
-    (∀ nf nm dp bo, step M p (enc x) ⟨"intent", [boolV nf, boolV nm, boolV dp, boolV bo]⟩ = none) ∧
-    (∀ nf nm fo, step M p (enc x) ⟨"equivalent", [boolV nf, boolV nm, boolV fo]⟩ = none) ∧
+    (∀ nf nm dp bo nb nk ns, step M p (enc x) ⟨"intent", [boolV nf, boolV nm, boolV dp, boolV bo, natV nb, natV nk,
+      boolV ns]⟩ = none) ∧
+    (∀ nf nm fo nb nc nk ns, step M p (enc x) ⟨"equivalent", [boolV nf, boolV nm, boolV fo, natV nb, natV nc,
+      natV nk, boolV ns]⟩ = none) ∧
     step M p (enc x) ⟨"reassess", []⟩ = none :=
-  apply_refused_uncertain p x (by have := reachable_uncertain_counted hr hs; omega)
+  apply_refused_uncertain p x (bounds (reachable_inv hr)).2.2.2.2.2.2.2.2.1
+    (by have := reachable_uncertain_counted hr hs; omega)
 
-/-- Theorem 5: a reassessment keeps a `published` or `equivalent` record. -/
-theorem reassess_spec (p : Params) (x : Rq) :
+/-- Theorem 5: a reassessment keeps a `published` or `equivalent` record and
+points it at the current work. -/
+theorem reassess_spec (p : Params) (x : Rq) (hcw : x.cw ≤ p "maxId") :
     step M p (enc x) ⟨"reassess", []⟩ ≠ none ↔ x.unc = 0 ∧ (x.st = 2 ∨ x.st = 3) := by
-  rw [step_reassess]
+  rw [step_reassess p x hcw]
   by_cases h : x.unc = 0 ∧ (x.st = 2 ∨ x.st = 3) <;> simp [h]
 
 /-- Theorem 5: a new record is written `uncertain` before the remote comment is
 posted, only when no record is `uncertain`, the completion evidence is not
-already published, and the body is valid. It carries no decision. -/
-theorem intent_spec (p : Params) (x : Rq) (nf nm dp bo : Bool) :
-    step M p (enc x) ⟨"intent", [boolV nf, boolV nm, boolV dp, boolV bo]⟩ ≠ none ↔
-      x.unc + 1 ≤ p "maxN" ∧ x.iid = true ∧ x.unc = 0 ∧ (x.st = 0 ∨ x.st = 4) ∧ dp = false ∧ bo = true ∧
-        (nf = false ∨ nm = true) := by
-  rw [step_intent]
-  by_cases h : x.unc + 1 ≤ p "maxN" ∧ x.iid = true ∧ x.unc = 0 ∧ (x.st = 0 ∨ x.st = 4) ∧ dp = false ∧
-    bo = true ∧ (nf = false ∨ nm = true) <;> simp [h] <;> omega
+already published, and the body is valid. It carries no decision and no
+comment, and it is assessed against the current work set. -/
+theorem intent_spec (p : Params) (x : Rq) (hcw : x.cw ≤ p "maxId") (nf nm dp bo : Bool) (nb nk : Nat) (ns : Bool) :
+    step M p (enc x) ⟨"intent", [boolV nf, boolV nm, boolV dp, boolV bo, natV nb, natV nk, boolV ns]⟩ ≠ none ↔
+      nb ≤ p "maxId" ∧ nk ≤ p "maxId" ∧ x.unc + 1 ≤ p "maxN" ∧ x.iid = true ∧ x.unc = 0 ∧
+        (x.st = 0 ∨ x.st = 4) ∧ dp = false ∧ bo = true ∧ (nf = false ∨ nm = true) ∧ nb ≠ 0 ∧ ns = true := by
+  rw [step_intent p x hcw]
+  by_cases h : nb ≤ p "maxId" ∧ nk ≤ p "maxId" ∧ x.unc + 1 ≤ p "maxN" ∧ x.iid = true ∧ x.unc = 0 ∧
+    (x.st = 0 ∨ x.st = 4) ∧ dp = false ∧ bo = true ∧ (nf = false ∨ nm = true) ∧ nb ≠ 0 ∧ ns = true <;> simp [h] <;> omega
 
-theorem intent_result (p : Params) (x : Rq) (nf nm dp bo : Bool) {s' : State}
-    (h : step M p (enc x) ⟨"intent", [boolV nf, boolV nm, boolV dp, boolV bo]⟩ = some s') :
-    s' = enc { x with st := 1, unc := x.unc + 1, full := nf, met := nm, cpos := false, nd := 0 } := by
-  rw [step_intent] at h; exact (ite_some_enc h).2
+theorem intent_result (p : Params) (x : Rq) (hcw : x.cw ≤ p "maxId") (nf nm dp bo : Bool) (nb nk : Nat) (ns : Bool)
+    {s' : State}
+    (h : step M p (enc x) ⟨"intent", [boolV nf, boolV nm, boolV dp, boolV bo, natV nb, natV nk, boolV ns]⟩ =
+      some s') :
+    s' = enc { x with st := 1, unc := x.unc + 1, full := nf, met := nm, cpos := false, nd := 0, bod := nb, cid := 0, chk := nk, wk := x.cw, sound := true } := by
+  rw [step_intent p x hcw] at h; exact (ite_some_enc h).2
 
-theorem intent_refused (p : Params) (x : Rq) (nf nm : Bool) :
-    (∀ bo, step M p (enc x) ⟨"intent", [boolV nf, boolV nm, boolV true, boolV bo]⟩ = none) ∧
-    (∀ dp, step M p (enc x) ⟨"intent", [boolV nf, boolV nm, boolV dp, boolV false]⟩ = none) ∧
+theorem intent_refused (p : Params) (x : Rq) (hcw : x.cw ≤ p "maxId") (nf nm : Bool) (nb nk : Nat) (ns : Bool) :
+    (∀ bo, step M p (enc x) ⟨"intent", [boolV nf, boolV nm, boolV true, boolV bo, natV nb, natV nk, boolV ns]⟩ =
+      none) ∧
+    (∀ dp, step M p (enc x) ⟨"intent", [boolV nf, boolV nm, boolV dp, boolV false, natV nb, natV nk, boolV ns]⟩ =
+      none) ∧
     (x.st = 1 ∨ x.st = 2 ∨ x.st = 3 → ∀ dp bo,
-      step M p (enc x) ⟨"intent", [boolV nf, boolV nm, boolV dp, boolV bo]⟩ = none) := by
+      step M p (enc x) ⟨"intent", [boolV nf, boolV nm, boolV dp, boolV bo, natV nb, natV nk, boolV ns]⟩ = none) := by
   refine ⟨fun bo => ?_, fun dp => ?_, fun hs dp bo => ?_⟩ <;>
-    (rw [step_intent]; apply ite_none; intro c; obtain ⟨-, -, -, c4, c5, c6, -⟩ := c
-     first | omega | (simp at c5) | (simp at c6))
+    (rw [step_intent p x hcw]; apply ite_none; intro c; obtain ⟨-, -, -, -, -, c6, c7, c8, -⟩ := c
+     first | omega | (simp at c7) | (simp at c8))
 
 /-- Theorem 5: the agent names an existing comment as the equivalent result: the
 new record is `equivalent`, and it has a comment. -/
-theorem equivalent_spec (p : Params) (x : Rq) (nf nm fo : Bool) :
-    step M p (enc x) ⟨"equivalent", [boolV nf, boolV nm, boolV fo]⟩ ≠ none ↔
-      x.iid = true ∧ x.unc = 0 ∧ (x.st = 0 ∨ x.st = 4) ∧ fo = true ∧ (nf = false ∨ nm = true) := by
-  rw [step_equivalent]
-  by_cases h : x.iid = true ∧ x.unc = 0 ∧ (x.st = 0 ∨ x.st = 4) ∧ fo = true ∧ (nf = false ∨ nm = true) <;>
-    simp [h]
+theorem equivalent_spec (p : Params) (x : Rq) (hcw : x.cw ≤ p "maxId") (nf nm fo : Bool) (nb nc nk : Nat)
+    (ns : Bool) :
+    step M p (enc x) ⟨"equivalent", [boolV nf, boolV nm, boolV fo, natV nb, natV nc, natV nk, boolV ns]⟩ ≠ none ↔
+      nb ≤ p "maxId" ∧ nc ≤ p "maxId" ∧ nk ≤ p "maxId" ∧ x.iid = true ∧ x.unc = 0 ∧ (x.st = 0 ∨ x.st = 4) ∧
+        fo = true ∧ (nf = false ∨ nm = true) ∧ nb ≠ 0 ∧ nc ≠ 0 ∧ ns = true := by
+  rw [step_equivalent p x hcw]
+  by_cases h : nb ≤ p "maxId" ∧ nc ≤ p "maxId" ∧ nk ≤ p "maxId" ∧ x.iid = true ∧ x.unc = 0 ∧
+    (x.st = 0 ∨ x.st = 4) ∧ fo = true ∧ (nf = false ∨ nm = true) ∧ nb ≠ 0 ∧ nc ≠ 0 ∧ ns = true <;> simp [h]
 
-theorem equivalent_result (p : Params) (x : Rq) (nf nm fo : Bool) {s' : State}
-    (h : step M p (enc x) ⟨"equivalent", [boolV nf, boolV nm, boolV fo]⟩ = some s') :
-    s' = enc { x with st := 3, cpos := true, full := nf, met := nm, nd := 0 } := by
-  rw [step_equivalent] at h; exact (ite_some_enc h).2
+theorem equivalent_result (p : Params) (x : Rq) (hcw : x.cw ≤ p "maxId") (nf nm fo : Bool) (nb nc nk : Nat)
+    (ns : Bool) {s' : State}
+    (h : step M p (enc x) ⟨"equivalent", [boolV nf, boolV nm, boolV fo, natV nb, natV nc, natV nk, boolV ns]⟩ =
+      some s') :
+    s' = enc { x with st := 3, cpos := true, full := nf, met := nm, nd := 0, bod := nb, cid := nc, chk := nk, wk := x.cw, sound := true } := by
+  rw [step_equivalent p x hcw] at h; exact (ite_some_enc h).2
 
 /-- Theorem 5: a publication is recorded only for an `uncertain` record after
 the provider returned the same author and body; a definite rejection of an
 `uncertain` record makes it `rejected` and adds one failure. -/
-theorem publish_spec (p : Params) (x : Rq) (hb : x.unc ≤ p "maxN") (ok : Bool) :
-    step M p (enc x) ⟨"publish", [boolV ok]⟩ ≠ none ↔ x.st = 1 ∧ ok = true ∧ 1 ≤ x.unc := by
+theorem publish_spec (p : Params) (x : Rq) (hb : x.unc ≤ p "maxN") (ok : Bool) (nc : Nat) :
+    step M p (enc x) ⟨"publish", [boolV ok, natV nc]⟩ ≠ none ↔
+      nc ≤ p "maxId" ∧ x.st = 1 ∧ ok = true ∧ nc ≠ 0 ∧ 1 ≤ x.unc := by
   rw [step_publish p x hb]
-  by_cases h : x.st = 1 ∧ ok = true ∧ 1 ≤ x.unc <;> simp [h]
+  by_cases h : nc ≤ p "maxId" ∧ x.st = 1 ∧ ok = true ∧ nc ≠ 0 ∧ 1 ≤ x.unc <;> simp [h]
 
-theorem publish_result (p : Params) (x : Rq) (hb : x.unc ≤ p "maxN") (ok : Bool) {s' : State}
-    (h : step M p (enc x) ⟨"publish", [boolV ok]⟩ = some s') :
-    s' = enc { x with st := 2, cpos := true, unc := x.unc - 1 } := by
+theorem publish_result (p : Params) (x : Rq) (hb : x.unc ≤ p "maxN") (ok : Bool) (nc : Nat) {s' : State}
+    (h : step M p (enc x) ⟨"publish", [boolV ok, natV nc]⟩ = some s') :
+    s' = enc { x with st := 2, cpos := true, unc := x.unc - 1, cid := nc } := by
   rw [step_publish p x hb] at h; exact (ite_some_enc h).2
 
-theorem reject_spec (p : Params) (x : Rq) (hb : x.unc ≤ p "maxN") :
-    step M p (enc x) ⟨"reject", []⟩ ≠ none ↔ x.nf + 1 ≤ p "maxN" ∧ x.st = 1 ∧ 1 ≤ x.unc := by
-  rw [step_reject p x hb]
-  by_cases h : x.nf + 1 ≤ p "maxN" ∧ x.st = 1 ∧ 1 ≤ x.unc <;> simp [h]
+theorem reject_spec (p : Params) (x : Rq) (hb : x.unc ≤ p "maxN") (hfh : x.fh ≤ p "maxId") (nh : Nat) :
+    step M p (enc x) ⟨"reject", [natV nh]⟩ ≠ none ↔
+      nh ≤ p "maxId" ∧ x.nf + 1 ≤ p "maxN" ∧ x.st = 1 ∧ nh ≠ 0 ∧ 1 ≤ x.unc := by
+  rw [step_reject p x hb hfh]
+  by_cases h : nh ≤ p "maxId" ∧ x.nf + 1 ≤ p "maxN" ∧ x.st = 1 ∧ nh ≠ 0 ∧ 1 ≤ x.unc <;> simp [h]
 
-theorem reject_result (p : Params) (x : Rq) (hb : x.unc ≤ p "maxN") {s' : State}
-    (h : step M p (enc x) ⟨"reject", []⟩ = some s') :
-    s' = enc { x with st := 4, unc := x.unc - 1, nf := x.nf + 1 } := by
-  rw [step_reject p x hb] at h; exact (ite_some_enc h).2
+theorem reject_result (p : Params) (x : Rq) (hb : x.unc ≤ p "maxN") (hfh : x.fh ≤ p "maxId") (nh : Nat)
+    {s' : State} (h : step M p (enc x) ⟨"reject", [natV nh]⟩ = some s') :
+    s' = enc { x with st := 4, unc := x.unc - 1, nf := x.nf + 1, fp := x.fh, fh := nh } := by
+  rw [step_reject p x hb hfh] at h; exact (ite_some_enc h).2
 
 /-- Theorem 5: `DecideResult` takes a decision only on a `published` or
 `equivalent` record of the current work set that is fully resolved, only while
@@ -375,47 +392,53 @@ theorem keep_decide_exclusive (p : Params) (x : Rq) (dg cl : Bool) (sc : Nat) (f
 
 /-- Theorem 5: a close request that the provider definitely rejected adds one
 failure to a `published` or `equivalent` record. -/
-theorem failClose_spec (p : Params) (x : Rq) :
-    step M p (enc x) ⟨"failClose", []⟩ ≠ none ↔ x.nf + 1 ≤ p "maxN" ∧ (x.st = 2 ∨ x.st = 3) := by
-  rw [step_failClose]
-  by_cases h : x.nf + 1 ≤ p "maxN" ∧ (x.st = 2 ∨ x.st = 3) <;> simp [h]
+theorem failClose_spec (p : Params) (x : Rq) (hfh : x.fh ≤ p "maxId") (nh : Nat) :
+    step M p (enc x) ⟨"failClose", [natV nh]⟩ ≠ none ↔
+      nh ≤ p "maxId" ∧ x.nf + 1 ≤ p "maxN" ∧ (x.st = 2 ∨ x.st = 3) ∧ nh ≠ 0 := by
+  rw [step_failClose p x hfh]
+  by_cases h : nh ≤ p "maxId" ∧ x.nf + 1 ≤ p "maxN" ∧ (x.st = 2 ∨ x.st = 3) ∧ nh ≠ 0 <;> simp [h]
 
-theorem failClose_result (p : Params) (x : Rq) {s' : State} (h : step M p (enc x) ⟨"failClose", []⟩ = some s') :
-    s' = enc { x with nf := x.nf + 1 } := by
-  rw [step_failClose] at h; exact (ite_some_enc h).2
+theorem failClose_result (p : Params) (x : Rq) (hfh : x.fh ≤ p "maxId") (nh : Nat) {s' : State}
+    (h : step M p (enc x) ⟨"failClose", [natV nh]⟩ = some s') :
+    s' = enc { x with nf := x.nf + 1, fp := x.fh, fh := nh } := by
+  rw [step_failClose p x hfh] at h; exact (ite_some_enc h).2
 
 /-! ## Theorem 6: reconciliation and the issue identity -/
 
 /-- Theorem 6: `InspectResult` makes an `uncertain` record `published` only
 when the complete remote observation has its comment, and records that comment;
 nothing else about the record changes. -/
-theorem reconcile_spec (p : Params) (x : Rq) (hb : x.unc ≤ p "maxN") (fo : Bool) :
-    step M p (enc x) ⟨"reconcile", [boolV fo]⟩ ≠ none ↔ x.st = 1 ∧ fo = true ∧ 1 ≤ x.unc := by
+theorem reconcile_spec (p : Params) (x : Rq) (hb : x.unc ≤ p "maxN") (fo : Bool) (nc : Nat) :
+    step M p (enc x) ⟨"reconcile", [boolV fo, natV nc]⟩ ≠ none ↔
+      nc ≤ p "maxId" ∧ x.st = 1 ∧ fo = true ∧ nc ≠ 0 ∧ 1 ≤ x.unc := by
   rw [step_reconcile p x hb]
-  by_cases h : x.st = 1 ∧ fo = true ∧ 1 ≤ x.unc <;> simp [h]
+  by_cases h : nc ≤ p "maxId" ∧ x.st = 1 ∧ fo = true ∧ nc ≠ 0 ∧ 1 ≤ x.unc <;> simp [h]
 
-theorem reconcile_result (p : Params) (x : Rq) (hb : x.unc ≤ p "maxN") (fo : Bool) {s' : State}
-    (h : step M p (enc x) ⟨"reconcile", [boolV fo]⟩ = some s') :
-    s' = enc { x with st := 2, cpos := true, unc := x.unc - 1 } := by
+theorem reconcile_result (p : Params) (x : Rq) (hb : x.unc ≤ p "maxN") (fo : Bool) (nc : Nat) {s' : State}
+    (h : step M p (enc x) ⟨"reconcile", [boolV fo, natV nc]⟩ = some s') :
+    s' = enc { x with st := 2, cpos := true, unc := x.unc - 1, cid := nc } := by
   rw [step_reconcile p x hb] at h; exact (ite_some_enc h).2
 
-theorem reconcile_refused (p : Params) (x : Rq) (hb : x.unc ≤ p "maxN") (fo : Bool) (hs : x.st ≠ 1) :
-    step M p (enc x) ⟨"reconcile", [boolV fo]⟩ = none := by
-  rw [step_reconcile p x hb]; apply ite_none; intro c; exact hs c.1
+theorem reconcile_refused (p : Params) (x : Rq) (hb : x.unc ≤ p "maxN") (fo : Bool) (nc : Nat) (hs : x.st ≠ 1) :
+    step M p (enc x) ⟨"reconcile", [boolV fo, natV nc]⟩ = none := by
+  rw [step_reconcile p x hb]; apply ite_none; intro c; exact hs c.2.1
 
 /-- Theorem 6: `readResult` writes the issue identity of the remote into a store
-that has none, and refuses a remote with another identity. -/
-theorem read_spec (p : Params) (x : Rq) (ro sm : Bool) :
-    step M p (enc x) ⟨"read", [boolV ro, boolV sm]⟩ ≠ none ↔ ro = true ∧ (x.iid = false ∨ sm = true) := by
+that has none, takes the work set it read as the current one, and refuses a
+remote with another identity. -/
+theorem read_spec (p : Params) (x : Rq) (ro sm : Bool) (nw : Nat) :
+    step M p (enc x) ⟨"read", [boolV ro, boolV sm, natV nw]⟩ ≠ none ↔
+      nw ≤ p "maxId" ∧ ro = true ∧ (x.iid = false ∨ sm = true) ∧ nw ≠ 0 := by
   rw [step_read]
-  by_cases h : ro = true ∧ (x.iid = false ∨ sm = true) <;> simp [h]
+  by_cases h : nw ≤ p "maxId" ∧ ro = true ∧ (x.iid = false ∨ sm = true) ∧ nw ≠ 0 <;> simp [h]
 
-theorem read_result (p : Params) (x : Rq) (ro sm : Bool) {s' : State}
-    (h : step M p (enc x) ⟨"read", [boolV ro, boolV sm]⟩ = some s') : s' = enc { x with iid := true } := by
+theorem read_result (p : Params) (x : Rq) (ro sm : Bool) (nw : Nat) {s' : State}
+    (h : step M p (enc x) ⟨"read", [boolV ro, boolV sm, natV nw]⟩ = some s') :
+    s' = enc { x with iid := true, cw := nw } := by
   rw [step_read] at h; exact (ite_some_enc h).2
 
-theorem read_refused (p : Params) (x : Rq) (hi : x.iid = true) (ro : Bool) :
-    step M p (enc x) ⟨"read", [boolV ro, boolV false]⟩ = none := by
+theorem read_refused (p : Params) (x : Rq) (hi : x.iid = true) (ro : Bool) (nw : Nat) :
+    step M p (enc x) ⟨"read", [boolV ro, boolV false, natV nw]⟩ = none := by
   rw [step_read]; apply ite_none; intro c; simp_all
 
 end KanderFormal.Proofs.IssueResult

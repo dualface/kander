@@ -866,7 +866,7 @@ def entries : List Entry := [
     ] },
   { machine := Machines.IssueResult.issueResultMachine
     source := "KanderFormal/Machines/IssueResult.lean"
-    vectors := { depth := 4, paramSets := [[("maxN", 2)]], natDomain := [], events := issueResultEvents }
+    vectors := { depth := 4, paramSets := [[("maxN", 2), ("maxId", 2)]], natDomain := [], events := issueResultEvents }
     theorems := [
       ``KanderFormal.Proofs.IssueResult.wellTyped,
       ``KanderFormal.Proofs.IssueResult.update_spec,
@@ -923,7 +923,7 @@ def entries : List Entry := [
       ``KanderFormal.Proofs.IssueResult.rejected_only_replaced,
       ``KanderFormal.Proofs.IssueResult.client_update_ok,
       ``KanderFormal.Proofs.IssueResult.client_work_ok,
-      ``KanderFormal.Proofs.IssueResult.idKeep_same_accepted,
+      ``KanderFormal.Proofs.IssueResult.read_idKeep_ok,
       ``KanderFormal.Proofs.IssueResult.props_valid,
       ``KanderFormal.Proofs.IssueResult.props_issueNeeded,
       ``KanderFormal.Proofs.IssueResult.reachable_client_save,
@@ -939,7 +939,7 @@ def entries : List Entry := [
     ] },
   { machine := Machines.IssueResultDecision.issueResultDecisionMachine
     source := "KanderFormal/Machines/IssueResultDecision.lean"
-    vectors := { depth := 4, paramSets := [[]], natDomain := [], events := decisionEvents }
+    vectors := { depth := 4, paramSets := [[("maxId", 2)]], natDomain := [], events := decisionEvents }
     theorems := [
       ``KanderFormal.Proofs.IssueResultDecision.wellTyped,
       ``KanderFormal.Proofs.IssueResultDecision.flow,
@@ -964,6 +964,9 @@ def entries : List Entry := [
       ``KanderFormal.Proofs.IssueResultDecision.cls_declined,
       ``KanderFormal.Proofs.IssueResultDecision.cls_consent,
       ``KanderFormal.Proofs.IssueResultDecision.cls_other,
+      ``KanderFormal.Proofs.IssueResultDecision.did_kept,
+      ``KanderFormal.Proofs.IssueResultDecision.client_settle_ok,
+      ``KanderFormal.Proofs.IssueResultDecision.props_valid,
       ``KanderFormal.Proofs.IssueResultDecision.visitAll_enc,
       ``KanderFormal.Proofs.IssueResultDecision.init,
       ``KanderFormal.Proofs.IssueResultDecision.step_inv,

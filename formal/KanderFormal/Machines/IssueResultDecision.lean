@@ -12,7 +12,10 @@ never has to be compared with its status: a consent cannot be `declined`, and a
 refusal has no other status. `other` stands for a status string the store does
 not know.
 
-`acc` is the accumulator of the scan. `DecideResult` walks the decisions that
+`did` is the identity of the decision's state version, decision, and user
+reference (0 while there is no decision); the identity of a text is a hash of
+it, so equal texts have equal identities, and the only event that writes it is
+the append of the decision. `acc` is the accumulator of the scan. `DecideResult` walks the decisions that
 bind the remote's current state version in order, and `visit` takes one of them.
 The first decision that blocks decides the result and no later decision changes
 it. The shell visits every decision of the record in order, so the statement
@@ -44,6 +47,8 @@ def scanC (c : String) : Expr := .enumLit "scan" c
 
 def boolArg (n : String) : ArgDecl := { name := n, ty := .scalar .bool }
 def dstatArg (n : String) : ArgDecl := { name := n, ty := .scalar (.enum "dstat") }
+def idArg (n : String) : ArgDecl := { name := n, ty := .scalar (.nat "maxId") }
+def zero : Expr := .natLit 0
 
 /-- A decision that consents (`yes`): any status but `declined`, `none`, and
 `other`. -/
@@ -55,17 +60,17 @@ def consentStatus (x : Expr) : Expr :=
 /-- `DecideResult`: a refusal is recorded (`no`, status `declined`). -/
 def appendNoEvent : EventDecl where
   name := "appendNo"
-  args := []
-  guard := dsIs "none"
-  assigns := [("ds", dsC "declined")]
+  args := [idArg "ndid"]
+  guard := andE (dsIs "none") (ne (a "ndid") zero)
+  assigns := [("ds", dsC "declined"), ("did", a "ndid")]
 
 /-- `DecideResult`: a consent is recorded (`yes`) before the close request;
 its outcome is not known yet. -/
 def appendYesEvent : EventDecl where
   name := "appendYes"
-  args := []
-  guard := dsIs "none"
-  assigns := [("ds", dsC "uncertain")]
+  args := [idArg "ndid"]
+  guard := andE (dsIs "none") (ne (a "ndid") zero)
+  assigns := [("ds", dsC "uncertain"), ("did", a "ndid")]
 
 /-- `DecideResult`: the provider closed the issue. -/
 def closeDoneEvent : EventDecl where
@@ -142,10 +147,11 @@ def issueResultDecisionMachine : Machine where
   enums := [{ name := "dstat", ctors := ["none", "declined", "uncertain", "closed", "observed", "superseded",
       "rejected", "other"] },
     { name := "scan", ctors := ["open", "uncertain", "refusal", "consent", "returned"] }]
-  params := []
+  params := ["maxId"]
   fields := [
     { name := "ds", ty := .scalar (.enum "dstat"), init := .scalar (.enum 0) },
-    { name := "acc", ty := .scalar (.enum "scan"), init := .scalar (.enum 0) }
+    { name := "acc", ty := .scalar (.enum "scan"), init := .scalar (.enum 0) },
+    { name := "did", ty := .scalar (.nat "maxId"), init := .scalar (.nat 0) }
   ]
   events := [appendNoEvent, appendYesEvent, closeDoneEvent, closeRejectedEvent, reconcileEvent, visitEvent,
     settleEvent, validEvent]

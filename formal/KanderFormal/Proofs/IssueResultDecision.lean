@@ -34,6 +34,13 @@ theorem bool_cons {p : Params} {n : String} {ds : List ArgDecl} {vs : List Val} 
   obtain ⟨b, rfl⟩ := conforms_bool c
   exact ⟨b, vs', a, rfl, h'⟩
 
+theorem id_cons {p : Params} {n : String} {ds : List ArgDecl} {vs : List Val} {args : List (String × Val)}
+    (h : bindArgs M p (idArg n :: ds) vs = some args) :
+    ∃ g vs' args', vs = natV g :: vs' ∧ bindArgs M p ds vs' = some args' := by
+  obtain ⟨v, vs', a, rfl, c, h', -⟩ := bindArgs_cons h
+  obtain ⟨g, rfl, -⟩ := conforms_nat c
+  exact ⟨g, vs', a, rfl, h'⟩
+
 theorem dstat_cons {p : Params} {n : String} {ds : List ArgDecl} {vs : List Val} {args : List (String × Val)}
     (h : bindArgs M p (dstatArg n :: ds) vs = some args) :
     ∃ i vs' args', vs = enumV i :: vs' ∧ bindArgs M p ds vs' = some args' := by
@@ -44,7 +51,8 @@ theorem dstat_cons {p : Params} {n : String} {ds : List ArgDecl} {vs : List Val}
 /-- Every accepted event is one of the eight, with arguments of its declared
 types. -/
 theorem accepted_cases {p : Params} {s s' : State} {e : Event} (h : step M p s e = some s') :
-    e = ⟨"appendNo", []⟩ ∨ e = ⟨"appendYes", []⟩ ∨ e = ⟨"closeDone", []⟩ ∨ e = ⟨"closeRejected", []⟩ ∨
+    (∃ nd, e = ⟨"appendNo", [natV nd]⟩) ∨ (∃ nd, e = ⟨"appendYes", [natV nd]⟩) ∨ e = ⟨"closeDone", []⟩ ∨
+    e = ⟨"closeRejected", []⟩ ∨
     (∃ c sm, e = ⟨"reconcile", [boolV c, boolV sm]⟩) ∨
     (∃ d rc nn, e = ⟨"visit", [enumV d, boolV rc, boolV nn]⟩) ∨
     (∃ nd id, e = ⟨"settle", [enumV nd, boolV id]⟩) ∨ (∃ y v, e = ⟨"valid", [boolV y, enumV v]⟩) := by
@@ -53,8 +61,10 @@ theorem accepted_cases {p : Params} {s s' : State} {e : Event} (h : step M p s e
   simp only at hname hb
   subst hname
   rcases events_cases hmem with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-  · obtain ⟨rfl, -⟩ := bindArgs_nil hb; exact .inl rfl
-  · obtain ⟨rfl, -⟩ := bindArgs_nil hb; exact .inr (.inl rfl)
+  · obtain ⟨nd, vs1, a1, rfl, h1⟩ := id_cons hb
+    obtain ⟨rfl, -⟩ := bindArgs_nil h1; exact .inl ⟨nd, rfl⟩
+  · obtain ⟨nd, vs1, a1, rfl, h1⟩ := id_cons hb
+    obtain ⟨rfl, -⟩ := bindArgs_nil h1; exact .inr (.inl ⟨nd, rfl⟩)
   · obtain ⟨rfl, -⟩ := bindArgs_nil hb; exact .inr (.inr (.inl rfl))
   · obtain ⟨rfl, -⟩ := bindArgs_nil hb; exact .inr (.inr (.inr (.inl rfl)))
   · obtain ⟨c, vs1, a1, rfl, h1⟩ := bool_cons hb
@@ -82,11 +92,11 @@ consent), an `uncertain` consent becomes `closed`, `observed`, `superseded`, or
 `rejected`, and nothing else changes a status. -/
 theorem flow {p : Params} {x y : Rq} {e : Event} (hx : x.acc < 5) (h : step M p (enc x) e = some (enc y)) :
     y.ds = x.ds ∨ (x.ds = 0 ∧ (y.ds = 1 ∨ y.ds = 2)) ∨ (x.ds = 2 ∧ 3 ≤ y.ds ∧ y.ds ≤ 6) := by
-  rcases accepted_cases h with rfl | rfl | rfl | rfl | ⟨c, sm, rfl⟩ | ⟨d, rc, nn, rfl⟩ | ⟨nd, id, rfl⟩ | ⟨v, w, rfl⟩
+  rcases accepted_cases h with ⟨ndn, rfl⟩ | ⟨ndn, rfl⟩ | rfl | rfl | ⟨c, sm, rfl⟩ | ⟨d, rc, nn, rfl⟩ | ⟨nd, id, rfl⟩ | ⟨v, w, rfl⟩
   · rw [step_appendNo] at h; obtain ⟨hc, hy⟩ := ite_some_enc h; have := enc_inj hy.symm; subst this
-    exact .inr (.inl ⟨hc, .inl rfl⟩)
+    exact .inr (.inl ⟨hc.2.1, .inl rfl⟩)
   · rw [step_appendYes] at h; obtain ⟨hc, hy⟩ := ite_some_enc h; have := enc_inj hy.symm; subst this
-    exact .inr (.inl ⟨hc, .inr rfl⟩)
+    exact .inr (.inl ⟨hc.2.1, .inr rfl⟩)
   · rw [step_closeDone] at h; obtain ⟨hc, hy⟩ := ite_some_enc h; have := enc_inj hy.symm; subst this
     exact .inr (.inr ⟨hc, by simp, by simp⟩)
   · rw [step_closeRejected] at h; obtain ⟨hc, hy⟩ := ite_some_enc h; have := enc_inj hy.symm; subst this
@@ -113,14 +123,16 @@ theorem declined_only_new {p : Params} {x y : Rq} {e : Event} (hx : x.acc < 5)
     (h : step M p (enc x) e = some (enc y)) (hy : y.ds = 1) : x.ds = 1 ∨ x.ds = 0 := by
   rcases flow hx h with h1 | ⟨h1, -⟩ | ⟨h1, h2, h3⟩ <;> omega
 
-/-- Theorem 4: a decision is appended only where none exists. -/
-theorem append_spec (p : Params) (x : Rq) :
-    (step M p (enc x) ⟨"appendNo", []⟩ ≠ none ↔ x.ds = 0) ∧ (step M p (enc x) ⟨"appendYes", []⟩ ≠ none ↔ x.ds = 0) ∧
-    (∀ s', step M p (enc x) ⟨"appendNo", []⟩ = some s' → s' = enc { x with ds := 1 }) ∧
-    (∀ s', step M p (enc x) ⟨"appendYes", []⟩ = some s' → s' = enc { x with ds := 2 }) := by
+/-- Theorem 4: a decision is appended only where none exists, with an identity
+that is not zero. -/
+theorem append_spec (p : Params) (x : Rq) (nd : Nat) :
+    (step M p (enc x) ⟨"appendNo", [natV nd]⟩ ≠ none ↔ nd ≤ p "maxId" ∧ x.ds = 0 ∧ nd ≠ 0) ∧
+    (step M p (enc x) ⟨"appendYes", [natV nd]⟩ ≠ none ↔ nd ≤ p "maxId" ∧ x.ds = 0 ∧ nd ≠ 0) ∧
+    (∀ s', step M p (enc x) ⟨"appendNo", [natV nd]⟩ = some s' → s' = enc { x with ds := 1, did := nd }) ∧
+    (∀ s', step M p (enc x) ⟨"appendYes", [natV nd]⟩ = some s' → s' = enc { x with ds := 2, did := nd }) := by
   refine ⟨?_, ?_, ?_, ?_⟩
-  · rw [step_appendNo]; by_cases h : x.ds = 0 <;> simp [h]
-  · rw [step_appendYes]; by_cases h : x.ds = 0 <;> simp [h]
+  · rw [step_appendNo]; by_cases h : nd ≤ p "maxId" ∧ x.ds = 0 ∧ nd ≠ 0 <;> simp [h]
+  · rw [step_appendYes]; by_cases h : nd ≤ p "maxId" ∧ x.ds = 0 ∧ nd ≠ 0 <;> simp [h]
   · intro s' h; rw [step_appendNo] at h; exact (ite_some_enc h).2
   · intro s' h; rw [step_appendYes] at h; exact (ite_some_enc h).2
 
@@ -184,7 +196,7 @@ theorem settle_settled_refused (p : Params) (x : Rq) (nd : Nat) (id : Bool) (hx 
 
 /-- Theorem 4: the new store has the decision (a decision cannot be removed). -/
 theorem settle_absent_refused (p : Params) (nd : Nat) (id : Bool) :
-    step M p (enc ⟨0, 0⟩) ⟨"settle", [enumV nd, boolV id]⟩ = none := by
+    step M p (enc ⟨0, 0, 0⟩) ⟨"settle", [enumV nd, boolV id]⟩ = none := by
   rw [step_settle]; apply ite_none; intro c; obtain ⟨-, -, c3, -⟩ := c; simp at c3
 
 /-- Theorem 4: a decision is valid when its status is known and has the kind of
@@ -274,10 +286,10 @@ theorem scanAcc_first (rc nn : Bool) :
 accumulator, give the class of the first decision that blocks, or `open` when
 none does. -/
 theorem scan_first_blocker (p : Params) (rc nn : Bool) (ds : Nat) (l : List Nat) (hl : ∀ d ∈ l, d < 8) :
-    visitAll p rc nn (enc ⟨ds, 0⟩) l = some (enc ⟨ds, match l.find? (fun d => decide (cls d rc nn ≠ 0)) with
+    visitAll p rc nn (enc ⟨ds, 0, 0⟩) l = some (enc ⟨ds, match l.find? (fun d => decide (cls d rc nn ≠ 0)) with
       | none => 0
-      | some d => cls d rc nn⟩) := by
-  rw [visitAll_enc p rc nn l ⟨ds, 0⟩ (by show 0 < 5; decide) hl]
+      | some d => cls d rc nn, 0⟩) := by
+  rw [visitAll_enc p rc nn l ⟨ds, 0, 0⟩ (by show 0 < 5; decide) hl]
   simp [scanAcc_first]
 
 theorem scanAcc_zero (rc nn : Bool) :
@@ -321,14 +333,14 @@ def Inv (p : Params) (s : State) : Prop := M.StateConforms p s ∧ ∀ x, s = en
 theorem init (p : Params) : Inv p (initial M p) := by
   refine ⟨initial_conforms wellTyped p, ?_⟩
   intro x hx
-  have : x = ⟨0, 0⟩ := enc_inj (hx.symm.trans rfl)
+  have : x = ⟨0, 0, 0⟩ := enc_inj (hx.symm.trans rfl)
   subst this; simp
 
 theorem step_inv (p : Params) (s s' : State) (e : Event) (hi : Inv p s)
     (h : KanderFormal.step M p s e = some s') : Inv p s' := by
   obtain ⟨hc, hp⟩ := hi
   refine ⟨step_preserves_conforms hc h, ?_⟩
-  obtain ⟨x, rfl, hd, ha⟩ := shape hc
+  obtain ⟨x, rfl, hd, ha, hdi⟩ := shape hc
   have hx := hp x rfl
   intro y hy
   rw [hy] at h
@@ -340,5 +352,65 @@ def cert : SafetyCert M where
   step := step_inv
 
 theorem reachable_inv {p : Params} {s : State} (h : Reachable M p s) : Inv p s := cert.reachable h
+
+/-! ## Theorem 6: every save satisfies the update relation of a decision -/
+
+/-- The facts of `ValidateResultStoreUpdate` for a decision that went from `x`
+to `y`, read off the two decisions: the new store has the decision with its
+status, and its state version, decision, and user reference are the old ones. -/
+def settleFacts (x y : Rq) : Event := ⟨"settle", [enumV y.ds, boolV (decide (x.did = y.did))]⟩
+
+/-- The facts of `ValidateResultStore` for the new decision: its kind is the one
+its status belongs to (a refusal is `declined`). -/
+def validFacts (y : Rq) : Event := ⟨"valid", [boolV (decide (y.ds ≠ 1)), enumV y.ds]⟩
+
+/-- Theorem 6: the identity of a decision that exists never changes. -/
+theorem did_kept {p : Params} {x y : Rq} {e : Event} (hx : x.acc < 5) (hs : x.ds ≠ 0)
+    (h : step M p (enc x) e = some (enc y)) : y.did = x.did := by
+  rcases accepted_cases h with ⟨nd, rfl⟩ | ⟨nd, rfl⟩ | rfl | rfl | ⟨c, sm, rfl⟩ | ⟨d, rc, nn, rfl⟩ | ⟨nd, id, rfl⟩ |
+    ⟨v, w, rfl⟩
+  · rw [step_appendNo] at h; obtain ⟨hc, -⟩ := ite_some_enc h; omega
+  · rw [step_appendYes] at h; obtain ⟨hc, -⟩ := ite_some_enc h; omega
+  · rw [step_closeDone] at h; have := enc_inj (ite_some_enc h).2.symm; subst this; rfl
+  · rw [step_closeRejected] at h; have := enc_inj (ite_some_enc h).2.symm; subst this; rfl
+  · rw [step_reconcile] at h; have := enc_inj (ite_some_enc h).2.symm; subst this; rfl
+  · rw [step_visit p x hx] at h
+    split at h
+    · have := enc_inj (Option.some.inj h); subst this; rfl
+    · cases h
+  · rw [step_settle] at h; have := enc_inj (ite_some_enc h).2.symm; subst this; rfl
+  · rw [step_valid] at h; have := enc_inj (ite_some_enc h).2.symm; subst this; rfl
+
+/-- Theorem 6: after a close outcome or a reconciliation of a decision of the
+old store, the new decision passes the update relation: it keeps its identity
+and a settled status. The identity fact is read off the two decisions. -/
+theorem client_settle_ok {p : Params} {x y : Rq} {e : Event} (hi : Inv p (enc x)) (hs : x.ds ≠ 0)
+    (h : step M p (enc x) e = some (enc y)) : step M p (enc x) (settleFacts x y) ≠ none := by
+  obtain ⟨z, hz, hd, ha, hdi⟩ := shape hi.1
+  have := enc_inj hz.symm; subst this
+  have hy := step_inv p _ _ _ hi h
+  obtain ⟨z, hz, hd', ha', hdi'⟩ := shape hy.1
+  have := enc_inj hz.symm; subst this
+  unfold settleFacts
+  rw [settle_spec]
+  have hk := did_kept ha hs h
+  have hf := flow ha h
+  simp only [decide_eq_true_eq]
+  refine ⟨hd', by omega, hs, ?_⟩
+  omega
+
+/-- Theorem 6: a decision of a reachable state is structurally valid. -/
+theorem props_valid {p : Params} {y : Rq} (hi : Inv p (enc y)) (h0 : y.ds ≠ 0) :
+    step M p (enc y) (validFacts y) ≠ none := by
+  obtain ⟨z, hz, hd, ha, hdi⟩ := shape hi.1
+  have := enc_inj hz.symm; subst this
+  have h7 := hi.2 z rfl
+  unfold validFacts
+  rw [valid_spec]
+  simp only [decide_eq_true_eq]
+  refine ⟨hd, ?_⟩
+  by_cases h1 : z.ds = 1
+  · exact .inr ⟨by simp [h1], h1⟩
+  · exact .inl ⟨by simp [h1], by omega, by omega⟩
 
 end KanderFormal.Proofs.IssueResultDecision

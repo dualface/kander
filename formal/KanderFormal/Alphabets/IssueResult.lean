@@ -14,16 +14,20 @@ def issueResultEvents : List Event :=
   let t := boolV true
   let x := boolV false
   let n := natV
-  [ ⟨"read", [t, t]⟩, ⟨"read", [t, x]⟩, ⟨"read", [x, t]⟩,
-    ⟨"reconcile", [t]⟩, ⟨"reconcile", [x]⟩, ⟨"reassess", []⟩,
-    ⟨"intent", [x, x, x, t]⟩, ⟨"intent", [t, t, x, t]⟩, ⟨"intent", [t, x, x, t]⟩, ⟨"intent", [x, x, t, t]⟩,
-    ⟨"intent", [x, x, x, x]⟩,
-    ⟨"equivalent", [x, x, t]⟩, ⟨"equivalent", [t, t, t]⟩, ⟨"equivalent", [x, x, x]⟩,
-    ⟨"publish", [t]⟩, ⟨"publish", [x]⟩, ⟨"reject", []⟩,
+  [ ⟨"read", [t, t, n 1]⟩, ⟨"read", [t, x, n 1]⟩, ⟨"read", [x, t, n 1]⟩, ⟨"read", [t, t, n 2]⟩,
+    ⟨"read", [t, t, n 0]⟩,
+    ⟨"reconcile", [t, n 1]⟩, ⟨"reconcile", [x, n 1]⟩, ⟨"reconcile", [t, n 0]⟩, ⟨"reassess", []⟩,
+    ⟨"intent", [x, x, x, t, n 1, n 1, t]⟩, ⟨"intent", [t, t, x, t, n 2, n 1, t]⟩,
+    ⟨"intent", [t, x, x, t, n 1, n 1, t]⟩, ⟨"intent", [x, x, t, t, n 1, n 1, t]⟩,
+    ⟨"intent", [x, x, x, x, n 1, n 1, t]⟩, ⟨"intent", [x, x, x, t, n 0, n 1, t]⟩,
+    ⟨"intent", [x, x, x, t, n 1, n 1, x]⟩,
+    ⟨"equivalent", [x, x, t, n 1, n 1, n 1, t]⟩, ⟨"equivalent", [t, t, t, n 2, n 2, n 1, t]⟩,
+    ⟨"equivalent", [x, x, x, n 1, n 1, n 1, t]⟩, ⟨"equivalent", [x, x, t, n 1, n 0, n 1, t]⟩,
+    ⟨"publish", [t, n 1]⟩, ⟨"publish", [x, n 1]⟩, ⟨"publish", [t, n 0]⟩, ⟨"reject", [n 1]⟩, ⟨"reject", [n 0]⟩,
     ⟨"decide", [t, x, enumV 0, t]⟩, ⟨"decide", [x, x, enumV 0, t]⟩, ⟨"decide", [t, t, enumV 0, t]⟩,
     ⟨"decide", [t, x, enumV 1, t]⟩, ⟨"decide", [t, x, enumV 0, x]⟩,
     ⟨"keep", [t, t, enumV 0]⟩, ⟨"keep", [t, x, enumV 4]⟩, ⟨"keep", [t, x, enumV 0]⟩, ⟨"keep", [x, t, enumV 0]⟩,
-    ⟨"failClose", []⟩, ⟨"otherIntent", []⟩, ⟨"otherSettle", []⟩,
+    ⟨"failClose", [n 1]⟩, ⟨"failClose", [n 2]⟩, ⟨"failClose", [n 0]⟩, ⟨"otherIntent", []⟩, ⟨"otherSettle", []⟩,
     ⟨"update", [t, enumV 2, t, n 0, t, n 0]⟩, ⟨"update", [t, enumV 1, t, n 1, t, n 1]⟩,
     ⟨"update", [x, enumV 2, t, n 0, t, n 0]⟩, ⟨"update", [t, enumV 2, x, n 0, t, n 0]⟩,
     ⟨"update", [t, enumV 4, t, n 0, t, n 0]⟩, ⟨"update", [t, enumV 2, t, n 0, x, n 0]⟩,
@@ -39,7 +43,8 @@ def issueResultEvents : List Event :=
 def decisionEvents : List Event :=
   let t := boolV true
   let x := boolV false
-  [ ⟨"appendNo", []⟩, ⟨"appendYes", []⟩, ⟨"closeDone", []⟩, ⟨"closeRejected", []⟩,
+  let n := natV
+  [ ⟨"appendNo", [n 1]⟩, ⟨"appendNo", [n 0]⟩, ⟨"appendYes", [n 1]⟩, ⟨"appendYes", [n 2]⟩, ⟨"closeDone", []⟩, ⟨"closeRejected", []⟩,
     ⟨"reconcile", [t, t]⟩, ⟨"reconcile", [t, x]⟩, ⟨"reconcile", [x, x]⟩, ⟨"reconcile", [x, t]⟩,
     ⟨"visit", [enumV 1, x, x]⟩, ⟨"visit", [enumV 1, x, t]⟩, ⟨"visit", [enumV 1, t, x]⟩,
     ⟨"visit", [enumV 2, x, x]⟩, ⟨"visit", [enumV 2, t, x]⟩, ⟨"visit", [enumV 3, x, x]⟩, ⟨"visit", [enumV 3, t, x]⟩,

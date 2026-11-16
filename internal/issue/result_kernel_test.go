@@ -61,13 +61,50 @@ func (p observedProvider) CloseResult(ctx context.Context, repo Repository, n in
 	return p.resultFake.CloseResult(ctx, repo, n)
 }
 
+// testWork is the identity of the current work set the kernel projection
+// compares records with; readStore refreshes it.
+var testWork uint64
+
+func projectOf(store ResultStore, version string) rk.State {
+	return projectRecord(store, version, testWork)
+}
+
 func readStore(t *testing.T, root string, repo Repository, id string) ResultStore {
 	t.Helper()
 	store, err := ReadResultStore(context.Background(), root, repo, 42, id)
 	if err != nil {
 		t.Fatal(err)
 	}
+	work, err := ReadResultWork(root, repo, 42, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testWork = workID(work)
 	return store
+}
+
+// The events of an entrance, with the witnesses of the record the entrance wrote.
+func intentOf(after ResultStore, version string) rk.Event {
+	r := after.Records[version]
+	return rk.Intent{Nfull: r.FullyResolved, Nmet: allMet(r.Outcomes), BodyOk: true, Nbod: bodyID(r.Body, r.ActorID),
+		Nchk: checksID(r.Checks), Nsound: soundRecord(r, after.TaskID)}
+}
+func equivalentOf(after ResultStore, version string) rk.Event {
+	r := after.Records[version]
+	return rk.Equivalent{Nfull: r.FullyResolved, Nmet: allMet(r.Outcomes), Found: true, Nbod: bodyID(r.Body, r.ActorID),
+		Ncid: commentID(r.CommentID), Nchk: checksID(r.Checks), Nsound: soundRecord(r, after.TaskID)}
+}
+func publishOf(after ResultStore, version string) rk.Event {
+	return rk.Publish{Ok: true, Ncid: commentID(after.Records[version].CommentID)}
+}
+func reconcileOf(after ResultStore, version string) rk.Event {
+	return rk.Reconcile{Found: true, Ncid: commentID(after.Records[version].CommentID)}
+}
+func rejectOf(after ResultStore, version string) rk.Event {
+	return rk.Reject{Nfh: failuresID(after.Records[version].Failures)}
+}
+func failOf(after ResultStore, version string) rk.Event {
+	return rk.FailClose{Nfh: failuresID(after.Records[version].Failures)}
 }
 
 func kernelSteps(t *testing.T, state rk.State, events ...rk.Event) rk.State {
@@ -108,17 +145,47 @@ func assertRefines(t *testing.T, before, after ResultStore, focus string, events
 	for v := range after.Records {
 		versions[v] = true
 	}
-	read := rk.Read{RemoteOk: true, Same: before.IssueID == 42}
+	read := rk.Read{RemoteOk: true, Same: before.IssueID == 42, Nw: testWork}
 	for version := range versions {
-		want := kernelSteps(t, projectRecord(before, version), read)
+		want := kernelSteps(t, projectOf(before, version), read)
 		if version == focus {
 			want = kernelSteps(t, want, events...)
 		} else {
 			want = kernelSteps(t, want, othersOf(events)...)
 		}
-		if got := projectRecord(after, version); got != want {
+		if got := projectOf(after, version); got != want {
 			t.Fatalf("record %.8s: projection after the write %+v, kernel step of the projection before %+v", version, got, want)
 		}
+	}
+}
+
+// projectedFacts reads the comparison facts off the kernel projections of a record
+// before and after a save, the way the proof of theorem 6 derives them.
+func projectedFacts(before, after rk.State) recordFacts {
+	return recordFacts{
+		identSame:  before.Bod == after.Bod && (before.Cid == 0 || before.Cid == after.Cid),
+		prefix:     after.Nf == before.Nf && after.Fh == before.Fh || after.Nf == before.Nf+1 && after.Fp == before.Fh,
+		checksSame: before.Chk == after.Chk,
+		workSame:   after.Wk == after.Cw,
+	}
+}
+
+// assertFactsAgree checks that the facts read off the projections are the
+// comparisons the shell makes on the records themselves.
+func assertFactsAgree(t *testing.T, before, after ResultStore, version string, work ResultWork) {
+	t.Helper()
+	old, current := before.Records[version], after.Records[version]
+	if old == nil || current == nil {
+		return
+	}
+	got := projectedFacts(projectRecord(before, version, workID(work)), projectRecord(after, version, workID(work)))
+	want := compareRecords(old, current, work)
+	// A new record replaces a rejected one: its text is new, and the update relation skips it.
+	if old.Status == "rejected" && current.Status != "rejected" {
+		got.identSame, got.checksSame = want.identSame, want.checksSame
+	}
+	if got != want {
+		t.Fatalf("record %.8s: facts of the projections %+v, comparisons of the records %+v", version, got, want)
 	}
 }
 
@@ -134,6 +201,9 @@ func assertRelations(t *testing.T, root string, repo Repository, id string, befo
 	}
 	if err := ValidateResultStoreWork(before, after, work); err != nil {
 		t.Fatalf("work relation: %v", err)
+	}
+	for version := range after.Records {
+		assertFactsAgree(t, before, after, version, work)
 	}
 }
 
@@ -184,9 +254,9 @@ func TestResultPublicationRefinesTheKernels(t *testing.T) {
 	} else {
 		after = readStore(t, root, repo, id)
 		version := onlyVersion(t, after)
-		assertSave(before, intent, version, rk.Intent{Nfull: true, Nmet: true, BodyOk: true})
-		assertSave(intent, after, version, rk.Reject{})
-		if got := projectRecord(after, version); got.St != rk.RstatRejected || got.Nf != 1 || got.Unc != 0 {
+		assertSave(before, intent, version, intentOf(intent, version))
+		assertSave(intent, after, version, rejectOf(after, version))
+		if got := projectOf(after, version); got.St != rk.RstatRejected || got.Nf != 1 || got.Unc != 0 {
 			t.Fatalf("rejected record: %+v", got)
 		}
 	}
@@ -201,9 +271,9 @@ func TestResultPublicationRefinesTheKernels(t *testing.T) {
 		t.Fatal(err)
 	}
 	after = readStore(t, root, repo, id)
-	assertSave(before, intent, version, rk.Intent{Nfull: true, Nmet: true, BodyOk: true})
-	assertSave(intent, after, version, rk.Publish{Ok: true})
-	if got := projectRecord(after, version); got.St != rk.RstatPublished || got.Nf != 1 || !got.Cpos {
+	assertSave(before, intent, version, intentOf(intent, version))
+	assertSave(intent, after, version, publishOf(after, version))
+	if got := projectOf(after, version); got.St != rk.RstatPublished || got.Nf != 1 || !got.Cpos {
 		t.Fatalf("replaced record: %+v", got)
 	}
 
@@ -244,8 +314,8 @@ func TestResultPublicationRefinesTheKernels(t *testing.T) {
 	if second == "" {
 		t.Fatal("the new delivery did not produce a new version")
 	}
-	assertSave(before, intent, second, rk.Intent{Nfull: true, Nmet: true, BodyOk: true})
-	assertSave(intent, after, second, rk.Publish{Ok: true})
+	assertSave(before, intent, second, intentOf(intent, second))
+	assertSave(intent, after, second, publishOf(after, second))
 }
 
 func TestResultUncertainAndEquivalentRefineTheKernels(t *testing.T) {
@@ -260,9 +330,9 @@ func TestResultUncertainAndEquivalentRefineTheKernels(t *testing.T) {
 		_, intent, _ := applyObserved(t, root, repo, id, fake, fixtureProposal(i))
 		uncertain := readStore(t, root, repo, id)
 		version := onlyVersion(t, uncertain)
-		assertRefines(t, before, uncertain, version, rk.Intent{Nfull: true, Nmet: true, BodyOk: true})
+		assertRefines(t, before, uncertain, version, intentOf(uncertain, version))
 		assertRelations(t, root, repo, id, before, uncertain)
-		if projectRecord(uncertain, version).St != rk.RstatUncertain || len(intent.Records) != 1 {
+		if projectOf(uncertain, version).St != rk.RstatUncertain || len(intent.Records) != 1 {
 			t.Fatal("record not uncertain")
 		}
 		// While the record is uncertain, nothing is written; an absent comment never clears it.
@@ -271,7 +341,7 @@ func TestResultUncertainAndEquivalentRefineTheKernels(t *testing.T) {
 		if _, err := ApplyResult(ctx, fake, root, repo, 42, id, fixtureProposal(i)); err == nil || !strings.Contains(err.Error(), "publication uncertain") {
 			t.Fatalf("write while a record is uncertain: %v", err)
 		}
-		if got := readStore(t, root, repo, id); projectRecord(got, version) != projectRecord(uncertain, version) {
+		if got := readStore(t, root, repo, id); projectOf(got, version) != projectOf(uncertain, version) {
 			t.Fatal("a refused apply changed the record")
 		}
 		// InspectResult finds the comment in the complete observation.
@@ -279,7 +349,7 @@ func TestResultUncertainAndEquivalentRefineTheKernels(t *testing.T) {
 		before = readStore(t, root, repo, id)
 		inspectFixture(t, root, repo, id, fake)
 		after := readStore(t, root, repo, id)
-		assertRefines(t, before, after, version, rk.Reconcile{Found: true})
+		assertRefines(t, before, after, version, reconcileOf(after, version))
 		assertRelations(t, root, repo, id, before, after)
 		if after.Records[version].CommentID != 777 {
 			t.Fatal("comment ID not recorded")
@@ -297,7 +367,7 @@ func TestResultUncertainAndEquivalentRefineTheKernels(t *testing.T) {
 			t.Fatal(err)
 		}
 		after := readStore(t, root, repo, id)
-		assertRefines(t, before, after, onlyVersion(t, after), rk.Equivalent{Nfull: true, Nmet: true, Found: true})
+		assertRefines(t, before, after, onlyVersion(t, after), equivalentOf(after, onlyVersion(t, after)))
 		assertRelations(t, root, repo, id, before, after)
 	})
 }
@@ -355,7 +425,7 @@ func TestResultDecisionsRefineTheKernels(t *testing.T) {
 	}
 	after := readStore(t, root, repo, id)
 	assertSave(before, mid, appended)
-	assertSave(mid, after, rk.FailClose{})
+	assertSave(mid, after, failOf(after, version))
 	if got := decisionsOf(t, root, repo, id); len(got) != 1 || got[0] != "rejected" {
 		t.Fatalf("decisions: %v", got)
 	}
@@ -366,7 +436,7 @@ func TestResultDecisionsRefineTheKernels(t *testing.T) {
 	if _, _, err := decide("no", false); err == nil || !strings.Contains(err.Error(), "old close consent cannot be reused") {
 		t.Fatalf("refusal after a rejected consent: %v", err)
 	}
-	if got := readStore(t, root, repo, id); projectRecord(got, version) != projectRecord(before, version) {
+	if got := readStore(t, root, repo, id); projectOf(got, version) != projectOf(before, version) {
 		t.Fatal("a refused decision changed the record")
 	}
 	before, _, err = decide("no", true)
@@ -430,7 +500,7 @@ func TestResultRefusalFirstThenConsent(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "refusal recorded") || fake.closes != 0 {
 		t.Fatalf("consent without reconsideration: %v", err)
 	}
-	if got := readStore(t, root, repo, id); projectRecord(got, version) != projectRecord(before, version) || len(decisionsOf(t, root, repo, id)) != 1 {
+	if got := readStore(t, root, repo, id); projectOf(got, version) != projectOf(before, version) || len(decisionsOf(t, root, repo, id)) != 1 {
 		t.Fatal("a refused decision changed the record")
 	}
 }
@@ -483,7 +553,7 @@ func TestResultEntrancesRefuseThroughTheKernels(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := readStore(t, root, repo, id)
-	state := projectRecord(before, published.Version)
+	state := projectOf(before, published.Version)
 	refused := func(name string, err error, want string, event rk.Event, on rk.State) {
 		t.Helper()
 		if err == nil || !strings.Contains(err.Error(), want) {
@@ -512,7 +582,7 @@ func TestResultEntrancesRefuseThroughTheKernels(t *testing.T) {
 
 	// The completion evidence is already published: another version of it is not posted again.
 	err = apply(func(p *ResultProposal) { p.Outcomes[3], p.FullyResolved, p.ResolutionEvidence = "unmet", false, "" })
-	refused("duplicate evidence", err, "completion evidence unchanged", rk.Intent{Dup: true, BodyOk: true}, fresh)
+	refused("duplicate evidence", err, "completion evidence unchanged", rk.Intent{Dup: true, BodyOk: true, Nbod: 1, Nchk: 1, Nsound: true}, fresh)
 	// A body with private data is not posted.
 	fake2root, fake2repo, fake2id, fake2 := resultFixture(t)
 	i2 := inspectFixture(t, fake2root, fake2repo, fake2id, fake2)
@@ -522,14 +592,14 @@ func TestResultEntrancesRefuseThroughTheKernels(t *testing.T) {
 	if err == nil || fake2.posts != 0 || len(readStore(t, fake2root, fake2repo, fake2id).Records) != 0 {
 		t.Fatalf("private text: %v", err)
 	}
-	if _, ok := resultStep(rk.State{Iid: true}, rk.Intent{BodyOk: false}); ok {
+	if _, ok := resultStep(rk.State{Iid: true}, rk.Intent{BodyOk: false, Nbod: 1, Nchk: 1, Nsound: true}); ok {
 		t.Fatal("the kernel accepted an invalid body")
 	}
 	// A comment that is not in the observation is not an equivalent result.
 	err = apply(func(p *ResultProposal) {
 		p.EquivalentCommentID, p.Outcomes[3], p.FullyResolved, p.ResolutionEvidence = 12345, "unmet", false, ""
 	})
-	refused("absent equivalent comment", err, "equivalent comment absent", rk.Equivalent{Found: false}, fresh)
+	refused("absent equivalent comment", err, "equivalent comment absent", rk.Equivalent{Found: false, Nbod: 1, Ncid: 1, Nchk: 1, Nsound: true}, fresh)
 
 	// A decision needs a record of the current work that is published or equivalent and fully resolved.
 	i = inspectFixture(t, root, repo, id, fake)
@@ -552,7 +622,7 @@ func TestResultEntrancesRefuseThroughTheKernels(t *testing.T) {
 	}
 	fake.closeErr = nil
 	before = readStore(t, root, repo, id)
-	state = projectRecord(before, published.Version)
+	state = projectOf(before, published.Version)
 	err = decide(i.Token, ResultDecision{Version: published.Version, Decision: "no", UserReference: "User: no.", Reconsider: true})
 	refused("uncertain consent", err, "close outcome uncertain", rk.Decide{DigestOk: true, Scan: rk.ScanUncertain, FieldsOk: true}, state)
 }

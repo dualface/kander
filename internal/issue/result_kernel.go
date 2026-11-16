@@ -1,9 +1,14 @@
 package issue
 
 import (
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/json"
 	"math"
 	"reflect"
 	"slices"
+	"strconv"
+	"strings"
 
 	rk "github.com/dualface/kander/internal/statemachine/issueresult"
 	dk "github.com/dualface/kander/internal/statemachine/issueresultdecision"
@@ -18,9 +23,70 @@ import (
 // decision about one record holds for a store of any size. The counts are slice
 // lengths, which stay below the kernel bound.
 var (
-	resultKernelParams   = rk.Params{MaxN: math.MaxUint32}
-	decisionKernelParams = dk.Params{}
+	resultKernelParams   = rk.Params{MaxN: math.MaxUint32, MaxId: math.MaxUint32}
+	decisionKernelParams = dk.Params{MaxId: math.MaxUint32}
 )
+
+// resultID is the identity the kernels compare for a text: the first four bytes
+// of its SHA-256, never zero (zero means there is none). Equal texts have equal
+// identities; the kernels only ask whether two identities are equal, and the
+// validators still ask the shell's exact comparisons.
+func resultID(parts ...string) uint64 {
+	sum := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
+	if id := uint64(binary.BigEndian.Uint32(sum[:4])); id != 0 {
+		return id
+	}
+	return 1
+}
+
+func jsonID(kind string, value any) uint64 {
+	data, _ := json.Marshal(value)
+	return resultID(kind, string(data))
+}
+
+// bodyID is the identity of a record's body and author, commentID that of its
+// remote comment (zero without one), checksID that of its verification
+// evidence, workID that of the work set a record was assessed against or that is
+// current, failuresID that of a failure log (zero when empty), and decisionID
+// that of a close decision's state version, decision, and user reference.
+func bodyID(body string, actor int64) uint64 {
+	return resultID("body", body, strconv.FormatInt(actor, 10))
+}
+
+func commentID(id int64) uint64 {
+	if id <= 0 {
+		return 0
+	}
+	return resultID("comment", strconv.FormatInt(id, 10))
+}
+
+func checksID(checks []ResultCheck) uint64 { return jsonID("checks", checks) }
+
+func recordWorkID(record *ResultRecord) uint64 {
+	return jsonID("work", []any{record.CardDigest, record.EvidenceVersion, record.TaskIDs, record.Commits})
+}
+
+func workID(work ResultWork) uint64 {
+	return jsonID("work", []any{work.Digest, work.EvidenceVersion, work.taskIDs(), work.Commits})
+}
+
+func failuresID(failures []ResultFailure) uint64 {
+	if len(failures) == 0 {
+		return 0
+	}
+	return jsonID("failures", failures)
+}
+
+func decisionID(d ResultCloseRecord) uint64 {
+	return resultID("decision", d.StateVersion, d.Decision, d.UserReference)
+}
+
+// soundRecord is whether a record's author is positive, its outcomes are known,
+// and its version is the one its assessment computes.
+func soundRecord(record *ResultRecord, taskID string) bool {
+	return record.ActorID > 0 && outcomesKnown(record.Outcomes) &&
+		resultVersion(record.taskKey(taskID), record.Commits, record.Outcomes, record.FullyResolved) == record.Version
+}
 
 func resultCount(n int) uint64 { return min(uint64(n), math.MaxUint32) }
 
@@ -121,8 +187,8 @@ func outcomesKnown(outcomes []string) bool {
 // projectRecord is the kernel state of the record of `version` in a store: the
 // record's status and counts, and the facts of the store around it. A version
 // without a record projects to the status `none`.
-func projectRecord(store ResultStore, version string) rk.State {
-	state := rk.State{Iid: store.IssueID > 0}
+func projectRecord(store ResultStore, version string, current uint64) rk.State {
+	state := rk.State{Iid: store.IssueID > 0, Cw: current}
 	for _, record := range store.Records {
 		if record != nil && record.Status == "uncertain" {
 			state.Unc++
@@ -133,6 +199,13 @@ func projectRecord(store ResultStore, version string) rk.State {
 		state.Full, state.Met = record.FullyResolved, allMet(record.Outcomes)
 		state.Cpos = record.CommentID > 0
 		state.Nf, state.Nd = resultCount(len(record.Failures)), resultCount(len(record.Decisions))
+		state.Bod, state.Cid, state.Chk, state.Wk = bodyID(record.Body, record.ActorID), commentID(record.CommentID),
+			checksID(record.Checks), recordWorkID(record)
+		state.Fh = failuresID(record.Failures)
+		if n := len(record.Failures); n > 0 {
+			state.Fp = failuresID(record.Failures[:n-1])
+		}
+		state.Sound = soundRecord(record, store.TaskID)
 	}
 	return state
 }
@@ -189,11 +262,30 @@ func validDecision(decision ResultCloseRecord) error {
 	return nil
 }
 
+// recordFacts are the comparisons of a record of the old store with the record
+// of the new store that the update and work relations ask: the body and author
+// are the old ones and a comment, once there is one, is the old one; the
+// failures are the old ones or extend them; the verification evidence is the
+// old one; the record was assessed against the work set.
+type recordFacts struct{ identSame, prefix, checksSame, workSame bool }
+
+func compareRecords(old, current *ResultRecord, work ResultWork) recordFacts {
+	return recordFacts{
+		identSame: current.Body == old.Body && current.ActorID == old.ActorID &&
+			(old.CommentID <= 0 || current.CommentID == old.CommentID),
+		prefix: len(current.Failures) >= len(old.Failures) &&
+			slices.Equal(current.Failures[:len(old.Failures)], old.Failures),
+		checksSame: reflect.DeepEqual(current.Checks, old.Checks),
+		workSame: current.CardDigest == work.Digest && current.EvidenceVersion == work.EvidenceVersion &&
+			slices.Equal(current.TaskIDs, work.taskIDs()) && slices.Equal(current.Commits, work.Commits),
+	}
+}
+
 // validRecordUpdate is the update relation of one record of the old store: the
 // error is the first failing check in the order ValidateResultStoreUpdate has
 // always made them, found by asking the kernel with every other fact holding.
 func validRecordUpdate(previous ResultStore, version string, old, current *ResultRecord) error {
-	state := projectRecord(previous, version)
+	state := projectRecord(previous, version, 0)
 	update := func(present bool, status rk.Rstat, identSame bool, failures uint64, prefix bool, decisions uint64) bool {
 		_, ok := resultStep(state, rk.Update{Present: present, NewSt: status, IdentSame: identSame, NfNew: failures,
 			PrefixF: prefix, NdNew: decisions})
@@ -203,9 +295,8 @@ func validRecordUpdate(previous ResultStore, version string, old, current *Resul
 		return resultError("result history cannot be removed")
 	}
 	newSt := rstatOf(current.Status)
-	identSame := current.Body == old.Body && current.ActorID == old.ActorID &&
-		(old.CommentID <= 0 || current.CommentID == old.CommentID)
-	prefix := len(current.Failures) >= len(old.Failures) && slices.Equal(current.Failures[:len(old.Failures)], old.Failures)
+	facts := compareRecords(old, current, ResultWork{})
+	identSame, prefix := facts.identSame, facts.prefix
 	failures, decisions := resultCount(len(current.Failures)), resultCount(len(current.Decisions))
 	if update(true, newSt, identSame, failures, prefix, decisions) {
 		return nil
@@ -242,7 +333,7 @@ func validDecisionUpdate(old, updated ResultCloseRecord) error {
 // always made them, found by asking the kernel with every other fact holding.
 func validRecordWork(previous ResultStore, version string, current *ResultRecord, work ResultWork) error {
 	old := previous.Records[version]
-	state := projectRecord(previous, version)
+	state := projectRecord(previous, version, workID(work))
 	newSt := rstatOf(current.Status)
 	check := func(state rk.State, identical, checksSame, workSame, versionOk bool) bool {
 		_, ok := resultStep(state, rk.Work{NewSt: newSt, Identical: identical, ChecksSame: checksSame,
@@ -256,7 +347,7 @@ func validRecordWork(previous ResultStore, version string, current *ResultRecord
 		return errResultInconsistent()
 	}
 	if old != nil && old.Status != "rejected" {
-		if check(state, false, reflect.DeepEqual(current.Checks, old.Checks), false, false) {
+		if check(state, false, compareRecords(old, current, work).checksSame, false, false) {
 			return nil
 		}
 		return resultError("published verification evidence changed")
@@ -270,8 +361,7 @@ func validRecordWork(previous ResultStore, version string, current *ResultRecord
 	if !check(state, false, false, true, true) {
 		return resultError("another publication outcome is still uncertain")
 	}
-	workSame := current.CardDigest == work.Digest && current.EvidenceVersion == work.EvidenceVersion &&
-		slices.Equal(current.TaskIDs, work.taskIDs()) && slices.Equal(current.Commits, work.Commits)
+	workSame := compareRecords(&ResultRecord{}, current, work).workSame
 	if !check(state, false, false, workSame, true) {
 		return resultError("result assessment differs from the current work set")
 	}

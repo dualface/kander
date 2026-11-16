@@ -13,12 +13,14 @@ var dstatNames = [DstatCount]string{"none", "declined", "uncertain", "closed", "
 var scanNames = [ScanCount]string{"open", "uncertain", "refusal", "consent", "returned"}
 
 var vectorParams = []Params{
-	{},
+	{MaxId: 2},
 }
 
 var vectorEvents = []Event{
-	AppendNo{},
-	AppendYes{},
+	AppendNo{Ndid: 1},
+	AppendNo{Ndid: 0},
+	AppendYes{Ndid: 1},
+	AppendYes{Ndid: 2},
 	CloseDone{},
 	CloseRejected{},
 	Reconcile{Closed: true, Same: true},
@@ -55,22 +57,25 @@ var vectorEvents = []Event{
 }
 
 func encodeParams(p Params) string {
-	return vectortest.Object()
+	return vectortest.Object(
+		"maxId", vectortest.Uint(uint64(p.MaxId)),
+	)
 }
 
 func encodeState(s State) string {
 	return vectortest.Object(
 		"ds", vectortest.Str(dstatNames[s.Ds]),
 		"acc", vectortest.Str(scanNames[s.Acc]),
+		"did", vectortest.Uint(s.Did),
 	)
 }
 
 func encodeEvent(e Event) string {
 	switch ev := e.(type) {
 	case AppendNo:
-		return vectortest.Event("appendNo")
+		return vectortest.Event("appendNo", "ndid", vectortest.Uint(ev.Ndid))
 	case AppendYes:
-		return vectortest.Event("appendYes")
+		return vectortest.Event("appendYes", "ndid", vectortest.Uint(ev.Ndid))
 	case CloseDone:
 		return vectortest.Event("closeDone")
 	case CloseRejected:
