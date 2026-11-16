@@ -72,8 +72,8 @@ func TestCheckBoardForImportProblemsSplitsWarningsFromBlockingProblems(t *testin
 	if err := InitStorage(root); err != nil {
 		t.Fatal(err)
 	}
-	// A dependency cycle between a done card and an active one is not a warning,
-	// and neither is a problem that only concerns closed cards.
+	// A dependency cycle that includes an active card blocks the import, because
+	// it does not concern only closed cards.
 	first := groupCard(t, root, "first", "done", "N/A")
 	second := groupCard(t, root, "second", "working", first)
 	editPrerequisite(t, filepath.Join(root, "done", first, "spec.md"), second)
