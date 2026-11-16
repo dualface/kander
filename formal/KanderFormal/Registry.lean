@@ -11,6 +11,9 @@ import KanderFormal.Proofs.DispatchGrant
 import KanderFormal.Proofs.ReviewRun
 import KanderFormal.Proofs.ReviewFindings
 import KanderFormal.Proofs.ReviewDisposition
+import KanderFormal.Proofs.Coordinator
+import KanderFormal.Proofs.CoordinatorMember
+import KanderFormal.Proofs.WrapUpWitness
 
 /-
 The registry of machines: what the generator emits, the bounds of the
@@ -284,6 +287,65 @@ def dispositionEvents : List Event :=
   [ wd 0 0 none, wd 0 1 none, wd 0 2 none, wd 1 1 none, wd 2 1 none ] ++
   (List.range 12).map (fun i => wd 0 0 (some i))
 
+
+/-- The coordinator checkpoint vector alphabet. Revisions and epochs are 0 to 2;
+each event is tried with every fact holding and with one fact failing: a claim
+of a new checkpoint, of an existing one at the right and at wrong revisions, with
+the same token, without room, with other members, and as a replay; a reconcile
+that changed and one that did not, with each count of blocked members, at the
+right and at the previous revision as a retry, with a wrong authority, a
+request-level failure, and each shell fact failing; and a recovery with each
+fact failing. -/
+def coordinatorEvents : List Event :=
+  let claim (er ee : Nat) (sm ts rm mo mb : Bool) : Event :=
+    ⟨"claim", [natV er, natV ee, boolV sm, boolV ts, boolV rm, boolV mo, boolV mb]⟩
+  let rcn (os ts : Bool) (ea er : Nat) (sm mo mm rc rf ch : Bool) (ba : Nat) (rm : Bool) : Event :=
+    ⟨"reconcile", [boolV os, boolV ts, natV ea, natV er, boolV sm, boolV mo, boolV mm, boolV rc, boolV rf,
+      boolV ch, natV ba, boolV rm]⟩
+  let rcv (er ee : Nat) (rm kn mb ex mo : Bool) : Event :=
+    ⟨"recover", [natV er, natV ee, boolV rm, boolV kn, boolV mb, boolV ex, boolV mo]⟩
+  [ claim 0 0 false false true true true, claim 1 1 false false true true true, claim 2 1 false false true true true,
+    claim 2 2 false false true true true, claim 1 1 false true true true true, claim 1 1 false false false true true,
+    claim 1 1 false false true false true, claim 1 1 false false true true false, claim 0 0 true false true true true,
+    claim 1 1 true false true true true, claim 0 1 false false true true true,
+    rcn true true 1 1 false true true true false true 1 true, rcn true true 1 1 false true true true false false 0 true,
+    rcn true true 1 2 false true true true false true 2 true, rcn true true 1 2 false true true true false true 0 true,
+    rcn true true 1 0 true true true true false true 1 true, rcn true true 1 0 false true true true false true 1 true,
+    rcn false true 1 1 false true true true false true 1 true, rcn true false 1 1 false true true true false true 1 true,
+    rcn true true 2 1 false true true true false true 1 true, rcn true true 1 1 false false true true false true 1 true,
+    rcn true true 1 1 false true false true false true 1 true, rcn true true 1 1 false true true false false true 1 true,
+    rcn true true 1 1 false true true true true true 1 true, rcn true true 1 1 false true true true false true 1 false,
+    rcv 1 1 true true true true true, rcv 2 1 true true true true true, rcv 2 2 true true true true true,
+    rcv 0 0 true true true true true, rcv 1 1 false true true true true, rcv 1 1 true false true true true,
+    rcv 1 1 true true false true true, rcv 1 1 true true true false true, rcv 1 1 true true true true false ]
+
+/-- The coordinator member vector alphabet. Columns: 0 early, 1 working, 2 review,
+3 done, 4 archived, 5 trash. The walking events are tried with the revision and
+the chain position kept, advanced, and moved back, in a column of each kind, with
+and without the confirmed cycle, a failing fact, and a missing handoff; the
+recoveries with a card in every kind of column. -/
+def memberEvents : List Event :=
+  let acc (nc nr nt nd : Nat) (cs ok mi : Bool) : Event :=
+    ⟨"accept", [enumV nc, natV nr, natV nt, natV nd, boolV cs, boolV ok, boolV mi]⟩
+  let cnf (nc nr : Nat) (cs : Bool) : Event := ⟨"acceptConfirmed", [enumV nc, natV nr, boolV cs]⟩
+  let trm (nc nr nt nd : Nat) (hr cs ok mi : Bool) : Event :=
+    ⟨"acceptTerminal", [enumV nc, natV nr, natV nt, natV nd, boolV hr, boolV cs, boolV ok, boolV mi]⟩
+  let rst (cc nr nt nd : Nat) (ok : Bool) : Event := ⟨"recoverReset", [enumV cc, natV nr, natV nt, natV nd, boolV ok]⟩
+  let rcf (cc nr : Nat) (tr : Bool) (nt : Nat) (dr : Bool) (nd : Nat) : Event :=
+    ⟨"recoverConfirm", [enumV cc, natV nr, boolV tr, natV nt, boolV dr, natV nd]⟩
+  [ acc 1 1 1 0 false true false, acc 2 2 1 1 false true false, acc 3 2 2 1 false true false,
+    acc 3 3 2 1 true true false, acc 1 1 0 0 false true false, acc 1 0 1 0 false true false,
+    acc 1 1 1 0 false false false, acc 1 1 1 0 false true true, acc 4 2 1 1 false true false,
+    acc 0 1 1 0 false true false,
+    cnf 3 2 true, cnf 4 3 true, cnf 3 2 false, cnf 1 2 true, cnf 3 0 true,
+    trm 4 2 2 1 true false true false, trm 5 3 2 1 false false true false, trm 4 2 2 1 true true true false,
+    trm 3 2 2 1 true false true false, trm 4 2 2 1 true false true true, trm 4 2 2 1 true false false false,
+    trm 4 2 0 1 true false true false, trm 4 0 2 1 true false true false,
+    ⟨"block", []⟩,
+    rst 1 2 2 1 true, rst 2 3 2 1 true, rst 3 2 2 1 true, rst 0 2 2 1 true, rst 1 2 2 1 false,
+    rcf 3 2 true 2 true 1, rcf 4 3 false 0 false 0, rcf 5 3 true 2 false 1, rcf 1 2 true 2 true 1,
+    rcf 0 2 true 2 true 1 ]
+
 def entries : List Entry := [
   { machine := Machines.exampleMachine
     source := "KanderFormal/Machines/Example.lean"
@@ -510,6 +572,87 @@ def entries : List Entry := [
       ``KanderFormal.Proofs.ReviewDisposition.init,
       ``KanderFormal.Proofs.ReviewDisposition.step_inv,
       ``KanderFormal.Proofs.ReviewDisposition.reachable_inv
+    ] },
+  { machine := Machines.Coordinator.coordinatorMachine
+    source := "KanderFormal/Machines/Coordinator.lean"
+    vectors := { depth := 4, paramSets := [[("maxRev", 3), ("maxEpoch", 3), ("members", 2)]], natDomain := [],
+                 events := coordinatorEvents }
+    theorems := [
+      ``KanderFormal.Proofs.Coordinator.wellTyped,
+      ``KanderFormal.Proofs.Coordinator.init,
+      ``KanderFormal.Proofs.Coordinator.step_inv,
+      ``KanderFormal.Proofs.Coordinator.reachable_inv,
+      ``KanderFormal.Proofs.Coordinator.reachable_exists,
+      ``KanderFormal.Proofs.Coordinator.claim_spec,
+      ``KanderFormal.Proofs.Coordinator.reconcile_spec,
+      ``KanderFormal.Proofs.Coordinator.recover_spec,
+      ``KanderFormal.Proofs.Coordinator.claim_replay,
+      ``KanderFormal.Proofs.Coordinator.claim_refused_cas,
+      ``KanderFormal.Proofs.Coordinator.claim_refused_token,
+      ``KanderFormal.Proofs.Coordinator.claim_refused_room,
+      ``KanderFormal.Proofs.Coordinator.claim_refused_members,
+      ``KanderFormal.Proofs.Coordinator.claim_first_refused,
+      ``KanderFormal.Proofs.Coordinator.reconcile_refused_authority,
+      ``KanderFormal.Proofs.Coordinator.reconcile_refused_none,
+      ``KanderFormal.Proofs.Coordinator.reconcile_refused_revision,
+      ``KanderFormal.Proofs.Coordinator.reconcile_refused_request_failure,
+      ``KanderFormal.Proofs.Coordinator.recover_refused_cas,
+      ``KanderFormal.Proofs.Coordinator.recover_refused_not_blocked,
+      ``KanderFormal.Proofs.Coordinator.recover_refused_count,
+      ``KanderFormal.Proofs.Coordinator.stale_retry_after_write,
+      ``KanderFormal.Proofs.Coordinator.epoch_change,
+      ``KanderFormal.Proofs.Coordinator.rev_monotone,
+      ``KanderFormal.Proofs.Coordinator.reconcile_blocked_count,
+      ``KanderFormal.Proofs.Coordinator.reconcile_all_blocked_accepted,
+      ``KanderFormal.Proofs.Coordinator.reconcile_unchanged_no_write,
+      ``KanderFormal.Proofs.Coordinator.wrapUpBlocked_eval,
+      ``KanderFormal.Proofs.Coordinator.reachable_blocked_exists,
+      ``KanderFormal.Proofs.Coordinator.recover_unblocks
+    ] },
+  { machine := Machines.CoordinatorMember.coordMemberMachine
+    source := "KanderFormal/Machines/CoordinatorMember.lean"
+    vectors := { depth := 4, paramSets := [[("maxRev", 3), ("maxSeq", 2)]], natDomain := [], events := memberEvents }
+    theorems := [
+      ``KanderFormal.Proofs.CoordinatorMember.wellTyped,
+      ``KanderFormal.Proofs.CoordinatorMember.init,
+      ``KanderFormal.Proofs.CoordinatorMember.step_inv,
+      ``KanderFormal.Proofs.CoordinatorMember.reachable_inv,
+      ``KanderFormal.Proofs.CoordinatorMember.reachable_confirmed_finished,
+      ``KanderFormal.Proofs.CoordinatorMember.block_keeps_mirror,
+      ``KanderFormal.Proofs.CoordinatorMember.accept_clears_block,
+      ``KanderFormal.Proofs.CoordinatorMember.member_isolated,
+      ``KanderFormal.Proofs.CoordinatorMember.member_step,
+      ``KanderFormal.Proofs.CoordinatorMember.accept_monotone,
+      ``KanderFormal.Proofs.CoordinatorMember.accept_refused_revision,
+      ``KanderFormal.Proofs.CoordinatorMember.accept_refused_chain,
+      ``KanderFormal.Proofs.CoordinatorMember.accept_dseq,
+      ``KanderFormal.Proofs.CoordinatorMember.accept_dseq_monotone,
+      ``KanderFormal.Proofs.CoordinatorMember.acceptTerminal_dseq,
+      ``KanderFormal.Proofs.CoordinatorMember.accept_refused_missing,
+      ``KanderFormal.Proofs.CoordinatorMember.missing_blocks_forever,
+      ``KanderFormal.Proofs.CoordinatorMember.blocked_exit,
+      ``KanderFormal.Proofs.CoordinatorMember.reset_spec,
+      ``KanderFormal.Proofs.CoordinatorMember.confirm_spec,
+      ``KanderFormal.Proofs.CoordinatorMember.recover_refused_not_blocked,
+      ``KanderFormal.Proofs.CoordinatorMember.recover_refused_early,
+      ``KanderFormal.Proofs.CoordinatorMember.recover_modes_exclusive,
+      ``KanderFormal.Proofs.CoordinatorMember.recover_wrong_mode,
+      ``KanderFormal.Proofs.CoordinatorMember.confirmed_accepts
+    ] },
+  { machine := Machines.WrapUpWitness.wrapUpWitnessMachine
+    source := "KanderFormal/Machines/WrapUpWitness.lean"
+    vectors := { depth := 5, paramSets := [[]], natDomain := [] }
+    theorems := [
+      ``KanderFormal.Proofs.WrapUpWitness.wellTyped,
+      ``KanderFormal.Proofs.WrapUpWitness.written_frozen,
+      ``KanderFormal.Proofs.WrapUpWitness.complete_once,
+      ``KanderFormal.Proofs.WrapUpWitness.reconcile_no_rewrite,
+      ``KanderFormal.Proofs.WrapUpWitness.complete_spec,
+      ``KanderFormal.Proofs.WrapUpWitness.complete_refused,
+      ``KanderFormal.Proofs.WrapUpWitness.reconcile_recorded_skips_git,
+      ``KanderFormal.Proofs.WrapUpWitness.reconcile_needs_git,
+      ``KanderFormal.Proofs.WrapUpWitness.reconcile_invalid_refused,
+      ``KanderFormal.Proofs.WrapUpWitness.reconcile_writes
     ] }
 ]
 
