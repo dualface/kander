@@ -248,14 +248,21 @@ func TestResultStoreValidatorsAgreeWithTheOriginals(t *testing.T) {
 	check := func(label string, ms ...storeMutation) {
 		next := apply(ms...)
 		single := len(ms) == 1
-		// A comparison fact read off the kernel projections implies the comparison of the records.
+		// The comparison facts read off the kernel projections are the comparisons of the records, in
+		// both directions; the failure log is a prefix by one append in the projections, so it is
+		// compared only when the new log is at most one entry longer.
 		if next.Records[version] != nil {
-			got := projectedFacts(projectRecord(previous, version, workID(work)), projectRecord(next, version, workID(work)))
-			want := compareRecords(previous.Records[version], next.Records[version], work)
-			// The facts of the projections describe one save that appends at most one failure, so a
-			// fact they hold is a comparison that holds; the converse is not claimed.
-			if got.identSame && !want.identSame || got.prefix && !want.prefix || got.checksSame && !want.checksSame ||
-				got.workSame && !want.workSame {
+			ids := newIdentities()
+			got := projectedFacts(projectRecord(previous, version, ids, work), projectRecord(next, version, ids, work))
+			old, current := previous.Records[version], next.Records[version]
+			want := compareRecords(old, current, work)
+			if grown := len(current.Failures) - len(old.Failures); grown < 0 || grown > 1 {
+				if got.prefix && !want.prefix {
+					t.Errorf("%s: the projections say the failures extend the old ones", label)
+				}
+				got.prefix = want.prefix
+			}
+			if got != want {
 				t.Errorf("%s: facts of the projections %+v, comparisons of the records %+v", label, got, want)
 			}
 		}
@@ -318,6 +325,41 @@ func TestResultStoreWorkAgreesWithTheOriginal(t *testing.T) {
 					t.Errorf("%s (update): kernel %q, original %q", label, errText(got), errText(want))
 				}
 			}
+		}
+	}
+}
+
+// TestResultIdentitiesAreInjective covers the collision of a 32-bit digest the
+// review of the first version found: the two verification records below had the
+// same truncated SHA-256, so the projection said they were equal. Identities are
+// positions in a table, so different values never share one.
+func TestResultIdentitiesAreInjective(t *testing.T) {
+	a := []ResultCheck{{Command: "go test ./pkg/check17299", Status: "pass"}}
+	b := []ResultCheck{{Command: "go test ./pkg/check135313", Status: "pass"}}
+	ids := newIdentities()
+	if ids.checks(a) == ids.checks(b) {
+		t.Fatal("different verification records share an identity")
+	}
+	if ids.checks(a) != ids.checks(append([]ResultCheck{}, a...)) || ids.checks(nil) == ids.checks([]ResultCheck{}) {
+		t.Fatal("equal values must share an identity, and nil and empty slices are different values")
+	}
+	// A store whose verification evidence was rewritten to such a value is seen as changed by the facts.
+	_, _, _, previous, version, work := oracleStore(t)
+	next := cloneStore(t, previous)
+	previous.Records[version].Checks, next.Records[version].Checks = a, b
+	got := projectedFacts(projectRecord(previous, version, ids, work), projectRecord(next, version, ids, work))
+	if got.checksSame || compareRecords(previous.Records[version], next.Records[version], work).checksSame {
+		t.Fatalf("rewritten verification evidence looks unchanged: %+v", got)
+	}
+	// Distinct bodies, comments, failure logs, work sets, and decisions get distinct identities too.
+	for _, pair := range [][2]uint64{
+		{ids.body("a", 1), ids.body("a", 2)}, {ids.body("a", 1), ids.body("b", 1)}, {ids.comment(1), ids.comment(2)},
+		{ids.failures([]ResultFailure{{Action: "x"}}), ids.failures([]ResultFailure{{Action: "y"}})},
+		{ids.work(ResultWork{Digest: "a"}), ids.work(ResultWork{Digest: "b"})},
+		{ids.decision(ResultCloseRecord{UserReference: "a"}), ids.decision(ResultCloseRecord{UserReference: "b"})},
+	} {
+		if pair[0] == pair[1] || pair[0] == 0 || pair[1] == 0 {
+			t.Fatalf("identities %v", pair)
 		}
 	}
 }

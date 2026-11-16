@@ -30,8 +30,11 @@ store was read against, `fh` the identity of its failure log and `fp` that of
 the log before the last failure was appended, and `sound` that its author is
 positive, its outcomes are known, and its version is the one its assessment
 computes. Identities are abstract: an event that writes a new body
-brings a new identity, and the shell projects the identity of a text as a hash
-of it, so that equal texts have equal identities.
+brings a new identity. The shell assigns identities from a table, so that, within
+one operation, two values have the same identity exactly when they are equal
+(never a digest, which could collide); the events only keep or replace an
+identity, so the facts read off two records are the comparisons of their
+values.
 
 The check events `update`, `work`, `idKeep`, `valid`, and `issueNeeded` change
 nothing. They are the decisions of `ValidateResultStoreUpdate`,

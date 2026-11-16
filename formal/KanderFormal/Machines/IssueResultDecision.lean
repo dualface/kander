@@ -13,9 +13,9 @@ refusal has no other status. `other` stands for a status string the store does
 not know.
 
 `did` is the identity of the decision's state version, decision, and user
-reference (0 while there is no decision); the identity of a text is a hash of
-it, so equal texts have equal identities, and the only event that writes it is
-the append of the decision. `acc` is the accumulator of the scan. `DecideResult` walks the decisions that
+reference (0 while there is no decision). The shell assigns identities from a
+table, so that two values have the same identity exactly when they are equal;
+the only event that writes `did` is the append of the decision. `acc` is the accumulator of the scan. `DecideResult` walks the decisions that
 bind the remote's current state version in order, and `visit` takes one of them.
 The first decision that blocks decides the result and no later decision changes
 it. The shell visits every decision of the record in order, so the statement

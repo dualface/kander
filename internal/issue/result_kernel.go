@@ -1,14 +1,10 @@
 package issue
 
 import (
-	"crypto/sha256"
-	"encoding/binary"
 	"encoding/json"
 	"math"
 	"reflect"
 	"slices"
-	"strconv"
-	"strings"
 
 	rk "github.com/dualface/kander/internal/statemachine/issueresult"
 	dk "github.com/dualface/kander/internal/statemachine/issueresultdecision"
@@ -27,58 +23,61 @@ var (
 	decisionKernelParams = dk.Params{MaxId: math.MaxUint32}
 )
 
-// resultID is the identity the kernels compare for a text: the first four bytes
-// of its SHA-256, never zero (zero means there is none). Equal texts have equal
-// identities; the kernels only ask whether two identities are equal, and the
-// validators still ask the shell's exact comparisons.
-func resultID(parts ...string) uint64 {
-	sum := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
-	if id := uint64(binary.BigEndian.Uint32(sum[:4])); id != 0 {
+// identities assigns the abstract identities the record kernel compares. Within
+// one table, equal values have equal identities and different values have
+// different identities, by construction: an identity is the position of the
+// exact value in the table, never a digest of it. A table serves one operation,
+// so the projections before and after a write, and the arguments of the events
+// between them, compare through the same table. Zero means there is none.
+type identities struct{ ids map[string]uint64 }
+
+func newIdentities() *identities { return &identities{ids: map[string]uint64{}} }
+
+func (t *identities) id(kind string, parts ...any) uint64 {
+	data, _ := json.Marshal(append([]any{kind}, parts...))
+	key := string(data)
+	if id, ok := t.ids[key]; ok {
 		return id
 	}
-	return 1
+	id := uint64(len(t.ids) + 1)
+	t.ids[key] = id
+	return id
 }
 
-func jsonID(kind string, value any) uint64 {
-	data, _ := json.Marshal(value)
-	return resultID(kind, string(data))
-}
+// body is the identity of a record's body and author, comment that of its
+// remote comment (zero without one), checks that of its verification evidence,
+// recordWork that of the work set a record was assessed against, work that of
+// the work set that is current, failures that of a failure log (zero when
+// empty), and decision that of a close decision's state version, decision, and
+// user reference.
+func (t *identities) body(body string, actor int64) uint64 { return t.id("body", body, actor) }
 
-// bodyID is the identity of a record's body and author, commentID that of its
-// remote comment (zero without one), checksID that of its verification
-// evidence, workID that of the work set a record was assessed against or that is
-// current, failuresID that of a failure log (zero when empty), and decisionID
-// that of a close decision's state version, decision, and user reference.
-func bodyID(body string, actor int64) uint64 {
-	return resultID("body", body, strconv.FormatInt(actor, 10))
-}
-
-func commentID(id int64) uint64 {
+func (t *identities) comment(id int64) uint64 {
 	if id <= 0 {
 		return 0
 	}
-	return resultID("comment", strconv.FormatInt(id, 10))
+	return t.id("comment", id)
 }
 
-func checksID(checks []ResultCheck) uint64 { return jsonID("checks", checks) }
+func (t *identities) checks(checks []ResultCheck) uint64 { return t.id("checks", checks) }
 
-func recordWorkID(record *ResultRecord) uint64 {
-	return jsonID("work", []any{record.CardDigest, record.EvidenceVersion, record.TaskIDs, record.Commits})
+func (t *identities) recordWork(record *ResultRecord) uint64 {
+	return t.id("work", record.CardDigest, record.EvidenceVersion, record.TaskIDs, record.Commits)
 }
 
-func workID(work ResultWork) uint64 {
-	return jsonID("work", []any{work.Digest, work.EvidenceVersion, work.taskIDs(), work.Commits})
+func (t *identities) work(work ResultWork) uint64 {
+	return t.id("work", work.Digest, work.EvidenceVersion, work.taskIDs(), work.Commits)
 }
 
-func failuresID(failures []ResultFailure) uint64 {
+func (t *identities) failures(failures []ResultFailure) uint64 {
 	if len(failures) == 0 {
 		return 0
 	}
-	return jsonID("failures", failures)
+	return t.id("failures", failures)
 }
 
-func decisionID(d ResultCloseRecord) uint64 {
-	return resultID("decision", d.StateVersion, d.Decision, d.UserReference)
+func (t *identities) decision(d ResultCloseRecord) uint64 {
+	return t.id("decision", d.StateVersion, d.Decision, d.UserReference)
 }
 
 // soundRecord is whether a record's author is positive, its outcomes are known,
@@ -187,8 +186,8 @@ func outcomesKnown(outcomes []string) bool {
 // projectRecord is the kernel state of the record of `version` in a store: the
 // record's status and counts, and the facts of the store around it. A version
 // without a record projects to the status `none`.
-func projectRecord(store ResultStore, version string, current uint64) rk.State {
-	state := rk.State{Iid: store.IssueID > 0, Cw: current}
+func projectRecord(store ResultStore, version string, ids *identities, work ResultWork) rk.State {
+	state := rk.State{Iid: store.IssueID > 0, Cw: ids.work(work)}
 	for _, record := range store.Records {
 		if record != nil && record.Status == "uncertain" {
 			state.Unc++
@@ -199,11 +198,11 @@ func projectRecord(store ResultStore, version string, current uint64) rk.State {
 		state.Full, state.Met = record.FullyResolved, allMet(record.Outcomes)
 		state.Cpos = record.CommentID > 0
 		state.Nf, state.Nd = resultCount(len(record.Failures)), resultCount(len(record.Decisions))
-		state.Bod, state.Cid, state.Chk, state.Wk = bodyID(record.Body, record.ActorID), commentID(record.CommentID),
-			checksID(record.Checks), recordWorkID(record)
-		state.Fh = failuresID(record.Failures)
+		state.Bod, state.Cid, state.Chk, state.Wk = ids.body(record.Body, record.ActorID), ids.comment(record.CommentID),
+			ids.checks(record.Checks), ids.recordWork(record)
+		state.Fh = ids.failures(record.Failures)
 		if n := len(record.Failures); n > 0 {
-			state.Fp = failuresID(record.Failures[:n-1])
+			state.Fp = ids.failures(record.Failures[:n-1])
 		}
 		state.Sound = soundRecord(record, store.TaskID)
 	}
@@ -285,7 +284,7 @@ func compareRecords(old, current *ResultRecord, work ResultWork) recordFacts {
 // error is the first failing check in the order ValidateResultStoreUpdate has
 // always made them, found by asking the kernel with every other fact holding.
 func validRecordUpdate(previous ResultStore, version string, old, current *ResultRecord) error {
-	state := projectRecord(previous, version, 0)
+	state := projectRecord(previous, version, newIdentities(), ResultWork{})
 	update := func(present bool, status rk.Rstat, identSame bool, failures uint64, prefix bool, decisions uint64) bool {
 		_, ok := resultStep(state, rk.Update{Present: present, NewSt: status, IdentSame: identSame, NfNew: failures,
 			PrefixF: prefix, NdNew: decisions})
@@ -333,7 +332,7 @@ func validDecisionUpdate(old, updated ResultCloseRecord) error {
 // always made them, found by asking the kernel with every other fact holding.
 func validRecordWork(previous ResultStore, version string, current *ResultRecord, work ResultWork) error {
 	old := previous.Records[version]
-	state := projectRecord(previous, version, workID(work))
+	state := projectRecord(previous, version, newIdentities(), work)
 	newSt := rstatOf(current.Status)
 	check := func(state rk.State, identical, checksSame, workSame, versionOk bool) bool {
 		_, ok := resultStep(state, rk.Work{NewSt: newSt, Identical: identical, ChecksSame: checksSame,

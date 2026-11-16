@@ -61,12 +61,16 @@ func (p observedProvider) CloseResult(ctx context.Context, repo Repository, n in
 	return p.resultFake.CloseResult(ctx, repo, n)
 }
 
-// testWork is the identity of the current work set the kernel projection
-// compares records with; readStore refreshes it.
-var testWork uint64
+// testIDs and testWorkSet are the identity table and the current work set the
+// kernel projections of one test compare records with; readStore refreshes the
+// work set. One table serves a whole test, so projections and events agree.
+var (
+	testIDs     = newIdentities()
+	testWorkSet ResultWork
+)
 
 func projectOf(store ResultStore, version string) rk.State {
-	return projectRecord(store, version, testWork)
+	return projectRecord(store, version, testIDs, testWorkSet)
 }
 
 func readStore(t *testing.T, root string, repo Repository, id string) ResultStore {
@@ -79,32 +83,32 @@ func readStore(t *testing.T, root string, repo Repository, id string) ResultStor
 	if err != nil {
 		t.Fatal(err)
 	}
-	testWork = workID(work)
+	testWorkSet = work
 	return store
 }
 
 // The events of an entrance, with the witnesses of the record the entrance wrote.
 func intentOf(after ResultStore, version string) rk.Event {
 	r := after.Records[version]
-	return rk.Intent{Nfull: r.FullyResolved, Nmet: allMet(r.Outcomes), BodyOk: true, Nbod: bodyID(r.Body, r.ActorID),
-		Nchk: checksID(r.Checks), Nsound: soundRecord(r, after.TaskID)}
+	return rk.Intent{Nfull: r.FullyResolved, Nmet: allMet(r.Outcomes), BodyOk: true, Nbod: testIDs.body(r.Body, r.ActorID),
+		Nchk: testIDs.checks(r.Checks), Nsound: soundRecord(r, after.TaskID)}
 }
 func equivalentOf(after ResultStore, version string) rk.Event {
 	r := after.Records[version]
-	return rk.Equivalent{Nfull: r.FullyResolved, Nmet: allMet(r.Outcomes), Found: true, Nbod: bodyID(r.Body, r.ActorID),
-		Ncid: commentID(r.CommentID), Nchk: checksID(r.Checks), Nsound: soundRecord(r, after.TaskID)}
+	return rk.Equivalent{Nfull: r.FullyResolved, Nmet: allMet(r.Outcomes), Found: true, Nbod: testIDs.body(r.Body, r.ActorID),
+		Ncid: testIDs.comment(r.CommentID), Nchk: testIDs.checks(r.Checks), Nsound: soundRecord(r, after.TaskID)}
 }
 func publishOf(after ResultStore, version string) rk.Event {
-	return rk.Publish{Ok: true, Ncid: commentID(after.Records[version].CommentID)}
+	return rk.Publish{Ok: true, Ncid: testIDs.comment(after.Records[version].CommentID)}
 }
 func reconcileOf(after ResultStore, version string) rk.Event {
-	return rk.Reconcile{Found: true, Ncid: commentID(after.Records[version].CommentID)}
+	return rk.Reconcile{Found: true, Ncid: testIDs.comment(after.Records[version].CommentID)}
 }
 func rejectOf(after ResultStore, version string) rk.Event {
-	return rk.Reject{Nfh: failuresID(after.Records[version].Failures)}
+	return rk.Reject{Nfh: testIDs.failures(after.Records[version].Failures)}
 }
 func failOf(after ResultStore, version string) rk.Event {
-	return rk.FailClose{Nfh: failuresID(after.Records[version].Failures)}
+	return rk.FailClose{Nfh: testIDs.failures(after.Records[version].Failures)}
 }
 
 func kernelSteps(t *testing.T, state rk.State, events ...rk.Event) rk.State {
@@ -145,7 +149,7 @@ func assertRefines(t *testing.T, before, after ResultStore, focus string, events
 	for v := range after.Records {
 		versions[v] = true
 	}
-	read := rk.Read{RemoteOk: true, Same: before.IssueID == 42, Nw: testWork}
+	read := rk.Read{RemoteOk: true, Same: before.IssueID == 42, Nw: testIDs.work(testWorkSet)}
 	for version := range versions {
 		want := kernelSteps(t, projectOf(before, version), read)
 		if version == focus {
@@ -171,14 +175,15 @@ func projectedFacts(before, after rk.State) recordFacts {
 }
 
 // assertFactsAgree checks that the facts read off the projections are the
-// comparisons the shell makes on the records themselves.
+// comparisons the shell makes on the records themselves, in both directions:
+// the identities are injective, so equal identities are equal values.
 func assertFactsAgree(t *testing.T, before, after ResultStore, version string, work ResultWork) {
 	t.Helper()
 	old, current := before.Records[version], after.Records[version]
 	if old == nil || current == nil {
 		return
 	}
-	got := projectedFacts(projectRecord(before, version, workID(work)), projectRecord(after, version, workID(work)))
+	got := projectedFacts(projectRecord(before, version, testIDs, work), projectRecord(after, version, testIDs, work))
 	want := compareRecords(old, current, work)
 	// A new record replaces a rejected one: its text is new, and the update relation skips it.
 	if old.Status == "rejected" && current.Status != "rejected" {
