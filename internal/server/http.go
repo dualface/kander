@@ -146,7 +146,7 @@ func (s *Server) Handler() http.Handler {
 		}
 		return p.answerRequest(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("task"), r.PathValue("request"), req, holderOf(r))
 	})
-	s.projectRoute(mux, "GET /api/v1/projects/{project}/events", func(p *project, r *http.Request) outcome {
+	s.projectRoute(mux, projectEvents, func(p *project, r *http.Request) outcome {
 		wait := time.Duration(0)
 		if raw := r.URL.Query().Get("wait"); raw != "" {
 			seconds, err := strconv.Atoi(raw)
@@ -201,13 +201,19 @@ func holderOf(r *http.Request) holder {
 	return h
 }
 
+// projectEvents is the one read route that never touches the board.
+const projectEvents = "GET /api/v1/projects/{project}/events"
+
 func (s *Server) projectRoute(mux *http.ServeMux, pattern string, fn func(*project, *http.Request) outcome) {
+	// The registered pattern decides the lock: a GET pattern also serves
+	// HEAD, and a request path ending in /events may still name a document.
+	read := strings.HasPrefix(pattern, http.MethodGet+" ") && pattern != projectEvents
 	mux.HandleFunc(pattern, s.domain(func(r *http.Request) outcome {
 		p, err := s.project(r.PathValue("project"))
 		if err != nil {
 			return outcome{err: err}
 		}
-		if r.Method == http.MethodGet && !strings.HasSuffix(r.URL.Path, "/events") {
+		if read {
 			if err := p.lockBoard(); err != nil {
 				return outcome{err: err}
 			}

@@ -42,7 +42,6 @@ func pauseImport(t *testing.T, s *Server, step string) (reached <-chan struct{},
 			close(gate)
 		}
 	}
-	t.Cleanup(release)
 	fired := false
 	s.importFault = func(current string) error {
 		if current == step && !fired {
@@ -66,6 +65,24 @@ func waitFor[T any](t *testing.T, ch <-chan T, what string) T {
 	}
 }
 
+// rawRead sends a read the client has no method for (HEAD, or a document
+// named events) and returns its status.
+func rawRead(t *testing.T, method, url string) int {
+	t.Helper()
+	req, err := http.NewRequestWithContext(t.Context(), method, url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set(api.HeaderProtocol, strconv.Itoa(api.ProtocolVersion))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Error(err)
+		return 0
+	}
+	resp.Body.Close()
+	return resp.StatusCode
+}
+
 func TestOnlineImportKeepsOtherProjectsServing(t *testing.T) {
 	source := v1Board(t)
 	s, h := openTest(t, t.TempDir(), nil)
@@ -77,6 +94,8 @@ func TestOnlineImportKeepsOtherProjectsServing(t *testing.T) {
 		t.Fatal(err)
 	}
 	reached, release := pauseImport(t, s, "copied")
+	// Deferred after the server close, so it runs first even on a failure.
+	defer release()
 	done := make(chan error, 1)
 	var result api.ImportResult
 	go func() {
@@ -140,6 +159,8 @@ func TestOnlineImportReadsWaitForPublicationAndEventsReset(t *testing.T) {
 	// The long poll must be waiting before the publication wakes it.
 	time.Sleep(200 * time.Millisecond)
 	reached, release := pauseImport(t, s, "backup-renamed")
+	// Deferred after the server close, so it runs first even on a failure.
+	defer release()
 	done := make(chan error, 1)
 	go func() {
 		_, err := onlineImport(t, s, h.URL, api.ImportRequest{Project: "demo", From: source})
@@ -158,9 +179,17 @@ func TestOnlineImportReadsWaitForPublicationAndEventsReset(t *testing.T) {
 		list, _ := p.List(t.Context(), "")
 		read <- list
 	}()
+	tasks := h.URL + "/api/v1/projects/" + info.ID + "/tasks"
+	head, document := make(chan int, 1), make(chan int, 1)
+	go func() { head <- rawRead(t, http.MethodHead, tasks) }()
+	go func() { document <- rawRead(t, http.MethodGet, tasks+"/20261116-demo-task/documents/events") }()
 	select {
 	case list := <-read:
 		t.Fatalf("a read returned inside the publication window: %+v", list)
+	case status := <-head:
+		t.Fatalf("a HEAD returned inside the publication window: %d", status)
+	case status := <-document:
+		t.Fatalf("a document named events returned inside the publication window: %d", status)
 	case <-time.After(200 * time.Millisecond):
 	}
 	published := time.Now()
@@ -171,6 +200,10 @@ func TestOnlineImportReadsWaitForPublicationAndEventsReset(t *testing.T) {
 	if list := waitFor(t, read, "queued read"); len(list.Tasks) != 2 {
 		t.Fatalf("queued read: %+v", list)
 	}
+	if status := waitFor(t, head, "queued HEAD"); status != http.StatusOK {
+		t.Fatalf("queued HEAD: %d", status)
+	}
+	waitFor(t, document, "queued document read")
 	if page := waitFor(t, polled, "long poll"); !page.Reset || time.Since(published) > 5*time.Second {
 		t.Fatalf("long poll must answer reset at publication: %+v after %s", page, time.Since(published))
 	}
@@ -252,6 +285,13 @@ func TestOnlineImportFailureClosesTheProjectWithoutTouchingItsBoard(t *testing.T
 	}
 	if _, err := p.List(t.Context(), ""); !api.IsCode(err, api.CodeNotReady) {
 		t.Fatalf("later read: %v", err)
+	}
+	tasks := h.URL + "/api/v1/projects/" + info.ID + "/tasks"
+	if status := rawRead(t, http.MethodHead, tasks); status != http.StatusServiceUnavailable {
+		t.Fatalf("later HEAD: %d", status)
+	}
+	if status := rawRead(t, http.MethodGet, tasks+"/20261116-demo-task/documents/events"); status != http.StatusServiceUnavailable {
+		t.Fatalf("later document named events: %d", status)
 	}
 	if _, err := onlineImport(t, s, h.URL, api.ImportRequest{Project: "demo", From: source}); !api.IsCode(err, api.CodeNotReady) {
 		t.Fatalf("later import: %v", err)
