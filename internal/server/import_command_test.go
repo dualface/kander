@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -50,7 +51,13 @@ func (b *syncBuffer) waitContains(t *testing.T, text string) {
 func TestImportReporterWritesPlainLinesWithoutATerminal(t *testing.T) {
 	var out bytes.Buffer
 	r := newImportReporter(&out, false)
+	if r.Seen() {
+		t.Fatal("nothing was reported yet")
+	}
 	r.Report(api.ImportProgress{Phase: api.ImportPhaseLock})
+	if !r.Seen() || r.PastCopy() {
+		t.Fatal("a report was seen and the copy has not finished")
+	}
 	r.Report(api.ImportProgress{Phase: api.ImportPhaseCopy, Total: 10, TotalBytes: 2048})
 	r.Report(api.ImportProgress{Phase: api.ImportPhaseCopy, Done: 1, Total: 10, Bytes: 100, TotalBytes: 2048})
 	r.Report(api.ImportProgress{Phase: api.ImportPhaseVerify})
@@ -322,5 +329,40 @@ func TestImportCommandPrintsOnlineProgress(t *testing.T) {
 		if !strings.Contains(stderr.String(), text) {
 			t.Fatalf("stderr lacks the server's %q:\n%s", text, stderr.String())
 		}
+	}
+}
+
+func TestImportCommandTreatsAnOnlineCancelWithoutProgressAsUnknown(t *testing.T) {
+	source := v1Board(t)
+	dir := t.TempDir()
+	holder, err := Open(Options{DataDir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer holder.Close()
+	reached := make(chan struct{})
+	var once sync.Once
+	// A server that predates the stream answers once, at the end, and never reports progress.
+	old := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/server/import" {
+			writeJSONResponse(w, http.StatusOK, api.ServerInfo{DataDir: dir})
+			return
+		}
+		// The server notices a closed connection only after it read the request.
+		_, _ = io.Copy(io.Discard, r.Body)
+		once.Do(func() { close(reached) })
+		<-r.Context().Done()
+	}))
+	defer old.Close()
+	useImportTarget(t, old.URL)
+	signals := make(chan os.Signal, 1)
+	go func() {
+		<-reached
+		signals <- os.Interrupt
+	}()
+	stdout, stderr := &syncBuffer{}, &syncBuffer{}
+	code := importCommand([]string{"--data", dir, "--project", "demo", "--from", source}, stdout, stderr, false, signals)
+	if code != 130 || stdout.String() != "" || !strings.Contains(stderr.String(), config.Text("server.import_cancelled_late")) || strings.Contains(stderr.String(), config.Text("server.import_cancelled")+"\n") {
+		t.Fatalf("exit %d stdout %q\n%s", code, stdout.String(), stderr.String())
 	}
 }

@@ -130,7 +130,8 @@ func importCommand(args []string, stdout, stderr io.Writer, tty bool, signals ch
 	report.Finish()
 	if err != nil {
 		if interrupt.cancelled() {
-			if online && report.PastCopy() {
+			// Without any progress the command cannot tell how far the server got.
+			if online && (report.PastCopy() || !report.Seen()) {
 				report.Notice(config.Text("server.import_cancelled_late"))
 			} else {
 				report.Notice(config.Text("server.import_cancelled"))

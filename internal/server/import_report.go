@@ -27,6 +27,7 @@ type importReporter struct {
 	width    int  // display width of the status line on a terminal
 	open     bool // the terminal status line has no newline yet
 	phase    string
+	seen     bool // any report arrived
 	pastCopy bool
 	printed  time.Time
 }
@@ -40,7 +41,7 @@ func (r *importReporter) Report(p api.ImportProgress) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	changed := p.Phase != r.phase
-	r.phase = p.Phase
+	r.phase, r.seen = p.Phase, true
 	switch p.Phase {
 	case api.ImportPhaseVerify, api.ImportPhaseCheck, api.ImportPhasePublish:
 		r.pastCopy = true
@@ -54,6 +55,13 @@ func (r *importReporter) Report(p api.ImportProgress) {
 		r.printed = time.Now()
 		fmt.Fprintln(r.w, text)
 	}
+}
+
+// Seen reports whether any progress arrived. An older server sends none.
+func (r *importReporter) Seen() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.seen
 }
 
 // PastCopy reports whether the copy phase has finished, from the progress seen.
