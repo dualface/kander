@@ -172,9 +172,11 @@ func TestArchiveCallSequencesAreTheProvedSet(t *testing.T) {
 	}
 }
 
-// The kernel accepts every proved sequence from a prepared run, and the set is
-// closed: a driver that skips the launching update before the running one, or
-// updates a run after it finalized, makes a sequence the kernel refuses.
+// The kernel accepts every proved sequence from a prepared run. The set itself is
+// what excludes a driver that skips the launching update: the kernel accepts any
+// phase an update presents to a run that is not finalized, so it would accept
+// that sequence, and the set check (inProvedSet) is what refuses it. The kernel
+// refuses an update of a run after it finalized.
 func TestArchiveProvedSequencesAreAcceptedByTheKernel(t *testing.T) {
 	prepared := func() reviewrun.State {
 		st, ok := reviewrun.Step(reviewrun.Initial(reviewrun.Params{}), reviewrun.Create{Ids: true, Cards: true, Batch: true, Role: true}, reviewrun.Params{})
@@ -203,6 +205,6 @@ func TestArchiveProvedSequencesAreAcceptedByTheKernel(t *testing.T) {
 		t.Fatal("the kernel accepts an update of a finalized run")
 	}
 	if inProvedSet([]string{"update running started", "finalize started ok"}) {
-		t.Fatal("a run that skips the launching update is in the proved set")
+		t.Fatal("a sequence that skips the launching update is in the proved set")
 	}
 }

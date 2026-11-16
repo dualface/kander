@@ -1,7 +1,10 @@
 package board
 
 import (
+	"errors"
+	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/dualface/kander/internal/statemachine/reviewrun"
@@ -315,11 +318,17 @@ func TestFinalizeUploadedReviewAndOriginalsRefineKernel(t *testing.T) {
 		t.Fatal(err)
 	}
 	read := func() error { _, err := ReadReviewOriginal(root, "upload-kernel", "report.md"); return err }
-	if err := read(); err == nil {
-		t.Fatal("an original of a run that is not finalized was read")
+	// The refusal is the finalization guard, not a missing hash: without the guard
+	// the same call fails with os.ErrNotExist, so the error text names the guard.
+	before := runStates(t, root, "upload-kernel", ids)
+	if err := read(); err == nil || !strings.Contains(err.Error(), "run not finalized") || errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("an original of a run that is not finalized: %v", err)
 	}
-	if reviewrun.Final(runStates(t, root, "upload-kernel", ids)[ids[0]], reviewrun.Params{}) {
+	if reviewrun.Final(before[ids[0]], reviewrun.Params{}) {
 		t.Fatal("the kernel reads the originals of a run that is not finalized")
+	}
+	if after := runStates(t, root, "upload-kernel", ids); !reflect.DeepEqual(after, before) {
+		t.Fatalf("a refused read changed the run: %+v -> %+v", before, after)
 	}
 	files := map[string][]byte{"output.raw": []byte("raw"), "stdout.log": []byte("out"), "error.log": []byte("err")}
 	upload := func() error {
