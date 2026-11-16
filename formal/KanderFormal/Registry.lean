@@ -9,6 +9,8 @@ import KanderFormal.Proofs.DispatchForms
 import KanderFormal.Proofs.DispatchSafety
 import KanderFormal.Proofs.DispatchGrant
 import KanderFormal.Proofs.ReviewRun
+import KanderFormal.Proofs.ReviewFindings
+import KanderFormal.Proofs.ReviewDisposition
 
 /-
 The registry of machines: what the generator emits, the bounds of the
@@ -242,6 +244,46 @@ def runEvents : List Event :=
     ⟨"verify", [t, t, t, t]⟩, ⟨"verify", [t, t, t, x]⟩, ⟨"verify", [t, t, x, t]⟩,
     ⟨"passSkipped", [t, t]⟩, ⟨"passSkipped", [t, x]⟩ ]
 
+/-- The review findings vector alphabet: a read-in of every schema with a
+structured, an unstructured, a block-marked, and an unconsumable report, the
+close of the batch, and each source and assignment event with every fact holding
+and with one fact failing. -/
+def findingsEvents : List Event :=
+  let t := boolV true
+  let x := boolV false
+  let opn (s : Nat) (st fe co : Val) : Event := ⟨"open", [enumV s, st, fe, co]⟩
+  [ opn 0 x x t, opn 0 x t t, opn 0 t t t, opn 1 x x t, opn 1 t t t, opn 2 x x t, opn 2 x t t, opn 2 t t t,
+    opn 2 x x x, opn 2 t x t,
+    ⟨"close", []⟩,
+    ⟨"interpret", [t, t, t]⟩, ⟨"interpret", [t, x, t]⟩, ⟨"interpret", [x, t, t]⟩, ⟨"interpret", [t, t, x]⟩,
+    ⟨"mapLegacy", [t, t, t]⟩, ⟨"mapLegacy", [t, x, t]⟩, ⟨"mapLegacy", [x, t, t]⟩, ⟨"mapLegacy", [t, t, x]⟩,
+    ⟨"assign", [t, t, t, t, t, t, t]⟩, ⟨"assign", [x, t, t, t, t, t, t]⟩, ⟨"assign", [t, x, t, t, t, t, t]⟩,
+    ⟨"assign", [t, t, x, t, t, t, t]⟩, ⟨"assign", [t, t, t, x, t, t, t]⟩, ⟨"assign", [t, t, t, t, x, t, t]⟩,
+    ⟨"assign", [t, t, t, t, t, x, t]⟩, ⟨"assign", [t, t, t, t, t, t, x]⟩ ]
+
+/-- The facts of a record event with the fact at `i` (or none) failing. -/
+def factsWith (n : Nat) (i : Option Nat) : List Val :=
+  (List.range n).map fun k => boolV (i != some k)
+
+/-- The review disposition vector alphabet: the assignment and the close, a
+submission with every status for a gate and another tier, with a waiver for and
+against a security role, with every relation of the record to the chain, and
+with each fact failing; and a withdrawal with every relation to the chain and
+each fact failing. -/
+def dispositionEvents : List Event :=
+  let sub (st du rf : Nat) (g se : Bool) (i : Option Nat) : Event :=
+    ⟨"submit", [enumV st, enumV du, enumV rf, boolV g, boolV se] ++ factsWith 12 i⟩
+  let wd (du rf : Nat) (i : Option Nat) : Event := ⟨"withdraw", [enumV du, enumV rf] ++ factsWith 12 i⟩
+  [ ⟨"assign", []⟩, ⟨"close", []⟩,
+    sub 0 0 0 true true none, sub 1 0 0 true true none, sub 1 0 0 false true none, sub 2 0 0 false true none,
+    sub 3 0 0 false true none, sub 4 0 0 true true none, sub 4 0 0 true false none, sub 5 0 0 true true none,
+    sub 5 0 0 false true none, sub 6 0 0 true true none, sub 7 0 0 true true none,
+    sub 1 0 1 true true none, sub 1 0 2 true true none, sub 1 1 1 true true none, sub 1 2 1 true true none,
+    sub 1 1 0 true true none ] ++
+  (List.range 12).map (fun i => sub 1 0 0 true true (some i)) ++
+  [ wd 0 0 none, wd 0 1 none, wd 0 2 none, wd 1 1 none, wd 2 1 none ] ++
+  (List.range 12).map (fun i => wd 0 0 (some i))
+
 def entries : List Entry := [
   { machine := Machines.exampleMachine
     source := "KanderFormal/Machines/Example.lean"
@@ -398,6 +440,76 @@ def entries : List Entry := [
       ``KanderFormal.Proofs.ReviewRun.step_inv,
       ``KanderFormal.Proofs.ReviewRun.reachable_inv,
       ``KanderFormal.Proofs.ReviewRun.reachable_published_finalized
+    ] },
+  { machine := Machines.ReviewFindings.reviewFindingsMachine
+    source := "KanderFormal/Machines/ReviewFindings.lean"
+    vectors := { depth := 4, paramSets := [[]], natDomain := [], events := findingsEvents }
+    theorems := [
+      ``KanderFormal.Proofs.ReviewFindings.wellTyped,
+      ``KanderFormal.Proofs.ReviewFindings.open_spec,
+      ``KanderFormal.Proofs.ReviewFindings.open_refused_unconsumable,
+      ``KanderFormal.Proofs.ReviewFindings.open_once,
+      ``KanderFormal.Proofs.ReviewFindings.unopened_refused,
+      ``KanderFormal.Proofs.ReviewFindings.interpret_refused_schema,
+      ``KanderFormal.Proofs.ReviewFindings.mapLegacy_refused_schema,
+      ``KanderFormal.Proofs.ReviewFindings.mapLegacy_refused_fenced,
+      ``KanderFormal.Proofs.ReviewFindings.interpret_refused_structured,
+      ``KanderFormal.Proofs.ReviewFindings.reachable_structured_no_source,
+      ``KanderFormal.Proofs.ReviewFindings.reachable_one_source,
+      ``KanderFormal.Proofs.ReviewFindings.interpret_spec,
+      ``KanderFormal.Proofs.ReviewFindings.mapLegacy_spec,
+      ``KanderFormal.Proofs.ReviewFindings.interpret_replay,
+      ``KanderFormal.Proofs.ReviewFindings.interpret_conflict,
+      ``KanderFormal.Proofs.ReviewFindings.mapLegacy_replay,
+      ``KanderFormal.Proofs.ReviewFindings.mapLegacy_conflict,
+      ``KanderFormal.Proofs.ReviewFindings.assign_replay,
+      ``KanderFormal.Proofs.ReviewFindings.assign_conflict,
+      ``KanderFormal.Proofs.ReviewFindings.written_frozen,
+      ``KanderFormal.Proofs.ReviewFindings.assign_refused_unavailable,
+      ``KanderFormal.Proofs.ReviewFindings.assign_refused_pending,
+      ``KanderFormal.Proofs.ReviewFindings.reachable_pending_unassigned,
+      ``KanderFormal.Proofs.ReviewFindings.assign_spec,
+      ``KanderFormal.Proofs.ReviewFindings.assign_refused_coverage,
+      ``KanderFormal.Proofs.ReviewFindings.assign_refused_foreign,
+      ``KanderFormal.Proofs.ReviewFindings.assign_refused_excluded,
+      ``KanderFormal.Proofs.ReviewFindings.closed_writes_refused,
+      ``KanderFormal.Proofs.ReviewFindings.interpret_closed,
+      ``KanderFormal.Proofs.ReviewFindings.init,
+      ``KanderFormal.Proofs.ReviewFindings.step_inv,
+      ``KanderFormal.Proofs.ReviewFindings.reachable_inv
+    ] },
+  { machine := Machines.ReviewDisposition.reviewDispositionMachine
+    source := "KanderFormal/Machines/ReviewDisposition.lean"
+    vectors := { depth := 4, paramSets := [[]], natDomain := [], events := dispositionEvents }
+    theorems := [
+      ``KanderFormal.Proofs.ReviewDisposition.wellTyped,
+      ``KanderFormal.Proofs.ReviewDisposition.reachable_chain_assigned,
+      ``KanderFormal.Proofs.ReviewDisposition.assign_once,
+      ``KanderFormal.Proofs.ReviewDisposition.submit_spec,
+      ``KanderFormal.Proofs.ReviewDisposition.submit_refused_unassigned,
+      ``KanderFormal.Proofs.ReviewDisposition.submit_refused_gate_deferred,
+      ``KanderFormal.Proofs.ReviewDisposition.submit_refused_nongate,
+      ``KanderFormal.Proofs.ReviewDisposition.submit_refused_waiver_role,
+      ``KanderFormal.Proofs.ReviewDisposition.submit_refused_other_status,
+      ``KanderFormal.Proofs.ReviewDisposition.submit_refuses_withdrawn,
+      ``KanderFormal.Proofs.ReviewDisposition.withdraw_spec,
+      ``KanderFormal.Proofs.ReviewDisposition.withdraw_refused_not_excluded,
+      ``KanderFormal.Proofs.ReviewDisposition.withdraw_refused_unnamed,
+      ``KanderFormal.Proofs.ReviewDisposition.withdraw_refused_unassigned,
+      ``KanderFormal.Proofs.ReviewDisposition.submit_refused_no_findings,
+      ``KanderFormal.Proofs.ReviewDisposition.withdraw_refused_no_findings,
+      ``KanderFormal.Proofs.ReviewDisposition.submit_chain_spec,
+      ``KanderFormal.Proofs.ReviewDisposition.submit_stale_predecessor,
+      ``KanderFormal.Proofs.ReviewDisposition.submit_replay,
+      ``KanderFormal.Proofs.ReviewDisposition.submit_conflict,
+      ``KanderFormal.Proofs.ReviewDisposition.withdraw_conflict,
+      ``KanderFormal.Proofs.ReviewDisposition.submit_same_needs_chain,
+      ``KanderFormal.Proofs.ReviewDisposition.withdraw_chain_spec,
+      ``KanderFormal.Proofs.ReviewDisposition.closed_refused,
+      ``KanderFormal.Proofs.ReviewDisposition.written_frozen,
+      ``KanderFormal.Proofs.ReviewDisposition.init,
+      ``KanderFormal.Proofs.ReviewDisposition.step_inv,
+      ``KanderFormal.Proofs.ReviewDisposition.reachable_inv
     ] }
 ]
 
