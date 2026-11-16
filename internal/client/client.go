@@ -93,8 +93,14 @@ func (c *Client) do(ctx context.Context, in call, out any) error {
 	if in.method != http.MethodGet && in.key == "" {
 		in.key = NewKey()
 	}
+	// in.path is already escaped segment by segment, so it goes into RawPath;
+	// assigning it to Path alone would escape every "%" a second time.
 	u := *c.base
-	u.Path = c.base.Path + in.path
+	u.RawPath = c.base.EscapedPath() + in.path
+	var err error
+	if u.Path, err = url.PathUnescape(u.RawPath); err != nil {
+		return fmt.Errorf("request path %q: %w", in.path, err)
+	}
 	u.RawQuery = in.query.Encode()
 	var last error
 	for attempt := 0; attempt <= c.Retries; attempt++ {

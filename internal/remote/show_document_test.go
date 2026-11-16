@@ -36,7 +36,7 @@ func showDocumentFixture(t *testing.T) (run func(args ...string) (int, string, s
 		case strings.Contains(r.URL.Path, "/documents/"):
 			paths = append(paths, r.URL.EscapedPath())
 			name := r.URL.Path[strings.Index(r.URL.Path, "/documents/")+len("/documents/"):]
-			if name != "plan.md" && name != "notes/a.md" {
+			if name != "plan.md" && name != "说明/a b.md" {
 				w.WriteHeader(http.StatusNotFound)
 				_ = json.NewEncoder(w).Encode(api.Error{Code: api.CodeNotFound, Message: "document " + name + " does not exist"})
 				return
@@ -70,12 +70,12 @@ func TestShowDocumentPrintsOnlyTheDocument(t *testing.T) {
 	if code != 0 || out != "# Plan\n\nbody\n" {
 		t.Fatalf("code=%d out=%q err=%q", code, out, errOut)
 	}
-	code, out, errOut = run("--json", "--document", "notes/a.md", "20261116-a-task")
+	code, out, errOut = run("--json", "--document", "说明/a b.md", "20261116-a-task")
 	var doc api.Document
-	if code != 0 || json.Unmarshal([]byte(out), &doc) != nil || doc.Path != "notes/a.md" || doc.ExpectedRevision != 7 || doc.Text != "# Plan\n\nbody\n" {
+	if code != 0 || json.Unmarshal([]byte(out), &doc) != nil || doc.Path != "说明/a b.md" || doc.ExpectedRevision != 7 || doc.Text != "# Plan\n\nbody\n" {
 		t.Fatalf("code=%d out=%q err=%q", code, out, errOut)
 	}
-	if len(*requested) != 2 || !strings.HasSuffix((*requested)[1], "/documents/notes/a.md") {
+	if len(*requested) != 2 || !strings.HasSuffix((*requested)[1], "/documents/%E8%AF%B4%E6%98%8E/a%20b.md") {
 		t.Fatalf("requests=%v", *requested)
 	}
 }
