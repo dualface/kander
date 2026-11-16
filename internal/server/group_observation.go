@@ -8,7 +8,7 @@ import (
 	"github.com/dualface/kander/internal/board"
 )
 
-func (p *project) updateGroupLease(key, group, operation string, input any, h holder, update func(*claimRecord) error) outcome {
+func (p *project) updateGroupLease(key, group, operation string, input any, h holder, event groupEvent, update func(*claimRecord) error) outcome {
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
@@ -16,17 +16,21 @@ func (p *project) updateGroupLease(key, group, operation string, input any, h ho
 	return p.idempotent(key, operation, input, func() outcome {
 		var view api.ClaimView
 		err := board.WithTransaction(p.board, board.LockScope{Groups: []string{serviceGroup}}, func(tx *board.Transaction) error {
-			claim, err := p.requireGroup(group, h)
+			c, err := p.groupLease(group, h)
 			if err != nil {
 				return err
 			}
+			if !c.step(event) {
+				return c.holderError()
+			}
+			claim := c.record
 			if err := update(&claim); err != nil {
 				return err
 			}
 			if err := stageJSON(tx, groupClaimName(group), claim); err != nil {
 				return err
 			}
-			view = *claim.view(p.server.now())
+			view = *p.groupClaimView(claim)
 			return p.stageOperationReceipt(tx, key, operation, input, api.Renewal{Claim: view})
 		})
 		if err == nil {
@@ -44,7 +48,7 @@ func (p *project) observeGroup(r *http.Request) outcome {
 		return outcome{err: apiError(api.CodeInvalidRequest, "invalid coordinator observation")}
 	}
 	group := r.PathValue("group")
-	return p.updateGroupLease(r.Header.Get(api.HeaderIdempotencyKey), group, "group-observation:"+group, observation, holderOf(r), func(claim *claimRecord) error {
+	return p.updateGroupLease(r.Header.Get(api.HeaderIdempotencyKey), group, "group-observation:"+group, observation, holderOf(r), observeGroupEvent(observation.Status == "stopped"), func(claim *claimRecord) error {
 		observation.ObservedAt = p.server.now()
 		claim.Observation = &observation
 		if observation.Status == "stopped" {
@@ -63,5 +67,5 @@ func (p *project) releaseGroup(r *http.Request) outcome {
 	if input.GroupID != group || strings.TrimSpace(input.Decision) == "" || strings.TrimSpace(input.Reason) == "" {
 		return outcome{err: apiError(api.CodeInvalidRequest, "group release needs its identity, reason and decision")}
 	}
-	return p.updateGroupLease(r.Header.Get(api.HeaderIdempotencyKey), group, "group-release:"+group, input, holderOf(r), func(claim *claimRecord) error { claim.Status = api.ClaimReleased; return nil })
+	return p.updateGroupLease(r.Header.Get(api.HeaderIdempotencyKey), group, "group-release:"+group, input, holderOf(r), releaseGroupEvent, func(claim *claimRecord) error { claim.Status = api.ClaimReleased; return nil })
 }

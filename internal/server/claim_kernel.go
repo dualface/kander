@@ -66,16 +66,20 @@ func (p *project) projectClaimAt(r claimRecord, found, held bool, base *uint64) 
 	return k, nil
 }
 
-// gen maps a generation with the operation's base: unchanged without a base,
-// else its distance from the base plus one, and 0 below the base.
-func (k *claimKernel) gen(g uint64) uint64 {
+// gen maps a generation with the operation's base.
+func (k *claimKernel) gen(g uint64) uint64 { return shiftGeneration(k.base, g) }
+
+// shiftGeneration maps a generation with the base of an operation: unchanged
+// without a base, else its distance from the base plus one, and 0 below the
+// base.
+func shiftGeneration(base, g uint64) uint64 {
 	switch {
-	case k.base == 0:
+	case base == 0:
 		return g
-	case g < k.base:
+	case g < base:
 		return 0
 	}
-	return g - k.base + 1
+	return g - base + 1
 }
 
 func (k *claimKernel) step(e serverclaim.Event) bool {

@@ -9,7 +9,93 @@ import (
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/statemachine/serverclaim"
+	"github.com/dualface/kander/internal/statemachine/servergrouplease"
 )
+
+func errOwnedRecoveryNotStopped() error {
+	return apiError(api.CodeEvidenceIncomplete, "owned recovery needs a confirmed stopped execution")
+}
+
+// ownedRecoveryReady is the readiness of an owned recovery, the group kernel's
+// recoverOwned event on the facts of the member card: its holder and its
+// observation ticket when it is claimed, and no unfinished start. The facts
+// are read in the order the server has always checked them, so a refused
+// recovery answers the error of the first one that fails.
+func (p *project) ownedRecoveryReady(tx *board.Transaction, input api.GroupRecover, h holder) error {
+	snapshot, err := tx.Snapshot(input.Request.Member)
+	if err != nil {
+		return err
+	}
+	c, err := p.groupLease(input.Request.GroupID, h)
+	if err != nil {
+		return err
+	}
+	facts := servergrouplease.RecoverOwned{Stopped: input.Observation.Status == "stopped", Claimed: claimedState(snapshot.Entry.State), Member: true, Ticket: true}
+	var failure error
+	if c.accepts(requireGroupEvent) {
+		if facts.Claimed {
+			claim, err := p.requireHolder(snapshot.Entry.TaskID, h)
+			if err != nil {
+				failure, facts.Member = err, false
+			} else if !p.validObservationTicket(snapshot.Entry.TaskID, input.ObservedRevision, claim.Generation, input.ObservationTicket) {
+				failure, facts.Ticket = apiError(api.CodeEvidenceIncomplete, "owned recovery needs a fresh stopped observation ticket"), false
+			}
+		}
+		if failure == nil {
+			view, err := tx.CurrentExecutionInTransaction(input.Request.Member)
+			if err != nil {
+				return err
+			}
+			if facts.Pending = view.Exists && view.Record.Status == board.ExecutionPending; facts.Pending {
+				failure = apiError(api.CodeEvidenceIncomplete, "a pending start must be reconciled before coordinator recovery")
+			}
+		}
+	}
+	if c.step(func(hdr bool, g, tg uint64) servergrouplease.Event {
+		facts.Hdr, facts.G, facts.Tg = hdr, g, tg
+		return facts
+	}) {
+		return nil
+	}
+	switch {
+	case failure != nil:
+		return failure
+	case !facts.Stopped:
+		return errOwnedRecoveryNotStopped()
+	}
+	return c.holderError()
+}
+
+// auditMemberClaim asks the claim kernel to give the member's claim record an
+// audit generation: the card is claimed, the request observed the record's
+// generation and names a fresh execution identity, no valid lease exists, and
+// the record is not pending. A refused request answers the first failing check
+// in the order the server has always made them.
+func (p *project) auditMemberClaim(current claimRecord, found bool, lost *api.RecoveryLease) error {
+	// A status the server never writes cannot be audited: the kernel refuses
+	// it like a pending record.
+	projected := current
+	if _, known := claimStatuses[current.Status]; !known {
+		projected.Status = claimPending
+	}
+	k, err := p.projectClaim(projected, found, true)
+	if err != nil {
+		return err
+	}
+	if k.step(k.auditEvent(current, *lost)) {
+		return nil
+	}
+	switch {
+	case current.Generation != lost.ExpectedGeneration:
+		return apiError(api.CodeLeaseInvalid, "lost recovery generation changed")
+	case serverclaim.Valid(k.state, k.params):
+		return apiError(api.CodeLeaseActive, "a live member requires its private holder proof and a fresh stopped observation")
+	case found && current.Status != api.ClaimActive && current.Status != api.ClaimLost && current.Status != api.ClaimReleased:
+		return apiError(api.CodeLeaseInvalid, "member claim must be reconciled before recovery")
+	}
+	return apiError(api.CodeLeaseInvalid, "lost recovery requires a fresh generation and execution identity")
+}
 
 // recoverLostMember is an explicit user-directed reset, not an ordinary group
 // write. It allocates a released audit generation, never a runnable task claim.
@@ -20,11 +106,22 @@ func (p *project) recoverLostMember(ctx context.Context, key string, input api.G
 	defer p.mu.Unlock()
 	operation := "group-recover:" + input.Request.GroupID
 	return p.idempotent(key, operation, input, func() outcome {
-		if input.Lost == nil || !api.ValidIdentity(input.Lost.ExecutionID) || strings.TrimSpace(input.Request.Decision) == "" || input.Observation.Status != "unknown" {
-			return outcome{err: apiError(api.CodeInvalidRequest, "lost recovery needs a fresh audit execution, explicit decision and an honest unknown predecessor observation")}
-		}
-		if _, err := p.requireGroup(input.Request.GroupID, h); err != nil {
+		c, err := p.groupLease(input.Request.GroupID, h)
+		if err != nil {
 			return outcome{err: err}
+		}
+		request := servergrouplease.RecoverLost{
+			Decision: strings.TrimSpace(input.Request.Decision) != "", Unknown: input.Observation.Status == "unknown",
+			ExecOk: input.Lost != nil && api.ValidIdentity(input.Lost.ExecutionID),
+		}
+		if !c.step(func(hdr bool, g, tg uint64) servergrouplease.Event {
+			request.Hdr, request.G, request.Tg = hdr, g, tg
+			return request
+		}) {
+			if !request.Decision || !request.Unknown || !request.ExecOk {
+				return outcome{err: apiError(api.CodeInvalidRequest, "lost recovery needs a fresh audit execution, explicit decision and an honest unknown predecessor observation")}
+			}
+			return outcome{err: c.holderError()}
 		}
 		snapshot, err := board.ReadSnapshot(p.board, input.Request.Member)
 		if err != nil {
@@ -48,17 +145,11 @@ func (p *project) recoverLostMember(ctx context.Context, key string, input api.G
 			if currentFound != previousFound || currentFound && current.TaskID != snapshot.Entry.TaskID {
 				return apiError(api.CodeLeaseInvalid, "lost member claim identity changed")
 			}
-			if current.Generation != input.Lost.ExpectedGeneration || current.Generation != previous.Generation || current.ExecutionID != previous.ExecutionID {
+			if current.Generation != previous.Generation || current.ExecutionID != previous.ExecutionID {
 				return apiError(api.CodeLeaseInvalid, "lost recovery generation changed")
 			}
-			if current.Status == api.ClaimActive && p.server.now().Before(current.ExpiresAt) {
-				return apiError(api.CodeLeaseActive, "a live member requires its private holder proof and a fresh stopped observation")
-			}
-			if current.Status != api.ClaimActive && current.Status != api.ClaimLost && current.Status != api.ClaimReleased && currentFound {
-				return apiError(api.CodeLeaseInvalid, "member claim must be reconciled before recovery")
-			}
-			if current.Generation == ^uint64(0) || current.ExecutionID == input.Lost.ExecutionID {
-				return apiError(api.CodeLeaseInvalid, "lost recovery requires a fresh generation and execution identity")
+			if err := p.auditMemberClaim(current, currentFound, input.Lost); err != nil {
+				return err
 			}
 			if _, err := tx.Expect(snapshot.Entry.TaskID, snapshot.Entry.State, input.ObservedRevision); err != nil {
 				return err

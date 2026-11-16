@@ -2,11 +2,9 @@ package server
 
 import (
 	"context"
-	"crypto/subtle"
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
@@ -18,21 +16,18 @@ func (p *project) readGroupClaim(group string) (claimRecord, bool, error) {
 	found, err := readJSON(p.root, servicePath(groupClaimName(group)), &claim)
 	return claim, found, err
 }
+
+// requireGroup checks that h is the current holder of the group lease. The
+// decision is the group kernel's require event (group_lease_kernel.go).
 func (p *project) requireGroup(group string, h holder) (claimRecord, error) {
-	claim, found, err := p.readGroupClaim(group)
+	c, err := p.groupLease(group, h)
 	if err != nil {
-		return claim, err
+		return claimRecord{}, err
 	}
-	if h.invalid != nil {
-		return claim, h.invalid
+	if !c.step(requireGroupEvent) {
+		return c.record, c.holderError()
 	}
-	if !found || claim.Status != api.ClaimActive || claim.Generation != h.generation || !p.server.now().Before(claim.ExpiresAt) {
-		return claim, apiError(api.CodeLeaseInvalid, "coordinator lease is not current")
-	}
-	if h.token == "" || subtle.ConstantTimeCompare([]byte(tokenHash(h.token)), []byte(claim.TokenHash)) != 1 {
-		return claim, apiError(api.CodeHeldByOther, "group is held by another coordinator")
-	}
-	return claim, nil
+	return c.record, nil
 }
 func (p *project) groupView(ctx context.Context, group string) (api.GroupView, error) {
 	value := api.GroupView{GroupID: group}
@@ -45,7 +40,7 @@ func (p *project) groupView(ctx context.Context, group string) (api.GroupView, e
 	}
 	claim, found, err := p.readGroupClaim(group)
 	if err == nil && found {
-		value.Claim = claim.view(p.server.now())
+		value.Claim = p.groupClaimView(claim)
 	}
 	return value, err
 }
@@ -63,25 +58,12 @@ func (p *project) claimGroup(ctx context.Context, key, group, client string, inp
 		if err != nil {
 			return outcome{err: err}
 		}
-		reuse := found && previous.ClientID == client && previous.ExecutionID == input.ExecutionID && previous.Status == api.ClaimActive && p.server.now().Before(previous.ExpiresAt)
-		if found && previous.ExecutionID == input.ExecutionID && !reuse {
-			return outcome{err: apiError(api.CodeLeaseInvalid, "a lost coordinator execution cannot reuse its identity")}
+		reuse, err := p.groupClaim(previous, found, client, input, h, "the coordinator lease is still active")
+		if err != nil {
+			return outcome{err: err}
 		}
 		claim := previous
-		if reuse {
-			if _, err := p.requireGroup(group, h); err != nil {
-				return outcome{err: err}
-			}
-		} else {
-			if found && previous.Status == api.ClaimActive && p.server.now().Before(previous.ExpiresAt) {
-				return outcome{err: apiError(api.CodeLeaseActive, "the coordinator lease is still active")}
-			}
-			if previous.Generation != input.ExpectedGeneration || previous.Generation == ^uint64(0) {
-				return outcome{err: apiError(api.CodeLeaseInvalid, "the observed coordinator generation is not current")}
-			}
-			if found && strings.TrimSpace(input.Decision) == "" {
-				return outcome{err: apiError(api.CodeInvalidRequest, "coordinator takeover needs an explicit decision reference")}
-			}
+		if !reuse {
 			now := p.server.now()
 			claim = claimRecord{TaskID: group, ClientID: client, ExecutionID: input.ExecutionID, Owner: input.Request.Owner, Generation: previous.Generation + 1, Status: api.ClaimActive, RenewedAt: now, ExpiresAt: now.Add(p.server.ttl), Handoffs: previous.Handoffs}
 			if found {
@@ -99,12 +81,11 @@ func (p *project) claimGroup(ctx context.Context, key, group, client string, inp
 			if exists != found || current.Generation != previous.Generation {
 				return apiError(api.CodeLeaseInvalid, "coordinator changed before claim transaction")
 			}
-			if reuse {
-				_, err := p.requireGroup(group, h)
+			if _, err := p.groupClaim(current, exists, client, input, h, "coordinator lease became active before takeover"); err != nil {
 				return err
 			}
-			if exists && current.Status == api.ClaimActive && p.server.now().Before(current.ExpiresAt) {
-				return apiError(api.CodeLeaseActive, "coordinator lease became active before takeover")
+			if reuse {
+				return nil
 			}
 			now := p.server.now()
 			claim.RenewedAt, claim.ExpiresAt = now, now.Add(p.server.ttl)
@@ -121,14 +102,14 @@ func (p *project) claimGroup(ctx context.Context, key, group, client string, inp
 			if err := stageJSON(tx, groupClaimName(group), claim); err != nil {
 				return err
 			}
-			return p.stageOperationReceipt(tx, key, operation, input, api.GroupGrant{GroupID: group, Checkpoint: checkpoint, Claim: *claim.view(p.server.now()), RenewInterval: api.DurationOf(p.server.renew), TTL: api.DurationOf(p.server.ttl)})
+			return p.stageOperationReceipt(tx, key, operation, input, api.GroupGrant{GroupID: group, Checkpoint: checkpoint, Claim: *p.groupClaimView(claim), RenewInterval: api.DurationOf(p.server.renew), TTL: api.DurationOf(p.server.ttl)})
 		}}
 		checkpoint, err := board.ClaimCoordinatorWithTransaction(ctx, p.board, request, extension)
 		if err != nil {
 			return outcome{err: err}
 		}
 		_ = p.events.append(api.Event{Kind: api.EventGroupChanged, GroupID: group, Generation: claim.Generation})
-		return outcome{status: http.StatusOK, body: api.GroupGrant{GroupID: group, Checkpoint: checkpoint, Claim: *claim.view(p.server.now()), RenewInterval: api.DurationOf(p.server.renew), TTL: api.DurationOf(p.server.ttl)}}
+		return outcome{status: http.StatusOK, body: api.GroupGrant{GroupID: group, Checkpoint: checkpoint, Claim: *p.groupClaimView(claim), RenewInterval: api.DurationOf(p.server.renew), TTL: api.DurationOf(p.server.ttl)}}
 	}, func() (outcome, bool) { return outcome{}, false })
 	if out.err == nil && out.status == http.StatusOK {
 		raw, err := json.Marshal(out.body)
@@ -151,14 +132,17 @@ func (p *project) renewGroup(group string, h holder) (api.Renewal, error) {
 	defer p.mu.Unlock()
 	var claim claimRecord
 	err := board.WithTransaction(p.board, board.LockScope{Groups: []string{serviceGroup}}, func(tx *board.Transaction) error {
-		var err error
-		claim, err = p.requireGroup(group, h)
+		c, err := p.groupLease(group, h)
 		if err != nil {
 			return err
 		}
+		if !c.step(renewGroupEvent) {
+			return c.holderError()
+		}
+		claim = c.record
 		claim.RenewedAt = p.server.now()
 		claim.ExpiresAt = claim.RenewedAt.Add(p.server.ttl)
 		return stageJSON(tx, groupClaimName(group), claim)
 	})
-	return api.Renewal{Claim: *claim.view(p.server.now())}, err
+	return api.Renewal{Claim: *p.groupClaimView(claim)}, err
 }

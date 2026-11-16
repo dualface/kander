@@ -20,19 +20,20 @@ func (p *project) groupWrite(key, operation, group string, request any, h holder
 			return outcome{err: err}
 		}
 		guard := board.TransactionExtension{Groups: []string{serviceGroup}, Before: func(*board.Transaction) error { _, err := p.requireGroup(group, h); return err }, After: func(tx *board.Transaction) error {
-			if _, err := p.requireGroup(group, h); err != nil {
+			c, err := p.groupLease(group, h)
+			if err != nil {
 				return err
 			}
-			for _, id := range tx.ChangedTaskIDs() {
-				snapshot, err := tx.Snapshot(id)
-				if err != nil {
-					return err
+			// The group holder is checked before the member cards, as before.
+			var memberErr error
+			if c.accepts(requireGroupEvent) {
+				memberErr = p.changedMembersHold(tx, h)
+			}
+			if !c.step(writeAfterEvent(memberErr == nil)) {
+				if memberErr != nil {
+					return memberErr
 				}
-				if claimedState(snapshot.Entry.State) {
-					if _, err := p.requireHolder(id, h); err != nil {
-						return err
-					}
-				}
+				return c.holderError()
 			}
 			value, ok := tx.OperationResult().(board.CoordinatorCheckpoint)
 			if !ok {
@@ -46,6 +47,23 @@ func (p *project) groupWrite(key, operation, group string, request any, h holder
 		}
 		return result(http.StatusOK, checkpoint, err)
 	}, func() (outcome, bool) { return outcome{}, false })
+}
+
+// changedMembersHold checks that h holds every card the transaction changed
+// that was in working or review before it.
+func (p *project) changedMembersHold(tx *board.Transaction, h holder) error {
+	for _, id := range tx.ChangedTaskIDs() {
+		snapshot, err := tx.Snapshot(id)
+		if err != nil {
+			return err
+		}
+		if claimedState(snapshot.Entry.State) {
+			if _, err := p.requireHolder(id, h); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 func (s *Server) groupRoutes(mux *http.ServeMux) {
 	const base = "/api/v1/projects/{project}/groups/{group}"
@@ -135,31 +153,11 @@ func (s *Server) groupRoutes(mux *http.ServeMux) {
 			return p.recoverLostMember(r.Context(), r.Header.Get(api.HeaderIdempotencyKey), input, h)
 		}
 		if input.Observation.Status != "stopped" {
-			return outcome{err: apiError(api.CodeEvidenceIncomplete, "owned recovery needs a confirmed stopped execution")}
+			return outcome{err: errOwnedRecoveryNotStopped()}
 		}
 		return p.groupWrite(r.Header.Get(api.HeaderIdempotencyKey), "group-recover:"+input.Request.GroupID, input.Request.GroupID, input, h, func(extension board.TransactionExtension) (board.CoordinatorCheckpoint, error) {
 			readiness := board.TransactionExtension{Before: func(tx *board.Transaction) error {
-				snapshot, err := tx.Snapshot(input.Request.Member)
-				if err != nil {
-					return err
-				}
-				if claimedState(snapshot.Entry.State) {
-					claim, err := p.requireHolder(snapshot.Entry.TaskID, h)
-					if err != nil {
-						return err
-					}
-					if !p.validObservationTicket(snapshot.Entry.TaskID, input.ObservedRevision, claim.Generation, input.ObservationTicket) {
-						return apiError(api.CodeEvidenceIncomplete, "owned recovery needs a fresh stopped observation ticket")
-					}
-				}
-				view, err := tx.CurrentExecutionInTransaction(input.Request.Member)
-				if err != nil {
-					return err
-				}
-				if view.Exists && view.Record.Status == board.ExecutionPending {
-					return apiError(api.CodeEvidenceIncomplete, "a pending start must be reconciled before coordinator recovery")
-				}
-				return nil
+				return p.ownedRecoveryReady(tx, input, h)
 			}}
 			return board.RecoverCoordinatorWithTransaction(r.Context(), p.board, input.Request, input.ObservedRevision, extension, readiness)
 		})
