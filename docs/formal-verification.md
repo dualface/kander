@@ -279,9 +279,43 @@ The shell is `internal/board/dispatch_kernel.go`, with the entrances in `dispatc
 
 `internal/board/dispatch_kernel_entrance_test.go` and `dispatch_grant_kernel_test.go` drive each entrance on a temporary board and assert `projection(after) = Step(projection(before), event)`, or for a refused entrance an error, a kernel refusal, and an unchanged projection; each theorem has at least one refused scenario there, and the grant and settlement entrances also assert the error of the first refused check. The differential vectors use an explicit alphabet of 67 events at depth 4. A settled round is four events from the initial state, so the vectors cover the events that settle but not the events a settled round refuses; the proofs (`settle_once`, `settled_fences`) and the refinement tests cover those.
 
+## Review Run Execution and Publication (M6)
+
+One machine replaces the hand-written acceptance and refusal decisions of a review run: its preparation, the phase updates the driver makes, the input artifacts, the finalization, and the per-card publication.
+
+| Machine | Definition | Kernel | Scope |
+| --- | --- | --- | --- |
+| `reviewrun` | `Machines/ReviewRun.lean` | `internal/statemachine/reviewrun` | One run as seen by one member: the phase, the launch status, the execution result, whether the exit code is 0, the three input artifacts, the originals, and the member's `published` and `skipped` flags |
+
+The machine has no parameter and all fields are scalars, so one instance describes one run for one member. The run-level fields are the same in the instance of every member; the shell steps a run-level event on one representative and a publication event on the member's own instance. `phase`, `launch`, and `exec` are the persisted strings of `ReviewRun`; a string that is not one of the persisted values projects to `other`, because `UpdateReviewRun` stores what it is given.
+
+The events are `create` and `retry` (`PrepareReviewRunWithTransaction`: a new run, and the same ID again), `update` (`UpdateReviewRunWithTransaction`), `storePrompt`, `storeContract`, and `storeEvidence` (`StoreReviewArtifactWithTransaction`), `finalize` (`FinalizeReviewRunWithTransaction` and `FinalizeUploadedReview`), and `stage`, `skip`, `verify`, and `passSkipped` (`stageReviewRunCard`, from `PublishReviewRun` and `PublishReviewRunAtomic`). The queries are `final` (`ReadReviewOriginal`, and the finalized check of `PublishReviewRun`), `complete` (`ReviewPublicationComplete`, the previous-run check of `Prepare`, and the coordinator mirror), and `consumable` (a complete run whose execution result is `ok`).
+
+The shell passes as Boolean arguments what it computes and the kernel does not: the identity, the cards, the batch binding with its advance and requirements, the frozen `ReviewInput` (`sameInput`), whether the report is non-empty and a structured report is invalid, the failure reason, whether every original exists, and for a member the group binding, whether the member left the batch, and the integrity of the batch binding, hashes, sidecar, manifest, and index line. It checks them in the order the entrance always has and returns the first failure; the kernel decides what depends on the state of the run.
+
+Proofs, for every run and member:
+
+| Theorem | Statement |
+| --- | --- |
+| `ReviewRun.update_refused_finalized`, `finalize_refused_finalized`, `finalized_frozen`, `archive_sequences_accepted` | (1) `update` and `finalize` refuse a finalized run, and no accepted event changes its phase, launch status, execution result, exit code, input artifacts, or originals. The kernel accepts every call sequence of the `archiveExecution` driver (prepared, launching, running, finalize; a launch failure that finalizes from launching with the launch status not started; the recovery that finalizes an unfinished run as interrupted from prepared, launching, and running; and an ok run whose report is invalid) |
+| `ReviewRun.finalize_ok`, `reachable_ok_facts` | (2) A finalization that leaves the run `ok` had launch status `started`, exit code 0, and a non-empty report, and a reachable run with originals that is `ok` has launch status `started` and exit code 0 |
+| `ReviewRun.store_only_prepared`, `artifacts_only_prepared`, `originals_only_finalize` | (3) An input artifact is stored only while the run is `prepared` (the same bytes pass again, other bytes are refused); the originals are written only by an accepted finalization of a run that was not finalized |
+| `ReviewRun.retry_spec`, `retry_refused`, `create_refused`, `input_conflict_refused` | (4) A retry changes nothing and is accepted only for an existing run whose frozen input, batch, and requirements hold; a new run needs that no run exists; a different frozen input is refused by every event that carries it |
+| `ReviewRun.stage_spec`, `skip_spec`, `publish_once` | (5) A member takes a copy, the manifest, and the index line exactly when `stage` is accepted, and then it was not published, not skipped, and not excluded; a member that left is published and skipped without a copy; a published member is neither staged nor skipped again |
+| `ReviewRun.publish_needs_finalized`, `reachable_published_finalized` | (6) Only a finalized run stages, skips, verifies, or passes a member; a published member belongs to a finalized run, and a skipped member is published |
+| `ReviewRun.published_frozen` | (7) Once a member is published no accepted event changes its instance, so once every member is published or skipped the run no longer changes |
+| `ReviewRun.reachable_inv` | (8) In every reachable state: a run that does not exist is the initial state, a skipped member is published, a published member belongs to a finalized run, the originals belong to a finalized run, and an `ok` run with originals has launch status `started` and exit code 0 |
+
+Known differences from the statement of the theorems, kept so that the production behavior does not change:
+
+- `UpdateReviewRun` stores any phase the caller presents (a rollback, `collecting`, `cleaning`, even `finalized`), so a run can reach `finalized` through `update` without originals. The invariant therefore states `originals → finalized`, not the converse. No production caller does this.
+- `UpdateReviewRun` and `FinalizeReviewRun` write the whole run the caller presents, including `Published`, `SkippedMembers`, and `MemberCycles` (`Hashes` is recomputed by a finalization). The kernel models the fields they advance (phase, launch status, execution result, exit code); theorems (5) and (7) and the invariants about `published` and `skipped` hold for the kernel events, not for a caller that forges those fields. `internal/board/review_run_kernel_entrance_test.go` pins this behavior (`TestUpdateReviewRunReplacesPublicationFields`). Every production caller passes the run it read from `Prepare` or `ReadReviewRun`, changing only the phase and the execution facts. Hardening (refusing a run whose publication fields differ from the stored ones) is a separate card.
+
+The shell is `internal/board/review_run_kernel.go`, with the entrances in `reviews.go` (`PrepareReviewRunWithTransaction`, `UpdateReviewRunWithTransaction`, `StoreReviewArtifactWithTransaction`, `FinalizeReviewRunWithTransaction`, `ReviewPublicationComplete`, `ReadReviewOriginal`), `review_publication.go` (`PublishReviewRun`, `PublishReviewRunAtomic`, `stageReviewRunCard`), and `review_upload.go` (`FinalizeUploadedReview`, through the finalization). `internal/server/review_runtime.go` calls these entrances and is not changed here. Projection rules are listed in the header of `review_run_kernel.go`. `internal/board/review_run_kernel_entrance_test.go` drives each entrance on a temporary board and asserts `projection(after) = Step(projection(before), event)` per member, or for a refused entrance an error, a kernel refusal, and an unchanged projection; `internal/review/archive_sequence_test.go` asserts that the calls the execution driver makes are the sequences of theorem (1). The differential vectors use an explicit alphabet of 42 events at depth 4.
+
 ## v2 State Machine Inventory
 
-M1 to M14 are the machines of `20261103-state-machine-simplification-audit-task`. Group A is `20261114-formal-kernel-foundation-group`; group B is `20261116-formal-dispatch-group`; groups C and D are created after group B integrates into `v2`.
+M1 to M14 are the machines of `20261103-state-machine-simplification-audit-task`. Group A is `20261114-formal-kernel-foundation-group`; group B is `20261116-formal-dispatch-group`; group C is `20261116-formal-review-evidence-group`; group D is created after group C integrates into `v2`.
 
 | Machine | Scope | Owner |
 | --- | --- | --- |
@@ -291,7 +325,7 @@ M1 to M14 are the machines of `20261103-state-machine-simplification-audit-task`
 | M3 | Durable dispatch, rounds, accept and complete receipts | Proved and generated: `dispatch` (B, `20261116-formal-dispatch-rounds-task`) |
 | M4 | Wrap-up-only capability grant | Proved and generated: `dispatch` (B, `20261116-formal-dispatch-grant-settlement-task`) |
 | M5 | Settlement of completed dispatches | Proved and generated: `dispatch` (B, `20261116-formal-dispatch-grant-settlement-task`) |
-| M6 | Review run execution and per-card publication | C |
+| M6 | Review run execution and per-card publication | Proved and generated: `reviewrun` (C, `20261116-formal-review-run-task`) |
 | M7 | Report interpretation and legacy mapping | C |
 | M8 | Finding assignment, author disposition, withdrawal | C |
 | M9 | Review batch target advance, aggregation, closure | Proved and generated: `reviewplan` (A, `20261114-formal-review-obligations-task`) |
