@@ -38,8 +38,9 @@ func (s *Server) Import(name, remote, source string) (api.ImportResult, error) {
 	return s.ImportContext(ctx, name, remote, source)
 }
 
-// ImportTimeout bounds the source lock wait and the copy of one import. Later
-// validation and publication do not observe cancellation.
+// ImportTimeout bounds the snapshot lock wait and the copy of one import.
+// The initial recovery of the source board waits for its lock without a
+// deadline, and validation and publication do not observe cancellation.
 const ImportTimeout = 5 * time.Minute
 
 // ImportContext runs offline and inside a serving instance alike. While it

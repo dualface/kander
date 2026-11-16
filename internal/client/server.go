@@ -50,8 +50,9 @@ func (c *Client) Shutdown(ctx context.Context, token string) error {
 	return nil
 }
 
-// importTimeout outlasts the server's import bound, so the server's answer,
-// not this client, ends a long import.
+// importTimeout outlasts the server's 5-minute bound on the snapshot lock
+// wait and the copy. Validation and publication are not bounded, so a timeout
+// here does not tell whether the import was published.
 const importTimeout = 6 * time.Minute
 
 // ErrImportUnsupported reports a running server that predates online import.
