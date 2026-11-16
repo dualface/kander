@@ -27,6 +27,25 @@ type createdContainer struct{ title, label string }
 
 func (b *titleBackend) Name() string { return "title-test" }
 
+// The registry is global, so the backend claims only its own addresses and
+// never takes part in auto resolution.
+func (b *titleBackend) AutoDetect(func(string) string) bool { return false }
+
+func (b *titleBackend) ParseAddress(value string) (terminal.Address, bool) {
+	rest, ok := strings.CutPrefix(value, "title-test:")
+	if !ok {
+		return terminal.Address{}, false
+	}
+	return b.Backend.ParseAddress("tmux:" + rest)
+}
+
+func (b *titleBackend) ParseFocusAddress(fields []string) (terminal.Address, bool) {
+	if len(fields) == 0 || fields[0] != "title-test" {
+		return terminal.Address{}, false
+	}
+	return b.Backend.ParseFocusAddress(append([]string{"tmux"}, fields[1:]...))
+}
+
 func (b *titleBackend) CreateContainer(conn terminal.Conn, target terminal.Target, cwd, label string) (terminal.Address, error) {
 	b.mu.Lock()
 	b.created = append(b.created, createdContainer{target.Title, label})
