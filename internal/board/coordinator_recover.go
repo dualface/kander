@@ -60,9 +60,10 @@ type CoordinatorConfirmation struct {
 
 func recoveryName(id string) string { return "recoveries/" + id + ".json" }
 
+// memberConfirmed asks the mirror kernel whether a finished card is still in the
+// cycle a recovery confirmed.
 func memberConfirmed(s Snapshot, old CoordinatorMember) bool {
-	finished := s.Entry.State == "done" || s.Entry.State == "archived" || s.Entry.State == "trash"
-	return finished && old.Confirmed != nil && old.Confirmed.Cycle == planCycle(s)
+	return newMirrorKernel(old).confirmed(s, old)
 }
 
 // verifyCoordinatorRecoveries requires every listed recovery to equal its immutable
@@ -122,14 +123,16 @@ func RecoverCoordinatorWithTransaction(ctx context.Context, root string, r Coord
 		if !exists {
 			return coordinatorError("checkpoint missing")
 		}
-		if c.Revision != r.ExpectedRevision || c.Authority.Epoch != r.ExpectedEpoch || c.Revision == ^uint64(0) {
+		g := newGroupKernel(c, true, len(c.Members))
+		if _, ok := g.probe().step(g.recoverEvent(r, c, true, true, true, true)); !ok {
 			return coordinatorError("recover CAS")
 		}
 		old, ok := c.Members[id]
 		if !ok {
 			return coordinatorError("unknown or missing member")
 		}
-		if old.Blocked == nil {
+		mk := newMirrorKernel(old)
+		if mk.refuseBlocked() {
 			return kanbanError("board.recover_not_blocked", id)
 		}
 		s, e := tx.Expect(id, "", observed)
@@ -141,19 +144,27 @@ func RecoverCoordinatorWithTransaction(ctx context.Context, root string, r Coord
 		switch s.Entry.State {
 		case "working", "review":
 			record.Mode = RecoverReset
-			m, e = stageRecoverReset(tx, s, r, &record)
+			if m, e = stageRecoverReset(tx, s, r, &record); e != nil {
+				return e
+			}
+			if _, ok := mk.recoverReset(s, m, true); !ok {
+				return kanbanError("board.recover_state", id, s.Entry.State)
+			}
 		case "done", "archived", "trash":
 			record.Mode = RecoverConfirm
-			m = confirmedMirror(tx, s, old, &record)
+			if m, e = confirmedMirror(tx, mk, s, old, &record); e != nil {
+				return e
+			}
 		default:
 			return kanbanError("board.recover_state", id, s.Entry.State)
 		}
-		if e != nil {
-			return e
+		next, ok := g.step(g.recoverEvent(r, c, true, true, true, true))
+		if !ok {
+			return coordinatorError("recover CAS")
 		}
 		c.Members[id] = m
 		c.Recoveries = append(c.Recoveries, record)
-		c.Revision++
+		c.Revision = g.revOut(next.Rev)
 		c.Schema, c.LastRequestHash = checkpointSchema, ""
 		if e = tx.PutGroup(r.GroupID, recoveryName(record.RecoveryID), reviewJSON(record)); e != nil {
 			return e
@@ -254,17 +265,21 @@ func stageRecoverReset(tx *Transaction, s Snapshot, r CoordinatorRecover, record
 // confirmedMirror rebinds the mirror of a finished member. A ledger or dispatch
 // that cannot be read is a reason a member can be blocked, so it stops nothing
 // here: the position stays where it was and the confirmation does not use it.
-func confirmedMirror(tx *Transaction, s Snapshot, old CoordinatorMember, record *CoordinatorRecovery) CoordinatorMember {
+func confirmedMirror(tx *Transaction, k *mirrorKernel, s Snapshot, old CoordinatorMember, record *CoordinatorRecovery) (CoordinatorMember, error) {
 	m := old
 	record.ToCycle = planCycle(s)
 	m.State, m.Revision, m.Cycle, m.AwaitingStart, m.Blocked = s.Entry.State, s.Revision, record.ToCycle, false, nil
 	m.Confirmed = &CoordinatorConfirmation{RecoveryID: record.RecoveryID, Cycle: record.ToCycle}
+	var tseqRead, dseqRead bool
 	if l, err := readExecutionLedger(tx, s); err == nil {
-		m.TransitionSeq, m.StartAttempt = l.end(), l.startAttempt()
+		m.TransitionSeq, m.StartAttempt, tseqRead = l.end(), l.startAttempt(), true
 		record.TransitionSeq = l.end()
 	}
 	if rounds, err := dispatchRounds(tx, s); err == nil {
-		m.DispatchSeq = uint64(len(rounds))
+		m.DispatchSeq, dseqRead = uint64(len(rounds)), true
 	}
-	return m
+	if _, ok := k.recoverConfirm(s, m, tseqRead, dseqRead); !ok {
+		return m, kanbanError("board.recover_state", s.Entry.TaskID, s.Entry.State)
+	}
+	return m, nil
 }

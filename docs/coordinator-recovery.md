@@ -245,3 +245,9 @@ before reconciliation. Replays revalidate retained release and handoff evidence.
 changed originals, absent handoff decisions, a substituted cycle or regressing revisions
 reject without changing the checkpoint. These references record user decisions; they do not
 grant the coordinator independent authority to terminate or reclaim an executor.
+
+## Decision Kernels
+
+The accept and refuse decisions described above are made by three generated kernels, proved in Lean 4 (`docs/formal-verification.md`, "Coordinator Checkpoints and Wrap-Up Witnesses (M12)"): `internal/statemachine/coordinator` decides a claim, a reconcile of the checkpoint, and a recovery, and answers the wrap-up refusal; `internal/statemachine/coordmember` decides which new mirror a member accepts, when it keeps its last mirror and blocks, and what a reset or a confirmation does to it; `internal/statemachine/wrapupwitness` decides when the Git witness of a wrap-up is written.
+
+What the kernels take from the shell is a result, never a check: the comparison of the owner, token, and hashes, the board membership and the recovery records, the walk of the execution chain and the dispatch rounds with the verification of their originals (only the chain end, the dispatch position, and the verdict "the chain carries no handoff to the mirror's cycle" reach the kernel), the card lifecycle and ledger checks of a reset, Git, and the liveness probe before a recovery. The order of the checks, the error codes, and the exit codes of `kander coordinator reconcile` (`complete` 0, `partial` 3, `failed` 1, a refused request 1 with no JSON) are unchanged. A reconcile that leaves every member blocked is committed before `CoordinatorBlockedError` is returned.

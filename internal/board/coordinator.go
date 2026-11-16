@@ -267,11 +267,14 @@ func ClaimCoordinatorWithTransaction(ctx context.Context, root string, r Coordin
 		if err != nil {
 			return err
 		}
-		if exists && c.ClaimHash == coordinatorHash(r) {
-			return nil
-		}
-		if c.Revision != r.ExpectedRevision || c.Authority.Epoch != r.ExpectedEpoch || c.Revision == ^uint64(0) || c.Authority.Epoch == ^uint64(0) || exists && c.Authority.Token == r.Token {
+		same := exists && c.ClaimHash == coordinatorHash(r)
+		g := newGroupKernel(c, exists, len(ids))
+		next, ok := g.step(g.claim(r, same, exists && c.Authority.Token == r.Token, true, true))
+		if !ok {
 			return coordinatorError("claim CAS or reused token")
+		}
+		if same {
+			return nil
 		}
 		if exists && !slices.Equal(checkpointIDs(c), ids) {
 			return coordinatorError("claim cannot change membership")
@@ -300,8 +303,8 @@ func ClaimCoordinatorWithTransaction(ctx context.Context, root string, r Coordin
 			}
 			c.Members[id] = m
 		}
-		c.Revision++
-		c.Authority = CoordinatorAuthority{Owner: r.Owner, Token: r.Token, Epoch: c.Authority.Epoch + 1}
+		c.Revision = g.revOut(next.Rev)
+		c.Authority = CoordinatorAuthority{Owner: r.Owner, Token: r.Token, Epoch: g.epochOut(next.Epoch)}
 		c.ClaimHash, c.LastRequestHash, c.Basis = coordinatorHash(r), "", r.Basis
 		return putCheckpoint(tx, &c)
 	}, extensions...)
@@ -429,8 +432,8 @@ func ReconcileCoordinatorWithTransaction(ctx context.Context, root string, r Coo
 	if err != nil {
 		return c, err
 	}
-	if blocked := c.BlockedMembers(); len(blocked) == len(c.Members) {
-		return c, &CoordinatorBlockedError{Group: c.GroupID, Reason: c.Members[blocked[0]].Blocked.Reason}
+	if allBlocked(c) {
+		return c, &CoordinatorBlockedError{Group: c.GroupID, Reason: c.Members[c.BlockedMembers()[0]].Blocked.Reason}
 	}
 	return c, nil
 }
@@ -476,15 +479,14 @@ func reconcileCheckpoint(ctx context.Context, tx *Transaction, r CoordinatorReco
 	if err != nil {
 		return c, false, err
 	}
-	if !exists || c.Authority != r.Authority {
+	g := newGroupKernel(c, exists, len(c.Members))
+	if g.refuseAuthority(c, r) {
 		return c, false, coordinatorError("stale coordinator authority")
 	}
-	if c.Revision != r.ExpectedRevision {
-		if c.LastRequestHash != coordinatorHash(r) {
-			return c, false, coordinatorError("checkpoint CAS")
-		}
-		// A lost response may retry the same request, but evidence is still
-		// revalidated before returning its existing result.
+	// A lost response may retry the same request, but evidence is still
+	// revalidated before returning its existing result.
+	if g.refuseRevision(c, r) {
+		return c, false, coordinatorError("checkpoint CAS")
 	}
 	if !slices.Equal(ids, checkpointIDs(c)) {
 		return c, false, coordinatorError("unknown or missing member")
@@ -496,6 +498,7 @@ func reconcileCheckpoint(ctx context.Context, tx *Transaction, r CoordinatorReco
 		return c, false, err
 	}
 	members := map[string]CoordinatorMember{}
+	blocked := 0
 	for _, id := range ids {
 		if err := ctx.Err(); err != nil {
 			return c, false, err
@@ -503,20 +506,28 @@ func reconcileCheckpoint(ctx context.Context, tx *Transaction, r CoordinatorReco
 		m, e := reconcileCoordinatorMember(ctx, tx, pass, id, c.Members[id], r.Members[id])
 		if e != nil {
 			if coordinatorRequestFailure(e) {
+				g.refuseRequest(c, r)
 				return c, false, e
 			}
 			m = c.Members[id]
-			m.Blocked = &CoordinatorBlock{Reason: blockReason(e)}
+			if newMirrorKernel(m).block().Blocked {
+				m.Blocked = &CoordinatorBlock{Reason: blockReason(e)}
+			}
+		}
+		if m.Blocked != nil {
+			blocked++
 		}
 		members[id] = m
 	}
-	if reflect.DeepEqual(c.Members, members) {
-		return c, false, nil
-	}
-	if c.Revision == ^uint64(0) {
+	changed = !reflect.DeepEqual(c.Members, members)
+	next, ok := g.step(g.reconcile(c, r, reconcileFacts{membersOk: true, membership: true, recoveries: true, changed: changed, blockedAfter: blocked}))
+	if !ok {
 		return c, false, coordinatorError("checkpoint revision overflow")
 	}
-	c.Revision++
+	if !changed {
+		return c, false, nil
+	}
+	c.Revision = g.revOut(next.Rev)
 	c.Schema, c.Members, c.LastRequestHash = checkpointSchema, members, coordinatorHash(r)
 	return c, true, nil
 }

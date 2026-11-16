@@ -86,8 +86,8 @@ func refuseBlockedWrapUp(tx *Transaction, in DispatchInput) error {
 	if err != nil || !exists {
 		return err
 	}
-	if blocked := c.BlockedMembers(); len(blocked) > 0 {
-		return kanbanError("board.wrap_up_blocked_members", group, strings.Join(blocked, ", "))
+	if wrapUpBlocked(c) {
+		return kanbanError("board.wrap_up_blocked_members", group, strings.Join(c.BlockedMembers(), ", "))
 	}
 	return nil
 }

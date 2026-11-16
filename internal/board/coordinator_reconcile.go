@@ -5,17 +5,24 @@ import (
 	"encoding/json"
 	"reflect"
 	"strconv"
+
+	"github.com/dualface/kander/internal/statemachine/wrapupwitness"
 )
 
+// reconcileCoordinatorMember judges one member alone. The mirror kernel decides
+// whether the card moved back, whether a recovery confirmed the finished card,
+// and finally whether the mirror the walk built is accepted; the walk itself is
+// the shell's.
 func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, pass *coordinatorPass, id string, old CoordinatorMember, o CoordinatorObservation) (m CoordinatorMember, err error) {
 	s, err := tx.Expect(id, "", o.Revision)
 	if err != nil {
 		return m, err
 	}
-	if s.Revision < old.Revision {
+	k := newMirrorKernel(old)
+	if k.refuseRevision(s.Revision) {
 		return m, coordinatorError("member revision or execution cycle changed: " + id)
 	}
-	if memberConfirmed(s, old) {
+	if _, ok := k.acceptConfirmed(s, old); ok {
 		// A recovery accepted this finished execution as it is. Nothing is left to
 		// check: the record of that decision replaces the facts that failed.
 		m = old
@@ -25,6 +32,20 @@ func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, pass *coor
 	if s.Entry.State == "archived" || s.Entry.State == "trash" {
 		return reconcileTerminalMember(ctx, tx, s, old, o)
 	}
+	if m, err = walkCoordinatorMember(ctx, tx, pass, s, old, o); err != nil {
+		return m, err
+	}
+	if _, ok := k.accept(s, old, m); !ok {
+		return m, coordinatorError("member mirror refused: " + id)
+	}
+	return m, nil
+}
+
+// walkCoordinatorMember builds the mirror of a member that is neither finished
+// and confirmed nor terminal: it verifies the chain, the review projection, and
+// the dispatch round the card is bound to.
+func walkCoordinatorMember(ctx context.Context, tx *Transaction, pass *coordinatorPass, s Snapshot, old CoordinatorMember, o CoordinatorObservation) (m CoordinatorMember, err error) {
+	id := s.Entry.TaskID
 	if err := verifyCoordinatorHandoffs(tx, s, old); err != nil {
 		return m, err
 	}
@@ -160,12 +181,15 @@ func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, pass *coor
 			return m, coordinatorError("wrap-up completion state: " + id)
 		}
 		recorded, e := readWrapUpEvidence(tx, pass.group, d)
-		if e != nil {
-			return m, e
-		}
+		w, valid := newWitnessKernel(recorded), e == nil
 		// Q9: a completed wrap-up is verified once. Later rewrites of the history
-		// are for kander check delivery, not a reason to fail the group.
-		if !completed || !recorded {
+		// are for kander check delivery, not a reason to fail the group. The
+		// witness kernel refuses without a passed verification exactly when Git
+		// must be asked, and refuses a record that does not match its dispatch.
+		if _, ok := w.step(wrapupwitness.Reconcile{Completed: completed, Valid: valid}); !ok {
+			if !valid {
+				return m, e
+			}
 			if verify == nil {
 				return m, coordinatorError("Git-aware reconciliation required")
 			}
@@ -177,7 +201,7 @@ func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, pass *coor
 				return m, err
 			}
 		}
-		if completed && !recorded {
+		if next, _ := w.step(wrapupwitness.Reconcile{Completed: completed, Valid: valid, Verified: true}); next.Written && !recorded {
 			pass.evidence = append(pass.evidence, newWrapUpEvidence(d, wrapUpVerifiedByReconcile))
 		}
 	}

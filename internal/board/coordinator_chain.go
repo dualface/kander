@@ -29,12 +29,13 @@ func (l executionLedger) startAttempt() string {
 // checkpoint has no position, so its facts select one. No match is the same
 // refusal the snapshot comparison gave.
 func coordinatorChainPosition(l executionLedger, old CoordinatorMember) (uint64, error) {
+	k := newMirrorKernel(old)
 	if old.TransitionSeq != 0 {
-		if old.TransitionSeq > l.end() {
-			return 0, coordinatorError("execution chain regressed: " + l.task)
+		if err := k.chainError(l, false); err != nil {
+			return 0, err
 		}
-		if !old.AwaitingStart && l.chain[old.TransitionSeq-1].ToCycle != old.Cycle {
-			return 0, missingHandoffError()
+		if err := k.chainError(l, !old.AwaitingStart && l.chain[old.TransitionSeq-1].ToCycle != old.Cycle); err != nil {
+			return 0, err
 		}
 		return old.TransitionSeq, nil
 	}
@@ -54,7 +55,7 @@ func coordinatorChainPosition(l executionLedger, old CoordinatorMember) (uint64,
 			return uint64(i) + 1, nil
 		}
 	}
-	return 0, missingHandoffError()
+	return 0, k.chainError(l, true)
 }
 
 // verifyChainOriginals requires the immutable original each stored link
@@ -190,6 +191,19 @@ func verifyTerminalExit(tx *Transaction, s Snapshot, l executionLedger) error {
 // and the chain. Start facts and dispatch rounds no longer matter. Archive cleanup
 // may have removed the records of a card; its receipt stands in for them.
 func reconcileTerminalMember(ctx context.Context, tx *Transaction, s Snapshot, old CoordinatorMember, o CoordinatorObservation) (m CoordinatorMember, err error) {
+	var hasRounds bool
+	if m, err = walkTerminalMember(ctx, tx, s, old, o, &hasRounds); err != nil {
+		return m, err
+	}
+	if _, ok := newMirrorKernel(old).acceptTerminal(s, old, m, hasRounds); !ok {
+		return m, coordinatorError("member mirror refused: " + s.Entry.TaskID)
+	}
+	return m, nil
+}
+
+// walkTerminalMember builds the mirror of a terminal member; hasRounds reports
+// whether the card has dispatch rounds, which move the mirror's round position.
+func walkTerminalMember(ctx context.Context, tx *Transaction, s Snapshot, old CoordinatorMember, o CoordinatorObservation, hasRounds *bool) (m CoordinatorMember, err error) {
 	id := s.Entry.TaskID
 	if MetadataFrom(s.Text, FieldResult) == "" {
 		return m, coordinatorError("terminal member has no result: " + id)
@@ -229,6 +243,7 @@ func reconcileTerminalMember(ctx context.Context, tx *Transaction, s Snapshot, o
 	if err != nil || len(rounds) == 0 {
 		return m, err
 	}
+	*hasRounds = true
 	last := rounds[len(rounds)-1]
 	m.Dispatch, m.DispatchSeq = mirrorDispatch(id, last), uint64(len(rounds))
 	if last.Completed != nil && (last.Cycle == "" || last.Cycle == m.Cycle) {

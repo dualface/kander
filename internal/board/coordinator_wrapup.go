@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"sync/atomic"
 	"time"
+
+	"github.com/dualface/kander/internal/statemachine/wrapupwitness"
 )
 
 // WrapUpGitEvidence records that the Git facts of one wrap-up held once. It lives
@@ -63,11 +65,15 @@ func readWrapUpEvidence(tx *Transaction, group string, d Dispatch) (bool, error)
 	return true, nil
 }
 
+// putWrapUpEvidence writes the witness once. The witness kernel refuses a second
+// write, so the record is immutable.
 func putWrapUpEvidence(tx *Transaction, group string, e WrapUpGitEvidence) error {
 	name := wrapUpEvidenceName(e.DispatchID)
-	if _, ok, err := tx.ReadGroup(group, name); err != nil {
+	_, written, err := tx.ReadGroup(group, name)
+	if err != nil {
 		return err
-	} else if ok {
+	}
+	if _, ok := newWitnessKernel(written).step(wrapupwitness.Complete{EpochSame: true, Verified: true}); !ok {
 		return dispatchEvidenceError("immutable wrap-up Git evidence")
 	}
 	return tx.PutGroup(group, name, reviewJSON(e))
@@ -166,7 +172,7 @@ func (w *wrapUpCompletion) stage(tx *Transaction, task string) error {
 	if err != nil {
 		return err
 	}
-	if d.Authorization.Epoch != w.evidence.Epoch {
+	if _, ok := newWitnessKernel(false).step(wrapupwitness.Complete{EpochSame: d.Authorization.Epoch == w.evidence.Epoch, Verified: true}); !ok {
 		return kanbanError("board.transaction_conflict", task)
 	}
 	return putWrapUpEvidence(tx, w.group, w.evidence)
