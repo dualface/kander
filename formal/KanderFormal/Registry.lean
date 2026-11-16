@@ -4,6 +4,7 @@ import KanderFormal.Proofs.ReviewPlan
 import KanderFormal.Proofs.CardLifecycle
 import KanderFormal.Proofs.ExecutionLedger
 import KanderFormal.Proofs.ServerClaim
+import KanderFormal.Proofs.Dispatch
 
 /-
 The registry of machines: what the generator emits, the bounds of the
@@ -158,6 +159,36 @@ def serverEvents : List Event :=
     ⟨"takeover", [natV 0, t, x] ++ g 0⟩, ⟨"takeover", [natV 2, t, x] ++ g 0⟩,
     ⟨"expire", []⟩, ⟨"pending", [t]⟩, ⟨"pending", [x]⟩, ⟨"reconcile", [t]⟩, ⟨"reconcile", [x]⟩ ]
 
+
+/-- The dispatch vector alphabet. Authorization pairs: `(1, 1)` is the first
+round at its first epoch, `(1, 2)` its reauthorization, `(2, 1)` the next round,
+and `(0, 0)` the empty pair. Each event is tried with every fact holding and with
+one fact failing; the enum arguments try a working, a review, and another column. -/
+def dispatchEvents : List Event :=
+  let t := boolV true
+  let x := boolV false
+  let a (r e : Nat) : List Val := [natV r, natV e]
+  [ ⟨"prepare", [enumV 0, enumV 0, t, t]⟩, ⟨"prepare", [enumV 2, enumV 1, t, t]⟩,
+    ⟨"prepare", [enumV 0, enumV 2, t, t]⟩, ⟨"prepare", [enumV 1, enumV 0, x, t]⟩,
+    ⟨"prepare", [enumV 0, enumV 0, t, x]⟩,
+    ⟨"retry", [t]⟩, ⟨"retry", [x]⟩,
+    ⟨"attempt", a 1 1 ++ [t, t, t, t]⟩, ⟨"attempt", a 2 1 ++ [t, t, t, t]⟩, ⟨"attempt", a 1 1 ++ [t, t, t, x]⟩,
+    ⟨"attempt", a 1 1 ++ [t, x, t, t]⟩, ⟨"attempt", a 1 1 ++ [x, t, t, t]⟩,
+    ⟨"reauthorize", a 1 1 ++ [t, t, t, t, t]⟩, ⟨"reauthorize", a 1 1 ++ [t, t, t, x, x]⟩,
+    ⟨"reauthorize", a 1 1 ++ [t, t, t, x, t]⟩, ⟨"reauthorize", a 1 1 ++ [t, x, t, t, t]⟩,
+    ⟨"reauthorize", a 1 2 ++ [t, t, t, t, t]⟩,
+    ⟨"accept", a 1 1 ++ [t, t, t]⟩, ⟨"accept", a 1 1 ++ [t, t, x]⟩, ⟨"accept", a 1 2 ++ [t, t, t]⟩,
+    ⟨"accept", a 1 1 ++ [x, t, t]⟩,
+    ⟨"complete", a 1 1 ++ [t, t, x, t, t, t, x, enumV 0]⟩, ⟨"complete", a 1 1 ++ [t, t, t, t, t, t, x, enumV 0]⟩,
+    ⟨"complete", a 1 1 ++ [t, t, x, t, t, t, t, enumV 1]⟩, ⟨"complete", a 1 1 ++ [t, t, x, t, t, t, x, enumV 2]⟩,
+    ⟨"complete", a 1 2 ++ [t, t, x, t, t, t, x, enumV 0]⟩, ⟨"complete", a 1 1 ++ [t, t, x, x, t, t, x, enumV 0]⟩,
+    ⟨"end", a 1 1 ++ [t, t, t, t, t]⟩, ⟨"end", a 1 1 ++ [t, t, t, t, x]⟩, ⟨"end", a 1 1 ++ [t, t, t, x, t]⟩,
+    ⟨"end", a 1 1 ++ [t, t, t, x, x]⟩, ⟨"end", a 2 1 ++ [t, t, t, t, t]⟩, ⟨"end", a 1 1 ++ [t, t, x, t, t]⟩,
+    ⟨"cancel", [t, t, t]⟩, ⟨"cancel", [x, t, t]⟩, ⟨"cancel", [t, x, t]⟩,
+    ⟨"retain", a 1 1 ++ [t, t, t, t]⟩, ⟨"retain", a 1 2 ++ [t, t, t, t]⟩, ⟨"retain", a 1 1 ++ [x, t, t, t]⟩,
+    ⟨"exec", a 1 1 ++ [t, t, x]⟩, ⟨"exec", a 1 1 ++ [t, t, t]⟩, ⟨"exec", a 1 1 ++ [t, x, x]⟩,
+    ⟨"exec", a 0 0 ++ [t, t, x]⟩, ⟨"exec", a 1 2 ++ [t, t, x]⟩ ]
+
 def entries : List Entry := [
   { machine := Machines.exampleMachine
     source := "KanderFormal/Machines/Example.lean"
@@ -242,6 +273,34 @@ def entries : List Entry := [
       ``KanderFormal.Proofs.ServerClaim.init,
       ``KanderFormal.Proofs.ServerClaim.step_inv,
       ``KanderFormal.Proofs.ServerClaim.reachable_inv
+    ] },
+  { machine := Machines.Dispatch.dispatchMachine
+    source := "KanderFormal/Machines/Dispatch.lean"
+    vectors := { depth := 4, paramSets := [[("maxRound", 3), ("maxEpoch", 3)]], natDomain := [],
+                 events := dispatchEvents }
+    theorems := [
+      ``KanderFormal.Proofs.Dispatch.wellTyped,
+      ``KanderFormal.Proofs.Dispatch.prepare_single,
+      ``KanderFormal.Proofs.Dispatch.pair_monotone,
+      ``KanderFormal.Proofs.Dispatch.prepare_strict,
+      ``KanderFormal.Proofs.Dispatch.reauthorize_strict,
+      ``KanderFormal.Proofs.Dispatch.fence_refused,
+      ``KanderFormal.Proofs.Dispatch.accept_change,
+      ``KanderFormal.Proofs.Dispatch.complete_change,
+      ``KanderFormal.Proofs.Dispatch.complete_kind,
+      ``KanderFormal.Proofs.Dispatch.accept_replay,
+      ``KanderFormal.Proofs.Dispatch.complete_replay,
+      ``KanderFormal.Proofs.Dispatch.terminal_stable,
+      ``KanderFormal.Proofs.Dispatch.terminal_refused,
+      ``KanderFormal.Proofs.Dispatch.end_spec,
+      ``KanderFormal.Proofs.Dispatch.end_once,
+      ``KanderFormal.Proofs.Dispatch.release_once,
+      ``KanderFormal.Proofs.Dispatch.reauthorize_spec,
+      ``KanderFormal.Proofs.Dispatch.cycle_refused,
+      ``KanderFormal.Proofs.Dispatch.init,
+      ``KanderFormal.Proofs.Dispatch.step_inv,
+      ``KanderFormal.Proofs.Dispatch.reachable_inv,
+      ``KanderFormal.Proofs.Dispatch.reachable_unbound
     ] }
 ]
 
