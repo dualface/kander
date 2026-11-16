@@ -13,6 +13,7 @@ import (
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/fs"
+	rk "github.com/dualface/kander/internal/statemachine/issueresult"
 )
 
 type ResultStore struct {
@@ -302,7 +303,8 @@ func readResult(ctx context.Context, provider ResultProvider, root string, repos
 	if err != nil {
 		return work, remote, err
 	}
-	if remote.SourceKey != store.SourceKey || remote.IssueID <= 0 || remote.ActorID <= 0 || remote.Revision == "" || remote.StateVersion == "" || (remote.State != "open" && remote.State != "closed") || (store.IssueID != 0 && store.IssueID != remote.IssueID) {
+	remoteOk := remote.SourceKey == store.SourceKey && remote.IssueID > 0 && remote.ActorID > 0 && remote.Revision != "" && remote.StateVersion != "" && (remote.State == "open" || remote.State == "closed")
+	if _, ok := resultStep(rk.State{Iid: store.IssueID > 0}, rk.Read{RemoteOk: remoteOk, Same: store.IssueID == remote.IssueID}); !ok {
 		return work, remote, resultError("remote identity or state mismatch")
 	}
 	store.IssueID = remote.IssueID

@@ -45,7 +45,7 @@ func (p *project) readIssueResult(ctx context.Context, query api.IssueResultQuer
 	if err != nil {
 		return value, err
 	}
-	if found && value.Revision == 0 {
+	if !newIssueRevision(value.Revision).read(found) {
 		return value, apiError(api.CodeEvidenceIncomplete, "central result record has no resource version")
 	}
 	if !found {

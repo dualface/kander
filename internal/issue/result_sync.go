@@ -11,22 +11,29 @@ import (
 	"unicode/utf8"
 
 	"github.com/dualface/kander/internal/board"
+	rk "github.com/dualface/kander/internal/statemachine/issueresult"
+	dk "github.com/dualface/kander/internal/statemachine/issueresultdecision"
 )
 
 // InspectResult refreshes complete evidence and reconciles uncertain writes.
 // An absent comment never clears an uncertain intent: GitHub does not provide
 // an idempotency key or a proof that an interrupted request was not accepted.
+// The issue result kernels decide each change of status.
 func InspectResult(ctx context.Context, provider ResultProvider, root string, repository Repository, number int, cardID string) (out ResultInspection, err error) {
 	err = withResultStore(ctx, root, repository, number, cardID, func(store *resultStore, save func() error) error {
 		work, remote, err := readResult(ctx, provider, root, repository, number, cardID, store)
 		if err != nil {
 			return err
 		}
-		for _, record := range store.Records {
+		for version, record := range store.Records {
 			if record.Status == "uncertain" {
 				for _, comment := range remote.Comments {
 					if comment.AuthorID == record.ActorID && comment.Body == record.Body && comment.ID > 0 {
-						record.Status = "published"
+						next, ok := resultStep(projectRecord(*store, version), rk.Reconcile{Found: true})
+						if !ok {
+							return errResultInconsistent()
+						}
+						record.Status = statusOf(next.St)
 						record.CommentID = comment.ID
 						break
 					}
@@ -34,13 +41,10 @@ func InspectResult(ctx context.Context, provider ResultProvider, root string, re
 			}
 			for i := range record.Decisions {
 				d := &record.Decisions[i]
-				if d.Status != "uncertain" {
-					continue
-				}
-				if remote.State == "closed" {
-					d.Status = "observed-closed"
-				} else if remote.StateVersion != d.StateVersion {
-					d.Status = "superseded"
+				// The kernel settles an uncertain consent. Any other decision, and an
+				// uncertain one on an open remote with the same state version, stays.
+				if next, ok := decisionStep(dk.State{Ds: dstatOf(d.Status)}, dk.Reconcile{Closed: remote.State == "closed", Same: remote.StateVersion == d.StateVersion}); ok {
+					d.Status = decisionStatusOf(next.Ds)
 				}
 			}
 		}
@@ -130,7 +134,10 @@ func validateResultBody(body string) error {
 // ApplyResult permits one pending or accepted publication per result version.
 // A definite provider rejection may be retried after fresh inspection.
 // Semantic equivalence is assessed by the agent against the inspected comments;
-// a stale observation cannot be used to publish or assert equivalence.
+// a stale observation cannot be used to publish or assert equivalence. The issue
+// result kernels decide what is written and what is refused; the checks run in
+// the order they always had, each asked of the kernel with every other fact
+// holding.
 func ApplyResult(ctx context.Context, provider ResultProvider, root string, repository Repository, number int, cardID string, proposal ResultProposal) (out ResultRecord, err error) {
 	err = withResultStore(ctx, root, repository, number, cardID, func(store *resultStore, save func() error) error {
 		work, remote, err := readResult(ctx, provider, root, repository, number, cardID, store)
@@ -144,20 +151,25 @@ func ApplyResult(ctx context.Context, provider ResultProvider, root string, repo
 		if err != nil {
 			return err
 		}
-		for _, record := range store.Records {
-			if record.Status == "uncertain" {
-				return resultError("publication uncertain; inspect remote before any further write")
-			}
-		}
+		state := projectRecord(*store, version)
+		met := allMet(proposal.Outcomes)
+		uncertain := resultError("publication uncertain; inspect remote before any further write")
 		if record := store.Records[version]; record != nil && record.Status != "rejected" {
 			// Reassessing current evidence may allow a close, without republishing
 			// a language rewrite or new run log as another result comment.
+			if _, ok := resultStep(state, rk.Reassess{}); !ok {
+				return uncertain
+			}
 			record.CardDigest = work.Digest
 			record.EvidenceVersion = work.EvidenceVersion
 			record.FullyResolved = proposal.FullyResolved
 			record.ResolutionEvidence = proposal.ResolutionEvidence
 			out = *record
 			return save()
+		}
+		// No record may be uncertain before a new one is written.
+		if _, ok := resultStep(state, rk.Intent{Nfull: proposal.FullyResolved, Nmet: met, BodyOk: true}); !ok {
+			return uncertain
 		}
 		checks := append([]ResultCheck{}, proposal.Checks...)
 		sort.Slice(checks, func(i, j int) bool { return checks[i].Command < checks[j].Command })
@@ -166,33 +178,52 @@ func ApplyResult(ctx context.Context, provider ResultProvider, root string, repo
 			record.Failures = previous.Failures
 		}
 		if proposal.EquivalentCommentID > 0 {
-			for _, comment := range remote.Comments {
+			var found *ResultComment
+			for i, comment := range remote.Comments {
 				if comment.ID == proposal.EquivalentCommentID {
-					record.Status = "equivalent"
-					record.Body = comment.Body
-					record.ActorID = comment.AuthorID
-					record.CommentID = comment.ID
-					store.Records[version] = record
-					out = *record
-					return save()
+					found = &remote.Comments[i]
+					break
 				}
 			}
-			return resultError("equivalent comment absent from current complete observation")
+			next, ok := resultStep(state, rk.Equivalent{Nfull: proposal.FullyResolved, Nmet: met, Found: found != nil})
+			if !ok {
+				if found == nil {
+					return resultError("equivalent comment absent from current complete observation")
+				}
+				return errResultInconsistent()
+			}
+			record.Status = statusOf(next.St)
+			record.Body = found.Body
+			record.ActorID = found.AuthorID
+			record.CommentID = found.ID
+			store.Records[version] = record
+			out = *record
+			return save()
 		}
+		duplicate := false
 		for _, previous := range store.Records {
 			if (previous.Status == "published" || previous.Status == "equivalent") && previous.EvidenceVersion == work.EvidenceVersion && resultHash(previous.Commits) == resultHash(work.Commits) {
-				return resultError("completion evidence unchanged; reference the existing result comment instead of publishing another assessment")
+				duplicate = true
+				break
 			}
 		}
-		if err := validateResultBody(proposal.Body); err != nil {
-			return err
+		bodyErr := validateResultBody(proposal.Body)
+		next, ok := resultStep(state, rk.Intent{Nfull: proposal.FullyResolved, Nmet: met, Dup: duplicate, BodyOk: bodyErr == nil})
+		if !ok {
+			if duplicate {
+				return resultError("completion evidence unchanged; reference the existing result comment instead of publishing another assessment")
+			}
+			if bodyErr != nil {
+				return bodyErr
+			}
+			return errResultInconsistent()
 		}
 		var nonce [24]byte
 		if _, err := rand.Read(nonce[:]); err != nil {
 			return err
 		}
 		record.Body = proposal.Body + "\n\n<!-- kander-result:" + hex.EncodeToString(nonce[:]) + " -->"
-		record.Status = "uncertain"
+		record.Status = statusOf(next.St)
 		store.Records[version] = record
 		if err := save(); err != nil {
 			return err
@@ -201,16 +232,21 @@ func ApplyResult(ctx context.Context, provider ResultProvider, root string, repo
 		if err != nil {
 			var rejected *ResultWriteRejection
 			if errors.As(err, &rejected) {
-				record.Status = "rejected"
+				next, ok := resultStep(projectRecord(*store, version), rk.Reject{})
+				if !ok {
+					return errors.Join(err, errResultInconsistent())
+				}
+				record.Status = statusOf(next.St)
 				record.Failures = append(record.Failures, ResultFailure{Action: "comment", Detail: Sanitize(err.Error())})
 				return errors.Join(err, save())
 			}
 			return err
 		}
-		if comment.ID <= 0 || comment.AuthorID != record.ActorID || comment.Body != record.Body {
+		next, ok = resultStep(projectRecord(*store, version), rk.Publish{Ok: comment.ID > 0 && comment.AuthorID == record.ActorID && comment.Body == record.Body})
+		if !ok {
 			return resultError("publication response mismatch; outcome remains uncertain")
 		}
-		record.Status = "published"
+		record.Status = statusOf(next.St)
 		record.CommentID = comment.ID
 		out = *record
 		return save()
@@ -221,6 +257,9 @@ func ApplyResult(ctx context.Context, provider ResultProvider, root string, repo
 // DecideResult records explicit target-bound consent or refusal. An unchanged
 // refusal is returned without prompting/writing again; reconsider is only for
 // a user who actively requests another decision. Old consent is never reused.
+// The issue result kernels decide each step: the record gate, a closed remote,
+// the scan of the earlier decisions of the same state version, the decision
+// fields, and the outcome of the close request.
 func DecideResult(ctx context.Context, provider ResultProvider, root string, repository Repository, number int, cardID string, decision ResultDecision) (out ResultRecord, err error) {
 	err = withResultStore(ctx, root, repository, number, cardID, func(store *resultStore, save func() error) error {
 		work, remote, err := readResult(ctx, provider, root, repository, number, cardID, store)
@@ -231,39 +270,40 @@ func DecideResult(ctx context.Context, provider ResultProvider, root string, rep
 			return resultError("close target changed; inspect and request a new decision")
 		}
 		record := store.Records[decision.Version]
-		if record == nil || (record.Status != "published" && record.Status != "equivalent") || record.CardDigest != work.Digest || !record.FullyResolved {
+		state := projectRecord(*store, decision.Version)
+		digestOk := record != nil && record.CardDigest == work.Digest
+		// The gate: a record that is published or equivalent, of the current work, and fully resolved.
+		if _, ok := resultStep(state, rk.Keep{DigestOk: digestOk, Closed: true}); !ok {
 			return resultError("no current fully resolved assessment")
 		}
 		if remote.State == "closed" {
 			out = *record
 			return nil
 		}
-		for _, d := range record.Decisions {
-			if d.StateVersion != remote.StateVersion {
-				continue
-			}
-			if d.Status == "uncertain" {
-				return resultError("close outcome uncertain; inspect remote, never retry blindly")
-			}
-			if d.Decision == "no" && !decision.Reconsider {
-				if decision.Decision != "no" {
-					return resultError("refusal recorded; explicit user reconsideration is required")
-				}
-				out = *record
-				return nil
-			}
-			if d.Decision == "yes" && !(d.Status == "rejected" && decision.Reconsider) {
-				return resultError("old close consent cannot be reused")
-			}
+		scan := scanDecisions(record, remote.StateVersion, decision)
+		if _, ok := resultStep(state, rk.Keep{DigestOk: digestOk, Scan: scan}); ok {
+			out = *record
+			return nil
 		}
-		if (decision.Decision != "yes" && decision.Decision != "no") || strings.TrimSpace(decision.UserReference) == "" {
+		switch scan {
+		case rk.ScanUncertain:
+			return resultError("close outcome uncertain; inspect remote, never retry blindly")
+		case rk.ScanRefusal:
+			return resultError("refusal recorded; explicit user reconsideration is required")
+		case rk.ScanConsent:
+			return resultError("old close consent cannot be reused")
+		}
+		fieldsOk := (decision.Decision == "yes" || decision.Decision == "no") && strings.TrimSpace(decision.UserReference) != ""
+		if _, ok := resultStep(state, rk.Decide{DigestOk: digestOk, Scan: scan, FieldsOk: fieldsOk}); !ok {
 			return resultError("explicit user decision and reference required")
 		}
-		d := ResultCloseRecord{StateVersion: remote.StateVersion, Decision: decision.Decision, UserReference: decision.UserReference, Status: "declined"}
+		var appended dk.State
 		if decision.Decision == "yes" {
-			d.Status = "uncertain"
+			appended, _ = decisionStep(dk.Initial(decisionKernelParams), dk.AppendYes{})
+		} else {
+			appended, _ = decisionStep(dk.Initial(decisionKernelParams), dk.AppendNo{})
 		}
-		record.Decisions = append(record.Decisions, d)
+		record.Decisions = append(record.Decisions, ResultCloseRecord{StateVersion: remote.StateVersion, Decision: decision.Decision, UserReference: decision.UserReference, Status: decisionStatusOf(appended.Ds)})
 		if err := save(); err != nil {
 			return err
 		}
@@ -271,16 +311,26 @@ func DecideResult(ctx context.Context, provider ResultProvider, root string, rep
 			out = *record
 			return nil
 		}
+		last := &record.Decisions[len(record.Decisions)-1]
 		if err := provider.CloseResult(ctx, repository, number); err != nil {
 			var rejected *ResultWriteRejection
 			if errors.As(err, &rejected) {
-				record.Decisions[len(record.Decisions)-1].Status = "rejected"
+				closed, ok := decisionStep(dk.State{Ds: dstatOf(last.Status)}, dk.CloseRejected{})
+				_, okFail := resultStep(projectRecord(*store, decision.Version), rk.FailClose{})
+				if !ok || !okFail {
+					return errors.Join(err, errResultInconsistent())
+				}
+				last.Status = decisionStatusOf(closed.Ds)
 				record.Failures = append(record.Failures, ResultFailure{Action: "close", Detail: Sanitize(err.Error())})
 				return errors.Join(err, save())
 			}
 			return err
 		}
-		record.Decisions[len(record.Decisions)-1].Status = "closed"
+		closed, ok := decisionStep(dk.State{Ds: dstatOf(last.Status)}, dk.CloseDone{})
+		if !ok {
+			return errResultInconsistent()
+		}
+		last.Status = decisionStatusOf(closed.Ds)
 		out = *record
 		return save()
 	})
