@@ -67,10 +67,13 @@ func (s *Server) ImportContext(ctx context.Context, name, remote, source string)
 }
 
 // ImportWithProgress is ImportContext that reports each phase and the file
-// counts of the long ones to report. report runs on the importing goroutine
-// while the project lock is held, so it must not block.
+// counts of the long ones to report. report runs while the project lock is
+// held, one call at a time, so it must not block. The latest report is repeated
+// once per second while a step takes longer, so a reader sees progress at
+// least that often.
 func (s *Server) ImportWithProgress(ctx context.Context, name, remote, source string, report func(api.ImportProgress)) (result api.ImportResult, err error) {
-	progress := &importEmitter{report: report}
+	progress := newImportEmitter(report)
+	defer progress.stop()
 	progress.phase(api.ImportPhaseLock)
 	source, err = filepath.Abs(source)
 	if err != nil {

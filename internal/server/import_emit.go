@@ -1,29 +1,80 @@
 package server
 
 import (
+	"sync"
 	"time"
 
 	"github.com/dualface/kander/internal/api"
 )
 
-// importProgressInterval spaces the file counts of one phase, so a client that
-// prints at least every 5 seconds always has a fresh count to show.
-const importProgressInterval = time.Second
+// importProgressInterval spaces the file counts of one phase, and the repeat of
+// the latest report while the import is busy with one slow step. A client that
+// prints at least every 5 seconds therefore always has a report to show.
+var importProgressInterval = time.Second
 
 // importEmitter hands the progress of one import to its report function. A
 // phase change is always reported; file counts are reported at most once per
-// importProgressInterval, and the last count of a phase always is. The zero
-// emitter and a nil one report nothing.
+// importProgressInterval, and the last count of a phase always is. While no
+// report was made for a whole interval (one large file, a slow disk, a long
+// check), a timer repeats the latest one. Reports are serialized, but may come
+// from the importing goroutine or from the timer. The zero emitter and a nil
+// one report nothing.
 type importEmitter struct {
 	report func(api.ImportProgress)
-	last   time.Time
+
+	mu      sync.Mutex
+	last    time.Time
+	current api.ImportProgress
+	stopped chan struct{}
+	done    chan struct{}
+}
+
+// newImportEmitter starts the timer when there is something to report to; stop
+// ends it and must be called once the import is over.
+func newImportEmitter(report func(api.ImportProgress)) *importEmitter {
+	e := &importEmitter{report: report}
+	if report != nil {
+		e.stopped, e.done = make(chan struct{}), make(chan struct{})
+		go e.repeat(importProgressInterval)
+	}
+	return e
+}
+
+func (e *importEmitter) repeat(interval time.Duration) {
+	defer close(e.done)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-e.stopped:
+			return
+		case <-ticker.C:
+			e.mu.Lock()
+			if e.current.Phase != "" && time.Since(e.last) >= interval {
+				e.report(e.current)
+				e.last = time.Now()
+			}
+			e.mu.Unlock()
+		}
+	}
+}
+
+// stop ends the timer and waits for a report in progress to return.
+func (e *importEmitter) stop() {
+	if e == nil || e.report == nil {
+		return
+	}
+	close(e.stopped)
+	<-e.done
 }
 
 func (e *importEmitter) send(p api.ImportProgress) {
 	if e == nil || e.report == nil {
 		return
 	}
-	e.last = time.Now()
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.current, e.last = p, time.Now()
 	e.report(p)
 }
 
@@ -40,7 +91,10 @@ func (e *importEmitter) count(name string, done, total int, bytes, totalBytes in
 	if e == nil || e.report == nil {
 		return
 	}
-	if done < total && time.Since(e.last) < importProgressInterval {
+	e.mu.Lock()
+	recent := time.Since(e.last) < importProgressInterval
+	e.mu.Unlock()
+	if done < total && recent {
 		return
 	}
 	e.phaseCounts(name, done, total, bytes, totalBytes)

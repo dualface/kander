@@ -12,7 +12,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
@@ -552,5 +554,60 @@ func TestVerifyDefaultedTreeAcceptsOnlyTheInsertedLine(t *testing.T) {
 		if err := verifyDefaultedTree(source, src, stage(edit), defaults); err == nil {
 			t.Fatalf("%s: a staged tree that differs beyond the SIZE line was accepted", name)
 		}
+	}
+}
+
+func TestImportRepeatsTheLatestReportWhileOneStepRunsLong(t *testing.T) {
+	previous := importProgressInterval
+	importProgressInterval = 20 * time.Millisecond
+	t.Cleanup(func() { importProgressInterval = previous })
+	source := v1Board(t)
+	s, h := openTest(t, t.TempDir(), nil)
+	defer h.Close()
+	defer s.Close()
+	var mu sync.Mutex
+	var copies []api.ImportProgress
+	report := func(p api.ImportProgress) {
+		mu.Lock()
+		defer mu.Unlock()
+		if p.Phase == api.ImportPhaseCopy {
+			copies = append(copies, p)
+		}
+	}
+	copied := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(copies)
+	}
+	fired := false
+	s.importFault = func(step string) error {
+		if step != "copying" || fired {
+			return nil
+		}
+		fired = true
+		// The first file is held: only the timer can report now.
+		before := copied()
+		deadline := time.Now().Add(10 * time.Second)
+		for copied() < before+3 {
+			if time.Now().After(deadline) {
+				return errors.New("no report while the copy was held")
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		return nil
+	}
+	if result, err := s.ImportWithProgress(t.Context(), "demo", "", source, report); err != nil || result.Tasks != 2 {
+		t.Fatalf("import: %+v %v", result, err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	held := 0
+	for _, p := range copies {
+		if p.Done == 0 && p.Total > 0 {
+			held++
+		}
+	}
+	if held < 3 {
+		t.Fatalf("the unchanged count was repeated %d times: %+v", held, copies)
 	}
 }
