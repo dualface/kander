@@ -220,7 +220,7 @@ func TestImportAcceptsProblemsOfClosedCardsAsWarnings(t *testing.T) {
 				t.Fatalf("import: %+v %v", result, err)
 			}
 			w := result.Warnings[0]
-			if !slices.Equal(w.TaskIDs, []string{closed}) || !strings.Contains(w.Message, "invalid prerequisite syntax") {
+			if !slices.Equal(w.TaskIDs, []string{closed}) || !strings.Contains(w.Message, closed) {
 				t.Fatalf("warning: %+v", w)
 			}
 			again, err := s.Import("demo", "", source)

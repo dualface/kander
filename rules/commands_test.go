@@ -170,7 +170,7 @@ func TestCommandIndexWordLimits(t *testing.T) {
 // contract documents must all be parsed by one of them, and every "--flag" literal in them
 // must be documented by a command that lists the function.
 var parserFunctions = map[string][]string{
-	"server":      {"cmd/kander/server.go:runServer", "internal/server/main.go:runImport", "internal/server/maintenance.go:runMaintain", "internal/server/projects_cmd.go:listProjects"},
+	"server":      {"cmd/kander/server.go:runServer", "internal/server/main.go:importCommand", "internal/server/maintenance.go:runMaintain", "internal/server/projects_cmd.go:listProjects"},
 	"config":      {"internal/menu/commands.go:parseConfigArgs"},
 	"doctor":      {"internal/menu/commands.go:Doctor"},
 	"version":     {"internal/cli/cli.go:runVersion"},

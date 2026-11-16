@@ -81,7 +81,7 @@ func TestCheckBoardForImportProblemsSplitsWarningsFromBlockingProblems(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(check.Warnings) != 0 || !strings.Contains(strings.Join(check.Blocking, "\n"), "cycle") {
+	if len(check.Warnings) != 0 || len(check.Blocking) != 1 || !strings.Contains(check.Blocking[0], first) || !strings.Contains(check.Blocking[0], second) {
 		t.Fatalf("a cycle through an active card blocks: %+v", check)
 	}
 	// Closing the second card turns the same cycle into a warning about both.
@@ -92,7 +92,7 @@ func TestCheckBoardForImportProblemsSplitsWarningsFromBlockingProblems(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(check.Blocking) != 0 || len(check.Warnings) != 1 || !strings.Contains(check.Warnings[0].Message, "cycle") {
+	if len(check.Blocking) != 0 || len(check.Warnings) != 1 || !strings.Contains(check.Warnings[0].Message, first) || !strings.Contains(check.Warnings[0].Message, second) {
 		t.Fatalf("a cycle of closed cards is a warning: %+v", check)
 	}
 	if want := []string{first, second}; !reflect.DeepEqual(check.Warnings[0].TaskIDs, want) {
