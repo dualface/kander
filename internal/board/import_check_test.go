@@ -172,3 +172,31 @@ func TestDefaultMissingSizeInsertsOneLineIntoDirectoryCardsOnly(t *testing.T) {
 		t.Fatalf("a second run changes nothing: %+v %v", again, err)
 	}
 }
+
+func TestClassifyImportProblemsOrdersItsResult(t *testing.T) {
+	b := Board{Entries: map[string]Entry{
+		"a-task": {TaskID: "a-task", State: "done", Path: "/b/done/a-task"},
+		"b-task": {TaskID: "b-task", State: "archived", Path: "/b/archived/b-task"},
+		"w-task": {TaskID: "w-task", State: "working", Path: "/b/working/w-task"},
+	}}
+	problems := []Problem{
+		{Path: "b-task", Message: "second"},
+		{Path: "w-task", Message: "z blocks"},
+		{Path: "a-task", Message: "b later"},
+		{Path: "w-task", Message: "a blocks"},
+		{Path: "a-task", Message: "a first"},
+	}
+	want := classifyImportProblems(b, problems)
+	if got := []string{want.Warnings[0].Message, want.Warnings[1].Message, want.Warnings[2].Message}; !reflect.DeepEqual(got, []string{"a first", "b later", "second"}) {
+		t.Fatalf("warnings are ordered by card, then message: %v", got)
+	}
+	if len(want.Blocking) != 2 || want.Blocking[0] >= want.Blocking[1] {
+		t.Fatalf("blocking lines are sorted: %v", want.Blocking)
+	}
+	for i := range problems {
+		rotated := append(append([]Problem{}, problems[i:]...), problems[:i]...)
+		if got := classifyImportProblems(b, rotated); !reflect.DeepEqual(got, want) {
+			t.Fatalf("input order %d changes the result: %+v vs %+v", i, got, want)
+		}
+	}
+}

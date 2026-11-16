@@ -29,13 +29,17 @@ type ImportCheck struct {
 var closedImportStates = map[string]struct{}{"done": {}, "archived": {}, "trash": {}}
 
 // CheckBoardForImportProblems runs the checks of CheckBoardForImport and
-// splits the problems into warnings and blocking lines.
+// splits the problems into warnings and blocking lines, each in a fixed order.
 func CheckBoardForImportProblems(root string) (ImportCheck, error) {
 	board, problems, err := collectBoardProblems(root, nil, true, true)
-	var check ImportCheck
 	if err != nil {
-		return check, err
+		return ImportCheck{}, err
 	}
+	return classifyImportProblems(board, problems), nil
+}
+
+func classifyImportProblems(board Board, problems []Problem) ImportCheck {
+	var check ImportCheck
 	for _, problem := range problems {
 		if ids, ok := closedProblemTasks(board, problem); ok {
 			check.Warnings = append(check.Warnings, ImportFinding{TaskIDs: ids, Message: problem.Message})
@@ -43,7 +47,17 @@ func CheckBoardForImportProblems(root string) (ImportCheck, error) {
 		}
 		check.Blocking = append(check.Blocking, t("board.invalid", problem.Message))
 	}
-	return check, nil
+	// The checks walk maps, so fix the order: the same board always reports,
+	// and records, the same list.
+	sort.Strings(check.Blocking)
+	sort.Slice(check.Warnings, func(i, j int) bool {
+		a, b := check.Warnings[i], check.Warnings[j]
+		if joined, other := strings.Join(a.TaskIDs, ","), strings.Join(b.TaskIDs, ","); joined != other {
+			return joined < other
+		}
+		return a.Message < b.Message
+	})
+	return check
 }
 
 // closedProblemTasks returns the cards a problem concerns and whether every
