@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net/http"
 	"time"
 
 	"github.com/dualface/kander/internal/api"
@@ -35,6 +36,9 @@ type outcome struct {
 	status int
 	body   any
 	err    error
+	// stream, when set, writes the whole response itself and returns the
+	// status to log. Only the import route streams.
+	stream func(http.ResponseWriter) int
 }
 
 func receiptPath(key string) string {

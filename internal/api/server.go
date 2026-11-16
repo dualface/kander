@@ -21,14 +21,62 @@ type ImportRequest struct {
 }
 
 // ImportResult describes one board import. Source is the absolute source path
-// of this request, also when the snapshot was imported earlier.
+// of this request, also when the snapshot was imported earlier. Snapshot is the
+// digest of the source board; the published board equals it except for the
+// SIZE lines listed in DefaultedSize. DefaultedSize and Warnings are the same
+// for an earlier import of the same snapshot.
 type ImportResult struct {
-	Project  Project `json:"project"`
-	Source   string  `json:"source"`
-	Files    int     `json:"files"`
-	Tasks    int     `json:"tasks"`
-	Snapshot string  `json:"snapshot"`
-	Existing bool    `json:"existing,omitzero"`
+	Project       Project         `json:"project"`
+	Source        string          `json:"source"`
+	Files         int             `json:"files"`
+	Tasks         int             `json:"tasks"`
+	Snapshot      string          `json:"snapshot"`
+	Existing      bool            `json:"existing,omitzero"`
+	DefaultedSize []string        `json:"defaulted_size,omitempty"`
+	Warnings      []ImportWarning `json:"warnings,omitempty"`
+}
+
+// ImportWarning is a board check problem the import accepted because every
+// card it concerns is closed (done, archived or trash).
+type ImportWarning struct {
+	TaskIDs []string `json:"task_ids"`
+	Message string   `json:"message"`
+}
+
+// Import phases, in the order a first successful import reports them.
+const (
+	ImportPhaseLock    = "lock"
+	ImportPhaseScan    = "scan"
+	ImportPhaseCopy    = "copy"
+	ImportPhaseVerify  = "verify"
+	ImportPhaseCheck   = "check"
+	ImportPhasePublish = "publish"
+)
+
+// ImportProgress reports where an import is. Done and Total count files and
+// are set while the phase walks the source or the staged copy; Bytes and
+// TotalBytes are the sizes of those files.
+type ImportProgress struct {
+	Phase      string `json:"phase"`
+	Done       int    `json:"done,omitzero"`
+	Total      int    `json:"total,omitzero"`
+	Bytes      int64  `json:"bytes,omitzero"`
+	TotalBytes int64  `json:"total_bytes,omitzero"`
+}
+
+// ImportStreamType is the media type a client puts in Accept to receive the
+// import as newline-delimited JSON. The server answers every other request
+// with the single JSON result of an import without progress.
+const ImportStreamType = "application/x-ndjson"
+
+// ImportStreamLine is one line of a streamed import. Exactly one of Progress,
+// Result and Error is set. The last line is the Result, or the Error with the
+// HTTP status the single-response form would have used.
+type ImportStreamLine struct {
+	Progress *ImportProgress `json:"progress,omitempty"`
+	Result   *ImportResult   `json:"result,omitempty"`
+	Status   int             `json:"status,omitempty"`
+	Error    *Error          `json:"error,omitempty"`
 }
 
 // ServerInfo describes the running instance, never its secrets.

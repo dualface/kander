@@ -1,12 +1,14 @@
 package client
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -58,9 +60,20 @@ const importTimeout = 6 * time.Minute
 // ErrImportUnsupported reports a running server that predates online import.
 var ErrImportUnsupported = errors.New("the running server does not support online import")
 
-// Import asks a local server to import a v1 board. Like Shutdown it never
-// follows redirects, so the administration token reaches only this endpoint.
+// importLineLimit bounds one line of a streamed import.
+const importLineLimit = 1 << 20
+
+// Import asks a local server to import a v1 board and waits for the single
+// JSON answer. Like Shutdown it never follows redirects, so the administration
+// token reaches only this endpoint.
 func (c *Client) Import(ctx context.Context, token string, in api.ImportRequest) (api.ImportResult, error) {
+	return c.ImportWithProgress(ctx, token, in, nil)
+}
+
+// ImportWithProgress is Import that asks the server to stream its progress to
+// progress. A server that predates the stream answers with the single JSON,
+// and progress is then never called.
+func (c *Client) ImportWithProgress(ctx context.Context, token string, in api.ImportRequest, progress func(api.ImportProgress)) (api.ImportResult, error) {
 	var out api.ImportResult
 	payload, err := json.Marshal(in)
 	if err != nil {
@@ -76,6 +89,9 @@ func (c *Client) Import(ctx context.Context, token string, in api.ImportRequest)
 	req.Header.Set(api.HeaderClientID, c.clientID)
 	req.Header.Set(api.HeaderAdminToken, token)
 	req.Header.Set("Content-Type", "application/json")
+	if progress != nil {
+		req.Header.Set("Accept", api.ImportStreamType)
+	}
 	h := *c.http
 	h.Timeout = importTimeout
 	h.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
@@ -84,6 +100,9 @@ func (c *Client) Import(ctx context.Context, token string, in api.ImportRequest)
 		return out, &TransportError{Err: err}
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusOK && importStreamed(resp) {
+		return readImportStream(resp.Body, progress)
+	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return out, &TransportError{Err: err}
@@ -104,4 +123,40 @@ func (c *Client) Import(ctx context.Context, token string, in api.ImportRequest)
 		return out, fmt.Errorf("server answer is malformed: %w", err)
 	}
 	return out, nil
+}
+
+func importStreamed(resp *http.Response) bool {
+	mediaType, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	return err == nil && mediaType == api.ImportStreamType
+}
+
+// readImportStream reads the lines of a streamed import up to its last line.
+// A stream that ends without a result or an error is a transport failure: the
+// server went away, and the import may or may not have been published.
+func readImportStream(body io.Reader, progress func(api.ImportProgress)) (api.ImportResult, error) {
+	var out api.ImportResult
+	lines := bufio.NewScanner(body)
+	lines.Buffer(nil, importLineLimit)
+	for lines.Scan() {
+		var line api.ImportStreamLine
+		if err := json.Unmarshal(lines.Bytes(), &line); err != nil {
+			return out, fmt.Errorf("server answer is malformed: %w", err)
+		}
+		switch {
+		case line.Progress != nil:
+			if progress != nil {
+				progress(*line.Progress)
+			}
+		case line.Result != nil:
+			return *line.Result, nil
+		case line.Error != nil:
+			line.Error.Status = line.Status
+			return out, line.Error
+		}
+	}
+	err := lines.Err()
+	if err == nil {
+		err = io.ErrUnexpectedEOF
+	}
+	return out, &TransportError{Err: err}
 }

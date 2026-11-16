@@ -10,10 +10,22 @@ import (
 	"github.com/dualface/kander/internal/fs"
 )
 
+// importPublication is control/import-pending.json. StagedDigest is the digest
+// of the staged board as it is published: the source snapshot plus the default
+// SIZE lines, without validation lock files. An intent written before default
+// SIZE lines existed has none, and its staged board equals the source snapshot.
 type importPublication struct {
-	Schema      int          `json:"schema"`
-	Record      importRecord `json:"record"`
-	EmptyDigest string       `json:"empty_digest"`
+	Schema       int          `json:"schema"`
+	Record       importRecord `json:"record"`
+	EmptyDigest  string       `json:"empty_digest"`
+	StagedDigest string       `json:"staged_digest,omitempty"`
+}
+
+func (p importPublication) stagedDigest() string {
+	if p.StagedDigest != "" {
+		return p.StagedDigest
+	}
+	return p.Record.Snapshot
 }
 
 func (s *Server) importCheckpoint(step string) error {
@@ -92,7 +104,7 @@ func (p *project) recoverImport() error {
 	return p.publishImport(pending)
 }
 func (p *project) publishImport(pending importPublication) error {
-	if pending.Schema != 1 || len(pending.Record.Snapshot) != 64 || len(pending.EmptyDigest) != 64 || pending.Record.Source == "" || pending.Record.Files < 0 || pending.Record.Tasks < 0 {
+	if pending.Schema != 1 || len(pending.Record.Snapshot) != 64 || len(pending.EmptyDigest) != 64 || (pending.StagedDigest != "" && len(pending.StagedDigest) != 64) || pending.Record.Source == "" || pending.Record.Files < 0 || pending.Record.Tasks < 0 {
 		return errors.New("invalid import publication intent")
 	}
 	staging, backup := filepath.Join(p.root, "board.import"), filepath.Join(p.root, "board.before-import")
@@ -106,7 +118,7 @@ func (p *project) publishImport(pending importPublication) error {
 		if err != nil {
 			return err
 		}
-		published = digest == pending.Record.Snapshot
+		published = digest == pending.stagedDigest()
 		if !published && digest != pending.EmptyDigest {
 			return errors.New("import destination differs from both the original empty board and the prepared snapshot")
 		}
@@ -123,7 +135,7 @@ func (p *project) publishImport(pending importPublication) error {
 		if err != nil {
 			return err
 		}
-		if digest != pending.Record.Snapshot {
+		if digest != pending.stagedDigest() {
 			return errors.New("prepared import staging digest changed")
 		}
 		backupExists, err := importDirectoryExists(p.root, backup)
@@ -171,7 +183,7 @@ func (p *project) publishImport(pending importPublication) error {
 		if err != nil {
 			return err
 		}
-		if digest != pending.Record.Snapshot {
+		if digest != pending.stagedDigest() {
 			return errors.New("unused import staging conflicts with the published snapshot")
 		}
 		if err := removeImportDirectory(p.root, staging); err != nil {

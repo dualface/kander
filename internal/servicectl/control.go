@@ -226,8 +226,8 @@ func adminToken(dataDir string) (string, error) {
 // Import hands a v1 board import to the local server that serves dataDir. The
 // caller calls it after finding the data directory lock held, so a missing
 // server means another offline command holds the lock, or the server listens
-// on another address.
-func Import(ctx context.Context, target, dataDir string, req api.ImportRequest) (api.ImportResult, error) {
+// on another address. progress, when set, receives the server's progress.
+func Import(ctx context.Context, target, dataDir string, req api.ImportRequest, progress func(api.ImportProgress)) (api.ImportResult, error) {
 	if !Local(target) {
 		return api.ImportResult{}, errors.New(config.Text("server.import_local_only", target))
 	}
@@ -249,7 +249,7 @@ func Import(ctx context.Context, target, dataDir string, req api.ImportRequest) 
 	if err != nil {
 		return api.ImportResult{}, err
 	}
-	result, err := p.Import(ctx, token, req)
+	result, err := p.ImportWithProgress(ctx, token, req, progress)
 	if errors.Is(err, client.ErrImportUnsupported) {
 		return api.ImportResult{}, errors.New(config.Text("server.import_unsupported", target))
 	}

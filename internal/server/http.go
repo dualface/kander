@@ -240,20 +240,29 @@ func (s *Server) domain(fn func(*http.Request) outcome) http.HandlerFunc {
 			out = fn(r)
 		}
 		status := out.status
-		if out.err != nil {
-			e := asAPIError(out.err)
-			if e.Code == api.CodeInternal {
-				s.log.Error("request failed", "method", r.Method, "path", r.URL.Path, "operation", r.Header.Get(api.HeaderOperationID), "error", out.err)
-			}
+		switch {
+		case out.stream != nil:
+			status = out.stream(w)
+		case out.err != nil:
+			e := s.failure(r, out.err)
 			status = e.Status
 			writeJSONResponse(w, status, e)
-		} else {
+		default:
 			writeJSONResponse(w, status, out.body)
 		}
 		s.log.Info("request", "method", r.Method, "path", r.URL.Path, "status", status,
 			"client", r.Header.Get(api.HeaderClientID), "group", r.PathValue("group"), "operation", r.Header.Get(api.HeaderOperationID),
 			"generation", r.Header.Get(api.HeaderClaimGen), "duration_ms", time.Since(started).Milliseconds())
 	}
+}
+
+// failure converts an operation error to its API error and logs an internal one.
+func (s *Server) failure(r *http.Request, err error) *api.Error {
+	e := asAPIError(err)
+	if e.Code == api.CodeInternal {
+		s.log.Error("request failed", "method", r.Method, "path", r.URL.Path, "operation", r.Header.Get(api.HeaderOperationID), "error", err)
+	}
+	return e
 }
 
 func decode(r *http.Request, value any) error {

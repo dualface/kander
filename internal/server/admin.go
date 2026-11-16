@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
@@ -56,22 +55,7 @@ func (s *Server) adminRoutes(mux *http.ServeMux) {
 	})
 	// Import changes board data, so unlike shutdown it passes the protocol
 	// handshake and the readiness gate of domain().
-	mux.HandleFunc("POST /api/v1/server/import", s.domain(func(r *http.Request) outcome {
-		if !s.administrator(r) {
-			return outcome{err: &api.Error{Code: api.CodeInvalidRequest, Message: "server import refused", Status: http.StatusForbidden}}
-		}
-		var req api.ImportRequest
-		if err := decode(r, &req); err != nil {
-			return outcome{err: err}
-		}
-		if !filepath.IsAbs(req.From) {
-			return outcome{err: apiError(api.CodeInvalidRequest, "import source must be an absolute path on the server host")}
-		}
-		ctx, cancel := context.WithTimeout(r.Context(), ImportTimeout)
-		defer cancel()
-		value, err := s.ImportContext(ctx, req.Project, req.Remote, req.From)
-		return result(http.StatusOK, value, err)
-	}))
+	mux.HandleFunc("POST /api/v1/server/import", s.domain(s.importRoute))
 }
 
 // administrator accepts only a loopback peer that presents the private

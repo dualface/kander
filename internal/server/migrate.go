@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -21,12 +20,29 @@ import (
 // of project.open can finish it.
 var errImportCrash = errors.New("simulated import crash")
 
+// importRecord is control/import.json. Snapshot is the digest of the source
+// board, whatever DefaultedSize changed in the published copy; a repeated
+// import of that snapshot answers with the record, DefaultedSize and Warnings
+// included.
 type importRecord struct {
-	Snapshot   string    `json:"snapshot"`
-	Source     string    `json:"source"`
-	Files      int       `json:"files"`
-	Tasks      int       `json:"tasks"`
-	ImportedAt time.Time `json:"imported_at"`
+	Snapshot      string              `json:"snapshot"`
+	Source        string              `json:"source"`
+	Files         int                 `json:"files"`
+	Tasks         int                 `json:"tasks"`
+	ImportedAt    time.Time           `json:"imported_at"`
+	DefaultedSize []string            `json:"defaulted_size,omitempty"`
+	Warnings      []api.ImportWarning `json:"warnings,omitempty"`
+}
+
+// existing answers a repeated import of the recorded snapshot.
+func (r importRecord) existing(info api.Project, source string) api.ImportResult {
+	result := r.result(info, source)
+	result.Existing = true
+	return result
+}
+
+func (r importRecord) result(info api.Project, source string) api.ImportResult {
+	return api.ImportResult{Project: info, Source: source, Files: r.Files, Tasks: r.Tasks, Snapshot: r.Snapshot, DefaultedSize: r.DefaultedSize, Warnings: r.Warnings}
 }
 
 // Import copies a quiescent v1 board into an empty project. Source recovery
@@ -46,7 +62,16 @@ const ImportTimeout = 5 * time.Minute
 // ImportContext runs offline and inside a serving instance alike. While it
 // holds p.mu, every request of the project waits; a publication that fails and
 // cannot be recovered in process closes the project until restart.
-func (s *Server) ImportContext(ctx context.Context, name, remote, source string) (result api.ImportResult, err error) {
+func (s *Server) ImportContext(ctx context.Context, name, remote, source string) (api.ImportResult, error) {
+	return s.ImportWithProgress(ctx, name, remote, source, nil)
+}
+
+// ImportWithProgress is ImportContext that reports each phase and the file
+// counts of the long ones to report. report runs on the importing goroutine
+// while the project lock is held, so it must not block.
+func (s *Server) ImportWithProgress(ctx context.Context, name, remote, source string, report func(api.ImportProgress)) (result api.ImportResult, err error) {
+	progress := &importEmitter{report: report}
+	progress.phase(api.ImportPhaseLock)
 	source, err = filepath.Abs(source)
 	if err != nil {
 		return result, err
@@ -65,7 +90,7 @@ func (s *Server) ImportContext(ctx context.Context, name, remote, source string)
 	if err != nil {
 		return result, err
 	}
-	if result, done, err := p.precheckImport(ctx, info, source); done || err != nil {
+	if result, done, err := p.precheckImport(ctx, info, source, progress); done || err != nil {
 		return result, err
 	}
 	if err := p.lockBoard(); err != nil {
@@ -77,17 +102,19 @@ func (s *Server) ImportContext(ctx context.Context, name, remote, source string)
 	}
 	published := false
 	err = board.WithTransactionContext(ctx, source, board.LockScope{ExclusiveBoard: true, ReadOnly: true}, func(*board.Transaction) error {
-		files, snapshot, err := snapshotTree(source)
+		progress.phase(api.ImportPhaseScan)
+		src, err := scanTree(source, progress.counter(api.ImportPhaseScan, 0))
 		if err != nil {
 			return err
 		}
+		files, snapshot := src.files, src.digest
 		var previous importRecord
 		found, err := readJSON(p.root, filepath.Join("control", "import.json"), &previous)
 		if err != nil {
 			return err
 		}
 		if found && previous.Snapshot == snapshot {
-			result = api.ImportResult{Project: info, Source: source, Files: previous.Files, Tasks: previous.Tasks, Snapshot: snapshot, Existing: true}
+			result = previous.existing(info, source)
 			return nil
 		}
 		current, err := board.LoadBoard(p.board)
@@ -108,7 +135,12 @@ func (s *Server) ImportContext(ctx context.Context, name, remote, source string)
 		if err := ensureDir(p.root, "board.import"); err != nil {
 			return err
 		}
-		for _, rel := range files {
+		progress.phaseCounts(api.ImportPhaseCopy, 0, len(files), 0, src.bytes)
+		var copied int64
+		for i, rel := range files {
+			if err := s.importCheckpoint("copying"); err != nil {
+				return err
+			}
 			if err := ctx.Err(); err != nil {
 				return err
 			}
@@ -123,31 +155,50 @@ func (s *Server) ImportContext(ctx context.Context, name, remote, source string)
 			if err := fs.WriteBytesAtomicInherited(p.root, target, data, false); err != nil {
 				return err
 			}
+			copied += int64(len(data))
+			progress.count(api.ImportPhaseCopy, i+1, len(files), copied, src.bytes)
 		}
 		if err := s.importCheckpoint("copied"); err != nil {
 			return err
 		}
+		progress.phase(api.ImportPhaseVerify)
 		if err := board.InitStorage(staging); err != nil {
 			return err
 		}
-		stagedFiles, stagedDigest, err := snapshotTree(staging)
+		staged, err := scanTree(staging, progress.counter(api.ImportPhaseVerify, src.bytes))
 		if err != nil {
 			return err
 		}
-		if stagedDigest != snapshot || !slices.Equal(stagedFiles, files) {
+		if staged.digest != snapshot || !slices.Equal(staged.files, files) {
 			return errors.New("staged board differs from the source; nothing was published")
 		}
-		staged, err := board.LoadBoard(staging)
+		progress.phase(api.ImportPhaseCheck)
+		defaults, err := board.DefaultMissingSize(staging)
+		if err != nil {
+			return fmt.Errorf("default the missing SIZE lines: %w", err)
+		}
+		if len(defaults) > 0 {
+			// The expected difference is exactly the defaulted cards, each by one
+			// inserted line; the validation below compares against this tree.
+			if staged, err = scanTree(staging, nil); err != nil {
+				return err
+			}
+			if err := verifyDefaultedTree(source, src, staged, defaults); err != nil {
+				return err
+			}
+		}
+		view, err := board.LoadBoard(staging)
 		if err != nil {
 			return err
 		}
-		code, _, problems, err := board.CheckBoardForImport(staging)
+		check, err := board.CheckBoardForImportProblems(staging)
 		if err != nil {
 			return fmt.Errorf("staged board check failed: %w", err)
 		}
-		if code != 0 {
-			return fmt.Errorf("staged board fails check; nothing was published: %s", strings.Join(problems, "; "))
+		if len(check.Blocking) > 0 {
+			return fmt.Errorf("staged board fails check; nothing was published: %s", strings.Join(check.Blocking, "; "))
 		}
+		progress.phase(api.ImportPhasePublish)
 		// A non-cooperating external writer must also invalidate publication.
 		_, again, err := snapshotTree(source)
 		if err != nil {
@@ -157,12 +208,16 @@ func (s *Server) ImportContext(ctx context.Context, name, remote, source string)
 			return errors.New("source board changed during import; nothing was published")
 		}
 		// Validation uses read locks, which may add empty lock files. They carry no
-		// evidence, but must be removed from staging to retain the exact snapshot.
-		if err := removeImportValidationFiles(staging, files, snapshot); err != nil {
+		// evidence, but must be removed from staging to retain the staged tree.
+		if err := removeImportValidationFiles(staging, files, staged.digest); err != nil {
 			return err
 		}
-		record := importRecord{Snapshot: snapshot, Source: source, Files: len(files), Tasks: len(staged.Entries), ImportedAt: s.now()}
-		pending := importPublication{Schema: 1, Record: record, EmptyDigest: emptyDigest}
+
+		record := importRecord{Snapshot: snapshot, Source: source, Files: len(files), Tasks: len(view.Entries), ImportedAt: s.now(), Warnings: importWarnings(check.Warnings)}
+		for _, d := range defaults {
+			record.DefaultedSize = append(record.DefaultedSize, d.TaskID)
+		}
+		pending := importPublication{Schema: 1, Record: record, EmptyDigest: emptyDigest, StagedDigest: staged.digest}
 		if err := writeJSON(p.root, filepath.Join("control", "import-pending.json"), pending); err != nil {
 			return err
 		}
@@ -173,7 +228,7 @@ func (s *Server) ImportContext(ctx context.Context, name, remote, source string)
 			return err
 		}
 		published = true
-		result = api.ImportResult{Project: info, Source: source, Files: record.Files, Tasks: record.Tasks, Snapshot: snapshot}
+		result = record.result(info, source)
 		return nil
 	})
 	if err != nil {
@@ -185,8 +240,44 @@ func (s *Server) ImportContext(ctx context.Context, name, remote, source string)
 	if err := p.reconcileClaims(); err != nil {
 		return result, err
 	}
-	p.log().Info("board imported", "files", result.Files, "tasks", result.Tasks, "snapshot", result.Snapshot)
+	p.log().Info("board imported", "files", result.Files, "tasks", result.Tasks, "snapshot", result.Snapshot, "defaulted_size", len(result.DefaultedSize), "warnings", len(result.Warnings))
 	return result, nil
+}
+
+func importWarnings(findings []board.ImportFinding) []api.ImportWarning {
+	var warnings []api.ImportWarning
+	for _, f := range findings {
+		warnings = append(warnings, api.ImportWarning{TaskIDs: f.TaskIDs, Message: f.Message})
+	}
+	return warnings
+}
+
+// verifyDefaultedTree accepts a staged tree only when it equals the source
+// tree except for the spec.md of the defaulted cards, which must be the source
+// text with the one inserted SIZE line.
+func verifyDefaultedTree(source string, src, staged treeScan, defaults []board.SizeDefault) error {
+	differs := errors.New("staged board differs from the source beyond the default SIZE lines; nothing was published")
+	if !slices.Equal(src.files, staged.files) {
+		return differs
+	}
+	defaulted := map[string]struct{}{}
+	for _, d := range defaults {
+		defaulted[d.Document] = struct{}{}
+	}
+	for _, rel := range src.files {
+		want := src.sums[rel]
+		if _, ok := defaulted[rel]; ok {
+			data, err := fs.ReadRegularFile(source, filepath.Join(source, filepath.FromSlash(rel)))
+			if err != nil {
+				return err
+			}
+			want = sha256.Sum256([]byte(board.DefaultedSizeText(string(data))))
+		}
+		if staged.sums[rel] != want {
+			return differs
+		}
+	}
+	return nil
 }
 
 func projectNotEmpty(name string) error {
@@ -197,7 +288,7 @@ func projectNotEmpty(name string) error {
 // without holding p.mu while the source is digested, so a busy project is not
 // blocked by a full source walk. A project without tasks takes the locked
 // import path, which keeps every earlier outcome.
-func (p *project) precheckImport(ctx context.Context, info api.Project, source string) (api.ImportResult, bool, error) {
+func (p *project) precheckImport(ctx context.Context, info api.Project, source string, progress *importEmitter) (api.ImportResult, bool, error) {
 	var record importRecord
 	tasks, found, err := func() (int, bool, error) {
 		if err := p.lockBoard(); err != nil {
@@ -226,8 +317,9 @@ func (p *project) precheckImport(ctx context.Context, info api.Project, source s
 	}
 	var snapshot string
 	err = board.WithTransactionContext(ctx, source, board.LockScope{ExclusiveBoard: true, ReadOnly: true}, func(*board.Transaction) error {
-		var err error
-		_, snapshot, err = snapshotTree(source)
+		progress.phase(api.ImportPhaseScan)
+		src, err := scanTree(source, progress.counter(api.ImportPhaseScan, 0))
+		snapshot = src.digest
 		return err
 	})
 	if err != nil {
@@ -236,7 +328,7 @@ func (p *project) precheckImport(ctx context.Context, info api.Project, source s
 	if snapshot != record.Snapshot {
 		return api.ImportResult{}, true, projectNotEmpty(info.Name)
 	}
-	return api.ImportResult{Project: info, Source: source, Files: record.Files, Tasks: record.Tasks, Snapshot: snapshot, Existing: true}, true, nil
+	return record.existing(info, source), true, nil
 }
 
 // settleFailedImport runs under p.mu. A failure after the publication intent
@@ -276,46 +368,4 @@ func (p *project) importPublished() {
 		p.log().Error("event stream reset failed after a board import", "error", err)
 	}
 	clear(p.starts)
-}
-
-// snapshotTree lists every regular file below root (sorted, root-relative)
-// and digests their paths and bytes. Symlinks, junctions, and other entries
-// refuse the snapshot, as every board operation does.
-func snapshotTree(root string) ([]string, string, error) {
-	var files []string
-	var walk func(rel string) error
-	walk = func(rel string) error {
-		entries, err := fs.ListDirectory(root, filepath.Join(root, rel))
-		if err != nil {
-			return err
-		}
-		for _, e := range entries {
-			child := filepath.Join(rel, e.Name)
-			switch e.Kind {
-			case fs.KindDirectory:
-				if err := walk(child); err != nil {
-					return err
-				}
-			case fs.KindFile:
-				files = append(files, filepath.ToSlash(child))
-			default:
-				return errors.New("board entry " + child + " is not a regular file or directory")
-			}
-		}
-		return nil
-	}
-	if err := walk(""); err != nil {
-		return nil, "", err
-	}
-	slices.Sort(files)
-	h := sha256.New()
-	for _, rel := range files {
-		data, err := fs.ReadRegularFile(root, filepath.Join(root, filepath.FromSlash(rel)))
-		if err != nil {
-			return nil, "", err
-		}
-		sum := sha256.Sum256(data)
-		fmt.Fprintf(h, "%s\x00%x\n", rel, sum)
-	}
-	return files, hex.EncodeToString(h.Sum(nil)), nil
 }
