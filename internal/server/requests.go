@@ -99,11 +99,12 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 		if err != nil {
 			return request, err
 		}
+		frame := newRequestFrame(0, task.Revision, nil)
 		if input.Dispatch != nil {
 			if input.Dispatch.Message != input.Message {
 				return request, apiError(api.CodeInvalidRequest, "dispatch proposal message differs from its visible request")
 			}
-			if input.Dispatch.TaskID != normalized || input.CardRevision == 0 || input.CardRevision != task.Revision {
+			if !newRequestKernel(frame, nil).accepts(frame.bindEvent(input.Dispatch.TaskID == normalized, input.CardRevision)) {
 				return request, apiError(api.CodeRevisionConflict, "dispatch request must bind the inspected card version")
 			}
 			raw, err := json.Marshal(input.Dispatch)
@@ -115,10 +116,13 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 		if err != nil {
 			return request, err
 		}
-		if !claimedState(task.Entry.State) || !found || claim.Status != api.ClaimActive {
-			return request, apiError(api.CodeClaimRequired, "task has no holder to answer a request")
-		}
-		if claim.Generation != input.TargetGeneration || !p.server.now().Before(claim.ExpiresAt) {
+		facts := claimFacts{held: claimedState(task.Entry.State), active: found && claim.Status == api.ClaimActive, live: p.server.now().Before(claim.ExpiresAt), generation: claim.Generation}
+		frame = newRequestFrame(claim.Generation, task.Revision, nil)
+		create := frame.createEvent(facts, input.TargetGeneration, input.Dispatch != nil, input.CardRevision)
+		if !newRequestKernel(frame, nil).step(create) {
+			if !facts.held || !facts.active {
+				return request, apiError(api.CodeClaimRequired, "task has no holder to answer a request")
+			}
 			return request, apiError(api.CodeLeaseInvalid, "request target generation is not live")
 		}
 		if input.Dispatch != nil {
@@ -130,7 +134,9 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 				if old.Dispatch == nil || old.Dispatch.ID != input.Dispatch.ID {
 					continue
 				}
-				if old.FromClient != input.FromClient || old.TargetGeneration != input.TargetGeneration || old.CardRevision != input.CardRevision || old.AcceptWithin != input.AcceptWithin || !sameRequestedDispatch(old, input) {
+				same := old.FromClient == input.FromClient && old.AcceptWithin == input.AcceptWithin && sameRequestedDispatch(old, input)
+				oldFrame := newRequestFrame(claim.Generation, task.Revision, &old)
+				if !newRequestKernel(oldFrame, &old).accepts(oldFrame.recreateEvent(facts, input.TargetGeneration, same)) {
 					return request, apiError(api.CodeIdempotencyMismatch, "dispatch ID already identifies another immutable proposal")
 				}
 				return old, nil
@@ -174,29 +180,44 @@ func (p *project) answerRequest(key, id, requestID string, answer api.CollabAnsw
 		if err := json.Unmarshal(data, &request); err != nil {
 			return request, err
 		}
-		if request.TargetGeneration != claim.Generation || request.Status == api.RequestSuperseded {
-			return request, apiError(api.CodeLeaseInvalid, "request targets another generation")
-		}
-		if answer.ExpectedRevision != 0 && answer.ExpectedRevision != request.Revision {
-			return request, apiError(api.CodeRevisionConflict, "request revision changed")
-		}
-		if request.Dispatch != nil && request.Status == api.RequestOpen && answer.Status == api.RequestAccepted {
-			if !request.Dispatch.ConfirmBy.IsZero() && !p.server.now().Before(request.Dispatch.ConfirmBy) {
-				return request, apiError(api.CodeEvidenceIncomplete, "dispatch proposal acceptance window has elapsed")
+		// The first acceptance of an open proposal also needs its acceptance
+		// window and the card at the version it binds; the card is read only
+		// once the checks before it passed.
+		now := p.server.now()
+		leaseBad := request.TargetGeneration != claim.Generation || request.Status == api.RequestSuperseded
+		expectedBad := answer.ExpectedRevision != 0 && answer.ExpectedRevision != request.Revision
+		firstAcceptance := request.Dispatch != nil && request.Status == api.RequestOpen && answer.Status == api.RequestAccepted
+		window := request.Dispatch == nil || request.Dispatch.ConfirmBy.IsZero() || now.Before(request.Dispatch.ConfirmBy)
+		card := request.CardRevision
+		if firstAcceptance && !leaseBad && !expectedBad && window {
+			snapshot, err := tx.Snapshot(normalized)
+			if err != nil {
+				return request, err
 			}
+			card = snapshot.Revision
+		}
+		frame := newRequestFrame(claim.Generation, card, &request)
+		same, change := frame.answerEvents(answerFacts{answer: answer, request: request, window: window, claim: claim.Generation, cardRevision: card})
+		k := newRequestKernel(frame, &request)
+		switch {
+		case k.step(same):
+			return request, nil
+		case k.step(change):
+			request.Status, request.Note, request.UpdatedAt = answer.Status, answer.Note, now
+			request.Revision++
+			return request, nil
+		case leaseBad:
+			return request, apiError(api.CodeLeaseInvalid, "request targets another generation")
+		case expectedBad:
+			return request, apiError(api.CodeRevisionConflict, "request revision changed")
+		case firstAcceptance && !window:
+			return request, apiError(api.CodeEvidenceIncomplete, "dispatch proposal acceptance window has elapsed")
+		case firstAcceptance && card != request.CardRevision:
 			if _, err := tx.Expect(normalized, "", request.CardRevision); err != nil {
 				return request, err
 			}
 		}
-		if request.Status == answer.Status && request.Note == answer.Note {
-			return request, nil
-		}
-		if request.Status == api.RequestDone || request.Status == api.RequestRejected {
-			return request, apiError(api.CodeRevisionConflict, "a settled request cannot change its answer")
-		}
-		request.Status, request.Note, request.UpdatedAt = answer.Status, answer.Note, p.server.now()
-		request.Revision++
-		return request, nil
+		return request, apiError(api.CodeRevisionConflict, "a settled request cannot change its answer")
 	}, http.StatusOK)
 }
 
@@ -208,12 +229,14 @@ func (p *project) stageSupersedeRequests(tx *board.Transaction, task string, gen
 		return err
 	}
 	for _, request := range requests {
-		if request.TargetGeneration < generation && (request.Status == api.RequestOpen || request.Status == api.RequestAccepted) {
-			request.Status, request.UpdatedAt = api.RequestSuperseded, p.server.now()
-			request.Revision++
-			if err := stageJSON(tx, requestName(task, request.ID), request); err != nil {
-				return err
-			}
+		frame := newRequestFrame(generation, 0, &request)
+		if !newRequestKernel(frame, &request).step(frame.supersedeEvent()) {
+			continue
+		}
+		request.Status, request.UpdatedAt = api.RequestSuperseded, p.server.now()
+		request.Revision++
+		if err := stageJSON(tx, requestName(task, request.ID), request); err != nil {
+			return err
 		}
 	}
 	return nil

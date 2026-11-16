@@ -1,0 +1,285 @@
+package server_test
+
+import (
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/statemachine/serverrequest"
+)
+
+// preparedHolder is a claimed task whose execution is confirmed and whose task
+// branch is recorded: the state in which the holder prepares a dispatch.
+type preparedHolder struct {
+	*kernelFixture
+	card api.Task
+}
+
+func newPreparedHolder(t *testing.T, slug string) *preparedHolder {
+	t.Helper()
+	k := newKernelFixtureWith(t, slug, &api.StartInput{Session: "codex " + slug, Window: "tmux:$1:@1:%1"})
+	card, err := k.holder.Execution(t.Context(), "", k.task, api.ExecutionUpdate{Action: api.ExecutionConfirm}, k.proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := strings.Replace(card.Text, "- TASK_BRANCH:", "- TASK_BRANCH: "+slug+"-branch", 1)
+	card, err = k.holder.PutDocument(t.Context(), "task-branch", k.task, api.Document{Path: "spec.md", Text: text, ExpectedRevision: card.Revision}, &k.proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &preparedHolder{kernelFixture: k, card: card}
+}
+
+func (h *preparedHolder) input(id string) board.DispatchInput {
+	return board.DispatchInput{ID: id, TaskID: h.task, Kind: "sync", Message: "Synchronize the verified target commit", Base: strings.Repeat("a", 40)}
+}
+
+func (h *preparedHolder) propose(t *testing.T, key string, input board.DispatchInput, window time.Duration) api.CollabRequest {
+	t.Helper()
+	return h.create(t, key, api.NewCollabRequest{Kind: api.RequestSync, Message: input.Message, Dispatch: &input, CardRevision: h.card.Revision, TargetGeneration: h.grant.Claim.Generation, AcceptWithin: api.DurationOf(window)})
+}
+
+func (h *preparedHolder) prepare(key string, input board.DispatchInput) error {
+	_, err := h.holder.DispatchAction(h.f.t.Context(), key, h.task, "prepare", api.DispatchCommand{Input: &input, CardRevision: h.card.Revision}, h.proof)
+	return err
+}
+
+// The formal preparation of a dispatch refines the kernel: the holder prepares
+// exactly the proposed material for the card version the proposal binds, which
+// accepts the proposal and increases its revision, also when the proposal was
+// already accepted. Other material, an elapsed window, an ambiguous dispatch ID,
+// and a superseded proposal are refused and leave the proposal as it is.
+func TestDispatchPreparationRefinesTheKernel(t *testing.T) {
+	prepared := serverrequest.Prepare{Unique: true, Holder: true, Cgen: 1, Window: true, Card: 1, Material: true}
+
+	t.Run("material", func(t *testing.T) {
+		h := newPreparedHolder(t, "request-kernel-material")
+		gen, card := h.grant.Claim.Generation, h.card.Revision
+		input := h.input("kernel-sync")
+		proposal := h.propose(t, "proposal", input, 120*time.Second)
+		unstamped := input
+		input = *proposal.Dispatch
+		changed := input
+		changed.Message = "Different proposed work"
+		refused := prepared
+		refused.Material = false
+		h.probe.refines(proposal.ID, gen, card, refused, api.CodeIdempotencyMismatch, func() error { return h.prepare("changed-material", changed) })
+		h.probe.refines(proposal.ID, gen, card, prepared, "", func() error { return h.prepare("prepare", input) })
+		// After the preparation the card moved, so the same proposal can no longer
+		// be created: it does not bind the inspected card version.
+		current, err := h.holder.Show(t.Context(), h.task)
+		if err != nil {
+			t.Fatal(err)
+		}
+		stale := serverrequest.Bind{TaskOk: true, InRev: 2, Card: 1}
+		h.probe.refines(proposal.ID, gen, current.Revision, stale, api.CodeRevisionConflict, func() error {
+			_, err := h.sender.CreateRequest(t.Context(), "proposal-after", h.task, api.NewCollabRequest{Kind: api.RequestSync, Message: unstamped.Message, Dispatch: &unstamped, CardRevision: card, TargetGeneration: gen, AcceptWithin: api.DurationOf(120 * time.Second)})
+			return err
+		})
+	})
+
+	t.Run("accepted", func(t *testing.T) {
+		h := newPreparedHolder(t, "request-kernel-accepted")
+		gen, card := h.grant.Claim.Generation, h.card.Revision
+		input := h.input("kernel-accepted")
+		proposal := h.propose(t, "proposal", input, 120*time.Second)
+		input = *proposal.Dispatch
+		accept := serverrequest.Answer{Holder: true, Cgen: 1, Ans: serverrequest.StatusAccepted, Window: true, Card: 1}
+		h.probe.refines(proposal.ID, gen, card, accept, "", func() error {
+			_, err := h.answer("accept", proposal.ID, api.CollabAnswer{Status: api.RequestAccepted})
+			return err
+		})
+		h.probe.refines(proposal.ID, gen, card, prepared, "", func() error { return h.prepare("prepare", input) })
+		after, _ := h.probe.state(proposal.ID, gen, card, h.probe.revision(proposal.ID))
+		if after.Status != serverrequest.StatusAccepted || after.Rev != 3 {
+			t.Fatalf("a prepared accepted proposal: %+v", after)
+		}
+	})
+
+	t.Run("window", func(t *testing.T) {
+		h := newPreparedHolder(t, "request-kernel-window")
+		gen, card := h.grant.Claim.Generation, h.card.Revision
+		input := h.input("kernel-window")
+		proposal := h.propose(t, "proposal", input, 120*time.Second)
+		input = *proposal.Dispatch
+		h.f.clock.advance(61 * time.Second)
+		if _, err := h.holder.Renew(t.Context(), h.task, h.proof); err != nil {
+			t.Fatal(err)
+		}
+		h.f.clock.advance(60 * time.Second)
+		late := prepared
+		late.Window = false
+		h.probe.refines(proposal.ID, gen, card, late, api.CodeEvidenceIncomplete, func() error { return h.prepare("prepare", input) })
+		// The same window refuses the first acceptance of the proposal.
+		answer := serverrequest.Answer{Holder: true, Cgen: 1, Ans: serverrequest.StatusAccepted, Window: false, Card: 1}
+		h.probe.refines(proposal.ID, gen, card, answer, api.CodeEvidenceIncomplete, func() error {
+			_, err := h.answer("late", proposal.ID, api.CollabAnswer{Status: api.RequestAccepted})
+			return err
+		})
+	})
+
+	t.Run("ambiguous", func(t *testing.T) {
+		h := newPreparedHolder(t, "request-kernel-ambiguous")
+		gen, card := h.grant.Claim.Generation, h.card.Revision
+		input := h.input("kernel-ambiguous")
+		proposal := h.propose(t, "proposal", input, 120*time.Second)
+		input = *proposal.Dispatch
+		twin := proposal
+		twin.ID, twin.CreatedAt = "req-twin-proposal", proposal.CreatedAt.Add(time.Second)
+		if err := h.f.srv.SeedRequest(h.holder.ID(), twin); err != nil {
+			t.Fatal(err)
+		}
+		ambiguous := prepared
+		ambiguous.Unique = false
+		h.probe.refines(proposal.ID, gen, card, ambiguous, api.CodeEvidenceIncomplete, func() error { return h.prepare("prepare", input) })
+	})
+
+	t.Run("card", func(t *testing.T) {
+		h := newPreparedHolder(t, "request-kernel-card")
+		gen := h.grant.Claim.Generation
+		input := h.input("kernel-card")
+		proposal := h.propose(t, "proposal", input, 120*time.Second)
+		input = *proposal.Dispatch
+		// The card changes after the proposal bound its version.
+		moved, err := h.holder.PutDocument(t.Context(), "progress", h.task, api.Document{Path: "progress.md", Text: "later content", ExpectedRevision: h.card.Revision}, &h.proof)
+		if err != nil {
+			t.Fatal(err)
+		}
+		h.card = moved
+		h.probe.refines(proposal.ID, gen, moved.Revision, prepared, api.CodeRevisionConflict, func() error { return h.prepare("prepare", input) })
+		answer := serverrequest.Answer{Holder: true, Cgen: 1, Ans: serverrequest.StatusAccepted, Window: true, Card: 1}
+		h.probe.refines(proposal.ID, gen, moved.Revision, answer, api.CodeRevisionConflict, func() error {
+			_, err := h.answer("accept", proposal.ID, api.CollabAnswer{Status: api.RequestAccepted})
+			return err
+		})
+	})
+
+	t.Run("superseded", func(t *testing.T) {
+		h := newPreparedHolder(t, "request-kernel-superseded")
+		input := h.input("kernel-superseded")
+		proposal := h.propose(t, "proposal", input, 120*time.Second)
+		input = *proposal.Dispatch
+		h.f.clock.advance(91 * time.Second)
+		successor, err := h.sender.Takeover(t.Context(), "", h.task, api.ClaimRequest{ClientID: "host-b", ExecutionID: "successor", Owner: "codex", Decision: "test explicit handoff", ExpectedGeneration: h.grant.Claim.Generation})
+		if err != nil {
+			t.Fatal(err)
+		}
+		proof := client.Claim{Token: successor.Token, Generation: successor.Claim.Generation}
+		if _, err := h.sender.Execution(t.Context(), "", h.task, api.ExecutionUpdate{Action: api.ExecutionConfirm}, proof); err != nil {
+			t.Fatal(err)
+		}
+		current, err := h.sender.Show(t.Context(), h.task)
+		if err != nil {
+			t.Fatal(err)
+		}
+		h.probe.refines(proposal.ID, successor.Claim.Generation, current.Revision, prepared, api.CodeLeaseInvalid, func() error {
+			_, err := h.sender.DispatchAction(t.Context(), "prepare", h.task, "prepare", api.DispatchCommand{Input: &input, CardRevision: current.Revision}, proof)
+			return err
+		})
+	})
+}
+
+// Completing the dispatch of an accepted proposal refines the kernel: the move
+// into done settles the proposal of that dispatch for the claim's generation
+// and no other request; an exact replay of the completion settles a proposal an
+// earlier server left accepted.
+func TestCompletedDispatchSettlesItsProposalThroughTheKernel(t *testing.T) {
+	f := newFixture(t)
+	a, b := f.project("host-a"), f.project("host-b")
+	member, first := integrationTask(t, f, a, "host-a", "request-kernel-complete")
+	task := member.TaskID
+	proof := client.Claim{Token: first.Token, Generation: first.Claim.Generation}
+	integration := integrate(t, a, integrationInput(t, a, member, first.Claim.ExecutionID, "complete-integration"), "g1", proof)
+	current, err := a.Show(t.Context(), task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gen, card := first.Claim.Generation, current.Revision
+	input := wrapUpRound(t, a, member, integration, "kernel-wrap-up")
+	proposal, err := b.CreateRequest(t.Context(), "wrap-up", task, api.NewCollabRequest{Kind: api.RequestSync, Message: input.Message, Dispatch: &input, CardRevision: card, TargetGeneration: gen})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bystander, err := b.CreateRequest(t.Context(), "bystander", task, api.NewCollabRequest{Kind: api.RequestFix, Message: "unrelated", TargetGeneration: gen})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Another proposal of the same generation is accepted too: only the one of the
+	// completed dispatch may settle.
+	twin := board.DispatchInput{ID: "kernel-other-proposal", TaskID: task, Kind: "sync", Message: "Another proposed round", Base: strings.Repeat("a", 40)}
+	other, err := b.CreateRequest(t.Context(), "other-proposal", task, api.NewCollabRequest{Kind: api.RequestSync, Message: twin.Message, Dispatch: &twin, CardRevision: card, TargetGeneration: gen})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.AnswerRequest(t.Context(), "accept-other", task, other.ID, api.CollabAnswer{Status: api.RequestAccepted}, proof); err != nil {
+		t.Fatal(err)
+	}
+	probe := requestProbe{t: t, f: f, p: a, task: task}
+	probe.refines(proposal.ID, gen, card, serverrequest.Prepare{Unique: true, Holder: true, Cgen: 1, Window: true, Card: 1, Material: true}, "", func() error {
+		prepared, err := a.DispatchAction(t.Context(), "prepare", task, "prepare", api.DispatchCommand{Input: &input, CardRevision: card}, proof)
+		if err != nil {
+			return err
+		}
+		_, err = a.Move(t.Context(), "accept", task, api.Move{State: "working", Authorization: prepared.Authorization}, &proof)
+		return err
+	})
+	round, err := a.Dispatch(t.Context(), task, input.ID)
+	if err != nil || round.State != board.DispatchAccepted {
+		t.Fatalf("accepted round: %+v %v", round, err)
+	}
+	complete := func(key string) error {
+		_, err := a.Move(t.Context(), key, task, api.Move{State: "done", Result: "completed", Authorization: round.Authorization, DeliveryCommit: member.DeliveryCommit}, &proof)
+		return err
+	}
+	settle := serverrequest.Complete{Completed: true, Found: true, Match: true, Cgen: 1}
+	elsewhere := settle
+	elsewhere.Match = false
+	// The move settles the proposal of the dispatch; the other requests stay.
+	type kept struct {
+		id     string
+		rev    uint64
+		state  serverrequest.State
+		params serverrequest.Params
+	}
+	var others []kept
+	for _, id := range []string{bystander.ID, other.ID} {
+		rev := probe.revision(id)
+		state, params := probe.state(id, gen, card, rev)
+		others = append(others, kept{id, rev, state, params})
+	}
+	probe.refines(proposal.ID, gen, card, settle, "", func() error { return complete("complete") })
+	for _, o := range others {
+		after, _ := probe.state(o.id, gen, card, o.rev)
+		if _, ok := serverrequest.Step(o.state, elsewhere, o.params); ok || after != o.state {
+			t.Fatalf("the completion changed request %s: %+v -> %+v", o.id, o.state, after)
+		}
+	}
+	if others[1].state.Status != serverrequest.StatusAccepted {
+		t.Fatalf("the other proposal is not accepted: %+v", others[1].state)
+	}
+	// An exact replay of the completion settles a proposal an earlier server left
+	// accepted, and leaves a settled one as it is.
+	requests, err := a.Requests(t.Context(), task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var settled api.CollabRequest
+	for _, r := range requests {
+		if r.ID == proposal.ID {
+			settled = r
+		}
+	}
+	if settled.Status != api.RequestDone {
+		t.Fatalf("completion left the proposal %+v", settled)
+	}
+	left := settled
+	left.Status, left.Revision = api.RequestAccepted, settled.Revision+1
+	if err := f.srv.SeedRequest(a.ID(), left); err != nil {
+		t.Fatal(err)
+	}
+	probe.refines(proposal.ID, gen, card, settle, "", func() error { return complete("replay") })
+	probe.unchanged(proposal.ID, gen, card, settle, func() error { return complete("replay-again") })
+}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/statemachine/serverdelivery"
 )
 
 func deliveryPath(task, commit string) string {
@@ -40,22 +41,43 @@ func (p *project) publishDelivery(key, task string, input api.DeliveryEvidence, 
 			if err != nil {
 				return err
 			}
-			if claim.ExecutionID != input.ExecutionID || claim.Generation != input.Generation {
-				return apiError(api.CodeLeaseInvalid, "delivery producer is not the current execution")
-			}
-			if _, err := tx.Expect(task, "", input.CardRevision); err != nil {
-				return err
-			}
 			// A later generation or content revision may attest the same SHA;
-			// the previous immutable version remains available in history.
+			// the previous immutable version remains available in history. A
+			// previous record that cannot be read is an error only once the
+			// publication itself is allowed.
 			name := deliveryPath(task, input.Commit)
-			if previous, found, err := tx.ReadGroup(serviceGroup, filepath.ToSlash(name)); err != nil {
-				return err
-			} else if found {
-				var old api.DeliveryEvidence
-				if err := json.Unmarshal(previous, &old); err != nil {
+			previous, found, readErr := tx.ReadGroup(serviceGroup, filepath.ToSlash(name))
+			var old *api.DeliveryEvidence
+			if readErr == nil && found {
+				var value api.DeliveryEvidence
+				if readErr = json.Unmarshal(previous, &value); readErr == nil {
+					old = &value
+				}
+			}
+			exec := claim.ExecutionID == input.ExecutionID
+			card := input.CardRevision
+			if exec && claim.Generation == input.Generation {
+				snapshot, err := tx.Snapshot(task)
+				if err != nil {
 					return err
 				}
+				card = snapshot.Revision
+			}
+			frame := deliveryFrame{gen: claim.Generation, card: card}
+			kernel := frame.project(old)
+			if !kernelAccepts(kernel, frame.publishEvent(input, claim, exec, card)) {
+				if !exec || claim.Generation != input.Generation {
+					return apiError(api.CodeLeaseInvalid, "delivery producer is not the current execution")
+				}
+				if _, err := tx.Expect(task, "", input.CardRevision); err != nil {
+					return err
+				}
+				return apiError(api.CodeEvidenceIncomplete, "delivery was refused by its kernel")
+			}
+			if readErr != nil {
+				return readErr
+			}
+			if serverdelivery.Keeps(kernel, deliveryParams) {
 				if err := tx.PutGroup(serviceGroup, filepath.ToSlash(filepath.Join("delivery-history", task, digest(string(previous))+".json")), string(previous)); err != nil {
 					return err
 				}
@@ -100,7 +122,8 @@ func (p *project) deliveryGuard(task, commit string, h holder) func(*board.Trans
 		if err != nil {
 			return err
 		}
-		if value.Purpose == "baseline" || value.Generation != claim.Generation || value.ExecutionID != claim.ExecutionID || value.CardRevision != snapshot.Revision {
+		frame := deliveryFrame{gen: claim.Generation, card: snapshot.Revision}
+		if !kernelAccepts(frame.project(&value), frame.guardEvent(value, claim, snapshot.Revision)) {
 			return apiError(api.CodeEvidenceIncomplete, "delivery belongs to another content version or execution")
 		}
 		return nil

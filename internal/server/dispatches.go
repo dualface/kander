@@ -27,7 +27,7 @@ func (p *project) dispatchWrite(key, action, task string, input api.DispatchComm
 				return outcome{err: err}
 			}
 		}
-		var proposal *api.CollabRequest
+		var proposal *dispatchProposal
 		guard := board.TransactionExtension{Groups: []string{serviceGroup}, Before: func(tx *board.Transaction) error {
 			if _, err := p.requireHolder(task, h); err != nil {
 				return err
