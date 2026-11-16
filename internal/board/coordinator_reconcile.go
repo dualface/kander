@@ -75,7 +75,7 @@ func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, pass *coor
 				return m, e
 			}
 			for _, run := range runs {
-				if run.Phase != "finalized" || !allPublished(run) {
+				if !reviewRunComplete(run) {
 					continue
 				}
 				if e = verifyPublishedReview(tx, run); e != nil {

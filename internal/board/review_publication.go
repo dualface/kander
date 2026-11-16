@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"reflect"
 	"slices"
+
+	"github.com/dualface/kander/internal/statemachine/reviewrun"
 )
 
 // PublishReviewRun preserves the standalone board's per-card recovery contract.
@@ -15,7 +17,7 @@ func publishReviewRun(root string, runID string, published func(string)) (Review
 	if err != nil {
 		return run, nil, err
 	}
-	if run.Phase != "finalized" {
+	if !reviewRunFinal(run, true) {
 		return run, nil, reviewError("run not finalized")
 	}
 	failures := map[string]error{}
@@ -62,7 +64,7 @@ func PublishReviewRunAtomic(root, runID string, extensions ...TransactionExtensi
 		if err != nil {
 			return err
 		}
-		if !ok || current.Phase != "finalized" || !reflect.DeepEqual(current.ReviewInput, run.ReviewInput) {
+		if !ok || !reviewRunFinal(current, true) || !reflect.DeepEqual(current.ReviewInput, run.ReviewInput) {
 			return reviewError("intent conflict")
 		}
 		for _, id := range run.TaskIDs {
@@ -77,6 +79,13 @@ func PublishReviewRunAtomic(root, runID string, extensions ...TransactionExtensi
 	return run, err
 }
 
+// stageReviewRunCard publishes run to member id inside tx and records it in
+// current. The caller has checked that the run is finalized with the frozen
+// input. The kernel decides what the member's state allows: a skipped member
+// passes, a member that left the batch is skipped, a published member is
+// verified, and any other member takes a copy once its checks pass. The checks of
+// the card, the batch, and the originals stay hand-written and run in the order
+// they always have.
 func stageReviewRunCard(tx *Transaction, current *ReviewRun, run ReviewRun, id string) error {
 	runID := run.RunID
 
@@ -87,10 +96,14 @@ func stageReviewRunCard(tx *Transaction, current *ReviewRun, run ReviewRun, id s
 	if TaskGroupFrom(s.Text) != run.TaskGroup {
 		return reviewError("card group binding")
 	}
-	if slices.Contains(current.SkippedMembers, id) {
+	state := projectReviewRun(*current, true, id)
+	if state.Skipped {
+		if _, ok := stepReviewRun(state, reviewrun.PassSkipped{SameInput: true, GroupOk: true}); !ok {
+			return reviewError("intent conflict")
+		}
 		return nil
 	}
-	if !current.Published[id] {
+	if !state.Published {
 		excluded, e := memberExcluded(tx, id)
 		if e != nil {
 			return e
@@ -98,7 +111,11 @@ func stageReviewRunCard(tx *Transaction, current *ReviewRun, run ReviewRun, id s
 		if excluded {
 			// The member left during the run: it takes no copy, and the
 			// run still settles for the members that remain.
-			current.Published[id] = true
+			next, ok := stepReviewRun(state, reviewrun.Skip{SameInput: true, GroupOk: true, Excluded: true})
+			if !ok {
+				return reviewError("intent conflict")
+			}
+			current.Published[id] = next.Published
 			current.SkippedMembers = append(current.SkippedMembers, id)
 			return nil
 		}
@@ -140,8 +157,16 @@ func stageReviewRunCard(tx *Transaction, current *ReviewRun, run ReviewRun, id s
 	}
 	manifest := ReviewManifest{Schema: 1, Input: run.ReviewInput, SidecarHash: ReviewDigest(sidecar), Hashes: run.Hashes}
 	prefix := "reviews/" + runID + "/"
-	if current.Published[id] {
-		return verifyCardReview(tx, id, manifest, sidecar)
+	if state.Published {
+		verified := verifyCardReview(tx, id, manifest, sidecar)
+		if _, ok := stepReviewRun(state, reviewrun.Verify{SameInput: true, GroupOk: true, Integrity: true, Verified: verified == nil}); !ok {
+			return firstError(verified, reviewError("intent conflict"))
+		}
+		return nil
+	}
+	next, ok := stepReviewRun(state, reviewrun.Stage{SameInput: true, GroupOk: true, MemberOk: true, Integrity: true})
+	if !ok {
+		return reviewError("intent conflict")
 	}
 	for name, data := range originals {
 		if e = putImmutableReview(tx, id, prefix+name, data); e != nil {
@@ -181,6 +206,6 @@ func stageReviewRunCard(tx *Transaction, current *ReviewRun, run ReviewRun, id s
 	if e = tx.Put(id, "spec.md", text); e != nil {
 		return e
 	}
-	current.Published[id] = true
+	current.Published[id] = next.Published
 	return nil
 }

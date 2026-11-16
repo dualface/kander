@@ -293,21 +293,7 @@ func PrepareReviewRunWithTransaction(root string, input ReviewInput, requirement
 		}
 		input.TaskGroup = TaskGroupFrom(first.Text)
 		if exists {
-			if run.Schema != 1 || !reflect.DeepEqual(input, run.ReviewInput) {
-				return reviewError(input.RunID + ": input conflict: " + t("board.review_run_input_conflict"))
-			}
-			var batch ReviewBatch
-			ok, e := readReviewJSON(tx, reviewBatchName(input.BatchID), &batch)
-			if e != nil {
-				return e
-			}
-			if !ok {
-				return reviewError("missing batch")
-			}
-			if len(requirements) > 0 && !reflect.DeepEqual(requirements, batch.Requirements) {
-				return reviewError("requirements conflict")
-			}
-			return nil
+			return retryReviewRun(tx, run, input, requirements)
 		}
 		var batch ReviewBatch
 		exists, e = readReviewJSON(tx, reviewBatchName(input.BatchID), &batch)
@@ -403,7 +389,7 @@ func PrepareReviewRunWithTransaction(root string, input ReviewInput, requirement
 			if e != nil {
 				return e
 			}
-			if !ok || previous.Phase != "finalized" || previous.BatchID != input.BatchID || previous.Role != input.Role || previous.Reviewer != input.Reviewer || previous.Base != input.Base || previous.Commit != input.ReviewedCommit || !allPublished(previous) {
+			if !ok || previous.BatchID != input.BatchID || previous.Role != input.Role || previous.Reviewer != input.Reviewer || previous.Base != input.Base || previous.Commit != input.ReviewedCommit || !reviewRunComplete(previous) {
 				return reviewError("previous run mismatch or incomplete publication")
 			}
 			if e = verifyPublishedReview(tx, previous); e != nil {
@@ -427,7 +413,9 @@ func PrepareReviewRunWithTransaction(root string, input ReviewInput, requirement
 		if e != nil {
 			return e
 		}
-		run = ReviewRun{Schema: 1, ReviewInput: input, KanderVersion: version, Phase: "prepared", LaunchStatus: "not_started", ExecutionStatus: "incomplete", SemanticStatus: "unassessed", CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), Hashes: map[string]string{}, Published: map[string]bool{}, MemberCycles: cycles}
+		if run, e = createReviewRun(input, version, time.Now().UTC().Format(time.RFC3339Nano), cycles); e != nil {
+			return e
+		}
 		if e = tx.PutGroup(reviewControlGroup, reviewBatchName(input.BatchID), reviewJSON(batch)); e != nil {
 			return e
 		}
@@ -449,6 +437,7 @@ func PrepareReviewRunWithTransaction(root string, input ReviewInput, requirement
 func reviewRole(role string) bool {
 	return role == "PM" || role == "QA" || role == "CSA" || role == "Hacker" || role == "PMQA" || role == "Security"
 }
+
 func allPublished(run ReviewRun) bool {
 	for _, id := range run.TaskIDs {
 		if !run.Published[id] {
@@ -478,7 +467,7 @@ func UpdateReviewRunWithTransaction(root string, run ReviewRun, extensions ...Tr
 		if err != nil {
 			return err
 		}
-		if !ok || old.Phase == "finalized" || !reflect.DeepEqual(old.ReviewInput, run.ReviewInput) {
+		if !updateReviewRunAllowed(old, ok, run) {
 			return reviewError("run update conflict")
 		}
 		return tx.PutGroup(reviewControlGroup, reviewRunName(run.RunID), reviewJSON(run))
@@ -498,7 +487,10 @@ func StoreReviewArtifactWithTransaction(root, runID, name string, data []byte, e
 		if err != nil {
 			return err
 		}
-		if !ok || run.Phase != "prepared" {
+		st := projectReviewRun(run, ok, "")
+		// A run takes an artifact only while it is prepared; the probe holds no
+		// artifact, so only the phase can refuse it.
+		if _, accepted := stepReviewRun(st, storeReviewArtifactEvent(name, true)); !accepted {
 			return reviewError("artifact phase")
 		}
 		path := "runs/" + runID + "/inputs/" + name
@@ -506,11 +498,14 @@ func StoreReviewArtifactWithTransaction(root, runID, name string, data []byte, e
 		if err != nil {
 			return err
 		}
-		if exists {
-			if string(old) == string(data) {
-				return nil
-			}
+		if st, err = projectReviewArtifacts(tx, runID, st); err != nil {
+			return err
+		}
+		if _, accepted := stepReviewRun(st, storeReviewArtifactEvent(name, exists && string(old) == string(data))); !accepted {
 			return reviewError("artifact conflict")
+		}
+		if exists {
+			return nil
 		}
 		return tx.putGroupBytes(reviewControlGroup, path, data)
 	}, extensions...)
@@ -526,13 +521,11 @@ func FinalizeReviewRunWithTransaction(root string, run ReviewRun, report []byte,
 		if err != nil {
 			return err
 		}
-		if !ok || old.Phase == "finalized" || !reflect.DeepEqual(old.ReviewInput, run.ReviewInput) {
-			return reviewError("finalize conflict")
-		}
-		if run.ExecutionStatus == "ok" && (run.ExitCode != 0 || run.LaunchStatus != "started" || len(report) == 0 || run.FindingsSchema == FindingsSchemaReceiver && strings.TrimSpace(string(report)) == "") {
-			return reviewError("invalid ok finalization")
-		}
-		if run.ExecutionStatus == "ok" && run.FindingsSchema > 0 {
+		var files map[string][]byte
+		next, err := finalizeReviewRun(old, ok, &run, report, func() bool {
+			if run.ExecutionStatus != "ok" || run.FindingsSchema <= 0 {
+				return false
+			}
 			findings, e := ParseReviewFindings(report)
 			if e != nil && run.FindingsSchema == FindingsSchemaReceiver {
 				// Formatting is interpreted separately; execution facts stay successful.
@@ -540,26 +533,29 @@ func FinalizeReviewRunWithTransaction(root string, run ReviewRun, report []byte,
 			} else if e == nil {
 				e = validateFindingLineage(tx, run, findings)
 			}
-			if e != nil {
-				run.ExecutionStatus = "failed"
-				run.ExitCode = 1
-				run.FailureReason = "invalid structured review report: " + e.Error()
+			if e == nil {
+				return false
 			}
-		}
-		if run.ExecutionStatus != "ok" && (run.ExitCode == 0 || run.FailureReason == "") {
-			return reviewError("missing failure facts")
-		}
-		files, err := reviewOriginals(tx, run.RunID, false)
+			run.ExecutionStatus = "failed"
+			run.ExitCode = 1
+			run.FailureReason = "invalid structured review report: " + e.Error()
+			return true
+		}, func() (missing, err error) {
+			if files, err = reviewOriginals(tx, run.RunID, false); err != nil {
+				return nil, err
+			}
+			if report != nil {
+				files["report.md"] = report
+			}
+			for _, name := range []string{"task-context.md", "review-context.md", "output.raw", "stdout.log", "error.log"} {
+				if _, ok := files[name]; !ok {
+					return reviewError("missing original: " + name), nil
+				}
+			}
+			return nil, nil
+		})
 		if err != nil {
 			return err
-		}
-		if report != nil {
-			files["report.md"] = report
-		}
-		for _, name := range []string{"task-context.md", "review-context.md", "output.raw", "stdout.log", "error.log"} {
-			if _, ok := files[name]; !ok {
-				return reviewError("missing original: " + name)
-			}
 		}
 		run.Hashes = map[string]string{}
 		for name, data := range files {
@@ -568,7 +564,7 @@ func FinalizeReviewRunWithTransaction(root string, run ReviewRun, report []byte,
 				return err
 			}
 		}
-		run.Phase = "finalized"
+		run.Phase = reviewRunPhaseName(next.Phase)
 		run.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		start, err := time.Parse(time.RFC3339Nano, run.CreatedAt)
 		if err != nil {
@@ -789,7 +785,7 @@ func ReviewPublicationComplete(root, id string) error {
 	if err != nil {
 		return err
 	}
-	if run.Phase != "finalized" || !allPublished(run) {
+	if !reviewRunComplete(run) {
 		return reviewError(id + ": incomplete publication")
 	}
 	return WithTransaction(root, reviewScope(run.TaskIDs, true), func(tx *Transaction) error {
@@ -821,7 +817,7 @@ func ReadReviewOriginal(root, id, name string) (data []byte, err error) {
 		if e != nil {
 			return e
 		}
-		if !ok || run.Phase != "finalized" {
+		if !reviewRunFinal(run, ok) {
 			return reviewError("run not finalized")
 		}
 		hash, ok := run.Hashes[name]
