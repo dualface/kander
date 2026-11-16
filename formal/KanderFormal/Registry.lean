@@ -18,6 +18,9 @@ import KanderFormal.Proofs.ReviewDisposition
 import KanderFormal.Proofs.Coordinator
 import KanderFormal.Proofs.CoordinatorMember
 import KanderFormal.Proofs.WrapUpWitness
+import KanderFormal.Proofs.IssueResult
+import KanderFormal.Proofs.IssueResultDecision
+import KanderFormal.Proofs.IssueResultSave
 
 /-
 The registry of machines: what the generator emits, the bounds of the
@@ -422,6 +425,61 @@ def memberEvents : List Event :=
     rst 1 2 2 1 true, rst 2 3 2 1 true, rst 3 2 2 1 true, rst 0 2 2 1 true, rst 1 2 2 1 false,
     rcf 3 2 true 2 true 1, rcf 4 3 false 0 false 0, rcf 5 3 true 2 false 1, rcf 1 2 true 2 true 1,
     rcf 0 2 true 2 true 1 ]
+
+/-- The issue result vector alphabet. Each event is tried with every fact holding and with one fact failing; the
+statuses are `none` 0, `uncertain` 1, `published` 2, `equivalent` 3, `rejected` 4, and `other` 5; the scan classes are
+`open` 0 and `returned` 4 (an event that needs the scan blocked is tried with `refusal` 2). The update and work
+checks try the new status, the failures, and the decisions of the first counts. -/
+def issueResultEvents : List Event :=
+  let t := boolV true
+  let x := boolV false
+  let n := natV
+  [ ⟨"read", [t, t]⟩, ⟨"read", [t, x]⟩, ⟨"read", [x, t]⟩,
+    ⟨"reconcile", [t]⟩, ⟨"reconcile", [x]⟩, ⟨"reassess", []⟩,
+    ⟨"intent", [x, x, x, t]⟩, ⟨"intent", [t, t, x, t]⟩, ⟨"intent", [t, x, x, t]⟩, ⟨"intent", [x, x, t, t]⟩,
+    ⟨"intent", [x, x, x, x]⟩,
+    ⟨"equivalent", [x, x, t]⟩, ⟨"equivalent", [t, t, t]⟩, ⟨"equivalent", [x, x, x]⟩,
+    ⟨"publish", [t]⟩, ⟨"publish", [x]⟩, ⟨"reject", []⟩,
+    ⟨"decide", [t, x, enumV 0, t]⟩, ⟨"decide", [x, x, enumV 0, t]⟩, ⟨"decide", [t, t, enumV 0, t]⟩,
+    ⟨"decide", [t, x, enumV 1, t]⟩, ⟨"decide", [t, x, enumV 0, x]⟩,
+    ⟨"keep", [t, t, enumV 0]⟩, ⟨"keep", [t, x, enumV 4]⟩, ⟨"keep", [t, x, enumV 0]⟩, ⟨"keep", [x, t, enumV 0]⟩,
+    ⟨"failClose", []⟩, ⟨"otherIntent", []⟩, ⟨"otherSettle", []⟩,
+    ⟨"update", [t, enumV 2, t, n 0, t, n 0]⟩, ⟨"update", [t, enumV 1, t, n 1, t, n 1]⟩,
+    ⟨"update", [x, enumV 2, t, n 0, t, n 0]⟩, ⟨"update", [t, enumV 2, x, n 0, t, n 0]⟩,
+    ⟨"update", [t, enumV 4, t, n 0, t, n 0]⟩, ⟨"update", [t, enumV 2, t, n 0, x, n 0]⟩,
+    ⟨"work", [enumV 1, x, t, t, t]⟩, ⟨"work", [enumV 3, x, t, t, t]⟩, ⟨"work", [enumV 2, x, t, t, t]⟩,
+    ⟨"work", [enumV 1, x, t, x, t]⟩, ⟨"work", [enumV 4, t, t, t, t]⟩, ⟨"work", [enumV 1, x, x, t, t]⟩,
+    ⟨"idKeep", [t]⟩, ⟨"idKeep", [x]⟩,
+    ⟨"valid", [enumV 1, t, x, t, x, x]⟩, ⟨"valid", [enumV 2, t, t, t, t, t]⟩, ⟨"valid", [enumV 2, t, x, t, x, x]⟩,
+    ⟨"valid", [enumV 0, t, x, t, x, x]⟩, ⟨"valid", [enumV 1, t, x, t, t, x]⟩,
+    ⟨"issueNeeded", [t, t]⟩, ⟨"issueNeeded", [t, x]⟩ ]
+
+/-- The issue close decision vector alphabet. Statuses are `none` 0, `declined` 1, `uncertain` 2, `closed` 3,
+`observed` 4, `superseded` 5, `rejected` 6, and `other` 7. Scan visits are `(decision, reconsider, newNo)`. -/
+def decisionEvents : List Event :=
+  let t := boolV true
+  let x := boolV false
+  [ ⟨"appendNo", []⟩, ⟨"appendYes", []⟩, ⟨"closeDone", []⟩, ⟨"closeRejected", []⟩,
+    ⟨"reconcile", [t, t]⟩, ⟨"reconcile", [t, x]⟩, ⟨"reconcile", [x, x]⟩, ⟨"reconcile", [x, t]⟩,
+    ⟨"visit", [enumV 1, x, x]⟩, ⟨"visit", [enumV 1, x, t]⟩, ⟨"visit", [enumV 1, t, x]⟩,
+    ⟨"visit", [enumV 2, x, x]⟩, ⟨"visit", [enumV 2, t, x]⟩, ⟨"visit", [enumV 3, x, x]⟩, ⟨"visit", [enumV 3, t, x]⟩,
+    ⟨"visit", [enumV 4, x, x]⟩, ⟨"visit", [enumV 5, x, x]⟩, ⟨"visit", [enumV 6, x, x]⟩, ⟨"visit", [enumV 6, t, x]⟩,
+    ⟨"visit", [enumV 0, x, x]⟩, ⟨"visit", [enumV 7, x, x]⟩,
+    ⟨"settle", [enumV 2, t]⟩, ⟨"settle", [enumV 3, t]⟩, ⟨"settle", [enumV 1, t]⟩, ⟨"settle", [enumV 2, x]⟩,
+    ⟨"settle", [enumV 6, t]⟩, ⟨"settle", [enumV 0, t]⟩,
+    ⟨"valid", [t, enumV 2]⟩, ⟨"valid", [t, enumV 3]⟩, ⟨"valid", [t, enumV 6]⟩, ⟨"valid", [t, enumV 1]⟩,
+    ⟨"valid", [x, enumV 1]⟩, ⟨"valid", [x, enumV 2]⟩, ⟨"valid", [t, enumV 0]⟩, ⟨"valid", [x, enumV 7]⟩ ]
+
+/-- The issue result resource vector alphabet: reads, saves with every fact failing in turn, and the replay. -/
+def issueSaveEvents : List Event :=
+  let t := boolV true
+  let x := boolV false
+  let n := natV
+  [ ⟨"read", [t]⟩, ⟨"read", [x]⟩,
+    ⟨"save", [t, n 0, t, t, t]⟩, ⟨"save", [t, n 1, t, t, t]⟩, ⟨"save", [t, n 2, t, t, t]⟩, ⟨"save", [t, n 3, t, t, t]⟩,
+    ⟨"save", [x, n 0, t, t, t]⟩, ⟨"save", [x, n 1, t, t, t]⟩, ⟨"save", [t, n 0, x, t, t]⟩, ⟨"save", [t, n 1, x, t, t]⟩,
+    ⟨"save", [t, n 0, t, x, t]⟩, ⟨"save", [t, n 1, t, x, t]⟩, ⟨"save", [t, n 0, t, t, x]⟩, ⟨"save", [t, n 1, t, t, x]⟩,
+    ⟨"replay", []⟩ ]
 
 def entries : List Entry := [
   { machine := Machines.exampleMachine
@@ -859,6 +917,128 @@ def entries : List Entry := [
       ``KanderFormal.Proofs.WrapUpWitness.reconcile_needs_git,
       ``KanderFormal.Proofs.WrapUpWitness.reconcile_invalid_refused,
       ``KanderFormal.Proofs.WrapUpWitness.reconcile_writes
+    ] },
+  { machine := Machines.IssueResult.issueResultMachine
+    source := "KanderFormal/Machines/IssueResult.lean"
+    vectors := { depth := 4, paramSets := [[("maxN", 2)]], natDomain := [], events := issueResultEvents }
+    theorems := [
+      ``KanderFormal.Proofs.IssueResult.wellTyped,
+      ``KanderFormal.Proofs.IssueResult.update_spec,
+      ``KanderFormal.Proofs.IssueResult.update_append_only,
+      ``KanderFormal.Proofs.IssueResult.update_published_frozen,
+      ``KanderFormal.Proofs.IssueResult.update_uncertain_any,
+      ``KanderFormal.Proofs.IssueResult.update_rejected_spec,
+      ``KanderFormal.Proofs.IssueResult.update_refused_removed,
+      ``KanderFormal.Proofs.IssueResult.update_refused_failures,
+      ``KanderFormal.Proofs.IssueResult.update_refused_prefix,
+      ``KanderFormal.Proofs.IssueResult.update_refused_decisions,
+      ``KanderFormal.Proofs.IssueResult.update_refused_regress,
+      ``KanderFormal.Proofs.IssueResult.update_refused_identity,
+      ``KanderFormal.Proofs.IssueResult.work_spec,
+      ``KanderFormal.Proofs.IssueResult.work_new_record,
+      ``KanderFormal.Proofs.IssueResult.work_rejected_only,
+      ``KanderFormal.Proofs.IssueResult.work_kept,
+      ``KanderFormal.Proofs.IssueResult.work_refused_other_uncertain,
+      ``KanderFormal.Proofs.IssueResult.work_refused_status,
+      ``KanderFormal.Proofs.IssueResult.work_refused_work,
+      ``KanderFormal.Proofs.IssueResult.idKeep_spec,
+      ``KanderFormal.Proofs.IssueResult.idKeep_refused,
+      ``KanderFormal.Proofs.IssueResult.valid_spec,
+      ``KanderFormal.Proofs.IssueResult.valid_refused,
+      ``KanderFormal.Proofs.IssueResult.issueNeeded_spec,
+      ``KanderFormal.Proofs.IssueResult.apply_refused_uncertain,
+      ``KanderFormal.Proofs.IssueResult.apply_refused_uncertain_record,
+      ``KanderFormal.Proofs.IssueResult.reassess_spec,
+      ``KanderFormal.Proofs.IssueResult.intent_spec,
+      ``KanderFormal.Proofs.IssueResult.intent_result,
+      ``KanderFormal.Proofs.IssueResult.intent_refused,
+      ``KanderFormal.Proofs.IssueResult.equivalent_spec,
+      ``KanderFormal.Proofs.IssueResult.equivalent_result,
+      ``KanderFormal.Proofs.IssueResult.publish_spec,
+      ``KanderFormal.Proofs.IssueResult.publish_result,
+      ``KanderFormal.Proofs.IssueResult.reject_spec,
+      ``KanderFormal.Proofs.IssueResult.reject_result,
+      ``KanderFormal.Proofs.IssueResult.decide_spec,
+      ``KanderFormal.Proofs.IssueResult.decide_result,
+      ``KanderFormal.Proofs.IssueResult.decide_refused,
+      ``KanderFormal.Proofs.IssueResult.keep_spec,
+      ``KanderFormal.Proofs.IssueResult.keep_keeps,
+      ``KanderFormal.Proofs.IssueResult.keep_decide_exclusive,
+      ``KanderFormal.Proofs.IssueResult.failClose_spec,
+      ``KanderFormal.Proofs.IssueResult.failClose_result,
+      ``KanderFormal.Proofs.IssueResult.reconcile_spec,
+      ``KanderFormal.Proofs.IssueResult.reconcile_result,
+      ``KanderFormal.Proofs.IssueResult.reconcile_refused,
+      ``KanderFormal.Proofs.IssueResult.read_spec,
+      ``KanderFormal.Proofs.IssueResult.read_result,
+      ``KanderFormal.Proofs.IssueResult.read_refused,
+      ``KanderFormal.Proofs.IssueResult.status_flow,
+      ``KanderFormal.Proofs.IssueResult.published_frozen,
+      ``KanderFormal.Proofs.IssueResult.rejected_only_replaced,
+      ``KanderFormal.Proofs.IssueResult.client_update_ok,
+      ``KanderFormal.Proofs.IssueResult.client_work_ok,
+      ``KanderFormal.Proofs.IssueResult.idKeep_same_accepted,
+      ``KanderFormal.Proofs.IssueResult.props_valid,
+      ``KanderFormal.Proofs.IssueResult.props_issueNeeded,
+      ``KanderFormal.Proofs.IssueResult.reachable_client_save,
+      ``KanderFormal.Proofs.IssueResult.init,
+      ``KanderFormal.Proofs.IssueResult.step_inv,
+      ``KanderFormal.Proofs.IssueResult.reachable_inv,
+      ``KanderFormal.Proofs.IssueResult.reachable_one_uncertain,
+      ``KanderFormal.Proofs.IssueResult.reachable_uncertain_counted,
+      ``KanderFormal.Proofs.IssueResult.reachable_issue_identity,
+      ``KanderFormal.Proofs.IssueResult.reachable_comment,
+      ``KanderFormal.Proofs.IssueResult.reachable_resolved_met,
+      ``KanderFormal.Proofs.IssueResult.reachable_no_decision
+    ] },
+  { machine := Machines.IssueResultDecision.issueResultDecisionMachine
+    source := "KanderFormal/Machines/IssueResultDecision.lean"
+    vectors := { depth := 4, paramSets := [[]], natDomain := [], events := decisionEvents }
+    theorems := [
+      ``KanderFormal.Proofs.IssueResultDecision.wellTyped,
+      ``KanderFormal.Proofs.IssueResultDecision.flow,
+      ``KanderFormal.Proofs.IssueResultDecision.settled_frozen,
+      ``KanderFormal.Proofs.IssueResultDecision.declined_only_new,
+      ``KanderFormal.Proofs.IssueResultDecision.append_spec,
+      ``KanderFormal.Proofs.IssueResultDecision.close_spec,
+      ``KanderFormal.Proofs.IssueResultDecision.reconcile_spec,
+      ``KanderFormal.Proofs.IssueResultDecision.reconcile_result,
+      ``KanderFormal.Proofs.IssueResultDecision.reconcile_refused_settled,
+      ``KanderFormal.Proofs.IssueResultDecision.settle_spec,
+      ``KanderFormal.Proofs.IssueResultDecision.settle_keeps,
+      ``KanderFormal.Proofs.IssueResultDecision.settle_identity_refused,
+      ``KanderFormal.Proofs.IssueResultDecision.settle_settled_refused,
+      ``KanderFormal.Proofs.IssueResultDecision.settle_absent_refused,
+      ``KanderFormal.Proofs.IssueResultDecision.valid_spec,
+      ``KanderFormal.Proofs.IssueResultDecision.valid_refused,
+      ``KanderFormal.Proofs.IssueResultDecision.scanAcc_first,
+      ``KanderFormal.Proofs.IssueResultDecision.scan_first_blocker,
+      ``KanderFormal.Proofs.IssueResultDecision.scan_open_iff,
+      ``KanderFormal.Proofs.IssueResultDecision.cls_uncertain,
+      ``KanderFormal.Proofs.IssueResultDecision.cls_declined,
+      ``KanderFormal.Proofs.IssueResultDecision.cls_consent,
+      ``KanderFormal.Proofs.IssueResultDecision.cls_other,
+      ``KanderFormal.Proofs.IssueResultDecision.visitAll_enc,
+      ``KanderFormal.Proofs.IssueResultDecision.init,
+      ``KanderFormal.Proofs.IssueResultDecision.step_inv,
+      ``KanderFormal.Proofs.IssueResultDecision.reachable_inv
+    ] },
+  { machine := Machines.IssueResultSave.issueResultSaveMachine
+    source := "KanderFormal/Machines/IssueResultSave.lean"
+    vectors := { depth := 5, paramSets := [[("maxRev", 3)]], natDomain := [], events := issueSaveEvents }
+    theorems := [
+      ``KanderFormal.Proofs.IssueResultSave.wellTyped,
+      ``KanderFormal.Proofs.IssueResultSave.save_spec,
+      ``KanderFormal.Proofs.IssueResultSave.save_result,
+      ``KanderFormal.Proofs.IssueResultSave.save_refused,
+      ``KanderFormal.Proofs.IssueResultSave.save_ceiling,
+      ``KanderFormal.Proofs.IssueResultSave.replay_keeps,
+      ``KanderFormal.Proofs.IssueResultSave.read_spec,
+      ``KanderFormal.Proofs.IssueResultSave.read_refused,
+      ``KanderFormal.Proofs.IssueResultSave.rev_step,
+      ``KanderFormal.Proofs.IssueResultSave.init,
+      ``KanderFormal.Proofs.IssueResultSave.step_inv,
+      ``KanderFormal.Proofs.IssueResultSave.reachable_inv
     ] }
 ]
 
