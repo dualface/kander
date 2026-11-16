@@ -74,7 +74,9 @@ func (s *Server) reviewRuntimeRoutes(mux *http.ServeMux) {
 		request.Input.CWD = "project:" + p.info.ID
 		// A prepared identity is never a fresh launch on retry, including when its
 		// initial joint-publication receipt still contains Fresh=true.
-		p.mu.Lock()
+		if err := p.lockBoard(); err != nil {
+			return outcome{err: err}
+		}
 		existing, found, lookupErr := board.LookupReviewRun(p.board, request.Input.RunID)
 		if lookupErr == nil && found {
 			writer, writerErr := p.writer(request.Input.RunID, client, secret)
@@ -165,7 +167,9 @@ func (s *Server) reviewRuntimeRoutes(mux *http.ServeMux) {
 				return board.PublishReviewRunAtomic(p.board, id, guard, extension)
 			})
 		}
-		p.mu.Lock()
+		if err := p.lockBoard(); err != nil {
+			return outcome{err: err}
+		}
 		defer p.mu.Unlock()
 		writer, err := p.writer(id, r.Header.Get(api.HeaderClientID), r.Header.Get(api.HeaderReviewWriter))
 		if err != nil {

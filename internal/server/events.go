@@ -168,6 +168,17 @@ func (l *eventLog) pageLocked(cursor string) (api.EventPage, bool) {
 	return api.EventPage{Cursor: current, Events: out}, true
 }
 
+// reset starts a new epoch and wakes every long poll, which then answers
+// reset. A board import calls it after replacing the whole board.
+func (l *eventLog) reset() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	err := l.rotate()
+	close(l.changed)
+	l.changed = make(chan struct{})
+	return err
+}
+
 // rotate runs only during startup or under mu after an append failure.
 func (l *eventLog) rotate() error {
 	var entropy [16]byte

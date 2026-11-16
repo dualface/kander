@@ -14,7 +14,9 @@ import (
 // recoverLostMember is an explicit user-directed reset, not an ordinary group
 // write. It allocates a released audit generation, never a runnable task claim.
 func (p *project) recoverLostMember(ctx context.Context, key string, input api.GroupRecover, h holder) outcome {
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return outcome{err: err}
+	}
 	defer p.mu.Unlock()
 	operation := "group-recover:" + input.Request.GroupID
 	return p.idempotent(key, operation, input, func() outcome {

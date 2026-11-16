@@ -208,7 +208,9 @@ func (s *Server) projectRoute(mux *http.ServeMux, pattern string, fn func(*proje
 			return outcome{err: err}
 		}
 		if r.Method == http.MethodGet && !strings.HasSuffix(r.URL.Path, "/events") {
-			p.mu.Lock()
+			if err := p.lockBoard(); err != nil {
+				return outcome{err: err}
+			}
 			defer p.mu.Unlock()
 		}
 		return fn(p, r)

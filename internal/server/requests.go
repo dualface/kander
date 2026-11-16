@@ -89,7 +89,9 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 	if err != nil {
 		return outcome{err: err}
 	}
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return outcome{err: err}
+	}
 	defer p.mu.Unlock()
 	return p.requestWrite(key, "request:"+id, normalized, input, func(tx *board.Transaction) (api.CollabRequest, error) {
 		var request api.CollabRequest
@@ -152,7 +154,9 @@ func (p *project) answerRequest(key, id, requestID string, answer api.CollabAnsw
 	if err != nil {
 		return outcome{err: err}
 	}
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return outcome{err: err}
+	}
 	defer p.mu.Unlock()
 	return p.requestWrite(key, "answer:"+id+":"+requestID, normalized, answer, func(tx *board.Transaction) (api.CollabRequest, error) {
 		var request api.CollabRequest

@@ -11,7 +11,9 @@ func (s *Server) reviewEvidenceRoutes(mux *http.ServeMux) {
 		if err := decode(r, &ids); err != nil {
 			return outcome{err: err}
 		}
-		p.mu.Lock()
+		if err := p.lockBoard(); err != nil {
+			return outcome{err: err}
+		}
 		defer p.mu.Unlock()
 		remaining, err := board.ReviewRemainingMembers(p.board, ids)
 		return result(http.StatusOK, remaining, err)

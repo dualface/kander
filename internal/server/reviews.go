@@ -39,7 +39,9 @@ func (p *project) requireHolders(tasks []string, h holder) error {
 }
 
 func (p *project) reviewWrite(key, operation string, request any, tasks func() ([]string, error), h holder, apply func(board.TransactionExtension) (any, error)) outcome {
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return outcome{err: err}
+	}
 	defer p.mu.Unlock()
 	run := func() outcome {
 		if h.publication != "" {

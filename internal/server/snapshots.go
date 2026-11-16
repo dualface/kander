@@ -16,7 +16,9 @@ func (s *Server) snapshotRoutes(mux *http.ServeMux) {
 		if len(query.Tasks) > 10000 {
 			return outcome{err: apiError(api.CodeInvalidRequest, "check selection exceeds its bound")}
 		}
-		p.mu.Lock()
+		if err := p.lockBoard(); err != nil {
+			return outcome{err: err}
+		}
 		defer p.mu.Unlock()
 		code, output, diagnostics, err := board.CheckBoard(p.board, query.Tasks, query.All)
 		return result(http.StatusOK, api.CheckResult{Code: code, Output: output, Diagnostics: diagnostics}, err)
@@ -36,7 +38,9 @@ func (s *Server) snapshotRoutes(mux *http.ServeMux) {
 			}
 		}
 
-		p.mu.Lock()
+		if err := p.lockBoard(); err != nil {
+			return outcome{err: err}
+		}
 		defer p.mu.Unlock()
 		scanned, err := board.ScanDispatchesContext(r.Context(), p.board, query.Tasks)
 		if err != nil {

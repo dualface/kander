@@ -10,7 +10,9 @@ import (
 )
 
 func (p *project) dispatchWrite(key, action, task string, input api.DispatchCommand, h holder) outcome {
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return outcome{err: err}
+	}
 	defer p.mu.Unlock()
 	operation := "dispatch:" + task + ":" + action
 	return p.idempotent(key, operation, input, func() outcome {

@@ -53,7 +53,9 @@ func (p *project) claimGroup(ctx context.Context, key, group, client string, inp
 	if !api.ValidIdentity(input.ExecutionID) || !api.ValidIdentity(client) || input.Request.GroupID != group {
 		return outcome{err: apiError(api.CodeInvalidRequest, "invalid coordinator execution identity")}
 	}
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return outcome{err: err}
+	}
 	defer p.mu.Unlock()
 	operation := "group-claim:" + group
 	out := p.idempotent(key, operation, input, func() outcome {
@@ -143,7 +145,9 @@ func (p *project) claimGroup(ctx context.Context, key, group, client string, inp
 	return out
 }
 func (p *project) renewGroup(group string, h holder) (api.Renewal, error) {
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return api.Renewal{}, err
+	}
 	defer p.mu.Unlock()
 	var claim claimRecord
 	err := board.WithTransaction(p.board, board.LockScope{Groups: []string{serviceGroup}}, func(tx *board.Transaction) error {

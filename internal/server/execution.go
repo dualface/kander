@@ -102,7 +102,9 @@ func (p *project) cursor(task string, generation uint64) (board.Entry, error) {
 
 // execution applies one launcher fact of the live holder.
 func (p *project) execution(key, id string, u api.ExecutionUpdate, h holder) outcome {
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return outcome{err: err}
+	}
 	defer p.mu.Unlock()
 	run := func() outcome {
 		id, err := board.NormalizeTaskID(id)

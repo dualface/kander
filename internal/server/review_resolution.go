@@ -25,7 +25,9 @@ func (p *project) resolutionTasks(input board.ReviewPlanExtension) ([]string, er
 }
 
 func (p *project) resolutionFacts(input board.ReviewPlanExtension) outcome {
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return outcome{err: err}
+	}
 	defer p.mu.Unlock()
 	facts, err := board.ReviewBatchResolutionFacts(p.board, input)
 	return result(http.StatusOK, facts, err)

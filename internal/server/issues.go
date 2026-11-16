@@ -41,7 +41,9 @@ func (s *Server) issueRoutes(mux *http.ServeMux) {
 		if err != nil {
 			return outcome{err: apiError(api.CodeInvalidRequest, err.Error())}
 		}
-		p.mu.Lock()
+		if err := p.lockBoard(); err != nil {
+			return outcome{err: err}
+		}
 		defer p.mu.Unlock()
 		run := func() outcome {
 			imported, err := issue.PublishImport(p.board, record, issue.ImportOptions{Type: request.Type, Language: request.Language, Large: request.Large})

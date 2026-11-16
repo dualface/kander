@@ -153,21 +153,15 @@ func (c Controller) Stop(ctx context.Context, target string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	data, err := fs.ReadRegularFile(info.DataDir, filepath.Join(info.DataDir, api.AdminTokenFile))
+	token, err := adminToken(info.DataDir)
 	if err != nil {
 		return true, err
-	}
-	var record struct {
-		Token string `json:"token"`
-	}
-	if err := json.Unmarshal(data, &record); err != nil || len(record.Token) != 64 {
-		return true, errors.New(config.Text("server.token_invalid"))
 	}
 	p, err := peer(target)
 	if err != nil {
 		return true, err
 	}
-	if err := p.Shutdown(ctx, record.Token); err != nil {
+	if err := p.Shutdown(ctx, token); err != nil {
 		return true, err
 	}
 	wait, cancel := context.WithTimeout(ctx, c.timeout())
@@ -211,4 +205,67 @@ func (c Controller) Restart(ctx context.Context, target string) (api.ServerInfo,
 		return api.ServerInfo{}, err
 	}
 	return c.Start(ctx, StartOptions{DataDir: info.DataDir, Listen: info.Listen, TTL: info.TTL.Std(), Renew: info.Renew.Std()})
+}
+
+// adminToken loads the private administration token from the data directory
+// the running server reported.
+func adminToken(dataDir string) (string, error) {
+	data, err := fs.ReadRegularFile(dataDir, filepath.Join(dataDir, api.AdminTokenFile))
+	if err != nil {
+		return "", err
+	}
+	var record struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(data, &record); err != nil || len(record.Token) != 64 {
+		return "", errors.New(config.Text("server.token_invalid"))
+	}
+	return record.Token, nil
+}
+
+// Import hands a v1 board import to the local server that serves dataDir. The
+// caller calls it after finding the data directory lock held, so a missing
+// server means another offline command holds the lock, or the server listens
+// on another address.
+func Import(ctx context.Context, target, dataDir string, req api.ImportRequest) (api.ImportResult, error) {
+	if !Local(target) {
+		return api.ImportResult{}, errors.New(config.Text("server.import_local_only", target))
+	}
+	info, err := Info(ctx, target)
+	if client.IsUnreachable(err) {
+		return api.ImportResult{}, errors.New(config.Text("server.import_no_server", dataDir, target))
+	}
+	if err != nil {
+		return api.ImportResult{}, err
+	}
+	if !sameDirectory(info.DataDir, dataDir) {
+		return api.ImportResult{}, errors.New(config.Text("server.import_data_mismatch", target, info.DataDir, dataDir))
+	}
+	token, err := adminToken(info.DataDir)
+	if err != nil {
+		return api.ImportResult{}, err
+	}
+	p, err := peer(target)
+	if err != nil {
+		return api.ImportResult{}, err
+	}
+	result, err := p.Import(ctx, token, req)
+	if errors.Is(err, client.ErrImportUnsupported) {
+		return api.ImportResult{}, errors.New(config.Text("server.import_unsupported", target))
+	}
+	return result, err
+}
+
+// sameDirectory compares two data directory paths, also when one of them
+// reaches the directory through a different spelling.
+func sameDirectory(a, b string) bool {
+	if filepath.Clean(a) == filepath.Clean(b) {
+		return true
+	}
+	first, err := os.Stat(a)
+	if err != nil {
+		return false
+	}
+	second, err := os.Stat(b)
+	return err == nil && os.SameFile(first, second)
 }

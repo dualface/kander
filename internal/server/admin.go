@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
@@ -46,13 +47,37 @@ func (s *Server) adminRoutes(mux *http.ServeMux) {
 		})
 	})
 	mux.HandleFunc("POST /api/v1/server/shutdown", func(w http.ResponseWriter, r *http.Request) {
-		host, _, err := net.SplitHostPort(r.RemoteAddr)
-		ip := net.ParseIP(host)
-		if err != nil || ip == nil || !ip.IsLoopback() || subtle.ConstantTimeCompare([]byte(r.Header.Get(api.HeaderAdminToken)), []byte(s.adminToken)) != 1 {
+		if !s.administrator(r) {
 			writeJSONResponse(w, http.StatusForbidden, api.Error{Code: api.CodeInvalidRequest, Message: "server shutdown refused"})
 			return
 		}
 		writeJSONResponse(w, http.StatusAccepted, map[string]string{"status": "stopping"})
 		s.shutdownCancel()
 	})
+	// Import changes board data, so unlike shutdown it passes the protocol
+	// handshake and the readiness gate of domain().
+	mux.HandleFunc("POST /api/v1/server/import", s.domain(func(r *http.Request) outcome {
+		if !s.administrator(r) {
+			return outcome{err: &api.Error{Code: api.CodeInvalidRequest, Message: "server import refused", Status: http.StatusForbidden}}
+		}
+		var req api.ImportRequest
+		if err := decode(r, &req); err != nil {
+			return outcome{err: err}
+		}
+		if !filepath.IsAbs(req.From) {
+			return outcome{err: apiError(api.CodeInvalidRequest, "import source must be an absolute path on the server host")}
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), ImportTimeout)
+		defer cancel()
+		value, err := s.ImportContext(ctx, req.Project, req.Remote, req.From)
+		return result(http.StatusOK, value, err)
+	}))
+}
+
+// administrator accepts only a loopback peer that presents the private
+// administration token. The comparison takes constant time.
+func (s *Server) administrator(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	ip := net.ParseIP(host)
+	return err == nil && ip != nil && ip.IsLoopback() && subtle.ConstantTimeCompare([]byte(r.Header.Get(api.HeaderAdminToken)), []byte(s.adminToken)) == 1
 }

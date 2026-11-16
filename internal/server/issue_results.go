@@ -68,7 +68,9 @@ func issueResultState(value issueResultRecord, work issue.ResultWork) (api.Issue
 	return api.IssueResultState{Revision: value.Revision, Work: rawWork, Store: rawStore}, nil
 }
 func (p *project) issueResultView(ctx context.Context, query api.IssueResultQuery) (api.IssueResultState, error) {
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return api.IssueResultState{}, err
+	}
 	defer p.mu.Unlock()
 	repository, number, work, err := p.issueResultInputs(query)
 	if err != nil {
@@ -81,7 +83,9 @@ func (p *project) issueResultView(ctx context.Context, query api.IssueResultQuer
 	return issueResultState(value, work)
 }
 func (p *project) saveIssueResult(ctx context.Context, key string, input api.IssueResultWrite) outcome {
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return outcome{err: err}
+	}
 	defer p.mu.Unlock()
 	operation := "issue-result-save:" + input.Query.SourceKey
 	return p.idempotent(key, operation, input, func() outcome {

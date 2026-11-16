@@ -29,7 +29,9 @@ func (p *project) publishDelivery(key, task string, input api.DeliveryEvidence, 
 	if (input.Purpose != "" && input.Purpose != "delivery" && input.Purpose != "baseline") || input.TaskID != task || !api.CommitSHA(input.Commit) || !api.ValidIdentity(input.ExecutionID) || input.Generation == 0 || input.CardRevision == 0 || input.Ref != api.DeliveryRef(p.info.ID, task, input.Generation, input.Commit) || input.Remote == "" || input.Remote != p.info.Remote || input.ObservedAt.IsZero() {
 		return outcome{err: apiError(api.CodeEvidenceIncomplete, "delivery must bind the registered remote, exact commit, card version and generation")}
 	}
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return outcome{err: err}
+	}
 	defer p.mu.Unlock()
 	operation := "delivery:" + task
 	return p.idempotent(key, operation, input, func() outcome {

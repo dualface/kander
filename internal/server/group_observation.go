@@ -9,7 +9,9 @@ import (
 )
 
 func (p *project) updateGroupLease(key, group, operation string, input any, h holder, update func(*claimRecord) error) outcome {
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return outcome{err: err}
+	}
 	defer p.mu.Unlock()
 	return p.idempotent(key, operation, input, func() outcome {
 		var view api.ClaimView

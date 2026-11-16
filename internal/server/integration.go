@@ -141,7 +141,9 @@ func (p *project) claimIntegration(key, id string, input api.IntegrationRequest,
 	if id != api.IntegrationID(input.TargetRef) || !api.ValidIdentity(h.clientID) || p.info.Remote == "" {
 		return outcome{err: apiError(api.CodeInvalidRequest, "integration must bind a registered common remote and target")}
 	}
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return outcome{err: err}
+	}
 	defer p.mu.Unlock()
 	operation := "integration-claim:" + id
 	out := p.idempotent(key, operation, input, func() outcome {
@@ -205,7 +207,9 @@ func (p *project) integrationChanged(value api.Integration) {
 	}
 }
 func (p *project) renewIntegration(id string, h holder) (api.Renewal, error) {
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return api.Renewal{}, err
+	}
 	defer p.mu.Unlock()
 	record, err := p.requireIntegration(id, h)
 	if err != nil {
@@ -229,7 +233,9 @@ func (p *project) renewIntegration(id string, h holder) (api.Renewal, error) {
 	return api.Renewal{Claim: api.ClaimView{ClientID: record.Value.ClientID, ExecutionID: record.Value.Request.ExecutionID, Owner: "integration", Generation: record.Value.Generation, Status: record.Value.Status, RenewedAt: record.Value.RenewedAt, ExpiresAt: record.Value.ExpiresAt}}, err
 }
 func (p *project) integrationAction(key, id string, input api.IntegrationCommand, h holder) outcome {
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return outcome{err: err}
+	}
 	defer p.mu.Unlock()
 	operation := "integration-action:" + id
 	return p.idempotent(key, operation, input, func() outcome {

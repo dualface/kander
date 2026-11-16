@@ -27,9 +27,24 @@ type project struct {
 	board  string
 	events *eventLog
 	starts map[string]startCursor
+	// importBroken is guarded by mu. It is set when a board import failed
+	// after its publication intent and in-process recovery failed too.
+	importBroken bool
 }
 
 func (p *project) log() *slog.Logger { return p.server.log.With("project", p.info.ID) }
+
+// lockBoard takes mu for board access. Requests that queued behind a failed
+// import observe importBroken only after they hold mu, so none of them reaches
+// a board directory the failed publication left behind.
+func (p *project) lockBoard() error {
+	p.mu.Lock()
+	if p.importBroken {
+		p.mu.Unlock()
+		return apiError(api.CodeNotReady, "project "+p.info.Name+" has an unfinished board import; restart the server to recover it")
+	}
+	return nil
+}
 
 // open prepares the board, finishes interrupted board transactions, and
 // settles claims an interrupted operation left behind.
@@ -202,7 +217,9 @@ func (p *project) changed(id string, generation uint64) {
 }
 
 func (p *project) newTask(key string, req api.NewTask) outcome {
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return outcome{err: err}
+	}
 	defer p.mu.Unlock()
 	run := func() outcome {
 		var created api.Task
@@ -231,7 +248,9 @@ func (p *project) newTask(key string, req api.NewTask) outcome {
 }
 
 func (p *project) putDocument(key, id string, doc api.Document, h holder) outcome {
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return outcome{err: err}
+	}
 	defer p.mu.Unlock()
 	if doc.SHA256 != digest(doc.Text) {
 		return outcome{err: apiError(api.CodeEvidenceIncomplete, "document digest does not match the received bytes")}
@@ -275,7 +294,9 @@ func (p *project) putDocument(key, id string, doc api.Document, h holder) outcom
 }
 
 func (p *project) move(key, id string, req api.Move, h holder) outcome {
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return outcome{err: err}
+	}
 	defer p.mu.Unlock()
 	run := func() outcome {
 		view, err := board.LoadBoard(p.board)
@@ -439,7 +460,9 @@ func (p *project) claim(key, id string, req api.ClaimRequest) outcome {
 	if err := validClaimRequest(req); err != nil {
 		return outcome{err: err}
 	}
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return outcome{err: err}
+	}
 	defer p.mu.Unlock()
 	run := func() outcome {
 		view, err := board.LoadBoard(p.board)
@@ -541,7 +564,9 @@ func (p *project) activate(r claimRecord) outcome {
 // renew extends the live lease of h. It writes no card and no receipt; a
 // repeated renewal is naturally idempotent.
 func (p *project) renew(id string, h holder) (api.Renewal, error) {
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return api.Renewal{}, err
+	}
 	defer p.mu.Unlock()
 	id, err := board.NormalizeTaskID(id)
 	if err != nil {
@@ -575,7 +600,9 @@ func (p *project) takeover(key, id string, req api.ClaimRequest, h holder) outco
 	if strings.TrimSpace(req.Decision) == "" {
 		return outcome{err: apiError(api.CodeInvalidRequest, "a takeover needs a decision reference")}
 	}
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return outcome{err: err}
+	}
 	defer p.mu.Unlock()
 	run := func() outcome {
 		t, err := p.show(id)

@@ -127,7 +127,9 @@ func (s *Server) publicationRoutes(mux *http.ServeMux) {
 			seen[member.TaskID] = true
 			ids = append(ids, member.TaskID)
 		}
-		p.mu.Lock()
+		if err := p.lockBoard(); err != nil {
+			return outcome{err: err}
+		}
 		defer p.mu.Unlock()
 		value := api.Publication{PublicationPrepare: request, Digest: digest, Status: "prepared", Approvals: map[string]api.PublicationApproval{}, CreatedAt: p.server.now()}
 		err = board.WithTransaction(p.board, board.LockScope{Tasks: ids, Groups: []string{serviceGroup}}, func(tx *board.Transaction) error {
@@ -166,7 +168,9 @@ func (s *Server) publicationRoutes(mux *http.ServeMux) {
 		if err := decode(r, &request); err != nil {
 			return outcome{err: err}
 		}
-		p.mu.Lock()
+		if err := p.lockBoard(); err != nil {
+			return outcome{err: err}
+		}
 		defer p.mu.Unlock()
 		value, err := p.readPublication(r.PathValue("publication"))
 		if err != nil {

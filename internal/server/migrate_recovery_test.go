@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,7 +26,8 @@ func TestImportRecoversEveryDirectoryPublicationBoundary(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			interrupted := errors.New("simulated import interruption")
+			// A crash skips in-process recovery, so reopening must finish it.
+			interrupted := fmt.Errorf("interrupted at %s: %w", step, errImportCrash)
 			srv.importFault = func(current string) error {
 				if current == step {
 					return interrupted
@@ -71,7 +73,7 @@ func TestImportRefusesTamperedPreparedSnapshotBeforeReadiness(t *testing.T) {
 	}
 	srv.importFault = func(step string) error {
 		if step == "prepared" {
-			return errors.New("interrupted")
+			return errImportCrash
 		}
 		return nil
 	}

@@ -23,7 +23,9 @@ func (s *Server) observationRoutes(mux *http.ServeMux) {
 		if err != nil {
 			return outcome{err: err}
 		}
-		p.mu.Lock()
+		if err := p.lockBoard(); err != nil {
+			return outcome{err: err}
+		}
 		defer p.mu.Unlock()
 		key, operation := r.Header.Get(api.HeaderIdempotencyKey), "observation:"+id
 		return p.idempotent(key, operation, input, func() outcome {

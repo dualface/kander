@@ -10,6 +10,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -74,6 +75,10 @@ type Server struct {
 
 func (s *Server) now() time.Time { return s.clock().UTC() }
 
+// ErrDataDirInUse reports that another process holds the data directory lock:
+// a serving instance or another offline command.
+var ErrDataDirInUse = errors.New("data directory lock is held")
+
 // Open locks the data directory against a second instance, then recovers
 // every project before reporting ready.
 func Open(o Options) (*Server, error) {
@@ -121,7 +126,7 @@ func Open(o Options) (*Server, error) {
 	cancel()
 	if err != nil {
 		file.Close()
-		return nil, errors.New("server data directory " + s.data + " is in use by another kander server")
+		return nil, fmt.Errorf("server data directory %s is in use by another kander server: %w", s.data, ErrDataDirInUse)
 	}
 	s.lock, s.lockFile = lock, file
 	if err := s.loadAdminToken(); err != nil {

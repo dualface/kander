@@ -11,7 +11,9 @@ import (
 )
 
 func (p *project) groupWrite(key, operation, group string, request any, h holder, apply func(board.TransactionExtension) (board.CoordinatorCheckpoint, error)) outcome {
-	p.mu.Lock()
+	if err := p.lockBoard(); err != nil {
+		return outcome{err: err}
+	}
 	defer p.mu.Unlock()
 	return p.idempotent(key, operation, request, func() outcome {
 		if _, err := p.requireGroup(group, h); err != nil {
@@ -81,7 +83,9 @@ func (s *Server) groupRoutes(mux *http.ServeMux) {
 			return outcome{err: apiError(api.CodeInvalidRequest, "group mismatch")}
 		}
 		request.CWD = "project:" + p.info.ID
-		p.mu.Lock()
+		if err := p.lockBoard(); err != nil {
+			return outcome{err: err}
+		}
 		defer p.mu.Unlock()
 		facts, err := board.CollectCoordinatorGitFacts(r.Context(), p.board, request)
 		return result(http.StatusOK, facts, err)
