@@ -253,6 +253,9 @@ func TestDispatchAttemptAndReauthorizeRefineKernel(t *testing.T) {
 	dispatchRefines(t, root, id, "one", "one", 0, reauthorizeEvent(d.Authorization, true, false, true), false, reauthorize())
 	exit := stoppedDispatchFixture(transactionSnapshot(t, root, id))
 	d, _ = ReadDispatch(root, id, "one")
+	alive := exit
+	alive.Outcome = "alive"
+	dispatchRefines(t, root, id, "one", "one", 0, reauthorizeEvent(d.Authorization, true, false, true), false, reauthorize(alive))
 	dispatchRefines(t, root, id, "one", "one", 0, reauthorizeEvent(d.Authorization, true, true, true), true, reauthorize(exit))
 	d, _ = ReadDispatch(root, id, "one")
 	// A terminal round is never reauthorized or attempted again.
