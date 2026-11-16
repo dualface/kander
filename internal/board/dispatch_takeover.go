@@ -1,6 +1,10 @@
 package board
 
-import "strings"
+import (
+	"strings"
+
+	dispatchkernel "github.com/dualface/kander/internal/statemachine/dispatch"
+)
 
 // DispatchTakeover binds a distributed ownership handoff to the exact business
 // round the successor inspected. Retaining a round never authorizes a replay of
@@ -15,22 +19,33 @@ func stageTakeoverDispatch(tx *Transaction, s Snapshot, context *DispatchTakeove
 	if context == nil {
 		return s.Text, false, nil
 	}
-	if context.Authorization != authFrom(s.Text) || strings.TrimSpace(decision) == "" {
+	// The kernel decides the retained round. The checks run in the order they
+	// have always run: the binding and the decision before the record is read, then
+	// its revision and authorization, the cycle, and the phase.
+	v := projectDispatch(s, nil)
+	round, epoch := v.pair(context.Authorization)
+	retain := func(rev, rec, cycle bool) dispatchkernel.Retain {
+		return dispatchkernel.Retain{AuthRound: round, AuthEpoch: epoch, Decided: strings.TrimSpace(decision) != "", Rev: rev, Rec: rec, Cycle: cycle}
+	}
+	open := v.state
+	open.Phase = dispatchkernel.PhasePrepared
+	if !v.allows(open, retain(true, true, true)) {
 		return "", false, dispatchError(context.Authorization.DispatchID)
 	}
 	dispatch, err := readDispatch(tx, s.Entry.TaskID, context.Authorization.DispatchID)
 	if err != nil {
 		return "", false, err
 	}
-	if dispatch.Revision != context.Revision || dispatch.Authorization != context.Authorization {
+	if !v.allows(open, retain(dispatch.Revision == context.Revision, dispatch.Authorization == context.Authorization, true)) {
 		return "", false, dispatchError(context.Authorization.DispatchID)
 	}
-	if err := requireDispatchCycle(dispatch, s); err != nil {
-		return "", false, err
+	cycleErr := requireDispatchCycle(dispatch, s)
+	if !v.allows(open, retain(true, true, cycleErr == nil)) {
+		return "", false, cycleErr
 	}
 	switch context.Mode {
 	case "retain":
-		if dispatch.State != DispatchPrepared && dispatch.State != DispatchUnknown && dispatch.State != DispatchAccepted {
+		if _, ok := projectDispatch(s, &dispatch).next(retain(true, true, true)); !ok {
 			return "", false, dispatchError(dispatch.Input.ID)
 		}
 		return s.Text, false, nil

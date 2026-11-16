@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	dispatchkernel "github.com/dualface/kander/internal/statemachine/dispatch"
 )
 
 // DispatchTermination preserves the explicit terminal decision independently of
@@ -51,25 +53,43 @@ func EndDispatchWithTransaction(root, task, id string, expected uint64, state Di
 		if err != nil {
 			return err
 		}
-		if d.Revision != expected || authFrom(s.Text) != d.Authorization || d.State == DispatchCompleted || d.Release != nil || d.Revision == ^uint64(0) {
+		// The kernel decides, in the order the checks have always run: the
+		// revision, the binding, and the phase; the cycle; then the decision
+		// that ending an accepted round needs, or the one a legacy terminal
+		// round needs to be released with its own state. The first probes
+		// take a matching state and a decision, so each sees its facts alone.
+		legacy := d.State == DispatchFailed || d.State == DispatchCancelled
+		decided := strings.TrimSpace(decision) != ""
+		v := projectDispatch(s, &d)
+		round, epoch := v.pair(d.Authorization)
+		end := func(cycle, decided, toFailed bool) dispatchkernel.End {
+			return dispatchkernel.End{AuthRound: round, AuthEpoch: epoch, Cas: d.Revision == expected, Room: d.Revision != ^uint64(0),
+				Cycle: cycle, Decided: decided, ToFailed: toFailed}
+		}
+		matching := state == DispatchFailed
+		if legacy {
+			matching = d.State == DispatchFailed
+		}
+		if !v.allows(v.state, end(true, true, matching)) {
 			return dispatchError(id)
 		}
-		if err = requireDispatchCycle(d, s); err != nil {
-			return err
+		cycleErr := requireDispatchCycle(d, s)
+		if !v.allows(v.state, end(cycleErr == nil, true, matching)) {
+			return cycleErr
 		}
-		// Unbinding an accepted round leaves its executor running with no fence,
-		// so somebody must have decided that.
-		if d.State == DispatchAccepted && strings.TrimSpace(decision) == "" {
-			return kanbanError("board.dispatch_end_decision_required", id)
-		}
-		legacy := d.State == DispatchFailed || d.State == DispatchCancelled
-		if legacy && (d.State != state || strings.TrimSpace(decision) == "") {
+		next, ok := v.next(end(true, decided, state == DispatchFailed))
+		if !ok {
+			// Unbinding an accepted round leaves its executor running with no
+			// fence, so somebody must have decided that.
+			if d.State == DispatchAccepted {
+				return kanbanError("board.dispatch_end_decision_required", id)
+			}
 			return dispatchError(id)
 		}
 		terminal := DispatchTermination{Authorization: d.Authorization, State: d.State, Revision: d.Revision, Reason: d.Reason}
 		d.Revision++
 		if !legacy {
-			d.State, d.Reason = state, reason
+			d.State, d.Reason = dispatchStates[next.Phase], reason
 			terminal = DispatchTermination{Authorization: d.Authorization, State: state, Revision: d.Revision, Reason: reason, Decision: decision}
 			if err := tx.Put(task, dispatchPath(id, "termination"), reviewJSON(terminal)); err != nil {
 				return err

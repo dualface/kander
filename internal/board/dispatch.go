@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	dispatchkernel "github.com/dualface/kander/internal/statemachine/dispatch"
 )
 
 // DispatchState separates durable business receipts from uncertain transport.
@@ -270,7 +272,7 @@ func (tx *Transaction) prepareDispatch(in DispatchInput, d *Dispatch) error {
 	}
 	if exists {
 		var old DispatchInput
-		if json.Unmarshal(registered, &old) != nil || !sameDispatchInput(in, old) {
+		if !dispatchRetryAllowed(json.Unmarshal(registered, &old) == nil && sameDispatchInput(in, old)) {
 			return dispatchError(in.ID)
 		}
 		*d, e = readDispatch(tx, in.TaskID, in.ID)
@@ -283,27 +285,36 @@ func (tx *Transaction) prepareDispatch(in DispatchInput, d *Dispatch) error {
 	if e != nil {
 		return e
 	}
-	if s.Entry.State != "working" && s.Entry.State != "review" {
+	// The kernel decides the column, the unfinished start, the binding, and the
+	// epoch ceiling. The checks that precede the binding run on a card with
+	// none, so each keeps its place in the order and its error.
+	prepare := func(free, room bool) dispatchkernel.Prepare {
+		return dispatchkernel.Prepare{Kind: kernelDispatchKinds[in.Kind], Col: kernelDispatchCol(s.Entry.State), Free: free, Room: room}
+	}
+	empty := emptyDispatchView()
+	if !empty.allows(empty.state, prepare(true, true)) {
 		return dispatchError(in.ID)
 	}
 	ledger, e := readExecutionLedger(tx, s)
 	if e != nil {
 		return e
 	}
-	if ledger.current != nil && ledger.current.StartUnfinished() {
+	unfinished := ledger.current != nil && ledger.current.StartUnfinished()
+	if !empty.allows(empty.state, prepare(!unfinished, true)) {
 		return kanbanError("board.dispatch_start_unfinished", in.TaskID, ledger.current.Status)
 	}
 	current := authFrom(s.Text)
+	var previous *Dispatch
 	if current.DispatchID != "" {
-		previous, e := readDispatch(tx, in.TaskID, current.DispatchID)
+		p, e := readDispatch(tx, in.TaskID, current.DispatchID)
 		if e != nil {
 			return e
 		}
-		if previous.State != DispatchCompleted && previous.State != DispatchFailed && previous.State != DispatchCancelled {
-			return dispatchError(in.ID)
-		}
+		previous = &p
 	}
-	if current.Epoch == ^uint64(0) {
+	v := projectDispatch(s, previous)
+	created, ok := v.next(prepare(true, current.Epoch != ^uint64(0)))
+	if !ok {
 		return dispatchError(in.ID)
 	}
 	if in.CreatedAt.IsZero() {
@@ -319,7 +330,7 @@ func (tx *Transaction) prepareDispatch(in DispatchInput, d *Dispatch) error {
 	if e != nil {
 		return e
 	}
-	*d = Dispatch{Schema: dispatchSchema, Input: in, Cycle: planCycle(s), MessageHash: messageHash(in.Message), Authorization: ExecutionAuthorization{in.ID, current.Epoch + 1}, Revision: 1, State: DispatchPrepared}
+	*d = Dispatch{Schema: dispatchSchema, Input: in, Cycle: planCycle(s), MessageHash: messageHash(in.Message), Authorization: ExecutionAuthorization{in.ID, v.real(created.Epoch)}, Revision: 1, State: DispatchPrepared}
 	if len(rounds) > 0 {
 		d.PreviousID = rounds[len(rounds)-1].Input.ID
 	}
@@ -378,19 +389,24 @@ func BeginDispatchAttemptWithTransaction(root, task, id string, expected uint64,
 		if e = refuseBlockedWrapUp(tx, d.Input); e != nil {
 			return e
 		}
-		if e = requireDispatchCycle(d, s); e != nil {
-			return e
+		v := projectDispatch(s, &d)
+		round, epoch := v.pair(d.Authorization)
+		attempt := func(cas, cycle, before bool) dispatchkernel.Attempt {
+			return dispatchkernel.Attempt{AuthRound: round, AuthEpoch: epoch, Cas: cas, Cycle: cycle, Evidence: true, Before: before}
+		}
+		cycleErr := requireDispatchCycle(d, s)
+		if !v.allows(v.permissive(d.Authorization, dispatchkernel.PhasePrepared, v.state.Kind), attempt(true, cycleErr == nil, true)) {
+			return cycleErr
 		}
 		if e = validateDispatchEvidence(tx, d.Input, false); e != nil {
 			return e
 		}
-		if len(cardRevision) > 0 && s.Revision != cardRevision[0] {
+		cas := (len(cardRevision) == 0 || s.Revision == cardRevision[0]) && d.Revision == expected
+		next, ok := v.next(attempt(cas, true, dispatchBefore(d)))
+		if !ok {
 			return dispatchError(id)
 		}
-		if d.Revision != expected || authFrom(s.Text) != d.Authorization || (d.State != DispatchPrepared && d.State != DispatchUnknown) || !time.Now().Before(d.AcceptBefore()) {
-			return dispatchError(id)
-		}
-		d.State = DispatchUnknown
+		d.State = dispatchStates[next.Phase]
 		d.Revision++
 		d.Attempts++
 		return putDispatch(tx, d)
@@ -414,22 +430,34 @@ func ReauthorizeDispatchWithTransaction(root, task, id string, expected uint64, 
 		if e != nil {
 			return e
 		}
-		if d.WrapUpAuthority != nil || d.Revision != expected || authFrom(s.Text) != d.Authorization || d.State == DispatchCompleted || d.State == DispatchFailed || d.State == DispatchCancelled || d.Authorization.Epoch == ^uint64(0) {
+		if d.WrapUpAuthority != nil {
 			return dispatchError(id)
 		}
-		if e = requireDispatchCycle(d, s); e != nil {
-			return e
+		v := projectDispatch(s, &d)
+		round, epoch := v.pair(d.Authorization)
+		reauthorize := func(cycle, fresh, before bool) dispatchkernel.Reauthorize {
+			return dispatchkernel.Reauthorize{AuthRound: round, AuthEpoch: epoch, Cas: d.Revision == expected,
+				Room: d.Authorization.Epoch != ^uint64(0), Cycle: cycle, Fresh: fresh, Before: before}
+		}
+		if !v.allows(v.state, reauthorize(true, true, true)) {
+			return dispatchError(id)
+		}
+		cycleErr := requireDispatchCycle(d, s)
+		if !v.allows(v.state, reauthorize(cycleErr == nil, true, true)) {
+			return cycleErr
 		}
 		now := time.Now().UTC()
 		execution := DispatchExecution{Epoch: d.Authorization.Epoch + 1, IssuedAt: now, ConfirmBy: d.AcceptBefore()}
-		if d.State == DispatchAccepted {
-			if len(stopped) != 1 || stopped[0].Outcome != "stopped" || !validDispatchExit(s, stopped[0], now) {
+		fresh := len(stopped) == 1 && stopped[0].Outcome == "stopped" && validDispatchExit(s, stopped[0], now)
+		if _, ok := v.next(reauthorize(true, fresh, now.Before(execution.ConfirmBy))); !ok {
+			if d.State == DispatchAccepted {
 				return dispatchEvidenceError("fresh confirmed exit required")
 			}
+			return dispatchError(id)
+		}
+		if d.State == DispatchAccepted {
 			execution.Exit = &stopped[0]
 			execution.ConfirmBy = now.Add(120 * time.Second)
-		} else if !now.Before(execution.ConfirmBy) {
-			return dispatchError(id)
 		}
 		b, _ := json.Marshal(d)
 		if e = tx.Put(task, dispatchPath(id, "execution-"+strconv.FormatUint(d.Authorization.Epoch, 10)), string(b)+"\n"); e != nil {
