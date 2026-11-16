@@ -1,6 +1,9 @@
 package server
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
 	"path/filepath"
 	"time"
 
@@ -181,4 +184,33 @@ func (s *Server) SeedDelivery(id string, value api.DeliveryEvidence) error {
 	return board.WithTransaction(p.board, board.LockScope{Groups: []string{serviceGroup}, Tasks: []string{value.TaskID}}, func(tx *board.Transaction) error {
 		return stageJSON(tx, deliveryPath(value.TaskID, value.Commit), value)
 	})
+}
+
+// GroupRecoverUnchecked runs an owned recovery of a group through groupWrite
+// without the readiness check of the recover route, so that only the guard's
+// check after the transaction decides whether the member cards it changed have
+// their holder. group is the claim proof of the coordinator and members the
+// proofs of the member cards.
+func (s *Server) GroupRecoverUnchecked(ctx context.Context, id, key string, input api.GroupRecover, token string, generation uint64, members map[string]api.ClaimProof) error {
+	p, err := s.project(id)
+	if err != nil {
+		return err
+	}
+	h := holder{token: token, generation: generation, members: members}
+	out := p.groupWrite(key, "group-recover:"+input.Request.GroupID, input.Request.GroupID, input, h, func(extension board.TransactionExtension) (board.CoordinatorCheckpoint, error) {
+		return board.RecoverCoordinatorWithTransaction(ctx, p.board, input.Request, input.ObservedRevision, extension)
+	})
+	if out.err != nil {
+		return out.err
+	}
+	// A refusal is recorded in the receipt of its key as the body of the reply.
+	if out.status >= http.StatusBadRequest {
+		var refusal api.Error
+		raw, _ := out.body.(json.RawMessage)
+		if err := json.Unmarshal(raw, &refusal); err != nil {
+			return err
+		}
+		return &refusal
+	}
+	return nil
 }

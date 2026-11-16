@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"math"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -158,8 +159,19 @@ func TestGroupLeaseEntrancesRefineTheKernel(t *testing.T) {
 	}
 	l.refines(servergrouplease.Renew{Hdr: true, G: 3, Tg: 3}, api.CodeLeaseInvalid, func() error { _, err := a.RenewGroup(ctx, group, proof); return err })
 	next := client.Claim{Token: second.Token, Generation: 2}
+	// A release is refused like a renewal: for a forged token and for the token
+	// of the current lease presented with an older generation.
+	release := api.GroupRelease{GroupID: group, Reason: "handoff", Decision: "user:release"}
+	l.refines(servergrouplease.Release{Hdr: true, G: 2, Tg: 3}, api.CodeHeldByOther, func() error {
+		_, err := b.ReleaseGroup(ctx, "", group, release, client.Claim{Token: "forged", Generation: 2})
+		return err
+	})
+	l.refines(servergrouplease.Release{Hdr: true, G: 3, Tg: 2}, api.CodeLeaseInvalid, func() error {
+		_, err := b.ReleaseGroup(ctx, "", group, release, client.Claim{Token: second.Token, Generation: 1})
+		return err
+	})
 	l.refines(servergrouplease.Release{Hdr: true, G: 2, Tg: 2}, "", func() error {
-		_, err := b.ReleaseGroup(ctx, "", group, api.GroupRelease{GroupID: group, Reason: "handoff", Decision: "user:release"}, next)
+		_, err := b.ReleaseGroup(ctx, "", group, release, next)
 		return err
 	})
 	l.refines(servergrouplease.Renew{Hdr: true, G: 2, Tg: 2}, api.CodeLeaseInvalid, func() error { _, err := b.RenewGroup(ctx, group, next); return err })
@@ -313,8 +325,10 @@ func TestLostMemberRecoveryRefinesTheKernels(t *testing.T) {
 // An owned recovery refines the group kernel's recoverOwned event: a member
 // card in working or review needs its holder and a fresh observation ticket.
 // The kernel also refuses every state when the observation is not `stopped`
-// and a start is unfinished, and the check after a write refuses a transaction
-// whose member cards lack a holder (theorems 5 and 6).
+// and a start is unfinished; those cases are asserted on the kernel only. The
+// check after a write, which refuses a transaction whose member cards lack a
+// holder (theorems 5 and 6), runs through groupWrite in
+// TestGroupWriteAfterRefusesChangedMembersWithoutHolder.
 func TestOwnedRecoveryRefinesTheKernel(t *testing.T) {
 	r := newLostRecoveryFixture(t, true)
 	group := r.input.Request.GroupID
@@ -396,4 +410,59 @@ func TestGroupWriteRefinesTheKernel(t *testing.T) {
 		_, err := a.CoordinatorAction(t.Context(), "", group, "reconcile", input, proof)
 		return err
 	})
+}
+
+// The check after a group write refuses a transaction that changed a member
+// card without its holder, and the transaction is rolled back (theorems 5 and
+// 6). The recover route stops such a request earlier, in its readiness check,
+// so the request goes through the guard of the group write alone: the group
+// lease holds, the member card was in working before the transaction, and the
+// member's proof is forged.
+func TestGroupWriteAfterRefusesChangedMembersWithoutHolder(t *testing.T) {
+	r := newLostRecoveryFixture(t, true)
+	group := r.input.Request.GroupID
+	l := leaseProbe{t: t, f: r.fixture, p: r.coordinator, group: group}
+	input := r.input
+	input.Lost = nil
+	input.Observation.Status = "stopped"
+	member := r.task.TaskID
+	valid := map[string]api.ClaimProof{member: {Token: r.taskGrant.Token, Generation: r.taskGrant.Claim.Generation}}
+	forged := map[string]api.ClaimProof{member: {Token: strings.Repeat("0", 64), Generation: r.taskGrant.Claim.Generation}}
+	write := func(key string, members map[string]api.ClaimProof) func() error {
+		return func() error {
+			return r.fixture.srv.GroupRecoverUnchecked(t.Context(), r.coordinator.ID(), key, input, r.proof.Token, r.proof.Generation, members)
+		}
+	}
+	snapshot := func() (api.Task, api.GroupView) {
+		t.Helper()
+		task, err := r.coordinator.Show(t.Context(), member)
+		if err != nil {
+			t.Fatal(err)
+		}
+		view, err := r.coordinator.Group(t.Context(), group)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return task, view
+	}
+	if task, _ := snapshot(); task.State != "working" {
+		t.Fatalf("the member card is %s before the transaction", task.State)
+	}
+	taskBefore, viewBefore := snapshot()
+
+	// The group holder is checked first and passes; the member check refuses.
+	l.refines(servergrouplease.WriteAfter{Hdr: true, G: 1, Tg: 1}, api.CodeHeldByOther, write("after-guard-forged", forged))
+	taskAfter, viewAfter := snapshot()
+	if !reflect.DeepEqual(taskBefore, taskAfter) || !reflect.DeepEqual(viewBefore, viewAfter) {
+		t.Fatalf("the refused transaction committed: card %+v -> %+v, group %+v -> %+v", taskBefore, taskAfter, viewBefore, viewAfter)
+	}
+	if len(viewAfter.Checkpoint.Recoveries) != 0 {
+		t.Fatalf("the refused transaction recorded a recovery: %+v", viewAfter.Checkpoint.Recoveries)
+	}
+
+	// The same request with the member's holder passes the check and commits.
+	l.refines(servergrouplease.WriteAfter{Hdr: true, G: 1, Tg: 1, Members: true}, "", write("after-guard-valid", valid))
+	if _, view := snapshot(); len(view.Checkpoint.Recoveries) != 1 {
+		t.Fatalf("the accepted transaction recorded %d recoveries", len(view.Checkpoint.Recoveries))
+	}
 }
