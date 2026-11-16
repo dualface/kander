@@ -161,9 +161,10 @@ func (f requestFrame) recreateEvent(c claimFacts, target uint64, same bool) serv
 	return serverrequest.Recreate{Held: c.held, Active: c.active, Live: c.live, Cgen: f.generation(c.generation), Target: f.generation(target), Card: f.cardRevision(f.card), Same: same}
 }
 
-// answerFacts are the facts of an answer to request: the status and note it
-// names, the revision it expects, and whether the acceptance window of a
-// proposal is open.
+// answerFacts are the facts of an answer to a request: the answer (its status,
+// note, and expected revision), the request, whether the acceptance window of a
+// proposal is open, the generation of the claim the holder answers with, and
+// the card revision a first acceptance is compared with.
 type answerFacts struct {
 	answer       api.CollabAnswer
 	request      api.CollabRequest
@@ -172,7 +173,8 @@ type answerFacts struct {
 	cardRevision uint64
 }
 
-// events are the repeated and the changing answer of a request.
+// answerEvents are the events of a repeated and of a changing answer; the kernel
+// accepts at most one of them.
 func (f requestFrame) answerEvents(a answerFacts) (serverrequest.AnswerSame, serverrequest.Answer) {
 	status, known := requestStatuses[a.answer.Status]
 	if !known {
@@ -183,7 +185,7 @@ func (f requestFrame) answerEvents(a answerFacts) (serverrequest.AnswerSame, ser
 	return same, serverrequest.Answer(same)
 }
 
-// supersedeEvent is the handoff to the generation the frame is built for.
+// supersedeEvent is the handoff to the generation the frame was built for.
 func (f requestFrame) supersedeEvent() serverrequest.Supersede {
 	return serverrequest.Supersede{Ngen: f.generation(f.gen)}
 }
