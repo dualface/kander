@@ -249,9 +249,14 @@ func dependencyProblems(board Board, selected map[string]struct{}, skipStates ma
 				if _, seen := reportedCycles[key]; !seen {
 					reportedCycles[key] = struct{}{}
 					source := board.Entries[visiting[len(visiting)-1]]
+					related := make([]string, 0, len(cycle))
+					for _, member := range cycle[:len(cycle)-1] {
+						related = append(related, board.Entries[member].Path)
+					}
 					problems = append(problems, Problem{
-						Path:    source.Path,
-						Message: t("board.dependency_cycle", key),
+						Path:         source.Path,
+						Message:      t("board.dependency_cycle", key),
+						RelatedPaths: related,
 					})
 				}
 				return
@@ -294,7 +299,11 @@ func CheckBoard(root string, taskIDs []string, includeAll bool) (code int, stdou
 func CheckBoardForImport(root string) (code int, stdout string, stderr []string, err error) {
 	return checkBoard(root, nil, true, true)
 }
-func checkBoard(root string, taskIDs []string, includeAll, importHistory bool) (code int, stdout string, stderr []string, err error) {
+
+// collectBoardProblems runs every check of checkBoard and returns the scanned
+// board with the unformatted problems.
+func collectBoardProblems(root string, taskIDs []string, includeAll, importHistory bool) (Board, []Problem, error) {
+	var err error
 	skipStates := map[string]struct{}{}
 	if !includeAll {
 		skipStates = deferredCheckStates
@@ -306,7 +315,7 @@ func checkBoard(root string, taskIDs []string, includeAll, importHistory bool) (
 		board, err = Scan(root)
 	}
 	if err != nil {
-		return 1, "", nil, err
+		return Board{}, nil, err
 	}
 	var allProblems []Problem
 	if len(taskIDs) > 0 {
@@ -360,7 +369,7 @@ func checkBoard(root string, taskIDs []string, includeAll, importHistory bool) (
 	if len(taskIDs) > 0 {
 		dependencyBoard, err = Scan(root)
 		if err != nil {
-			return 1, "", nil, err
+			return Board{}, nil, err
 		}
 	}
 	var selected map[string]struct{}
@@ -372,6 +381,14 @@ func checkBoard(root string, taskIDs []string, includeAll, importHistory bool) (
 	}
 	allProblems = append(allProblems, dependencyProblems(dependencyBoard, selected, skipStates)...)
 	allProblems = append(allProblems, contractProblems(board)...)
+	return board, allProblems, nil
+}
+
+func checkBoard(root string, taskIDs []string, includeAll, importHistory bool) (code int, stdout string, stderr []string, err error) {
+	board, allProblems, err := collectBoardProblems(root, taskIDs, includeAll, importHistory)
+	if err != nil {
+		return 1, "", nil, err
+	}
 	checked := 0
 	if len(taskIDs) > 0 || includeAll {
 		checked = len(board.Entries)
