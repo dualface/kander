@@ -16,8 +16,10 @@ func (e *batchError) Unwrap() error { return e.error }
 
 // reviewProblem is the check problem of card id for err. An error that
 // concerns a batch belongs to the cards of that batch alone, however many cards
-// of the plan the check reached it from. A batch whose cards cannot be read
-// stays with the card checked.
+// of the plan the check reached it from, and however a check worded it around
+// the error (the run evidence check prefixes the run ID): the problem is the
+// batch error itself. A batch whose cards cannot be read stays with the card
+// checked.
 func reviewProblem(tx *Transaction, id, message string, err error) Problem {
 	problem := Problem{Path: id, Message: message}
 	var concerned *batchError
@@ -29,7 +31,7 @@ func reviewProblem(tx *Transaction, id, message string, err error) Problem {
 		return problem
 	}
 	members := slices.Sorted(slices.Values(batch.TaskIDs))
-	problem.Path, problem.RelatedPaths, problem.Key = members[0], members[1:], err.Error()
+	problem.Path, problem.RelatedPaths, problem.Message, problem.Key = members[0], members[1:], concerned.Error(), concerned.Error()
 	return problem
 }
 

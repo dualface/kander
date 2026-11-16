@@ -296,3 +296,42 @@ func TestImportCheckLeavesAnUnrelatedActiveCardOutOfABatchProblem(t *testing.T) 
 		t.Fatalf("the warning names the closed batch alone: %v", named)
 	}
 }
+
+func TestImportCheckReportsABatchProblemOnceAcrossTheEvidenceAndGateChecks(t *testing.T) {
+	root := tempBoard(t)
+	if err := InitStorage(root); err != nil {
+		t.Fatal(err)
+	}
+	first := gateCard(t, root, "evidence-first")
+	second := gateCard(t, root, "evidence-second")
+	ids := []string{first, second}
+	gatePlan(t, root, ids, archiveRequirements())
+	// A published run makes the evidence check reach the batch problem too,
+	// wrapped with the run ID, besides the import gate that reports it bare.
+	gateRun(t, root, archiveInput(ids, "evidence-run", "PMQA"), emptyFindings())
+	driftBatchTarget(t, root, "batch", strings.Repeat("c", 40))
+	for _, id := range ids {
+		if err := os.Rename(filepath.Join(root, "working", id), filepath.Join(root, "done", id)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	check, err := CheckBoardForImportProblems(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mismatch := strings.Repeat("b", 40) + " != batch target " + strings.Repeat("c", 40)
+	if strings.Contains(strings.Join(check.Blocking, "\n"), mismatch) {
+		t.Fatalf("a closed batch must not block: %v", check.Blocking)
+	}
+	var named []ImportFinding
+	for _, w := range check.Warnings {
+		if strings.Contains(w.Message, mismatch) {
+			named = append(named, w)
+		}
+	}
+	want := slices.Clone(ids)
+	slices.Sort(want)
+	if len(named) != 1 || !reflect.DeepEqual(named[0].TaskIDs, want) {
+		t.Fatalf("one warning naming the whole batch, got %+v", named)
+	}
+}
