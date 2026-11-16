@@ -132,6 +132,30 @@ func TestDispatchAuthorizeWrapUpRefusalsRefineKernel(t *testing.T) {
 
 func fullEvent(*dispatchView) dispatchkernel.Event { return dispatchkernel.Full{} }
 
+// requireFullFn runs the production check of a full-execution write on the card.
+func requireFullFn(root, id string) func() error {
+	return func() error {
+		return WithTransaction(root, LockScope{Tasks: []string{id}, ReadOnly: true}, func(tx *Transaction) error {
+			s, err := tx.Snapshot(id)
+			if err != nil {
+				return err
+			}
+			return tx.requireFullExecution(s)
+		})
+	}
+}
+
+// A full-execution write is accepted on a card without a binding and on a card
+// bound to a round that holds no grant; the projection stays (theorem 2).
+func TestDispatchFullExecutionAcceptsRefineKernel(t *testing.T) {
+	root := tempBoard(t)
+	s := dispatchCard(t, root, "kernel-full-accepts")
+	id := s.Entry.TaskID
+	dispatchRefines(t, root, id, "", "", 0, fullEvent, true, requireFullFn(root, id))
+	prepareTestDispatch(t, root, dispatchInput(s, "no-grant"))
+	dispatchRefines(t, root, id, "no-grant", "no-grant", 0, fullEvent, true, requireFullFn(root, id))
+}
+
 func wrapUpWriteEvent(w dispatchkernel.WrapUpWrite) func(*dispatchView) dispatchkernel.Event {
 	return func(*dispatchView) dispatchkernel.Event { return w }
 }
@@ -168,15 +192,7 @@ func TestDispatchGrantRefusesWritesAndRefinesKernel(t *testing.T) {
 	if got := projectDispatchAt(t, root, id, rid, nil).state; !got.AcceptedReceipt || !got.Grant {
 		t.Fatalf("accepted projection %+v", got)
 	}
-	requireFull := func() error {
-		return WithTransaction(root, LockScope{Tasks: []string{id}, ReadOnly: true}, func(tx *Transaction) error {
-			s, err := tx.Snapshot(id)
-			if err != nil {
-				return err
-			}
-			return tx.requireFullExecution(s)
-		})
-	}
+	requireFull := requireFullFn(root, id)
 	dispatchRefines(t, root, id, rid, rid, 0, fullEvent, false, requireFull)
 	dispatchRefines(t, root, id, rid, rid, 0, fullEvent, false, func() error {
 		return fixtureWrite(root, transactionSnapshot(t, root, id).Entry, transactionSnapshot(t, root, id).Text+"\nnew runtime identity\n")
