@@ -84,7 +84,7 @@ A capability flag requires its operation (`focus`, `set_session_marker` for `pan
 | Operation            | Inputs (placeholders)                                   | Result fields |
 | -------------------- | ------------------------------------------------------- | ------------- |
 | `prepare` (optional) | `project`, `project_key`, `command`                     | `session`, `session_exists` (`true`/`false`), `workspace` |
-| `create_container`   | `session`, `session_exists`, `workspace`, `project`, `project_key`, `cwd`, `cwd_resolved`, `label`, `label_name` | `session`, `container`, `pane` (container and pane required; with an address without `container`, map the pane as the container) |
+| `create_container`   | `session`, `session_exists`, `workspace`, `project`, `project_key`, `cwd`, `cwd_resolved`, `label`, `label_name`, `title` | `session`, `container`, `pane` (container and pane required; with an address without `container`, map the pane as the container) |
 | `wait_ready` (optional; absent means ready) | `pane`, `timeout_ms` (the readiness budget: 15000, or 120000 with `extended_launch_timeouts`; `kander terminal test` always passes 15000) | none |
 | `run_command`        | `pane`, `cwd_quoted`, `command`, `posix` (`true`/`false`) | none |
 | `pane_directory` (optional) | `pane` | `directory` |
@@ -100,7 +100,7 @@ A capability flag requires its operation (`focus`, `set_session_marker` for `pan
 | `focus`              | `session`, `container`, `pane`                          | focus notice |
 | `close_container`    | `session`, `container`, `pane`                          | none |
 
-Every template also accepts `env.<VAR>` and the stored step results `step.<store>.<field>`. `project_key` is the directory label plus an eight-digit digest of the project path. `label_name` is the label reduced to a terminal name: its lowercase ASCII letters, digits and hyphens (at most 23 characters), a hyphen, and eight random hexadecimal digits, so two launches of one card (a takeover opens its container before the old one closes) never share it. `cwd_resolved` is `cwd` with symbolic links resolved (and so without a trailing separator), or `cwd` unchanged when it cannot be resolved; a definition that reads the new pane's directory back compares against both. `report_session` has no steps; it is the `report_session` hook.
+Every template also accepts `env.<VAR>` and the stored step results `step.<store>.<field>`. `project_key` is the directory label plus an eight-digit digest of the project path. `label_name` is the label reduced to a terminal name: its lowercase ASCII letters, digits and hyphens (at most 23 characters), a hyphen, and eight random hexadecimal digits, so two launches of one card (a takeover opens its container before the old one closes) never share it. `title` is the display title of the container (`Target.Title`, see [Terminal backends](terminal-backend.md#2-package-organization)), or `label` when the launch sets none. `cwd_resolved` is `cwd` with symbolic links resolved (and so without a trailing separator), or `cwd` unchanged when it cannot be resolved; a definition that reads the new pane's directory back compares against both. `report_session` has no steps; it is the `report_session` hook.
 
 An operation object is:
 
@@ -234,6 +234,7 @@ These stay in Go and are the same for every definition: `pane_facts`, `topology`
 | ---------------- | ------------------- | ------------------------------------------ | ------ |
 | `report_session` | reported            | `ErrNoReportChannel` with the note (launch warns) | the hook error |
 | `focus_pane` (after the `focus` steps) | switched | switched with the `focus.tab_only` notice | `focus.switch_failed` |
+| `place_container` (after `create_container`) | placed and named, or nothing to place into | the note becomes a launch warning | not used: the launch continues |
 
 The herdr hooks share one channel dial. On POSIX it connects to the unix socket at `HERDR_SOCKET_PATH`. On Windows herdr serves the named pipe `\\.\pipe\` followed by that path (a value that already starts with `\\.\pipe\` is used unchanged); the dial opens it for overlapped I/O so deadlines and cancellation apply, retries while every pipe instance is busy until the context ends, and returns the original error on failure without falling back to another channel.
 
@@ -241,14 +242,19 @@ The `report_session` hook owns the session socket handshake, then reads the iden
 
 The `focus_pane` hook runs only after the `focus` argv steps have switched the container. `ok` completes focus, `degraded` preserves successful container focus with a warning, and `failed` reports an error. The herdr implementation degrades on a socket failure, preserving the existing tab-only result.
 
+The `place_container` hook is not called by `create_container`: the launch layer calls it through the optional `terminal.ContainerPlacer` interface right after the container exists, because `CreateContainer` returns no warnings. It receives `container`, `pane`, `title` and `label` in `HookCall.Values`; `title` is `Target.Title` and falls back to `label` when empty. It requires `capabilities.container`. Its result never fails a launch: a degraded or failed result is returned as a warning string, and a definition without the hook returns none. `create_container` itself also receives `{title}` with the same fallback.
+
+The herdr-core implementation (`herdr-core-place-tab`) reads the labels of the terminal named by `HC_TERMINAL_ID` with `hc get`. Without that variable, or without a valid `herdr.space` label, the terminal is not placed and the result is ok. Otherwise it labels the new terminal with that space and a new random `herdr.tab` of the form `tb` plus 32 lowercase hexadecimal characters, and waits for Herdr App to create the tab in the `herdr-app` layout document (`doc.get` through `hc connect`). It then names the tab by writing the document back with `doc.set` at the version it read: the document is decoded as generic JSON with numbers kept as text, only the `name` of that one tab changes, and a version conflict rereads and retries. The title is written as a JSON string value after control characters are removed. The budgets are fixed and ignore `extended_launch_timeouts`: 3s per `hc` call, 5s for the tab to appear (polled every 200ms), 5 conflict attempts and 15s for the whole hook. A caller terminal that carries `herdr.space` while Herdr App is not connected to the core therefore costs each launch up to 5s, then a warning.
+
 ### Hook Inventory
 
-All shipped hook registrations live in `internal/terminal/builtin/hooks.go`; their implementations live in `internal/terminal/herdr`. The inventory test checks every registered built-in name against this table.
+All shipped hook registrations live in `internal/terminal/builtin/hooks.go`; their implementations live in `internal/terminal/herdr` and `internal/terminal/herdrcore`. The inventory test checks every registered built-in name against this table.
 
 | Hook name | Mount point | Purpose | Built-in definition |
 | --------- | ----------- | ------- | ------------------- |
 | `herdr-socket-session` | `report_session` | Report and read back the agent session | `herdr.json` |
 | `herdr-socket-focus` | `focus_pane` | Focus the pane after tab focus | `herdr.json` |
+| `herdr-core-place-tab` | `place_container` | Put the new terminal in a new, named tab of the caller's space | `herdr-core.json` |
 
 Go code is still required for socket or other non-command-line protocols, and for platform-specific process-tree handling. Definitions do not gain scripts to implement these operations.
 
