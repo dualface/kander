@@ -8,6 +8,7 @@ import KanderFormal.Proofs.Dispatch
 import KanderFormal.Proofs.DispatchForms
 import KanderFormal.Proofs.DispatchSafety
 import KanderFormal.Proofs.DispatchGrant
+import KanderFormal.Proofs.ReviewRun
 
 /-
 The registry of machines: what the generator emits, the bounds of the
@@ -215,6 +216,32 @@ def dispatchEvents : List Event :=
     ⟨"terminateSettle", [t, t, t]⟩, ⟨"terminateSettle", [x, t, t]⟩,
     ⟨"takeoverSettle", a 1 1 ++ [t, t, t, t]⟩, ⟨"takeoverSettle", a 1 2 ++ [t, t, t, t]⟩ ]
 
+/-- The review run vector alphabet: each event with every fact holding and with
+one fact failing, the phase updates the driver makes and the odd ones the entrance
+accepts, the finalizations of an `ok` run (valid, invalid report, launch status
+other than started, empty report, missing originals), a failure with and without
+a reason, a launch failure, and an interruption. -/
+def runEvents : List Event :=
+  let t := boolV true
+  let x := boolV false
+  let upd (p l e : Nat) (z s : Bool) : Event := ⟨"update", [enumV p, enumV l, enumV e, boolV z, boolV s]⟩
+  let fin (l e : Nat) (z r why inv cm : Bool) : Event :=
+    ⟨"finalize", [enumV l, enumV e, boolV z, boolV r, boolV why, boolV inv, boolV cm, t]⟩
+  [ ⟨"create", [t, t, t, t]⟩, ⟨"create", [x, t, t, t]⟩, ⟨"create", [t, t, t, x]⟩,
+    ⟨"retry", [t, t, t, t, t]⟩, ⟨"retry", [t, t, x, t, t]⟩, ⟨"retry", [t, t, t, x, t]⟩,
+    upd 1 0 0 true true, upd 2 1 0 true true, upd 3 2 0 true true, upd 4 2 0 true true, upd 6 2 1 true true,
+    upd 0 0 0 true true, upd 7 3 5 false true, upd 3 2 0 true false,
+    ⟨"storePrompt", [t]⟩, ⟨"storePrompt", [x]⟩, ⟨"storeContract", [t]⟩, ⟨"storeEvidence", [t]⟩,
+    fin 2 1 true true false false true, fin 2 1 true true false true true, fin 1 1 true true false false true,
+    fin 2 1 true false false false true, fin 2 3 false false true false true, fin 2 3 false false false false true,
+    fin 0 2 false false true false true, fin 1 4 false false true false true, fin 2 1 true true false false false,
+    ⟨"finalize", [enumV 2, enumV 1, t, t, x, x, t, x]⟩,
+    ⟨"stage", [t, t, x, t, t]⟩, ⟨"stage", [t, t, t, t, t]⟩, ⟨"stage", [t, x, x, t, t]⟩, ⟨"stage", [x, t, x, t, t]⟩,
+    ⟨"stage", [t, t, x, x, t]⟩, ⟨"stage", [t, t, x, t, x]⟩,
+    ⟨"skip", [t, t, t]⟩, ⟨"skip", [t, t, x]⟩, ⟨"skip", [t, x, t]⟩,
+    ⟨"verify", [t, t, t, t]⟩, ⟨"verify", [t, t, t, x]⟩, ⟨"verify", [t, t, x, t]⟩,
+    ⟨"passSkipped", [t, t]⟩, ⟨"passSkipped", [t, x]⟩ ]
+
 def entries : List Entry := [
   { machine := Machines.exampleMachine
     source := "KanderFormal/Machines/Example.lean"
@@ -343,6 +370,34 @@ def entries : List Entry := [
       ``KanderFormal.Proofs.Dispatch.release_settle_exclusive,
       ``KanderFormal.Proofs.Dispatch.reachable_grant_kind,
       ``KanderFormal.Proofs.Dispatch.cycle_refused_grant
+    ] },
+  { machine := Machines.ReviewRun.reviewRunMachine
+    source := "KanderFormal/Machines/ReviewRun.lean"
+    vectors := { depth := 4, paramSets := [[]], natDomain := [], events := runEvents }
+    theorems := [
+      ``KanderFormal.Proofs.ReviewRun.wellTyped,
+      ``KanderFormal.Proofs.ReviewRun.update_refused_finalized,
+      ``KanderFormal.Proofs.ReviewRun.finalize_refused_finalized,
+      ``KanderFormal.Proofs.ReviewRun.finalized_frozen,
+      ``KanderFormal.Proofs.ReviewRun.archive_sequences_accepted,
+      ``KanderFormal.Proofs.ReviewRun.finalize_ok,
+      ``KanderFormal.Proofs.ReviewRun.reachable_ok_facts,
+      ``KanderFormal.Proofs.ReviewRun.store_only_prepared,
+      ``KanderFormal.Proofs.ReviewRun.artifacts_only_prepared,
+      ``KanderFormal.Proofs.ReviewRun.originals_only_finalize,
+      ``KanderFormal.Proofs.ReviewRun.retry_spec,
+      ``KanderFormal.Proofs.ReviewRun.retry_refused,
+      ``KanderFormal.Proofs.ReviewRun.create_refused,
+      ``KanderFormal.Proofs.ReviewRun.stage_spec,
+      ``KanderFormal.Proofs.ReviewRun.skip_spec,
+      ``KanderFormal.Proofs.ReviewRun.publish_once,
+      ``KanderFormal.Proofs.ReviewRun.publish_needs_finalized,
+      ``KanderFormal.Proofs.ReviewRun.input_conflict_refused,
+      ``KanderFormal.Proofs.ReviewRun.published_frozen,
+      ``KanderFormal.Proofs.ReviewRun.init,
+      ``KanderFormal.Proofs.ReviewRun.step_inv,
+      ``KanderFormal.Proofs.ReviewRun.reachable_inv,
+      ``KanderFormal.Proofs.ReviewRun.reachable_published_finalized
     ] }
 ]
 

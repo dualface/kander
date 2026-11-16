@@ -76,9 +76,12 @@ def testFile (en : Entry) : String :=
         "\treturn vectortest.Array(xs...)", "}", ""]) ++
     ["var vectorParams = []Params{"] ++ en.vectors.paramSets.map (fun ps => "\t" ++ goParamsLit m ps ++ ",") ++
     ["}", "", "var vectorEvents = []Event{"] ++ events.map (fun e => "\t" ++ goEventLit m e ++ ",") ++
-    ["}", "", "func encodeParams(p Params) string {", "\treturn vectortest.Object("] ++
-    m.params.map (fun x => "\t\t" ++ jsonStr x ++ ", vectortest.Uint(uint64(p." ++ capitalize x ++ ")),") ++
-    ["\t)", "}", "", "func encodeState(s State) string {", "\treturn vectortest.Object("] ++
+    ["}", "", "func encodeParams(p Params) string {"] ++
+    (if m.params.isEmpty then ["\treturn vectortest.Object()"] else
+      ["\treturn vectortest.Object("] ++
+      m.params.map (fun x => "\t\t" ++ jsonStr x ++ ", vectortest.Uint(uint64(p." ++ capitalize x ++ ")),") ++
+      ["\t)"]) ++
+    ["}", "", "func encodeState(s State) string {", "\treturn vectortest.Object("] ++
     m.fields.map (fun d => "\t\t" ++ jsonStr d.name ++ ", " ++ goEncode m ("s." ++ capitalize d.name) d.ty.erase ++ ",") ++
     ["\t)", "}", "", "func encodeEvent(e Event) string {",
       if anyArgs then "\tswitch ev := e.(type) {" else "\tswitch e.(type) {"] ++
