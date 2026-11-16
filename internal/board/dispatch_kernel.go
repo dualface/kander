@@ -27,6 +27,8 @@ import (
 //   - The presented pair names the card's binding when the presented ID and epoch
 //     equal it; any other non-empty ID or epoch projects to a value that differs
 //     from the binding's, and an empty one to 0.
+//   - The receipts of the record project to whether each exists; their content is
+//     the shell's. A reauthorization clears both.
 //   - A released round leaves no trace on the card: a card without binding projects
 //     to the empty state unless the entrance holds the released record.
 
@@ -92,6 +94,7 @@ func projectDispatchBase(s Snapshot, d *Dispatch, base *uint64) *dispatchView {
 	if d != nil {
 		v.state.Phase, v.state.Kind = kernelDispatchPhases[d.State], kernelDispatchKinds[d.Input.Kind]
 		v.state.Released = d.Release != nil
+		v.state.AcceptedReceipt, v.state.CompletedReceipt = d.Accepted != nil, d.Completed != nil
 	}
 	v.base = counterBase(v.epoch)
 	if base != nil {

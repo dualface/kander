@@ -256,7 +256,14 @@ func TestDispatchAttemptAndReauthorizeRefineKernel(t *testing.T) {
 	alive := exit
 	alive.Outcome = "alive"
 	dispatchRefines(t, root, id, "one", "one", 0, reauthorizeEvent(d.Authorization, true, false, true), false, reauthorize(alive))
+	if st := projectDispatchAt(t, root, id, "one", nil).state; !st.AcceptedReceipt || st.CompletedReceipt {
+		t.Fatalf("accepted round holds receipts %+v", st)
+	}
 	dispatchRefines(t, root, id, "one", "one", 0, reauthorizeEvent(d.Authorization, true, true, true), true, reauthorize(exit))
+	// The reauthorization cleared the receipt of the acceptance (theorem 7).
+	if st := projectDispatchAt(t, root, id, "one", nil).state; st.AcceptedReceipt || st.CompletedReceipt {
+		t.Fatalf("reauthorized round keeps receipts %+v", st)
+	}
 	d, _ = ReadDispatch(root, id, "one")
 	// A terminal round is never reauthorized or attempted again.
 	for _, target := range []string{"working", "review"} {

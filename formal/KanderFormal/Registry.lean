@@ -300,7 +300,8 @@ def entries : List Entry := [
       ``KanderFormal.Proofs.Dispatch.init,
       ``KanderFormal.Proofs.Dispatch.step_inv,
       ``KanderFormal.Proofs.Dispatch.reachable_inv,
-      ``KanderFormal.Proofs.Dispatch.reachable_unbound
+      ``KanderFormal.Proofs.Dispatch.reachable_unbound,
+      ``KanderFormal.Proofs.Dispatch.reachable_receipts
     ] }
 ]
 

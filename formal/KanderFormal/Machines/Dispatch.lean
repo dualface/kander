@@ -8,7 +8,9 @@ The state is the slot a card offers one round of dispatch: the sequence number
 of the latest round (`round`, 0 before the first `prepare`), the authorization
 epoch of that round (`epoch`), whether the card binding (`DISPATCH_ID` and
 `EXECUTION_EPOCH`) is set (`bound`), the phase and kind of the round, and
-whether its release was written (`released`). The round number abstracts the
+whether its release was written (`released`), and whether the record holds the
+receipt of its acceptance and the receipt of its completion (`acceptedReceipt`,
+`completedReceipt`; the content of a receipt is not modeled). The round number abstracts the
 dispatch ID: the global uniqueness of IDs belongs to the shell. After a
 release the record keeps its pair `(round, epoch)` while the card binding is
 empty, so the pair of the dispatch record never decreases; the card's own
@@ -83,7 +85,8 @@ def prepareEvent : EventDecl where
   guard := all [ne (a "col") (.enumLit "col" "other"), a "free", orE (notE (f "bound")) isTerm, a "room"]
   assigns := [("round", inc (f "round")),
     ("epoch", .ite (f "bound") (inc (f "epoch")) (.natLit 1)),
-    ("bound", tt), ("phase", phaseLit "prepared"), ("kind", a "kind"), ("released", .boolLit false)]
+    ("bound", tt), ("phase", phaseLit "prepared"), ("kind", a "kind"), ("released", .boolLit false),
+    ("acceptedReceipt", .boolLit false), ("completedReceipt", .boolLit false)]
 
 /-- `prepareDispatch` of an ID the registry knows: the same input returns the
 stored round and changes nothing. -/
@@ -109,7 +112,8 @@ def reauthorizeEvent : EventDecl where
   args := authArgs ++ [boolArg "cas", boolArg "room", boolArg "cycle", boolArg "fresh", boolArg "before"]
   guard := all [a "cas", fenced, isOpen, a "room", a "cycle",
     .ite (phaseIs "accepted") (a "fresh") (a "before")]
-  assigns := [("epoch", inc (f "epoch")), ("phase", phaseLit "prepared")]
+  assigns := [("epoch", inc (f "epoch")), ("phase", phaseLit "prepared"),
+    ("acceptedReceipt", .boolLit false), ("completedReceipt", .boolLit false)]
 
 /-- `stageDispatchMove` into `working`: acceptance of a pending round before its
 deadline, or the replay of an accepted or completed one. -/
@@ -118,7 +122,8 @@ def acceptEvent : EventDecl where
   args := authArgs ++ [boolArg "rec", boolArg "cycle", boolArg "before"]
   guard := all [fenced, a "rec", a "cycle",
     orE (phaseIs "accepted") (orE (phaseIs "completed") (andE isPending (a "before")))]
-  assigns := [("phase", .ite isPending (phaseLit "accepted") (f "phase"))]
+  assigns := [("phase", .ite isPending (phaseLit "accepted") (f "phase")),
+    ("acceptedReceipt", .ite isPending tt (f "acceptedReceipt"))]
 
 /-- `stageDispatchMove` into `review` or `done`: completion of an accepted round
 of a card in `working`, or the replay of an identical stored receipt. -/
@@ -129,7 +134,7 @@ def completeEvent : EventDecl where
   guard := all [fenced, a "rec", a "cycle", eq (kindIs "wrapUp") (a "toDone"), a "commit", a "evidence",
     a "disp",
     orE (andE (phaseIs "completed") (a "same")) (andE (phaseIs "accepted") (eq (a "col") (.enumLit "col" "working")))]
-  assigns := [("phase", phaseLit "completed")]
+  assigns := [("phase", phaseLit "completed"), ("completedReceipt", tt)]
 
 /-- `EndDispatch`: a failed or cancelled end that also releases the binding. Ending
 an accepted round needs a decision; a failed or cancelled round only releases,
@@ -184,7 +189,9 @@ def dispatchMachine : Machine where
     { name := "bound", ty := .scalar .bool, init := .scalar (.bool false) },
     { name := "phase", ty := .scalar (.enum "phase"), init := .scalar (.enum 0) },
     { name := "kind", ty := .scalar (.enum "kind"), init := .scalar (.enum 0) },
-    { name := "released", ty := .scalar .bool, init := .scalar (.bool false) }
+    { name := "released", ty := .scalar .bool, init := .scalar (.bool false) },
+    { name := "acceptedReceipt", ty := .scalar .bool, init := .scalar (.bool false) },
+    { name := "completedReceipt", ty := .scalar .bool, init := .scalar (.bool false) }
   ]
   events := [prepareEvent, retryEvent, attemptEvent, reauthorizeEvent, acceptEvent, completeEvent, endEvent,
     cancelEvent, retainEvent, execEvent]

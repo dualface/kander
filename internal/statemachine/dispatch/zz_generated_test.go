@@ -80,6 +80,8 @@ func encodeState(s State) string {
 		"phase", vectortest.Str(phaseNames[s.Phase]),
 		"kind", vectortest.Str(kindNames[s.Kind]),
 		"released", vectortest.Bool(s.Released),
+		"acceptedReceipt", vectortest.Bool(s.AcceptedReceipt),
+		"completedReceipt", vectortest.Bool(s.CompletedReceipt),
 	)
 }
 

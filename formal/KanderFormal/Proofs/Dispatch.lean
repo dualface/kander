@@ -23,44 +23,53 @@ structure Dp where
   ph : Nat
   kd : Nat
   rel : Bool
+  racc : Bool
+  rcmp : Bool
 
 def enc (x : Dp) : State :=
   [("round", natV x.round), ("epoch", natV x.epoch), ("bound", boolV x.bound), ("phase", enumV x.ph),
-    ("kind", enumV x.kd), ("released", boolV x.rel)]
+    ("kind", enumV x.kd), ("released", boolV x.rel), ("acceptedReceipt", boolV x.racc),
+    ("completedReceipt", boolV x.rcmp)]
 
 theorem enc_inj {x y : Dp} (h : enc x = enc y) : x = y := by
-  obtain ⟨_, _, _, _, _, _⟩ := x
-  obtain ⟨_, _, _, _, _, _⟩ := y
+  obtain ⟨_, _, _, _, _, _, _, _⟩ := x
+  obtain ⟨_, _, _, _, _, _, _, _⟩ := y
   simp [enc, enumV, natV, boolV] at h
-  obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩ := h
+  obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ := h
   rfl
 
 theorem shape {p : Params} {s : State} (h : M.StateConforms p s) :
     ∃ x, s = enc x ∧ x.ph < 7 ∧ x.kd < 3 ∧ x.round ≤ p "maxRound" ∧ x.epoch ≤ p "maxEpoch" := by
   obtain ⟨hn, hc⟩ := h
   match s, hn with
-  | [(_, v1), (_, v2), (_, v3), (_, v4), (_, v5), (_, v6)], hn =>
+  | [(_, v1), (_, v2), (_, v3), (_, v4), (_, v5), (_, v6), (_, v7), (_, v8)], hn =>
     simp [dispatchMachine] at hn
-    obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩ := hn
+    obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ := hn
     obtain ⟨t1, ht1, c1⟩ := hc "round" v1 (by simp [lookup])
     obtain ⟨t2, ht2, c2⟩ := hc "epoch" v2 (by simp [lookup])
     obtain ⟨t3, ht3, c3⟩ := hc "bound" v3 (by simp [lookup])
     obtain ⟨t4, ht4, c4⟩ := hc "phase" v4 (by simp [lookup])
     obtain ⟨t5, ht5, c5⟩ := hc "kind" v5 (by simp [lookup])
     obtain ⟨t6, ht6, c6⟩ := hc "released" v6 (by simp [lookup])
+    obtain ⟨t7, ht7, c7⟩ := hc "acceptedReceipt" v7 (by simp [lookup])
+    obtain ⟨t8, ht8, c8⟩ := hc "completedReceipt" v8 (by simp [lookup])
     cases (rfl : M.fieldTy "round" = some (.scalar (.nat "maxRound"))).symm.trans ht1
     cases (rfl : M.fieldTy "epoch" = some (.scalar (.nat "maxEpoch"))).symm.trans ht2
     cases (rfl : M.fieldTy "bound" = some (.scalar .bool)).symm.trans ht3
     cases (rfl : M.fieldTy "phase" = some (.scalar (.enum "phase"))).symm.trans ht4
     cases (rfl : M.fieldTy "kind" = some (.scalar (.enum "kind"))).symm.trans ht5
     cases (rfl : M.fieldTy "released" = some (.scalar .bool)).symm.trans ht6
+    cases (rfl : M.fieldTy "acceptedReceipt" = some (.scalar .bool)).symm.trans ht7
+    cases (rfl : M.fieldTy "completedReceipt" = some (.scalar .bool)).symm.trans ht8
     obtain ⟨r, rfl, hr⟩ := conforms_nat c1
     obtain ⟨e, rfl, he⟩ := conforms_nat c2
     obtain ⟨b, rfl⟩ := conforms_bool c3
     obtain ⟨ph, rfl, hph⟩ := conforms_enum (rfl : M.enumSize "phase" = some 7) c4
     obtain ⟨kd, rfl, hkd⟩ := conforms_enum (rfl : M.enumSize "kind" = some 3) c5
     obtain ⟨rl, rfl⟩ := conforms_bool c6
-    exact ⟨⟨r, e, b, ph, kd, rl⟩, rfl, hph, hkd, hr, he⟩
+    obtain ⟨ra, rfl⟩ := conforms_bool c7
+    obtain ⟨rc, rfl⟩ := conforms_bool c8
+    exact ⟨⟨r, e, b, ph, kd, rl, ra, rc⟩, rfl, hph, hkd, hr, he⟩
 
 /-! ## Events on an encoded state -/
 
@@ -86,11 +95,13 @@ theorem ty_bound : M.fieldTy "bound" = some (.scalar .bool) := rfl
 theorem ty_phase : M.fieldTy "phase" = some (.scalar (.enum "phase")) := rfl
 theorem ty_kind : M.fieldTy "kind" = some (.scalar (.enum "kind")) := rfl
 theorem ty_released : M.fieldTy "released" = some (.scalar .bool) := rfl
+theorem ty_acceptedReceipt : M.fieldTy "acceptedReceipt" = some (.scalar .bool) := rfl
+theorem ty_completedReceipt : M.fieldTy "completedReceipt" = some (.scalar .bool) := rfl
 
 macro "dp_simp" "[" ts:Lean.Parser.Tactic.simpLemma,* "]" : tactic =>
   `(tactic| simp [step, find_prepare, find_retry, find_attempt, find_reauthorize, find_accept, find_complete,
       find_end, find_cancel, find_retain, find_exec, ctors_phase, ctors_kind, ctors_col, size_phase, size_kind,
-      size_col, ty_round, ty_epoch, ty_bound, ty_phase, ty_kind, ty_released, lookup,
+      size_col, ty_round, ty_epoch, ty_bound, ty_phase, ty_kind, ty_released, ty_acceptedReceipt, ty_completedReceipt, lookup,
       prepareEvent, retryEvent, attemptEvent, reauthorizeEvent, acceptEvent, completeEvent, endEvent,
       cancelEvent, retainEvent, execEvent, fenced, isOpen, isTerm, isLegacy, isPending, phaseIs, kindIs,
       phaseLit, authRound, authEpoch, authArgs, natArg, boolArg, enumArg, all, imp, eq, ne, inc, zero, f, a, tt,
@@ -131,7 +142,7 @@ theorem step_prepare (p : Params) (x : Dp) (kd cl : Nat) (free room : Bool) :
     step M p (enc x) ⟨"prepare", [enumV kd, enumV cl, boolV free, boolV room]⟩ =
       if kd < 3 ∧ cl < 3 ∧ cl ≠ 2 ∧ free = true ∧ (x.bound = false ∨ Term x) ∧ room = true ∧
           x.round + 1 ≤ p "maxRound" ∧ (if x.bound = true then x.epoch + 1 else 1) ≤ p "maxEpoch" then
-        some (enc ⟨x.round + 1, if x.bound = true then x.epoch + 1 else 1, true, 1, kd, false⟩) else none := by
+        some (enc ⟨x.round + 1, if x.bound = true then x.epoch + 1 else 1, true, 1, kd, false, false, false⟩) else none := by
   by_cases hk : kd < 3 <;> by_cases hc : cl < 3 <;> cases hb : x.bound <;> dp_simp [hk, hc, hb, Term] <;> ite_close
 
 theorem step_attempt (p : Params) (x : Dp) (ar ae : Nat) (cas cycle evidence before : Bool) :
@@ -146,7 +157,7 @@ theorem step_reauthorize (p : Params) (x : Dp) (ar ae : Nat) (cas room cycle fre
         boolV before]⟩ =
       if ar ≤ p "maxRound" ∧ ae ≤ p "maxEpoch" ∧ cas = true ∧ Fenced x ar ae ∧ Open x ∧ room = true ∧
           cycle = true ∧ (if x.ph = 3 then fresh = true else before = true) ∧ x.epoch + 1 ≤ p "maxEpoch" then
-        some (enc { x with epoch := x.epoch + 1, ph := 1 }) else none := by
+        some (enc { x with epoch := x.epoch + 1, ph := 1, racc := false, rcmp := false }) else none := by
   by_cases h1 : ar ≤ p "maxRound" <;> by_cases h2 : ae ≤ p "maxEpoch" <;> by_cases h3 : x.ph = 3 <;>
     dp_simp [h1, h2, h3, Fenced, Open] <;> ite_close
 
@@ -154,7 +165,7 @@ theorem step_accept (p : Params) (x : Dp) (ar ae : Nat) (rec cycle before : Bool
     step M p (enc x) ⟨"accept", [natV ar, natV ae, boolV rec, boolV cycle, boolV before]⟩ =
       if ar ≤ p "maxRound" ∧ ae ≤ p "maxEpoch" ∧ Fenced x ar ae ∧ rec = true ∧ cycle = true ∧
           (x.ph = 3 ∨ x.ph = 4 ∨ Pend x ∧ before = true) then
-        some (enc { x with ph := if Pend x then 3 else x.ph }) else none := by
+        some (enc { x with ph := if Pend x then 3 else x.ph, racc := if Pend x then true else x.racc }) else none := by
   by_cases h1 : ar ≤ p "maxRound" <;> by_cases h2 : ae ≤ p "maxEpoch" <;> by_cases h3 : x.ph = 1 <;>
     by_cases h4 : x.ph = 2 <;> dp_simp [h1, h2, h3, h4, Fenced, Pend] <;> ite_close
 
@@ -165,7 +176,7 @@ theorem step_complete (p : Params) (x : Dp) (ar ae : Nat) (rec cycle toDone comm
       if ar ≤ p "maxRound" ∧ ae ≤ p "maxEpoch" ∧ cl < 3 ∧ Fenced x ar ae ∧ rec = true ∧ cycle = true ∧
           decide (x.kd = 2) = toDone ∧ commit = true ∧ evidence = true ∧ disp = true ∧
           (x.ph = 4 ∧ same = true ∨ x.ph = 3 ∧ cl = 0) then
-        some (enc { x with ph := 4 }) else none := by
+        some (enc { x with ph := 4, rcmp := true }) else none := by
   by_cases h1 : ar ≤ p "maxRound" <;> by_cases h2 : ae ≤ p "maxEpoch" <;> by_cases hc : cl < 3 <;>
     dp_simp [h1, h2, hc, Fenced] <;> ite_close
 
@@ -175,7 +186,7 @@ theorem step_end (p : Params) (x : Dp) (ar ae : Nat) (cas room cycle decided toF
       if ar ≤ p "maxRound" ∧ ae ≤ p "maxEpoch" ∧ cas = true ∧ Fenced x ar ae ∧ x.ph ≠ 4 ∧ x.rel = false ∧
           room = true ∧ cycle = true ∧ (x.ph ≠ 3 ∨ decided = true) ∧
           (¬Leg x ∨ decided = true ∧ (x.ph = 5 ↔ toFailed = true)) then
-        some (enc ⟨x.round, x.epoch, false, if toFailed = true then 5 else 6, x.kd, true⟩) else none := by
+        some (enc ⟨x.round, x.epoch, false, if toFailed = true then 5 else 6, x.kd, true, x.racc, x.rcmp⟩) else none := by
   by_cases h1 : ar ≤ p "maxRound" <;> by_cases h2 : ae ≤ p "maxEpoch" <;>
     cases toFailed <;> dp_simp [h1, h2, Fenced, Leg] <;> ite_close
 
@@ -366,14 +377,16 @@ theorem accepted_cases {p : Params} {s s' : State} {e : Event} (h : step M p s e
 def Forms (x y : Dp) : Prop :=
   y = x ∨
   (y.round = x.round + 1 ∧ y.bound = true ∧ y.ph = 1 ∧ y.rel = false ∧ (x.bound = false ∨ Term x) ∧
-      y.epoch = (if x.bound = true then x.epoch + 1 else 1)) ∨
+      y.epoch = (if x.bound = true then x.epoch + 1 else 1) ∧ y.racc = false ∧ y.rcmp = false) ∨
   (y = { x with ph := 2 } ∧ x.bound = true ∧ x.round ≠ 0 ∧ Pend x) ∨
-  (y = { x with epoch := x.epoch + 1, ph := 1 } ∧ x.bound = true ∧ x.round ≠ 0 ∧ Open x) ∨
-  (y = { x with ph := if Pend x then 3 else x.ph } ∧ x.bound = true ∧ x.round ≠ 0 ∧
+  (y = { x with epoch := x.epoch + 1, ph := 1, racc := false, rcmp := false } ∧ x.bound = true ∧ x.round ≠ 0 ∧
+      Open x) ∨
+  (y = { x with ph := if Pend x then 3 else x.ph, racc := if Pend x then true else x.racc } ∧ x.bound = true ∧ x.round ≠ 0 ∧
       (Pend x ∨ x.ph = 3 ∨ x.ph = 4)) ∨
-  (y = { x with ph := 4 } ∧ x.bound = true ∧ x.round ≠ 0 ∧ (x.ph = 3 ∨ x.ph = 4)) ∨
+  (y = { x with ph := 4, rcmp := true } ∧ x.bound = true ∧ x.round ≠ 0 ∧ (x.ph = 3 ∨ x.ph = 4)) ∨
   (y.round = x.round ∧ y.epoch = x.epoch ∧ y.bound = false ∧ y.rel = true ∧ (y.ph = 5 ∨ y.ph = 6) ∧
-      y.kd = x.kd ∧ x.bound = true ∧ x.round ≠ 0 ∧ x.ph ≠ 4 ∧ x.rel = false ∧ (Leg x → y.ph = x.ph)) ∨
+      y.kd = x.kd ∧ x.bound = true ∧ x.round ≠ 0 ∧ x.ph ≠ 4 ∧ x.rel = false ∧ (Leg x → y.ph = x.ph) ∧
+      y.racc = x.racc ∧ y.rcmp = x.rcmp) ∨
   (y = { x with ph := if Open x then 6 else x.ph } ∧ x.bound = true ∧ (Open x ∨ Leg x))
 
 theorem ite_some_inv {c : Prop} [Decidable c] {a b : State} (h : (if c then some a else none) = some b) :
@@ -496,10 +509,11 @@ theorem fence_refused (p : Params) (x : Dp) (ar ae : Nat)
 /-! ## Theorem 3: acceptance and completion -/
 
 /-- Theorem 3: an `accept` that changes the phase starts from a prepared or
-uncertain round, before its acceptance deadline, and ends in `accepted`. -/
+uncertain round, before its acceptance deadline, and ends in `accepted` with
+its receipt. -/
 theorem accept_change {p : Params} {x y : Dp} {ar ae : Nat} {rc cy bf : Bool} {s' : State}
     (h : step M p (enc x) ⟨"accept", [natV ar, natV ae, boolV rc, boolV cy, boolV bf]⟩ = some s')
-    (hy : s' = enc y) (hne : y.ph ≠ x.ph) : Pend x ∧ bf = true ∧ y.ph = 3 := by
+    (hy : s' = enc y) (hne : y.ph ≠ x.ph) : Pend x ∧ bf = true ∧ y.ph = 3 ∧ y.racc = true := by
   rw [step_accept] at h
   obtain ⟨hc, rfl⟩ := ite_some_inv h
   have := enc_inj hy
@@ -513,12 +527,13 @@ theorem accept_change {p : Params} {x y : Dp} {ar ae : Nat} {rc cy bf : Bool} {s
   · simp [hp] at hne
 
 /-- Theorem 3: a `complete` that changes the phase starts from an accepted round
-of a card in `working` (`col` is `working`, index 0) and ends in `completed`. -/
+of a card in `working` (`col` is `working`, index 0) and ends in `completed` with
+its receipt. -/
 theorem complete_change {p : Params} {x y : Dp} {ar ae : Nat} {rc cy td cm ev dp sm : Bool} {cl : Nat}
     {s' : State}
     (h : step M p (enc x) ⟨"complete", [natV ar, natV ae, boolV rc, boolV cy, boolV td, boolV cm, boolV ev,
         boolV dp, boolV sm, enumV cl]⟩ = some s')
-    (hy : s' = enc y) (hne : y.ph ≠ x.ph) : x.ph = 3 ∧ cl = 0 ∧ y.ph = 4 := by
+    (hy : s' = enc y) (hne : y.ph ≠ x.ph) : x.ph = 3 ∧ cl = 0 ∧ y.ph = 4 ∧ y.rcmp = true := by
   rw [step_complete] at h
   obtain ⟨hc, rfl⟩ := ite_some_inv h
   have := enc_inj hy
@@ -526,7 +541,7 @@ theorem complete_change {p : Params} {x y : Dp} {ar ae : Nat} {rc cy td cm ev dp
   obtain ⟨-, -, -, -, -, -, -, -, -, -, h3⟩ := hc
   rcases h3 with ⟨h3, -⟩ | ⟨h3, h4⟩
   · simp [h3] at hne
-  · exact ⟨h3, h4, rfl⟩
+  · exact ⟨h3, h4, rfl, rfl⟩
 
 /-- Theorem 3: a round of kind `wrap-up` (index 2) completes only by a move into
 `done`, and any other kind only by a move into `review`. -/
@@ -556,11 +571,11 @@ theorem accept_replay (p : Params) (x : Dp) (ar ae : Nat) (rc cy bf : Bool)
 receipt is accepted as a replay and leaves the state unchanged. -/
 theorem complete_replay (p : Params) (x : Dp) (ar ae : Nat) (td : Bool) (cl : Nat)
     (hb1 : ar ≤ p "maxRound") (hb2 : ae ≤ p "maxEpoch") (hcl : cl < 3) (hf : Fenced x ar ae)
-    (hk : decide (x.kd = 2) = td) (hp : x.ph = 4) :
+    (hk : decide (x.kd = 2) = td) (hp : x.ph = 4) (hr : x.rcmp = true) :
     step M p (enc x) ⟨"complete", [natV ar, natV ae, boolV true, boolV true, boolV td, boolV true, boolV true,
         boolV true, boolV true, enumV cl]⟩ = some (enc x) := by
   rw [step_complete]
-  have : { x with ph := 4 } = x := by cases x; simp_all
+  have : { x with ph := 4, rcmp := true } = x := by cases x; simp_all
   simp [hb1, hb2, hcl, hf, hk, hp, this]
 
 /-! ## Theorem 5: terminal phases -/
@@ -571,7 +586,7 @@ theorem terminal_stable {p : Params} {x y : Dp} {s' : State} {e : Event} (h : st
     (hy : s' = enc y) (ht : Term x) (hr : y.round = x.round) : y.ph = x.ph := by
   unfold Term at ht
   rcases forms h hy with h0 | ⟨h1, -⟩ | ⟨h1, -, -, hp⟩ | ⟨h1, -, -, ho⟩ | ⟨h1, -, -, hp⟩ | ⟨h1, -, -, hp⟩ |
-    ⟨-, -, -, -, -, -, -, -, h4, -, hl⟩ | ⟨h1, -, ho⟩
+    ⟨-, -, -, -, -, -, -, -, h4, -, hl, -⟩ | ⟨h1, -, ho⟩
   · subst h0; rfl
   · omega
   · exfalso; unfold Pend at hp; omega
@@ -642,20 +657,20 @@ theorem release_once {p : Params} {x y : Dp} {s' : State} {e : Event} (h : step 
 /-! ## Theorem 7: reauthorization -/
 
 /-- Theorem 7: an accepted `reauthorize` of an accepted round carries fresh
-stopped evidence; it raises the epoch by one and returns the round to
-`prepared`. -/
+stopped evidence; it raises the epoch by one, returns the round to `prepared`,
+and clears the receipts of its acceptance and completion. -/
 theorem reauthorize_spec {p : Params} {x y : Dp} {ar ae : Nat} {cs rm cy fr bf : Bool} {s' : State}
     (h : step M p (enc x) ⟨"reauthorize", [natV ar, natV ae, boolV cs, boolV rm, boolV cy, boolV fr,
         boolV bf]⟩ = some s')
     (hy : s' = enc y) :
     (x.ph = 3 → fr = true) ∧ (x.ph ≠ 3 → bf = true) ∧ y.epoch = x.epoch + 1 ∧ y.ph = 1 ∧
-      y.round = x.round := by
+      y.round = x.round ∧ y.racc = false ∧ y.rcmp = false := by
   rw [step_reauthorize] at h
   obtain ⟨hc, rfl⟩ := ite_some_inv h
   have := enc_inj hy
   subst this
   obtain ⟨-, -, -, -, -, -, -, h8, -⟩ := hc
-  refine ⟨fun h3 => ?_, fun h3 => ?_, rfl, rfl, rfl⟩
+  refine ⟨fun h3 => ?_, fun h3 => ?_, rfl, rfl, rfl, rfl, rfl⟩
   · simpa [h3] using h8
   · simpa [h3] using h8
 
@@ -696,6 +711,10 @@ structure Props (x : Dp) : Prop where
   boundLive : x.bound = true → x.ph ≠ 0
   releasedUnbound : x.rel = true → x.bound = false ∧ Leg x
   unbound : x.bound = false → x.ph = 0 ∨ x.rel = true
+  idleReceipts : (x.ph = 0 ∨ x.ph = 1 ∨ x.ph = 2) → x.racc = false ∧ x.rcmp = false
+  acceptedReceipts : x.ph = 3 → x.racc = true ∧ x.rcmp = false
+  completedReceipts : x.ph = 4 → x.racc = true ∧ x.rcmp = true
+  endedReceipts : (x.ph = 5 ∨ x.ph = 6) → x.rcmp = false
 
 def Inv (p : Params) (s : State) : Prop :=
   M.StateConforms p s ∧ ∀ x, s = enc x → Props x
@@ -703,61 +722,47 @@ def Inv (p : Params) (s : State) : Prop :=
 theorem init (p : Params) : Inv p (initial M p) := by
   refine ⟨initial_conforms wellTyped p, ?_⟩
   intro x hx
-  have : x = ⟨0, 0, false, 0, 0, false⟩ := enc_inj (hx.symm.trans rfl)
+  have : x = ⟨0, 0, false, 0, 0, false, false, false⟩ := enc_inj (hx.symm.trans rfl)
   subst this
-  exact ⟨by simp, by simp, by simp, by simp, by simp⟩
+  exact ⟨by simp, by simp, by simp, by simp, by simp, by simp, by simp, by simp, by simp⟩
+
+macro "props_close" : tactic =>
+  `(tactic| (refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> intros <;> simp_all [Pend, Open, Leg] <;> omega))
 
 theorem step_inv (p : Params) (s s' : State) (e : Event) (hi : Inv p s)
     (h : KanderFormal.step M p s e = some s') : Inv p s' := by
   obtain ⟨hc, hp⟩ := hi
   refine ⟨step_preserves_conforms hc h, ?_⟩
-  obtain ⟨x, rfl, -⟩ := shape hc
-  obtain ⟨P1, P2, P3, P4, P5⟩ := hp x rfl
+  obtain ⟨x, rfl, hlt, -⟩ := shape hc
+  obtain ⟨P1, P2, P3, P4, P5, P6, P7, P8, P9⟩ := hp x rfl
   intro y hy
-  rcases forms h hy with h0 | ⟨hr, hb, hph, hrl, -, he⟩ | ⟨h1, hb, hr, hp⟩ | ⟨h1, hb, hr, ho⟩ |
-    ⟨h1, hb, hr, hp⟩ | ⟨h1, hb, hr, hp⟩ | ⟨hr, he, hb, hrl, hph, -, hxb, hxr, hx4, hxrel, -⟩ | ⟨h1, hb, ho⟩
-  · subst h0; exact ⟨P1, P2, P3, P4, P5⟩
-  · refine ⟨by omega, ?_, by simp [hph], by simp [hb, hrl], by simp [hb]⟩
-    have : y.epoch ≠ 0 := by rw [he]; split <;> omega
-    omega
-  · subst h1
-    have hrl : x.rel = false := by
-      cases hq : x.rel
-      · rfl
-      · have := (P4 hq).1; simp_all
-    unfold Pend at hp
-    refine ⟨by simp; omega, P2, by simp, by simp [hrl], by simp [hb]⟩
-  · subst h1
-    have hrl : x.rel = false := by
-      cases hq : x.rel
-      · rfl
-      · have := (P4 hq).1; simp_all
-    unfold Open at ho
-    refine ⟨by simp; omega, by simp; omega, by simp, by simp [hrl], by simp [hb]⟩
-  · subst h1
-    have hrl : x.rel = false := by
-      cases hq : x.rel
-      · rfl
-      · have := (P4 hq).1; simp_all
-    refine ⟨?_, P2, ?_, by simp [hrl], by simp [hb]⟩
-    · unfold Pend at hp; by_cases hq : x.ph = 1 ∨ x.ph = 2 <;> simp [Pend, hq] <;> omega
-    · unfold Pend at hp; by_cases hq : x.ph = 1 ∨ x.ph = 2 <;> simp [Pend, hq] <;> omega
-  · subst h1
-    have hrl : x.rel = false := by
-      cases hq : x.rel
-      · rfl
-      · have := (P4 hq).1; simp_all
-    refine ⟨by simp; omega, P2, by simp, by simp [hrl], by simp [hb]⟩
-  · refine ⟨by omega, by omega, by simp [hb], fun _ => ⟨hb, by unfold Leg; omega⟩, fun _ => Or.inr hrl⟩
-  · subst h1
-    have hrl : x.rel = false := by
-      cases hq : x.rel
-      · rfl
-      · have := (P4 hq).1; simp_all
-    have hx : x.ph ≠ 0 := by unfold Open Leg at ho; omega
-    refine ⟨?_, P2, ?_, by simp [hrl], by simp [hb]⟩
-    · by_cases hq : Open x <;> simp [hq] <;> omega
-    · by_cases hq : Open x <;> simp [hq] <;> omega
+  have hrel : x.bound = true → x.rel = false := fun hb => by
+    cases hq : x.rel
+    · rfl
+    · have := (P4 hq).1; simp_all
+  rcases forms h hy with h0 | ⟨hr, hb, hph, hrl, -, he, hra, hrc⟩ | ⟨h1, hb, hr, hp⟩ | ⟨h1, hb, hr, ho⟩ |
+    ⟨h1, hb, hr, hp⟩ | ⟨h1, hb, hr, hr'⟩ | ⟨hr, he, hb, hrl, hph, -, hxb, hxr, hx4, hxrel, -, hra, hrc⟩ |
+    ⟨h1, hb, ho⟩
+  · subst h0; exact ⟨P1, P2, P3, P4, P5, P6, P7, P8, P9⟩
+  · have : y.epoch ≠ 0 := by rw [he]; split <;> omega
+    refine ⟨by omega, by omega, by simp [hph], by simp [hb, hrl], by simp [hb], ?_, ?_, ?_, ?_⟩ <;>
+      intros <;> simp_all
+  · subst h1; have := hrel hb; props_close
+  · subst h1; have := hrel hb; props_close
+  · subst h1; have := hrel hb
+    by_cases hq : x.ph = 1 ∨ x.ph = 2 <;> props_close
+  · subst h1; have := hrel hb
+    have hx : x.ph = 3 ∨ x.ph = 4 := hr'
+    rcases hx with hq | hq <;> props_close
+  · have hx : x.ph ≠ 0 := P3 hxb
+    have hleg := P9
+    have hq : x.ph = 1 ∨ x.ph = 2 ∨ x.ph = 3 ∨ x.ph = 5 ∨ x.ph = 6 := by omega
+    refine ⟨by omega, by omega, by simp [hb], fun _ => ⟨hb, by unfold Leg; omega⟩, fun _ => Or.inr hrl, ?_, ?_, ?_, ?_⟩ <;>
+      intros <;> rcases hq with hq | hq | hq | hq | hq <;> simp_all <;> omega
+  · subst h1; have := hrel hb
+    have hx : x.ph = 1 ∨ x.ph = 2 ∨ x.ph = 3 ∨ x.ph = 5 ∨ x.ph = 6 := by
+      unfold Open Leg at ho; omega
+    rcases hx with hx | hx | hx | hx | hx <;> props_close
 
 /-- The dispatch round machine's proof obligation certificate. -/
 def cert : SafetyCert M where
@@ -774,5 +779,15 @@ a released one, so `accept`, `complete`, `attempt`, `reauthorize`, `end`, `cance
 refused there. -/
 theorem reachable_unbound {p : Params} {x : Dp} (hr : Reachable M p (enc x)) (hb : x.bound = false) :
     x.ph = 0 ∨ x.rel = true := ((reachable_inv hr).2 x rfl).unbound hb
+
+/-- Theorem 9: in every reachable state the receipts follow the phase: none while
+a round is prepared or uncertain, the acceptance receipt once accepted, both once
+completed, and never a completion receipt on a failed or cancelled round. -/
+theorem reachable_receipts {p : Params} {x : Dp} (hr : Reachable M p (enc x)) :
+    (x.ph = 0 ∨ x.ph = 1 ∨ x.ph = 2 → x.racc = false ∧ x.rcmp = false) ∧
+    (x.ph = 3 → x.racc = true ∧ x.rcmp = false) ∧ (x.ph = 4 → x.racc = true ∧ x.rcmp = true) ∧
+    (x.ph = 5 ∨ x.ph = 6 → x.rcmp = false) := by
+  have h := (reachable_inv hr).2 x rfl
+  exact ⟨h.idleReceipts, h.acceptedReceipts, h.completedReceipts, h.endedReceipts⟩
 
 end KanderFormal.Proofs.Dispatch
