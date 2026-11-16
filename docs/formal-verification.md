@@ -233,16 +233,52 @@ The shells are `internal/board/lifecycle_kernel.go`, `internal/board/execution_k
 
 The differential vectors use explicit alphabets: `cardlifecycle` and `serverclaim` replay every sequence of depth 5, `executionledger` of depth 4, because its 30 events would make depth 5 walk about 24 million sequences.
 
+## Durable Dispatch Rounds (M3)
+
+One machine replaces the hand-written acceptance and refusal decisions of the dispatch rounds of a card:
+
+| Machine | Definition | Kernel | Scope |
+| --- | --- | --- | --- |
+| `dispatch` | `Machines/Dispatch.lean` | `internal/statemachine/dispatch` | The slot a card offers one round of dispatch: the round, its epoch, whether the card binding is set, the phase and kind of the round, and whether its release was written |
+
+The events are `prepare` (a new round) and `retry` (the same ID with an equal input), `attempt` (`BeginDispatchAttempt`), `reauthorize` (`ReauthorizeDispatch`), `accept` (the move into `working`), `complete` (the move into `review` or `done`), `end` (`EndDispatch`, fail or cancel, with the release), `cancel` (the unfinished binding at a move into `archived` or `trash`), `retain` (a takeover that keeps the round), and `exec` (`requireExecution`, for author and non-author writes). The round number abstracts the dispatch ID, whose global uniqueness stays with the registry. A release keeps the pair `(round, epoch)` of the record while the card binding is empty. The wrap-up grant and the settlement of a completed binding (M4, M5) are not modeled yet; their checks stay hand-written and run where they always ran.
+
+A request presents an authorization pair; the kernel compares it with the binding. The shell passes as Boolean arguments what it computes and the kernel does not: the server clock against the acceptance deadline, the plan cycle of the round, the card and record revisions, the integrity of stored receipts and originals, the result of the wrap-up evidence checks, whether a start is unfinished, whether the epoch is below the last `uint64`, and whether a decision was recorded.
+
+Proofs, for every round and epoch bound:
+
+| Theorem | Statement |
+| --- | --- |
+| `Dispatch.prepare_single` | (1) A new round is accepted only when the card has no binding or its binding is terminal |
+| `Dispatch.pair_monotone`, `prepare_strict`, `reauthorize_strict`, `fence_refused` | (2) No accepted event lowers the pair `(round, epoch)` of the record in lexicographic order; a new round raises the round and sets the epoch to the card's epoch plus one (1 without a binding); a reauthorization raises the epoch by one; an `accept`, a `complete`, an `end`, or an executor write that presents a pair other than the binding is refused and the state stays |
+| `Dispatch.accept_change`, `complete_change`, `complete_kind` | (3) An `accept` that changes the phase starts from a prepared or uncertain round before its deadline; a `complete` that changes it starts from an accepted round of a card in `working`; a wrap-up round completes only into `done`, any other kind only into `review` |
+| `Dispatch.accept_replay`, `complete_replay` | (4) An `accept` of an accepted or completed round, and a `complete` of a completed round with the identical receipt, are accepted and change nothing |
+| `Dispatch.terminal_stable`, `terminal_refused` | (5) Within one round a terminal phase never changes; `attempt` and `reauthorize` refuse it |
+| `Dispatch.end_spec`, `end_once`, `release_once` | (6) Ending an accepted round needs a decision, a failed or cancelled round is released only with a decision and its own phase, a release empties the binding, and a round is released once |
+| `Dispatch.reauthorize_spec` | (7) A reauthorization raises the epoch by one and returns the round to `prepared`; an accepted round needs fresh stopped evidence, any other an unexpired deadline |
+| `Dispatch.cycle_refused` | (8) A round of another plan cycle is refused by `attempt`, `reauthorize`, `accept`, `complete`, `end`, `cancel`, and `retain`; `prepare` and `exec` carry no cycle |
+| `Dispatch.reachable_inv`, `reachable_unbound` | (9) In every reachable state the phase and the epoch exist exactly once a round exists, a binding names a round, a release belongs to a failed or cancelled round and an empty binding, and an empty binding is the initial state or a released round |
+
+The shell is `internal/board/dispatch_kernel.go`, with the entrances in `dispatch.go` (`prepareDispatch`, `BeginDispatchAttempt`, `ReauthorizeDispatch`), `dispatch_receipt.go` (`requireExecution`, `stageDispatchMove`, `stageDispatchTermination`), `dispatch_release.go` (`EndDispatch`), and `dispatch_takeover.go` (the `retain` mode). Projection rules:
+
+1. The round is relative: 1 when the card has a binding or the entrance holds a record, else 0. A new round adds one to the round of the state before it.
+2. The epoch of the state is the card's `EXECUTION_EPOCH` when bound, else the epoch of the held record, else 0. `DISPATCH_ID` and `EXECUTION_EPOCH` are written and cleared together, so a card never has an epoch without a binding. As in M2, an operation fixes a shift from the state before it (an epoch from 2^31 on projects to 1) and maps the state, the presented epochs, and the result with it. The ceiling of the `uint64` representation is the `room` argument.
+3. A presented ID or epoch projects to the binding's round or epoch when it equals it, to another non-empty value when it does not, and to 0 when empty.
+4. A card without binding projects to the empty state, unless the entrance holds the released record.
+5. Checks that the original code ran in a fixed order keep it: an entrance runs the kernel on a state that no other fact can refuse (a probe) to answer one fact at a time, so a request that fails several returns the error of the first, as before. The last step runs on the projected state.
+
+`internal/board/dispatch_kernel_entrance_test.go` drives each entrance on a temporary board and asserts `projection(after) = Step(projection(before), event)`, or for a refused entrance an error, a kernel refusal, and an unchanged projection; each theorem has at least one refused scenario there. The differential vectors use an explicit alphabet of 44 events at depth 4.
+
 ## v2 State Machine Inventory
 
-M1 to M14 are the machines of `20261103-state-machine-simplification-audit-task`. Group A is `20261114-formal-kernel-foundation-group`; groups B, C, and D are created after group A integrates into `v2`.
+M1 to M14 are the machines of `20261103-state-machine-simplification-audit-task`. Group A is `20261114-formal-kernel-foundation-group`; group B is `20261116-formal-dispatch-group`; groups C and D are created after group B integrates into `v2`.
 
 | Machine | Scope | Owner |
 | --- | --- | --- |
 | M1 | Card lifecycle, contract freezing, member exclusion | Proved and generated: `cardlifecycle` (A, `20261114-formal-card-lifecycle-task`) |
 | M2 | Execution ownership: start, claim, takeover, execution chain | Proved and generated: `executionledger` (A, `20261114-formal-card-lifecycle-task`) |
 | v2 server single-card claim record and lease expiry (`internal/server/claims.go`) | Execution ownership on the server | Proved and generated: `serverclaim` (A, `20261114-formal-card-lifecycle-task`) |
-| M3 | Durable dispatch, rounds, accept and complete receipts | B |
+| M3 | Durable dispatch, rounds, accept and complete receipts | Proved and generated: `dispatch` (B, `20261116-formal-dispatch-rounds-task`) |
 | M4 | Wrap-up-only capability grant | B |
 | M5 | Settlement of completed dispatches | B |
 | M6 | Review run execution and per-card publication | C |
