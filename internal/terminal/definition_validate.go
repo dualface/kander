@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -213,6 +214,11 @@ func (v validator) template(field, template string, names scope, kind process.Te
 		if !names.allows(name) {
 			return v.fieldErr(field, "unknown placeholder {%s}", name)
 		}
+	}
+	// The title comes from card text, so it never joins other text in a
+	// template: a definition passes it as one whole argv element.
+	if template != "{title}" && slices.Contains(placeholders, "title") {
+		return v.fieldErr(field, "{title} must be the whole template, not part of other text")
 	}
 	if err := process.ValidateTemplate(template, placeholders, kind); err != nil {
 		return v.fieldErr(field, "%s", err.Error())

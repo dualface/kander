@@ -98,6 +98,12 @@ func TestDefinitionValidationRejects(t *testing.T) {
 			delete(launchers, "faketerm")
 		}, []string{"field launchers.Fake:Term", "launcher name must match"}},
 		{"unregistered hook", func(r map[string]any) { r["hooks"] = map[string]any{"focus_pane": "no-such-hook"} }, []string{"field hooks.focus_pane", `hook "no-such-hook" is not registered`}},
+		{"title joined with other text", func(r map[string]any) {
+			firstStep(r, "create_container")["argv"] = []any{"new", "--title={title}"}
+		}, []string{"field argv[1]", "{title} must be the whole template"}},
+		{"title inside a shell template", func(r map[string]any) {
+			firstStep(r, "create_container")["argv"] = []any{"sh", "-c", "tab {title} && {cwd}"}
+		}, []string{"field argv[2]", "{title} must be the whole template"}},
 		{"unknown hook point", func(r map[string]any) { r["hooks"] = map[string]any{"attach": "validate-test-hook"} }, []string{"field hooks.attach", "unknown mount point"}},
 		{"focus operation is not a mount point", func(r map[string]any) { r["hooks"] = map[string]any{"focus": "validate-test-hook"} }, []string{"field hooks.focus", "unknown mount point (report_session, focus_pane, place_container)"}},
 		{"rows split", func(r map[string]any) { object(r, "ops", "reverse_lookup", "rows")["split"] = "json" }, []string{"field rows.split", "json_array:<dotted.path>"}},
