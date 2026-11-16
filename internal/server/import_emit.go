@@ -74,6 +74,10 @@ func (e *importEmitter) send(p api.ImportProgress) {
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	e.sendLocked(p)
+}
+
+func (e *importEmitter) sendLocked(p api.ImportProgress) {
 	e.current, e.last = p, time.Now()
 	e.report(p)
 }
@@ -86,18 +90,21 @@ func (e *importEmitter) phaseCounts(name string, done, total int, bytes, totalBy
 	e.send(api.ImportProgress{Phase: name, Done: done, Total: total, Bytes: bytes, TotalBytes: totalBytes})
 }
 
-// count reports file counts of the running phase, throttled.
+// count reports file counts of the running phase. The throttle decides only
+// whether to report now: the newest counts are always kept, so the timer never
+// repeats older ones.
 func (e *importEmitter) count(name string, done, total int, bytes, totalBytes int64) {
 	if e == nil || e.report == nil {
 		return
 	}
+	p := api.ImportProgress{Phase: name, Done: done, Total: total, Bytes: bytes, TotalBytes: totalBytes}
 	e.mu.Lock()
-	recent := time.Since(e.last) < importProgressInterval
-	e.mu.Unlock()
-	if done < total && recent {
+	defer e.mu.Unlock()
+	if done < total && time.Since(e.last) < importProgressInterval {
+		e.current = p
 		return
 	}
-	e.phaseCounts(name, done, total, bytes, totalBytes)
+	e.sendLocked(p)
 }
 
 // counter adapts count to the callback of scanTree.

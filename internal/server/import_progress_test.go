@@ -611,3 +611,55 @@ func TestImportRepeatsTheLatestReportWhileOneStepRunsLong(t *testing.T) {
 		t.Fatalf("the unchanged count was repeated %d times: %+v", held, copies)
 	}
 }
+
+func TestImportRepeatsTheNewestCountsWhileTheNextFileRunsLong(t *testing.T) {
+	previous := importProgressInterval
+	importProgressInterval = 50 * time.Millisecond
+	t.Cleanup(func() { importProgressInterval = previous })
+	source := v1Board(t)
+	s, h := openTest(t, t.TempDir(), nil)
+	defer h.Close()
+	defer s.Close()
+	var mu sync.Mutex
+	var copies []api.ImportProgress
+	report := func(p api.ImportProgress) {
+		mu.Lock()
+		defer mu.Unlock()
+		if p.Phase == api.ImportPhaseCopy {
+			copies = append(copies, p)
+		}
+	}
+	repeats := func(done int) (n int) {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, p := range copies {
+			if p.Done == done {
+				n++
+			}
+		}
+		return n
+	}
+	files := 0
+	s.importFault = func(step string) error {
+		if step != "copying" {
+			return nil
+		}
+		files++
+		if files != 2 {
+			return nil
+		}
+		// One file is done, which the throttle held back from the report, and the next one is held:
+		// the timer must repeat the count of one file.
+		deadline := time.Now().Add(10 * time.Second)
+		for repeats(1) < 3 {
+			if time.Now().After(deadline) {
+				return errors.New("the timer never repeated the newest count")
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		return nil
+	}
+	if result, err := s.ImportWithProgress(t.Context(), "demo", "", source, report); err != nil || result.Tasks != 2 {
+		t.Fatalf("import: %+v %v", result, err)
+	}
+}
