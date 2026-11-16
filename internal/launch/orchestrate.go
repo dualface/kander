@@ -128,6 +128,7 @@ func StartOrchestrator(request OrchestrateRequest) (result OrchestrateResult, er
 	}
 	// The orchestrator owns no card, so it records no pane session marker and
 	// reports no Herdr agent session; those identities belong to card launches.
+	plan.Target.Title = orchestratorTabTitle(request.References)
 	outcome, err := launchAgent(plan, request.Root, orchestratorWindowName(tasks[0].TaskID), inv, nil, nil, nil)
 	if err != nil {
 		return result, err

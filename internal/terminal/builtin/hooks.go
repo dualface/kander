@@ -3,6 +3,7 @@ package builtin
 import (
 	"github.com/dualface/kander/internal/terminal"
 	"github.com/dualface/kander/internal/terminal/herdr"
+	"github.com/dualface/kander/internal/terminal/herdrcore"
 )
 
 type builtinHook struct {
@@ -16,6 +17,7 @@ func builtinHooks() []builtinHook {
 	return []builtinHook{
 		{"herdr-socket-session", herdr.ReportSession},
 		{"herdr-socket-focus", herdr.FocusPane},
+		{"herdr-core-place-tab", herdrcore.PlaceTab},
 	}
 }
 

@@ -30,5 +30,8 @@
   "program_status.agent_status_reason": "Agent 状態: {{.V0}} (報告: {{.V1}})",
   "program_status.pane_unreported": "ターミナル {{.V0}} はまだ Agent 状態 (OSC 7501) を報告していません",
   "herdr_core.doctor_socket_unreadable": "{{.V0}} の socket 設定を読み取れません; Kander は herdr-core が実行中か判断できません",
-  "herdr_core.doctor_no_core": "{{.V0}} で待ち受けている core はありません: {{.V1}}"
+  "herdr_core.doctor_no_core": "{{.V0}} で待ち受けている core はありません: {{.V1}}",
+  "herdr_core.place_failed": "新しいターミナルを呼び出し元のレイアウトに配置できませんでした: {{.V0}}",
+  "herdr_core.tab_missing": "新しいタブが {{.V0}} 以内に Herdr App のレイアウトに現れませんでした。Herdr App が core に接続されていない可能性があります",
+  "herdr_core.tab_name_failed": "新しいタブに名前を付けられませんでした: {{.V0}}"
 }

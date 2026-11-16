@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -83,6 +84,16 @@ func (p LaunchPlan) backend() terminal.Backend {
 // when extended_launch_timeouts is off.
 func (p LaunchPlan) launchTimeout(base time.Duration) time.Duration {
 	return config.LaunchTimeout(p.extendedTimeouts, base)
+}
+
+// warn reports a launch warning to the caller's collector, or to stderr when
+// the caller collects none.
+func (p LaunchPlan) warn(message string) {
+	if p.warning != nil {
+		p.warning(message)
+		return
+	}
+	fmt.Fprint(os.Stderr, message)
 }
 
 func (p LaunchPlan) judgeFailure() launchVerdict {

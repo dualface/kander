@@ -104,6 +104,13 @@ func launchAgent(
 		}
 		return ""
 	}
+	// Placement only warns: a terminal that sits in no tab, or in a tab with the
+	// default name, still runs the agent.
+	if placer, ok := backend.(terminal.ContainerPlacer); ok {
+		if note := placer.PlaceContainer(conn, address, plan.Target, name); note != "" {
+			plan.warn(t("launch.warning_container_placement", note))
+		}
+	}
 	readyTimeout := plan.launchTimeout(terminal.DefaultReadyTimeout)
 	if err := backend.WaitReady(conn, address.Pane, int(readyTimeout/time.Millisecond)); err != nil {
 		return LaunchOutcome{}, fail(err)
@@ -164,11 +171,7 @@ func launchAgent(
 		}
 	}
 	if caps.SessionReport && agentSession != nil {
-		warn := plan.warning
-		if warn == nil {
-			warn = func(message string) { fmt.Fprint(os.Stderr, message) }
-		}
-		reportAgentSession(plan, address.Pane, *agentSession, warn)
+		reportAgentSession(plan, address.Pane, *agentSession, plan.warn)
 	}
 	return outcome, nil
 }

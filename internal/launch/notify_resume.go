@@ -163,6 +163,7 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 		loc = recordWindowLocation(root, plan, entry, choice)
 	}
 	durable := board.MetadataFrom(originalText, "DISPATCH_ID") != ""
+	plan.Target.Title = taskTabTitle(originalText)
 	outcome, err := launchAgent(plan, root, windowName(entry, originalText), inv, loc, paneCB, &session, durable)
 	if err != nil {
 		failure := asLaunchFailure(err)
