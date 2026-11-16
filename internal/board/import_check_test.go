@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -197,6 +198,59 @@ func TestClassifyImportProblemsOrdersItsResult(t *testing.T) {
 		rotated := append(append([]Problem{}, problems[i:]...), problems[:i]...)
 		if got := classifyImportProblems(b, rotated); !reflect.DeepEqual(got, want) {
 			t.Fatalf("input order %d changes the result: %+v vs %+v", i, got, want)
+		}
+	}
+}
+
+func TestImportCheckNamesEveryCardOfABatchProblem(t *testing.T) {
+	root := tempBoard(t)
+	if err := InitStorage(root); err != nil {
+		t.Fatal(err)
+	}
+	first := gateCard(t, root, "batch-first")
+	second := gateCard(t, root, "batch-second")
+	gatePlan(t, root, []string{first, second}, noReviewRequirements())
+	// A legacy board whose plan target lags the runtime batch.
+	driftBatchTarget(t, root, "batch", strings.Repeat("c", 40))
+	mismatch := strings.Repeat("b", 40) + " != batch target " + strings.Repeat("c", 40)
+	var reported []ImportFinding
+	collect := func() ImportCheck {
+		check, err := CheckBoardForImportProblems(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reported = reported[:0]
+		for _, w := range check.Warnings {
+			if strings.Contains(w.Message, mismatch) {
+				reported = append(reported, w)
+			}
+		}
+		return check
+	}
+	// One member is still working: the batch problem concerns it too.
+	if err := os.Rename(filepath.Join(root, "working", first), filepath.Join(root, "done", first)); err != nil {
+		t.Fatal(err)
+	}
+	check := collect()
+	if len(reported) != 0 {
+		t.Fatalf("a batch problem of a plan with an active member is no warning: %+v", reported)
+	}
+	if blocked := strings.Count(strings.Join(check.Blocking, "\n"), mismatch); blocked != 2 {
+		t.Fatalf("both members report the batch problem as blocking: %d in %v", blocked, check.Blocking)
+	}
+	// Every member closed: the problem is accepted, and each warning names the whole batch.
+	if err := os.Rename(filepath.Join(root, "working", second), filepath.Join(root, "done", second)); err != nil {
+		t.Fatal(err)
+	}
+	check = collect()
+	if len(reported) != 2 || strings.Contains(strings.Join(check.Blocking, "\n"), mismatch) {
+		t.Fatalf("closed members: warnings %+v blocking %v", reported, check.Blocking)
+	}
+	want := []string{first, second}
+	slices.Sort(want)
+	for _, w := range reported {
+		if !reflect.DeepEqual(w.TaskIDs, want) {
+			t.Fatalf("the warning must name every card of the batch: %v, want %v", w.TaskIDs, want)
 		}
 	}
 }

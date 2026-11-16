@@ -226,5 +226,5 @@ func syncPlannedBatchTarget(tx *Transaction, batch ReviewBatch, request reviewPl
 }
 
 func planBatchTargetMismatch(planTarget, batchTarget, batchID string) error {
-	return reviewError(fmt.Sprintf("plan target %s != batch target %s for %s", planTarget, batchTarget, batchID))
+	return &batchError{error: reviewError(fmt.Sprintf("plan target %s != batch target %s for %s", planTarget, batchTarget, batchID)), BatchID: batchID}
 }

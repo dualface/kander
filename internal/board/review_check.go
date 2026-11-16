@@ -23,11 +23,14 @@ func CheckReviewEvidence(root string, ids []string) (problems []Problem, err err
 	}
 	ids = append([]string(nil), ids...)
 	sort.Strings(ids)
+	var active *Transaction
 	add := func(id string, e error) {
-		problems = append(problems, Problem{Path: id, Message: id + ": " + e.Error()})
+		problems = append(problems, Problem{Path: id, Message: id + ": " + e.Error(), RelatedPaths: batchTaskIDs(active, e)})
 	}
 	receiverRuns := map[string]ReviewRun{}
 	err = WithTransaction(root, reviewScope(ids, true), func(tx *Transaction) error {
+		active = tx
+		defer func() { active = nil }()
 		runs := map[string]ReviewRun{}
 		entries, e := fs.ListDirectory(root, control(root, "groups", reviewControlGroup, "runs"))
 		if e != nil && !errors.Is(e, os.ErrNotExist) {
