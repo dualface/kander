@@ -40,6 +40,9 @@ const (
 	// HookPointFocusPane runs after the focus steps switched the container,
 	// to focus the pane itself.
 	HookPointFocusPane = "focus_pane"
+	// HookPointPlaceContainer runs after create_container, to place the new
+	// container in the caller's layout and name it.
+	HookPointPlaceContainer = "place_container"
 )
 
 // Step failure policies.

@@ -30,7 +30,7 @@ var stepMessageNames = []string{"detail", "error", "output"}
 // method arguments.
 var opInputs = map[string][]string{
 	OpPrepare:          {"project", "project_key", "command"},
-	OpCreateContainer:  {"session", "session_exists", "workspace", "project", "project_key", "cwd", "cwd_resolved", "label", "label_name"},
+	OpCreateContainer:  {"session", "session_exists", "workspace", "project", "project_key", "cwd", "cwd_resolved", "label", "label_name", "title"},
 	OpWaitReady:        {"pane", "timeout_ms"},
 	OpRunCommand:       {"pane", "cwd_quoted", "command", "posix"},
 	OpSetSessionMarker: {"pane", "value"},
@@ -364,9 +364,9 @@ func (v validator) errorRules(rules ErrorRules) error {
 func (v validator) hooks(def *Definition) error {
 	for point, name := range def.Hooks {
 		switch point {
-		case HookPointReportSession, HookPointFocusPane:
+		case HookPointReportSession, HookPointFocusPane, HookPointPlaceContainer:
 		default:
-			return v.fieldErr("hooks."+point, "unknown mount point (report_session, focus_pane)")
+			return v.fieldErr("hooks."+point, "unknown mount point (report_session, focus_pane, place_container)")
 		}
 		if _, ok := LookupHook(name); !ok {
 			return v.fieldErr("hooks."+point, "hook %q is not registered", name)
