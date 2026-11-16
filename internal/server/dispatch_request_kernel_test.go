@@ -8,6 +8,7 @@ import (
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/statemachine/serverproposal"
 	"github.com/dualface/kander/internal/statemachine/serverrequest"
 )
 
@@ -282,4 +283,72 @@ func TestCompletedDispatchSettlesItsProposalThroughTheKernel(t *testing.T) {
 	}
 	probe.refines(proposal.ID, gen, card, settle, "", func() error { return complete("replay") })
 	probe.unchanged(proposal.ID, gen, card, settle, func() error { return complete("replay-again") })
+}
+
+// A dispatch ID identifies one proposal: the slot of the ID refines its kernel
+// through the entrances. A first creation takes the slot, every later creation
+// finds the proposal and never creates a second one, and the formal preparation
+// needs exactly one; a task directory with two proposals of one ID (a
+// hand-edited one) admits no creation and refuses the preparation.
+func TestProposalSlotRefinesTheKernel(t *testing.T) {
+	h := newPreparedHolder(t, "request-kernel-slot")
+	ctx := t.Context()
+	input := h.input("kernel-slot")
+	slot := func() (serverproposal.State, serverproposal.Params) {
+		t.Helper()
+		st, params, err := h.f.srv.ProposalSlot(h.holder.ID(), h.task, input.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return st, params
+	}
+	create := func(key string) (api.CollabRequest, error) {
+		return h.sender.CreateRequest(ctx, key, h.task, api.NewCollabRequest{Kind: api.RequestSync, Message: input.Message, Dispatch: &input, CardRevision: h.card.Revision, TargetGeneration: h.grant.Claim.Generation, AcceptWithin: api.DurationOf(120 * time.Second)})
+	}
+	check := func(e serverproposal.Event, before serverproposal.State, wantAccepted bool) {
+		t.Helper()
+		after, params := slot()
+		want, ok := serverproposal.Step(before, e, params)
+		if ok != wantAccepted || (ok && after != want) || (!ok && after != before) {
+			t.Fatalf("%T on %+v: accepted %v, projection %+v, kernel %+v", e, before, ok, after, want)
+		}
+	}
+
+	empty, _ := slot()
+	first, err := create("slot-first")
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(serverproposal.Admit{}, empty, true)
+	taken, _ := slot()
+	again, err := create("slot-again")
+	if err != nil || again.ID != first.ID {
+		t.Fatalf("a second creation: %+v %v", again, err)
+	}
+	check(serverproposal.Repeat{}, taken, true)
+	if requests, err := h.holder.Requests(ctx, h.task); err != nil || len(requests) != 1 {
+		t.Fatalf("a second creation made a second proposal: %+v %v", requests, err)
+	}
+
+	// Two proposals of one ID: no creation takes the slot, the first is found,
+	// and the formal preparation is ambiguous.
+	twin := first
+	twin.ID, twin.CreatedAt = "req-twin-slot", first.CreatedAt.Add(time.Second)
+	if err := h.f.srv.SeedRequest(h.holder.ID(), twin); err != nil {
+		t.Fatal(err)
+	}
+	crowded, params := slot()
+	if _, ok := serverproposal.Step(crowded, serverproposal.Admit{}, params); ok || crowded.Count != 2 {
+		t.Fatalf("a slot with two proposals: %+v", crowded)
+	}
+	if _, ok := serverproposal.Step(crowded, serverproposal.Lookup{}, params); ok {
+		t.Fatal("the slot looked up one of two proposals")
+	}
+	if found, err := create("slot-crowded"); err != nil || found.ID != first.ID {
+		t.Fatalf("a creation in a crowded slot: %+v %v", found, err)
+	}
+	check(serverproposal.Repeat{}, crowded, true)
+	stamped := *first.Dispatch
+	err = h.prepare("slot-prepare", stamped)
+	expectCode(t, err, api.CodeEvidenceIncomplete)
 }

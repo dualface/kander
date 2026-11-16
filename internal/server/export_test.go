@@ -13,6 +13,7 @@ import (
 	"github.com/dualface/kander/internal/statemachine/serverclaim"
 	"github.com/dualface/kander/internal/statemachine/serverdelivery"
 	"github.com/dualface/kander/internal/statemachine/servergrouplease"
+	"github.com/dualface/kander/internal/statemachine/serverproposal"
 	"github.com/dualface/kander/internal/statemachine/serverrequest"
 )
 
@@ -213,4 +214,18 @@ func (s *Server) GroupRecoverUnchecked(ctx context.Context, id, key string, inpu
 		return &refusal
 	}
 	return nil
+}
+
+// ProposalSlot projects the slot of a dispatch ID in a task the way an
+// operation does.
+func (s *Server) ProposalSlot(id, task, dispatchID string) (serverproposal.State, serverproposal.Params, error) {
+	p, err := s.project(id)
+	if err != nil {
+		return serverproposal.State{}, serverproposal.Params{}, err
+	}
+	requests, err := p.readRequests(task)
+	if err != nil {
+		return serverproposal.State{}, serverproposal.Params{}, err
+	}
+	return newProposalSlot(len(proposalsOf(requests, dispatchID))).state, proposalSlotParams, nil
 }

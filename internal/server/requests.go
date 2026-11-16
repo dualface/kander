@@ -11,6 +11,7 @@ import (
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/internal/statemachine/serverproposal"
 )
 
 var requestKinds = []string{api.RequestFix, api.RequestSync, api.RequestReview, api.RequestStop}
@@ -130,10 +131,14 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 			if err != nil {
 				return request, err
 			}
-			for _, old := range previous {
-				if old.Dispatch == nil || old.Dispatch.ID != input.Dispatch.ID {
-					continue
+			// The slot of the dispatch ID decides whether this creation takes it
+			// or finds the first proposal that already has the ID.
+			found := proposalsOf(previous, input.Dispatch.ID)
+			if slot := newProposalSlot(len(found)); !slot.step(serverproposal.Admit{}) {
+				if !slot.accepts(serverproposal.Repeat{}) {
+					return request, apiError(api.CodeInternal, "dispatch proposal slot refused a creation")
 				}
+				old := found[0]
 				same := old.FromClient == input.FromClient && old.AcceptWithin == input.AcceptWithin && sameRequestedDispatch(old, input)
 				oldFrame := newRequestFrame(claim.Generation, task.Revision, &old)
 				if !newRequestKernel(oldFrame, &old).accepts(oldFrame.recreateEvent(facts, input.TargetGeneration, same)) {

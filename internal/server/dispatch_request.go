@@ -5,6 +5,7 @@ import (
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/statemachine/serverproposal"
 	"github.com/dualface/kander/internal/statemachine/serverrequest"
 )
 
@@ -27,17 +28,12 @@ func (p *project) inspectDispatchProposal(tx *board.Transaction, task string, co
 	if err != nil {
 		return nil, err
 	}
-	var matches []api.CollabRequest
-	for _, request := range requests {
-		if request.Dispatch != nil && request.Dispatch.ID == command.Input.ID {
-			matches = append(matches, request)
-		}
-	}
+	matches := proposalsOf(requests, command.Input.ID)
 	if len(matches) == 0 {
 		return nil, nil
 	}
 	match := matches[0]
-	event := serverrequest.Prepare{Unique: len(matches) == 1}
+	event := serverrequest.Prepare{Unique: newProposalSlot(len(matches)).accepts(serverproposal.Lookup{})}
 	var claim claimRecord
 	frame := newRequestFrame(0, 0, &match)
 	if event.Unique {

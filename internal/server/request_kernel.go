@@ -2,12 +2,15 @@ package server
 
 import (
 	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/internal/statemachine/serverproposal"
 	"github.com/dualface/kander/internal/statemachine/serverrequest"
 )
 
 // The collaboration request decisions are made by the generated kernel in
 // internal/statemachine/serverrequest
-// (formal/KanderFormal/Machines/ServerRequest.lean). This file projects a
+// (formal/KanderFormal/Machines/ServerRequest.lean) and, for the dispatch ID of a
+// proposal, internal/statemachine/serverproposal
+// (formal/KanderFormal/Machines/ServerProposal.lean). This file projects a
 // request record into a kernel state, maps the facts of an operation to kernel
 // arguments, and holds the kernel call of an operation. requests.go and
 // dispatch_request.go select the error of a refused operation. See
@@ -194,4 +197,41 @@ func (f requestFrame) supersedeEvent() serverrequest.Supersede {
 // claim record exists.
 func (f requestFrame) completeEvent(found, match bool) serverrequest.Complete {
 	return serverrequest.Complete{Completed: true, Found: found, Match: match, Cgen: f.generation(f.gen)}
+}
+
+// proposalSlot is the slot of one dispatch ID in one task: the proposals that
+// carry it. The shell counts them (capped at two, an ambiguous slot) and the
+// slot kernel decides whether a creation takes the slot, finds the first
+// proposal, or the formal preparation finds exactly one.
+type proposalSlot struct{ state serverproposal.State }
+
+var proposalSlotParams = serverproposal.Params{MaxCount: 2}
+
+// proposalsOf are the requests of a task that carry the dispatch ID, in the
+// order readRequests sorts them.
+func proposalsOf(requests []api.CollabRequest, dispatchID string) []api.CollabRequest {
+	var matches []api.CollabRequest
+	for _, request := range requests {
+		if request.Dispatch != nil && request.Dispatch.ID == dispatchID {
+			matches = append(matches, request)
+		}
+	}
+	return matches
+}
+
+func newProposalSlot(proposals int) *proposalSlot {
+	return &proposalSlot{state: serverproposal.State{Count: uint64(min(proposals, 2))}}
+}
+
+func (s *proposalSlot) step(e serverproposal.Event) bool {
+	next, ok := serverproposal.Step(s.state, e, proposalSlotParams)
+	if ok {
+		s.state = next
+	}
+	return ok
+}
+
+func (s *proposalSlot) accepts(e serverproposal.Event) bool {
+	_, ok := serverproposal.Step(s.state, e, proposalSlotParams)
+	return ok
 }
