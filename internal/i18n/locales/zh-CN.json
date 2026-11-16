@@ -453,6 +453,7 @@
   "launch.view": "查看: {{.V0}}",
   "launch.warning_failed_to_report_the_herdr_session_identity": "警告: herdr 会话身份上报失败: {{.V0}}\n",
   "launch.warning_failed_to_report_the_herdr_session_identity_herdr": "警告: herdr 会话身份上报失败: 缺少 HERDR_SOCKET_PATH\n",
+  "launch.warning_container_placement": "警告: 新终端没有完整放进调用方的布局: {{.V0}}\n",
   "launch.windows_does_not_support_the_launcher_use_console_or": "Windows 不支持 {{.V0}} 启动方式; 请使用 herdr, console 或 foreground",
   "liveness.agent_is_alive_but_the_pane_is_in_copy": "Agent 存活但 pane 处于 copy-mode, 暂不可直投",
   "liveness.agent_is_reachable": "Agent 可达",

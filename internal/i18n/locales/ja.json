@@ -453,6 +453,7 @@
   "launch.view": "表示: {{.V0}}",
   "launch.warning_failed_to_report_the_herdr_session_identity": "警告: herdr セッション ID の報告に失敗しました: {{.V0}}\n",
   "launch.warning_failed_to_report_the_herdr_session_identity_herdr": "警告: herdr セッション ID の報告に失敗しました: HERDR_SOCKET_PATH がありません\n",
+  "launch.warning_container_placement": "警告: 新しいターミナルを呼び出し元のレイアウトに完全には配置できませんでした: {{.V0}}\n",
   "launch.windows_does_not_support_the_launcher_use_console_or": "Windows は {{.V0}} 起動方式をサポートしません; herdr、console、または foreground を使ってください",
   "liveness.agent_is_alive_but_the_pane_is_in_copy": "Agent は生存していますが、pane が copy mode のため直投を受け取れません",
   "liveness.agent_is_reachable": "Agent に到達できます",

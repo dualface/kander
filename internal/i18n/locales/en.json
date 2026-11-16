@@ -453,6 +453,7 @@
   "launch.view": "view: {{.V0}}",
   "launch.warning_failed_to_report_the_herdr_session_identity": "warning: failed to report the herdr session identity: {{.V0}}\n",
   "launch.warning_failed_to_report_the_herdr_session_identity_herdr": "warning: failed to report the herdr session identity: HERDR_SOCKET_PATH is missing\n",
+  "launch.warning_container_placement": "warning: the new terminal was not fully placed in the caller's layout: {{.V0}}\n",
   "launch.windows_does_not_support_the_launcher_use_console_or": "Windows does not support the {{.V0}} launcher; use herdr, console, or foreground",
   "liveness.agent_is_alive_but_the_pane_is_in_copy": "Agent is alive but the pane is in copy mode and cannot receive direct delivery",
   "liveness.agent_is_reachable": "Agent is reachable",

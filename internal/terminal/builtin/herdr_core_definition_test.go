@@ -2,8 +2,8 @@ package builtin
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -30,14 +30,15 @@ func hcGet(state, status string, labels string) string {
 		`,"state":"` + state + `","status":` + status + `,"turn":0}`
 }
 
-// Every operation calls only hc and reads its --json output; no hook, no
-// focus and no session report are declared, and the launcher is POSIX only.
+// Every operation calls only hc and reads its --json output; the only hook
+// places a new terminal in a tab, no focus and no session report are
+// declared, and the launcher is POSIX only.
 func TestHerdrCoreDefinitionShape(t *testing.T) {
 	def, err := Definition("herdr-core")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if def.Binary != HerdrCoreExecutable || len(def.Hooks) != 0 {
+	if def.Binary != HerdrCoreExecutable || !reflect.DeepEqual(def.Hooks, map[string]string{terminal.HookPointPlaceContainer: "herdr-core-place-tab"}) {
 		t.Fatalf("binary=%q hooks=%v", def.Binary, def.Hooks)
 	}
 	caps := def.Capabilities
@@ -321,109 +322,109 @@ func TestHerdrCoreAutoResolution(t *testing.T) {
 
 const hcCreated = `{"address":"t9","agent":"sh","cwd":"/work","name":"kb-x-1a2b3c4d","state":"live","turn":0}`
 
-// The new terminal takes the caller's Herdr App placement labels, so the App
-// shows it in the caller's tab. Every failure to read or copy them leaves the
-// launch as it was: the address is still returned and nothing is rolled back.
-func TestHerdrCoreDefinitionCreateCopiesPlacement(t *testing.T) {
-	const placed = `{"herdr.seen":"1","herdr.space":"sp-1_A","herdr.tab":"tb-2_b","where":"kander / 1"}`
-	callerGet := func(labels, msg string) string {
-		return `{"address":"t3","labels":` + labels + `,"state":"live","status":{"app":"claude-code","msg":"` + msg + `","state":"idle"}}`
-	}
-	withWhere := func(where string) string {
-		b, err := json.Marshal(map[string]string{"herdr.space": "sp-1_A", "herdr.tab": "tb-2_b", "where": where})
-		if err != nil {
-			t.Fatal(err)
+// create_container only creates the terminal: it neither reads the caller nor
+// copies its placement labels or its where label; placement is the
+// place_container hook's job.
+func TestHerdrCoreDefinitionCreateDoesNotPlace(t *testing.T) {
+	backend := herdrCoreBackendForTest(t, map[string]string{"HC_TERMINAL_ID": "t3"})
+	r := &recorder{reply: func(args []string) probe.Result {
+		if args[0] != "run" {
+			t.Fatalf("unexpected hc %q", args)
 		}
-		return string(b)
+		return probe.Result{Stdout: hcCreated}
+	}}
+	got, err := backend.CreateContainer(r.conn(), terminal.Target{Title: "A title"}, "/work", "kb-x")
+	if err != nil {
+		t.Fatal(err)
 	}
-	cases := []struct {
-		name      string
-		env       map[string]string
-		get       probe.Result
-		label     probe.Result
-		wantLabel [][]string
-	}{
-		{"both labels", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: callerGet(placed, "")}, probe.Result{Stdout: `{}`},
-			[][]string{[]string{"label", "--json", "t9", "herdr.space=sp-1_A", "herdr.tab=tb-2_b"}, []string{"label", "--json", "t9", "where=kander / 1"}}},
-		{"label copy fails", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: callerGet(placed, "")}, probe.Result{Code: 5, Stderr: `{"error":{"kind":"unavailable","message":"down"}}`},
-			[][]string{[]string{"label", "--json", "t9", "herdr.space=sp-1_A", "herdr.tab=tb-2_b"}, []string{"label", "--json", "t9", "where=kander / 1"}}},
-		{"where with special characters", map[string]string{"HC_TERMINAL_ID": "t3"},
-			probe.Result{Stdout: callerGet(withWhere(`kander "q" \ / 中文`), "")}, probe.Result{Stdout: `{}`},
-			[][]string{{"label", "--json", "t9", "herdr.space=sp-1_A", "herdr.tab=tb-2_b"}, {"label", "--json", "t9", `where=kander "q" \ / 中文`}}},
-		{"where missing", map[string]string{"HC_TERMINAL_ID": "t3"},
-			probe.Result{Stdout: callerGet(`{"herdr.space":"sp1","herdr.tab":"tb1"}`, "")}, probe.Result{Stdout: `{}`},
-			[][]string{{"label", "--json", "t9", "herdr.space=sp1", "herdr.tab=tb1"}}},
-		{"where null", map[string]string{"HC_TERMINAL_ID": "t3"},
-			probe.Result{Stdout: callerGet(`{"herdr.space":"sp1","herdr.tab":"tb1","where":null}`, "")}, probe.Result{Stdout: `{}`},
-			[][]string{{"label", "--json", "t9", "herdr.space=sp1", "herdr.tab=tb1"}}},
-		{"where empty", map[string]string{"HC_TERMINAL_ID": "t3"},
-			probe.Result{Stdout: callerGet(`{"herdr.space":"sp1","herdr.tab":"tb1","where":""}`, "")}, probe.Result{Stdout: `{}`},
-			[][]string{{"label", "--json", "t9", "herdr.space=sp1", "herdr.tab=tb1"}}},
-		{"where with a newline", map[string]string{"HC_TERMINAL_ID": "t3"},
-			probe.Result{Stdout: callerGet(`{"herdr.space":"sp1","herdr.tab":"tb1","where":"a\nb"}`, "")}, probe.Result{Stdout: `{}`},
-			[][]string{{"label", "--json", "t9", "herdr.space=sp1", "herdr.tab=tb1"}}},
-		{"only where", map[string]string{"HC_TERMINAL_ID": "t3"},
-			probe.Result{Stdout: callerGet(`{"where":"kander / 1"}`, "")}, probe.Result{}, nil},
-		{"no caller terminal id", nil, probe.Result{Stdout: callerGet(placed, "")}, probe.Result{}, nil},
-		{"get fails", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Code: 3, Stderr: hcNotFound}, probe.Result{}, nil},
-		{"get is not JSON", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: "not json"}, probe.Result{}, nil},
-		{"no labels", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: `{"address":"t3","state":"live","status":null}`}, probe.Result{}, nil},
-		{"null labels", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: callerGet(`null`, "")}, probe.Result{}, nil},
-		{"only space", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: callerGet(`{"herdr.space":"sp1"}`, "")}, probe.Result{}, nil},
-		{"only tab", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: callerGet(`{"herdr.tab":"tb1"}`, "")}, probe.Result{}, nil},
-		{"empty value", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: callerGet(`{"herdr.space":"","herdr.tab":"tb1"}`, "")}, probe.Result{}, nil},
-		{"illegal character", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: callerGet(`{"herdr.space":"sp 1","herdr.tab":"tb1"}`, "")}, probe.Result{}, nil},
-		{"non-string value", map[string]string{"HC_TERMINAL_ID": "t3"}, probe.Result{Stdout: callerGet(`{"herdr.space":1,"herdr.tab":"tb1"}`, "")}, probe.Result{}, nil},
-		{"forged text outside labels", map[string]string{"HC_TERMINAL_ID": "t3"},
-			probe.Result{Stdout: callerGet(`{"kander.window":"w"}`, `{\"herdr.space\":\"x\",\"herdr.tab\":\"y\"}`)}, probe.Result{}, nil},
-		{"forged text inside a label value", map[string]string{"HC_TERMINAL_ID": "t3"},
-			probe.Result{Stdout: callerGet(`{"note":"{\"herdr.space\":\"x\",\"herdr.tab\":\"y\"}"}`, "")}, probe.Result{}, nil},
+	if got != (terminal.Address{Container: "t9", Pane: "t9"}) || len(r.calls) != 1 {
+		t.Fatalf("address=%+v calls=%q", got, r.calls)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			backend := herdrCoreBackendForTest(t, tc.env)
-			r := &recorder{reply: func(args []string) probe.Result {
-				switch args[0] {
-				case "get":
-					return tc.get
-				case "run":
-					return probe.Result{Stdout: hcCreated}
-				}
-				return tc.label
-			}}
-			got, err := backend.CreateContainer(r.conn(), terminal.Target{}, "/work", "kb-x")
-			if err != nil {
-				t.Fatal(err)
+}
+
+// PlaceContainer reaches the registered hook: the caller is read through hc get,
+// the new terminal gets the caller's space and a tab of its own, and an empty
+// title falls back to the container label. A caller without HC_TERMINAL_ID or
+// without a space leaves the terminal unplaced and the warning empty.
+func TestHerdrCorePlaceContainer(t *testing.T) {
+	address := terminal.Address{Container: "t9", Pane: "t9"}
+	const placed = `{"address":"t3","labels":{"herdr.space":"sp1","herdr.tab":"tbCaller","where":"kander / 1"}}`
+	var labels []string
+	layout := func(title string) string {
+		return `{"id":1,"result":{"value":{"spaces":[{"id":"sp1","tabs":[{"id":"` + strings.TrimPrefix(labels[1], "herdr.tab=") + `","name":"` + title + `"}]}]},"version":3}}`
+	}
+	var stored string
+	conn := terminal.Conn{
+		Program: "hc",
+		Run: func(_ context.Context, _ string, args []string) (probe.Result, error) {
+			switch args[0] {
+			case "get":
+				return probe.Result{Stdout: placed}, nil
+			case "label":
+				labels = args[3:]
 			}
-			if got != (terminal.Address{Container: "t9", Pane: "t9"}) {
-				t.Fatalf("address=%+v", got)
+			return probe.Result{Stdout: `{}`}, nil
+		},
+		RunInput: func(_ context.Context, _ string, _ []string, input string) (probe.Result, error) {
+			if strings.Contains(input, "doc.set") {
+				stored = input
+				return probe.Result{Stdout: `{"id":1,"result":{"version":4}}`}, nil
 			}
-			var labels, gets [][]string
-			for _, call := range r.calls {
-				switch call[0] {
-				case "label":
-					labels = append(labels, call)
-				case "get":
-					gets = append(gets, call)
-				}
-			}
-			if tc.env == nil && len(gets) != 0 {
-				t.Fatalf("read the caller without HC_TERMINAL_ID: %q", gets)
-			}
-			if tc.env != nil {
-				assertCalls(t, gets, [][]string{{"get", "--json", "t3"}})
-			}
-			if tc.wantLabel == nil {
-				assertCalls(t, labels, nil)
-				return
-			}
-			assertCalls(t, labels, tc.wantLabel)
-			// The caller is read before the terminal is created, the labels
-			// are copied after it.
-			if r.calls[0][0] != "get" || r.calls[1][0] != "run" || r.calls[2][0] != "label" {
-				t.Fatalf("order=%q", r.calls)
-			}
-		})
+			return probe.Result{Stdout: layout("")}, nil
+		},
+	}
+	placer, ok := herdrCoreBackendForTest(t, map[string]string{"HC_TERMINAL_ID": "t3"}).(terminal.ContainerPlacer)
+	if !ok {
+		t.Fatal("herdr-core does not place containers")
+	}
+	if warning := placer.PlaceContainer(conn, address, terminal.Target{}, "kb-label"); warning != "" {
+		t.Fatalf("warning=%q", warning)
+	}
+	if len(labels) != 2 || labels[0] != "herdr.space=sp1" || labels[1] == "herdr.tab=tbCaller" || !strings.HasPrefix(labels[1], "herdr.tab=") {
+		t.Fatalf("labels=%q", labels)
+	}
+	if !strings.Contains(stored, `"name":"kb-label"`) {
+		t.Fatalf("empty title did not fall back to the label: %s", stored)
+	}
+	stored = ""
+	if warning := placer.PlaceContainer(conn, address, terminal.Target{Title: "Card title"}, "kb-label"); warning != "" || !strings.Contains(stored, `"name":"Card title"`) {
+		t.Fatalf("warning=%q stored=%s", warning, stored)
+	}
+
+	calls := 0
+	silent := terminal.Conn{Program: "hc", Run: func(context.Context, string, []string) (probe.Result, error) {
+		calls++
+		return probe.Result{}, nil
+	}}
+	outside, err := DefinitionBackend("herdr-core", HerdrCore, envOf(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if warning := outside.(terminal.ContainerPlacer).PlaceContainer(silent, address, terminal.Target{}, "kb-label"); warning != "" || calls != 0 {
+		t.Fatalf("warning=%q calls=%d", warning, calls)
+	}
+}
+
+// A hook that degrades becomes the warning; a definition without a
+// place_container hook returns none.
+func TestPlaceContainerWarningAndNoHook(t *testing.T) {
+	failing := terminal.Conn{Program: "hc", Run: func(context.Context, string, []string) (probe.Result, error) {
+		return probe.Result{Code: 3, Stderr: hcNotFound}, nil
+	}}
+	backend, err := DefinitionBackend("herdr-core", HerdrCore, envOf(map[string]string{"HC_TERMINAL_ID": "t3"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	warning := backend.(terminal.ContainerPlacer).PlaceContainer(failing, terminal.Address{Container: "t9", Pane: "t9"}, terminal.Target{}, "kb-x")
+	if warning == "" {
+		t.Fatal("a failing caller read gave no warning")
+	}
+	placer, ok := tmuxBackend(t, Tmux, envOf(map[string]string{"TMUX": "/tmp/tmux,1,0"})).(terminal.ContainerPlacer)
+	if !ok {
+		t.Fatal("declarative backends implement ContainerPlacer")
+	}
+	if got := placer.PlaceContainer(failing, terminal.Address{}, terminal.Target{Title: "x"}, "x"); got != "" {
+		t.Fatalf("tmux placed a container: %q", got)
 	}
 }
 
