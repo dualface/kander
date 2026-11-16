@@ -112,6 +112,20 @@ def takeoverEvent : EventDecl where
     (orE (notE (andE (statusIs "active") (f "live"))) (andE (a "restart") holder))))
   assigns := [("status", .enumLit "status" "active"), ("gen", inc gen), ("live", tt)]
 
+/-- `recoverLostMember` (`internal/server/group_recovery.go`): a group
+coordinator resets a member of its group with an honest `unknown` observation of
+the predecessor. The record of the claimed card gets the next generation with
+status `released`, an audit generation no execution can run under, and no lease.
+The request names the generation it observed (`expected`) and a fresh execution
+identity below the last generation (`fresh`). A valid lease is never replaced,
+and a pending record must be reconciled first. -/
+def auditEvent : EventDecl where
+  name := "audit"
+  args := [genArg "expected", boolArg "fresh"]
+  guard := andE (f "held") (andE (eq (a "expected") gen) (andE (a "fresh")
+    (andE (notE (statusIs "pending")) (notE (andE (statusIs "active") (f "live"))))))
+  assigns := [("status", .enumLit "status" "released"), ("gen", inc gen), ("live", ff)]
+
 /-- The environment: the server clock passes `ExpiresAt`. -/
 def expireEvent : EventDecl where
   name := "expire"
@@ -152,7 +166,7 @@ def serverClaimMachine : Machine where
     { name := "live", ty := .scalar .bool, init := .scalar (.bool false) }
   ]
   events := [claimEvent, renewEvent, writeEvent, leaveEvent, releaseEvent, rollbackEvent, takeoverEvent,
-    expireEvent, pendingEvent, reconcileEvent]
+    expireEvent, pendingEvent, reconcileEvent, auditEvent]
   queries := [
     { name := "valid", ty := .base .bool, body := andE (statusIs "active") (f "live") }
   ]

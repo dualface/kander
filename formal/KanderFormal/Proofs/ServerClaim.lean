@@ -65,6 +65,7 @@ theorem find_takeover : M.findEvent "takeover" = some takeoverEvent := rfl
 theorem find_expire : M.findEvent "expire" = some expireEvent := rfl
 theorem find_pending : M.findEvent "pending" = some pendingEvent := rfl
 theorem find_reconcile : M.findEvent "reconcile" = some reconcileEvent := rfl
+theorem find_audit : M.findEvent "audit" = some auditEvent := rfl
 theorem ctors_status : M.ctorsOf "status" = some ["none", "pending", "active", "lost", "released"] := rfl
 theorem size_status : M.enumSize "status" = some 5 := rfl
 theorem ty_held : M.fieldTy "held" = some (.scalar .bool) := rfl
@@ -74,9 +75,9 @@ theorem ty_live : M.fieldTy "live" = some (.scalar .bool) := rfl
 
 macro "cl_simp" "[" ts:Lean.Parser.Tactic.simpLemma,* "]" : tactic =>
   `(tactic| simp [step, find_claim, find_renew, find_write, find_leave, find_release, find_rollback, find_takeover,
-      find_expire, find_pending, find_reconcile, ctors_status, size_status, ty_held, ty_status, ty_gen, ty_live,
+      find_expire, find_pending, find_reconcile, find_audit, ctors_status, size_status, ty_held, ty_status, ty_gen, ty_live,
       lookup, claimEvent, renewEvent, writeEvent, leaveEvent, releaseEvent, rollbackEvent, takeoverEvent,
-      expireEvent, pendingEvent, reconcileEvent, holder, leaseInvalid, genArg, boolArg, holderArgs, statusIs,
+      expireEvent, pendingEvent, reconcileEvent, auditEvent, holder, leaseInvalid, genArg, boolArg, holderArgs, statusIs,
       gen, inc, eq, bindArgs, Ty.conforms, STy.conforms, eval, evalCmp, natAdd, boolAnd, boolOr, boolNot, indexOf,
       enumV, boolV, natV, f, a, tt, ff, andE, orE, notE, evalAssigns, applyUpdates, enc, or_assoc, and_assoc,
       Bool.and_assoc, Bool.or_assoc, map_ite, ite_and_self, ite_ite_none, $ts,*])
@@ -169,11 +170,19 @@ theorem step_reconcile (p : Params) (x : Cl) (hs : x.st < 5) (owner : Bool) :
   cases hh : x.held <;> cases owner <;> by_cases h1 : x.st = 1 <;> by_cases h2 : x.st = 2 <;>
     cl_simp [hh, h1, h2, hs, reconciled]
 
+theorem step_audit (p : Params) (x : Cl) (expected : Nat) (fresh : Bool) :
+    step M p (enc x) ⟨"audit", [natV expected, boolV fresh]⟩ =
+      if expected ≤ p "maxGen" ∧ x.held = true ∧ expected = x.gen ∧ fresh = true ∧ x.st ≠ 1 ∧ ¬Valid x ∧
+          x.gen + 1 ≤ p "maxGen" then
+        some (enc ⟨x.held, 4, x.gen + 1, false⟩) else none := by
+  by_cases h0 : expected ≤ p "maxGen" <;> cases fresh <;> cl_simp [h0, Valid] <;> ite_close
+
 /-! ## The events an accepted step ran -/
 
 theorem events_cases {ev : EventDecl} (h : ev ∈ M.events) :
     ev = claimEvent ∨ ev = renewEvent ∨ ev = writeEvent ∨ ev = leaveEvent ∨ ev = releaseEvent ∨
-      ev = rollbackEvent ∨ ev = takeoverEvent ∨ ev = expireEvent ∨ ev = pendingEvent ∨ ev = reconcileEvent := by
+      ev = rollbackEvent ∨ ev = takeoverEvent ∨ ev = expireEvent ∨ ev = pendingEvent ∨ ev = reconcileEvent ∨
+      ev = auditEvent := by
   simpa [serverClaimMachine] using h
 
 theorem nat_arg {p : Params} {b : String} {v : Val} (h : Ty.conforms M p (.scalar (.nat b)) v = true) :
@@ -198,12 +207,13 @@ theorem accepted_cases {p : Params} {s s' : State} {e : Event} (h : step M p s e
       (∃ g tg t, e = ⟨"leave", [natV g, natV tg, boolV t]⟩) ∨
       (∃ g tg, e = ⟨"release", [natV g, natV tg]⟩) ∨ (∃ g tg, e = ⟨"rollback", [natV g, natV tg]⟩) ∨
       (∃ ex fr rs g tg, e = ⟨"takeover", [natV ex, boolV fr, boolV rs, natV g, natV tg]⟩) ∨
-      e = ⟨"expire", []⟩ ∨ (∃ m, e = ⟨"pending", [boolV m]⟩) ∨ (∃ o, e = ⟨"reconcile", [boolV o]⟩) := by
+      e = ⟨"expire", []⟩ ∨ (∃ m, e = ⟨"pending", [boolV m]⟩) ∨ (∃ o, e = ⟨"reconcile", [boolV o]⟩) ∨
+      (∃ ex fr, e = ⟨"audit", [natV ex, boolV fr]⟩) := by
   obtain ⟨ev, args, hmem, hname, hb⟩ := accepted_event h
   obtain ⟨n, vs⟩ := e
   simp only at hname hb
   subst hname
-  rcases events_cases hmem with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+  rcases events_cases hmem with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · obtain ⟨fr, rfl⟩ := args_b hb; exact .inl ⟨fr, rfl⟩
   · obtain ⟨g, tg, rfl⟩ := holder_args hb; exact .inr (.inl ⟨g, tg, rfl⟩)
   · obtain ⟨v1, vs1, _, rfl, c1, h1, -⟩ := bindArgs_cons hb
@@ -234,7 +244,13 @@ theorem accepted_cases {p : Params} {s s' : State} {e : Event} (h : step M p s e
     exact .inr (.inr (.inr (.inr (.inr (.inr (.inl ⟨ex, fr, rs, g, tg, rfl⟩))))))
   · obtain ⟨rfl, -⟩ := bindArgs_nil hb; exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inl rfl)))))))
   · obtain ⟨m, rfl⟩ := args_b hb; exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inl ⟨m, rfl⟩))))))))
-  · obtain ⟨o, rfl⟩ := args_b hb; exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr ⟨o, rfl⟩))))))))
+  · obtain ⟨o, rfl⟩ := args_b hb; exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inl ⟨o, rfl⟩)))))))))
+  · obtain ⟨v1, vs1, _, rfl, c1, h1, -⟩ := bindArgs_cons hb
+    obtain ⟨v2, vs2, _, rfl, c2, h2, -⟩ := bindArgs_cons h1
+    obtain ⟨rfl, -⟩ := bindArgs_nil h2
+    obtain ⟨ex, rfl⟩ := nat_arg c1
+    obtain ⟨fr, rfl⟩ := conforms_bool c2
+    exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr ⟨ex, fr, rfl⟩)))))))))
 
 /-! ## Theorem 3: at most one valid claim -/
 
@@ -265,7 +281,7 @@ theorem gen_monotone {p : Params} {x y : Cl} {e : Event} {s' : State} (hs : x.st
     (h : step M p (enc x) e = some s') (hy : s' = enc y) :
     x.gen ≤ y.gen ∧ (e.name = "takeover" → y.gen = x.gen + 1) := by
   rcases accepted_cases h with ⟨fr, rfl⟩ | ⟨g, tg, rfl⟩ | ⟨g, tg, w, rfl⟩ | ⟨g, tg, t, rfl⟩ | ⟨g, tg, rfl⟩ |
-    ⟨g, tg, rfl⟩ | ⟨ex, fr, rs, g, tg, rfl⟩ | rfl | ⟨m, rfl⟩ | ⟨o, rfl⟩
+    ⟨g, tg, rfl⟩ | ⟨ex, fr, rs, g, tg, rfl⟩ | rfl | ⟨m, rfl⟩ | ⟨o, rfl⟩ | ⟨ex, fr, rfl⟩
   · rw [step_claim p x] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp
   · rw [step_renew] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp
   · rw [step_write] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp
@@ -276,6 +292,7 @@ theorem gen_monotone {p : Params} {x y : Cl} {e : Event} {s' : State} (hs : x.st
   · rw [step_expire] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp
   · rw [step_pending] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp
   · rw [step_reconcile p x hs] at h; cases h; have := enc_inj hy; subst this; simp
+  · rw [step_audit p x] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp
 
 /-! ## Theorem 5: requests of an older generation -/
 
@@ -350,7 +367,7 @@ theorem step_inv (p : Params) (s s' : State) (e : Event) (hi : Inv p s)
   obtain ⟨P1, P2, P3⟩ := hp x rfl
   intro y hy
   rcases accepted_cases h with ⟨fr, rfl⟩ | ⟨g, tg, rfl⟩ | ⟨g, tg, w, rfl⟩ | ⟨g, tg, t, rfl⟩ | ⟨g, tg, rfl⟩ |
-    ⟨g, tg, rfl⟩ | ⟨ex, fr, rs, g, tg, rfl⟩ | rfl | ⟨m, rfl⟩ | ⟨o, rfl⟩
+    ⟨g, tg, rfl⟩ | ⟨ex, fr, rs, g, tg, rfl⟩ | rfl | ⟨m, rfl⟩ | ⟨o, rfl⟩ | ⟨ex, fr, rfl⟩
   · rw [step_claim p x] at h; split at h <;> cases h; have := enc_inj hy; subst this; props_close
   · rw [step_renew] at h; split at h <;> cases h; have := enc_inj hy; subst this; props_close
   · rw [step_write] at h; split at h <;> cases h; have := enc_inj hy; subst this; props_close
@@ -363,6 +380,7 @@ theorem step_inv (p : Params) (s s' : State) (e : Event) (hi : Inv p s)
   · rw [step_pending] at h; split at h <;> cases h; have := enc_inj hy; subst this; props_close
   · rw [step_reconcile p x hs] at h; cases h; have := enc_inj hy; subst this
     cases hh : x.held <;> cases o <;> by_cases h1 : x.st = 1 <;> by_cases h2 : x.st = 2 <;> props_close
+  · rw [step_audit p x] at h; split at h <;> cases h; have := enc_inj hy; subst this; props_close
 
 /-- The server claim machine's proof obligation certificate. -/
 def cert : SafetyCert M where
@@ -378,5 +396,51 @@ theorem reachable_inv {p : Params} {s : State} (h : Reachable M p s) : Inv p s :
 card, and only its generation passes `requireHolder`. -/
 theorem reachable_valid_held {p : Params} {x : Cl} (hr : Reachable M p (enc x)) (hv : Valid x) :
     x.held = true := ((reachable_inv hr).2 x rfl).validHeld hv
+
+/-! ## Theorem 7 of the group lease card: the audit generation of a lost member recovery -/
+
+/-- A lost member recovery is accepted only for a claimed card (`working` or
+`review`), at the generation the request observed, with a fresh execution
+identity below the last generation, a record that is not pending, and no valid
+lease. -/
+theorem audit_iff (p : Params) (x : Cl) (expected : Nat) (fresh : Bool) :
+    step M p (enc x) ⟨"audit", [natV expected, boolV fresh]⟩ ≠ none ↔
+      expected ≤ p "maxGen" ∧ x.held = true ∧ expected = x.gen ∧ fresh = true ∧ x.st ≠ 1 ∧ ¬Valid x ∧
+        x.gen + 1 ≤ p "maxGen" := by
+  rw [step_audit]
+  by_cases h : expected ≤ p "maxGen" ∧ x.held = true ∧ expected = x.gen ∧ fresh = true ∧ x.st ≠ 1 ∧ ¬Valid x ∧
+    x.gen + 1 ≤ p "maxGen" <;> simp [h]
+
+/-- The audit generation is exactly one above the observed one, its status is
+`released` (not a claim any execution can hold), and it has no lease. -/
+theorem audit_result (p : Params) (x : Cl) (expected : Nat) (fresh : Bool) {s' : State}
+    (h : step M p (enc x) ⟨"audit", [natV expected, boolV fresh]⟩ = some s') :
+    s' = enc ⟨x.held, 4, x.gen + 1, false⟩ ∧ ¬Valid ⟨x.held, 4, x.gen + 1, false⟩ := by
+  rw [step_audit] at h
+  split at h
+  · cases h; exact ⟨rfl, by simp [Valid]⟩
+  · cases h
+
+/-- A valid lease is never replaced by an audit generation. -/
+theorem audit_refused_valid (p : Params) (x : Cl) (expected : Nat) (fresh : Bool) (hv : Valid x) :
+    step M p (enc x) ⟨"audit", [natV expected, boolV fresh]⟩ = none := by
+  rw [step_audit]
+  split
+  · rename_i hh; exact absurd hv hh.2.2.2.2.2.1
+  · rfl
+
+/-- A request that observed another generation, or presents no fresh execution
+identity, is refused. -/
+theorem audit_refused_stale (p : Params) (x : Cl) (expected : Nat) (fresh : Bool)
+    (h : expected ≠ x.gen ∨ fresh = false) :
+    step M p (enc x) ⟨"audit", [natV expected, boolV fresh]⟩ = none := by
+  rw [step_audit]
+  split
+  · rename_i hh
+    obtain ⟨-, -, h1, h2, -⟩ := hh
+    rcases h with h | h
+    · exact absurd h1 h
+    · simp_all
+  · rfl
 
 end KanderFormal.Proofs.ServerClaim

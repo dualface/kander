@@ -37,6 +37,9 @@ var vectorEvents = []Event{
 	Pending{Moved: false},
 	Reconcile{Owner: true},
 	Reconcile{Owner: false},
+	Audit{Expected: 1, Fresh: true},
+	Audit{Expected: 0, Fresh: true},
+	Audit{Expected: 1, Fresh: false},
 }
 
 func encodeParams(p Params) string {
@@ -76,6 +79,8 @@ func encodeEvent(e Event) string {
 		return vectortest.Event("pending", "moved", vectortest.Bool(ev.Moved))
 	case Reconcile:
 		return vectortest.Event("reconcile", "owner", vectortest.Bool(ev.Owner))
+	case Audit:
+		return vectortest.Event("audit", "expected", vectortest.Uint(ev.Expected), "fresh", vectortest.Bool(ev.Fresh))
 	}
 	return "null"
 }
