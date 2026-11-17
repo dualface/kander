@@ -17,7 +17,7 @@ import (
 // fast-forward, a replay of the review range, and a merge of the target with the
 // reviewed commit that the client generates. Other purposes keep the plain
 // contained or fast-forward decision.
-func (s *Session) integrationContainment(ctx context.Context, dir string, options IntegrationOptions, request *api.IntegrationRequest) error {
+func (s *Session) integrationContainment(ctx context.Context, dir string, options IntegrationOptions, request *api.IntegrationRequest, carried *api.IntegrationRequest) error {
 	target := request.ExpectedTarget
 	if options.Purpose != "deliver" {
 		contained, err := s.integrationContains(ctx, dir, options.Commit, target)
@@ -25,7 +25,7 @@ func (s *Session) integrationContainment(ctx context.Context, dir string, option
 		return err
 	}
 	if options.ViaCommit != "" {
-		return s.viaContainment(ctx, dir, options, request)
+		return s.viaContainment(ctx, dir, options, request, carried)
 	}
 	contained, err := s.integrationContains(ctx, dir, options.Commit, target)
 	if err != nil {
@@ -48,7 +48,7 @@ func (s *Session) integrationContainment(ctx context.Context, dir string, option
 		return err
 	}
 	if replay == nil {
-		return s.autoMerge(ctx, dir, options, request, options.Commit)
+		return s.autoMerge(ctx, dir, options, request, options.Commit, carried)
 	}
 	request.Containment, request.AlreadyContained, request.Replay = api.IntegrationReplayed, true, replay
 	return nil
@@ -60,7 +60,7 @@ func (s *Session) integrationContainment(ctx context.Context, dir string, option
 // the target itself carries it if it contains the carrier, and otherwise the
 // target and the carrier are merged. Either way the request records the
 // caller's carrier as the via source.
-func (s *Session) viaContainment(ctx context.Context, dir string, options IntegrationOptions, request *api.IntegrationRequest) error {
+func (s *Session) viaContainment(ctx context.Context, dir string, options IntegrationOptions, request *api.IntegrationRequest, carried *api.IntegrationRequest) error {
 	via, target := options.ViaCommit, request.ExpectedTarget
 	if err := s.FetchCommit(ctx, dir, target); err != nil {
 		return err
@@ -97,7 +97,7 @@ func (s *Session) viaContainment(ctx context.Context, dir string, options Integr
 		request.Containment, request.ViaCommit, request.AlreadyContained, request.ViaSource = api.IntegrationVia, target, true, via
 		return nil
 	}
-	return s.autoMerge(ctx, dir, options, request, via)
+	return s.autoMerge(ctx, dir, options, request, via, carried)
 }
 
 // reviewReplay finds the commits of the target that repeat the closed review

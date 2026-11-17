@@ -147,23 +147,24 @@ func (s *Session) finishIntegration(ctx context.Context, dir string, journal *Ac
 	if err := storeIntegrationOperation(journal, state); err != nil {
 		return value, err
 	}
-	for _, attempt := range state.Attempts {
-		if err := dropAutoMerge(ctx, dir, attempt.Request); err != nil {
-			return value, err
-		}
+	if err := dropAutoMerges(ctx, dir, state); err != nil {
+		return value, err
 	}
 	credential := Credential{ResourceKind: "integration", ServerURL: s.ServerURL, ClientID: s.Client.ClientID(), ProjectID: s.Info.ID, TaskID: value.ID, ExecutionID: value.Request.ExecutionID, Generation: value.Generation}
 	return value, RemoveCredential(s.Home, credential)
 }
 
-// retireIntegration ends an attempt for good: its credential and the private
-// ref of its generated merge go away, and the journal keeps the reason.
+// retireIntegration ends an attempt for good: its credential goes away, and so
+// does the private ref of its generated merge unless the next attempt may adopt
+// that merge. The journal keeps the reason.
 func (s *Session) retireIntegration(ctx context.Context, dir string, journal *ActionJournal, state *integrationOperation, attempt *integrationAttempt, current api.Integration, reason string) error {
 	if err := RemoveCredential(s.Home, Credential{ResourceKind: "integration", ServerURL: s.ServerURL, ProjectID: s.Info.ID, TaskID: current.ID, ExecutionID: attempt.Request.ExecutionID, Generation: current.Generation}); err != nil {
 		return err
 	}
-	if err := dropAutoMerge(ctx, dir, attempt.Request); err != nil {
-		return err
+	if !carriesAutoMerge[reason] {
+		if err := dropAutoMerge(ctx, dir, attempt.Request); err != nil {
+			return err
+		}
 	}
 	attempt.Retired, attempt.RetiredFor = true, reason
 	return storeIntegrationOperation(journal, state)

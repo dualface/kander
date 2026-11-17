@@ -2,6 +2,7 @@ package remote_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/internal/remote"
 )
 
 // isolateGit keeps the tests away from the developer's own Git configuration
@@ -499,4 +501,147 @@ func TestIntegrationRetryStartsOverWhenTheMergeRefIsLost(t *testing.T) {
 		t.Fatalf("private ref left behind after completion: %s", refs)
 	}
 	f.complete(result)
+}
+
+// dropIntegrationCredentials removes the private credentials of the host, which
+// is what a restarted command finds when the process that held the lease is gone.
+func (f *integrationFixture) dropIntegrationCredentials() {
+	f.t.Helper()
+	credentials, err := remote.Credentials(f.a.Home)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	for _, credential := range credentials {
+		if credential.ResourceKind == "integration" {
+			if err := remote.RemoveCredential(f.a.Home, credential); err != nil {
+				f.t.Fatal(err)
+			}
+		}
+	}
+}
+
+func TestIntegrationRestartedCommandReusesTheMergeOfTheInterruptedOne(t *testing.T) {
+	f := newIntegrationFixture(t)
+	f.mergeIdentity()
+	f.advanceTarget("other.txt")
+	t.Setenv("GIT_COMMITTER_DATE", "2030-01-01T00:00:00Z")
+	t.Setenv("GIT_AUTHOR_DATE", "2030-01-01T00:00:00Z")
+	f.interruptBeforePush()
+	options := f.options("restarted-command")
+	if _, err := f.a.Integrate(t.Context(), f.first, options); err == nil {
+		t.Fatal("the interrupted push intent was not reported")
+	}
+	f.dropIntegrationCredentials()
+	// A new merge of the same inputs would carry another time stamp.
+	t.Setenv("GIT_COMMITTER_DATE", "2031-01-01T00:00:00Z")
+	t.Setenv("GIT_AUTHOR_DATE", "2031-01-01T00:00:00Z")
+	result, err := f.a.Integrate(t.Context(), f.first, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempts := f.attempts(options.OperationID)
+	if len(attempts) != 2 || attempts[0].RetiredFor != "identity_changed" || attempts[1].Request.ExecutionID == attempts[0].Request.ExecutionID {
+		t.Fatalf("attempts: %+v", attempts)
+	}
+	if result.Request.ViaCommit != attempts[0].Request.ViaCommit || f.targetHead() != attempts[0].Request.ViaCommit {
+		t.Fatalf("a restarted command made a new merge: %s, first %s", result.Request.ViaCommit, attempts[0].Request.ViaCommit)
+	}
+	if refs := f.privateRefs(); refs != "" {
+		t.Fatalf("private ref left behind: %s", refs)
+	}
+	f.complete(result)
+}
+
+func TestIntegrationRestartedCommandMergesAgainWhenTheTargetMoved(t *testing.T) {
+	f := newIntegrationFixture(t)
+	f.mergeIdentity()
+	f.advanceTarget("other.txt")
+	f.interruptBeforePush()
+	options := f.options("restarted-after-move")
+	if _, err := f.a.Integrate(t.Context(), f.first, options); err == nil {
+		t.Fatal("the interrupted push intent was not reported")
+	}
+	first := f.attempts(options.OperationID)[0].Request
+	f.dropIntegrationCredentials()
+	moved := f.advanceTarget("moved.txt")
+	result, err := f.a.Integrate(t.Context(), f.first, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Request.ViaCommit == first.ViaCommit {
+		t.Fatal("a merge of the old target was reused")
+	}
+	if got := f.parents(result.Request.ViaCommit); len(got) != 2 || got[0] != moved {
+		t.Fatalf("the new merge does not start from the moved target: %v", got)
+	}
+	if refs := f.privateRefs(); refs != "" {
+		t.Fatalf("private ref left behind: %s", refs)
+	}
+	f.complete(result)
+}
+
+func TestIntegrationRetryStartsOverWhenTheMergeAndItsRefAreBothGone(t *testing.T) {
+	f := newIntegrationFixture(t)
+	f.mergeIdentity()
+	f.advanceTarget("other.txt")
+	f.interruptBeforePush()
+	options := f.options("lost-merge-object")
+	if _, err := f.a.Integrate(t.Context(), f.first, options); err == nil {
+		t.Fatal("the interrupted push intent was not reported")
+	}
+	lost := f.attempts(options.OperationID)[0].Request
+	deliveryGit(t, f.first, "update-ref", "-d", "refs/kander/auto-merge/"+lost.ExecutionID)
+	deliveryGit(t, f.first, "reflog", "expire", "--expire=now", "--all")
+	deliveryGit(t, f.first, "prune", "--expire=now")
+	if exec.CommandContext(t.Context(), "git", "-C", f.first, "cat-file", "-e", lost.ViaCommit).Run() == nil {
+		t.Fatal("the merge object survived the prune")
+	}
+	result, err := f.a.Integrate(t.Context(), f.first, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempts := f.attempts(options.OperationID)
+	if len(attempts) != 2 || attempts[0].RetiredFor != "auto_merge_lost" || f.targetHead() != result.Request.ViaCommit {
+		t.Fatalf("attempts: %+v", attempts)
+	}
+	f.complete(result)
+}
+
+func TestIntegrationCancelledCommandStillDeletesItsMergeRef(t *testing.T) {
+	f := newIntegrationFixture(t)
+	f.mergeIdentity()
+	f.advanceTarget("other.txt")
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	f.watch(func(kind string) int {
+		if kind == "observation" {
+			cancel()
+		}
+		return 0
+	})
+	if _, err := f.a.Integrate(ctx, f.first, f.options("cancelled-preparation")); err == nil {
+		t.Fatal("a cancelled command succeeded")
+	}
+	if refs := f.privateRefs(); refs != "" {
+		t.Fatalf("a cancelled preparation kept the merge ref: %s", refs)
+	}
+}
+
+func TestIntegrationReplayedCompletionFinishesAnInterruptedCleanup(t *testing.T) {
+	f := newIntegrationFixture(t)
+	f.mergeIdentity()
+	f.advanceTarget("other.txt")
+	options := f.options("cleanup-replay")
+	result, err := f.a.Integrate(t.Context(), f.first, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A completion saved its result and stopped before the cleanup finished.
+	deliveryGit(t, f.first, "update-ref", "refs/kander/auto-merge/"+result.Request.ExecutionID, result.Request.ViaCommit)
+	if _, err := f.a.Integrate(t.Context(), f.first, options); err != nil {
+		t.Fatal(err)
+	}
+	if refs := f.privateRefs(); refs != "" {
+		t.Fatalf("the replayed completion kept the merge ref: %s", refs)
+	}
 }

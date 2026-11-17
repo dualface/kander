@@ -27,7 +27,7 @@ const (
 // prepareIntegration observes the target and decides how the reviewed commit
 // reaches it. A generated merge exists only once the decision is made; a later
 // failure of the preparation deletes its private ref again.
-func (s *Session) prepareIntegration(ctx context.Context, dir string, options IntegrationOptions, actor Credential) (request api.IntegrationRequest, err error) {
+func (s *Session) prepareIntegration(ctx context.Context, dir string, options IntegrationOptions, actor Credential, carried *api.IntegrationRequest) (request api.IntegrationRequest, err error) {
 	request = api.IntegrationRequest{Purpose: options.Purpose, TargetRef: options.TargetRef, Commit: options.Commit, GroupID: options.GroupID, ExecutionID: NewExecutionID(), ActorExecutionID: actor.ExecutionID, Decision: options.Decision}
 	defer func() {
 		if err == nil {
@@ -68,7 +68,7 @@ func (s *Session) prepareIntegration(ctx context.Context, dir string, options In
 	if request.BaseCommit == "" {
 		return request, integrationFailure("remote.integration_input_required")
 	}
-	if err := s.integrationContainment(ctx, dir, options, &request); err != nil {
+	if err := s.integrationContainment(ctx, dir, options, &request, carried); err != nil {
 		return request, err
 	}
 	request.Edges = request.ContainmentEdges()
@@ -140,7 +140,8 @@ func (s *Session) Integrate(ctx context.Context, dir string, options Integration
 		}
 	}
 	if state.Result != nil {
-		return *state.Result, nil
+		// A completion whose cleanup failed is finished again by the next call.
+		return *state.Result, dropAutoMerges(ctx, dir, &state)
 	}
 	if err := storeIntegrationOperation(journal, &state); err != nil {
 		return api.Integration{}, err
@@ -181,7 +182,14 @@ func (s *Session) Integrate(ctx context.Context, dir string, options Integration
 			if len(state.Attempts) >= 32 {
 				return api.Integration{}, integrationFailure("remote.integration_recovery_required")
 			}
-			request, err := s.prepareIntegration(ctx, dir, options, actor)
+			carried := carriedAutoMerge(&state)
+			request, err := s.prepareIntegration(ctx, dir, options, actor, carried)
+			if carried != nil && (err == nil || errors.Is(err, errTargetMoved)) {
+				// The carried merge is adopted, stale or unused by now.
+				if dropErr := dropAutoMerge(ctx, dir, *carried); dropErr != nil {
+					return api.Integration{}, dropErr
+				}
+			}
 			if errors.Is(err, errTargetMoved) {
 				last = retireTargetMoved
 				continue
