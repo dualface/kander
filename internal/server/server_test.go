@@ -349,17 +349,23 @@ func TestRestartKeepsStateAndRefusesASecondInstance(t *testing.T) {
 	}
 }
 
+// A newer and an older peer protocol are refused before any domain operation:
+// protocol 1 clients predate recoverable lapsed leases.
 func TestProtocolMismatchIsRefused(t *testing.T) {
 	f := newFixture(t)
-	req, _ := http.NewRequest(http.MethodGet, f.http.URL+"/api/v1/projects?name=demo", nil)
-	req.Header.Set(api.HeaderProtocol, "99")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusPreconditionFailed {
-		t.Fatalf("want 412, got %d", resp.StatusCode)
+	for _, version := range []string{"99", "1"} {
+		req, _ := http.NewRequest(http.MethodGet, f.http.URL+"/api/v1/projects?name=demo", nil)
+		req.Header.Set(api.HeaderProtocol, version)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body api.Error
+		_ = json.NewDecoder(resp.Body).Decode(&body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusPreconditionFailed || body.Code != api.CodeProtocolIncompatible {
+			t.Fatalf("protocol %s: want 412 %s, got %d %+v", version, api.CodeProtocolIncompatible, resp.StatusCode, body)
+		}
 	}
 }
 
