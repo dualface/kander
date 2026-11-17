@@ -159,3 +159,40 @@ func TestIntegrationReplayMayEnterTheTargetThroughAMerge(t *testing.T) {
 	}
 	f.complete(result)
 }
+
+func TestIntegrationReplayTriesEveryChildWithTheSamePatch(t *testing.T) {
+	f := newIntegrationGitFixture(t)
+	mid := f.commit
+	second := commitFile(t, f.first, "extra.txt", "extra work\n", "Add extra work")
+	f.commit = commitFile(t, f.first, "third.txt", "third work\n", "Add third work")
+	f.reviewedTask()
+	if _, err := f.b.FetchDelivery(t.Context(), f.second, f.task.TaskID, f.commit); err != nil {
+		t.Fatal(err)
+	}
+	deliveryGit(t, f.second, "fetch", "-q", "origin")
+	deliveryGit(t, f.second, "checkout", "-q", "-B", "forked", "origin/v2")
+	foreign := commitFile(t, f.second, "foreign.txt", "foreign\n", "Foreign work")
+	deliveryGit(t, f.second, "cherry-pick", mid)
+	root := deliveryGit(t, f.second, "rev-parse", "HEAD")
+	// A side copy of the second commit comes first and has no third commit. The
+	// complete chain goes through another copy with the same patch.
+	t.Setenv("GIT_COMMITTER_DATE", "2001-01-01T00:00:00Z")
+	deliveryGit(t, f.second, "checkout", "-q", "-B", "partial", root)
+	deliveryGit(t, f.second, "cherry-pick", "-x", second)
+	t.Setenv("GIT_COMMITTER_DATE", "2002-01-01T00:00:00Z")
+	deliveryGit(t, f.second, "checkout", "-q", "forked")
+	deliveryGit(t, f.second, "cherry-pick", second)
+	deliveryGit(t, f.second, "commit", "-q", "--amend", "-m", "Second copy of the second commit")
+	deliveryGit(t, f.second, "cherry-pick", f.commit)
+	tail := deliveryGit(t, f.second, "rev-parse", "HEAD")
+	deliveryGit(t, f.second, "merge", "--no-ff", "--no-edit", "partial")
+	deliveryGit(t, f.second, "push", "origin", "HEAD:refs/heads/v2")
+	result, err := f.a.Integrate(t.Context(), f.first, f.options("replay-forked-copies"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replay := result.Request.Replay; result.Request.Containment != api.IntegrationReplayed || replay == nil || replay.ReplayBase != foreign || replay.ReplayTarget != tail {
+		t.Fatalf("receipt: %+v", result.Request)
+	}
+	f.complete(result)
+}

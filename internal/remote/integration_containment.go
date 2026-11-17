@@ -3,6 +3,8 @@ package remote
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -63,7 +65,7 @@ func (s *Session) viaContainment(ctx context.Context, dir string, options Integr
 		if err := s.FetchCommit(ctx, dir, via); err != nil {
 			return errors.Join(err, integrationFailure("remote.integration_via_unavailable"))
 		}
-		if err := remoteServes(ctx, dir, via); err != nil {
+		if err := remoteServes(ctx, dir, s.Info.Remote, via); err != nil {
 			return errors.Join(err, integrationFailure("remote.integration_via_unavailable"))
 		}
 	}
@@ -147,14 +149,48 @@ func (s *Session) integrationMemberEdges(ctx context.Context, dir string, reques
 // fetch succeeds without contact when the object is already in the clone. The
 // negotiation asks the remote through the clone's own origin and prints every
 // commit of the negotiation tip that the remote acknowledges; the commit itself
-// is listed only when the remote has it.
-func remoteServes(ctx context.Context, dir, commit string) error {
+// is listed only when the remote has it. Negotiation needs protocol version 2,
+// so a failure falls back to fetching the one commit into a scratch repository.
+func remoteServes(ctx context.Context, dir, remote, commit string) error {
 	acknowledged, err := gitCommand(ctx, dir, "fetch", "--negotiate-only", "--negotiation-tip="+commit, "origin")
 	if err != nil {
-		return err
+		return scratchServes(ctx, dir, remote, commit)
 	}
 	if !slices.Contains(strings.Fields(acknowledged), commit) {
 		return integrationFailure("remote.git_commit_unavailable")
 	}
 	return nil
+}
+
+func scratchServes(ctx context.Context, dir, remote, commit string) error {
+	url, err := absoluteRemote(ctx, dir, remote)
+	if err != nil {
+		return err
+	}
+	scratch, err := os.MkdirTemp("", "kander-remote-probe-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(scratch)
+	if _, err := gitCommand(ctx, scratch, "init", "-q", "--bare"); err != nil {
+		return err
+	}
+	_, err = gitCommand(ctx, scratch, "fetch", "-q", "--no-tags", "--depth=1", url, commit)
+	return err
+}
+
+// absoluteRemote resolves a relative local remote against the work tree, where
+// git itself resolves it, so a scratch repository reads the same repository.
+func absoluteRemote(ctx context.Context, dir, remote string) (string, error) {
+	if strings.Contains(remote, "://") || filepath.IsAbs(remote) {
+		return remote, nil
+	}
+	if host, _, scp := strings.Cut(remote, ":"); scp && host != "" && !strings.Contains(host, "/") {
+		return remote, nil
+	}
+	top, err := gitCommand(ctx, dir, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(top, remote), nil
 }

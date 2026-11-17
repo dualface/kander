@@ -134,11 +134,12 @@ func findReplay(ctx context.Context, dir, base, commit, target string) (*api.Int
 		patches[c] = value
 		return value, err
 	}
+	run := replayRuns{reviewed: reviewed, children: children, patch: patch, memo: map[runKey]string{}}
 	for _, start := range candidates {
 		if parent[start] == "" {
 			continue
 		}
-		last, err := followRun(start, reviewed, children, patch)
+		last, err := run.from(start, 0)
 		if err != nil {
 			return nil, err
 		}
@@ -149,35 +150,53 @@ func findReplay(ctx context.Context, dir, base, commit, target string) (*api.Int
 	return nil, nil
 }
 
-// followRun walks the children of start while their patches repeat the
-// reviewed commits in order. It returns the last commit of a complete run.
-func followRun(start string, reviewed []string, children map[string][]string, patch func(string) (string, error)) (string, error) {
-	cursor := ""
-	for i, reviewedCommit := range reviewed {
-		want, err := patch(reviewedCommit)
+type runKey struct {
+	commit string
+	index  int
+}
+
+// replayRuns follows chains of parent links whose patches repeat the reviewed
+// commits in order. A commit may have several children with the same patch, so
+// every branch is tried; the memo keeps the walk to one visit per commit and
+// position.
+type replayRuns struct {
+	reviewed []string
+	children map[string][]string
+	patch    func(string) (string, error)
+	memo     map[runKey]string
+}
+
+// from returns the last commit of a complete run that starts at commit as the
+// reviewed commit at index, or an empty string when no branch completes.
+func (r replayRuns) from(commit string, index int) (string, error) {
+	key := runKey{commit, index}
+	if last, seen := r.memo[key]; seen {
+		return last, nil
+	}
+	r.memo[key] = ""
+	want, err := r.patch(r.reviewed[index])
+	if err != nil {
+		return "", err
+	}
+	got, err := r.patch(commit)
+	if err != nil || got != want {
+		return "", err
+	}
+	if index == len(r.reviewed)-1 {
+		r.memo[key] = commit
+		return commit, nil
+	}
+	for _, child := range r.children[commit] {
+		last, err := r.from(child, index+1)
 		if err != nil {
 			return "", err
 		}
-		next := []string{start}
-		if i > 0 {
-			next = children[cursor]
-		}
-		cursor = ""
-		for _, candidate := range next {
-			got, err := patch(candidate)
-			if err != nil {
-				return "", err
-			}
-			if got == want {
-				cursor = candidate
-				break
-			}
-		}
-		if cursor == "" {
-			return "", nil
+		if last != "" {
+			r.memo[key] = last
+			return last, nil
 		}
 	}
-	return cursor, nil
+	return "", nil
 }
 
 // verifyReplay repeats the commit-by-commit comparison of a recorded replay.
