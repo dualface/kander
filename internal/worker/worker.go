@@ -12,7 +12,6 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
@@ -22,8 +21,8 @@ import (
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
-	"github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/internal/version"
 )
 
 // idleExit is how long a worker without live claims stays before exiting.
@@ -43,6 +42,28 @@ type Options struct {
 	// Deliver types one line into the agent recorded by the card's WINDOW
 	// and SESSION; the default is Deliver.
 	Deliver func(window, session, text string) error
+	// The fields below drive the handover to a replaced binary; the defaults
+	// are the production behavior and tests replace them to start no process.
+	//
+	// Executable names the file this worker started from; the default is
+	// os.Executable.
+	Executable func() (string, error)
+	// Identity reads the identity of the file at a path; the default reads it
+	// through an open handle.
+	Identity func(path string) (os.FileInfo, error)
+	// Probe checks that the replaced binary works; the default runs
+	// `<executable> version` with a bounded timeout.
+	Probe func(ctx context.Context, executable string) error
+	// Spawn starts the worker of the replaced binary for a client home; the
+	// default is remote.StartWorker.
+	Spawn func(home, executable string) (Successor, error)
+	// Held reports whether a worker holds the lock of a client home; the
+	// default is remote.WorkerHeld.
+	Held func(home string) (bool, error)
+	// ConfirmTimeout and ConfirmPoll bound the wait for the started worker to
+	// take the lock and set its pace.
+	ConfirmTimeout time.Duration
+	ConfirmPoll    time.Duration
 }
 
 // Deliver is the terminal delivery of collaboration requests. The notify
@@ -95,22 +116,21 @@ func Serve(ctx context.Context, o Options) error {
 	if o.Deliver == nil {
 		o.Deliver = Deliver
 	}
+	o.defaultHandover()
 	if err := os.MkdirAll(o.Home, 0o700); err != nil {
 		return err
 	}
-	file, err := fs.OpenLockFile(o.Home, filepath.Join(o.Home, remote.WorkerLockName))
-	if err != nil {
+	lock := &workerLock{home: o.Home}
+	if err := lock.acquire(ctx); err != nil {
 		return err
 	}
-	defer file.Close()
-	lockCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
-	lock, err := fs.LockExclusiveContext(lockCtx, file)
-	cancel()
-	if err != nil {
-		return ErrRunning
-	}
-	defer lock.Unlock()
+	defer lock.release()
 	w := &loop{o: o, clients: map[string]*client.Client{}}
+	self, err := newHandover(o)
+	if err != nil {
+		o.Logger.Warn("the executable of this worker cannot be identified; handover to a replaced binary is off", "error", err)
+	}
+	o.Logger.Info("worker started", "version", version.String(), "pid", os.Getpid(), "executable", self.path())
 	idleSince := o.Now()
 	ticker := time.NewTicker(o.Tick)
 	defer ticker.Stop()
@@ -122,6 +142,13 @@ func Serve(ctx context.Context, o Options) error {
 		if live > 0 {
 			idleSince = o.Now()
 		} else if o.Now().Sub(idleSince) >= o.IdleExit {
+			return nil
+		}
+		result, err := w.tryHandover(ctx, self, lock)
+		if err != nil {
+			return err
+		}
+		if result != handoverNone {
 			return nil
 		}
 		select {
