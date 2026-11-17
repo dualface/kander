@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fix (TUI): the board no longer crashes when the terminal height is exactly one row. Rendering the "terminal too small" notice padded its body to a negative height, which panicked with `slice bounds out of range [:-1]` and ended `kander` with exit code 1. The board, detail view, help overlay and options panel now render at every window size, and shrinking the terminal to one row and back keeps the process running.
+
 ## v1.4.2 — 2026-11-16
 
 - herdr-core launcher: every task agent and orchestrator agent now opens in its own new tab of the calling terminal's Herdr App space, instead of a pane in the caller's tab. The tab is named for the task: the card title for `start`, resume takeover and notify recovery (control characters removed, at most 40 characters, longer titles end in `…`), the first `kander orchestrate` argument followed by ` +<number of the other arguments>` for an orchestrator, and the existing window label for chat, issue triage and refinement. Naming goes through the `herdr-app` layout document with a versioned write; when the tab cannot be placed or named (including a Herdr App that is not connected to the core, which costs each launch a bounded wait: the tab is polled for 5 seconds, each `hc` call is capped at 3 seconds and the whole step at 15 seconds), the launch still succeeds and prints a warning. A caller without `herdr.space` places nothing, as before. `kander terminal test herdr-core` run inside an Herdr App terminal also opens a tab for its test terminal.
