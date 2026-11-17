@@ -415,6 +415,20 @@ func RunMove(args []string) int {
 	return 0
 }
 
+// reclaimRefusal refuses a takeover by the execution that already owns the
+// claim. A live claim needs no takeover; a lost or released one cannot be taken
+// again under the same execution ID.
+func reclaimRefusal(current *api.ClaimView, execution string, now time.Time) error {
+	if current == nil || current.ExecutionID != execution {
+		return nil
+	}
+	key := "remote.execution_cannot_reclaim"
+	if current.Status == api.ClaimActive && now.Before(current.ExpiresAt) {
+		key = "remote.execution_already_holder"
+	}
+	return &api.Error{Code: api.CodeLeaseInvalid, Message: config.Text(key)}
+}
+
 // claim takes a todo task, or with a decision takes over a lost claim.
 func claim(ctx context.Context, s *Session, task, owner, decision string) int {
 	execution := os.Getenv(EnvExecutionID)
@@ -434,8 +448,8 @@ func claim(ctx context.Context, s *Session, task, owner, decision string) int {
 		if current.Claim != nil {
 			req.ExpectedGeneration = current.Claim.Generation
 		}
-		if current.Claim != nil && current.Claim.ExecutionID == execution {
-			return fail(&api.Error{Code: api.CodeLeaseInvalid, Message: config.Text("remote.execution_cannot_reclaim")})
+		if err := reclaimRefusal(current.Claim, execution, time.Now()); err != nil {
+			return fail(err)
 		}
 		if id := board.MetadataFrom(current.Text, "DISPATCH_ID"); id != "" {
 			dispatch, err := s.Project.Dispatch(ctx, current.TaskID, id)

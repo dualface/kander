@@ -90,6 +90,7 @@
   "remote.integration_members_changed": "統合メンバーまたは実行が変わりました。現在のサーバースナップショットを確認してください",
   "remote.integration_delivery_required": "各寄与メンバーには現在の公開済み成果物と有効な review 所有権が必要です",
   "remote.integration_fast_forward_required": "確認した対象はソースへ fast-forward できません",
+  "remote.execution_already_holder": "この実行はすでにタスクを保持しているため、引き継ぎは不要です。--owner なしの kander move で続行してください。",
   "remote.integration_operation_changed": "この統合操作 ID は別の資料に結び付いています。元の記録を保持してください",
   "remote.integration_recovery_required": "統合結果は未確定です。続行前に非公開記録と正確なリモート状態を確認してください",
   "remote.integration_process_required": "統合には観測可能なローカルコマンドプロセスが必要です",

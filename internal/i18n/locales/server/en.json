@@ -90,6 +90,7 @@
   "remote.integration_members_changed": "Integration membership or its execution changed; inspect the current service snapshot",
   "remote.integration_delivery_required": "Every contributing member needs its current published delivery and live review ownership",
   "remote.integration_fast_forward_required": "The inspected target cannot advance to the source by fast-forward",
+  "remote.execution_already_holder": "This execution already holds the task, so it needs no takeover. Continue with kander move without --owner.",
   "remote.integration_operation_changed": "The integration operation ID already names other material; preserve its receipt",
   "remote.integration_recovery_required": "Integration remains unresolved; inspect its private receipt and exact remote state before continuing",
   "remote.integration_process_required": "Integration requires an observable local command process",
