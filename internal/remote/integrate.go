@@ -11,8 +11,32 @@ import (
 	"github.com/dualface/kander/internal/client"
 )
 
-func (s *Session) prepareIntegration(ctx context.Context, dir string, options IntegrationOptions, actor Credential) (api.IntegrationRequest, error) {
-	request := api.IntegrationRequest{Purpose: options.Purpose, TargetRef: options.TargetRef, Commit: options.Commit, GroupID: options.GroupID, ExecutionID: NewExecutionID(), ActorExecutionID: actor.ExecutionID, Decision: options.Decision}
+// errTargetMoved reports that the target changed while a new attempt was being
+// prepared. Integrate starts the attempt over from a fresh observation.
+var errTargetMoved = errors.New("integration target moved during preparation")
+
+// Reasons an attempt is retired. The journal keeps the reason of each one.
+const (
+	retireTargetMoved   = "target_moved"
+	retireClaimEnded    = "claim_ended"
+	retireIdentity      = "identity_changed"
+	retireScope         = "scope_invalid"
+	retireAutoMergeLost = "auto_merge_lost"
+)
+
+// prepareIntegration observes the target and decides how the reviewed commit
+// reaches it. A generated merge exists only once the decision is made; a later
+// failure of the preparation deletes its private ref again.
+func (s *Session) prepareIntegration(ctx context.Context, dir string, options IntegrationOptions, actor Credential) (request api.IntegrationRequest, err error) {
+	request = api.IntegrationRequest{Purpose: options.Purpose, TargetRef: options.TargetRef, Commit: options.Commit, GroupID: options.GroupID, ExecutionID: NewExecutionID(), ActorExecutionID: actor.ExecutionID, Decision: options.Decision}
+	defer func() {
+		if err == nil {
+			return
+		}
+		if dropped := dropAutoMerge(ctx, dir, request); dropped != nil {
+			err = errors.Join(err, dropped)
+		}
+	}()
 	members, err := s.integrationMembers(ctx, options)
 	if err != nil {
 		return request, err
@@ -69,7 +93,7 @@ func (s *Session) prepareIntegration(ctx context.Context, dir string, options In
 		return request, err
 	}
 	if current != target {
-		return request, integrationFailure("remote.git_ref_conflict")
+		return request, errTargetMoved
 	}
 	request.ObservationTicket = observation.Ticket
 	if observation.Integration != nil {
@@ -126,7 +150,7 @@ func (s *Session) Integrate(ctx context.Context, dir string, options Integration
 	for _, attempt := range slices.Backward(state.Attempts) {
 		previous, err := s.Project.IntegrationExecution(ctx, api.IntegrationID(options.TargetRef), attempt.Request.ExecutionID)
 		if err == nil && previous.Phase == "integrated" {
-			return s.finishIntegration(journal, &state, previous)
+			return s.finishIntegration(ctx, dir, journal, &state, previous)
 		}
 		if err != nil && !api.IsCode(err, api.CodeNotFound) {
 			return api.Integration{}, err
@@ -144,6 +168,10 @@ func (s *Session) Integrate(ctx context.Context, dir string, options Integration
 	if err != nil {
 		return api.Integration{}, err
 	}
+	// last is why the previous pass gave up its attempt. A command that runs out
+	// of passes while the target keeps moving says so; any other reason leaves
+	// the unresolved-integration error.
+	last := ""
 	for range 3 {
 		var attempt *integrationAttempt
 		if len(state.Attempts) > 0 {
@@ -154,6 +182,10 @@ func (s *Session) Integrate(ctx context.Context, dir string, options Integration
 				return api.Integration{}, integrationFailure("remote.integration_recovery_required")
 			}
 			request, err := s.prepareIntegration(ctx, dir, options, actor)
+			if errors.Is(err, errTargetMoved) {
+				last = retireTargetMoved
+				continue
+			}
 			if err != nil {
 				return api.Integration{}, err
 			}
@@ -184,7 +216,7 @@ func (s *Session) Integrate(ctx context.Context, dir string, options Integration
 			return api.Integration{}, integrationFailure("remote.integration_members_changed")
 		}
 		if current.Phase == "integrated" {
-			return s.finishIntegration(journal, &state, current)
+			return s.finishIntegration(ctx, dir, journal, &state, current)
 		}
 		proof := client.Claim{Token: grant.Token, Generation: grant.Integration.Generation}
 		if current.Status == api.ClaimReleased {
@@ -197,9 +229,10 @@ func (s *Session) Integrate(ctx context.Context, dir string, options Integration
 			}
 		}
 		if current.Status == api.ClaimReleased || current.Status == api.ClaimLost {
-			if err := s.retireIntegration(journal, &state, attempt, current); err != nil {
+			if err := s.retireIntegration(ctx, dir, journal, &state, attempt, current, retireClaimEnded); err != nil {
 				return api.Integration{}, err
 			}
+			last = retireClaimEnded
 			continue
 		}
 		if current.Status != api.ClaimActive {
@@ -217,22 +250,38 @@ func (s *Session) Integrate(ctx context.Context, dir string, options Integration
 		if err != nil {
 			return api.Integration{}, err
 		}
-		rotate := knownClaim && (!found || credential.Lost || credential.AgentPID != facts.PID || credential.AgentStart != facts.Start || credential.BootID != boot)
-		rotate = rotate || !valid || current.Phase == "reserved" && head != attempt.Request.ExpectedTarget
-		if current.Phase == "pushing" && head != attempt.Request.ExpectedTarget {
+		reason := ""
+		moved := head != attempt.Request.ExpectedTarget
+		switch {
+		case knownClaim && (!found || credential.Lost || credential.AgentPID != facts.PID || credential.AgentStart != facts.Start || credential.BootID != boot):
+			reason = retireIdentity
+		case !valid:
+			reason = retireScope
+		case current.Phase == "reserved" && moved:
+			reason = retireTargetMoved
+		case current.Phase == "pushing" && moved:
 			contained, err := s.integrationContains(ctx, dir, attempt.Request.PushCommit(), head)
 			if err != nil {
 				return api.Integration{}, err
 			}
-			rotate = rotate || !contained
+			if !contained {
+				reason = retireTargetMoved
+			}
 		}
-		if rotate {
-			if _, err := s.integrationActionCall(ctx, dir, journal, &state, attempt, "release", proof); err != nil {
+		if reason == "" && attempt.Request.ViaAutoMerge {
+			kept, err := s.autoMergeKept(ctx, dir, attempt.Request, head)
+			if err != nil {
 				return api.Integration{}, err
 			}
-			if err := s.retireIntegration(journal, &state, attempt, current); err != nil {
+			if !kept {
+				reason = retireAutoMergeLost
+			}
+		}
+		if reason != "" {
+			if err := s.rotateIntegration(ctx, dir, journal, &state, attempt, current, proof, reason); err != nil {
 				return api.Integration{}, err
 			}
+			last = reason
 			continue
 		}
 		credential = Credential{ResourceKind: "integration", AuthorityExecutionID: actor.ExecutionID, ServerURL: s.ServerURL, ClientID: s.Client.ClientID(), ProjectID: s.Info.ID, TaskID: current.ID, ExecutionID: attempt.Request.ExecutionID, Generation: current.Generation, Token: grant.Token, RenewInterval: grant.RenewInterval, TTL: grant.TTL, RenewedAt: time.Now().UTC(), AgentPID: facts.PID, AgentStart: facts.Start, BootID: boot, Branch: options.TargetRef, BaseCommit: attempt.Request.BaseCommit}
@@ -251,10 +300,21 @@ func (s *Session) Integrate(ctx context.Context, dir string, options Integration
 		}
 		if !attempt.Request.AlreadyContained {
 			if current.Phase == "reserved" {
-				current, err = s.integrationActionCall(ctx, dir, journal, &state, attempt, "pushing", proof)
+				pushing, err := s.integrationActionCall(ctx, dir, journal, &state, attempt, "pushing", proof)
 				if err != nil {
-					return api.Integration{}, err
+					// The service refuses the push intent when the target is no longer
+					// the one this attempt observed; the attempt starts over.
+					moved, observeErr := s.integrationMoved(ctx, dir, attempt, err)
+					if observeErr != nil || !moved {
+						return api.Integration{}, errors.Join(err, observeErr)
+					}
+					if err := s.rotateIntegration(ctx, dir, journal, &state, attempt, current, proof, retireTargetMoved); err != nil {
+						return api.Integration{}, err
+					}
+					last = retireTargetMoved
+					continue
 				}
+				current = pushing
 			}
 			if _, err := s.Project.RenewIntegration(ctx, current.ID, proof); err != nil {
 				return api.Integration{}, err
@@ -269,7 +329,11 @@ func (s *Session) Integrate(ctx context.Context, dir string, options Integration
 			}
 			if !contains {
 				if head != attempt.Request.ExpectedTarget {
-					return api.Integration{}, integrationFailure("remote.git_ref_conflict")
+					if err := s.rotateIntegration(ctx, dir, journal, &state, attempt, current, proof, retireTargetMoved); err != nil {
+						return api.Integration{}, err
+					}
+					last = retireTargetMoved
+					continue
 				}
 				attempt.PushAttempts++
 				if err := storeIntegrationOperation(journal, &state); err != nil {
@@ -284,6 +348,15 @@ func (s *Session) Integrate(ctx context.Context, dir string, options Integration
 					return api.Integration{}, errors.Join(pushErr, observeErr)
 				}
 				contains, verifyErr := s.integrationContains(ctx, dir, attempt.Request.PushCommit(), after)
+				if verifyErr == nil && !contains && after != attempt.Request.ExpectedTarget {
+					// The lease held the push back because the target moved in between;
+					// nothing of this attempt reached the target.
+					if err := s.rotateIntegration(ctx, dir, journal, &state, attempt, current, proof, retireTargetMoved); err != nil {
+						return api.Integration{}, err
+					}
+					last = retireTargetMoved
+					continue
+				}
 				if verifyErr != nil || !contains {
 					return api.Integration{}, errors.Join(pushErr, verifyErr, integrationFailure("remote.integration_recovery_required"))
 				}
@@ -293,7 +366,24 @@ func (s *Session) Integrate(ctx context.Context, dir string, options Integration
 		if err != nil {
 			return api.Integration{}, err
 		}
-		return s.finishIntegration(journal, &state, confirmed)
+		return s.finishIntegration(ctx, dir, journal, &state, confirmed)
+	}
+	if last == retireTargetMoved {
+		return api.Integration{}, integrationFailure("remote.integration_target_moving")
 	}
 	return api.Integration{}, integrationFailure("remote.integration_recovery_required")
+}
+
+// integrationMoved reports whether a refused action followed a move of the
+// target: the refusal is a known one, and the target now differs from the one
+// the attempt observed. Any other refusal keeps its own error.
+func (s *Session) integrationMoved(ctx context.Context, dir string, attempt *integrationAttempt, refusal error) (bool, error) {
+	if !requestFailureKnown(refusal) {
+		return false, nil
+	}
+	head, err := s.integrationTarget(ctx, dir, attempt.Request.TargetRef)
+	if err != nil {
+		return false, err
+	}
+	return head != attempt.Request.ExpectedTarget, nil
 }

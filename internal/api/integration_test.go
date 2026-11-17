@@ -75,3 +75,33 @@ func TestIntegrationContainmentEdgesAndFinalCommit(t *testing.T) {
 		t.Fatal("a request without a carrier pushes the reviewed commit")
 	}
 }
+
+func TestIntegrationViaSourceAddsOneEdgeAndOldRequestsKeepTheirBytes(t *testing.T) {
+	via := IntegrationRequest{Containment: IntegrationVia, ViaCommit: "m", ViaAutoMerge: true, ViaSource: "s", Commit: "c", BaseCommit: "t", ExpectedTarget: "t"}
+	want := []IntegrationEdge{{"t", "m"}, {"c", "m"}, {"s", "m"}}
+	if got := via.ContainmentEdges(); len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Fatalf("edges with a source: %v", got)
+	}
+	raw, _ := json.Marshal(via)
+	for _, field := range []string{`"via_auto_merge":true`, `"via_source":"s"`} {
+		if !strings.Contains(string(raw), field) {
+			t.Fatalf("missing %s in %s", field, raw)
+		}
+	}
+	via.ViaSource = ""
+	if got := via.ContainmentEdges(); len(got) != 2 {
+		t.Fatalf("edges without a source: %v", got)
+	}
+	// A request or receipt written before the two fields reads and writes the same bytes.
+	old := `{"containment":"via","via_commit":"m","observation_ticket":"","expected_revision":0,"edges":null,"purpose":"deliver","target_ref":"refs/heads/v2","base_commit":"t","expected_target":"t","commit":"c","execution_id":"x","actor_execution_id":"y","expected_generation":0,"decision":"d","members":null}`
+	var request IntegrationRequest
+	if err := json.Unmarshal([]byte(old), &request); err != nil {
+		t.Fatal(err)
+	}
+	if request.ViaAutoMerge || request.ViaSource != "" {
+		t.Fatalf("an old request gained fields: %+v", request)
+	}
+	if raw, _ := json.Marshal(request); string(raw) != old {
+		t.Fatalf("an old request changed its bytes:\n%s\n%s", raw, old)
+	}
+}

@@ -67,28 +67,38 @@ func TestIntegrationReplayedRangeAlreadyInTheTargetPushesNothing(t *testing.T) {
 
 func TestIntegrationReplayRejectsRangesThatAreNotEqualCommitByCommit(t *testing.T) {
 	cases := []struct {
-		name  string
-		steps func(mid, top string) []string
+		name     string
+		steps    func(mid, top string) []string
+		conflict bool
 	}{
-		{"fewer commits than the review range", func(mid, top string) []string { return []string{mid} }},
-		{"the review range in another order", func(mid, top string) []string { return []string{top, mid} }},
-		{"a foreign commit inside the range", func(mid, top string) []string { return []string{mid, "other.txt=foreign", top} }},
-		{"a commit with another patch", func(mid, top string) []string { return []string{mid, "extra.txt=different work"} }},
-		{"only the second commit", func(mid, top string) []string { return []string{top} }},
+		{"fewer commits than the review range", func(mid, top string) []string { return []string{mid} }, false},
+		{"the review range in another order", func(mid, top string) []string { return []string{top, mid} }, false},
+		{"a foreign commit inside the range", func(mid, top string) []string { return []string{mid, "other.txt=foreign", top} }, false},
+		{"a commit with another patch", func(mid, top string) []string { return []string{mid, "extra.txt=different work"} }, true},
+		{"only the second commit", func(mid, top string) []string { return []string{top} }, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			f, mid := replayFixture(t)
 			_, target := f.pickOnTarget(c.steps(mid, f.commit)...)
-			_, err := f.a.Integrate(t.Context(), f.first, f.options("not-equal"))
-			if err == nil || !strings.Contains(err.Error(), "via_commit") {
-				t.Fatalf("unequal range accepted or unhelpful error: %v", err)
+			result, err := f.a.Integrate(t.Context(), f.first, f.options("not-equal"))
+			if c.conflict {
+				// The target holds another version of a file the range adds, so the
+				// client cannot merge it either.
+				if err == nil || !strings.Contains(err.Error(), "via_commit") {
+					t.Fatalf("unequal range accepted or unhelpful error: %v", err)
+				}
+				if got := f.targetHead(); got != target {
+					t.Fatal("rejected integration moved the target")
+				}
+				if _, err := f.a.Project.Integration(t.Context(), api.IntegrationID("refs/heads/v2")); !api.IsCode(err, api.CodeNotFound) {
+					t.Fatalf("rejected integration claimed the target: %v", err)
+				}
+				return
 			}
-			if got := f.targetHead(); got != target {
-				t.Fatal("rejected integration moved the target")
-			}
-			if _, err := f.a.Project.Integration(t.Context(), api.IntegrationID("refs/heads/v2")); !api.IsCode(err, api.CodeNotFound) {
-				t.Fatalf("rejected integration claimed the target: %v", err)
+			// An unequal range is never judged a replay; the client merges instead.
+			if err != nil || result.Request.Containment != api.IntegrationVia || !result.Request.ViaAutoMerge || result.Request.Replay != nil {
+				t.Fatalf("unequal range was not merged: %+v %v", result.Request, err)
 			}
 		})
 	}
@@ -110,8 +120,9 @@ func TestIntegrationReplayRejectsAMergeInTheReviewRange(t *testing.T) {
 	commitFile(t, f.second, "foreign.txt", "foreign\n", "Foreign work")
 	deliveryGit(t, f.second, "cherry-pick", "-m", "1", f.commit)
 	deliveryGit(t, f.second, "push", "origin", "HEAD:refs/heads/v2")
-	if _, err := f.a.Integrate(t.Context(), f.first, f.options("merge-range")); err == nil {
-		t.Fatal("a review range with a merge was judged equal")
+	result, err := f.a.Integrate(t.Context(), f.first, f.options("merge-range"))
+	if err != nil || result.Request.Containment == api.IntegrationReplayed || result.Request.Replay != nil {
+		t.Fatalf("a review range with a merge was judged equal: %+v %v", result.Request, err)
 	}
 }
 

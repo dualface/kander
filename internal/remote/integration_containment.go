@@ -14,8 +14,9 @@ import (
 // integrationContainment decides how the reviewed commit reaches the observed
 // target and records the decision in the request. Delivery tries, in order, a
 // via commit when the caller gave one, the commit already in the target, a
-// fast-forward, and a replay of the review range. Other purposes keep the
-// plain contained or fast-forward decision.
+// fast-forward, a replay of the review range, and a merge of the target with the
+// reviewed commit that the client generates. Other purposes keep the plain
+// contained or fast-forward decision.
 func (s *Session) integrationContainment(ctx context.Context, dir string, options IntegrationOptions, request *api.IntegrationRequest) error {
 	target := request.ExpectedTarget
 	if options.Purpose != "deliver" {
@@ -47,14 +48,18 @@ func (s *Session) integrationContainment(ctx context.Context, dir string, option
 		return err
 	}
 	if replay == nil {
-		return integrationFailure("remote.integration_target_diverged")
+		return s.autoMerge(ctx, dir, options, request, options.Commit)
 	}
 	request.Containment, request.AlreadyContained, request.Replay = api.IntegrationReplayed, true, replay
 	return nil
 }
 
 // viaContainment accepts a carrier commit only when the common remote has it
-// and it descends from both the reviewed commit and the observed target.
+// and it descends from the reviewed commit. A carrier that descends from the
+// observed target too is used as given. When the target moved past the carrier,
+// the target itself carries it if it contains the carrier, and otherwise the
+// target and the carrier are merged. Either way the request records the
+// caller's carrier as the via source.
 func (s *Session) viaContainment(ctx context.Context, dir string, options IntegrationOptions, request *api.IntegrationRequest) error {
 	via, target := options.ViaCommit, request.ExpectedTarget
 	if err := s.FetchCommit(ctx, dir, target); err != nil {
@@ -69,17 +74,30 @@ func (s *Session) viaContainment(ctx context.Context, dir string, options Integr
 			return errors.Join(err, integrationFailure("remote.integration_via_unavailable"))
 		}
 	}
-	for _, ancestor := range []string{options.Commit, target} {
-		descends, err := gitAncestor(ctx, dir, ancestor, via)
-		if err != nil {
-			return err
-		}
-		if !descends {
-			return integrationFailure("remote.integration_via_invalid")
-		}
+	reviewed, err := gitAncestor(ctx, dir, options.Commit, via)
+	if err != nil {
+		return err
 	}
-	request.Containment, request.ViaCommit, request.AlreadyContained = api.IntegrationVia, via, via == target
-	return nil
+	if !reviewed {
+		return integrationFailure("remote.integration_via_invalid")
+	}
+	forward, err := gitAncestor(ctx, dir, target, via)
+	if err != nil {
+		return err
+	}
+	if forward {
+		request.Containment, request.ViaCommit, request.AlreadyContained = api.IntegrationVia, via, via == target
+		return nil
+	}
+	contained, err := gitAncestor(ctx, dir, via, target)
+	if err != nil {
+		return err
+	}
+	if contained {
+		request.Containment, request.ViaCommit, request.AlreadyContained, request.ViaSource = api.IntegrationVia, target, true, via
+		return nil
+	}
+	return s.autoMerge(ctx, dir, options, request, via)
 }
 
 // reviewReplay finds the commits of the target that repeat the closed review

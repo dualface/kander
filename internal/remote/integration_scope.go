@@ -27,7 +27,7 @@ type IntegrationOptions struct {
 	Decision  string `json:"decision"`
 }
 
-func integrationFailure(id string) error { return errors.New(config.Text(id)) }
+func integrationFailure(id string, args ...any) error { return errors.New(config.Text(id, args...)) }
 func validateIntegrationOptions(options IntegrationOptions) error {
 	if !api.ValidIdentity(options.OperationID) || !api.IntegrationTarget(options.TargetRef) || !api.CommitSHA(options.Commit) || strings.TrimSpace(options.Decision) == "" {
 		return integrationFailure("remote.integration_input_required")

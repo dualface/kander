@@ -12,10 +12,14 @@ import (
 // service only requires the exact set a containment kind needs.
 func integrationContainmentEdges(input api.IntegrationRequest) ([]api.IntegrationEdge, error) {
 	invalid := apiError(api.CodeInvalidRequest, "integration containment fields disagree")
-	if input.Purpose != "deliver" && (input.Containment != "" || input.ViaCommit != "" || input.Replay != nil) {
+	if input.Purpose != "deliver" && (input.Containment != "" || input.ViaCommit != "" || input.ViaAutoMerge || input.ViaSource != "" || input.Replay != nil) {
 		return nil, invalid
 	}
-	switch input.EffectiveContainment() {
+	containment := input.EffectiveContainment()
+	if containment != api.IntegrationVia && (input.ViaAutoMerge || input.ViaSource != "") {
+		return nil, invalid
+	}
+	switch containment {
 	case api.IntegrationFastForward:
 		if input.AlreadyContained || input.ViaCommit != "" || input.Replay != nil {
 			return nil, invalid
@@ -29,6 +33,14 @@ func integrationContainmentEdges(input api.IntegrationRequest) ([]api.Integratio
 		}
 	case api.IntegrationVia:
 		if !api.CommitSHA(input.ViaCommit) || input.AlreadyContained != (input.ViaCommit == input.ExpectedTarget) || input.Replay != nil {
+			return nil, invalid
+		}
+		if input.ViaAutoMerge && input.AlreadyContained {
+			return nil, invalid
+		}
+		// A source needs a via commit the caller did not give: the generated
+		// merge, or the target that already contains the caller's commit.
+		if input.ViaSource != "" && (!api.CommitSHA(input.ViaSource) || input.ViaSource == input.ViaCommit || !input.ViaAutoMerge && !input.AlreadyContained) {
 			return nil, invalid
 		}
 	case api.IntegrationReplayed:

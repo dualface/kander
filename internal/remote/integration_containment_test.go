@@ -120,11 +120,8 @@ func TestIntegrationViaCarrierFastForwardsTheDivergedTarget(t *testing.T) {
 	deliveryGit(t, f.first, "merge", "--no-edit", "origin/v2")
 	carrier := deliveryGit(t, f.first, "rev-parse", "HEAD")
 	deliveryGit(t, f.first, "push", "origin", carrier+":refs/heads/carrier")
-	if _, err := f.a.Integrate(t.Context(), f.first, f.options("diverged-without-via")); err == nil || !strings.Contains(err.Error(), "via_commit") {
-		t.Fatalf("diverged target without a carrier: %v", err)
-	}
 	if got := f.targetHead(); got != foreign {
-		t.Fatal("rejected integration moved the target")
+		t.Fatal("preparing a carrier moved the target")
 	}
 	options := f.options("diverged-with-via")
 	options.ViaCommit = carrier
@@ -133,7 +130,7 @@ func TestIntegrationViaCarrierFastForwardsTheDivergedTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	request := result.Request
-	if request.Containment != api.IntegrationVia || request.ViaCommit != carrier || request.AlreadyContained || request.Commit != f.commit || result.ObservedTarget != carrier {
+	if request.Containment != api.IntegrationVia || request.ViaCommit != carrier || request.AlreadyContained || request.ViaAutoMerge || request.ViaSource != "" || request.Commit != f.commit || result.ObservedTarget != carrier {
 		t.Fatalf("receipt: %+v", result)
 	}
 	if got := f.targetHead(); got != carrier {
@@ -161,7 +158,7 @@ func TestIntegrationViaEqualToTheTargetPushesNothing(t *testing.T) {
 	f.complete(result)
 }
 
-func TestIntegrationViaMustDescendFromBothAndBeOnTheRemote(t *testing.T) {
+func TestIntegrationViaMustDescendFromTheReviewedCommitAndBeOnTheRemote(t *testing.T) {
 	f := newIntegrationFixture(t)
 	foreign := f.advanceTarget("other.txt")
 	deliveryGit(t, f.first, "fetch", "-q", "origin")
@@ -174,11 +171,7 @@ func TestIntegrationViaMustDescendFromBothAndBeOnTheRemote(t *testing.T) {
 	for name, via := range map[string]string{
 		"not on the common remote":      unpushed,
 		"not below the reviewed commit": targetOnly,
-		"not below the target":          f.commit,
 	} {
-		if name == "not below the target" {
-			deliveryGit(t, f.first, "push", "origin", f.commit+":refs/heads/reviewed-only")
-		}
 		options := f.options("bad-via-" + strings.ReplaceAll(name, " ", "-"))
 		options.ViaCommit = via
 		if _, err := f.a.Integrate(t.Context(), f.first, options); err == nil {

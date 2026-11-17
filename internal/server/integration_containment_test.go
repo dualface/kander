@@ -113,6 +113,54 @@ func TestIntegrationContainmentKindsNeedExactEdges(t *testing.T) {
 			r.Containment = "guess"
 			r.Edges = []api.IntegrationEdge{edge(s("a"), s("c")), edge(s("d"), s("c"))}
 		}},
+		{name: "via with a generated merge", build: func(r *api.IntegrationRequest, s func(string) string) {
+			r.Containment, r.ViaCommit, r.ViaAutoMerge = api.IntegrationVia, s("e"), true
+			r.Edges = []api.IntegrationEdge{edge(s("a"), s("e")), edge(s("c"), s("e")), edge(s("d"), s("e"))}
+		}},
+		{name: "via with a generated merge of the carrier of the caller", build: func(r *api.IntegrationRequest, s func(string) string) {
+			r.Containment, r.ViaCommit, r.ViaAutoMerge, r.ViaSource = api.IntegrationVia, s("e"), true, s("9")
+			r.Edges = []api.IntegrationEdge{edge(s("a"), s("e")), edge(s("c"), s("e")), edge(s("9"), s("e")), edge(s("d"), s("e"))}
+		}},
+		{name: "via source recorded when the target holds the carrier", build: func(r *api.IntegrationRequest, s func(string) string) {
+			r.Containment, r.ViaCommit, r.AlreadyContained, r.ViaSource = api.IntegrationVia, s("a"), true, s("9")
+			r.Edges = []api.IntegrationEdge{edge(s("a"), s("a")), edge(s("c"), s("a")), edge(s("9"), s("a")), edge(s("d"), s("a"))}
+		}},
+		{name: "generated merge marked as contained", reject: api.CodeInvalidRequest, build: func(r *api.IntegrationRequest, s func(string) string) {
+			r.Containment, r.ViaCommit, r.ViaAutoMerge, r.AlreadyContained = api.IntegrationVia, s("a"), true, true
+			r.Edges = []api.IntegrationEdge{edge(s("a"), s("a")), edge(s("c"), s("a")), edge(s("d"), s("a"))}
+		}},
+		{name: "generated merge with a fast-forward", reject: api.CodeInvalidRequest, build: func(r *api.IntegrationRequest, s func(string) string) {
+			r.Containment, r.ViaAutoMerge = api.IntegrationFastForward, true
+			r.Edges = []api.IntegrationEdge{edge(s("a"), s("c")), edge(s("d"), s("c"))}
+		}},
+		{name: "generated merge without containment", reject: api.CodeInvalidRequest, build: func(r *api.IntegrationRequest, s func(string) string) {
+			r.ViaAutoMerge = true
+			r.Edges = []api.IntegrationEdge{edge(s("a"), s("c")), edge(s("d"), s("c"))}
+		}},
+		{name: "via source equal to the carrier", reject: api.CodeInvalidRequest, build: func(r *api.IntegrationRequest, s func(string) string) {
+			r.Containment, r.ViaCommit, r.ViaAutoMerge, r.ViaSource = api.IntegrationVia, s("e"), true, s("e")
+			r.Edges = []api.IntegrationEdge{edge(s("a"), s("e")), edge(s("c"), s("e")), edge(s("d"), s("e"))}
+		}},
+		{name: "via source that is not a commit", reject: api.CodeInvalidRequest, build: func(r *api.IntegrationRequest, s func(string) string) {
+			r.Containment, r.ViaCommit, r.ViaAutoMerge, r.ViaSource = api.IntegrationVia, s("e"), true, "carrier"
+			r.Edges = []api.IntegrationEdge{edge(s("a"), s("e")), edge(s("c"), s("e")), edge(s("d"), s("e"))}
+		}},
+		{name: "via source on a carrier the caller gave", reject: api.CodeInvalidRequest, build: func(r *api.IntegrationRequest, s func(string) string) {
+			r.Containment, r.ViaCommit, r.ViaSource = api.IntegrationVia, s("e"), s("9")
+			r.Edges = []api.IntegrationEdge{edge(s("a"), s("e")), edge(s("c"), s("e")), edge(s("9"), s("e")), edge(s("d"), s("e"))}
+		}},
+		{name: "via source with another containment", reject: api.CodeInvalidRequest, build: func(r *api.IntegrationRequest, s func(string) string) {
+			r.Containment, r.AlreadyContained, r.ViaSource = api.IntegrationContained, true, s("9")
+			r.Edges = []api.IntegrationEdge{edge(s("c"), s("a")), edge(s("d"), s("a"))}
+		}},
+		{name: "via source missing its edge", reject: api.CodeEvidenceIncomplete, build: func(r *api.IntegrationRequest, s func(string) string) {
+			r.Containment, r.ViaCommit, r.ViaAutoMerge, r.ViaSource = api.IntegrationVia, s("e"), true, s("9")
+			r.Edges = []api.IntegrationEdge{edge(s("a"), s("e")), edge(s("c"), s("e")), edge(s("d"), s("e"))}
+		}},
+		{name: "via edge from a source the request does not name", reject: api.CodeEvidenceIncomplete, build: func(r *api.IntegrationRequest, s func(string) string) {
+			r.Containment, r.ViaCommit, r.ViaAutoMerge = api.IntegrationVia, s("e"), true
+			r.Edges = []api.IntegrationEdge{edge(s("a"), s("e")), edge(s("c"), s("e")), edge(s("9"), s("e")), edge(s("d"), s("e"))}
+		}},
 		{name: "fast-forward whose delivery is not below the reviewed commit", reject: api.CodeEvidenceIncomplete, build: func(r *api.IntegrationRequest, s func(string) string) {
 			r.Containment = api.IntegrationFastForward
 			r.Edges = []api.IntegrationEdge{edge(s("a"), s("c"))}
@@ -152,6 +200,25 @@ func TestIntegrationContainmentIsDeliveryOnly(t *testing.T) {
 	input.TargetRef = "refs/heads/group/" + input.GroupID
 	_, err := p.ClaimIntegration(t.Context(), "", input, client.Claim{Token: grant.Token, Generation: grant.Claim.Generation})
 	expectCode(t, err, api.CodeInvalidRequest)
+}
+
+func TestIntegrationGeneratedMergeIsDeliveryOnly(t *testing.T) {
+	for name, set := range map[string]func(*api.IntegrationRequest){
+		"generated merge": func(r *api.IntegrationRequest) { r.ViaAutoMerge = true },
+		"via source":      func(r *api.IntegrationRequest) { r.ViaSource = strings.Repeat("9", 40) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t)
+			p := f.project("host-a")
+			member, grant := integrationTask(t, f, p, "host-a", "contain-merge-purpose")
+			input := integrationInput(t, p, member, grant.Claim.ExecutionID, "contain-merge-purpose")
+			input.GroupID, input.Purpose = "20261117-contain-group", "assemble"
+			input.TargetRef = "refs/heads/group/" + input.GroupID
+			set(&input)
+			_, err := p.ClaimIntegration(t.Context(), "", input, client.Claim{Token: grant.Token, Generation: grant.Claim.Generation})
+			expectCode(t, err, api.CodeInvalidRequest)
+		})
+	}
 }
 
 func TestIntegrationConfirmUsesTheReplayedTail(t *testing.T) {

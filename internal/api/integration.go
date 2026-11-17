@@ -27,6 +27,11 @@ type IntegrationObservation struct {
 }
 
 // Containment values record how a reviewed commit reaches the target branch.
+// A via request names the commit the target branch holds afterwards in
+// ViaCommit. ViaAutoMerge marks that commit as a merge the client generated
+// from the observed target and the reviewed commit, or from the caller's via
+// commit when ViaSource records it. ViaSource also appears when the target
+// already contains the caller's via commit and ViaCommit is the target.
 const (
 	IntegrationFastForward = "fast_forward"
 	IntegrationContained   = "contained"
@@ -47,6 +52,8 @@ type IntegrationRequest struct {
 	AlreadyContained   bool                `json:"already_contained,omitzero"`
 	Containment        string              `json:"containment,omitzero"`
 	ViaCommit          string              `json:"via_commit,omitzero"`
+	ViaAutoMerge       bool                `json:"via_auto_merge,omitzero"`
+	ViaSource          string              `json:"via_source,omitzero"`
 	Replay             *IntegrationReplay  `json:"replay,omitzero"`
 	ObservationTicket  string              `json:"observation_ticket"`
 	ExpectedRevision   uint64              `json:"expected_revision"`
@@ -109,13 +116,18 @@ func (r IntegrationRequest) ConfirmAncestor() string {
 }
 
 // ContainmentEdges are the ancestry facts that tie the request commit to the
-// observed target for its containment kind.
+// observed target for its containment kind. A via request that records the
+// caller's own commit as its source adds the edge from that source.
 func (r IntegrationRequest) ContainmentEdges() []IntegrationEdge {
 	switch r.EffectiveContainment() {
 	case IntegrationContained:
 		return []IntegrationEdge{{Ancestor: r.Commit, Descendant: r.ExpectedTarget}}
 	case IntegrationVia:
-		return []IntegrationEdge{{Ancestor: r.ExpectedTarget, Descendant: r.ViaCommit}, {Ancestor: r.Commit, Descendant: r.ViaCommit}}
+		edges := []IntegrationEdge{{Ancestor: r.ExpectedTarget, Descendant: r.ViaCommit}, {Ancestor: r.Commit, Descendant: r.ViaCommit}}
+		if r.ViaSource != "" {
+			edges = append(edges, IntegrationEdge{Ancestor: r.ViaSource, Descendant: r.ViaCommit})
+		}
+		return edges
 	case IntegrationReplayed:
 		if r.Replay == nil {
 			return nil

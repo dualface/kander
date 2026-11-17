@@ -78,11 +78,8 @@ func TestIntegrationGroupViaCarrierAfterTheTargetAdvanced(t *testing.T) {
 	deliveryGit(t, f.first, "merge", "--no-edit", "origin/v2")
 	carrier := deliveryGit(t, f.first, "rev-parse", "HEAD")
 	deliveryGit(t, f.first, "push", "origin", carrier+":refs/heads/group-carrier")
-	if _, err := f.a.Integrate(t.Context(), f.first, options); err == nil {
-		t.Fatal("a group delivery with a diverged target needed no carrier")
-	}
 	if got := f.targetHead(); got != foreign {
-		t.Fatal("rejected group delivery moved the target")
+		t.Fatal("preparing a carrier moved the target")
 	}
 	options.OperationID, options.ViaCommit = "deliver-stacked-group-via", carrier
 	result, err := f.a.Integrate(t.Context(), f.first, options)

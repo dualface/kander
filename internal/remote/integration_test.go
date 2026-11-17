@@ -68,11 +68,12 @@ func TestIntegrationMissingDeliveryRefBlocksEvenWithCachedCommit(t *testing.T) {
 }
 func TestIntegrationRejectsDivergentRemoteBeforeTargetClaim(t *testing.T) {
 	f := newIntegrationFixture(t)
-	if err := os.WriteFile(filepath.Join(f.second, "other.txt"), []byte("foreign branch work\n"), 0600); err != nil {
+	// The foreign commit rewrites the line the reviewed commit changes, so the
+	// two cannot merge on their own.
+	if err := os.WriteFile(filepath.Join(f.second, "work.txt"), []byte("foreign branch work\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	deliveryGit(t, f.second, "add", "other.txt")
-	deliveryGit(t, f.second, "commit", "-m", "Concurrent target work")
+	deliveryGit(t, f.second, "commit", "-am", "Concurrent target work")
 	other := deliveryGit(t, f.second, "rev-parse", "HEAD")
 	deliveryGit(t, f.second, "push", "origin", "HEAD:refs/heads/v2")
 	if _, err := f.a.Integrate(t.Context(), f.first, f.options("divergent-delivery")); err == nil {
