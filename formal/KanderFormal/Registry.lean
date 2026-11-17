@@ -22,6 +22,7 @@ import KanderFormal.Proofs.IssueResult
 import KanderFormal.Proofs.IssueResultDecision
 import KanderFormal.Proofs.IssueResultSave
 import KanderFormal.Alphabets.IssueResult
+import KanderFormal.Alphabets.ServerIntegration
 
 /-
 The registry of machines: what the generator emits, the bounds of the
@@ -988,7 +989,11 @@ def entries : List Entry := [
       ``KanderFormal.Proofs.IssueResultSave.init,
       ``KanderFormal.Proofs.IssueResultSave.step_inv,
       ``KanderFormal.Proofs.IssueResultSave.reachable_inv
-    ] }
+    ] },
+  { machine := Machines.ServerIntegration.serverIntegrationMachine
+    source := "KanderFormal/Machines/ServerIntegration.lean"
+    vectors := { depth := 4, paramSets := [[("maxGen", 2), ("maxRev", 4), ("maxAuth", 2)]], natDomain := [], events := integrationEvents }
+    theorems := serverIntegrationTheorems }
 ]
 
 end KanderFormal.Registry
