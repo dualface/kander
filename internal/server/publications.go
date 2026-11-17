@@ -91,8 +91,12 @@ func (p *project) validatePublication(tx *board.Transaction, value api.Publicati
 			return err
 		}
 		approval, approved := value.Approvals[member.TaskID]
-		if !found || claim.Status != api.ClaimActive || !p.server.now().Before(claim.ExpiresAt) || claim.Generation != member.Generation {
-			return apiError(api.CodeLeaseInvalid, "publication member execution changed or expired")
+		standing, err := p.standing(claim, found, member.Generation)
+		if err != nil {
+			return err
+		}
+		if !standing {
+			return apiError(api.CodeLeaseInvalid, "publication member execution changed")
 		}
 		if !approved || approval.Digest != value.Digest || approval.Revision != member.Revision || approval.Generation != member.Generation || approval.ClientID != claim.ClientID || approval.ExecutionID != claim.ExecutionID {
 			return apiError(api.CodeEvidenceIncomplete, "publication still needs the current holder's confirmation for "+member.TaskID)

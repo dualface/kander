@@ -18,8 +18,9 @@ generation the token was derived for, and `hdr` says that the claim headers
 parsed (`holder.invalid` is empty). The shell maps a header or token that
 matches no generation of the record to a value other than `gen`, as it does for
 the single card claim (`ServerClaim.lean`). `holder` is `requireGroup`: an
-active record, the token and the header of the current generation, and a lease
-that has not expired.
+active record and the token and the header of the current generation. As for
+the single card claim, the lease clock only decides whether another execution
+may take the group over; `lapsed` is a view value that is never stored.
 
 A group has no card, so the machine has no `held` field. The member cards of a
 group write and recover through their own claim kernels
@@ -46,10 +47,11 @@ def gen : Expr := f "gen"
 /-- The lease of a record: active and not expired. -/
 def valid : Expr := andE (statusIs "active") (f "live")
 
-/-- `requireGroup` accepts: the headers parsed, the record is active and not
-expired, and the generation header and the token belong to its generation. -/
+/-- `requireGroup` accepts: the headers parsed, the record is active, and the
+generation header and the token belong to its generation. The lease clock is
+not part of it. -/
 def holder : Expr :=
-  andE (a "hdr") (andE (statusIs "active") (andE (eq (a "tg") gen) (andE (eq (a "g") gen) (f "live"))))
+  andE (a "hdr") (andE (statusIs "active") (andE (eq (a "tg") gen) (eq (a "g") gen)))
 
 def genArg (n : String) : ArgDecl := { name := n, ty := .scalar (.nat "maxGen") }
 def boolArg (n : String) : ArgDecl := { name := n, ty := .scalar .bool }
@@ -74,7 +76,7 @@ def claimEvent : EventDecl where
   guard := claimGuard
   assigns := [("status", .enumLit "status" "active"), ("gen", .ite (a "sameExec") gen (inc gen)), ("live", tt)]
 
-/-- `renewGroup`. -/
+/-- `renewGroup`, also after the lease lapsed. -/
 def renewEvent : EventDecl where
   name := "renew"
   args := holderArgs
@@ -137,6 +139,22 @@ def recoverLostEvent : EventDecl where
   guard := andE holder (andE (a "decision") (andE (a "unknown") (a "execOk")))
   assigns := []
 
+/-- Project startup: an active record gets a lease of at least one TTL from
+the start, so the server's downtime never opens a takeover. -/
+def startupEvent : EventDecl where
+  name := "startup"
+  args := []
+  guard := statusIs "active"
+  assigns := [("live", tt)]
+
+/-- The check that the group lease still gives generation `g` an execution
+(the integration actor check of a group). It changes nothing. -/
+def standingEvent : EventDecl where
+  name := "standing"
+  args := [genArg "g"]
+  guard := andE (statusIs "active") (eq gen (a "g"))
+  assigns := []
+
 /-- The environment: the server clock passes `ExpiresAt`. -/
 def expireEvent : EventDecl where
   name := "expire"
@@ -146,7 +164,7 @@ def expireEvent : EventDecl where
 
 def serverGroupLeaseMachine : Machine where
   name := "servergrouplease"
-  enums := [{ name := "status", ctors := ["none", "active", "lost", "released"] }]
+  enums := [{ name := "status", ctors := ["none", "active", "lost", "released", "lapsed"] }]
   params := ["maxGen"]
   fields := [
     { name := "status", ty := .scalar (.enum "status"), init := .scalar (.enum 0) },
@@ -154,13 +172,15 @@ def serverGroupLeaseMachine : Machine where
     { name := "live", ty := .scalar .bool, init := .scalar (.bool false) }
   ]
   events := [claimEvent, renewEvent, observeEvent, releaseEvent, requireEvent, writeAfterEvent,
-    recoverOwnedEvent, recoverLostEvent, expireEvent]
+    recoverOwnedEvent, recoverLostEvent, expireEvent, startupEvent, standingEvent]
   queries := [
-    -- A valid lease: the integration actor check and the view of an active record.
+    -- A valid lease: no other execution may take the group over.
     { name := "valid", ty := .base .bool, body := valid },
-    -- The status a view shows: an active record whose lease expired is `lost`.
+    -- Some generation has an execution: the record is active.
+    { name := "hasStanding", ty := .base .bool, body := statusIs "active" },
+    -- The status a view shows: an active record whose lease expired is `lapsed`.
     { name := "shown", ty := .base (.enum "status"),
-      body := .ite (andE (statusIs "active") (notE (f "live"))) (.enumLit "status" "lost") (f "status") }
+      body := .ite (andE (statusIs "active") (notE (f "live"))) (.enumLit "status" "lapsed") (f "status") }
   ]
 
 end KanderFormal.Machines.ServerGroupLease

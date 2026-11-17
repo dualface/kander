@@ -29,6 +29,7 @@ inductive Ev where
   | wrapUp (notRequired idGiven idMatch : Bool) (ig : Nat)
       (srcMatch tgtMatch cwdMatch member closed planIsSrc reviewIsSrc : Bool)
   | expire
+  | startup
 
 def Ev.toEvent : Ev → Event
   | .claim eg er rg rr se ac am ag pu ct =>
@@ -58,11 +59,13 @@ def Ev.toEvent : Ev → Event
     ⟨"wrapUp", [boolV nr, boolV ig, boolV idm, natV ig', boolV sm, boolV tm, boolV cm, boolV me, boolV cl,
       boolV ps, boolV rs]⟩
   | .expire => ⟨"expire", []⟩
+  | .startup => ⟨"startup", []⟩
 
 theorem events_cases {ev : EventDecl} (h : ev ∈ M.events) :
     ev = claimEvent ∨ ev = claimGuardEvent ∨ ev = requireEvent ∨ ev = requireOwnerEvent ∨ ev = renewEvent ∨
       ev = checkEvent ∨ ev = checkOwnerEvent ∨ ev = pushingEvent ∨ ev = confirmEvent ∨ ev = releaseEvent ∨ ev = guardEvent ∨
-      ev = guardReleaseEvent ∨ ev = completionEvent ∨ ev = wrapUpEvent ∨ ev = expireEvent := by
+      ev = guardReleaseEvent ∨ ev = completionEvent ∨ ev = wrapUpEvent ∨ ev = expireEvent ∨
+      ev = startupEvent := by
   simpa [serverIntegrationMachine] using h
 
 theorem bool_cons {p : Params} {n : String} {ds : List ArgDecl} {vs : List Val} {args : List (String × Val)}
@@ -117,7 +120,7 @@ theorem lease_args {p : Params} {rest : List ArgDecl} {vs : List Val} {args : Li
   have h' : bindArgs M p (ownerArgs ++ (actorArgs ++ rest)) vs = some args := by
     simpa [leaseArgs, List.append_assoc] using h
   obtain ⟨hdr, g, tg, c, vs0, a0, rfl, h0⟩ := owner_args h'
-  obtain ⟨al, vs1, a1, rfl, h1⟩ := bool_cons (n := "actorLive") h0
+  obtain ⟨al, vs1, a1, rfl, h1⟩ := bool_cons (n := "actorStanding") h0
   obtain ⟨ag, vs2, a2, rfl, h2⟩ := auth_cons (n := "actorGen") h1
   obtain ⟨ae, vs3, a3, rfl, h3⟩ := bool_cons (n := "actorExec") h2
   obtain ⟨ac, vs4, a4, rfl, h4⟩ := bool_cons (n := "actorClient") h3
@@ -134,7 +137,7 @@ theorem action_args {p : Params} {rest : List ArgDecl} {vs : List Val} {args : L
   obtain ⟨rm, vs2, a2, rfl, h2⟩ := bool_cons (n := "room") h1
   exact ⟨hdr, g, tg, c, al, ag, ae, ac, er, rm, vs2, a2, rfl, h2⟩
 
-/-- Every accepted event is one of the fifteen, with arguments of its declared
+/-- Every accepted event is one of the sixteen, with arguments of its declared
 types. -/
 theorem accepted_ev {p : Params} {s s' : State} {e : Event} (h : step M p s e = some s') :
     ∃ v : Ev, e = v.toEvent := by
@@ -142,7 +145,8 @@ theorem accepted_ev {p : Params} {s s' : State} {e : Event} (h : step M p s e = 
   obtain ⟨n, vs⟩ := e
   simp only at hname hb
   subst hname
-  rcases events_cases hmem with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+  rcases events_cases hmem with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
+    rfl
   · obtain ⟨eg, vs1, a1, rfl, h1⟩ := gen_cons hb
     obtain ⟨er, vs2, a2, rfl, h2⟩ := rev_cons h1
     obtain ⟨rg, vs3, a3, rfl, h3⟩ := bool_cons h2
@@ -229,5 +233,7 @@ theorem accepted_ev {p : Params} {s s' : State} {e : Event} (h : step M p s e = 
     exact ⟨.wrapUp nr ig idm ig' sm tm cm me cl ps rs, rfl⟩
   · obtain ⟨rfl, -⟩ := bindArgs_nil hb
     exact ⟨.expire, rfl⟩
+  · obtain ⟨rfl, -⟩ := bindArgs_nil hb
+    exact ⟨.startup, rfl⟩
 
 end KanderFormal.Proofs.ServerIntegration

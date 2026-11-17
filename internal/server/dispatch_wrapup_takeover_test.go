@@ -110,7 +110,7 @@ func TestSuccessorGenerationEndsRetainedWrapUpRound(t *testing.T) {
 			r := retainWrapUp(t, "retained-"+string(state))
 			ctx := t.Context()
 			err := r.end(t, "old-generation-end", r.oldProof, state)
-			if !api.IsCode(err, api.CodeHeldByOther) && !api.IsCode(err, api.CodeLeaseInvalid) {
+			if !api.IsCode(err, api.CodeTakenOver) {
 				t.Fatalf("old generation ended the round: %v", err)
 			}
 			if kept, err := r.b.Dispatch(ctx, r.task, r.round.Input.ID); err != nil || kept.State != board.DispatchAccepted || kept.Revision != r.round.Revision {

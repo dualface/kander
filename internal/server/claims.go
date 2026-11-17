@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/internal/statemachine/serverclaim"
 )
 
 // claimRecord is the server-side ownership of one task. It lives outside the
@@ -69,11 +70,13 @@ func tokenHash(token string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// view renders the public claim with the lease status the server clock decides.
+// view renders the public claim with the status the claim kernel's shown
+// query gives for the server clock: an active record whose lease expired is
+// lapsed.
 func (r claimRecord) view(now time.Time) *api.ClaimView {
 	status := r.Status
-	if status == api.ClaimActive && !now.Before(r.ExpiresAt) {
-		status = api.ClaimLost
+	if s, ok := claimStatuses[r.Status]; ok {
+		status = claimStatusNames[serverclaim.Shown(serverclaim.State{Status: s, Live: now.Before(r.ExpiresAt)}, serverclaim.Params{})]
 	}
 	return &api.ClaimView{
 		Observation: r.Observation, ClientID: r.ClientID, ExecutionID: r.ExecutionID, Owner: r.Owner,

@@ -78,25 +78,25 @@ func (i integrationProbe) guarded(build func(serverintegration.State) serverinte
 // lease is the claim headers and the actor facts of a request against the
 // record projected before it.
 type lease struct {
-	hdr, client, actorLive, actorExec, actorClient bool
-	g, tg, actorGen                                uint64
+	hdr, client, actorStanding, actorExec, actorClient bool
+	g, tg, actorGen                                    uint64
 }
 
 // current is the owner of the record with its actor holding the lease.
 func current(s serverintegration.State) lease {
-	return lease{hdr: true, client: true, actorLive: true, actorExec: true, actorClient: true, g: s.Gen, tg: s.Gen, actorGen: s.Auth}
+	return lease{hdr: true, client: true, actorStanding: true, actorExec: true, actorClient: true, g: s.Gen, tg: s.Gen, actorGen: s.Auth}
 }
 
 func (l lease) renew(facts bool) serverintegration.Event {
-	return serverintegration.Renew{Hdr: l.hdr, G: l.g, Tg: l.tg, Client: l.client, ActorLive: l.actorLive, ActorGen: l.actorGen, ActorExec: l.actorExec, ActorClient: l.actorClient, Facts: facts}
+	return serverintegration.Renew{Hdr: l.hdr, G: l.g, Tg: l.tg, Client: l.client, ActorStanding: l.actorStanding, ActorGen: l.actorGen, ActorExec: l.actorExec, ActorClient: l.actorClient, Facts: facts}
 }
 
 func (l lease) pushing(rev uint64, room, match, sha bool) serverintegration.Event {
-	return serverintegration.Pushing{Hdr: l.hdr, G: l.g, Tg: l.tg, Client: l.client, ActorLive: l.actorLive, ActorGen: l.actorGen, ActorExec: l.actorExec, ActorClient: l.actorClient, ExpRev: rev, Room: room, ObsMatch: match, ObsSha: sha}
+	return serverintegration.Pushing{Hdr: l.hdr, G: l.g, Tg: l.tg, Client: l.client, ActorStanding: l.actorStanding, ActorGen: l.actorGen, ActorExec: l.actorExec, ActorClient: l.actorClient, ExpRev: rev, Room: room, ObsMatch: match, ObsSha: sha}
 }
 
 func (l lease) confirm(rev uint64, room, sha, at, edges bool) serverintegration.Event {
-	return serverintegration.Confirm{Hdr: l.hdr, G: l.g, Tg: l.tg, Client: l.client, ActorLive: l.actorLive, ActorGen: l.actorGen, ActorExec: l.actorExec, ActorClient: l.actorClient, ExpRev: rev, Room: room, ObsSha: sha, ObsAt: at, EdgesOk: edges}
+	return serverintegration.Confirm{Hdr: l.hdr, G: l.g, Tg: l.tg, Client: l.client, ActorStanding: l.actorStanding, ActorGen: l.actorGen, ActorExec: l.actorExec, ActorClient: l.actorClient, ExpRev: rev, Room: room, ObsSha: sha, ObsAt: at, EdgesOk: edges}
 }
 
 func (l lease) release(rev uint64, room, decision, empty, sha bool) serverintegration.Event {
@@ -104,7 +104,7 @@ func (l lease) release(rev uint64, room, decision, empty, sha bool) serverintegr
 }
 
 func (l lease) guard(ticket, facts bool) serverintegration.Event {
-	return serverintegration.Guard{Hdr: l.hdr, G: l.g, Tg: l.tg, Client: l.client, ActorLive: l.actorLive, ActorGen: l.actorGen, ActorExec: l.actorExec, ActorClient: l.actorClient, Ticket: ticket, Facts: facts}
+	return serverintegration.Guard{Hdr: l.hdr, G: l.g, Tg: l.tg, Client: l.client, ActorStanding: l.actorStanding, ActorGen: l.actorGen, ActorExec: l.actorExec, ActorClient: l.actorClient, Ticket: ticket, Facts: facts}
 }
 
 func (l lease) guardRelease(ticket bool) serverintegration.Event {
@@ -427,9 +427,10 @@ func TestIntegrationFactsRefineTheKernel(t *testing.T) {
 
 }
 
-// The integration lease is renewed, the task lease of the actor is not: every
-// check that needs the actor refuses, and a release, which needs the owner only,
-// still ends the integration.
+// The integration lease is renewed, the task lease of the actor is not: while
+// the actor's lease only lapsed it still stands and the integration renews;
+// once a takeover replaced the actor every check that needs the actor refuses,
+// and a release, which needs the owner only, still ends the integration.
 func TestIntegrationActorLeaseLossRefinesTheKernel(t *testing.T) {
 	r := newIntegrationRig(t, "refine-actor-lost")
 	ctx := t.Context()
@@ -444,9 +445,16 @@ func TestIntegrationActorLeaseLossRefinesTheKernel(t *testing.T) {
 		return err
 	})
 	r.f.clock.advance(46 * time.Second)
+	r.probe.refines(func(b serverintegration.State) serverintegration.Event { return current(b).renew(true) }, "", func() error {
+		_, err := r.a.RenewIntegration(ctx, grant.Integration.ID, proof)
+		return err
+	})
+	if _, err := r.b.Takeover(ctx, "", r.member.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "actor-successor", Owner: "codex", Decision: "user:takeover", ExpectedGeneration: r.task.Claim.Generation}); err != nil {
+		t.Fatal(err)
+	}
 	lost := func(b serverintegration.State) lease {
 		l := current(b)
-		l.actorLive = false
+		l.actorStanding = false
 		return l
 	}
 	r.probe.refines(func(b serverintegration.State) serverintegration.Event { return lost(b).renew(true) }, api.CodeLeaseInvalid, func() error {
@@ -612,7 +620,9 @@ func TestIntegrationEvidenceRefinesTheKernel(t *testing.T) {
 
 // A group integration has the coordinator of its group as its actor: the
 // initialization of the group branch is claimed with the coordinator's lease,
-// and when that lease expires only the owner's release still ends it.
+// a lapsed coordinator lease still stands, and once the coordinator's agent is
+// observed stopped (the group lease is lost) only the owner's release still
+// ends it.
 func TestIntegrationGroupActorRefinesTheKernel(t *testing.T) {
 	f := newFixture(t)
 	p := f.project("host-a")
@@ -655,9 +665,16 @@ func TestIntegrationGroupActorRefinesTheKernel(t *testing.T) {
 		return err
 	})
 	f.clock.advance(46 * time.Second)
+	probe.refines(func(b serverintegration.State) serverintegration.Event { return current(b).renew(true) }, "", func() error {
+		_, err := p.RenewIntegration(ctx, grant.Integration.ID, proof)
+		return err
+	})
+	if _, err := p.ObserveGroup(ctx, "", group, api.AgentObservation{Status: "stopped"}, coordinatorProof); err != nil {
+		t.Fatal(err)
+	}
 	lost := func(b serverintegration.State) lease {
 		l := current(b)
-		l.actorLive = false
+		l.actorStanding = false
 		return l
 	}
 	probe.refines(func(b serverintegration.State) serverintegration.Event { return lost(b).renew(true) }, api.CodeLeaseInvalid, func() error {

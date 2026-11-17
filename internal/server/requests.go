@@ -117,14 +117,18 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 		if err != nil {
 			return request, err
 		}
-		facts := claimFacts{held: claimedState(task.Entry.State), active: found && claim.Status == api.ClaimActive, live: p.server.now().Before(claim.ExpiresAt), generation: claim.Generation}
+		standing, err := p.standing(claim, found, input.TargetGeneration)
+		if err != nil {
+			return request, err
+		}
+		facts := claimFacts{held: claimedState(task.Entry.State), active: found && claim.Status == api.ClaimActive, standing: standing}
 		frame = newRequestFrame(claim.Generation, task.Revision, nil)
 		create := frame.createEvent(facts, input.TargetGeneration, input.Dispatch != nil, input.CardRevision)
 		if !newRequestKernel(frame, nil).step(create) {
 			if !facts.held || !facts.active {
 				return request, apiError(api.CodeClaimRequired, "task has no holder to answer a request")
 			}
-			return request, apiError(api.CodeLeaseInvalid, "request target generation is not live")
+			return request, apiError(api.CodeLeaseInvalid, "request target generation is not the claim's")
 		}
 		if input.Dispatch != nil {
 			previous, err := p.readRequests(normalized)

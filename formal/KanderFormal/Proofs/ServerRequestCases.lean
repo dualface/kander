@@ -45,10 +45,8 @@ theorem status_cons {p : Params} {n : String} {ds : List ArgDecl} {vs : List Val
 types. -/
 theorem accepted_cases {p : Params} {s s' : State} {e : Event} (h : step M p s e = some s') :
     (∃ tk ir ca, e = ⟨"bind", [boolV tk, natV ir, natV ca]⟩) ∨
-    (∃ he ac lv cg tg pr ir,
-      e = ⟨"create", [boolV he, boolV ac, boolV lv, natV cg, natV tg, boolV pr, natV ir]⟩) ∨
-    (∃ he ac lv cg tg ca sm,
-      e = ⟨"recreate", [boolV he, boolV ac, boolV lv, natV cg, natV tg, natV ca, boolV sm]⟩) ∨
+    (∃ he sd tg pr ir, e = ⟨"create", [boolV he, boolV sd, natV tg, boolV pr, natV ir]⟩) ∨
+    (∃ he sd tg ca sm, e = ⟨"recreate", [boolV he, boolV sd, natV tg, natV ca, boolV sm]⟩) ∨
     (∃ ho cg an ex sn wi ca,
       e = ⟨"answerSame", [boolV ho, natV cg, enumV an, natV ex, boolV sn, boolV wi, natV ca]⟩) ∨
     (∃ ho cg an ex sn wi ca,
@@ -67,23 +65,19 @@ theorem accepted_cases {p : Params} {s s' : State} {e : Event} (h : step M p s e
     obtain ⟨rfl, -⟩ := bindArgs_nil h3
     exact .inl ⟨tk, ir, ca, rfl⟩
   · obtain ⟨he, vs1, a1, rfl, h1⟩ := bool_cons hb
-    obtain ⟨ac, vs2, a2, rfl, h2⟩ := bool_cons h1
-    obtain ⟨lv, vs3, a3, rfl, h3⟩ := bool_cons h2
-    obtain ⟨cg, vs4, a4, rfl, h4⟩ := gen_cons h3
-    obtain ⟨tg, vs5, a5, rfl, h5⟩ := gen_cons h4
-    obtain ⟨pr, vs6, a6, rfl, h6⟩ := bool_cons h5
-    obtain ⟨ir, vs7, a7, rfl, h7⟩ := rev_cons h6
-    obtain ⟨rfl, -⟩ := bindArgs_nil h7
-    exact .inr (.inl ⟨he, ac, lv, cg, tg, pr, ir, rfl⟩)
+    obtain ⟨sd, vs2, a2, rfl, h2⟩ := bool_cons h1
+    obtain ⟨tg, vs3, a3, rfl, h3⟩ := gen_cons h2
+    obtain ⟨pr, vs4, a4, rfl, h4⟩ := bool_cons h3
+    obtain ⟨ir, vs5, a5, rfl, h5⟩ := rev_cons h4
+    obtain ⟨rfl, -⟩ := bindArgs_nil h5
+    exact .inr (.inl ⟨he, sd, tg, pr, ir, rfl⟩)
   · obtain ⟨he, vs1, a1, rfl, h1⟩ := bool_cons hb
-    obtain ⟨ac, vs2, a2, rfl, h2⟩ := bool_cons h1
-    obtain ⟨lv, vs3, a3, rfl, h3⟩ := bool_cons h2
-    obtain ⟨cg, vs4, a4, rfl, h4⟩ := gen_cons h3
-    obtain ⟨tg, vs5, a5, rfl, h5⟩ := gen_cons h4
-    obtain ⟨ca, vs6, a6, rfl, h6⟩ := rev_cons h5
-    obtain ⟨sm, vs7, a7, rfl, h7⟩ := bool_cons h6
-    obtain ⟨rfl, -⟩ := bindArgs_nil h7
-    exact .inr (.inr (.inl ⟨he, ac, lv, cg, tg, ca, sm, rfl⟩))
+    obtain ⟨sd, vs2, a2, rfl, h2⟩ := bool_cons h1
+    obtain ⟨tg, vs3, a3, rfl, h3⟩ := gen_cons h2
+    obtain ⟨ca, vs4, a4, rfl, h4⟩ := rev_cons h3
+    obtain ⟨sm, vs5, a5, rfl, h5⟩ := bool_cons h4
+    obtain ⟨rfl, -⟩ := bindArgs_nil h5
+    exact .inr (.inr (.inl ⟨he, sd, tg, ca, sm, rfl⟩))
   · obtain ⟨ho, vs1, a1, rfl, h1⟩ := bool_cons hb
     obtain ⟨cg, vs2, a2, rfl, h2⟩ := gen_cons h1
     obtain ⟨an, vs3, a3, rfl, h3⟩ := status_cons h2

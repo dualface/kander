@@ -138,12 +138,13 @@ theorem refused_unchanged (p : Params) (s : State) (e : Event) (h : step M p s e
 
 /-! ## Theorem 9: the invariant -/
 
-/-- The safety properties of an integration record. -/
+/-- The safety properties of an integration record. `lost` and `lapsed` are
+never stored: they are only statuses a projection or a view reports. -/
 structure Props (x : It) : Prop where
   noneGen : x.st = 0 ↔ x.gen = 0
   noneRev : x.st = 0 ↔ x.rev = 0
   genRev : x.gen ≤ x.rev
-  notLost : x.st ≠ 2
+  notLost : x.st ≠ 2 ∧ x.st ≠ 4
   noneClean : x.st = 0 → x.live = false ∧ x.ph = 0 ∧ x.pu = 0 ∧ x.ct = false ∧ x.au = 0 ∧ x.ob = false
   activePhase : x.st = 1 ↔ (x.ph = 1 ∨ x.ph = 2)
   releasedPhase : x.st = 3 ↔ (x.ph = 3 ∨ x.ph = 4 ∨ x.ph = 5)
@@ -166,17 +167,17 @@ theorem props_step {x y : It} (P : Props x) (ht : Trans x y) : Props y := by
   obtain ⟨a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11⟩ := P
   cases ht with
   | keep => exact ⟨a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11⟩
-  | renew hs hl =>
+  | renew hs =>
     refine ⟨a1, a2, a3, a4, ?_, a6, a7, ?_, a9, a10, a11⟩ <;> simp_all
   | expire hl =>
     refine ⟨a1, a2, a3, a4, ?_, a6, a7, ?_, a9, a10, a11⟩ <;> simp_all
   | claim pu ag ct hv hpu =>
     refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all
-  | pushing ob hs hl hr hph hct =>
+  | pushing ob hs hr hph hct =>
     refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all <;> omega
-  | confirm hs hl hr hph =>
+  | confirm hs hr hph =>
     refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all <;> omega
-  | release ob hs hl hr =>
+  | release ob hs hr =>
     by_cases hp : x.ph = 2 <;> refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all <;> omega
 
 theorem step_inv (p : Params) (s s' : State) (e : Event) (hi : Inv p s)
@@ -237,12 +238,12 @@ theorem trans_phase_flow {x y : It} (P : Props x) (ht : Trans x y) :
   | renew => simp
   | expire => simp
   | claim => simp
-  | pushing ob hs hl hr hph hct => simp [hph]
-  | confirm hs hl hr hph =>
+  | pushing ob hs hr hph hct => simp [hph]
+  | confirm hs hr hph =>
     rcases hph with ⟨h1, -⟩ | h2
     · simp [h1]
     · simp [h2]
-  | release ob hs hl hr =>
+  | release ob hs hr =>
     have := hap.1 hs
     by_cases hp : x.ph = 2 <;> simp_all <;> omega
 
@@ -272,12 +273,12 @@ theorem terminal_frozen {p : Params} {x y : It} {e : Event} {s' : State} (hr : R
   have hap := P.activePhase
   cases ht with
   | keep => rfl
-  | renew hs hl => omega
+  | renew hs => omega
   | expire hl => simp_all
   | claim pu ag ct hv hpu => simp at hn
-  | pushing ob hs hl hr hph hct => omega
-  | confirm hs hl hr hph => omega
-  | release ob hs hl hr => omega
+  | pushing ob hs hr hph hct => omega
+  | confirm hs hr hph => omega
+  | release ob hs hr => omega
 
 /-- Theorem 4: a record in a final phase keeps its generation and revision
 against every event that does not take a new generation. -/
@@ -287,5 +288,26 @@ theorem terminal_keeps_counters {p : Params} {x y : It} {e : Event} {s' : State}
   have := terminal_frozen hr hph h hy hn
   subst this
   rfl
+
+/-! ## Lapsed leases -/
+
+/-- The owner renews a lease that lapsed while its actor still stands: the
+record keeps its generation, revision, and phase and gets a live lease again. -/
+theorem renew_lapsed_keeps_gen (p : Params) (x : It) (hst : x.st = 1) (hg : x.gen ≤ p "maxGen")
+    (hag : x.au ≤ p "maxAuth") :
+    step M p (enc { x with live := false }) ⟨"renew", [boolV true, natV x.gen, natV x.gen, boolV true,
+      boolV true, natV x.au, boolV true, boolV true, boolV true]⟩ = some (enc { x with live := true }) := by
+  rw [step_renew]; simp [Owner, Actor, hst, hg, hag]
+
+/-- `startup` keeps every field but the lease of an active record. -/
+theorem startup_spec (p : Params) (x : It) {s' : State} (h : step M p (enc x) ⟨"startup", []⟩ = some s') :
+    x.st = 1 ∧ s' = enc { x with live := true } := by
+  rw [step_startup] at h
+  obtain ⟨hs, rfl⟩ := ite_some_enc h
+  exact ⟨hs, rfl⟩
+
+/-- The status `lapsed` is never stored in a reachable state. -/
+theorem reachable_not_lapsed {p : Params} {x : It} (hr : Reachable M p (enc x)) : x.st ≠ 4 :=
+  ((reachable_inv hr).2 x rfl).notLost.2
 
 end KanderFormal.Proofs.ServerIntegration

@@ -10,9 +10,10 @@ revision (the request's own, never the card's), the generation it targets,
 whether it is a dispatch proposal, and the card revision a proposal binds
 (`prev`, zero for any other request). The server clock, the claim record, and
 the card are not modeled: the shell projects their facts as arguments. `cgen`
-is the generation of the claim record, and `held`, `active` and `live` say that
-the card is in `working` or `review`, that the record is active, and that its
-lease has not expired. `card` is the card revision a check compares with the
+is the generation of the claim record. `held` says that the card is in
+`working` or `review`, and `standing` is the claim kernel's `standing` event for
+the request's target generation: the record is active at that generation,
+whatever its lease clock says. `card` is the card revision a check compares with the
 revision a request binds. Comparisons of strings and JSON (the client, the
 acceptance window, the immutable dispatch material, the note) are Boolean
 arguments (`same`, `sameNote`, `material`, `match`, `window`). `holder` is the
@@ -65,10 +66,10 @@ def actionable : Expr := orE (statusIs "open") (statusIs "accepted")
 def settled : Expr := orE (statusIs "done") (statusIs "rejected")
 
 /-- The claim facts of creating a request (`createRequest`): the card is in
-`working` or `review`, the claim record is active, the request targets the
-claim's generation, and the lease has not expired. -/
+`working` or `review`, and the claim kernel's `standing` event accepts the
+generation the request targets. -/
 def claimOk : Expr :=
-  andE (a "held") (andE (a "active") (andE (eq (a "target") (a "cgen")) (a "live")))
+  andE (a "held") (a "standing")
 
 /-- `createRequest`: a dispatch proposal binds the inspected card version (the
 card revision, not zero, and the task of its material). The check runs before
@@ -84,8 +85,7 @@ holder's generation. A proposal binds a card revision; any other request keeps
 none (`prop` and a revision that is not zero go together). -/
 def createEvent : EventDecl where
   name := "create"
-  args := [boolArg "held", boolArg "active", boolArg "live", genArg "cgen", genArg "target", boolArg "prop",
-    revArg "inRev"]
+  args := [boolArg "held", boolArg "standing", genArg "target", boolArg "prop", revArg "inRev"]
   guard := andE (statusIs "none") (andE claimOk (eq (a "prop") (ne (a "inRev") zero)))
   assigns := [("status", .enumLit "status" "open"), ("rev", .natLit 1), ("tgen", a "target"), ("prop", a "prop"),
     ("prev", a "inRev")]
@@ -95,8 +95,7 @@ def createEvent : EventDecl where
 The immutable proposal is returned and nothing changes. -/
 def recreateEvent : EventDecl where
   name := "recreate"
-  args := [boolArg "held", boolArg "active", boolArg "live", genArg "cgen", genArg "target", revArg "card",
-    boolArg "same"]
+  args := [boolArg "held", boolArg "standing", genArg "target", revArg "card", boolArg "same"]
   guard := andE (ne (f "status") (.enumLit "status" "none")) (andE (f "prop") (andE claimOk
     (andE (eq (f "tgen") (a "target")) (andE (eq (f "prev") (a "card")) (a "same")))))
   assigns := []

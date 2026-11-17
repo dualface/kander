@@ -115,8 +115,12 @@ func (p *project) integrationFacts(tx *board.Transaction, input api.IntegrationR
 		if member.DeliveryCommit == "" {
 			continue
 		}
-		if !claimedState(snapshot.Entry.State) || snapshot.Entry.State != "review" || !found || claim.Status != api.ClaimActive || !p.server.now().Before(claim.ExpiresAt) {
-			return apiError(api.CodeLeaseInvalid, "contributor must have a live review execution")
+		standing, err := p.hasStanding(claim, found)
+		if err != nil {
+			return err
+		}
+		if snapshot.Entry.State != "review" || !standing {
+			return apiError(api.CodeLeaseInvalid, "contributor must have an active review execution")
 		}
 		delivery, err := p.latestDelivery(member.TaskID)
 		if err != nil {

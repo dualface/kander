@@ -60,7 +60,7 @@ func TestAgentExitIsReportedWithoutTreatingWorkerPresenceAsAgentLife(t *testing.
 		t.Fatalf("confirmed exit did not allow explicit takeover: %+v %v", grant, err)
 	}
 	_, err = project.ObserveAgent(t.Context(), "late-observation", credential.TaskID, api.AgentObservation{Status: "stopped"}, *credential.Claim())
-	if !api.IsCode(err, api.CodeHeldByOther) && !api.IsCode(err, api.CodeLeaseInvalid) {
+	if !api.IsCode(err, api.CodeTakenOver) {
 		t.Fatalf("old observation changed successor: %v", err)
 	}
 }

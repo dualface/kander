@@ -8,7 +8,7 @@ import (
 	"github.com/dualface/kander/internal/statemachine/vectortest"
 )
 
-var statusNames = [StatusCount]string{"none", "pending", "active", "lost", "released"}
+var statusNames = [StatusCount]string{"none", "pending", "active", "lost", "released", "lapsed"}
 
 var vectorParams = []Params{
 	{MaxGen: 3},
@@ -40,6 +40,9 @@ var vectorEvents = []Event{
 	Audit{Expected: 1, Fresh: true},
 	Audit{Expected: 0, Fresh: true},
 	Audit{Expected: 1, Fresh: false},
+	Startup{},
+	Standing{G: 1},
+	Standing{G: 2},
 }
 
 func encodeParams(p Params) string {
@@ -81,6 +84,10 @@ func encodeEvent(e Event) string {
 		return vectortest.Event("reconcile", "owner", vectortest.Bool(ev.Owner))
 	case Audit:
 		return vectortest.Event("audit", "expected", vectortest.Uint(ev.Expected), "fresh", vectortest.Bool(ev.Fresh))
+	case Startup:
+		return vectortest.Event("startup")
+	case Standing:
+		return vectortest.Event("standing", "g", vectortest.Uint(ev.G))
 	}
 	return "null"
 }
@@ -89,9 +96,19 @@ func encodeQueryValid(s State, p Params) string {
 	return vectortest.Bool(Valid(s, p))
 }
 
+func encodeQueryHasStanding(s State, p Params) string {
+	return vectortest.Bool(HasStanding(s, p))
+}
+
+func encodeQueryShown(s State, p Params) string {
+	return vectortest.Str(statusNames[Shown(s, p)])
+}
+
 func encodeQueries(s State, p Params) string {
 	return vectortest.Object(
 		"valid", encodeQueryValid(s, p),
+		"hasStanding", encodeQueryHasStanding(s, p),
+		"shown", encodeQueryShown(s, p),
 	)
 }
 

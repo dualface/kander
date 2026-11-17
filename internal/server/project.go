@@ -79,6 +79,8 @@ func (p *project) open() error {
 // reconcileClaims derives every claim from the committed card state: a
 // pending claim whose move committed becomes active, one whose move did not
 // is released, and a claim of a card that left working/review is released.
+// It then extends the active leases past the server's downtime
+// (startupLeases).
 func (p *project) reconcileClaims() error {
 	if err := ensureDir(p.root, servicePath("claims")); err != nil {
 		return err
@@ -121,7 +123,7 @@ func (p *project) reconcileClaims() error {
 			}
 		}
 	}
-	return nil
+	return p.startupLeases()
 }
 
 func (p *project) ownerMatches(entry board.Entry, r claimRecord) bool {

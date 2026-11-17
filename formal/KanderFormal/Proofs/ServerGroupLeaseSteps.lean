@@ -16,7 +16,7 @@ abbrev M := serverGroupLeaseMachine
 theorem wellTyped : M.wellTyped = true := by decide
 
 /-- The explicit components of a state. `st`: 0 none, 1 active, 2 lost,
-3 released. -/
+3 released, 4 lapsed (a view value that is never stored). -/
 structure Gl where
   st : Nat
   gen : Nat
@@ -33,7 +33,7 @@ theorem enc_inj {x y : Gl} (h : enc x = enc y) : x = y := by
   rfl
 
 theorem shape {p : Params} {s : State} (h : M.StateConforms p s) :
-    ∃ x, s = enc x ∧ x.st < 4 ∧ x.gen ≤ p "maxGen" := by
+    ∃ x, s = enc x ∧ x.st < 5 ∧ x.gen ≤ p "maxGen" := by
   obtain ⟨hn, hc⟩ := h
   match s, hn with
   | [(_, v1), (_, v2), (_, v3)], hn =>
@@ -45,7 +45,7 @@ theorem shape {p : Params} {s : State} (h : M.StateConforms p s) :
     cases (rfl : M.fieldTy "status" = some (.scalar (.enum "status"))).symm.trans ht1
     cases (rfl : M.fieldTy "gen" = some (.scalar (.nat "maxGen"))).symm.trans ht2
     cases (rfl : M.fieldTy "live" = some (.scalar .bool)).symm.trans ht3
-    obtain ⟨st, rfl, hst⟩ := conforms_enum (rfl : M.enumSize "status" = some 4) c1
+    obtain ⟨st, rfl, hst⟩ := conforms_enum (rfl : M.enumSize "status" = some 5) c1
     obtain ⟨g, rfl, hg⟩ := conforms_nat c2
     obtain ⟨lv, rfl⟩ := conforms_bool c3
     exact ⟨⟨st, g, lv⟩, rfl, hst, hg⟩
@@ -61,17 +61,19 @@ theorem find_writeAfter : M.findEvent "writeAfter" = some writeAfterEvent := rfl
 theorem find_recoverOwned : M.findEvent "recoverOwned" = some recoverOwnedEvent := rfl
 theorem find_recoverLost : M.findEvent "recoverLost" = some recoverLostEvent := rfl
 theorem find_expire : M.findEvent "expire" = some expireEvent := rfl
-theorem ctors_status : M.ctorsOf "status" = some ["none", "active", "lost", "released"] := rfl
-theorem size_status : M.enumSize "status" = some 4 := rfl
+theorem find_startup : M.findEvent "startup" = some startupEvent := rfl
+theorem find_standing : M.findEvent "standing" = some standingEvent := rfl
+theorem ctors_status : M.ctorsOf "status" = some ["none", "active", "lost", "released", "lapsed"] := rfl
+theorem size_status : M.enumSize "status" = some 5 := rfl
 theorem ty_status : M.fieldTy "status" = some (.scalar (.enum "status")) := rfl
 theorem ty_gen : M.fieldTy "gen" = some (.scalar (.nat "maxGen")) := rfl
 theorem ty_live : M.fieldTy "live" = some (.scalar .bool) := rfl
 
 macro "gl_simp" "[" ts:Lean.Parser.Tactic.simpLemma,* "]" : tactic =>
   `(tactic| simp [step, find_claim, find_renew, find_observe, find_release, find_require, find_writeAfter,
-      find_recoverOwned, find_recoverLost, find_expire, ctors_status, size_status, ty_status, ty_gen, ty_live,
+      find_recoverOwned, find_recoverLost, find_expire, find_startup, find_standing, ctors_status, size_status, ty_status, ty_gen, ty_live,
       lookup, claimEvent, renewEvent, observeEvent, releaseEvent, requireEvent, writeAfterEvent,
-      recoverOwnedEvent, recoverLostEvent, expireEvent, holder, valid, claimGuard, genArg, boolArg, holderArgs,
+      recoverOwnedEvent, recoverLostEvent, expireEvent, startupEvent, standingEvent, holder, valid, claimGuard, genArg, boolArg, holderArgs,
       statusIs, gen, inc, eq, bindArgs, Ty.conforms, STy.conforms, eval, evalCmp, natAdd, boolAnd, boolOr,
       boolNot, indexOf, enumV, boolV, natV, f, a, tt, ff, andE, orE, notE, evalAssigns, applyUpdates, enc,
       or_assoc, and_assoc, Bool.and_assoc, Bool.or_assoc, map_ite, ite_and_self, ite_ite_none, $ts,*])
@@ -80,9 +82,10 @@ macro "ite_close" : tactic =>
   `(tactic| ((try split) <;> (try split) <;> first | rfl | (exfalso; simp_all; done) | (simp_all; done) |
     (exfalso; simp_all; omega)))
 
-/-- `requireGroup` accepts the request. -/
+/-- `requireGroup` accepts the request: holder authority, whatever the lease
+clock says. -/
 def Holder (x : Gl) (hdr : Bool) (g tg : Nat) : Prop :=
-  hdr = true ∧ x.st = 1 ∧ tg = x.gen ∧ g = x.gen ∧ x.live = true
+  hdr = true ∧ x.st = 1 ∧ tg = x.gen ∧ g = x.gen
 
 instance (x : Gl) (hdr : Bool) (g tg : Nat) : Decidable (Holder x hdr g tg) := by
   unfold Holder; infer_instance
@@ -141,6 +144,19 @@ theorem step_recoverLost (p : Params) (x : Gl) (hdr : Bool) (g tg : Nat) (decisi
           execOk = true then some (enc x) else none := by
   by_cases h1 : g ≤ p "maxGen" <;> by_cases h2 : tg ≤ p "maxGen" <;> cases decision <;> cases unknown <;>
     cases execOk <;> gl_simp [h1, h2, Holder] <;> ite_close
+
+theorem step_startup (p : Params) (x : Gl) :
+    step M p (enc x) ⟨"startup", []⟩ = if x.st = 1 then some (enc { x with live := true }) else none := by
+  by_cases h : x.st = 1 <;> gl_simp [h]
+
+/-- The standing check of generation `g`. -/
+def Standing (x : Gl) (g : Nat) : Prop := x.st = 1 ∧ x.gen = g
+
+instance (x : Gl) (g : Nat) : Decidable (Standing x g) := by unfold Standing; infer_instance
+
+theorem step_standing (p : Params) (x : Gl) (g : Nat) :
+    step M p (enc x) ⟨"standing", [natV g]⟩ = if g ≤ p "maxGen" ∧ Standing x g then some (enc x) else none := by
+  by_cases h1 : g ≤ p "maxGen" <;> gl_simp [h1, Standing] <;> ite_close
 
 theorem step_expire (p : Params) (x : Gl) :
     step M p (enc x) ⟨"expire", []⟩ = if x.live = true then some (enc { x with live := false }) else none := by

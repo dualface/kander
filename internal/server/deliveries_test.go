@@ -47,7 +47,7 @@ func TestDeliveryIsBoundToContentAndExecution(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = a.PublishDelivery(t.Context(), "late-delivery", value, proof)
-	if !api.IsCode(err, api.CodeHeldByOther) && !api.IsCode(err, api.CodeLeaseInvalid) {
+	if !api.IsCode(err, api.CodeTakenOver) {
 		t.Fatalf("late upload: %v", err)
 	}
 	_, err = b.Move(t.Context(), "old-generation-delivery", card.TaskID, api.Move{State: "review", DeliveryCommit: commit}, &client.Claim{Token: successor.Token, Generation: successor.Claim.Generation})

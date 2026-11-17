@@ -107,13 +107,13 @@ func TestCoordinatorTakeoverFencesLateWritesAndRecoversItsReceipt(t *testing.T) 
 		t.Fatalf("handoff failed: %+v", second)
 	}
 	_, err = a.RenewGroup(t.Context(), request.Request.GroupID, firstProof)
-	expectCode(t, err, api.CodeLeaseInvalid)
+	expectCode(t, err, api.CodeTakenOver)
 	reconcile := board.CoordinatorReconcile{GroupID: request.Request.GroupID, CWD: "/first/clone", ExpectedRevision: first.Checkpoint.Revision, Authority: first.Checkpoint.Authority, Members: map[string]board.CoordinatorObservation{}}
 	for id, member := range first.Checkpoint.Members {
 		reconcile.Members[id] = board.CoordinatorObservation{Revision: member.Revision}
 	}
 	_, err = a.CoordinatorAction(t.Context(), "late-checkpoint", request.Request.GroupID, "reconcile", api.GroupReconcile{Request: reconcile}, firstProof)
-	expectCode(t, err, api.CodeLeaseInvalid)
+	expectCode(t, err, api.CodeTakenOver)
 	dir, clock := f.dir, f.clock
 	f.stop()
 	f = start(t, dir, clock)

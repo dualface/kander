@@ -15,8 +15,12 @@ A request presents a generation header (`g`) and a bearer token; `tg` is the
 generation the token was derived for (the shell maps a token that matches no
 generation of the record to a value other than `gen`). A request of an older
 execution carries its own generation and token, so `g` and `tg` are both that
-older generation. `holder` is `requireHolder`: an active record, the token and
-the header of the current generation, and a live lease.
+older generation. `holder` is `requireHolder`: an active record and the token
+and the header of the current generation. The lease clock is not part of it:
+`live` only decides whether another execution may take the task over, so a
+holder whose lease lapsed keeps its authority until a takeover raises the
+generation. The status `lapsed` is never stored; `shown` reports it for an
+active record whose lease expired.
 -/
 namespace KanderFormal.Machines.ServerClaim
 
@@ -35,14 +39,15 @@ def inc (x : Expr) : Expr := .add x (.natLit 1)
 def statusIs (c : String) : Expr := eq (f "status") (.enumLit "status" c)
 def gen : Expr := f "gen"
 
-/-- `requireHolder`. -/
+/-- `requireHolder`: holder authority, which ignores the lease clock. -/
 def holder : Expr :=
-  andE (statusIs "active") (andE (eq (a "tg") gen) (andE (eq (a "g") gen) (f "live")))
+  andE (statusIs "active") (andE (eq (a "tg") gen) (eq (a "g") gen))
 
-/-- The `CodeLeaseInvalid` answers of `requireHolder`: no active record, or the
-token of the current generation with another header or an expired lease. -/
+/-- The `CodeLeaseInvalid` answers of `requireHolder` that a termination may
+pass: no active record, or the token of the current generation with another
+header. -/
 def leaseInvalid : Expr :=
-  orE (notE (statusIs "active")) (andE (eq (a "tg") gen) (orE (notE (eq (a "g") gen)) (notE (f "live"))))
+  orE (notE (statusIs "active")) (andE (eq (a "tg") gen) (notE (eq (a "g") gen)))
 
 def genArg (n : String) : ArgDecl := { name := n, ty := .scalar (.nat "maxGen") }
 def boolArg (n : String) : ArgDecl := { name := n, ty := .scalar .bool }
@@ -57,7 +62,7 @@ def claimEvent : EventDecl where
   guard := andE (notE (f "held")) (orE (statusIs "none") (a "fresh"))
   assigns := [("held", tt), ("status", .enumLit "status" "active"), ("gen", inc gen), ("live", tt)]
 
-/-- `project.renew`: the holder extends its lease. -/
+/-- `project.renew`: the holder extends its lease, also after it lapsed. -/
 def renewEvent : EventDecl where
   name := "renew"
   args := holderArgs
@@ -126,6 +131,24 @@ def auditEvent : EventDecl where
     (andE (notE (statusIs "pending")) (notE (andE (statusIs "active") (f "live"))))))
   assigns := [("status", .enumLit "status" "released"), ("gen", inc gen), ("live", ff)]
 
+/-- `reconcileClaims` at startup, after `reconcile`: an active record gets a
+lease of at least one TTL from the start, so the server's downtime never opens
+a takeover. -/
+def startupEvent : EventDecl where
+  name := "startup"
+  args := []
+  guard := statusIs "active"
+  assigns := [("live", tt)]
+
+/-- The check that another task's claim record still gives generation `g` an
+execution (a publication member, a review writer, a request target, an
+integration contributor or actor). It changes nothing. -/
+def standingEvent : EventDecl where
+  name := "standing"
+  args := [genArg "g"]
+  guard := andE (statusIs "active") (eq gen (a "g"))
+  assigns := []
+
 /-- The environment: the server clock passes `ExpiresAt`. -/
 def expireEvent : EventDecl where
   name := "expire"
@@ -157,7 +180,7 @@ def reconcileEvent : EventDecl where
 
 def serverClaimMachine : Machine where
   name := "serverclaim"
-  enums := [{ name := "status", ctors := ["none", "pending", "active", "lost", "released"] }]
+  enums := [{ name := "status", ctors := ["none", "pending", "active", "lost", "released", "lapsed"] }]
   params := ["maxGen"]
   fields := [
     { name := "held", ty := .scalar .bool, init := .scalar (.bool false) },
@@ -166,9 +189,15 @@ def serverClaimMachine : Machine where
     { name := "live", ty := .scalar .bool, init := .scalar (.bool false) }
   ]
   events := [claimEvent, renewEvent, writeEvent, leaveEvent, releaseEvent, rollbackEvent, takeoverEvent,
-    expireEvent, pendingEvent, reconcileEvent, auditEvent]
+    expireEvent, pendingEvent, reconcileEvent, auditEvent, startupEvent, standingEvent]
   queries := [
-    { name := "valid", ty := .base .bool, body := andE (statusIs "active") (f "live") }
+    -- A valid lease: no other execution may take the task over.
+    { name := "valid", ty := .base .bool, body := andE (statusIs "active") (f "live") },
+    -- Some generation has an execution: the record is active.
+    { name := "hasStanding", ty := .base .bool, body := statusIs "active" },
+    -- The status a view shows: an active record whose lease expired is `lapsed`.
+    { name := "shown", ty := .base (.enum "status"),
+      body := .ite (andE (statusIs "active") (notE (f "live"))) (.enumLit "status" "lapsed") (f "status") }
   ]
 
 end KanderFormal.Machines.ServerClaim

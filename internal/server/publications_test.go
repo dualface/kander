@@ -106,8 +106,24 @@ func TestJointReviewRecoversPartialConfirmationAndPublishesAtomically(t *testing
 	}
 }
 
+// A member whose lease only lapsed still stands: the joint operation it
+// confirmed publishes.
+func TestJointReviewPublishesWithLapsedMembers(t *testing.T) {
+	joint := prepareJointReview(t)
+	joint.confirm(t, 0)
+	joint.confirm(t, 1)
+	joint.fixture.clock.advance(91 * time.Second)
+	if _, err := joint.first.ReviewPlan(t.Context(), "lapsed-joint", joint.plan, &client.Claim{PublicationID: joint.publication.ID}); err != nil {
+		t.Fatalf("lapsed members refused the joint operation: %v", err)
+	}
+	publication, err := joint.first.Publication(t.Context(), joint.publication.ID)
+	if err != nil || publication.Status == "prepared" {
+		t.Fatalf("joint operation of lapsed members was not published: %+v %v", publication, err)
+	}
+}
+
 func TestJointReviewRejectsChangedVersionsAndExecutions(t *testing.T) {
-	for _, change := range []string{"revision", "takeover", "expiry"} {
+	for _, change := range []string{"revision", "takeover"} {
 		t.Run(change, func(t *testing.T) {
 			joint := prepareJointReview(t)
 			joint.confirm(t, 0)
@@ -132,8 +148,6 @@ func TestJointReviewRejectsChangedVersionsAndExecutions(t *testing.T) {
 				if _, err := successor.Takeover(t.Context(), "", secondID, api.ClaimRequest{ClientID: "host-c", ExecutionID: "successor", Owner: "codex", ExpectedGeneration: second.Claim.Generation, Decision: "explicit test takeover"}); err != nil {
 					t.Fatal(err)
 				}
-			case "expiry":
-				joint.fixture.clock.advance(91 * time.Second)
 			}
 			_, err := joint.first.ReviewPlan(t.Context(), "stale-joint", joint.plan, &client.Claim{PublicationID: joint.publication.ID})
 			expectCode(t, err, expected)

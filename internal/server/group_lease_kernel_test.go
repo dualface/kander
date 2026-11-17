@@ -157,7 +157,7 @@ func TestGroupLeaseEntrancesRefineTheKernel(t *testing.T) {
 	if second.Claim.Generation != 2 {
 		t.Fatalf("takeover granted generation %d", second.Claim.Generation)
 	}
-	l.refines(servergrouplease.Renew{Hdr: true, G: 3, Tg: 3}, api.CodeLeaseInvalid, func() error { _, err := a.RenewGroup(ctx, group, proof); return err })
+	l.refines(servergrouplease.Renew{Hdr: true, G: 3, Tg: 3}, api.CodeTakenOver, func() error { _, err := a.RenewGroup(ctx, group, proof); return err })
 	next := client.Claim{Token: second.Token, Generation: 2}
 	// A release is refused like a renewal: for a forged token and for the token
 	// of the current lease presented with an older generation.
@@ -176,7 +176,7 @@ func TestGroupLeaseEntrancesRefineTheKernel(t *testing.T) {
 	})
 	l.refines(servergrouplease.Renew{Hdr: true, G: 2, Tg: 2}, api.CodeLeaseInvalid, func() error { _, err := b.RenewGroup(ctx, group, next); return err })
 
-	// A lease that expired keeps its record, but its execution cannot return.
+	// A lease that expired keeps its record and its execution.
 	third := take
 	third.ExecutionID, third.ExpectedGeneration, third.Request.ExpectedRevision = "third-coordinator", 2, second.Checkpoint.Revision
 	third.Request.ExpectedEpoch = second.Checkpoint.Authority.Epoch
@@ -190,13 +190,18 @@ func TestGroupLeaseEntrancesRefineTheKernel(t *testing.T) {
 	if want, _ := servergrouplease.Step(before, servergrouplease.Expire{}, servergrouplease.Params{MaxGen: 3}); func() servergrouplease.State { st, _ := l.state(nil); return st }() != want {
 		t.Fatalf("lease expiry: kernel %+v", want)
 	}
+	if view, err := a.Group(ctx, group); err != nil || view.Claim.Status != api.ClaimLapsed || servergrouplease.Shown(func() servergrouplease.State { st, _ := l.state(nil); return st }(), servergrouplease.Params{MaxGen: 4}) != servergrouplease.StatusLapsed {
+		t.Fatalf("view of an expired lease: %+v %v", view.Claim, err)
+	}
+	// A lapsed lease keeps its holder: the same execution reuses it at the same
+	// generation.
 	reuse := client.Claim{Token: grant.Token, Generation: 3}
-	l.refines(servergrouplease.Claim{Hdr: true, G: 3, Tg: 3, SameExec: true, SameClient: true, Expected: 4, Room: true}, api.CodeLeaseInvalid, func() error {
+	l.refines(servergrouplease.Claim{Hdr: true, G: 3, Tg: 3, SameExec: true, SameClient: true, Expected: 4, Room: true}, "", func() error {
 		_, err := b.ClaimGroup(ctx, "", group, third, &reuse)
 		return err
 	})
-	if view, err := a.Group(ctx, group); err != nil || view.Claim.Status != api.ClaimLost || servergrouplease.Shown(func() servergrouplease.State { st, _ := l.state(nil); return st }(), servergrouplease.Params{MaxGen: 4}) != servergrouplease.StatusLost {
-		t.Fatalf("view of an expired lease: %+v %v", view.Claim, err)
+	if view, err := a.Group(ctx, group); err != nil || view.Claim.Status != api.ClaimActive || view.Claim.Generation != 3 {
+		t.Fatalf("view of a reused lease: %+v %v", view.Claim, err)
 	}
 }
 
@@ -406,7 +411,7 @@ func TestGroupWriteRefinesTheKernel(t *testing.T) {
 		return err
 	})
 	f.clock.advance(91 * time.Second)
-	l.refines(servergrouplease.Require{Hdr: true, G: 1, Tg: 1}, api.CodeLeaseInvalid, func() error {
+	l.refines(servergrouplease.WriteAfter{Hdr: true, G: 1, Tg: 1, Members: true}, "", func() error {
 		_, err := a.CoordinatorAction(t.Context(), "", group, "reconcile", input, proof)
 		return err
 	})

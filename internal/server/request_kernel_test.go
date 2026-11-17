@@ -151,7 +151,7 @@ func (k *kernelFixture) answer(key, id string, answer api.CollabAnswer) (api.Col
 func TestRequestCreationRefinesTheKernel(t *testing.T) {
 	k := newKernelFixture(t, "request-kernel-create")
 	gen, card := k.grant.Claim.Generation, k.grant.Task.Revision
-	claimed := serverrequest.Create{Held: true, Active: true, Live: true, Cgen: 1, Target: 1}
+	claimed := serverrequest.Create{Held: true, Standing: true, Target: 1}
 
 	plain := api.CollaborationRequestID("plain")
 	k.probe.refines(plain, gen, 0, claimed, "", func() error {
@@ -159,7 +159,7 @@ func TestRequestCreationRefinesTheKernel(t *testing.T) {
 		return err
 	})
 	wrong := claimed
-	wrong.Target = 2
+	wrong.Standing, wrong.Target = false, 2
 	k.probe.refines(api.CollaborationRequestID("other-generation"), gen, 0, wrong, api.CodeLeaseInvalid, func() error {
 		_, err := k.sender.CreateRequest(t.Context(), "other-generation", k.task, api.NewCollabRequest{Kind: api.RequestFix, Message: "fix", TargetGeneration: gen + 1})
 		return err
@@ -168,7 +168,7 @@ func TestRequestCreationRefinesTheKernel(t *testing.T) {
 	// A card nobody holds has no claim record at all.
 	idle := todoTask(t, k.holder, "request-kernel-idle")
 	idleProbe := requestProbe{t: t, f: k.f, p: k.holder, task: idle.TaskID}
-	idleProbe.refines(api.CollaborationRequestID("idle"), 0, 0, serverrequest.Create{Cgen: 1, Target: 2}, api.CodeClaimRequired, func() error {
+	idleProbe.refines(api.CollaborationRequestID("idle"), 0, 0, serverrequest.Create{Target: 2}, api.CodeClaimRequired, func() error {
 		_, err := k.sender.CreateRequest(t.Context(), "idle", idle.TaskID, api.NewCollabRequest{Kind: api.RequestFix, Message: "fix", TargetGeneration: 1})
 		return err
 	})
@@ -192,12 +192,12 @@ func TestRequestCreationRefinesTheKernel(t *testing.T) {
 			return err
 		})
 	}
-	k.probe.refines(proposalID, gen, card, serverrequest.Create{Held: true, Active: true, Live: true, Cgen: 1, Target: 1, Prop: true, InRev: 1}, "", func() error {
+	k.probe.refines(proposalID, gen, card, serverrequest.Create{Held: true, Standing: true, Target: 1, Prop: true, InRev: 1}, "", func() error {
 		_, err := k.sender.CreateRequest(t.Context(), "proposal", k.task, proposal)
 		return err
 	})
 
-	same := serverrequest.Recreate{Held: true, Active: true, Live: true, Cgen: 1, Target: 1, Card: 1, Same: true}
+	same := serverrequest.Recreate{Held: true, Standing: true, Target: 1, Card: 1, Same: true}
 	k.probe.returns(proposalID, gen, card, same, func() (api.CollabRequest, error) {
 		return k.sender.CreateRequest(t.Context(), "proposal-retry", k.task, proposal)
 	})
@@ -222,14 +222,19 @@ func TestRequestCreationRefinesTheKernel(t *testing.T) {
 		})
 	}
 
-	// An expired lease refuses a creation, whatever the generation says.
+	// A lapsed lease keeps the claim's standing: a creation for its generation
+	// is accepted, and one for another generation is still refused.
 	k.f.clock.advance(91 * time.Second)
-	k.probe.refines(api.CollaborationRequestID("expired"), gen, 0, serverrequest.Create{Held: true, Active: true, Cgen: 1, Target: 1}, api.CodeLeaseInvalid, func() error {
-		_, err := k.sender.CreateRequest(t.Context(), "expired", k.task, api.NewCollabRequest{Kind: api.RequestFix, Message: "fix", TargetGeneration: gen})
+	k.probe.refines(api.CollaborationRequestID("other"), gen, 0, serverrequest.Create{Held: true, Target: 2}, api.CodeLeaseInvalid, func() error {
+		_, err := k.sender.CreateRequest(t.Context(), "other", k.task, api.NewCollabRequest{Kind: api.RequestFix, Message: "fix", TargetGeneration: gen + 1})
 		return err
 	})
-	if requests, err := k.holder.Requests(t.Context(), k.task); err != nil || len(requests) != 2 {
-		t.Fatalf("refused creations left requests: %+v %v", requests, err)
+	k.probe.refines(api.CollaborationRequestID("lapsed"), gen, 0, serverrequest.Create{Held: true, Standing: true, Target: 1}, "", func() error {
+		_, err := k.sender.CreateRequest(t.Context(), "lapsed", k.task, api.NewCollabRequest{Kind: api.RequestFix, Message: "fix", TargetGeneration: gen})
+		return err
+	})
+	if requests, err := k.holder.Requests(t.Context(), k.task); err != nil || len(requests) != 3 {
+		t.Fatalf("lapsed creation was not kept beside the earlier requests: %+v %v", requests, err)
 	}
 }
 

@@ -16,7 +16,7 @@ abbrev M := serverIntegrationMachine
 theorem wellTyped : M.wellTyped = true := by decide
 
 /-- The explicit components of a state. `st`: 0 none, 1 active, 2 lost,
-3 released. `ph`: 0 none, 1 reserved, 2 pushing, 3 integrated, 4 released,
+3 released, 4 lapsed (a view value that is never stored). `ph`: 0 none, 1 reserved, 2 pushing, 3 integrated, 4 released,
 5 uncertain. `pu`: 0 none, 1 initialize, 2 assemble, 3 deliver. -/
 structure It where
   st : Nat
@@ -42,7 +42,7 @@ theorem enc_inj {x y : It} (h : enc x = enc y) : x = y := by
   rfl
 
 theorem shape {p : Params} {s : State} (h : M.StateConforms p s) :
-    ∃ x, s = enc x ∧ x.st < 4 ∧ x.gen ≤ p "maxGen" ∧ x.rev ≤ p "maxRev" ∧ x.ph < 6 ∧ x.pu < 4 ∧
+    ∃ x, s = enc x ∧ x.st < 5 ∧ x.gen ≤ p "maxGen" ∧ x.rev ≤ p "maxRev" ∧ x.ph < 6 ∧ x.pu < 4 ∧
       x.au ≤ p "maxAuth" := by
   obtain ⟨hn, hc⟩ := h
   match s, hn with
@@ -67,7 +67,7 @@ theorem shape {p : Params} {s : State} (h : M.StateConforms p s) :
     cases (rfl : M.fieldTy "contained" = some (.scalar .bool)).symm.trans ht7
     cases (rfl : M.fieldTy "auth" = some (.scalar (.nat "maxAuth"))).symm.trans ht8
     cases (rfl : M.fieldTy "obs" = some (.scalar .bool)).symm.trans ht9
-    obtain ⟨st, rfl, hst⟩ := conforms_enum (rfl : M.enumSize "status" = some 4) c1
+    obtain ⟨st, rfl, hst⟩ := conforms_enum (rfl : M.enumSize "status" = some 5) c1
     obtain ⟨g, rfl, hg⟩ := conforms_nat c2
     obtain ⟨rv, rfl, hrv⟩ := conforms_nat c3
     obtain ⟨lv, rfl⟩ := conforms_bool c4
@@ -95,11 +95,12 @@ theorem find_guardRelease : M.findEvent "guardRelease" = some guardReleaseEvent 
 theorem find_completion : M.findEvent "completion" = some completionEvent := rfl
 theorem find_wrapUp : M.findEvent "wrapUp" = some wrapUpEvent := rfl
 theorem find_expire : M.findEvent "expire" = some expireEvent := rfl
-theorem ctors_status : M.ctorsOf "status" = some ["none", "active", "lost", "released"] := rfl
+theorem find_startup : M.findEvent "startup" = some startupEvent := rfl
+theorem ctors_status : M.ctorsOf "status" = some ["none", "active", "lost", "released", "lapsed"] := rfl
 theorem ctors_phase :
     M.ctorsOf "phase" = some ["none", "reserved", "pushing", "integrated", "released", "uncertain"] := rfl
 theorem ctors_purpose : M.ctorsOf "purpose" = some ["none", "initialize", "assemble", "deliver"] := rfl
-theorem size_status : M.enumSize "status" = some 4 := rfl
+theorem size_status : M.enumSize "status" = some 5 := rfl
 theorem size_phase : M.enumSize "phase" = some 6 := rfl
 theorem size_purpose : M.enumSize "purpose" = some 4 := rfl
 theorem ty_status : M.fieldTy "status" = some (.scalar (.enum "status")) := rfl
@@ -115,10 +116,10 @@ theorem ty_obs : M.fieldTy "obs" = some (.scalar .bool) := rfl
 macro "it_simp" "[" ts:Lean.Parser.Tactic.simpLemma,* "]" : tactic =>
   `(tactic| simp [step, find_claim, find_claimGuard, find_require, find_requireOwner, find_renew, find_check,
       find_checkOwner, find_pushing, find_confirm, find_release, find_guard, find_guardRelease, find_completion, find_wrapUp,
-      find_expire, ctors_status, ctors_phase, ctors_purpose, size_status, size_phase, size_purpose, ty_status,
+      find_expire, find_startup, ctors_status, ctors_phase, ctors_purpose, size_status, size_phase, size_purpose, ty_status,
       ty_gen, ty_rev, ty_live, ty_phase, ty_purpose, ty_contained, ty_auth, ty_obs, lookup, claimEvent,
       claimGuardEvent, requireEvent, requireOwnerEvent, renewEvent, checkEvent, checkOwnerEvent, pushingEvent,
-      confirmEvent, releaseEvent, guardEvent, guardReleaseEvent, completionEvent, wrapUpEvent, expireEvent, valid, owner,
+      confirmEvent, releaseEvent, guardEvent, guardReleaseEvent, completionEvent, wrapUpEvent, expireEvent, startupEvent, valid, owner,
       actor, lease, revOk, genArg, revArg, authArg, boolArg, purposeArg, ownerArgs, actorArgs, leaseArgs,
       actionArgs, statusIs, phaseIs, purposeIs, gen, rev, auth, inc, zero, eq, ne, bindArgs, Ty.conforms,
       STy.conforms, eval, evalCmp, natAdd, boolAnd, boolOr, boolNot, indexOf, enumV, boolV, natV, f, a, tt, ff,
@@ -129,9 +130,9 @@ macro "ite_close" : tactic =>
   `(tactic| ((try split) <;> (try split) <;> first | rfl | (exfalso; simp_all; done) | (simp_all; done) |
     (exfalso; simp_all; omega)))
 
-/-- `requireIntegrationOwner` accepts. -/
+/-- `requireIntegrationOwner` accepts, whatever the lease clock says. -/
 def Owner (x : It) (hdr : Bool) (g tg : Nat) (client : Bool) : Prop :=
-  hdr = true ∧ x.st = 1 ∧ g = x.gen ∧ x.live = true ∧ client = true ∧ tg = x.gen
+  hdr = true ∧ x.st = 1 ∧ g = x.gen ∧ client = true ∧ tg = x.gen
 
 /-- `currentIntegrationActor` accepts. -/
 def Actor (x : It) (al : Bool) (ag : Nat) (ae ac : Bool) : Prop :=
@@ -246,6 +247,10 @@ theorem step_claimGuard (p : Params) (x : It) (ticket actor facts : Bool) :
     step M p (enc x) ⟨"claimGuard", [boolV ticket, boolV actor, boolV facts]⟩ =
       if ticket = true ∧ actor = true ∧ facts = true then some (enc x) else none := by
   it_simp [] <;> ite_close
+
+theorem step_startup (p : Params) (x : It) :
+    step M p (enc x) ⟨"startup", []⟩ = if x.st = 1 then some (enc { x with live := true }) else none := by
+  by_cases h : x.st = 1 <;> it_simp [h]
 
 theorem step_expire (p : Params) (x : It) :
     step M p (enc x) ⟨"expire", []⟩ = if x.live = true then some (enc { x with live := false }) else none := by

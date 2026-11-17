@@ -206,11 +206,9 @@ func TestExpiredLeaseNeedsExplicitTakeoverAndFencesTheOldExecution(t *testing.T)
 
 	f.clock.advance(91 * time.Second)
 	shown, _ := b.Show(t.Context(), task.TaskID)
-	if shown.Claim == nil || shown.Claim.Status != api.ClaimLost || shown.State != "working" {
-		t.Fatalf("an expired lease must read as lost and keep the task: %+v", shown.Claim)
+	if shown.Claim == nil || shown.Claim.Status != api.ClaimLapsed || shown.State != "working" {
+		t.Fatalf("an expired lease must read as lapsed and keep the task: %+v", shown.Claim)
 	}
-	_, err = a.Renew(t.Context(), task.TaskID, old)
-	expectCode(t, err, api.CodeLeaseInvalid)
 
 	next, err := b.Takeover(t.Context(), "", task.TaskID, takeover)
 	if err != nil {
@@ -222,14 +220,14 @@ func TestExpiredLeaseNeedsExplicitTakeoverAndFencesTheOldExecution(t *testing.T)
 	if !strings.Contains(next.Task.Text, "- OWNER: codex") {
 		t.Fatalf("the takeover must hand the card's execution to the new owner:\n%s", next.Task.Text)
 	}
-	// Every late write of the old execution is refused.
+	// Every late write of the old execution is refused as taken over.
 	late := api.Document{Path: "report.md", Text: "late", ExpectedRevision: next.Task.Revision}
 	_, err = a.PutDocument(t.Context(), "", task.TaskID, late, &old)
-	expectCode(t, err, api.CodeHeldByOther)
+	expectCode(t, err, api.CodeTakenOver)
 	_, err = a.Move(t.Context(), "", task.TaskID, api.Move{State: "done", Result: "completed"}, &old)
-	expectCode(t, err, api.CodeHeldByOther)
+	expectCode(t, err, api.CodeTakenOver)
 	_, err = a.Renew(t.Context(), task.TaskID, old)
-	expectCode(t, err, api.CodeHeldByOther)
+	expectCode(t, err, api.CodeTakenOver)
 	// A token from the old generation with the new generation number is still refused.
 	_, err = a.Renew(t.Context(), task.TaskID, client.Claim{Token: old.Token, Generation: 2})
 	expectCode(t, err, api.CodeHeldByOther)
@@ -382,7 +380,7 @@ func TestDocumentDigestMismatchPublishesNothing(t *testing.T) {
 	}
 	body := `{"path":"report.md","text":"partial","sha256":"00","expected_revision":` + strconv.FormatUint(task.Revision, 10) + `}`
 	req, _ := http.NewRequest(http.MethodPut, f.http.URL+"/api/v1/projects/"+a.ID()+"/tasks/"+task.TaskID+"/documents/report.md", strings.NewReader(body))
-	req.Header.Set(api.HeaderProtocol, "1")
+	req.Header.Set(api.HeaderProtocol, strconv.Itoa(api.ProtocolVersion))
 	req.Header.Set(api.HeaderIdempotencyKey, "key-digest")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

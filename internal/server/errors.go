@@ -24,6 +24,7 @@ var codeStatus = map[string]int{
 	api.CodeNotFound:             http.StatusNotFound,
 	api.CodeRevisionConflict:     http.StatusConflict,
 	api.CodeHeldByOther:          http.StatusConflict,
+	api.CodeTakenOver:            http.StatusConflict,
 	api.CodeLeaseInvalid:         http.StatusConflict,
 	api.CodeLeaseActive:          http.StatusConflict,
 	api.CodeClaimRequired:        http.StatusConflict,

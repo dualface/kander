@@ -19,23 +19,22 @@ var vectorEvents = []Event{
 	Bind{TaskOk: false, InRev: 1, Card: 1},
 	Bind{TaskOk: true, InRev: 0, Card: 1},
 	Bind{TaskOk: true, InRev: 1, Card: 2},
-	Create{Held: true, Active: true, Live: true, Cgen: 1, Target: 1, Prop: false, InRev: 0},
-	Create{Held: true, Active: true, Live: true, Cgen: 1, Target: 1, Prop: true, InRev: 1},
-	Create{Held: true, Active: true, Live: true, Cgen: 2, Target: 2, Prop: true, InRev: 2},
-	Create{Held: true, Active: true, Live: true, Cgen: 1, Target: 1, Prop: true, InRev: 0},
-	Create{Held: true, Active: true, Live: true, Cgen: 1, Target: 1, Prop: false, InRev: 1},
-	Create{Held: false, Active: true, Live: true, Cgen: 1, Target: 1, Prop: false, InRev: 0},
-	Create{Held: true, Active: false, Live: true, Cgen: 1, Target: 1, Prop: false, InRev: 0},
-	Create{Held: true, Active: true, Live: false, Cgen: 1, Target: 1, Prop: false, InRev: 0},
-	Create{Held: true, Active: true, Live: true, Cgen: 1, Target: 2, Prop: false, InRev: 0},
-	Recreate{Held: true, Active: true, Live: true, Cgen: 1, Target: 1, Card: 1, Same: true},
-	Recreate{Held: true, Active: true, Live: true, Cgen: 1, Target: 1, Card: 2, Same: true},
-	Recreate{Held: true, Active: true, Live: true, Cgen: 1, Target: 1, Card: 1, Same: false},
-	Recreate{Held: true, Active: true, Live: true, Cgen: 2, Target: 2, Card: 1, Same: true},
-	Recreate{Held: true, Active: true, Live: true, Cgen: 2, Target: 2, Card: 2, Same: true},
-	Recreate{Held: false, Active: true, Live: true, Cgen: 1, Target: 1, Card: 1, Same: true},
-	Recreate{Held: true, Active: true, Live: false, Cgen: 1, Target: 1, Card: 1, Same: true},
-	Recreate{Held: true, Active: true, Live: true, Cgen: 1, Target: 2, Card: 1, Same: true},
+	Create{Held: true, Standing: true, Target: 1, Prop: false, InRev: 0},
+	Create{Held: true, Standing: true, Target: 1, Prop: true, InRev: 1},
+	Create{Held: true, Standing: true, Target: 2, Prop: true, InRev: 2},
+	Create{Held: true, Standing: true, Target: 1, Prop: true, InRev: 0},
+	Create{Held: true, Standing: true, Target: 1, Prop: false, InRev: 1},
+	Create{Held: false, Standing: true, Target: 1, Prop: false, InRev: 0},
+	Create{Held: true, Standing: false, Target: 1, Prop: false, InRev: 0},
+	Create{Held: true, Standing: false, Target: 2, Prop: false, InRev: 0},
+	Recreate{Held: true, Standing: true, Target: 1, Card: 1, Same: true},
+	Recreate{Held: true, Standing: true, Target: 1, Card: 2, Same: true},
+	Recreate{Held: true, Standing: true, Target: 1, Card: 1, Same: false},
+	Recreate{Held: true, Standing: true, Target: 2, Card: 1, Same: true},
+	Recreate{Held: true, Standing: true, Target: 2, Card: 2, Same: true},
+	Recreate{Held: false, Standing: true, Target: 1, Card: 1, Same: true},
+	Recreate{Held: true, Standing: false, Target: 1, Card: 1, Same: true},
+	Recreate{Held: true, Standing: false, Target: 2, Card: 1, Same: true},
 	AnswerSame{Holder: true, Cgen: 1, Ans: StatusAccepted, Expected: 0, SameNote: true, Window: true, Card: 1},
 	AnswerSame{Holder: true, Cgen: 1, Ans: StatusAccepted, Expected: 0, SameNote: false, Window: true, Card: 1},
 	AnswerSame{Holder: true, Cgen: 1, Ans: StatusDone, Expected: 0, SameNote: true, Window: true, Card: 1},
@@ -104,9 +103,9 @@ func encodeEvent(e Event) string {
 	case Bind:
 		return vectortest.Event("bind", "taskOk", vectortest.Bool(ev.TaskOk), "inRev", vectortest.Uint(ev.InRev), "card", vectortest.Uint(ev.Card))
 	case Create:
-		return vectortest.Event("create", "held", vectortest.Bool(ev.Held), "active", vectortest.Bool(ev.Active), "live", vectortest.Bool(ev.Live), "cgen", vectortest.Uint(ev.Cgen), "target", vectortest.Uint(ev.Target), "prop", vectortest.Bool(ev.Prop), "inRev", vectortest.Uint(ev.InRev))
+		return vectortest.Event("create", "held", vectortest.Bool(ev.Held), "standing", vectortest.Bool(ev.Standing), "target", vectortest.Uint(ev.Target), "prop", vectortest.Bool(ev.Prop), "inRev", vectortest.Uint(ev.InRev))
 	case Recreate:
-		return vectortest.Event("recreate", "held", vectortest.Bool(ev.Held), "active", vectortest.Bool(ev.Active), "live", vectortest.Bool(ev.Live), "cgen", vectortest.Uint(ev.Cgen), "target", vectortest.Uint(ev.Target), "card", vectortest.Uint(ev.Card), "same", vectortest.Bool(ev.Same))
+		return vectortest.Event("recreate", "held", vectortest.Bool(ev.Held), "standing", vectortest.Bool(ev.Standing), "target", vectortest.Uint(ev.Target), "card", vectortest.Uint(ev.Card), "same", vectortest.Bool(ev.Same))
 	case AnswerSame:
 		return vectortest.Event("answerSame", "holder", vectortest.Bool(ev.Holder), "cgen", vectortest.Uint(ev.Cgen), "ans", vectortest.Str(statusNames[ev.Ans]), "expected", vectortest.Uint(ev.Expected), "sameNote", vectortest.Bool(ev.SameNote), "window", vectortest.Bool(ev.Window), "card", vectortest.Uint(ev.Card))
 	case Answer:

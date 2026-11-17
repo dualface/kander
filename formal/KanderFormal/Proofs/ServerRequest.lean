@@ -13,40 +13,34 @@ open KanderFormal KanderFormal.Machines.ServerRequest KanderFormal.Proofs.Scalar
 /-! ## Theorem 1: a request goes to the current holder -/
 
 /-- Theorem 1: a request is created only for a card in `working` or `review`
-whose claim record is active, for the claim's generation, while the lease has
-not expired. A request of a proposal binds a card revision that is not zero. -/
-theorem create_spec (p : Params) (x : Rq) (he ac lv : Bool) (cg tg : Nat) (pr : Bool) (ir : Nat) :
-    step M p (enc x) ⟨"create", [boolV he, boolV ac, boolV lv, natV cg, natV tg, boolV pr, natV ir]⟩ ≠ none ↔
-      cg ≤ p "maxGen" ∧ tg ≤ p "maxGen" ∧ ir ≤ p "maxRev" ∧ 1 ≤ p "maxRev" ∧ x.st = 0 ∧
-        he = true ∧ ac = true ∧ tg = cg ∧ lv = true ∧ (pr = true ↔ ir ≠ 0) := by
+whose claim record gives the target generation standing (the claim kernel's
+`standing` event, which ignores the lease clock). A request of a proposal binds
+a card revision that is not zero. -/
+theorem create_spec (p : Params) (x : Rq) (he sd : Bool) (tg : Nat) (pr : Bool) (ir : Nat) :
+    step M p (enc x) ⟨"create", [boolV he, boolV sd, natV tg, boolV pr, natV ir]⟩ ≠ none ↔
+      tg ≤ p "maxGen" ∧ ir ≤ p "maxRev" ∧ 1 ≤ p "maxRev" ∧ x.st = 0 ∧
+        he = true ∧ sd = true ∧ (pr = true ↔ ir ≠ 0) := by
   rw [step_create]
-  by_cases h : cg ≤ p "maxGen" ∧ tg ≤ p "maxGen" ∧ ir ≤ p "maxRev" ∧ 1 ≤ p "maxRev" ∧ x.st = 0 ∧
-    he = true ∧ ac = true ∧ tg = cg ∧ lv = true ∧ (pr = true ↔ ir ≠ 0) <;> simp [h]
+  by_cases h : tg ≤ p "maxGen" ∧ ir ≤ p "maxRev" ∧ 1 ≤ p "maxRev" ∧ x.st = 0 ∧
+    he = true ∧ sd = true ∧ (pr = true ↔ ir ≠ 0) <;> simp [h]
 
 /-- Theorem 1: a created request is open at revision 1 and targets the
 generation it was created for. -/
-theorem create_result (p : Params) (x : Rq) (he ac lv : Bool) (cg tg : Nat) (pr : Bool) (ir : Nat) {s' : State}
-    (h : step M p (enc x) ⟨"create", [boolV he, boolV ac, boolV lv, natV cg, natV tg, boolV pr, natV ir]⟩ =
+theorem create_result (p : Params) (x : Rq) (he sd : Bool) (tg : Nat) (pr : Bool) (ir : Nat) {s' : State}
+    (h : step M p (enc x) ⟨"create", [boolV he, boolV sd, natV tg, boolV pr, natV ir]⟩ =
       some s') : s' = enc ⟨1, 1, tg, pr, ir⟩ := by
   rw [step_create] at h
   exact (ite_some_enc h).2
 
 /-- Theorem 1: no request is created for a request that exists, a card
-outside `working` and `review`, a record that is not active, another
-generation, or an expired lease. -/
-theorem create_refused (p : Params) (x : Rq) (he ac lv : Bool) (cg tg : Nat) (pr : Bool) (ir : Nat) :
-    (x.st ≠ 0 → step M p (enc x) ⟨"create", [boolV he, boolV ac, boolV lv, natV cg, natV tg, boolV pr,
-      natV ir]⟩ = none) ∧
-    (he = false → step M p (enc x) ⟨"create", [boolV he, boolV ac, boolV lv, natV cg, natV tg, boolV pr,
-      natV ir]⟩ = none) ∧
-    (ac = false → step M p (enc x) ⟨"create", [boolV he, boolV ac, boolV lv, natV cg, natV tg, boolV pr,
-      natV ir]⟩ = none) ∧
-    (tg ≠ cg → step M p (enc x) ⟨"create", [boolV he, boolV ac, boolV lv, natV cg, natV tg, boolV pr,
-      natV ir]⟩ = none) ∧
-    (lv = false → step M p (enc x) ⟨"create", [boolV he, boolV ac, boolV lv, natV cg, natV tg, boolV pr,
-      natV ir]⟩ = none) := by
-  refine ⟨fun hn => ?_, fun hn => ?_, fun hn => ?_, fun hn => ?_, fun hn => ?_⟩ <;>
-    (rw [step_create]; apply ite_none; intro c; obtain ⟨-, -, -, -, c5, c6, c7, c8, c9, -⟩ := c; simp_all)
+outside `working` and `review`, or a target generation without standing (a
+record that is not active, or another generation). -/
+theorem create_refused (p : Params) (x : Rq) (he sd : Bool) (tg : Nat) (pr : Bool) (ir : Nat) :
+    (x.st ≠ 0 → step M p (enc x) ⟨"create", [boolV he, boolV sd, natV tg, boolV pr, natV ir]⟩ = none) ∧
+    (he = false → step M p (enc x) ⟨"create", [boolV he, boolV sd, natV tg, boolV pr, natV ir]⟩ = none) ∧
+    (sd = false → step M p (enc x) ⟨"create", [boolV he, boolV sd, natV tg, boolV pr, natV ir]⟩ = none) := by
+  refine ⟨fun hn => ?_, fun hn => ?_, fun hn => ?_⟩ <;>
+    (rw [step_create]; apply ite_none; intro c; obtain ⟨-, -, -, c4, c5, c6, -⟩ := c; simp_all)
 
 /-- Theorem 1: the check of a proposal's card version accepts only an inspected
 revision that is not zero and is the card's. It keeps the request. -/
@@ -72,12 +66,12 @@ changes a status. -/
 theorem flow {p : Params} {x y : Rq} {e : Event} {s' : State} (hs : x.st < 6)
     (h : step M p (enc x) e = some s') (hy : s' = enc y) :
     y.st = x.st ∨ (x.st = 0 ∧ y.st = 1) ∨ (x.st = 1 ∧ 2 ≤ y.st) ∨ (x.st = 2 ∧ 3 ≤ y.st) := by
-  rcases accepted_cases h with ⟨tk, ir, ca, rfl⟩ | ⟨he, ac, lv, cg, tg, pr, ir, rfl⟩ |
-    ⟨he, ac, lv, cg, tg, ca, sm, rfl⟩ | ⟨ho, cg, an, ex, sn, wi, ca, rfl⟩ | ⟨ho, cg, an, ex, sn, wi, ca, rfl⟩ |
+  rcases accepted_cases h with ⟨tk, ir, ca, rfl⟩ | ⟨he, sd, tg, pr, ir, rfl⟩ |
+    ⟨he, sd, tg, ca, sm, rfl⟩ | ⟨ho, cg, an, ex, sn, wi, ca, rfl⟩ | ⟨ho, cg, an, ex, sn, wi, ca, rfl⟩ |
     ⟨ng, rfl⟩ | ⟨un, ho, cg, wi, ca, ma, rfl⟩ | ⟨co, fo, im, cg, rfl⟩
   · rw [step_bind] at h; obtain ⟨-, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this; exact .inl rfl
   · rw [step_create] at h; obtain ⟨hc, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this
-    obtain ⟨-, -, -, -, h0, -⟩ := hc; exact .inr (.inl ⟨h0, rfl⟩)
+    obtain ⟨-, -, -, h0, -⟩ := hc; exact .inr (.inl ⟨h0, rfl⟩)
   · rw [step_recreate] at h; obtain ⟨-, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this; exact .inl rfl
   · rw [step_answerSame] at h; obtain ⟨-, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this; exact .inl rfl
   · rw [step_answer] at h; obtain ⟨hc, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this
@@ -95,12 +89,12 @@ theorem flow {p : Params} {x y : Rq} {e : Event} {s' : State} (hs : x.st < 6)
 changes again, whatever event arrives. -/
 theorem settled_frozen {p : Params} {x : Rq} {e : Event} {s' : State} (hs : x.st < 6) (hx : 3 ≤ x.st)
     (h : step M p (enc x) e = some s') : s' = enc x := by
-  rcases accepted_cases h with ⟨tk, ir, ca, rfl⟩ | ⟨he, ac, lv, cg, tg, pr, ir, rfl⟩ |
-    ⟨he, ac, lv, cg, tg, ca, sm, rfl⟩ | ⟨ho, cg, an, ex, sn, wi, ca, rfl⟩ | ⟨ho, cg, an, ex, sn, wi, ca, rfl⟩ |
+  rcases accepted_cases h with ⟨tk, ir, ca, rfl⟩ | ⟨he, sd, tg, pr, ir, rfl⟩ |
+    ⟨he, sd, tg, ca, sm, rfl⟩ | ⟨ho, cg, an, ex, sn, wi, ca, rfl⟩ | ⟨ho, cg, an, ex, sn, wi, ca, rfl⟩ |
     ⟨ng, rfl⟩ | ⟨un, ho, cg, wi, ca, ma, rfl⟩ | ⟨co, fo, im, cg, rfl⟩
   · rw [step_bind] at h; exact (ite_some_enc h).2
   · rw [step_create] at h; obtain ⟨hc, -⟩ := ite_some_enc h
-    obtain ⟨-, -, -, -, h0, -⟩ := hc; omega
+    obtain ⟨-, -, -, h0, -⟩ := hc; omega
   · rw [step_recreate] at h; exact (ite_some_enc h).2
   · rw [step_answerSame] at h; exact (ite_some_enc h).2
   · rw [step_answer] at h; obtain ⟨hc, -⟩ := ite_some_enc h

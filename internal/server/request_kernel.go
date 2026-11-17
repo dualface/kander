@@ -136,11 +136,11 @@ func (k *requestKernel) accepts(e serverrequest.Event) bool {
 }
 
 // claimFacts are the facts of a claim record that decide a request: the card is
-// in working or review, the record is active, its lease has not expired, and its
-// generation.
+// in working or review, and the claim kernel's standing event accepts the
+// request's target generation. active (the record is active) only selects the
+// error of a refused creation.
 type claimFacts struct {
-	held, active, live bool
-	generation         uint64
+	held, active, standing bool
 }
 
 // bindEvent is the check of a proposal's card version: the proposal names the
@@ -151,7 +151,7 @@ func (f requestFrame) bindEvent(taskOK bool, named uint64) serverrequest.Bind {
 
 // createEvent is the creation of a request that targets target.
 func (f requestFrame) createEvent(c claimFacts, target uint64, proposal bool, named uint64) serverrequest.Create {
-	create := serverrequest.Create{Held: c.held, Active: c.active, Live: c.live, Cgen: f.generation(c.generation), Target: f.generation(target), Prop: proposal}
+	create := serverrequest.Create{Held: c.held, Standing: c.standing, Target: f.generation(target), Prop: proposal}
 	if proposal {
 		create.InRev = f.cardRevision(named)
 	}
@@ -161,7 +161,7 @@ func (f requestFrame) createEvent(c claimFacts, target uint64, proposal bool, na
 // recreateEvent is a second creation of the dispatch of a proposal; same says
 // that its client, acceptance window, and dispatch material are the proposal's.
 func (f requestFrame) recreateEvent(c claimFacts, target uint64, same bool) serverrequest.Recreate {
-	return serverrequest.Recreate{Held: c.held, Active: c.active, Live: c.live, Cgen: f.generation(c.generation), Target: f.generation(target), Card: f.cardRevision(f.card), Same: same}
+	return serverrequest.Recreate{Held: c.held, Standing: c.standing, Target: f.generation(target), Card: f.cardRevision(f.card), Same: same}
 }
 
 // answerFacts are the facts of an answer to a request: the answer (its status,

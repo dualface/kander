@@ -8,7 +8,9 @@ evidence that the published receipt of an integration gives a task or a wrap-up
 dispatch.
 
 The state is the status of the record (`none` when no record exists, `lost` only
-as the status a stored record of an unknown kind projects to), its generation and
+as the status a stored record of an unknown kind projects to, `lapsed` only as
+the status `shown` reports for an active record whose lease expired), its
+generation and
 revision, whether its lease has not expired (`live`), its phase (`none`,
 `reserved`, `pushing`, `integrated`, `released`, `uncertain`), the purpose of its
 request, whether the request declares the source already contained
@@ -26,13 +28,15 @@ parsed (`holder.invalid` is empty). `client` says that the presenting client is
 the record's client. The shell maps a header or token that matches no generation
 of the record to a value other than `gen`, as it does for the claims
 (`ServerClaim.lean`). `owner` is `requireIntegrationOwner`: an active record, the
-header of the current generation, a lease that has not expired, the record's
-client, and the token of the current generation. The integration actor is the
+header of the current generation, the record's client, and the token of the
+current generation. The lease clock is not part of it: `live` only decides
+whether another execution may claim the target. The integration actor is the
 single-card holder or the group holder (`ServerClaim.lean`,
 `ServerGroupLease.lean`); the actor arguments are the facts of its current lease
-(`currentIntegrationActor`): the lease is active and has not expired
-(`actorLive`), it is the generation recorded in `auth` (`actorGen`), and its
-execution identity and client are the record's (`actorExec`, `actorClient`).
+(`currentIntegrationActor`): the `standing` event of the actor's kernel accepts
+the generation recorded in `auth` (`actorStanding`, which ignores the actor's
+lease clock as well), it is that generation (`actorGen`), and its execution
+identity and client are the record's (`actorExec`, `actorClient`).
 
 An action names the revision it inspected (`expRev`), which must be the
 record's and not zero, and the revision must have room for one more (`room`);
@@ -70,18 +74,18 @@ def auth : Expr := f "auth"
 /-- A valid lease: an active record that has not expired. -/
 def valid : Expr := andE (statusIs "active") (f "live")
 
-/-- `requireIntegrationOwner` accepts: the headers parsed, the record is active
-with a lease that has not expired, the generation header and the token belong to
-its generation, and the client is the record's. -/
+/-- `requireIntegrationOwner` accepts: the headers parsed, the record is active,
+the generation header and the token belong to its generation, and the client is
+the record's. The lease clock is not part of it. -/
 def owner : Expr :=
-  andE (a "hdr") (andE (statusIs "active") (andE (eq (a "g") gen) (andE (f "live")
-    (andE (a "client") (eq (a "tg") gen)))))
+  andE (a "hdr") (andE (statusIs "active") (andE (eq (a "g") gen)
+    (andE (a "client") (eq (a "tg") gen))))
 
-/-- `currentIntegrationActor` accepts: the actor's lease is active and has not
-expired, it is the generation the record was claimed under, and its execution
-identity and client are the record's. -/
+/-- `currentIntegrationActor` accepts: the actor still stands (its kernel's
+`standing` event accepts its generation), it is the generation the record was
+claimed under, and its execution identity and client are the record's. -/
 def actor : Expr :=
-  andE (a "actorLive") (andE (eq (a "actorGen") auth) (andE (a "actorExec") (a "actorClient")))
+  andE (a "actorStanding") (andE (eq (a "actorGen") auth) (andE (a "actorExec") (a "actorClient")))
 
 /-- `requireIntegration`: the owner whose actor still holds its lease. -/
 def lease : Expr := andE owner actor
@@ -98,7 +102,7 @@ def purposeArg (n : String) : ArgDecl := { name := n, ty := .scalar (.enum "purp
 
 def ownerArgs : List ArgDecl := [boolArg "hdr", genArg "g", genArg "tg", boolArg "client"]
 def actorArgs : List ArgDecl :=
-  [boolArg "actorLive", authArg "actorGen", boolArg "actorExec", boolArg "actorClient"]
+  [boolArg "actorStanding", authArg "actorGen", boolArg "actorExec", boolArg "actorClient"]
 def leaseArgs : List ArgDecl := ownerArgs ++ actorArgs
 def actionArgs : List ArgDecl := leaseArgs ++ [revArg "expRev", boolArg "room"]
 
@@ -147,8 +151,8 @@ def requireOwnerEvent : EventDecl where
   assigns := []
 
 /-- `renewIntegration` inside its transaction: `requireIntegration` again and the
-integration facts. The renewal refreshes the lease and keeps the revision, the
-generation, and the phase. -/
+integration facts. The renewal refreshes the lease, also after it lapsed, and
+keeps the revision, the generation, and the phase. -/
 def renewEvent : EventDecl where
   name := "renew"
   args := leaseArgs ++ [boolArg "facts"]
@@ -262,6 +266,14 @@ def wrapUpEvent : EventDecl where
           (andE (a "planIsSrc") (a "reviewIsSrc"))))))))))))))
   assigns := []
 
+/-- Project startup: an active record gets a lease of at least one TTL from
+the start, so the server's downtime never opens a claim of the target. -/
+def startupEvent : EventDecl where
+  name := "startup"
+  args := []
+  guard := statusIs "active"
+  assigns := [("live", tt)]
+
 /-- The environment: the server clock passes `ExpiresAt`. -/
 def expireEvent : EventDecl where
   name := "expire"
@@ -272,7 +284,7 @@ def expireEvent : EventDecl where
 def serverIntegrationMachine : Machine where
   name := "serverintegration"
   enums := [
-    { name := "status", ctors := ["none", "active", "lost", "released"] },
+    { name := "status", ctors := ["none", "active", "lost", "released", "lapsed"] },
     { name := "phase", ctors := ["none", "reserved", "pushing", "integrated", "released", "uncertain"] },
     { name := "purpose", ctors := ["none", "initialize", "assemble", "deliver"] }
   ]
@@ -289,13 +301,14 @@ def serverIntegrationMachine : Machine where
     { name := "obs", ty := .scalar .bool, init := .scalar (.bool false) }
   ]
   events := [claimEvent, claimGuardEvent, requireEvent, requireOwnerEvent, renewEvent, checkEvent,
-    checkOwnerEvent, pushingEvent, confirmEvent, releaseEvent, guardEvent, guardReleaseEvent, completionEvent, wrapUpEvent, expireEvent]
+    checkOwnerEvent, pushingEvent, confirmEvent, releaseEvent, guardEvent, guardReleaseEvent, completionEvent, wrapUpEvent, expireEvent,
+    startupEvent]
   queries := [
     -- A valid lease: an active record that has not expired.
     { name := "valid", ty := .base .bool, body := valid },
-    -- The status a view shows: an active record whose lease expired is `lost`.
+    -- The status a view shows: an active record whose lease expired is `lapsed`.
     { name := "shown", ty := .base (.enum "status"),
-      body := .ite (andE (statusIs "active") (notE (f "live"))) (.enumLit "status" "lost") (f "status") }
+      body := .ite (andE (statusIs "active") (notE (f "live"))) (.enumLit "status" "lapsed") (f "status") }
   ]
 
 end KanderFormal.Machines.ServerIntegration

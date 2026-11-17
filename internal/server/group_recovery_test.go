@@ -90,13 +90,13 @@ func TestLostMemberRecoveryFencesOldGenerationWithoutStartingOrAssigning(t *test
 		t.Fatal("recovery pretended the predecessor was observed stopped")
 	}
 	old := client.Claim{Token: f.taskGrant.Token, Generation: f.taskGrant.Claim.Generation}
-	if _, err := f.owner.Renew(t.Context(), f.task.TaskID, old); !api.IsCode(err, api.CodeLeaseInvalid) {
+	if _, err := f.owner.Renew(t.Context(), f.task.TaskID, old); !api.IsCode(err, api.CodeTakenOver) {
 		t.Fatalf("old execution renewed: %v", err)
 	}
-	if _, err := f.owner.PutDocument(t.Context(), "late-recovery-write", f.task.TaskID, api.Document{Path: "progress.md", Text: "late old output", ExpectedRevision: after.Revision}, &old); !api.IsCode(err, api.CodeLeaseInvalid) {
+	if _, err := f.owner.PutDocument(t.Context(), "late-recovery-write", f.task.TaskID, api.Document{Path: "progress.md", Text: "late old output", ExpectedRevision: after.Revision}, &old); !api.IsCode(err, api.CodeTakenOver) {
 		t.Fatalf("old execution wrote: %v", err)
 	}
-	if _, err := f.owner.Execution(t.Context(), "late-recovery-rollback", f.task.TaskID, api.ExecutionUpdate{Action: api.ExecutionRollback}, old); !api.IsCode(err, api.CodeLeaseInvalid) {
+	if _, err := f.owner.Execution(t.Context(), "late-recovery-rollback", f.task.TaskID, api.ExecutionUpdate{Action: api.ExecutionRollback}, old); !api.IsCode(err, api.CodeTakenOver) {
 		t.Fatalf("old execution rolled back: %v", err)
 	}
 	requests, err := f.coordinator.Requests(t.Context(), f.task.TaskID)

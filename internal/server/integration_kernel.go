@@ -27,7 +27,7 @@ var integrationStatuses = map[string]serverintegration.Status{
 
 var integrationStatusNames = map[serverintegration.Status]string{
 	serverintegration.StatusActive: api.ClaimActive, serverintegration.StatusLost: api.ClaimLost,
-	serverintegration.StatusReleased: api.ClaimReleased,
+	serverintegration.StatusReleased: api.ClaimReleased, serverintegration.StatusLapsed: api.ClaimLapsed,
 }
 
 var integrationPhases = map[string]serverintegration.Phase{
@@ -161,7 +161,7 @@ func (k *integrationKernel) revision(named, record uint64) uint64 {
 }
 
 // integrationShown renders the status of a record the kernel shows: an active
-// record whose lease expired is lost.
+// record whose lease expired is lapsed.
 func (p *project) integrationShown(v api.Integration) (api.Integration, error) {
 	if _, known := integrationStatuses[v.Status]; !known {
 		return v, nil
@@ -175,9 +175,10 @@ func (p *project) integrationShown(v api.Integration) (api.Integration, error) {
 }
 
 // actorFacts are the facts of the integration actor's current lease: the claim
-// of the single card or the group.
+// of the single card or the group. standing is the standing event of the
+// actor's own kernel for its current generation, which ignores the lease clock.
 type actorFacts struct {
-	live       bool
+	standing   bool
 	generation uint64
 	exec       bool
 	client     bool
@@ -197,8 +198,14 @@ func (p *project) integrationActorFacts(value api.Integration) (actorFacts, erro
 	if err != nil {
 		return actorFacts{}, err
 	}
+	var standing bool
+	if value.Request.GroupID != "" {
+		standing = p.groupStanding(claim, found, claim.Generation)
+	} else if standing, err = p.standing(claim, found, claim.Generation); err != nil {
+		return actorFacts{}, err
+	}
 	return actorFacts{
-		live: found && claim.Status == api.ClaimActive && p.server.now().Before(claim.ExpiresAt), generation: claim.Generation,
+		standing: standing, generation: claim.Generation,
 		exec: claim.ExecutionID == value.Request.ActorExecutionID, client: claim.ClientID == value.ClientID,
 	}, nil
 }
@@ -238,15 +245,15 @@ func (l *integrationLease) requireOwner() serverintegration.Event {
 func (l *integrationLease) actorGen() uint64 { return l.kernel.bases.auth.of(l.actor.generation) }
 
 func (l *integrationLease) require() serverintegration.Event {
-	return serverintegration.Require{Hdr: l.hdr, G: l.g, Tg: l.tg, Client: l.client, ActorLive: l.actor.live, ActorGen: l.actorGen(), ActorExec: l.actor.exec, ActorClient: l.actor.client}
+	return serverintegration.Require{Hdr: l.hdr, G: l.g, Tg: l.tg, Client: l.client, ActorStanding: l.actor.standing, ActorGen: l.actorGen(), ActorExec: l.actor.exec, ActorClient: l.actor.client}
 }
 
 func (l *integrationLease) renew(facts bool) serverintegration.Event {
-	return serverintegration.Renew{Hdr: l.hdr, G: l.g, Tg: l.tg, Client: l.client, ActorLive: l.actor.live, ActorGen: l.actorGen(), ActorExec: l.actor.exec, ActorClient: l.actor.client, Facts: facts}
+	return serverintegration.Renew{Hdr: l.hdr, G: l.g, Tg: l.tg, Client: l.client, ActorStanding: l.actor.standing, ActorGen: l.actorGen(), ActorExec: l.actor.exec, ActorClient: l.actor.client, Facts: facts}
 }
 
 func (l *integrationLease) guard(ticket, facts bool) serverintegration.Event {
-	return serverintegration.Guard{Hdr: l.hdr, G: l.g, Tg: l.tg, Client: l.client, ActorLive: l.actor.live, ActorGen: l.actorGen(), ActorExec: l.actor.exec, ActorClient: l.actor.client, Ticket: ticket, Facts: facts}
+	return serverintegration.Guard{Hdr: l.hdr, G: l.g, Tg: l.tg, Client: l.client, ActorStanding: l.actor.standing, ActorGen: l.actorGen(), ActorExec: l.actor.exec, ActorClient: l.actor.client, Ticket: ticket, Facts: facts}
 }
 
 func (l *integrationLease) guardRelease(ticket bool) serverintegration.Event {
@@ -254,14 +261,18 @@ func (l *integrationLease) guardRelease(ticket bool) serverintegration.Event {
 }
 
 // ownerError is the answer of requireIntegrationOwner to a request the kernel
-// refused, in the order the server has always checked: the headers, then the
-// lease, then the client and the token. It reads the lease from the projection,
-// so it agrees with the kernel even when the clock moved on.
+// refused, in the order the server has always checked: the headers, then
+// whether a newer generation took the target over, then the record, then the
+// client and the token. As for the single card claim, the taken-over answer
+// does not authenticate the old token and grants nothing.
 func (l *integrationLease) ownerError(h holder) error {
 	if h.invalid != nil {
 		return h.invalid
 	}
-	if !l.found || l.record.Value.Status != api.ClaimActive || l.record.Value.Generation != h.generation || !l.kernel.state.Live {
+	if l.found && takenOver(h, l.record.Hash, l.record.Value.Generation) {
+		return apiError(api.CodeTakenOver, "target was taken over by integration generation "+strconv.FormatUint(l.record.Value.Generation, 10))
+	}
+	if !l.found || l.record.Value.Status != api.ClaimActive || l.record.Value.Generation != h.generation {
 		return apiError(api.CodeLeaseInvalid, "integration lease is no longer current")
 	}
 	return apiError(api.CodeHeldByOther, "target is held by another integration execution")
@@ -383,7 +394,7 @@ func (a *integrationActionDecision) check() serverintegration.Event {
 	if a.input.Action == "release" {
 		return serverintegration.CheckOwner{Hdr: l.hdr, G: l.g, Tg: l.tg, Client: l.client, ExpRev: a.expRev(), Room: a.room()}
 	}
-	return serverintegration.Check{Hdr: l.hdr, G: l.g, Tg: l.tg, Client: l.client, ActorLive: l.actor.live, ActorGen: l.actorGen(), ActorExec: l.actor.exec, ActorClient: l.actor.client, ExpRev: a.expRev(), Room: a.room()}
+	return serverintegration.Check{Hdr: l.hdr, G: l.g, Tg: l.tg, Client: l.client, ActorStanding: l.actor.standing, ActorGen: l.actorGen(), ActorExec: l.actor.exec, ActorClient: l.actor.client, ExpRev: a.expRev(), Room: a.room()}
 }
 
 // revisionError is the answer to a check the kernel refused after the lease
@@ -402,10 +413,10 @@ func (a *integrationActionDecision) event() (serverintegration.Event, bool) {
 	sha := api.CommitSHA(in.ObservedTarget)
 	switch in.Action {
 	case "pushing":
-		return serverintegration.Pushing{Hdr: l.hdr, G: l.g, Tg: l.tg, Client: l.client, ActorLive: l.actor.live, ActorGen: l.actorGen(), ActorExec: l.actor.exec, ActorClient: l.actor.client, ExpRev: a.expRev(), Room: a.room(), ObsMatch: in.ObservedTarget == request.ExpectedTarget, ObsSha: sha}, true
+		return serverintegration.Pushing{Hdr: l.hdr, G: l.g, Tg: l.tg, Client: l.client, ActorStanding: l.actor.standing, ActorGen: l.actorGen(), ActorExec: l.actor.exec, ActorClient: l.actor.client, ExpRev: a.expRev(), Room: a.room(), ObsMatch: in.ObservedTarget == request.ExpectedTarget, ObsSha: sha}, true
 	case "confirm":
 		required := []api.IntegrationEdge{{Ancestor: request.ConfirmAncestor(), Descendant: in.ObservedTarget}}
-		return serverintegration.Confirm{Hdr: l.hdr, G: l.g, Tg: l.tg, Client: l.client, ActorLive: l.actor.live, ActorGen: l.actorGen(), ActorExec: l.actor.exec, ActorClient: l.actor.client, ExpRev: a.expRev(), Room: a.room(), ObsSha: sha, ObsAt: !in.ObservedAt.IsZero(), EdgesOk: reflect.DeepEqual(normalizedIntegrationEdges(required), normalizedIntegrationEdges(in.Edges))}, true
+		return serverintegration.Confirm{Hdr: l.hdr, G: l.g, Tg: l.tg, Client: l.client, ActorStanding: l.actor.standing, ActorGen: l.actorGen(), ActorExec: l.actor.exec, ActorClient: l.actor.client, ExpRev: a.expRev(), Room: a.room(), ObsSha: sha, ObsAt: !in.ObservedAt.IsZero(), EdgesOk: reflect.DeepEqual(normalizedIntegrationEdges(required), normalizedIntegrationEdges(in.Edges))}, true
 	case "release":
 		return serverintegration.Release{Hdr: l.hdr, G: l.g, Tg: l.tg, Client: l.client, ExpRev: a.expRev(), Room: a.room(), Decision: strings.TrimSpace(in.Decision) != "", ObsEmpty: in.ObservedTarget == "", ObsSha: sha}, true
 	}

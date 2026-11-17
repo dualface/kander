@@ -88,7 +88,7 @@ func TestDispatchServiceKeepsOwnershipAndBusinessEpochAsSeparateFences(t *testin
 	}
 	nextProof := client.Claim{Token: successor.Token, Generation: successor.Claim.Generation}
 	_, err = a.DispatchAction(t.Context(), "late-settlement", task.TaskID, "settle", api.DispatchCommand{DispatchID: input.ID, Revision: completed.Revision}, proof)
-	if !api.IsCode(err, api.CodeHeldByOther) && !api.IsCode(err, api.CodeLeaseInvalid) {
+	if !api.IsCode(err, api.CodeTakenOver) {
 		t.Fatalf("old execution settled a new holder's binding: %v", err)
 	}
 	settled, err := b.Dispatch(t.Context(), task.TaskID, input.ID)

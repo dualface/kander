@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -313,7 +314,7 @@ func TestOfflineMaintenanceInstanceNeverEnablesDomainRequests(t *testing.T) {
 		t.Fatal("offline maintenance became a serving instance")
 	}
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+fixture.projectID+"/tasks", nil)
-	request.Header.Set(api.HeaderProtocol, "1")
+	request.Header.Set(api.HeaderProtocol, strconv.Itoa(api.ProtocolVersion))
 	response := httptest.NewRecorder()
 	service.Handler().ServeHTTP(response, request)
 	if response.Code != http.StatusServiceUnavailable {

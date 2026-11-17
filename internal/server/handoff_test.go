@@ -46,7 +46,7 @@ func TestLiveHolderCanRestartOnlyItsFreshlyStoppedExecutor(t *testing.T) {
 	if err != nil || next.Claim.Generation != grant.Claim.Generation+1 || next.Claim.ExecutionID != input.ExecutionID {
 		t.Fatalf("restart: %+v %v", next, err)
 	}
-	if _, err := a.Renew(t.Context(), card.TaskID, proof); !api.IsCode(err, api.CodeLeaseInvalid) && !api.IsCode(err, api.CodeHeldByOther) {
+	if _, err := a.Renew(t.Context(), card.TaskID, proof); !api.IsCode(err, api.CodeTakenOver) {
 		t.Fatalf("old execution renewed after owned restart: %v", err)
 	}
 	replay, err := a.Handoff(t.Context(), "owned-restart", card.TaskID, input, proof)

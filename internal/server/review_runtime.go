@@ -52,8 +52,12 @@ func (p *project) validateWriter(tx *board.Transaction, writer reviewWriter) err
 		if err != nil {
 			return err
 		}
-		if !claimedState(snapshot.Entry.State) || !found || claim.Status != api.ClaimActive || claim.Generation != generation || !p.server.now().Before(claim.ExpiresAt) {
-			return apiError(api.CodeLeaseInvalid, "review writer belongs to an expired or replaced execution")
+		standing, err := p.standing(claim, found, generation)
+		if err != nil {
+			return err
+		}
+		if !claimedState(snapshot.Entry.State) || !standing {
+			return apiError(api.CodeLeaseInvalid, "review writer belongs to a replaced execution")
 		}
 	}
 	return nil
@@ -135,8 +139,12 @@ func (s *Server) reviewRuntimeRoutes(mux *http.ServeMux) {
 					if err != nil {
 						return err
 					}
-					if !found || claim.Status != api.ClaimActive || !p.server.now().Before(claim.ExpiresAt) {
-						return apiError(api.CodeLeaseInvalid, "review input requires live executions")
+					standing, err := p.hasStanding(claim, found)
+					if err != nil {
+						return err
+					}
+					if !standing {
+						return apiError(api.CodeLeaseInvalid, "review input requires active executions")
 					}
 					writer.Generations[id] = claim.Generation
 				}

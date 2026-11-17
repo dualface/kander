@@ -18,16 +18,16 @@ or `review`, an active record, the claim's generation, a lease that has not
 expired), the card is at the revision the proposal binds, the proposal targets
 that generation, and the client, the window and the material are the same.
 The request is accepted whatever its status. -/
-theorem recreate_spec (p : Params) (x : Rq) (he ac lv : Bool) (cg tg ca : Nat) (sm : Bool) :
-    step M p (enc x) ⟨"recreate", [boolV he, boolV ac, boolV lv, natV cg, natV tg, natV ca, boolV sm]⟩ ≠ none ↔
-      cg ≤ p "maxGen" ∧ tg ≤ p "maxGen" ∧ ca ≤ p "maxRev" ∧ x.st ≠ 0 ∧ x.prop = true ∧
-        he = true ∧ ac = true ∧ tg = cg ∧ lv = true ∧ x.tgen = tg ∧ x.prev = ca ∧ sm = true := by
+theorem recreate_spec (p : Params) (x : Rq) (he sd : Bool) (tg ca : Nat) (sm : Bool) :
+    step M p (enc x) ⟨"recreate", [boolV he, boolV sd, natV tg, natV ca, boolV sm]⟩ ≠ none ↔
+      tg ≤ p "maxGen" ∧ ca ≤ p "maxRev" ∧ x.st ≠ 0 ∧ x.prop = true ∧
+        he = true ∧ sd = true ∧ x.tgen = tg ∧ x.prev = ca ∧ sm = true := by
   rw [step_recreate]
-  by_cases h : cg ≤ p "maxGen" ∧ tg ≤ p "maxGen" ∧ ca ≤ p "maxRev" ∧ x.st ≠ 0 ∧ x.prop = true ∧
-    he = true ∧ ac = true ∧ tg = cg ∧ lv = true ∧ x.tgen = tg ∧ x.prev = ca ∧ sm = true <;> simp [h]
+  by_cases h : tg ≤ p "maxGen" ∧ ca ≤ p "maxRev" ∧ x.st ≠ 0 ∧ x.prop = true ∧
+    he = true ∧ sd = true ∧ x.tgen = tg ∧ x.prev = ca ∧ sm = true <;> simp [h]
 
-theorem recreate_keeps (p : Params) (x : Rq) (he ac lv : Bool) (cg tg ca : Nat) (sm : Bool) {s' : State}
-    (h : step M p (enc x) ⟨"recreate", [boolV he, boolV ac, boolV lv, natV cg, natV tg, natV ca, boolV sm]⟩ =
+theorem recreate_keeps (p : Params) (x : Rq) (he sd : Bool) (tg ca : Nat) (sm : Bool) {s' : State}
+    (h : step M p (enc x) ⟨"recreate", [boolV he, boolV sd, natV tg, natV ca, boolV sm]⟩ =
       some s') : s' = enc x := by
   rw [step_recreate] at h
   exact (ite_some_enc h).2
@@ -35,31 +35,26 @@ theorem recreate_keeps (p : Params) (x : Rq) (he ac lv : Bool) (cg tg ca : Nat) 
 /-- Theorem 5: a second creation that differs in the target generation, the
 bound card revision, or the client, window or material is refused, and so is
 one the claim no longer holds for. -/
-theorem recreate_refused (p : Params) (x : Rq) (he ac lv : Bool) (cg tg ca : Nat) (sm : Bool) :
-    (x.tgen ≠ tg → step M p (enc x) ⟨"recreate", [boolV he, boolV ac, boolV lv, natV cg, natV tg, natV ca,
-      boolV sm]⟩ = none) ∧
-    (x.prev ≠ ca → step M p (enc x) ⟨"recreate", [boolV he, boolV ac, boolV lv, natV cg, natV tg, natV ca,
-      boolV sm]⟩ = none) ∧
-    (sm = false → step M p (enc x) ⟨"recreate", [boolV he, boolV ac, boolV lv, natV cg, natV tg, natV ca,
-      boolV sm]⟩ = none) ∧
-    (tg ≠ cg → step M p (enc x) ⟨"recreate", [boolV he, boolV ac, boolV lv, natV cg, natV tg, natV ca,
-      boolV sm]⟩ = none) ∧
-    (x.st = 0 → step M p (enc x) ⟨"recreate", [boolV he, boolV ac, boolV lv, natV cg, natV tg, natV ca,
-      boolV sm]⟩ = none) := by
+theorem recreate_refused (p : Params) (x : Rq) (he sd : Bool) (tg ca : Nat) (sm : Bool) :
+    (x.tgen ≠ tg → step M p (enc x) ⟨"recreate", [boolV he, boolV sd, natV tg, natV ca, boolV sm]⟩ = none) ∧
+    (x.prev ≠ ca → step M p (enc x) ⟨"recreate", [boolV he, boolV sd, natV tg, natV ca, boolV sm]⟩ = none) ∧
+    (sm = false → step M p (enc x) ⟨"recreate", [boolV he, boolV sd, natV tg, natV ca, boolV sm]⟩ = none) ∧
+    (sd = false → step M p (enc x) ⟨"recreate", [boolV he, boolV sd, natV tg, natV ca, boolV sm]⟩ = none) ∧
+    (x.st = 0 → step M p (enc x) ⟨"recreate", [boolV he, boolV sd, natV tg, natV ca, boolV sm]⟩ = none) := by
   refine ⟨fun hn => ?_, fun hn => ?_, fun hn => ?_, fun hn => ?_, fun hn => ?_⟩ <;>
-    (rw [step_recreate]; apply ite_none; intro c; obtain ⟨-, -, -, c4, -, -, -, c8, -, c10, c11, c12⟩ := c; simp_all)
+    (rw [step_recreate]; apply ite_none; intro c; obtain ⟨-, -, c3, -, -, c6, c7, c8, c9⟩ := c; simp_all)
 
 /-- Theorem 5: an accepted step never changes the target generation, the
 proposal flag, or the bound card revision of a request that exists. -/
 theorem proposal_immutable {p : Params} {x y : Rq} {e : Event} {s' : State} (hx : x.st ≠ 0)
     (h : step M p (enc x) e = some s') (hy : s' = enc y) :
     y.tgen = x.tgen ∧ y.prop = x.prop ∧ y.prev = x.prev := by
-  rcases accepted_cases h with ⟨tk, ir, ca, rfl⟩ | ⟨he, ac, lv, cg, tg, pr, ir, rfl⟩ |
-    ⟨he, ac, lv, cg, tg, ca, sm, rfl⟩ | ⟨ho, cg, an, ex, sn, wi, ca, rfl⟩ | ⟨ho, cg, an, ex, sn, wi, ca, rfl⟩ |
+  rcases accepted_cases h with ⟨tk, ir, ca, rfl⟩ | ⟨he, sd, tg, pr, ir, rfl⟩ |
+    ⟨he, sd, tg, ca, sm, rfl⟩ | ⟨ho, cg, an, ex, sn, wi, ca, rfl⟩ | ⟨ho, cg, an, ex, sn, wi, ca, rfl⟩ |
     ⟨ng, rfl⟩ | ⟨un, ho, cg, wi, ca, ma, rfl⟩ | ⟨co, fo, im, cg, rfl⟩
   · rw [step_bind] at h; obtain ⟨-, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this; exact ⟨rfl, rfl, rfl⟩
   · rw [step_create] at h; obtain ⟨hc, -⟩ := ite_some_enc h
-    obtain ⟨-, -, -, -, h0, -⟩ := hc; exact absurd h0 hx
+    obtain ⟨-, -, -, h0, -⟩ := hc; exact absurd h0 hx
   · rw [step_recreate] at h; obtain ⟨-, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this; exact ⟨rfl, rfl, rfl⟩
   · rw [step_answerSame] at h; obtain ⟨-, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this
     exact ⟨rfl, rfl, rfl⟩
@@ -193,13 +188,13 @@ theorem step_inv (p : Params) (s s' : State) (e : Event) (hi : Inv p s)
   obtain ⟨x, rfl, hs, hr, hg, hv⟩ := shape hc
   obtain ⟨P1, P2, P3, P4⟩ := hp x rfl
   intro y hy
-  rcases accepted_cases h with ⟨tk, ir, ca, rfl⟩ | ⟨he, ac, lv, cg, tg, pr, ir, rfl⟩ |
-    ⟨he, ac, lv, cg, tg, ca, sm, rfl⟩ | ⟨ho, cg, an, ex, sn, wi, ca, rfl⟩ | ⟨ho, cg, an, ex, sn, wi, ca, rfl⟩ |
+  rcases accepted_cases h with ⟨tk, ir, ca, rfl⟩ | ⟨he, sd, tg, pr, ir, rfl⟩ |
+    ⟨he, sd, tg, ca, sm, rfl⟩ | ⟨ho, cg, an, ex, sn, wi, ca, rfl⟩ | ⟨ho, cg, an, ex, sn, wi, ca, rfl⟩ |
     ⟨ng, rfl⟩ | ⟨un, ho, cg, wi, ca, ma, rfl⟩ | ⟨co, fo, im, cg, rfl⟩
   · rw [step_bind] at h; obtain ⟨-, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this
     exact ⟨P1, P2, P3, P4⟩
   · rw [step_create] at h; obtain ⟨hc, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this
-    obtain ⟨-, -, -, -, -, -, -, -, -, hb⟩ := hc
+    obtain ⟨-, -, -, -, -, -, hb⟩ := hc
     refine ⟨by simp, fun _ => by simp, fun h2 => by dsimp only at h2; omega, hb⟩
   · rw [step_recreate] at h; obtain ⟨-, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this
     exact ⟨P1, P2, P3, P4⟩

@@ -125,7 +125,14 @@ func TestClaimEntrancesRefineTheKernel(t *testing.T) {
 	if want, _ := serverclaim.Step(before, serverclaim.Expire{}, serverclaim.Params{MaxGen: 2}); c.state(id) != want {
 		t.Fatalf("lease expiry: %+v, kernel %+v", c.state(id), want)
 	}
-	c.refines(id, serverclaim.Renew{G: 1, Tg: 1}, false, func() error { _, err := p.Renew(ctx, id, own); return err })
+	// A lapsed lease keeps its holder: the renewal is accepted at the same
+	// generation, and the lease then lapses again.
+	c.refines(id, serverclaim.Renew{G: 1, Tg: 1}, true, func() error { _, err := p.Renew(ctx, id, own); return err })
+	before = c.state(id)
+	at.Add(int64(DefaultTTL + time.Second))
+	if want, _ := serverclaim.Step(before, serverclaim.Expire{}, serverclaim.Params{MaxGen: 2}); c.state(id) != want {
+		t.Fatalf("second lease expiry: %+v, kernel %+v", c.state(id), want)
+	}
 	stale := takeover
 	stale.ExpectedGeneration = 3
 	c.refines(id, serverclaim.Takeover{Expected: 2, Fresh: true, G: 2, Tg: 2}, false, func() error {

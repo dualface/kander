@@ -22,8 +22,8 @@ theorem require_owner_iff (p : Params) (x : It) (hdr : Bool) (g tg : Nat) (clien
   by_cases h : g ≤ p "maxGen" ∧ tg ≤ p "maxGen" ∧ Owner x hdr g tg client <;> simp [h]
 
 /-- `requireIntegration` accepts exactly the owner whose integration actor still
-holds its lease: the generation the record was claimed under, active, not
-expired, and the execution identity and client of the record. -/
+stands: the generation the record was claimed under, accepted by the actor's
+`standing` event, and the execution identity and client of the record. -/
 theorem require_iff (p : Params) (x : It) (hdr : Bool) (g tg : Nat) (client al : Bool) (ag : Nat)
     (ae ac : Bool) :
     step M p (enc x) ⟨"require", [boolV hdr, natV g, natV tg, boolV client, boolV al, natV ag, boolV ae,
@@ -35,15 +35,15 @@ theorem require_iff (p : Params) (x : It) (hdr : Bool) (g tg : Nat) (client al :
 
 /-- Theorem 1: in every state, `requireIntegrationOwner` accepts at most one
 generation and one token: two accepted requests name the same generation, the
-current one, and the record is active with a lease that has not expired. -/
+current one, and the record is active. The lease clock plays no part. -/
 theorem owner_unique (p : Params) (x : It) {hdr1 g1 tg1 c1 hdr2 g2 tg2 c2 : _}
     (h1 : step M p (enc x) ⟨"requireOwner", [boolV hdr1, natV g1, natV tg1, boolV c1]⟩ ≠ none)
     (h2 : step M p (enc x) ⟨"requireOwner", [boolV hdr2, natV g2, natV tg2, boolV c2]⟩ ≠ none) :
-    g1 = x.gen ∧ g2 = x.gen ∧ tg1 = x.gen ∧ tg2 = x.gen ∧ x.st = 1 ∧ x.live = true := by
+    g1 = x.gen ∧ g2 = x.gen ∧ tg1 = x.gen ∧ tg2 = x.gen ∧ x.st = 1 := by
   rw [require_owner_iff] at h1 h2
-  obtain ⟨-, -, -, hs1, hg1, hl1, -, ht1⟩ := h1
-  obtain ⟨-, -, -, -, hg2, -, -, ht2⟩ := h2
-  exact ⟨hg1, hg2, ht1, ht2, hs1, hl1⟩
+  obtain ⟨-, -, -, hs1, hg1, -, ht1⟩ := h1
+  obtain ⟨-, -, -, -, hg2, -, ht2⟩ := h2
+  exact ⟨hg1, hg2, ht1, ht2, hs1⟩
 
 /-- Theorem 1: every event that presents the owner headers is accepted only for
 the owner of the record. -/
@@ -81,7 +81,7 @@ theorem owner_required (p : Params) (x : It) (hdr : Bool) (g tg : Nat) (client a
   · rw [step_guardRelease] at h; exact (ite_ne_none h).2.2.1
 
 /-- Theorem 1: every event that is guarded by `requireIntegration` also needs
-the integration actor's current lease. A `release` needs the owner only, and its
+the integration actor to stand. A `release` needs the owner only, and its
 arguments carry no actor. -/
 theorem actor_required (p : Params) (x : It) (hdr : Bool) (g tg : Nat) (client al : Bool) (ag : Nat)
     (ae ac : Bool) :
@@ -115,7 +115,7 @@ theorem stale_refused (p : Params) (x : It) (hdr : Bool) (g tg : Nat) (client al
     step M p (enc x) ⟨"require", [boolV hdr, natV g, natV tg, boolV client, boolV al, natV ag, boolV ae,
       boolV ac]⟩ = none ∧
     (∀ t, step M p (enc x) ⟨"guardRelease", [boolV hdr, natV g, natV tg, boolV client, boolV t]⟩ = none) := by
-  have ho : ¬Owner x hdr g tg client := fun ⟨_, _, h2, _, _, h3⟩ => by omega
+  have ho : ¬Owner x hdr g tg client := fun ⟨_, _, h2, _, h3⟩ => by omega
   refine ⟨?_, ?_, fun t => ?_⟩
   · rw [step_requireOwner]; apply ite_none; intro c; exact ho c.2.2
   · rw [step_require]; apply ite_none; intro c; exact ho c.2.2.2.1

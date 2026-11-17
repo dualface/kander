@@ -2,6 +2,7 @@ package server
 
 import (
 	"crypto/subtle"
+	"strconv"
 	"strings"
 
 	"github.com/dualface/kander/internal/api"
@@ -24,7 +25,7 @@ var groupStatuses = map[string]servergrouplease.Status{
 
 var groupStatusNames = map[servergrouplease.Status]string{
 	servergrouplease.StatusActive: api.ClaimActive, servergrouplease.StatusLost: api.ClaimLost,
-	servergrouplease.StatusReleased: api.ClaimReleased,
+	servergrouplease.StatusReleased: api.ClaimReleased, servergrouplease.StatusLapsed: api.ClaimLapsed,
 }
 
 // groupKernel is the projected lease record of one group in one operation.
@@ -77,6 +78,18 @@ func (k *groupKernel) accepts(e servergrouplease.Event) bool {
 
 // valid is the kernel's query for a lease that is active and has not expired.
 func (k *groupKernel) valid() bool { return servergrouplease.Valid(k.state, k.params) }
+
+// groupStanding reports whether the lease record of a group gives generation g
+// an execution: the group kernel's standing event, which ignores the lease
+// clock (the integration actor check of a group).
+func (p *project) groupStanding(r claimRecord, found bool, g uint64) bool {
+	k := p.projectGroup(r, found, nil)
+	kg := k.state.Gen + 1
+	if found && g == r.Generation {
+		kg = k.state.Gen
+	}
+	return k.accepts(servergrouplease.Standing{G: kg})
+}
 
 // observed maps a generation a request names: the record's own maps to the
 // kernel generation, any other to the generation after it, which the kernel
@@ -161,14 +174,18 @@ func (c *groupLease) step(build groupEvent) bool    { return c.kernel.step(c.eve
 func (c *groupLease) accepts(build groupEvent) bool { return c.kernel.accepts(c.event(build)) }
 
 // holderError is the answer of requireGroup to a request the kernel refused,
-// in the order the server has always checked: the headers, then the lease, then
-// the token. It reads the lease from the projection, so it agrees with the
-// kernel even when the clock moved on.
+// in the order the server has always checked: the headers, then whether a
+// newer generation took the group over, then the record, then the token. As
+// for the single card claim, the taken-over answer does not authenticate the
+// old token and grants nothing.
 func (c *groupLease) holderError() error {
 	if c.h.invalid != nil {
 		return c.h.invalid
 	}
-	if !c.found || c.record.Status != api.ClaimActive || c.record.Generation != c.h.generation || !c.kernel.state.Live {
+	if c.found && takenOver(c.h, c.record.TokenHash, c.record.Generation) {
+		return apiError(api.CodeTakenOver, "group was taken over by coordinator generation "+strconv.FormatUint(c.record.Generation, 10))
+	}
+	if !c.found || c.record.Status != api.ClaimActive || c.record.Generation != c.h.generation {
 		return apiError(api.CodeLeaseInvalid, "coordinator lease is not current")
 	}
 	return apiError(api.CodeHeldByOther, "group is held by another coordinator")
@@ -180,7 +197,7 @@ func (c *groupLease) holderError() error {
 func (c *groupLease) claimError(sameExec, sameClient bool, input api.GroupClaim, activeMessage string) error {
 	valid := c.kernel.valid()
 	switch {
-	case sameExec && !(sameClient && valid):
+	case sameExec && !(sameClient && c.record.Status == api.ClaimActive):
 		return apiError(api.CodeLeaseInvalid, "a lost coordinator execution cannot reuse its identity")
 	case sameExec:
 		return c.holderError()

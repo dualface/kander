@@ -2,7 +2,8 @@ import KanderFormal.Proofs.ServerIntegrationEv
 
 /-
 The transition relation of the server integration machine: every accepted step
-keeps the record, refreshes or expires its lease, claims it, or runs one of the
+keeps the record, refreshes or expires its lease (a renewal or the startup
+lease), claims it, or runs one of the
 three actions. The relation carries the facts the guards give about the record
 before the step, so the invariant and the theorems about all events are proved
 by cases on seven constructors instead of fourteen events.
@@ -13,15 +14,15 @@ open KanderFormal KanderFormal.Machines.ServerIntegration KanderFormal.Proofs.Sc
 
 inductive Trans (x : It) : It → Prop where
   | keep : Trans x x
-  | renew (hs : x.st = 1) (hl : x.live = true) : Trans x { x with live := true }
+  | renew (hs : x.st = 1) : Trans x { x with live := true }
   | expire (hl : x.live = true) : Trans x { x with live := false }
   | claim (pu ag : Nat) (ct : Bool) (hv : ¬Valid x) (hpu : pu ≠ 0) :
       Trans x ⟨1, x.gen + 1, x.rev + 1, true, 1, pu, ct, ag, false⟩
-  | pushing (ob : Bool) (hs : x.st = 1) (hl : x.live = true) (hr : x.rev ≠ 0) (hph : x.ph = 1)
+  | pushing (ob : Bool) (hs : x.st = 1) (hr : x.rev ≠ 0) (hph : x.ph = 1)
       (hct : x.ct = false) : Trans x { x with ph := 2, rev := x.rev + 1, ob := ob }
-  | confirm (hs : x.st = 1) (hl : x.live = true) (hr : x.rev ≠ 0) (hph : (x.ph = 1 ∧ x.ct = true) ∨ x.ph = 2) :
+  | confirm (hs : x.st = 1) (hr : x.rev ≠ 0) (hph : (x.ph = 1 ∧ x.ct = true) ∨ x.ph = 2) :
       Trans x { x with st := 3, ph := 3, live := false, rev := x.rev + 1, ob := true }
-  | release (ob : Bool) (hs : x.st = 1) (hl : x.live = true) (hr : x.rev ≠ 0) :
+  | release (ob : Bool) (hs : x.st = 1) (hr : x.rev ≠ 0) :
       Trans x ⟨3, x.gen, x.rev + 1, false, (if x.ph = 2 then 5 else 4), x.pu, x.ct, x.au, ob⟩
 
 theorem ite_ne_none {c : Prop} [Decidable c] {α : Type} {v : α} (h : (if c then some v else none) ≠ none) : c := by
@@ -57,6 +58,7 @@ def Ev.res (x : It) : Ev → It → Prop
   | .release _ _ _ _ _ _ _ _ os, y =>
     y = ⟨3, x.gen, x.rev + 1, false, (if x.ph = 2 then 5 else 4), x.pu, x.ct, x.au, os⟩
   | .expire, y => y = { x with live := false }
+  | .startup, y => y = { x with live := true }
   | _, y => y = x
 
 /-- Every accepted step is a transition. -/
@@ -88,8 +90,8 @@ theorem accepted_trans {p : Params} {x : It} {s' : State} {v : Ev}
     simp only [Ev.toEvent] at h
     rw [step_renew] at h
     obtain ⟨hc, rfl⟩ := ite_some_enc h
-    obtain ⟨-, -, -, ⟨-, hs, -, hl, -, -⟩, -⟩ := hc
-    exact ⟨_, rfl, .renew hs hl, rfl⟩
+    obtain ⟨-, -, -, ⟨-, hs, -, -, -⟩, -⟩ := hc
+    exact ⟨_, rfl, .renew hs, rfl⟩
   | check hdr g tg c al ag ae ac er rm =>
     simp only [Ev.toEvent] at h
     rw [step_check] at h
@@ -104,20 +106,20 @@ theorem accepted_trans {p : Params} {x : It} {s' : State} {v : Ev}
     simp only [Ev.toEvent] at h
     rw [step_pushing] at h
     obtain ⟨hc, rfl⟩ := ite_some_enc h
-    obtain ⟨-, -, -, -, -, ⟨-, hs, -, hl, -, -⟩, -, her, hne, -, hct, hph, -⟩ := hc
-    exact ⟨_, rfl, .pushing os hs hl (her ▸ hne) hph hct, rfl⟩
+    obtain ⟨-, -, -, -, -, ⟨-, hs, -, -, -⟩, -, her, hne, -, hct, hph, -⟩ := hc
+    exact ⟨_, rfl, .pushing os hs (her ▸ hne) hph hct, rfl⟩
   | confirm hdr g tg c al ag ae ac er rm os oa ee =>
     simp only [Ev.toEvent] at h
     rw [step_confirm] at h
     obtain ⟨hc, rfl⟩ := ite_some_enc h
-    obtain ⟨-, -, -, -, -, ⟨-, hs, -, hl, -, -⟩, -, her, hne, -, hph, -⟩ := hc
-    exact ⟨_, rfl, .confirm hs hl (her ▸ hne) hph, rfl⟩
+    obtain ⟨-, -, -, -, -, ⟨-, hs, -, -, -⟩, -, her, hne, -, hph, -⟩ := hc
+    exact ⟨_, rfl, .confirm hs (her ▸ hne) hph, rfl⟩
   | release hdr g tg c er rm de oe os =>
     simp only [Ev.toEvent] at h
     rw [step_release] at h
     obtain ⟨hc, rfl⟩ := ite_some_enc h
-    obtain ⟨-, -, -, -, ⟨-, hs, -, hl, -, -⟩, her, hne, -⟩ := hc
-    exact ⟨_, rfl, .release os hs hl (her ▸ hne), rfl⟩
+    obtain ⟨-, -, -, -, ⟨-, hs, -, -, -⟩, her, hne, -⟩ := hc
+    exact ⟨_, rfl, .release os hs (her ▸ hne), rfl⟩
   | guard hdr g tg c al ag ae ac t fa =>
     simp only [Ev.toEvent] at h
     rw [step_guard] at h
@@ -143,6 +145,11 @@ theorem accepted_trans {p : Params} {x : It} {s' : State} {v : Ev}
     rw [step_expire] at h
     obtain ⟨hl, rfl⟩ := ite_some_enc h
     exact ⟨_, rfl, .expire hl, rfl⟩
+  | startup =>
+    simp only [Ev.toEvent] at h
+    rw [step_startup] at h
+    obtain ⟨hs, rfl⟩ := ite_some_enc h
+    exact ⟨_, rfl, .renew hs, rfl⟩
 
 
 /-- Every accepted event of any form is a transition of one of the kinds. -/

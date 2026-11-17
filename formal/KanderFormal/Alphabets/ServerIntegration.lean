@@ -58,7 +58,7 @@ def integrationEvents : List Event :=
     ⟨"wrapUp", [x, x, t, natV 1, t, t, t, t, t, t, t]⟩, ⟨"wrapUp", [x, t, t, natV 0, t, t, t, t, t, t, t]⟩,
     ⟨"wrapUp", [x, t, x, natV 1, t, t, t, t, t, t, t]⟩, ⟨"wrapUp", [x, t, t, natV 1, x, t, t, t, t, t, t]⟩,
     ⟨"wrapUp", [x, t, t, natV 1, t, t, t, x, t, t, t]⟩, ⟨"wrapUp", [x, t, t, natV 1, t, t, t, t, t, t, x]⟩,
-    ⟨"expire", []⟩ ]
+    ⟨"expire", []⟩, ⟨"startup", []⟩ ]
 
 /-- The theorems of the server integration machine the axiom audit checks. -/
 def serverIntegrationTheorems : List Name := [
@@ -78,6 +78,9 @@ def serverIntegrationTheorems : List Name := [
   ``KanderFormal.Proofs.ServerIntegration.claim_room_refused,
   ``KanderFormal.Proofs.ServerIntegration.claim_identity_refused,
   ``KanderFormal.Proofs.ServerIntegration.renew_keeps,
+  ``KanderFormal.Proofs.ServerIntegration.renew_lapsed_keeps_gen,
+  ``KanderFormal.Proofs.ServerIntegration.startup_spec,
+  ``KanderFormal.Proofs.ServerIntegration.reachable_not_lapsed,
   ``KanderFormal.Proofs.ServerIntegration.action_cas,
   ``KanderFormal.Proofs.ServerIntegration.rev_change,
   ``KanderFormal.Proofs.ServerIntegration.gen_auth_change,

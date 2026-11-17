@@ -84,12 +84,10 @@ func (p *project) claimGroup(ctx context.Context, key, group, client string, inp
 			if _, err := p.groupClaim(current, exists, client, input, h, "coordinator lease became active before takeover"); err != nil {
 				return err
 			}
-			if reuse {
-				return nil
-			}
+			// A reuse refreshes the lease like a renewal, also after it lapsed.
 			now := p.server.now()
 			claim.RenewedAt, claim.ExpiresAt = now, now.Add(p.server.ttl)
-			if found {
+			if !reuse && found {
 				claim.Handoffs[len(claim.Handoffs)-1].At = now
 			}
 

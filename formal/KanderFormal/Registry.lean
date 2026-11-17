@@ -165,7 +165,8 @@ def ledgerEvents : List Event :=
 
 /-- The server claim vector alphabet: holder requests of the first generations,
 of no generation, and of an older one; terminations; takeovers with the
-current, an older, and a newer observed generation; and the environment events. -/
+current, an older, and a newer observed generation; the environment events;
+the startup lease; and the standing checks of the first two generations. -/
 def serverEvents : List Event :=
   let t := boolV true
   let x := boolV false
@@ -176,14 +177,17 @@ def serverEvents : List Event :=
     ⟨"takeover", [natV 1, t, x] ++ g 0⟩, ⟨"takeover", [natV 1, t, t] ++ g 1⟩,
     ⟨"takeover", [natV 0, t, x] ++ g 0⟩, ⟨"takeover", [natV 2, t, x] ++ g 0⟩,
     ⟨"expire", []⟩, ⟨"pending", [t]⟩, ⟨"pending", [x]⟩, ⟨"reconcile", [t]⟩, ⟨"reconcile", [x]⟩,
-    ⟨"audit", [natV 1, t]⟩, ⟨"audit", [natV 0, t]⟩, ⟨"audit", [natV 1, x]⟩ ]
+    ⟨"audit", [natV 1, t]⟩, ⟨"audit", [natV 0, t]⟩, ⟨"audit", [natV 1, x]⟩,
+    ⟨"startup", []⟩, ⟨"standing", [natV 1]⟩, ⟨"standing", [natV 2]⟩ ]
 
 /-- The server group lease vector alphabet. Holder requests are `(hdr, g, tg)`:
 the first and second generation, a token of another generation, and a header
 that did not parse. Claims try a new record, takeovers with and without a
 decision, at the observed generation and at a stale one, with and without room
 below the last generation, and the reuse of a lease by the same client, by
-another client, with a stale token, and with a header that did not parse. -/
+another client, with a stale token, and with a header that did not parse. The
+environment events, the startup lease, and the standing checks of the first two
+generations close it. -/
 def groupLeaseEvents : List Event :=
   let t := boolV true
   let x := boolV false
@@ -202,12 +206,13 @@ def groupLeaseEvents : List Event :=
     ⟨"recoverOwned", h true 1 1 ++ [t, t, t, x, x]⟩, ⟨"recoverOwned", h true 1 1 ++ [t, x, t, t, t]⟩,
     ⟨"recoverOwned", h true 1 1 ++ [t, t, x, t, x]⟩,
     ⟨"recoverLost", h true 1 1 ++ [t, t, t]⟩, ⟨"recoverLost", h true 1 1 ++ [x, t, t]⟩,
-    ⟨"expire", []⟩ ]
+    ⟨"expire", []⟩, ⟨"startup", []⟩, ⟨"standing", [natV 1]⟩, ⟨"standing", [natV 2]⟩ ]
 
 /-- The server request vector alphabet. Holder requests are `(holder, cgen, answer, expected, sameNote, window,
 card)` for the claim generations 1 and 2; the answers are `accepted`, `done`, `rejected`, and the two statuses that are
 no answers (`open`, `superseded`). Creations try a plain request and a proposal at the first generations and
-revisions, a proposal flag that disagrees with its revision, and every missing claim fact. -/
+revisions, a proposal flag that disagrees with its revision, a card outside `working` and `review`, and
+a target generation without standing. -/
 def requestEvents : List Event :=
   let t := boolV true
   let x := boolV false
@@ -219,15 +224,14 @@ def requestEvents : List Event :=
       [t, n 2, enumV 2, n 0, t, t, n 1], [t, n 1, enumV 2, n 1, t, t, n 1], [t, n 1, enumV 2, n 2, t, t, n 1],
       [t, n 1, enumV 1, n 0, t, t, n 1], [t, n 1, enumV 5, n 0, t, t, n 1] ]
   [ ⟨"bind", [t, n 1, n 1]⟩, ⟨"bind", [x, n 1, n 1]⟩, ⟨"bind", [t, n 0, n 1]⟩, ⟨"bind", [t, n 1, n 2]⟩,
-    ⟨"create", [t, t, t, n 1, n 1, x, n 0]⟩, ⟨"create", [t, t, t, n 1, n 1, t, n 1]⟩,
-    ⟨"create", [t, t, t, n 2, n 2, t, n 2]⟩, ⟨"create", [t, t, t, n 1, n 1, t, n 0]⟩,
-    ⟨"create", [t, t, t, n 1, n 1, x, n 1]⟩, ⟨"create", [x, t, t, n 1, n 1, x, n 0]⟩,
-    ⟨"create", [t, x, t, n 1, n 1, x, n 0]⟩, ⟨"create", [t, t, x, n 1, n 1, x, n 0]⟩,
-    ⟨"create", [t, t, t, n 1, n 2, x, n 0]⟩,
-    ⟨"recreate", [t, t, t, n 1, n 1, n 1, t]⟩, ⟨"recreate", [t, t, t, n 1, n 1, n 2, t]⟩,
-    ⟨"recreate", [t, t, t, n 1, n 1, n 1, x]⟩, ⟨"recreate", [t, t, t, n 2, n 2, n 1, t]⟩,
-    ⟨"recreate", [t, t, t, n 2, n 2, n 2, t]⟩, ⟨"recreate", [x, t, t, n 1, n 1, n 1, t]⟩,
-    ⟨"recreate", [t, t, x, n 1, n 1, n 1, t]⟩, ⟨"recreate", [t, t, t, n 1, n 2, n 1, t]⟩ ] ++
+    ⟨"create", [t, t, n 1, x, n 0]⟩, ⟨"create", [t, t, n 1, t, n 1]⟩,
+    ⟨"create", [t, t, n 2, t, n 2]⟩, ⟨"create", [t, t, n 1, t, n 0]⟩,
+    ⟨"create", [t, t, n 1, x, n 1]⟩, ⟨"create", [x, t, n 1, x, n 0]⟩,
+    ⟨"create", [t, x, n 1, x, n 0]⟩, ⟨"create", [t, x, n 2, x, n 0]⟩,
+    ⟨"recreate", [t, t, n 1, n 1, t]⟩, ⟨"recreate", [t, t, n 1, n 2, t]⟩,
+    ⟨"recreate", [t, t, n 1, n 1, x]⟩, ⟨"recreate", [t, t, n 2, n 1, t]⟩,
+    ⟨"recreate", [t, t, n 2, n 2, t]⟩, ⟨"recreate", [x, t, n 1, n 1, t]⟩,
+    ⟨"recreate", [t, x, n 1, n 1, t]⟩, ⟨"recreate", [t, x, n 2, n 1, t]⟩ ] ++
   answers.map (fun args => ⟨"answerSame", args⟩) ++ answers.map (fun args => ⟨"answer", args⟩) ++
   [ ⟨"supersede", [n 1]⟩, ⟨"supersede", [n 2]⟩, ⟨"supersede", [n 3]⟩,
     ⟨"prepare", [t, t, n 1, t, n 1, t]⟩, ⟨"prepare", [x, t, n 1, t, n 1, t]⟩, ⟨"prepare", [t, x, n 1, t, n 1, t]⟩,
@@ -513,6 +517,12 @@ def entries : List Entry := [
       ``KanderFormal.Proofs.ServerClaim.audit_result,
       ``KanderFormal.Proofs.ServerClaim.audit_refused_valid,
       ``KanderFormal.Proofs.ServerClaim.audit_refused_stale,
+      ``KanderFormal.Proofs.ServerClaim.renew_lapsed_keeps_gen,
+      ``KanderFormal.Proofs.ServerClaim.taken_over_refused,
+      ``KanderFormal.Proofs.ServerClaim.startup_spec,
+      ``KanderFormal.Proofs.ServerClaim.reachable_not_lapsed,
+      ``KanderFormal.Proofs.ServerClaim.standing_iff_write,
+      ``KanderFormal.Proofs.ServerClaim.standing_unique,
       ``KanderFormal.Proofs.ServerClaim.init,
       ``KanderFormal.Proofs.ServerClaim.step_inv,
       ``KanderFormal.Proofs.ServerClaim.reachable_inv
@@ -545,6 +555,12 @@ def entries : List Entry := [
       ``KanderFormal.Proofs.ServerGroupLease.recover_owned_spec,
       ``KanderFormal.Proofs.ServerGroupLease.recover_owned_refused,
       ``KanderFormal.Proofs.ServerGroupLease.recover_lost_spec,
+      ``KanderFormal.Proofs.ServerGroupLease.renew_lapsed_keeps_gen,
+      ``KanderFormal.Proofs.ServerGroupLease.taken_over_refused,
+      ``KanderFormal.Proofs.ServerGroupLease.startup_spec,
+      ``KanderFormal.Proofs.ServerGroupLease.reachable_not_lapsed,
+      ``KanderFormal.Proofs.ServerGroupLease.standing_iff_require,
+      ``KanderFormal.Proofs.ServerGroupLease.standing_unique,
       ``KanderFormal.Proofs.ServerGroupLease.init,
       ``KanderFormal.Proofs.ServerGroupLease.step_inv,
       ``KanderFormal.Proofs.ServerGroupLease.reachable_inv,

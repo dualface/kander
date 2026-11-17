@@ -100,24 +100,21 @@ theorem step_bind (p : Params) (x : Rq) (taskOk : Bool) (inRev card : Nat) :
     ite_close
 
 set_option maxHeartbeats 4000000 in
-theorem step_create (p : Params) (x : Rq) (held active live : Bool) (cgen target : Nat) (prop : Bool)
-    (inRev : Nat) :
-    step M p (enc x) ⟨"create", [boolV held, boolV active, boolV live, natV cgen, natV target, boolV prop,
-        natV inRev]⟩ =
-      if cgen ≤ p "maxGen" ∧ target ≤ p "maxGen" ∧ inRev ≤ p "maxRev" ∧ 1 ≤ p "maxRev" ∧ x.st = 0 ∧
-          held = true ∧ active = true ∧ target = cgen ∧ live = true ∧ (prop = true ↔ inRev ≠ 0) then
+theorem step_create (p : Params) (x : Rq) (held standing : Bool) (target : Nat) (prop : Bool) (inRev : Nat) :
+    step M p (enc x) ⟨"create", [boolV held, boolV standing, natV target, boolV prop, natV inRev]⟩ =
+      if target ≤ p "maxGen" ∧ inRev ≤ p "maxRev" ∧ 1 ≤ p "maxRev" ∧ x.st = 0 ∧
+          held = true ∧ standing = true ∧ (prop = true ↔ inRev ≠ 0) then
         some (enc ⟨1, 1, target, prop, inRev⟩) else none := by
-  by_cases h1 : cgen ≤ p "maxGen" <;> by_cases h2 : target ≤ p "maxGen" <;> by_cases h3 : inRev ≤ p "maxRev" <;>
-    by_cases h4 : 1 ≤ p "maxRev" <;> cases prop <;> rq_simp [h1, h2, h3, h4] <;> ite_close
+  by_cases h2 : target ≤ p "maxGen" <;> by_cases h3 : inRev ≤ p "maxRev" <;>
+    by_cases h4 : 1 ≤ p "maxRev" <;> cases prop <;> rq_simp [h2, h3, h4] <;> ite_close
 
-theorem step_recreate (p : Params) (x : Rq) (held active live : Bool) (cgen target card : Nat) (same : Bool) :
-    step M p (enc x) ⟨"recreate", [boolV held, boolV active, boolV live, natV cgen, natV target, natV card,
-        boolV same]⟩ =
-      if cgen ≤ p "maxGen" ∧ target ≤ p "maxGen" ∧ card ≤ p "maxRev" ∧ x.st ≠ 0 ∧ x.prop = true ∧
-          held = true ∧ active = true ∧ target = cgen ∧ live = true ∧ x.tgen = target ∧ x.prev = card ∧
+theorem step_recreate (p : Params) (x : Rq) (held standing : Bool) (target card : Nat) (same : Bool) :
+    step M p (enc x) ⟨"recreate", [boolV held, boolV standing, natV target, natV card, boolV same]⟩ =
+      if target ≤ p "maxGen" ∧ card ≤ p "maxRev" ∧ x.st ≠ 0 ∧ x.prop = true ∧
+          held = true ∧ standing = true ∧ x.tgen = target ∧ x.prev = card ∧
           same = true then some (enc x) else none := by
-  by_cases h1 : cgen ≤ p "maxGen" <;> by_cases h2 : target ≤ p "maxGen" <;> by_cases h3 : card ≤ p "maxRev" <;>
-    cases same <;> rq_simp [h1, h2, h3] <;> ite_close
+  by_cases h2 : target ≤ p "maxGen" <;> by_cases h3 : card ≤ p "maxRev" <;>
+    cases same <;> rq_simp [h2, h3] <;> ite_close
 
 theorem step_supersede (p : Params) (x : Rq) (ngen : Nat) :
     step M p (enc x) ⟨"supersede", [natV ngen]⟩ =

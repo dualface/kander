@@ -20,9 +20,12 @@ import (
 // ProtocolVersion is the wire protocol this build speaks. MinProtocolVersion is
 // the oldest peer protocol it still accepts. A peer outside the range is
 // refused with CodeProtocolIncompatible before any domain operation runs.
+// Protocol 2 made an expired lease recoverable by its holder (ClaimLapsed,
+// CodeTakenOver); a protocol 1 worker would still stop agents on its own
+// timeout, so mixed versions are refused.
 const (
-	ProtocolVersion    = 1
-	MinProtocolVersion = 1
+	ProtocolVersion    = 2
+	MinProtocolVersion = 2
 )
 
 // Header names. The claim token is a bearer secret for one execution; it is
@@ -48,6 +51,7 @@ const (
 	CodeHeldByOther          = "held_by_other"
 	CodeLeaseInvalid         = "lease_invalid"
 	CodeLeaseActive          = "lease_active"
+	CodeTakenOver            = "taken_over"
 	CodeClaimRequired        = "claim_required"
 	CodeEvidenceIncomplete   = "evidence_incomplete"
 	CodeProtocolIncompatible = "protocol_incompatible"
@@ -130,14 +134,23 @@ type ClaimView struct {
 	RenewedAt   time.Time         `json:"renewed_at"`
 }
 
-// Claim status values. A claim is active while its lease is unexpired, lost
-// once the lease expired (only an explicit takeover moves on), and released
-// when the card left working/review through done, archived, or trash.
+// Claim status values. A claim is active while its lease is unexpired and
+// lapsed once the lease expired: its holder keeps its authority and may renew,
+// and another execution may take it over with a decision. A claim is lost once
+// its holder released it or its agent was observed stopped, and released when
+// the card left working/review through done, archived, or trash. Lapsed is a
+// view value; a stored record is never lapsed.
 const (
 	ClaimActive   = "active"
+	ClaimLapsed   = "lapsed"
 	ClaimLost     = "lost"
 	ClaimReleased = "released"
 )
+
+// ClaimStands reports whether a claim view status still gives its generation
+// an execution: active, or lapsed (expired but not taken over). A client
+// treats both alike wherever it asks whether an execution still holds a task.
+func ClaimStands(status string) bool { return status == ClaimActive || status == ClaimLapsed }
 
 // Task is one card as the server publishes it.
 // MoveReceipt is the exact producer result saved with the move transaction.

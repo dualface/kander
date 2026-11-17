@@ -130,9 +130,9 @@ func TestIntegrationLeaseHasOneWinnerAndFencesLateGeneration(t *testing.T) {
 		}
 	}
 	f.clock.advance(46 * time.Second)
-	lost, err := a.Integration(t.Context(), target)
-	if err != nil || lost.Status != api.ClaimLost {
-		t.Fatalf("expired target: %+v %v", lost, err)
+	lapsed, err := a.Integration(t.Context(), target)
+	if err != nil || lapsed.Status != api.ClaimLapsed {
+		t.Fatalf("expired target: %+v %v", lapsed, err)
 	}
 	nextIndex := 1 - winner
 	next := integrationInput(t, projects[nextIndex], []api.IntegrationMember{one, two}[nextIndex], []api.ClaimGrant{first, second}[nextIndex].Claim.ExecutionID, "integration-successor")
@@ -140,10 +140,10 @@ func TestIntegrationLeaseHasOneWinnerAndFencesLateGeneration(t *testing.T) {
 	if err != nil || successor.Integration.Generation != 2 {
 		t.Fatalf("target handoff: %+v %v", successor, err)
 	}
-	if _, err := projects[winner].RenewIntegration(t.Context(), target, old); !api.IsCode(err, api.CodeLeaseInvalid) {
+	if _, err := projects[winner].RenewIntegration(t.Context(), target, old); !api.IsCode(err, api.CodeTakenOver) {
 		t.Fatalf("old target lease renewed: %v", err)
 	}
-	if _, err := projects[winner].IntegrationAction(t.Context(), "late-old-push", target, api.IntegrationCommand{Action: "pushing", ExpectedRevision: granted.Integration.Revision}, old); !api.IsCode(err, api.CodeLeaseInvalid) {
+	if _, err := projects[winner].IntegrationAction(t.Context(), "late-old-push", target, api.IntegrationCommand{Action: "pushing", ExpectedRevision: granted.Integration.Revision}, old); !api.IsCode(err, api.CodeTakenOver) {
 		t.Fatalf("late old intent: %v", err)
 	}
 	for _, member := range []api.IntegrationMember{one, two} {

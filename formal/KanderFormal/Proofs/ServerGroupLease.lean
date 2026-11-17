@@ -12,7 +12,8 @@ open KanderFormal KanderFormal.Machines.ServerGroupLease KanderFormal.Proofs.Sca
 
 theorem events_cases {ev : EventDecl} (h : ev ∈ M.events) :
     ev = claimEvent ∨ ev = renewEvent ∨ ev = observeEvent ∨ ev = releaseEvent ∨ ev = requireEvent ∨
-      ev = writeAfterEvent ∨ ev = recoverOwnedEvent ∨ ev = recoverLostEvent ∨ ev = expireEvent := by
+      ev = writeAfterEvent ∨ ev = recoverOwnedEvent ∨ ev = recoverLostEvent ∨ ev = expireEvent ∨
+      ev = startupEvent ∨ ev = standingEvent := by
   simpa [serverGroupLeaseMachine] using h
 
 theorem bool_cons {p : Params} {n : String} {ds : List ArgDecl} {vs : List Val} {args : List (String × Val)}
@@ -38,7 +39,7 @@ theorem holder_args {p : Params} {rest : List ArgDecl} {vs : List Val} {args : L
   obtain ⟨tg, vs3, a3, rfl, h3⟩ := nat_cons (n := "tg") h2
   exact ⟨hdr, g, tg, vs3, a3, rfl, h3⟩
 
-/-- Every accepted event is one of the nine, with arguments of its declared
+/-- Every accepted event is one of the eleven, with arguments of its declared
 types. -/
 theorem accepted_cases {p : Params} {s s' : State} {e : Event} (h : step M p s e = some s') :
     (∃ hdr g tg se sc ex ro de,
@@ -51,12 +52,12 @@ theorem accepted_cases {p : Params} {s s' : State} {e : Event} (h : step M p s e
     (∃ hdr g tg st cl m tk pe,
       e = ⟨"recoverOwned", [boolV hdr, natV g, natV tg, boolV st, boolV cl, boolV m, boolV tk, boolV pe]⟩) ∨
     (∃ hdr g tg de un ok, e = ⟨"recoverLost", [boolV hdr, natV g, natV tg, boolV de, boolV un, boolV ok]⟩) ∨
-    e = ⟨"expire", []⟩ := by
+    e = ⟨"expire", []⟩ ∨ e = ⟨"startup", []⟩ ∨ (∃ g, e = ⟨"standing", [natV g]⟩) := by
   obtain ⟨ev, args, hmem, hname, hb⟩ := accepted_event h
   obtain ⟨n, vs⟩ := e
   simp only at hname hb
   subst hname
-  rcases events_cases hmem with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+  rcases events_cases hmem with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · obtain ⟨hdr, g, tg, vs0, a0, rfl, h0⟩ := holder_args hb
     obtain ⟨se, vs1, a1, rfl, h1⟩ := bool_cons h0
     obtain ⟨sc, vs2, a2, rfl, h2⟩ := bool_cons h1
@@ -97,7 +98,12 @@ theorem accepted_cases {p : Params} {s s' : State} {e : Event} (h : step M p s e
     obtain ⟨rfl, -⟩ := bindArgs_nil h3
     exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inl ⟨hdr, g, tg, de, un, ok, rfl⟩)))))))
   · obtain ⟨rfl, -⟩ := bindArgs_nil hb
-    exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr rfl)))))))
+    exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inl rfl))))))))
+  · obtain ⟨rfl, -⟩ := bindArgs_nil hb
+    exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inl rfl)))))))))
+  · obtain ⟨g, vs0, a0, rfl, h0⟩ := nat_cons hb
+    obtain ⟨rfl, -⟩ := bindArgs_nil h0
+    exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr ⟨g, rfl⟩)))))))))
 
 
 /-! ## Reading an accepted step -/
@@ -126,15 +132,15 @@ theorem require_iff (p : Params) (x : Gl) (hdr : Bool) (g tg : Nat) :
 
 /-- Theorem 1: in every state, `requireGroup` accepts at most one generation
 and one token: two accepted requests name the same generation, the current one,
-and the record is active with a lease that has not expired. -/
+and the record is active. The lease clock plays no part. -/
 theorem holder_unique (p : Params) (x : Gl) {hdr1 g1 tg1 hdr2 g2 tg2 : _}
     (h1 : step M p (enc x) ⟨"require", [boolV hdr1, natV g1, natV tg1]⟩ ≠ none)
     (h2 : step M p (enc x) ⟨"require", [boolV hdr2, natV g2, natV tg2]⟩ ≠ none) :
-    g1 = x.gen ∧ g2 = x.gen ∧ tg1 = x.gen ∧ tg2 = x.gen ∧ x.st = 1 ∧ x.live = true := by
+    g1 = x.gen ∧ g2 = x.gen ∧ tg1 = x.gen ∧ tg2 = x.gen ∧ x.st = 1 := by
   rw [require_iff] at h1 h2
-  obtain ⟨-, -, -, hs1, ht1, hg1, hl1⟩ := h1
-  obtain ⟨-, -, -, -, ht2, hg2, -⟩ := h2
-  exact ⟨hg1, hg2, ht1, ht2, hs1, hl1⟩
+  obtain ⟨-, -, -, hs1, ht1, hg1⟩ := h1
+  obtain ⟨-, -, -, -, ht2, hg2⟩ := h2
+  exact ⟨hg1, hg2, ht1, ht2, hs1⟩
 
 /-- Every event that presents the claim headers of a holder is accepted only
 for the current holder. -/
@@ -164,7 +170,7 @@ theorem gen_monotone {p : Params} {x y : Gl} {e : Event} {s' : State}
     (h : step M p (enc x) e = some s') (hy : s' = enc y) : x.gen ≤ y.gen := by
   rcases accepted_cases h with ⟨hdr, g, tg, se, sc, ex, ro, de, rfl⟩ | ⟨hdr, g, tg, rfl⟩ |
     ⟨hdr, g, tg, st, rfl⟩ | ⟨hdr, g, tg, rfl⟩ | ⟨hdr, g, tg, rfl⟩ | ⟨hdr, g, tg, m, rfl⟩ |
-    ⟨hdr, g, tg, st, cl, m, tk, pe, rfl⟩ | ⟨hdr, g, tg, de, un, ok, rfl⟩ | rfl
+    ⟨hdr, g, tg, st, cl, m, tk, pe, rfl⟩ | ⟨hdr, g, tg, de, un, ok, rfl⟩ | rfl | rfl | ⟨g, rfl⟩
   · rw [step_claim] at h; obtain ⟨-, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this
     cases se <;> simp
   · rw [step_renew] at h; obtain ⟨-, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this; simp
@@ -175,6 +181,8 @@ theorem gen_monotone {p : Params} {x y : Gl} {e : Event} {s' : State}
   · rw [step_recoverOwned] at h; obtain ⟨-, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this; simp
   · rw [step_recoverLost] at h; obtain ⟨-, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this; simp
   · rw [step_expire] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp
+  · rw [step_startup] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp
+  · rw [step_standing] at h; obtain ⟨-, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this; simp
 
 /-- Theorem 2: the generation changes only at a claim that takes the next
 generation (a new record or a takeover), and then by exactly one. -/
@@ -185,7 +193,7 @@ theorem gen_change {p : Params} {x y : Gl} {e : Event} {s' : State}
         y.gen = x.gen + 1 := by
   rcases accepted_cases h with ⟨hdr, g, tg, se, sc, ex, ro, de, rfl⟩ | ⟨hdr, g, tg, rfl⟩ |
     ⟨hdr, g, tg, st, rfl⟩ | ⟨hdr, g, tg, rfl⟩ | ⟨hdr, g, tg, rfl⟩ | ⟨hdr, g, tg, m, rfl⟩ |
-    ⟨hdr, g, tg, st, cl, m, tk, pe, rfl⟩ | ⟨hdr, g, tg, de, un, ok, rfl⟩ | rfl
+    ⟨hdr, g, tg, st, cl, m, tk, pe, rfl⟩ | ⟨hdr, g, tg, de, un, ok, rfl⟩ | rfl | rfl | ⟨g, rfl⟩
   · rw [step_claim] at h; obtain ⟨-, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this
     cases se
     · exact ⟨hdr, g, tg, sc, ex, ro, de, rfl, rfl⟩
@@ -198,26 +206,30 @@ theorem gen_change {p : Params} {x y : Gl} {e : Event} {s' : State}
   · rw [step_recoverOwned] at h; obtain ⟨-, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this; exact absurd rfl hne
   · rw [step_recoverLost] at h; obtain ⟨-, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this; exact absurd rfl hne
   · rw [step_expire] at h; split at h <;> cases h; have := enc_inj hy; subst this; exact absurd rfl hne
+  · rw [step_startup] at h; split at h <;> cases h; have := enc_inj hy; subst this; exact absurd rfl hne
+  · rw [step_standing] at h; obtain ⟨-, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this
+    exact absurd rfl hne
 
-/-- Theorem 2: a reuse keeps the record. -/
+/-- Theorem 2: a reuse keeps the record's status and generation and gives it
+a live lease, also when the lease lapsed. -/
 theorem claim_reuse_keeps (p : Params) (x : Gl) (hdr : Bool) (g tg : Nat) (sc : Bool) (ex : Nat) (ro de : Bool) {s' : State}
     (h : step M p (enc x) ⟨"claim", [boolV hdr, natV g, natV tg, boolV true, boolV sc, natV ex, boolV ro,
-      boolV de]⟩ = some s') : s' = enc x := by
+      boolV de]⟩ = some s') : s' = enc { x with live := true } := by
   rw [step_claim] at h
   obtain ⟨hc, rfl⟩ := ite_some_enc h
   obtain ⟨-, -, -, hh⟩ := hc
   simp only [ite_true] at hh
-  obtain ⟨-, ⟨-, hs, -, -, hl⟩, -⟩ := hh
+  obtain ⟨-, ⟨-, hs, -, -⟩, -⟩ := hh
   obtain ⟨st, gn, lv⟩ := x
   simp_all
 
 /-! ## Theorem 3: claims -/
 
 /-- Theorem 3: a claim that names the lease's own execution identity and is not
-the reuse of a valid lease by the same client is refused, whatever the other
+the reuse of an active lease by the same client is refused, whatever the other
 facts say. -/
 theorem claim_same_exec_refused (p : Params) (x : Gl) (hdr : Bool) (g tg : Nat) (sc : Bool) (ex : Nat)
-    (ro de : Bool) (hno : ¬(sc = true ∧ x.st = 1 ∧ x.live = true)) :
+    (ro de : Bool) (hno : ¬(sc = true ∧ x.st = 1)) :
     step M p (enc x) ⟨"claim", [boolV hdr, natV g, natV tg, boolV true, boolV sc, natV ex, boolV ro,
       boolV de]⟩ = none := by
   rw [step_claim]
@@ -225,8 +237,8 @@ theorem claim_same_exec_refused (p : Params) (x : Gl) (hdr : Bool) (g tg : Nat) 
   intro hc
   obtain ⟨-, -, -, hh⟩ := hc
   simp only [ite_true] at hh
-  obtain ⟨h1, ⟨-, h2, -, -, h3⟩, -⟩ := hh
-  exact hno ⟨h1, h2, h3⟩
+  obtain ⟨h1, ⟨-, h2, -, -⟩, -⟩ := hh
+  exact hno ⟨h1, h2⟩
 
 /-- Theorem 3: a reuse needs the current holder (`requireGroup` accepts) and the
 same client. -/
@@ -350,7 +362,7 @@ theorem stale_refused (p : Params) (x : Gl) (hdr : Bool) (g tg : Nat) (h : g ≠
     step M p (enc x) ⟨"renew", [boolV hdr, natV g, natV tg]⟩ = none ∧
     (∀ st, step M p (enc x) ⟨"observe", [boolV hdr, natV g, natV tg, boolV st]⟩ = none) ∧
     step M p (enc x) ⟨"release", [boolV hdr, natV g, natV tg]⟩ = none := by
-  have hh : ¬Holder x hdr g tg := fun ⟨_, _, h2, h3, _⟩ => by omega
+  have hh : ¬Holder x hdr g tg := fun ⟨_, _, h2, h3⟩ => by omega
   refine ⟨?_, fun m => ?_, ?_, fun st => ?_, ?_⟩
   · rw [step_require]; apply ite_none; intro c; exact hh c.2.2
   · rw [step_writeAfter]; apply ite_none; intro c; exact hh c.2.2.1
@@ -406,10 +418,11 @@ theorem recover_lost_spec (p : Params) (x : Gl) (hdr : Bool) (g tg : Nat) (de un
 /-- The safety properties of a lease record: a record exists exactly when the
 generation is positive, and a missing record has no lease. Together with the
 definition of `Valid` they give: a valid lease belongs to an existing, active
-record. -/
+record, and `lapsed` is never stored. -/
 structure Props (x : Gl) : Prop where
   noneZero : x.st = 0 ↔ x.gen = 0
   noneDead : x.st = 0 → x.live = false
+  lapsedNever : x.st ≠ 4
 
 def Inv (p : Params) (s : State) : Prop :=
   M.StateConforms p s ∧ ∀ x, s = enc x → Props x
@@ -419,42 +432,46 @@ theorem init (p : Params) : Inv p (initial M p) := by
   intro x hx
   have : x = ⟨0, 0, false⟩ := enc_inj (hx.symm.trans rfl)
   subst this
-  exact ⟨by simp, by simp⟩
+  exact ⟨by simp, by simp, by simp⟩
 
 theorem step_inv (p : Params) (s s' : State) (e : Event) (hi : Inv p s)
     (h : KanderFormal.step M p s e = some s') : Inv p s' := by
   obtain ⟨hc, hp⟩ := hi
   refine ⟨step_preserves_conforms hc h, ?_⟩
   obtain ⟨x, rfl, hs, hg⟩ := shape hc
-  obtain ⟨P1, P2⟩ := hp x rfl
+  obtain ⟨P1, P2, P3⟩ := hp x rfl
   intro y hy
   rcases accepted_cases h with ⟨hdr, g, tg, se, sc, ex, ro, de, rfl⟩ | ⟨hdr, g, tg, rfl⟩ |
     ⟨hdr, g, tg, st, rfl⟩ | ⟨hdr, g, tg, rfl⟩ | ⟨hdr, g, tg, rfl⟩ | ⟨hdr, g, tg, m, rfl⟩ |
-    ⟨hdr, g, tg, st, cl, m, tk, pe, rfl⟩ | ⟨hdr, g, tg, de, un, ok, rfl⟩ | rfl
+    ⟨hdr, g, tg, st, cl, m, tk, pe, rfl⟩ | ⟨hdr, g, tg, de, un, ok, rfl⟩ | rfl | rfl | ⟨g, rfl⟩
   · rw [step_claim] at h; obtain ⟨hc, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this
     cases se
     · constructor <;> simp
-    · obtain ⟨-, -, -, -, ⟨-, hs1, -, -, -⟩, -⟩ := hc
+    · obtain ⟨-, -, -, -, ⟨-, hs1, -, -⟩, -⟩ := hc
       constructor <;> simp_all
   · rw [step_renew] at h; obtain ⟨hc, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this
-    obtain ⟨-, -, ⟨-, hs1, -, -, -⟩⟩ := hc
+    obtain ⟨-, -, ⟨-, hs1, -, -⟩⟩ := hc
     constructor <;> simp_all
   · rw [step_observe] at h; obtain ⟨hc, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this
-    obtain ⟨-, -, ⟨-, hs1, -, -, -⟩⟩ := hc
+    obtain ⟨-, -, ⟨-, hs1, -, -⟩⟩ := hc
     cases st <;> constructor <;> simp_all
   · rw [step_release] at h; obtain ⟨hc, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this
-    obtain ⟨-, -, ⟨-, hs1, -, -, -⟩⟩ := hc
+    obtain ⟨-, -, ⟨-, hs1, -, -⟩⟩ := hc
     constructor <;> simp_all
   · rw [step_require] at h; obtain ⟨-, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this
-    exact ⟨P1, P2⟩
+    exact ⟨P1, P2, P3⟩
   · rw [step_writeAfter] at h; obtain ⟨-, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this
-    exact ⟨P1, P2⟩
+    exact ⟨P1, P2, P3⟩
   · rw [step_recoverOwned] at h; obtain ⟨-, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this
-    exact ⟨P1, P2⟩
+    exact ⟨P1, P2, P3⟩
   · rw [step_recoverLost] at h; obtain ⟨-, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this
-    exact ⟨P1, P2⟩
+    exact ⟨P1, P2, P3⟩
   · rw [step_expire] at h; split at h <;> cases h; have := enc_inj hy; subst this
-    exact ⟨P1, fun h0 => rfl⟩
+    exact ⟨P1, fun h0 => rfl, P3⟩
+  · rw [step_startup] at h; split at h <;> cases h; have := enc_inj hy; subst this
+    constructor <;> simp_all
+  · rw [step_standing] at h; obtain ⟨-, rfl⟩ := ite_some_enc h; have := enc_inj hy; subst this
+    exact ⟨P1, P2, P3⟩
 
 /-- The server group lease machine's proof obligation certificate. -/
 def cert : SafetyCert M where
@@ -471,5 +488,60 @@ theorem reachable_valid_gen {p : Params} {x : Gl} (hr : Reachable M p (enc x)) (
   have := ((reachable_inv hr).2 x rfl).noneZero
   obtain ⟨h1, -⟩ := hv
   omega
+
+/-! ## Lapsed leases and standing -/
+
+/-- The holder renews a lease that lapsed: the record keeps its generation and
+gets a live lease again. -/
+theorem renew_lapsed_keeps_gen (p : Params) (x : Gl) (hst : x.st = 1) (hg : x.gen ≤ p "maxGen") :
+    step M p (enc { x with live := false }) ⟨"renew", [boolV true, natV x.gen, natV x.gen]⟩ =
+      some (enc { x with live := true }) := by
+  rw [step_renew]; simp [Holder, hst, hg]
+
+/-- After a takeover, the holder requests of the generation it replaced are
+refused. -/
+theorem taken_over_refused (p : Params) (x : Gl) (hdr : Bool) (g tg : Nat) (sc : Bool) (ex : Nat)
+    (ro de : Bool) {s' : State}
+    (h : step M p (enc x) ⟨"claim", [boolV hdr, natV g, natV tg, boolV false, boolV sc, natV ex, boolV ro,
+      boolV de]⟩ = some s') (hdr' : Bool) :
+    step M p s' ⟨"renew", [boolV hdr', natV x.gen, natV x.gen]⟩ = none ∧
+      step M p s' ⟨"require", [boolV hdr', natV x.gen, natV x.gen]⟩ = none := by
+  rw [claim_takeover_result p x hdr g tg sc ex ro de h]
+  obtain ⟨r1, -, r3, -⟩ := stale_refused p ⟨1, x.gen + 1, true⟩ hdr' x.gen x.gen (.inl (by simp))
+  exact ⟨r3, r1⟩
+
+/-- `startup` keeps the generation and the stored status and only gives an
+active record a live lease. -/
+theorem startup_spec (p : Params) (x : Gl) {s' : State} (h : step M p (enc x) ⟨"startup", []⟩ = some s') :
+    x.st = 1 ∧ s' = enc { x with live := true } := by
+  rw [step_startup] at h
+  split at h
+  · cases h; exact ⟨by assumption, rfl⟩
+  · cases h
+
+/-- The status `lapsed` is never stored in a reachable state. -/
+theorem reachable_not_lapsed {p : Params} {x : Gl} (hr : Reachable M p (enc x)) : x.st ≠ 4 :=
+  ((reachable_inv hr).2 x rfl).lapsedNever
+
+/-- A standing check of generation `g` is accepted exactly when `requireGroup`
+accepts the parsed headers and token of `g`. -/
+theorem standing_iff_require (p : Params) (x : Gl) (g : Nat) (hg : g ≤ p "maxGen") :
+    step M p (enc x) ⟨"standing", [natV g]⟩ ≠ none ↔
+      step M p (enc x) ⟨"require", [boolV true, natV g, natV g]⟩ ≠ none := by
+  rw [step_standing, step_require]
+  by_cases h : Standing x g
+  · have hh : Holder x true g g := ⟨rfl, h.1, h.2.symm, h.2.symm⟩
+    simp [hg, h, hh]
+  · have hh : ¬Holder x true g g := fun ⟨_, h1, h2, _⟩ => h ⟨h1, h2.symm⟩
+    simp [hg, h, hh]
+
+/-- At most one generation stands in any state. -/
+theorem standing_unique (p : Params) (x : Gl) {g1 g2 : Nat}
+    (h1 : step M p (enc x) ⟨"standing", [natV g1]⟩ ≠ none)
+    (h2 : step M p (enc x) ⟨"standing", [natV g2]⟩ ≠ none) : g1 = g2 := by
+  rw [step_standing] at h1 h2
+  have a := ite_ne_none h1
+  have b := ite_ne_none h2
+  exact a.2.2.symm.trans b.2.2
 
 end KanderFormal.Proofs.ServerGroupLease
