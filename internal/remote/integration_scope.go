@@ -21,8 +21,10 @@ type IntegrationOptions struct {
 	GroupID      string   `json:"group_id,omitempty"`
 	TaskID       string   `json:"task_id,omitempty"`
 	Contributors []string `json:"contributors,omitempty"`
-	// ViaCommit is a commit on the common remote that descends from both the
-	// reviewed commit and the current target. Changing it needs a new operation ID.
+	// ViaCommit is a commit on the common remote that descends from the reviewed
+	// commit. The client uses it as given when it also descends from the current
+	// target, and merges it with the current target otherwise. Changing it needs
+	// a new operation ID.
 	ViaCommit string `json:"via_commit,omitempty"`
 	Decision  string `json:"decision"`
 }

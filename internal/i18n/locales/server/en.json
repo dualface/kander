@@ -95,7 +95,7 @@
   "remote.integration_auto_merge_identity": "The target branch moved past the reviewed commit, and merging them locally needs a Git author and committer identity in the repository configuration (user.name and user.email); Git never guesses one from the host. Nothing was pushed. Configure the identity, or merge the target branch into your own branch, push the result to the common remote, and integrate with a via_commit.",
   "remote.integration_target_moving": "The target branch kept changing during the integration, so every attempt was given up before it pushed anything. Retry with the same operation ID to continue.",
   "remote.integration_via_unavailable": "The via commit is not available from the common remote. Push it to the common remote first, for example to the group or task branch.",
-  "remote.integration_via_invalid": "The via commit must descend from both the reviewed commit and the current target",
+  "remote.integration_via_invalid": "The via commit must descend from the reviewed commit",
   "remote.integration_delivery_not_contained": "A contributing member's latest delivery is neither in the reviewed commit nor in the target after the integration",
   "remote.execution_already_holder": "This execution already holds the task, so it needs no takeover. Continue with kander move without --owner.",
   "remote.integration_operation_changed": "The integration operation ID already names other material; preserve its receipt",

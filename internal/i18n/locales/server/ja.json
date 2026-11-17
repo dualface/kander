@@ -95,7 +95,7 @@
   "remote.integration_auto_merge_identity": "対象ブランチがレビュー済みコミットより先に進んでおり、ローカルでマージするにはリポジトリ設定に Git の author と committer の ID（user.name と user.email）が必要です。Git はホストから ID を推測しません。何も push していません。ID を設定するか、自分のブランチへ対象ブランチをマージして結果を共通リモートへ push し、via_commit で統合してください。",
   "remote.integration_target_moving": "統合の間に対象ブランチが変わり続けたため、すべての試行を push 前に取り下げました。同じ operation ID で再試行すると続行します。",
   "remote.integration_via_unavailable": "via コミットを共通リモートから取得できません。先に共通リモート（グループブランチやタスクブランチなど）へ push してください。",
-  "remote.integration_via_invalid": "via コミットはレビュー済みコミットと現在の対象の両方の子孫である必要があります",
+  "remote.integration_via_invalid": "via コミットはレビュー済みコミットの子孫である必要があります",
   "remote.integration_delivery_not_contained": "貢献メンバーの最新の納品が、レビュー済みコミットにも統合後の対象にも含まれていません",
   "remote.execution_already_holder": "この実行はすでにタスクを保持しているため、引き継ぎは不要です。--owner なしの kander move で続行してください。",
   "remote.integration_operation_changed": "この統合操作 ID は別の資料に結び付いています。元の記録を保持してください",
