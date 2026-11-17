@@ -44,18 +44,17 @@ func (s *Session) prepareIntegration(ctx context.Context, dir string, options In
 	if request.BaseCommit == "" {
 		return request, integrationFailure("remote.integration_input_required")
 	}
-	contained, err := s.integrationContains(ctx, dir, options.Commit, target)
-	if err != nil {
+	if err := s.integrationContainment(ctx, dir, options, &request); err != nil {
 		return request, err
 	}
-	request.AlreadyContained = contained
-	request.Edges = []api.IntegrationEdge{{Ancestor: request.BaseCommit, Descendant: options.Commit}}
-	if contained {
-		request.Edges = []api.IntegrationEdge{{Ancestor: options.Commit, Descendant: target}}
-	}
+	request.Edges = request.ContainmentEdges()
 	for _, member := range members {
 		if member.DeliveryCommit != "" {
-			request.Edges = append(request.Edges, api.IntegrationEdge{Ancestor: member.DeliveryCommit, Descendant: options.Commit})
+			edge, err := s.integrationMemberEdge(ctx, dir, request, member.DeliveryCommit)
+			if err != nil {
+				return request, err
+			}
+			request.Edges = append(request.Edges, edge)
 		}
 	}
 	if err := s.integrationEdges(ctx, dir, request); err != nil {
@@ -221,7 +220,7 @@ func (s *Session) Integrate(ctx context.Context, dir string, options Integration
 		rotate := knownClaim && (!found || credential.Lost || credential.AgentPID != facts.PID || credential.AgentStart != facts.Start || credential.BootID != boot)
 		rotate = rotate || !valid || current.Phase == "reserved" && head != attempt.Request.ExpectedTarget
 		if current.Phase == "pushing" && head != attempt.Request.ExpectedTarget {
-			contained, err := s.integrationContains(ctx, dir, options.Commit, head)
+			contained, err := s.integrationContains(ctx, dir, attempt.Request.PushCommit(), head)
 			if err != nil {
 				return api.Integration{}, err
 			}
@@ -264,7 +263,7 @@ func (s *Session) Integrate(ctx context.Context, dir string, options Integration
 			if err != nil {
 				return api.Integration{}, err
 			}
-			contains, err := s.integrationContains(ctx, dir, options.Commit, head)
+			contains, err := s.integrationContains(ctx, dir, attempt.Request.PushCommit(), head)
 			if err != nil {
 				return api.Integration{}, err
 			}
@@ -279,12 +278,12 @@ func (s *Session) Integrate(ctx context.Context, dir string, options Integration
 				if _, err := s.Project.RenewIntegration(ctx, current.ID, proof); err != nil {
 					return api.Integration{}, err
 				}
-				_, pushErr := gitCommand(ctx, dir, "push", "--porcelain", "--force-with-lease="+options.TargetRef+":"+attempt.Request.ExpectedTarget, "origin", options.Commit+":"+options.TargetRef)
+				_, pushErr := gitCommand(ctx, dir, "push", "--porcelain", "--force-with-lease="+options.TargetRef+":"+attempt.Request.ExpectedTarget, "origin", attempt.Request.PushCommit()+":"+options.TargetRef)
 				after, observeErr := s.integrationTarget(ctx, dir, options.TargetRef)
 				if observeErr != nil {
 					return api.Integration{}, errors.Join(pushErr, observeErr)
 				}
-				contains, verifyErr := s.integrationContains(ctx, dir, options.Commit, after)
+				contains, verifyErr := s.integrationContains(ctx, dir, attempt.Request.PushCommit(), after)
 				if verifyErr != nil || !contains {
 					return api.Integration{}, errors.Join(pushErr, verifyErr, integrationFailure("remote.integration_recovery_required"))
 				}

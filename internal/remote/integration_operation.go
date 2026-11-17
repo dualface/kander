@@ -85,7 +85,7 @@ func (s *Session) integrationActionCall(ctx context.Context, dir string, journal
 	input := api.IntegrationCommand{Action: action, ExpectedRevision: observation.Integration.Revision, ObservationTicket: observation.Ticket, ObservedTarget: head, ObservedAt: time.Now().UTC()}
 	switch action {
 	case "confirm":
-		contains, err := s.integrationContains(ctx, dir, attempt.Request.Commit, head)
+		contains, err := s.integrationContains(ctx, dir, attempt.Request.ConfirmAncestor(), head)
 		if err != nil {
 			return api.Integration{}, err
 		}
@@ -106,7 +106,7 @@ func (s *Session) integrationActionCall(ctx context.Context, dir string, journal
 			return api.Integration{}, integrationFailure("remote.integration_recovery_required")
 		}
 		input.ExpectedRevision, input.ObservationTicket = observation.Integration.Revision, observation.Ticket
-		input.Edges = []api.IntegrationEdge{{Ancestor: attempt.Request.Commit, Descendant: head}}
+		input.Edges = []api.IntegrationEdge{{Ancestor: attempt.Request.ConfirmAncestor(), Descendant: head}}
 	case "release":
 		input.Decision = state.Options.Decision + "; recover completed local invocation " + attempt.Request.ExecutionID
 	}

@@ -21,7 +21,10 @@ type IntegrationOptions struct {
 	GroupID      string   `json:"group_id,omitempty"`
 	TaskID       string   `json:"task_id,omitempty"`
 	Contributors []string `json:"contributors,omitempty"`
-	Decision     string   `json:"decision"`
+	// ViaCommit is a commit on the common remote that descends from both the
+	// reviewed commit and the current target. Changing it needs a new operation ID.
+	ViaCommit string `json:"via_commit,omitempty"`
+	Decision  string `json:"decision"`
 }
 
 func integrationFailure(id string) error { return errors.New(config.Text(id)) }
@@ -30,6 +33,9 @@ func validateIntegrationOptions(options IntegrationOptions) error {
 		return integrationFailure("remote.integration_input_required")
 	}
 	if options.Purpose != "initialize" && options.Purpose != "assemble" && options.Purpose != "deliver" {
+		return integrationFailure("remote.integration_input_required")
+	}
+	if options.ViaCommit != "" && (options.Purpose != "deliver" || !api.CommitSHA(options.ViaCommit)) {
 		return integrationFailure("remote.integration_input_required")
 	}
 	if options.GroupID == "" {

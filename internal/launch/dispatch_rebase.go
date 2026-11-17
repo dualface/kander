@@ -3,13 +3,10 @@ package launch
 import (
 	"context"
 	"os/exec"
-	"regexp"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/remote"
 )
-
-var integrationHunk = regexp.MustCompile(`(?m)^@@ -[0-9]+(,[0-9]+)? \+[0-9]+(,[0-9]+)? @@`)
-var integrationIndex = regexp.MustCompile(`(?m)^index [0-9a-f]+\.\.[0-9a-f]+(?: [0-7]+)?\n`)
 
 // Compare complete patches, preserving whitespace, context, modes and binary
 // changes. Only blob hashes and line offsets may vary after an unrelated rebase.
@@ -21,8 +18,7 @@ func verifyDispatchRebase(ctx context.Context, g board.DispatchIntegration) erro
 		if err != nil {
 			return "", launchError("board.dispatch_evidence_invalid", "rebase diff: "+err.Error())
 		}
-		text := integrationIndex.ReplaceAllString(string(raw), "")
-		return integrationHunk.ReplaceAllString(text, "@@ -x${1} +x${2} @@"), nil
+		return remote.NormalizePatch(string(raw)), nil
 	}
 	before, err := diff(g.ReviewBase, g.ReviewTarget)
 	if err != nil {

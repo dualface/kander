@@ -2,7 +2,6 @@ package server
 
 import (
 	"cmp"
-	"reflect"
 	"slices"
 	"strings"
 
@@ -19,6 +18,9 @@ func integrationIDs(input api.IntegrationRequest) ([]string, error) {
 	}
 	if input.GroupID != "" && !board.ValidTaskGroup(input.GroupID) {
 		return nil, apiError(api.CodeInvalidRequest, "invalid integration group")
+	}
+	if _, err := integrationContainmentEdges(input); err != nil {
+		return nil, err
 	}
 	if input.Purpose != "deliver" && (input.GroupID == "" || input.TargetRef != "refs/heads/group/"+input.GroupID) {
 		return nil, apiError(api.CodeEvidenceIncomplete, "group initialization and assembly require that group's exact branch")
@@ -68,14 +70,11 @@ func (p *project) integrationFacts(tx *board.Transaction, input api.IntegrationR
 			return err
 		}
 	}
-	edges := []api.IntegrationEdge{{Ancestor: input.BaseCommit, Descendant: input.Commit}}
-	if input.AlreadyContained {
-		if input.ExpectedTarget == "" {
-			return apiError(api.CodeEvidenceIncomplete, "contained-source reconciliation requires an existing target")
-		}
-		edges = []api.IntegrationEdge{{Ancestor: input.Commit, Descendant: input.ExpectedTarget}}
+	edges, err := integrationContainmentEdges(input)
+	if err != nil {
+		return err
 	}
-	contributions := 0
+	var deliveries []string
 	for _, member := range input.Members {
 		snapshot, err := tx.Snapshot(member.TaskID)
 		if err != nil {
@@ -126,13 +125,12 @@ func (p *project) integrationFacts(tx *board.Transaction, input api.IntegrationR
 		if delivery == nil || delivery.Purpose == "baseline" || delivery.Commit != member.DeliveryCommit || delivery.Generation != member.Generation || delivery.ExecutionID != claim.ExecutionID {
 			return apiError(api.CodeEvidenceIncomplete, "contributor does not match its latest published delivery")
 		}
-		contributions++
-		edges = append(edges, api.IntegrationEdge{Ancestor: member.DeliveryCommit, Descendant: input.Commit})
+		deliveries = append(deliveries, member.DeliveryCommit)
 	}
-	if input.Purpose != "initialize" && contributions == 0 {
+	if input.Purpose != "initialize" && len(deliveries) == 0 {
 		return apiError(api.CodeEvidenceIncomplete, "integration needs at least one delivered member")
 	}
-	if !reflect.DeepEqual(normalizedIntegrationEdges(edges), normalizedIntegrationEdges(input.Edges)) {
+	if !integrationEdgesMatch(input, edges, deliveries) {
 		return apiError(api.CodeEvidenceIncomplete, "integration lacks the exact client-verified ancestry edges")
 	}
 	return nil

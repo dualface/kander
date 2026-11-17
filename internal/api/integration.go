@@ -26,8 +26,28 @@ type IntegrationObservation struct {
 	Ticket      string       `json:"ticket"`
 }
 
+// Containment values record how a reviewed commit reaches the target branch.
+const (
+	IntegrationFastForward = "fast_forward"
+	IntegrationContained   = "contained"
+	IntegrationVia         = "via"
+	IntegrationReplayed    = "replayed"
+)
+
+// IntegrationReplay records the review range and the commits of the target
+// branch whose patches equal it, one for one and in order.
+type IntegrationReplay struct {
+	ReviewBase   string `json:"review_base"`
+	ReviewTarget string `json:"review_target"`
+	ReplayBase   string `json:"replay_base"`
+	ReplayTarget string `json:"replay_target"`
+}
+
 type IntegrationRequest struct {
 	AlreadyContained   bool                `json:"already_contained,omitzero"`
+	Containment        string              `json:"containment,omitzero"`
+	ViaCommit          string              `json:"via_commit,omitzero"`
+	Replay             *IntegrationReplay  `json:"replay,omitzero"`
 	ObservationTicket  string              `json:"observation_ticket"`
 	ExpectedRevision   uint64              `json:"expected_revision"`
 	Edges              []IntegrationEdge   `json:"edges"`
@@ -42,6 +62,68 @@ type IntegrationRequest struct {
 	ExpectedGeneration uint64              `json:"expected_generation"`
 	Decision           string              `json:"decision"`
 	Members            []IntegrationMember `json:"members"`
+}
+
+// EffectiveContainment reads a request that predates the containment field
+// through its already_contained flag.
+func (r IntegrationRequest) EffectiveContainment() string {
+	switch {
+	case r.Containment != "":
+		return r.Containment
+	case r.AlreadyContained:
+		return IntegrationContained
+	default:
+		return IntegrationFastForward
+	}
+}
+
+// FinalCommit is the commit the target branch holds, or descends from, once the
+// request completes: the reviewed commit after a fast-forward, the carrier
+// commit for a via request, and the observed target otherwise.
+func (r IntegrationRequest) FinalCommit() string {
+	switch r.EffectiveContainment() {
+	case IntegrationFastForward:
+		return r.Commit
+	case IntegrationVia:
+		return r.ViaCommit
+	default:
+		return r.ExpectedTarget
+	}
+}
+
+// PushCommit is the commit a request that needs a push writes to the target.
+func (r IntegrationRequest) PushCommit() string {
+	if r.ViaCommit != "" {
+		return r.ViaCommit
+	}
+	return r.Commit
+}
+
+// ConfirmAncestor is the commit that the observed target must contain to
+// confirm the request: the replayed range ends before the reviewed commit.
+func (r IntegrationRequest) ConfirmAncestor() string {
+	if r.EffectiveContainment() == IntegrationReplayed && r.Replay != nil {
+		return r.Replay.ReplayTarget
+	}
+	return r.Commit
+}
+
+// ContainmentEdges are the ancestry facts that tie the request commit to the
+// observed target for its containment kind.
+func (r IntegrationRequest) ContainmentEdges() []IntegrationEdge {
+	switch r.EffectiveContainment() {
+	case IntegrationContained:
+		return []IntegrationEdge{{Ancestor: r.Commit, Descendant: r.ExpectedTarget}}
+	case IntegrationVia:
+		return []IntegrationEdge{{Ancestor: r.ExpectedTarget, Descendant: r.ViaCommit}, {Ancestor: r.Commit, Descendant: r.ViaCommit}}
+	case IntegrationReplayed:
+		if r.Replay == nil {
+			return nil
+		}
+		return []IntegrationEdge{{Ancestor: r.Replay.ReplayTarget, Descendant: r.ExpectedTarget}}
+	default:
+		return []IntegrationEdge{{Ancestor: r.BaseCommit, Descendant: r.Commit}}
+	}
 }
 
 type Integration struct {

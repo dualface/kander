@@ -26,7 +26,20 @@ func (s *Session) VerifyIntegration(ctx context.Context, dir string, value api.I
 			}
 		}
 	}
-	for _, commit := range []string{value.Request.Commit, value.ObservedTarget} {
+	kept := []string{value.Request.ConfirmAncestor(), value.ObservedTarget}
+	switch value.Request.EffectiveContainment() {
+	case api.IntegrationVia:
+		kept = append(kept, value.Request.ViaCommit)
+	case api.IntegrationReplayed:
+		replay := value.Request.Replay
+		if replay == nil || replay.ReviewTarget != value.Request.Commit {
+			return integrationFailure("remote.integration_recovery_required")
+		}
+		if err := s.verifyReplay(ctx, dir, *replay); err != nil {
+			return err
+		}
+	}
+	for _, commit := range kept {
 		if err := s.FetchCommit(ctx, dir, commit); err != nil {
 			return err
 		}
@@ -35,7 +48,7 @@ func (s *Session) VerifyIntegration(ctx context.Context, dir string, value api.I
 	if err != nil {
 		return err
 	}
-	for _, source := range []string{value.Request.Commit, value.ObservedTarget} {
+	for _, source := range kept {
 		contained, err := s.integrationContains(ctx, dir, source, head)
 		if err != nil {
 			return err

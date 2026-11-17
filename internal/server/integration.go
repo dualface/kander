@@ -271,7 +271,7 @@ func (p *project) integrationAction(key, id string, input api.IntegrationCommand
 			if (!reconciles && record.Value.Phase != "pushing") || !api.CommitSHA(input.ObservedTarget) || input.ObservedAt.IsZero() {
 				return outcome{err: apiError(api.CodeEvidenceIncomplete, "completion requires a push intent and fresh exact remote facts")}
 			}
-			required := []api.IntegrationEdge{{Ancestor: record.Value.Request.Commit, Descendant: input.ObservedTarget}}
+			required := []api.IntegrationEdge{{Ancestor: record.Value.Request.ConfirmAncestor(), Descendant: input.ObservedTarget}}
 			if !reflect.DeepEqual(normalizedIntegrationEdges(required), normalizedIntegrationEdges(input.Edges)) {
 				return outcome{err: apiError(api.CodeEvidenceIncomplete, "completion must prove the integrated source is in the observed remote target")}
 			}

@@ -14,6 +14,14 @@ import (
 
 func integrationTask(t *testing.T, f *fixture, p *client.Project, host, slug string) (api.IntegrationMember, api.ClaimGrant) {
 	t.Helper()
+	commit := strings.Repeat("b", 40)
+	return integrationTaskAt(t, f, p, host, slug, commit, commit)
+}
+
+// integrationTaskAt delivers one commit and closes the review at another: the
+// delivery and the closed review target differ after a target-side merge.
+func integrationTaskAt(t *testing.T, f *fixture, p *client.Project, host, slug, delivery, target string) (api.IntegrationMember, api.ClaimGrant) {
+	t.Helper()
 	task := todoTask(t, p, slug)
 	text := strings.Replace(task.Text, "- TASK_BRANCH:", "- TASK_BRANCH: task/"+slug, 1)
 	task, err := p.PutDocument(t.Context(), "", task.TaskID, api.Document{Path: "spec.md", Text: text, ExpectedRevision: task.Revision}, nil)
@@ -25,7 +33,7 @@ func integrationTask(t *testing.T, f *fixture, p *client.Project, host, slug str
 		t.Fatal(err)
 	}
 	own := client.Claim{Token: grant.Token, Generation: grant.Claim.Generation}
-	base, commit := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	base, commit := strings.Repeat("a", 40), delivery
 	if _, err := p.PublishDelivery(t.Context(), "", api.DeliveryEvidence{Purpose: "delivery", TaskID: task.TaskID, ExecutionID: grant.Claim.ExecutionID, Generation: grant.Claim.Generation, CardRevision: grant.Task.Revision, Commit: commit, Ref: api.DeliveryRef(p.ID(), task.TaskID, grant.Claim.Generation, commit), Remote: "git@example.invalid:demo.git", ObservedAt: f.clock.now()}, own); err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +41,7 @@ func integrationTask(t *testing.T, f *fixture, p *client.Project, host, slug str
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan := board.ReviewPlan{Schema: 1, PlanID: "integration-plan-" + slug, Sealed: true, Author: "coordinator", Basis: "integration fixture", CWD: "project:" + p.ID(), ReportLanguage: "en", TaskIDs: []string{task.TaskID}, Batches: []board.ReviewPlanBatch{{BatchID: "integration-batch-" + slug, TaskIDs: []string{task.TaskID}, Base: base, TargetCommit: commit, Requirements: map[string]string{"PMQA": "N/A: lease fixture", "Security": "N/A: repository policy"}}}}
+	plan := board.ReviewPlan{Schema: 1, PlanID: "integration-plan-" + slug, Sealed: true, Author: "coordinator", Basis: "integration fixture", CWD: "project:" + p.ID(), ReportLanguage: "en", TaskIDs: []string{task.TaskID}, Batches: []board.ReviewPlanBatch{{BatchID: "integration-batch-" + slug, TaskIDs: []string{task.TaskID}, Base: base, TargetCommit: target, Requirements: map[string]string{"PMQA": "N/A: lease fixture", "Security": "N/A: repository policy"}}}}
 	if _, err := p.ReviewPlan(t.Context(), "", plan, &own); err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +58,7 @@ func integrationTask(t *testing.T, f *fixture, p *client.Project, host, slug str
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := map[string]any{"request": request, "evidence": board.ReviewGitEvidence{CWD: plan.CWD, Head: commit, VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano), Edges: edges}}
+	body := map[string]any{"request": request, "evidence": board.ReviewGitEvidence{CWD: plan.CWD, Head: target, VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano), Edges: edges}}
 	if _, err := p.ReviewClose(t.Context(), "", body, &own); err != nil {
 		t.Fatal(err)
 	}

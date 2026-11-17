@@ -1,0 +1,87 @@
+package server
+
+import (
+	"reflect"
+
+	"github.com/dualface/kander/internal/api"
+)
+
+// integrationContainmentEdges checks that the containment fields of a request
+// agree with each other and returns the ancestry edges that tie the request to
+// its target. The service never runs Git: the client proves the edges, and the
+// service only requires the exact set a containment kind needs.
+func integrationContainmentEdges(input api.IntegrationRequest) ([]api.IntegrationEdge, error) {
+	invalid := apiError(api.CodeInvalidRequest, "integration containment fields disagree")
+	if input.Purpose != "deliver" && (input.Containment != "" || input.ViaCommit != "" || input.Replay != nil) {
+		return nil, invalid
+	}
+	switch input.EffectiveContainment() {
+	case api.IntegrationFastForward:
+		if input.AlreadyContained || input.ViaCommit != "" || input.Replay != nil {
+			return nil, invalid
+		}
+	case api.IntegrationContained:
+		if !input.AlreadyContained || input.ViaCommit != "" || input.Replay != nil {
+			return nil, invalid
+		}
+		if input.ExpectedTarget == "" {
+			return nil, apiError(api.CodeEvidenceIncomplete, "contained-source reconciliation requires an existing target")
+		}
+	case api.IntegrationVia:
+		if !api.CommitSHA(input.ViaCommit) || input.AlreadyContained != (input.ViaCommit == input.ExpectedTarget) || input.Replay != nil {
+			return nil, invalid
+		}
+	case api.IntegrationReplayed:
+		replay := input.Replay
+		if replay == nil || !input.AlreadyContained || input.ViaCommit != "" || replay.ReviewTarget != input.Commit {
+			return nil, invalid
+		}
+		for _, commit := range []string{replay.ReviewBase, replay.ReviewTarget, replay.ReplayBase, replay.ReplayTarget} {
+			if !api.CommitSHA(commit) {
+				return nil, invalid
+			}
+		}
+	default:
+		return nil, invalid
+	}
+	return input.ContainmentEdges(), nil
+}
+
+// integrationEdgesMatch requires the request to carry exactly the containment
+// edges plus one edge per contributing delivery: either the delivery is an
+// ancestor of the reviewed commit, or it is an ancestor of the target after
+// the integration. A delivery with both edges, or with neither, is refused.
+// An edge that is already a containment edge does not count as a choice.
+func integrationEdgesMatch(input api.IntegrationRequest, containment []api.IntegrationEdge, deliveries []string) bool {
+	base := map[api.IntegrationEdge]bool{}
+	required := append([]api.IntegrationEdge(nil), containment...)
+	for _, edge := range containment {
+		base[edge] = true
+	}
+	given := map[api.IntegrationEdge]bool{}
+	for _, edge := range input.Edges {
+		given[edge] = true
+	}
+	final := input.FinalCommit()
+	for _, delivery := range deliveries {
+		options := []api.IntegrationEdge{{Ancestor: delivery, Descendant: input.Commit}}
+		if input.Purpose == "deliver" && final != input.Commit {
+			options = append(options, api.IntegrationEdge{Ancestor: delivery, Descendant: final})
+		}
+		var own []api.IntegrationEdge
+		onBase := false
+		for _, option := range options {
+			switch {
+			case base[option]:
+				onBase = true
+			case given[option]:
+				own = append(own, option)
+			}
+		}
+		if len(own) > 1 || len(own) == 0 && !onBase {
+			return false
+		}
+		required = append(required, own...)
+	}
+	return reflect.DeepEqual(normalizedIntegrationEdges(required), normalizedIntegrationEdges(input.Edges))
+}
