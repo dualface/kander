@@ -47,27 +47,37 @@ func (s *Session) publicationPayload(operation string, value any) (json.RawMessa
 // and asks other holders to confirm the exact prepared material. Pending
 // confirmations are durable and do not publish any card evidence.
 func (s *Session) ReviewAuthority(ctx context.Context, operation string, payload any, tasks []string) (*client.Claim, error) {
+	proof, _, err := s.reviewAuthority(ctx, operation, operation, payload, tasks)
+	return proof, err
+}
+
+// reviewAuthority looks prior publications up by replay, which equals
+// operation except for operations whose material does not identify their
+// result. The second result reports that the proof names an already published
+// publication, whose saved result the server returns unchanged.
+func (s *Session) reviewAuthority(ctx context.Context, operation, replay string, payload any, tasks []string) (*client.Claim, bool, error) {
 	raw, err := s.publicationPayload(operation, payload)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	if proof, found, err := s.completedReviewPublication(ctx, operation, raw); err != nil || found {
-		return proof, err
+	if proof, found, err := s.completedReviewPublication(ctx, operation, replay, raw); err != nil || found {
+		return proof, found, err
 	}
 	if len(tasks) <= 1 {
-		return s.ClaimsFor(tasks)
+		proof, err := s.ClaimsFor(tasks)
+		return proof, false, err
 	}
 	members := make([]api.PublicationMember, 0, len(tasks))
 	for _, id := range slices.Sorted(slices.Values(tasks)) {
 		task, err := s.Project.Show(ctx, id)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if task.State != "working" && task.State != "review" {
 			continue
 		}
 		if task.Claim == nil || task.Claim.Status != api.ClaimActive {
-			return nil, &api.Error{Code: api.CodeLeaseInvalid, Message: "review member has no live execution: " + id}
+			return nil, false, &api.Error{Code: api.CodeLeaseInvalid, Message: "review member has no live execution: " + id}
 		}
 		members = append(members, api.PublicationMember{TaskID: id, Revision: task.Revision, Generation: task.Claim.Generation})
 	}
@@ -76,11 +86,12 @@ func (s *Session) ReviewAuthority(ctx context.Context, operation string, payload
 		for i, member := range members {
 			ids[i] = member.TaskID
 		}
-		return s.ClaimsFor(ids)
+		proof, err := s.ClaimsFor(ids)
+		return proof, false, err
 	}
 	raw, err = s.freezePublicationMaterial(operation, raw, members)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	identity, err := json.Marshal(struct {
 		Operation string
@@ -88,44 +99,44 @@ func (s *Session) ReviewAuthority(ctx context.Context, operation string, payload
 		Members   []api.PublicationMember
 	}{operation, raw, members})
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	digest := sha256.Sum256(identity)
 	id := "review-" + hex.EncodeToString(digest[:])
-	if _, err := s.publicationHistory(operation, raw, id); err != nil {
-		return nil, err
+	if _, err := s.publicationHistory(operation, replay, raw, id); err != nil {
+		return nil, false, err
 	}
 	prepared, err := s.Project.PreparePublication(ctx, api.PublicationPrepare{ID: id, Operation: operation, Payload: raw, Members: members})
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if prepared.Status == "published" {
-		return &client.Claim{PublicationID: id, PublicationPayload: raw}, nil
+		return &client.Claim{PublicationID: id, PublicationPayload: raw}, true, nil
 	}
 	var pending []string
 	for _, member := range members {
 		credential, found, err := s.Credential(member.TaskID)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if found && !credential.Lost && credential.Generation == member.Generation {
 			prepared, err = s.Project.ConfirmPublication(ctx, id, api.PublicationApproval{TaskID: member.TaskID, Digest: prepared.Digest, Revision: member.Revision, Generation: member.Generation}, *credential.Claim())
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 		} else if _, approved := prepared.Approvals[member.TaskID]; !approved {
 			key := sha256.Sum256([]byte(id + "\x00" + member.TaskID))
 			message := config.Text("remote.publication_confirmation_request", id, member.TaskID)
 			if _, err := s.Project.CreateRequest(ctx, "approval-"+hex.EncodeToString(key[:]), member.TaskID, api.NewCollabRequest{Kind: api.RequestReview, TargetGeneration: member.Generation, Message: message}); err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			pending = append(pending, member.TaskID)
 		}
 	}
 	if len(pending) > 0 {
-		return nil, &api.Error{Code: api.CodeEvidenceIncomplete, Message: "publication " + id + " awaits holder confirmation for " + strings.Join(pending, ", ")}
+		return nil, false, &api.Error{Code: api.CodeEvidenceIncomplete, Message: "publication " + id + " awaits holder confirmation for " + strings.Join(pending, ", ")}
 	}
-	return &client.Claim{PublicationID: id, PublicationPayload: raw}, nil
+	return &client.Claim{PublicationID: id, PublicationPayload: raw}, false, nil
 }
 
 // ConfirmReviewPublication confirms only the credential available to this

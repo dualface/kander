@@ -16,7 +16,10 @@ import (
 	"github.com/dualface/kander/internal/fs"
 )
 
-func (s *Session) publicationHistory(operation string, raw json.RawMessage, add string) (ids []string, err error) {
+// publicationHistory keys the replay record by replay and the logical
+// material. replay is the operation name for every operation except aggregate,
+// so existing records keep their names.
+func (s *Session) publicationHistory(operation, replay string, raw json.RawMessage, add string) (ids []string, err error) {
 	logical, err := verificationIdentity(operation, raw)
 	if err != nil {
 		return nil, err
@@ -24,7 +27,7 @@ func (s *Session) publicationHistory(operation string, raw json.RawMessage, add 
 	data, err := json.Marshal(struct {
 		Operation string
 		Material  json.RawMessage
-	}{operation, logical})
+	}{replay, logical})
 	if err != nil {
 		return nil, err
 	}
@@ -74,8 +77,8 @@ func (s *Session) publicationHistory(operation string, raw json.RawMessage, add 
 // completedReviewPublication recognizes a prior successful operation before
 // looking at versions changed by that very publication or by a later executor.
 // It returns only an immutable receipt; it grants no new write authority.
-func (s *Session) completedReviewPublication(ctx context.Context, operation string, raw json.RawMessage) (*client.Claim, bool, error) {
-	ids, err := s.publicationHistory(operation, raw, "")
+func (s *Session) completedReviewPublication(ctx context.Context, operation, replay string, raw json.RawMessage) (*client.Claim, bool, error) {
+	ids, err := s.publicationHistory(operation, replay, raw, "")
 	if err != nil {
 		return nil, false, err
 	}

@@ -85,6 +85,7 @@
   "remote.launch_operation_id_invalid": "--operation-id には有効で安定した操作識別子が必要です",
   "remote.local_execution_required": "この操作には所有ホストに保持された正確な実行記録が必要です",
   "remote.execution_dismissed": "タスク実行を終了して閉じました: {{.V0}}",
+  "remote.review_aggregate_stale": "サーバーはバッチ {{.V0}} の現在のビューではなく、以前の公開で保存された集約ビューを返しました。何も出力していません。kander review aggregate を再実行してください",
   "remote.review_material_conflict": "非公開の共同レビュー資料が破損しているか、確認した操作と一致しません",
   "remote.integration_input_required": "統合には安定した操作 ID、目的、正確なコミット SHA、対象参照、メンバー範囲、決定の根拠が必要です",
   "remote.integration_members_changed": "統合メンバーまたは実行が変わりました。現在のサーバースナップショットを確認してください",

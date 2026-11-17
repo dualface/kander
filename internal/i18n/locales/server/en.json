@@ -85,6 +85,7 @@
   "remote.launch_operation_id_invalid": "--operation-id requires a valid stable operation identity",
   "remote.local_execution_required": "This operation requires the exact retained execution on its owning host",
   "remote.execution_dismissed": "Dismissed task execution: {{.V0}}",
+  "remote.review_aggregate_stale": "The server returned the aggregate view saved by an earlier publication of batch {{.V0}}, not its current view; nothing was printed. Run kander review aggregate again",
   "remote.review_material_conflict": "The private joint-review material is damaged or differs from the inspected operation",
   "remote.integration_input_required": "Integration requires a stable operation ID, purpose, exact source SHA, target ref, member scope and decision",
   "remote.integration_members_changed": "Integration membership or its execution changed; inspect the current service snapshot",

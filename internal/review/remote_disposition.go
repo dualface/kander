@@ -78,14 +78,7 @@ func runRemoteDisposition(cfg *config.Config, args []string) int {
 		}
 		typed = &map[string]string{}
 	case "aggregate":
-		var v board.ReviewBatchView
-		if v, err = remoteBatchView(ctx, session, input); err == nil {
-			proof, authorityErr := session.ReviewAuthority(ctx, "review-aggregate:"+input, input, v.Batch.TaskIDs)
-			err = authorityErr
-			if err == nil {
-				out, err = session.Project.ReviewAggregate(ctx, client.NewKey(), input, proof)
-			}
-		}
+		out, err = session.AggregateReview(ctx, input)
 		typed = &board.ReviewBatchView{}
 	case "progress":
 		out, err = session.Project.ReviewProgress(ctx, input)

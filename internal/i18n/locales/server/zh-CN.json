@@ -85,6 +85,7 @@
   "remote.launch_operation_id_invalid": "--operation-id 需要有效且稳定的操作标识",
   "remote.local_execution_required": "此操作需要执行主机保留的精确执行记录",
   "remote.execution_dismissed": "已退出并关闭任务执行：{{.V0}}",
+  "remote.review_aggregate_stale": "服务端返回的是批次 {{.V0}} 先前一次发布保存的聚合视图，不是当前视图；未输出任何内容。请重新运行 kander review aggregate",
   "remote.review_material_conflict": "私有联合评审材料损坏，或与已检查的操作不一致",
   "remote.integration_input_required": "集成需要稳定的操作 ID、用途、来源完整 SHA、目标引用、成员范围和决定来源",
   "remote.integration_members_changed": "集成成员或执行已变化；请核对服务端当前快照",
