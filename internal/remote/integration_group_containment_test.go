@@ -12,11 +12,11 @@ import (
 
 // linearReviewedGroup reviews a group of two members whose deliveries stack:
 // the second builds on the first, so the joint review range stays linear.
-func linearReviewedGroup(t *testing.T) (f *integrationFixture, ids []string, options remote.IntegrationOptions, tip string) {
+func linearReviewedGroup(t *testing.T) (f *integrationFixture, ids []string, owners []remote.Credential, options remote.IntegrationOptions, tip string) {
 	t.Helper()
 	f = newIntegrationGitFixture(t)
 	group := "20261117-contain-group"
-	ids, owners := integrationGroupCards(t, f, group)
+	ids, owners = integrationGroupCards(t, f, group)
 	if _, err := f.a.AcquireCoordinator(t.Context(), board.CoordinatorClaim{GroupID: group, Owner: "coordinator", Token: "contain-session", Basis: "explicitly coordinate the complete group", Members: ids}, "explicit group coordination"); err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func linearReviewedGroup(t *testing.T) (f *integrationFixture, ids []string, opt
 	}
 	integrationJointClose(t, f, ids, tip)
 	options.OperationID, options.Purpose, options.TargetRef, options.Contributors = "deliver-stacked-group", "deliver", "refs/heads/v2", nil
-	return f, ids, options, tip
+	return f, ids, owners, options, tip
 }
 
 func (f *integrationFixture) verifyGroupReceipts(ids []string, result api.Integration) {
@@ -71,7 +71,7 @@ func (f *integrationFixture) verifyGroupReceipts(ids []string, result api.Integr
 }
 
 func TestIntegrationGroupViaCarrierAfterTheTargetAdvanced(t *testing.T) {
-	f, ids, options, tip := linearReviewedGroup(t)
+	f, ids, owners, options, tip := linearReviewedGroup(t)
 	foreign := f.advanceTarget("other.txt")
 	deliveryGit(t, f.first, "fetch", "-q", "origin")
 	deliveryGit(t, f.first, "checkout", "-q", "--detach", tip)
@@ -93,10 +93,11 @@ func TestIntegrationGroupViaCarrierAfterTheTargetAdvanced(t *testing.T) {
 		t.Fatalf("receipt: %+v", result)
 	}
 	f.verifyGroupReceipts(ids, result)
+	f.completeGroupMembers(ids, owners)
 }
 
 func TestIntegrationGroupReplayedRangeAlreadyInTheTarget(t *testing.T) {
-	f, ids, options, tip := linearReviewedGroup(t)
+	f, ids, owners, options, tip := linearReviewedGroup(t)
 	deliveryGit(t, f.second, "fetch", "-q", "origin")
 	_, target := f.pickOnTarget(f.commit, tip)
 	result, err := f.a.Integrate(t.Context(), f.first, options)
@@ -111,7 +112,32 @@ func TestIntegrationGroupReplayedRangeAlreadyInTheTarget(t *testing.T) {
 		t.Fatalf("a replayed group delivery moved the target: %s", f.targetHead())
 	}
 	f.verifyGroupReceipts(ids, result)
+	f.completeGroupMembers(ids, owners)
 	if filepath.Base(result.Request.TargetRef) != "v2" {
 		t.Fatal(result.Request.TargetRef)
+	}
+}
+
+// completeGroupMembers moves every member to done on the final receipt, the
+// way an executing agent does once the group is integrated.
+func (f *integrationFixture) completeGroupMembers(ids []string, owners []remote.Credential) {
+	f.t.Helper()
+	for i, id := range ids {
+		session, dir := []*remote.Session{f.a, f.b}[i], []string{f.first, f.second}[i]
+		owners[i].Worktree = dir
+		if err := session.SaveCredential(owners[i]); err != nil {
+			f.t.Fatal(err)
+		}
+		current, err := session.Project.Show(f.t.Context(), id)
+		if err != nil {
+			f.t.Fatal(err)
+		}
+		if _, err := session.Project.PutDocument(f.t.Context(), "", id, api.Document{Path: "report.md", Text: "Completed through a group integration.", ExpectedRevision: current.Revision}, owners[i].Claim()); err != nil {
+			f.t.Fatal(err)
+		}
+		done, err := session.MoveTask(f.t.Context(), id, api.Move{State: "done", Result: "completed"})
+		if err != nil || done.State != "done" {
+			f.t.Fatalf("completion of %s: %+v %v", id, done, err)
+		}
 	}
 }
