@@ -62,19 +62,15 @@ func recordWindowLocation(root string, plan LaunchPlan, entry board.Entry, choic
 	}
 }
 
-// tabTitleLimit is the longest display title of a container, in runes.
-const tabTitleLimit = 40
-
 // taskTabTitle is the display title of a card launch: the card title, with
-// control characters removed and cut to tabTitleLimit runes with a trailing
-// ellipsis. It is empty for a card without a title, so the container label
+// control characters removed and never shortened. It is empty for a card without a title, so the container label
 // stays in use.
 func taskTabTitle(text string) string {
 	title := board.TitleFrom(text)
 	if title == t("board.untitled") {
 		return ""
 	}
-	return capTabTitle(title)
+	return cleanTabTitle(title)
 }
 
 // orchestratorTabTitle is the display title of an orchestrator launch: the ID
@@ -88,18 +84,14 @@ func orchestratorTabTitle(references []string) string {
 	if rest := len(references) - 1; rest > 0 {
 		title += " +" + strconv.Itoa(rest)
 	}
-	return capTabTitle(title)
+	return cleanTabTitle(title)
 }
 
-func capTabTitle(title string) string {
-	runes := []rune(strings.TrimSpace(strings.Map(func(r rune) rune {
+func cleanTabTitle(title string) string {
+	return strings.TrimSpace(strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) {
 			return -1
 		}
 		return r
-	}, title)))
-	if len(runes) <= tabTitleLimit {
-		return string(runes)
-	}
-	return string(runes[:tabTitleLimit-1]) + "…"
+	}, title))
 }
