@@ -317,7 +317,11 @@ func sectionTitle(section string) string {
 }
 
 // padBlock pads the content into a rectangle of fixed width and height, so the popup border does not jitter.
+// A height below one yields no lines at all: callers derive it from the window size, which can be smaller than their chrome.
 func padBlock(text string, width, height int, p palette) string {
+	if height <= 0 {
+		return ""
+	}
 	lines := strings.Split(text, "\n")
 	if len(lines) > height {
 		lines = lines[:height]
