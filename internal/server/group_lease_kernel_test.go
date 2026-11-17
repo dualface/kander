@@ -71,11 +71,11 @@ func (l leaseProbe) stays(e servergrouplease.Event, code string, fn func() error
 }
 
 // Every lease entrance of the server refines the group kernel: a claim, the
-// reuse of a valid lease, a renewal, observations, a takeover, and a release.
-// The refusals cover theorems 1 to 4: a forged token, a second claim of a valid
-// lease, a claim of the lease's own execution identity by another client or
-// after the lease expired, a takeover without a decision or with a stale
-// observed generation, and every request of a lost, expired, or released
+// reuse of an active lease (also after it lapsed), a renewal, observations, a
+// takeover, and a release. The refusals cover theorems 1 to 4: a forged token,
+// a second claim of a valid lease, a claim of the lease's own execution
+// identity by another client, a takeover without a decision or with a stale
+// observed generation, and every request of a taken-over, lost, or released
 // lease.
 func TestGroupLeaseEntrancesRefineTheKernel(t *testing.T) {
 	f := newFixture(t)

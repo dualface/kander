@@ -67,8 +67,9 @@ def claimGuard : Expr :=
   .ite (a "sameExec") (andE (a "sameClient") holder)
     (andE (notE valid) (andE (eq (a "expected") gen) (andE (a "room") (orE (statusIs "none") (a "decision")))))
 
-/-- `claimGroup`: a new record, a takeover, or the reuse of a valid lease. The
-reuse keeps the record. -/
+/-- `claimGroup`: a new record, a takeover, or the reuse of an active lease,
+valid or lapsed. The reuse keeps the status and the generation and makes the
+lease live. -/
 def claimEvent : EventDecl where
   name := "claim"
   args := holderArgs ++ [boolArg "sameExec", boolArg "sameClient", genArg "expected", boolArg "room",
