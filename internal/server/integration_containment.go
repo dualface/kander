@@ -50,38 +50,36 @@ func integrationContainmentEdges(input api.IntegrationRequest) ([]api.Integratio
 // integrationEdgesMatch requires the request to carry exactly the containment
 // edges plus one edge per contributing delivery: either the delivery is an
 // ancestor of the reviewed commit, or it is an ancestor of the target after
-// the integration. A delivery with both edges, or with neither, is refused.
-// An edge that is already a containment edge does not count as a choice.
+// the integration. A delivery with both edges, or with neither, is refused. A
+// containment edge that is also a delivery edge counts as the delivery's edge.
+// A request without containment (an older client, or a purpose other than
+// deliver) keeps the earlier rule: the edge to the reviewed commit, always.
 func integrationEdgesMatch(input api.IntegrationRequest, containment []api.IntegrationEdge, deliveries []string) bool {
-	base := map[api.IntegrationEdge]bool{}
-	required := append([]api.IntegrationEdge(nil), containment...)
-	for _, edge := range containment {
-		base[edge] = true
-	}
 	given := map[api.IntegrationEdge]bool{}
 	for _, edge := range input.Edges {
 		given[edge] = true
 	}
+	required := append([]api.IntegrationEdge(nil), containment...)
 	final := input.FinalCommit()
 	for _, delivery := range deliveries {
 		options := []api.IntegrationEdge{{Ancestor: delivery, Descendant: input.Commit}}
-		if input.Purpose == "deliver" && final != input.Commit {
+		if input.Containment == "" {
+			required = append(required, options...)
+			continue
+		}
+		if final != input.Commit {
 			options = append(options, api.IntegrationEdge{Ancestor: delivery, Descendant: final})
 		}
-		var own []api.IntegrationEdge
-		onBase := false
+		var present []api.IntegrationEdge
 		for _, option := range options {
-			switch {
-			case base[option]:
-				onBase = true
-			case given[option]:
-				own = append(own, option)
+			if given[option] {
+				present = append(present, option)
 			}
 		}
-		if len(own) > 1 || len(own) == 0 && !onBase {
+		if len(present) != 1 {
 			return false
 		}
-		required = append(required, own...)
+		required = append(required, present...)
 	}
 	return reflect.DeepEqual(normalizedIntegrationEdges(required), normalizedIntegrationEdges(input.Edges))
 }

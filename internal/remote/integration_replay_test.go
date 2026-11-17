@@ -114,3 +114,48 @@ func TestIntegrationReplayRejectsAMergeInTheReviewRange(t *testing.T) {
 		t.Fatal("a review range with a merge was judged equal")
 	}
 }
+
+func TestIntegrationReplayMayReuseAnOriginalCommitOfTheRange(t *testing.T) {
+	f, mid := replayFixture(t)
+	// The target received the first reviewed commit under its own SHA and the
+	// second one as a copy, so the matching run starts at an original commit.
+	deliveryGit(t, f.second, "checkout", "-q", "-B", "reuse", "origin/v2")
+	deliveryGit(t, f.second, "cherry-pick", "--ff", mid)
+	deliveryGit(t, f.second, "cherry-pick", "-x", f.commit)
+	copied := deliveryGit(t, f.second, "rev-parse", "HEAD")
+	deliveryGit(t, f.second, "push", "origin", "HEAD:refs/heads/v2")
+	if copied == f.commit {
+		t.Fatal("the copy kept the reviewed SHA")
+	}
+	result, err := f.a.Integrate(t.Context(), f.first, f.options("replay-original-commit"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	replay := result.Request.Replay
+	if result.Request.Containment != api.IntegrationReplayed || replay == nil || replay.ReplayBase != f.base || replay.ReplayTarget != copied || f.targetHead() != copied {
+		t.Fatalf("receipt: %+v", result.Request)
+	}
+	f.complete(result)
+}
+
+func TestIntegrationReplayMayEnterTheTargetThroughAMerge(t *testing.T) {
+	f, mid := replayFixture(t)
+	deliveryGit(t, f.second, "checkout", "-q", "-B", "pull-request", "origin/v2")
+	commitFile(t, f.second, "pr-base.txt", "pull request base\n", "Pull request base")
+	deliveryGit(t, f.second, "cherry-pick", mid)
+	deliveryGit(t, f.second, "cherry-pick", f.commit)
+	copied := deliveryGit(t, f.second, "rev-parse", "HEAD")
+	deliveryGit(t, f.second, "checkout", "-q", "-B", "mainline", "origin/v2")
+	commitFile(t, f.second, "mainline.txt", "mainline work\n", "Mainline work")
+	deliveryGit(t, f.second, "merge", "--no-ff", "--no-edit", "pull-request")
+	merged := deliveryGit(t, f.second, "rev-parse", "HEAD")
+	deliveryGit(t, f.second, "push", "origin", "HEAD:refs/heads/v2")
+	result, err := f.a.Integrate(t.Context(), f.first, f.options("replay-behind-merge"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replay := result.Request.Replay; result.Request.Containment != api.IntegrationReplayed || replay == nil || replay.ReplayTarget != copied || result.ObservedTarget != merged || f.targetHead() != merged {
+		t.Fatalf("receipt: %+v", result.Request)
+	}
+	f.complete(result)
+}

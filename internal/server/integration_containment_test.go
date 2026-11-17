@@ -12,9 +12,11 @@ import (
 // containmentCase builds a delivery request whose reviewed commit differs from
 // the member delivery, as it does after a target-side merge.
 type containmentCase struct {
-	name   string
-	build  func(r *api.IntegrationRequest, sha func(string) string)
-	reject string
+	name string
+	// deliveryIsReviewed makes the member delivery the reviewed commit itself.
+	deliveryIsReviewed bool
+	build              func(r *api.IntegrationRequest, sha func(string) string)
+	reject             string
 }
 
 func edge(a, d string) api.IntegrationEdge { return api.IntegrationEdge{Ancestor: a, Descendant: d} }
@@ -46,6 +48,14 @@ func TestIntegrationContainmentKindsNeedExactEdges(t *testing.T) {
 		{name: "contained with no member edge", reject: api.CodeEvidenceIncomplete, build: func(r *api.IntegrationRequest, s func(string) string) {
 			r.Containment, r.AlreadyContained = api.IntegrationContained, true
 			r.Edges = []api.IntegrationEdge{edge(s("c"), s("a"))}
+		}},
+		{name: "contained with the delivery equal to the reviewed commit", deliveryIsReviewed: true, build: func(r *api.IntegrationRequest, s func(string) string) {
+			r.Containment, r.AlreadyContained = api.IntegrationContained, true
+			r.Edges = []api.IntegrationEdge{edge(s("c"), s("a"))}
+		}},
+		{name: "contained with the delivery equal to the reviewed commit and both edges", deliveryIsReviewed: true, reject: api.CodeEvidenceIncomplete, build: func(r *api.IntegrationRequest, s func(string) string) {
+			r.Containment, r.AlreadyContained = api.IntegrationContained, true
+			r.Edges = []api.IntegrationEdge{edge(s("c"), s("a")), edge(s("c"), s("c"))}
 		}},
 		{name: "via with the delivery in the carrier", build: func(r *api.IntegrationRequest, s func(string) string) {
 			r.Containment, r.ViaCommit = api.IntegrationVia, s("e")
@@ -112,7 +122,11 @@ func TestIntegrationContainmentKindsNeedExactEdges(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			f := newFixture(t)
 			p := f.project("host-a")
-			member, grant := integrationTaskAt(t, f, p, "host-a", "contain-kind", sha("d"), sha("c"))
+			delivery := sha("d")
+			if c.deliveryIsReviewed {
+				delivery = sha("c")
+			}
+			member, grant := integrationTaskAt(t, f, p, "host-a", "contain-kind", delivery, sha("c"))
 			input := integrationInput(t, p, member, grant.Claim.ExecutionID, "contain-kind-"+strings.ReplaceAll(c.name, " ", "-"))
 			input.Commit = sha("c")
 			c.build(&input, sha)

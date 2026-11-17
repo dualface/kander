@@ -50,11 +50,11 @@ func (s *Session) prepareIntegration(ctx context.Context, dir string, options In
 	request.Edges = request.ContainmentEdges()
 	for _, member := range members {
 		if member.DeliveryCommit != "" {
-			edge, err := s.integrationMemberEdge(ctx, dir, request, member.DeliveryCommit)
+			edges, err := s.integrationMemberEdges(ctx, dir, request, member.DeliveryCommit)
 			if err != nil {
 				return request, err
 			}
-			request.Edges = append(request.Edges, edge)
+			request.Edges = append(request.Edges, edges...)
 		}
 	}
 	if err := s.integrationEdges(ctx, dir, request); err != nil {

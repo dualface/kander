@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -93,21 +94,36 @@ func patchesEqual(ctx context.Context, dir string, reviewed, replayed []string) 
 	return true, nil
 }
 
-// findReplay looks for a run of consecutive commits on the first-parent chain
-// of the target that repeats the review range B..C commit by commit. The
-// search only starts after the merge base of C and the target.
+// findReplay looks for a run of consecutive commits of the target that repeats
+// the review range B..C commit by commit. Candidates are the single-parent
+// commits of B..T, wherever they entered the target, so a replay behind a merge
+// and a replay that follows commits the target already held both qualify. A run
+// is a chain in which each commit has the previous one as its parent.
 func findReplay(ctx context.Context, dir, base, commit, target string) (*api.IntegrationReplay, error) {
 	reviewed, ok, err := reviewCommits(ctx, dir, base, commit)
 	if err != nil || !ok || len(reviewed) > replayMaxCommits {
 		return nil, err
 	}
-	fork, err := gitCommand(ctx, dir, "merge-base", commit, target)
-	if err != nil || fork == "" {
-		return nil, nil
-	}
-	chain, ok, err := revList(ctx, dir, fork+".."+target, true)
-	if err != nil || !ok {
+	listing, err := gitCommand(ctx, dir, "rev-list", "--reverse", "--parents", "--max-count="+strconv.Itoa(replayMaxChain+1), base+".."+target)
+	if err != nil {
 		return nil, err
+	}
+	var candidates []string
+	parent := map[string]string{}
+	children := map[string][]string{}
+	for _, line := range strings.Split(listing, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		if len(candidates) == replayMaxChain {
+			return nil, nil
+		}
+		candidates = append(candidates, fields[0])
+		if len(fields) == 2 {
+			parent[fields[0]] = fields[1]
+			children[fields[1]] = append(children[fields[1]], fields[0])
+		}
 	}
 	patches := map[string]string{}
 	patch := func(c string) (string, error) {
@@ -118,32 +134,50 @@ func findReplay(ctx context.Context, dir, base, commit, target string) (*api.Int
 		patches[c] = value
 		return value, err
 	}
-	for start := 0; start+len(reviewed) <= len(chain); start++ {
-		matched := true
-		for i, c := range reviewed {
-			want, err := patch(c)
-			if err != nil {
-				return nil, err
-			}
-			got, err := patch(chain[start+i])
-			if err != nil {
-				return nil, err
-			}
-			if want != got {
-				matched = false
-				break
-			}
-		}
-		if !matched {
+	for _, start := range candidates {
+		if parent[start] == "" {
 			continue
 		}
-		first, err := gitCommand(ctx, dir, "rev-parse", chain[start]+"^1")
+		last, err := followRun(start, reviewed, children, patch)
 		if err != nil {
 			return nil, err
 		}
-		return &api.IntegrationReplay{ReviewBase: base, ReviewTarget: commit, ReplayBase: first, ReplayTarget: chain[start+len(reviewed)-1]}, nil
+		if last != "" {
+			return &api.IntegrationReplay{ReviewBase: base, ReviewTarget: commit, ReplayBase: parent[start], ReplayTarget: last}, nil
+		}
 	}
 	return nil, nil
+}
+
+// followRun walks the children of start while their patches repeat the
+// reviewed commits in order. It returns the last commit of a complete run.
+func followRun(start string, reviewed []string, children map[string][]string, patch func(string) (string, error)) (string, error) {
+	cursor := ""
+	for i, reviewedCommit := range reviewed {
+		want, err := patch(reviewedCommit)
+		if err != nil {
+			return "", err
+		}
+		next := []string{start}
+		if i > 0 {
+			next = children[cursor]
+		}
+		cursor = ""
+		for _, candidate := range next {
+			got, err := patch(candidate)
+			if err != nil {
+				return "", err
+			}
+			if got == want {
+				cursor = candidate
+				break
+			}
+		}
+		if cursor == "" {
+			return "", nil
+		}
+	}
+	return cursor, nil
 }
 
 // verifyReplay repeats the commit-by-commit comparison of a recorded replay.

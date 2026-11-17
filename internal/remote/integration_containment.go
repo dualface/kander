@@ -3,7 +3,8 @@ package remote
 import (
 	"context"
 	"errors"
-	"os"
+	"slices"
+	"strings"
 
 	"github.com/dualface/kander/internal/api"
 )
@@ -62,7 +63,7 @@ func (s *Session) viaContainment(ctx context.Context, dir string, options Integr
 		if err := s.FetchCommit(ctx, dir, via); err != nil {
 			return errors.Join(err, integrationFailure("remote.integration_via_unavailable"))
 		}
-		if err := remoteServes(ctx, s.Info.Remote, via); err != nil {
+		if err := remoteServes(ctx, dir, via); err != nil {
 			return errors.Join(err, integrationFailure("remote.integration_via_unavailable"))
 		}
 	}
@@ -105,48 +106,55 @@ func (s *Session) reviewReplay(ctx context.Context, dir string, request *api.Int
 	return findReplay(ctx, dir, base, request.Commit, target)
 }
 
-// integrationMemberEdge ties one contributing delivery to the integration. A
-// delivery that is an ancestor of the reviewed commit keeps the plain edge;
-// otherwise it must already be in the target the integration leaves behind.
-// Assembly and initialization keep the plain edge, which the edge check proves.
-func (s *Session) integrationMemberEdge(ctx context.Context, dir string, request api.IntegrationRequest, delivery string) (api.IntegrationEdge, error) {
-	edge := api.IntegrationEdge{Ancestor: delivery, Descendant: request.Commit}
+// integrationMemberEdges ties one contributing delivery to the integration and
+// returns the edge to add, if any. A delivery that is an ancestor of the
+// reviewed commit uses the edge to that commit; otherwise it must already be in
+// the target the integration leaves. An edge that the request already carries
+// serves the delivery, because the service counts exactly one such edge per
+// delivery; the edge check proves it. Assembly and initialization keep the
+// plain edge.
+func (s *Session) integrationMemberEdges(ctx context.Context, dir string, request api.IntegrationRequest, delivery string) ([]api.IntegrationEdge, error) {
+	toReviewed := api.IntegrationEdge{Ancestor: delivery, Descendant: request.Commit}
 	if request.Purpose != "deliver" {
-		return edge, nil
+		return []api.IntegrationEdge{toReviewed}, nil
+	}
+	final := request.FinalCommit()
+	toFinal := api.IntegrationEdge{Ancestor: delivery, Descendant: final}
+	if slices.Contains(request.Edges, toReviewed) || slices.Contains(request.Edges, toFinal) {
+		return nil, nil
 	}
 	reviewed, err := gitAncestor(ctx, dir, delivery, request.Commit)
 	if err != nil || reviewed {
-		return edge, err
+		return []api.IntegrationEdge{toReviewed}, err
 	}
-	final := request.FinalCommit()
 	if final == request.Commit {
-		return edge, integrationFailure("remote.integration_delivery_not_contained")
+		return nil, integrationFailure("remote.integration_delivery_not_contained")
 	}
 	if err := s.FetchCommit(ctx, dir, final); err != nil {
-		return edge, err
+		return nil, err
 	}
 	kept, err := gitAncestor(ctx, dir, delivery, final)
 	if err != nil {
-		return edge, err
+		return nil, err
 	}
 	if !kept {
-		return edge, integrationFailure("remote.integration_delivery_not_contained")
+		return nil, integrationFailure("remote.integration_delivery_not_contained")
 	}
-	return api.IntegrationEdge{Ancestor: delivery, Descendant: final}, nil
+	return []api.IntegrationEdge{toFinal}, nil
 }
 
 // remoteServes proves that the common remote itself holds a commit. A plain
-// fetch succeeds without contact when the object is already in the clone, so
-// the probe fetches one shallow commit into an empty scratch repository.
-func remoteServes(ctx context.Context, remote, commit string) error {
-	scratch, err := os.MkdirTemp("", "kander-remote-probe-")
+// fetch succeeds without contact when the object is already in the clone. The
+// negotiation asks the remote through the clone's own origin and prints every
+// commit of the negotiation tip that the remote acknowledges; the commit itself
+// is listed only when the remote has it.
+func remoteServes(ctx context.Context, dir, commit string) error {
+	acknowledged, err := gitCommand(ctx, dir, "fetch", "--negotiate-only", "--negotiation-tip="+commit, "origin")
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(scratch)
-	if _, err := gitCommand(ctx, scratch, "init", "-q", "--bare"); err != nil {
-		return err
+	if !slices.Contains(strings.Fields(acknowledged), commit) {
+		return integrationFailure("remote.git_commit_unavailable")
 	}
-	_, err = gitCommand(ctx, scratch, "fetch", "-q", "--no-tags", "--depth=1", "--filter=blob:none", remote, commit)
-	return err
+	return nil
 }

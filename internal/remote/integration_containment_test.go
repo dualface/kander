@@ -255,3 +255,38 @@ func TestIntegrationInputAcceptsViaCommitAndStillRejectsUnknownFields(t *testing
 		t.Fatal("a misspelled field was accepted")
 	}
 }
+
+func TestIntegrationContainedBySeveralCommitsNeedsNoSecondMemberEdge(t *testing.T) {
+	f := newIntegrationFixture(t)
+	// The delivery is the reviewed commit itself and the target is ahead of it.
+	deliveryGit(t, f.first, "push", "origin", f.commit+":refs/heads/v2")
+	ahead := f.advanceTarget("ahead.txt")
+	result, err := f.a.Integrate(t.Context(), f.first, f.options("contained-ahead"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Request.Containment != api.IntegrationContained || result.ObservedTarget != ahead || f.targetHead() != ahead {
+		t.Fatalf("receipt: %+v", result)
+	}
+	if len(result.Request.Edges) != 1 {
+		t.Fatalf("a delivery equal to the reviewed commit needs no extra edge: %+v", result.Request.Edges)
+	}
+	f.complete(result)
+}
+
+func TestIntegrationViaMayBeBelowARemoteTip(t *testing.T) {
+	f := newIntegrationFixture(t)
+	f.advanceTarget("other.txt")
+	deliveryGit(t, f.first, "fetch", "-q", "origin")
+	deliveryGit(t, f.first, "merge", "--no-edit", "origin/v2")
+	carrier := deliveryGit(t, f.first, "rev-parse", "HEAD")
+	commitFile(t, f.first, "after-carrier.txt", "later work\n", "Work after the carrier")
+	deliveryGit(t, f.first, "push", "origin", "HEAD:refs/heads/carrier-branch")
+	deliveryGit(t, f.first, "reset", "-q", "--hard", carrier)
+	options := f.options("via-below-tip")
+	options.ViaCommit = carrier
+	result, err := f.a.Integrate(t.Context(), f.first, options)
+	if err != nil || result.ObservedTarget != carrier {
+		t.Fatalf("a carrier below a remote tip was refused: %+v %v", result, err)
+	}
+}
