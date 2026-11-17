@@ -13,6 +13,7 @@ import (
 	"github.com/dualface/kander/internal/statemachine/serverclaim"
 	"github.com/dualface/kander/internal/statemachine/serverdelivery"
 	"github.com/dualface/kander/internal/statemachine/servergrouplease"
+	"github.com/dualface/kander/internal/statemachine/serverintegration"
 	"github.com/dualface/kander/internal/statemachine/serverproposal"
 	"github.com/dualface/kander/internal/statemachine/serverrequest"
 )
@@ -228,4 +229,117 @@ func (s *Server) ProposalSlot(id, task, dispatchID string) (serverproposal.State
 		return serverproposal.State{}, serverproposal.Params{}, err
 	}
 	return newProposalSlot(len(proposalsOf(requests, dispatchID))).state, proposalSlotParams, nil
+}
+
+// IntegrationState projects the integration record of target integration of
+// project id the way an operation does, with the bases of the operation or the
+// bases the record fixes when bases is nil. It returns the bases it used.
+func (s *Server) IntegrationState(id, integration string, bases *IntegrationBases) (serverintegration.State, IntegrationBases, error) {
+	p, err := s.project(id)
+	if err != nil {
+		return serverintegration.State{}, IntegrationBases{}, err
+	}
+	record, found, err := p.readIntegration(integration)
+	if err != nil {
+		return serverintegration.State{}, IntegrationBases{}, err
+	}
+	k, err := p.projectIntegration(record.Value, found, bases)
+	if err != nil {
+		return serverintegration.State{}, IntegrationBases{}, err
+	}
+	return k.state, k.bases, nil
+}
+
+// ReceiptState projects the published receipt of one generation of a task, or
+// the empty state when the generation has none.
+func (s *Server) ReceiptState(id, task string, generation uint64) (serverintegration.State, error) {
+	p, err := s.project(id)
+	if err != nil {
+		return serverintegration.State{}, err
+	}
+	var value api.Integration
+	found, err := readJSON(p.root, taskIntegrationName(task, generation), &value)
+	if err != nil {
+		return serverintegration.State{}, err
+	}
+	k, err := p.projectIntegration(value, found, nil)
+	if err != nil {
+		return serverintegration.State{}, err
+	}
+	return k.state, nil
+}
+
+// ExecutionState projects the published execution of an integration the way a
+// wrap-up check does.
+func (s *Server) ExecutionState(id, integration, execution string) (serverintegration.State, error) {
+	p, err := s.project(id)
+	if err != nil {
+		return serverintegration.State{}, err
+	}
+	value, err := p.integrationExecution(integration, execution)
+	if err != nil {
+		return serverintegration.State{}, err
+	}
+	k, err := p.projectIntegration(value, true, nil)
+	if err != nil {
+		return serverintegration.State{}, err
+	}
+	return k.state, nil
+}
+
+// MutateIntegration rewrites the stored record of an integration, keeping its
+// token hash, to reach counters the operations cannot reach in a test.
+func (s *Server) MutateIntegration(id, integration string, mutate func(*api.Integration)) error {
+	p, err := s.project(id)
+	if err != nil {
+		return err
+	}
+	if err := p.lockBoard(); err != nil {
+		return err
+	}
+	defer p.mu.Unlock()
+	record, found, err := p.readIntegration(integration)
+	if err != nil || !found {
+		return err
+	}
+	mutate(&record.Value)
+	return board.WithTransaction(p.board, board.LockScope{Groups: []string{serviceGroup}}, func(tx *board.Transaction) error {
+		return stageJSON(tx, integrationName(integration), record)
+	})
+}
+
+// CompletionEvidence runs the evidence check of a move of task into done inside
+// a transaction with the scope the move holds.
+func (s *Server) CompletionEvidence(id, task string, generation uint64) (api.Integration, error) {
+	p, err := s.project(id)
+	if err != nil {
+		return api.Integration{}, err
+	}
+	var value api.Integration
+	err = p.evidence(task, func(tx *board.Transaction) error {
+		var err error
+		value, err = p.completionIntegration(tx, task, generation)
+		return err
+	})
+	return value, err
+}
+
+// WrapUpEvidence runs the integration evidence check of a wrap-up dispatch of
+// task inside a transaction with the scope the dispatch holds.
+func (s *Server) WrapUpEvidence(id, task string, generation uint64, g board.DispatchIntegration) error {
+	p, err := s.project(id)
+	if err != nil {
+		return err
+	}
+	return p.evidence(task, func(tx *board.Transaction) error { return p.wrapUpIntegration(tx, task, generation, g) })
+}
+
+func (p *project) evidence(task string, fn func(*board.Transaction) error) error {
+	if err := p.lockBoard(); err != nil {
+		return err
+	}
+	defer p.mu.Unlock()
+	scope := board.IntegrationScope([]string{task}, "")
+	scope.Groups = append(scope.Groups, serviceGroup)
+	return board.WithTransaction(p.board, scope, fn)
 }

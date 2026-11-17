@@ -1,16 +1,15 @@
 package server
 
 import (
-	"crypto/subtle"
 	"encoding/json"
 	"net/http"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/statemachine/serverintegration"
 )
 
 type integrationRecord struct {
@@ -34,39 +33,7 @@ func (p *project) integrationView(id string) (api.Integration, error) {
 	if !found {
 		return api.Integration{}, apiError(api.CodeNotFound, "target has no integration record")
 	}
-	value := record.Value
-	if value.Status == api.ClaimActive && !p.server.now().Before(value.ExpiresAt) {
-		value.Status = api.ClaimLost
-	}
-	return value, nil
-}
-func (p *project) requireIntegrationOwner(id string, h holder) (integrationRecord, error) {
-	record, found, err := p.readIntegration(id)
-	if err != nil {
-		return record, err
-	}
-	value := record.Value
-	if h.invalid != nil {
-		return record, h.invalid
-	}
-	if !found || value.Status != api.ClaimActive || value.Generation != h.generation || !p.server.now().Before(value.ExpiresAt) {
-		return record, apiError(api.CodeLeaseInvalid, "integration lease is no longer current")
-	}
-	if h.clientID != value.ClientID || h.token == "" || subtle.ConstantTimeCompare([]byte(tokenHash(h.token)), []byte(record.Hash)) != 1 {
-		return record, apiError(api.CodeHeldByOther, "target is held by another integration execution")
-	}
-	return record, nil
-}
-
-func (p *project) requireIntegration(id string, h holder) (integrationRecord, error) {
-	record, err := p.requireIntegrationOwner(id, h)
-	if err != nil {
-		return record, err
-	}
-	if err := p.currentIntegrationActor(record.Value); err != nil {
-		return record, err
-	}
-	return record, nil
+	return p.integrationShown(record.Value)
 }
 func (p *project) integrationObservation(id string) (api.IntegrationObservation, error) {
 	record, found, err := p.readIntegration(id)
@@ -151,33 +118,37 @@ func (p *project) claimIntegration(key, id string, input api.IntegrationRequest,
 		if err != nil {
 			return outcome{err: err}
 		}
-		if found && previous.Value.Status == api.ClaimActive && p.server.now().Before(previous.Value.ExpiresAt) {
-			return outcome{err: apiError(api.CodeLeaseActive, "target already has an active integration lease")}
-		}
-		if input.ExpectedGeneration != previous.Value.Generation || input.ExpectedRevision != previous.Value.Revision {
-			return outcome{err: apiError(api.CodeRevisionConflict, "integration target changed since inspection")}
-		}
-		if previous.Value.Generation == ^uint64(0) || previous.Value.Revision == ^uint64(0) || found && previous.Value.Request.ExecutionID == input.ExecutionID {
-			return outcome{err: apiError(api.CodeLeaseInvalid, "integration requires a fresh execution identity and generation")}
-		}
-		actor, err := p.integrationActor(input, h)
+		k, err := p.projectIntegration(previous.Value, found, nil)
 		if err != nil {
 			return outcome{err: err}
 		}
-		if actor.ClientID != h.clientID || actor.ExecutionID != input.ActorExecutionID {
-			return outcome{err: apiError(api.CodeHeldByOther, "integration actor differs from the presented task or coordinator execution")}
+		actor, actorErr := p.integrationActor(input, h)
+		decision := &integrationClaim{kernel: k, previous: previous, found: found, input: input, h: h, actor: actor, actorErr: actorErr}
+		if !k.step(decision.event()) {
+			return outcome{err: decision.err()}
 		}
 		now := p.server.now()
 		next := integrationRecord{Value: api.Integration{SourceRef: api.IntegrationSourceRef(p.info.ID, input.ExecutionID, input.Commit), ID: id, Revision: previous.Value.Revision + 1, Generation: previous.Value.Generation + 1, ClientID: h.clientID, Status: api.ClaimActive, Phase: "reserved", Request: input, AuthorityGeneration: actor.Generation, RenewedAt: now, ExpiresAt: now.Add(p.server.ttl)}}
 		next.Hash = tokenHash(p.server.token(p.info.ID, "integration:"+id, input.ExecutionID, next.Value.Generation))
+		// The ticket and the actor are checked before the facts, which are only
+		// read when both hold, so a refused claim answers the first failure.
 		guard := func(tx *board.Transaction) error {
-			if !p.validIntegrationObservation(id, input.ExpectedRevision, input.ExpectedGeneration, input.ObservationTicket) {
+			ticket := p.validIntegrationObservation(id, input.ExpectedRevision, input.ExpectedGeneration, input.ObservationTicket)
+			_, guardErr := p.integrationActor(input, h)
+			var factsErr error
+			if ticket && guardErr == nil {
+				factsErr = p.integrationFacts(tx, input, true)
+			}
+			if k.accepts(serverintegration.ClaimGuard{Ticket: ticket, Actor: guardErr == nil, Facts: ticket && guardErr == nil && factsErr == nil}) {
+				return nil
+			}
+			switch {
+			case !ticket:
 				return apiError(api.CodeEvidenceIncomplete, "integration target observation expired or changed")
+			case guardErr != nil:
+				return guardErr
 			}
-			if _, err := p.integrationActor(input, h); err != nil {
-				return err
-			}
-			return p.integrationFacts(tx, input, true)
+			return integrationRefusal(factsErr)
 		}
 		grant := api.IntegrationGrant{Integration: next.Value, RenewInterval: api.DurationOf(p.server.renew), TTL: api.DurationOf(p.server.ttl)}
 		err = board.WithTransaction(p.board, scope, func(tx *board.Transaction) error {
@@ -211,20 +182,23 @@ func (p *project) renewIntegration(id string, h holder) (api.Renewal, error) {
 		return api.Renewal{}, err
 	}
 	defer p.mu.Unlock()
-	record, err := p.requireIntegration(id, h)
+	lease, err := p.integrationHolder(id, h)
 	if err != nil {
 		return api.Renewal{}, err
 	}
+	record := lease.record
 	scope, err := integrationScope(record.Value.Request)
 	if err != nil {
 		return api.Renewal{}, err
 	}
 	err = board.WithTransaction(p.board, scope, func(tx *board.Transaction) error {
-		if _, err := p.requireIntegration(id, h); err != nil {
+		again, err := p.integrationHolder(id, h)
+		if err != nil {
 			return err
 		}
-		if err := p.integrationFacts(tx, record.Value.Request, false); err != nil {
-			return err
+		factsErr := p.integrationFacts(tx, record.Value.Request, false)
+		if !again.kernel.step(again.renew(factsErr == nil)) {
+			return integrationRefusal(factsErr)
 		}
 		record.Value.RenewedAt = p.server.now()
 		record.Value.ExpiresAt = record.Value.RenewedAt.Add(p.server.ttl)
@@ -239,19 +213,19 @@ func (p *project) integrationAction(key, id string, input api.IntegrationCommand
 	defer p.mu.Unlock()
 	operation := "integration-action:" + id
 	return p.idempotent(key, operation, input, func() outcome {
-		require := p.requireIntegration
-		if input.Action == "release" {
-			require = p.requireIntegrationOwner
+		release := input.Action == "release"
+		lease := p.integrationHolder
+		if release {
+			lease = p.integrationOwner
 		}
-		record, err := require(id, h)
+		held, err := lease(id, h)
 		if err != nil {
 			return outcome{err: err}
 		}
-		if input.ExpectedRevision == 0 || input.ExpectedRevision != record.Value.Revision {
-			return outcome{err: apiError(api.CodeRevisionConflict, "integration requires its inspected resource version")}
-		}
-		if record.Value.Revision == ^uint64(0) {
-			return outcome{err: apiError(api.CodeRevisionConflict, "integration revision exhausted")}
+		record := held.record
+		action := &integrationActionDecision{lease: held, input: input, now: p.server.now()}
+		if !held.kernel.accepts(action.check()) {
+			return outcome{err: action.revisionError()}
 		}
 		scope, err := integrationScope(record.Value.Request)
 		if err != nil {
@@ -259,46 +233,50 @@ func (p *project) integrationAction(key, id string, input api.IntegrationCommand
 		}
 		next := record
 		next.Value.Revision++
-		next.Value.ObservedTarget, next.Value.ObservedAt = input.ObservedTarget, p.server.now()
+		next.Value.ObservedTarget, next.Value.ObservedAt = input.ObservedTarget, action.now
+		event, ok := action.event()
+		if !ok {
+			return outcome{err: apiError(api.CodeInvalidRequest, "unknown integration action")}
+		}
+		if !held.kernel.step(event) {
+			return outcome{err: action.refusal()}
+		}
 		switch input.Action {
 		case "pushing":
-			if record.Value.Request.AlreadyContained || record.Value.Phase != "reserved" || input.ObservedTarget != record.Value.Request.ExpectedTarget {
-				return outcome{err: apiError(api.CodeEvidenceIncomplete, "push intent must bind the unchanged inspected remote target")}
-			}
 			next.Value.Phase = "pushing"
 		case "confirm":
-			reconciles := record.Value.Phase == "reserved" && record.Value.Request.AlreadyContained
-			if (!reconciles && record.Value.Phase != "pushing") || !api.CommitSHA(input.ObservedTarget) || input.ObservedAt.IsZero() {
-				return outcome{err: apiError(api.CodeEvidenceIncomplete, "completion requires a push intent and fresh exact remote facts")}
-			}
-			required := []api.IntegrationEdge{{Ancestor: record.Value.Request.ConfirmAncestor(), Descendant: input.ObservedTarget}}
-			if !reflect.DeepEqual(normalizedIntegrationEdges(required), normalizedIntegrationEdges(input.Edges)) {
-				return outcome{err: apiError(api.CodeEvidenceIncomplete, "completion must prove the integrated source is in the observed remote target")}
-			}
-			next.Value.Phase, next.Value.Status, next.Value.ExpiresAt = "integrated", api.ClaimReleased, p.server.now()
+			next.Value.Phase, next.Value.Status, next.Value.ExpiresAt = "integrated", api.ClaimReleased, action.now
 		case "release":
-			if strings.TrimSpace(input.Decision) == "" || (input.ObservedTarget != "" && !api.CommitSHA(input.ObservedTarget)) {
-				return outcome{err: apiError(api.CodeEvidenceIncomplete, "release requires a decision and inspected remote state")}
-			}
 			next.Value.Phase = "released"
 			if record.Value.Phase == "pushing" {
 				next.Value.Phase = "uncertain"
 			}
-			next.Value.Status, next.Value.ExpiresAt = api.ClaimReleased, p.server.now()
-		default:
-			return outcome{err: apiError(api.CodeInvalidRequest, "unknown integration action")}
+			next.Value.Status, next.Value.ExpiresAt = api.ClaimReleased, action.now
 		}
 		guard := func(tx *board.Transaction) error {
-			if _, err := require(id, h); err != nil {
+			again, err := lease(id, h)
+			if err != nil {
 				return err
 			}
-			if !p.validIntegrationObservation(id, input.ExpectedRevision, record.Value.Generation, input.ObservationTicket) {
-				return apiError(api.CodeEvidenceIncomplete, "integration remote observation is stale")
-			}
-			if input.Action == "release" {
+			ticket := p.validIntegrationObservation(id, input.ExpectedRevision, record.Value.Generation, input.ObservationTicket)
+			stale := apiError(api.CodeEvidenceIncomplete, "integration remote observation is stale")
+			if release {
+				if !again.kernel.step(again.guardRelease(ticket)) {
+					return stale
+				}
 				return nil
 			}
-			return p.integrationFacts(tx, record.Value.Request, false)
+			var factsErr error
+			if ticket {
+				factsErr = p.integrationFacts(tx, record.Value.Request, false)
+			}
+			if !again.kernel.step(again.guard(ticket, ticket && factsErr == nil)) {
+				if !ticket {
+					return stale
+				}
+				return integrationRefusal(factsErr)
+			}
+			return nil
 		}
 		err = board.WithTransaction(p.board, scope, func(tx *board.Transaction) error {
 			if err := guard(tx); err != nil {
@@ -368,8 +346,5 @@ func (p *project) integrationExecution(id, execution string) (api.Integration, e
 	if !found {
 		return value, apiError(api.CodeNotFound, "integration execution has no published record")
 	}
-	if value.Status == api.ClaimActive && !p.server.now().Before(value.ExpiresAt) {
-		value.Status = api.ClaimLost
-	}
-	return value, nil
+	return p.integrationShown(value)
 }

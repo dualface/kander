@@ -142,20 +142,3 @@ func (p *project) integrationActor(input api.IntegrationRequest, h holder) (clai
 	}
 	return p.requireHolder(input.Members[0].TaskID, h)
 }
-func (p *project) currentIntegrationActor(value api.Integration) error {
-	var claim claimRecord
-	var found bool
-	var err error
-	if value.Request.GroupID != "" {
-		claim, found, err = p.readGroupClaim(value.Request.GroupID)
-	} else {
-		claim, found, err = p.readClaim(value.Request.Members[0].TaskID)
-	}
-	if err != nil {
-		return err
-	}
-	if !found || claim.Status != api.ClaimActive || claim.Generation != value.AuthorityGeneration || claim.ExecutionID != value.Request.ActorExecutionID || claim.ClientID != value.ClientID || !p.server.now().Before(claim.ExpiresAt) {
-		return apiError(api.CodeLeaseInvalid, "integration actor lost its task or coordinator authority")
-	}
-	return nil
-}
