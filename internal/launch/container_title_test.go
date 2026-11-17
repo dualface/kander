@@ -5,7 +5,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"unicode/utf8"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
@@ -92,14 +91,13 @@ func TestTaskTabTitle(t *testing.T) {
 	for _, tc := range []struct{ name, text, want string }{
 		{"card title", "# Open each agent in a tab\n", "Open each agent in a tab"},
 		{"control characters", "# a\x00b\x1b[0m\tc\n", "ab[0mc"},
-		{"at the limit", "# " + strings.Repeat("x", tabTitleLimit) + "\n", strings.Repeat("x", tabTitleLimit)},
-		{"over the limit", "# " + long + "\n", strings.Repeat("长", tabTitleLimit-1) + "…"},
+		{"long title is kept whole", "# " + long + "\n", long},
 		{"no title", "no heading here\n", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			resetLang(t)
 			got := taskTabTitle(tc.text)
-			if got != tc.want || utf8.RuneCountInString(got) > tabTitleLimit {
+			if got != tc.want {
 				t.Fatalf("title=%q, want %q", got, tc.want)
 			}
 		})
@@ -121,7 +119,7 @@ func TestOrchestratorTabTitle(t *testing.T) {
 		}
 	}
 	long := strings.Repeat("a", 60)
-	if got := orchestratorTabTitle([]string{long, "b"}); utf8.RuneCountInString(got) > tabTitleLimit || !strings.HasSuffix(got, "…") {
+	if got := orchestratorTabTitle([]string{long, "b"}); got != long+" +1" {
 		t.Fatalf("title=%q", got)
 	}
 }

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- herdr-core launcher: the tab title of a task agent or orchestrator is no longer cut to 40 characters; the card title (control characters removed) or the orchestrate reference is used whole, with no trailing `…`.
 - Fix (TUI): the board no longer crashes when the terminal height is exactly one row. Rendering the "terminal too small" notice padded its body to a negative height, which panicked with `slice bounds out of range [:-1]` and ended `kander` with exit code 1. The board, detail view, help overlay and options panel now render at every window size, and shrinking the terminal to one row and back keeps the process running.
 
 ## v1.4.2 — 2026-11-16
