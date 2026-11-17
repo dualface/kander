@@ -162,7 +162,13 @@ func Serve(ctx context.Context, o Options) error {
 type loop struct {
 	o       Options
 	clients map[string]*client.Client
+	// disconnected holds, per execution, the first and the latest renewal
+	// attempt that reached no decision of the server since the last confirmed
+	// renewal: retries are paced by the renewal interval and logged.
+	disconnected map[string]outage
 }
+
+type outage struct{ since, last time.Time }
 
 func (w *loop) client(c remote.Credential) (*client.Client, error) {
 	key := c.ServerURL + "\x00" + c.ClientID
@@ -208,21 +214,21 @@ func (w *loop) pass(ctx context.Context) (int, error) {
 // step handles one credential and reports whether it is still live.
 func (w *loop) step(ctx context.Context, c remote.Credential) bool {
 	now := w.o.Now()
-	interval, ttl := c.RenewInterval.Std(), c.TTL.Std()
+	interval := c.RenewInterval.Std()
 	if interval <= 0 {
 		interval = 15 * time.Second
 	}
-	if ttl <= 0 {
-		ttl = 90 * time.Second
-	}
 	if now.Sub(c.RenewedAt) < interval {
+		return true
+	}
+	if o, known := w.disconnected[c.ExecutionID]; known && now.Sub(o.last) < interval {
 		return true
 	}
 	log := w.o.Logger.With("project", c.ProjectID, "task", c.TaskID, "generation", c.Generation, "execution", c.ExecutionID)
 	cl, err := w.client(c)
 	if err != nil {
-		w.lose(log, c, err.Error())
-		return false
+		w.retry(log, c, now, err)
+		return true
 	}
 	callCtx, cancel := context.WithTimeout(ctx, min(interval, 10*time.Second))
 	defer cancel()
@@ -236,6 +242,7 @@ func (w *loop) step(ctx context.Context, c remote.Credential) bool {
 	}
 	switch {
 	case err == nil:
+		w.reconnected(log, c, now)
 		c.RenewedAt = now
 		if c.ResourceKind == "integration" {
 			return w.integrationRenewed(ctx, log, c)
@@ -267,44 +274,80 @@ func (w *loop) step(ctx context.Context, c remote.Credential) bool {
 			log.Error("credential write failed", "error", err)
 		}
 		return true
+	case api.IsCode(err, api.CodeTakenOver):
+		// A newer generation took the lease over: this execution may never
+		// write again.
+		w.lose(log, c, err.Error())
+		return false
 	case api.IsCode(err, api.CodeLeaseInvalid) || api.IsCode(err, api.CodeHeldByOther) || api.IsCode(err, api.CodeNotFound) || c.ResourceKind == "integration" && api.IsCode(err, api.CodeRevisionConflict):
-		// A released claim is a normal end; anything else lost the lease.
+		// A released claim is a normal end; a lost or replaced one ends this
+		// execution. Only the server's own view decides: a refusal while the
+		// view still shows this generation active or lapsed proves nothing.
 		var claim *api.ClaimView
+		var lookupErr error
 		if c.ResourceKind == "integration" {
-			value, lookupErr := project.Integration(callCtx, c.TaskID)
-			if lookupErr == nil {
+			var value api.Integration
+			if value, lookupErr = project.Integration(callCtx, c.TaskID); lookupErr == nil {
 				claim = &api.ClaimView{Generation: value.Generation, Status: value.Status}
 			}
 		} else if c.ResourceKind == "group" {
-			value, err := project.Group(callCtx, c.TaskID)
-			if err == nil {
+			var value api.GroupView
+			if value, lookupErr = project.Group(callCtx, c.TaskID); lookupErr == nil {
 				claim = value.Claim
 			}
 		} else {
-			value, err := project.Show(callCtx, c.TaskID)
-			if err == nil {
+			var value api.Task
+			if value, lookupErr = project.Show(callCtx, c.TaskID); lookupErr == nil {
 				claim = value.Claim
 			}
 		}
-		if claim != nil && claim.Generation == c.Generation && claim.Status == api.ClaimReleased {
+		switch {
+		case lookupErr != nil && !api.IsCode(lookupErr, api.CodeNotFound):
+			// The refusal cannot be read against the server's view yet.
+			w.retry(log, c, now, errors.Join(err, lookupErr))
+			return true
+		case claim != nil && claim.Generation == c.Generation && claim.Status == api.ClaimReleased:
 			log.Info("claim released; credential removed")
 			if err := remote.RemoveCredential(w.o.Home, c); err != nil {
 				log.Error("credential removal failed", "error", err)
 			}
 			return false
+		case claim != nil && claim.Generation == c.Generation && (claim.Status == api.ClaimActive || claim.Status == api.ClaimLapsed):
+			log.Error("renewal refused while the server still shows this generation; retrying", "error", err, "status", claim.Status)
+			return true
 		}
 		w.lose(log, c, err.Error())
 		return false
 	default:
-		// The server is unreachable or failing. The lease is decided by the
-		// server clock; once a full TTL passed since the last confirmed
-		// renewal this host must assume the lease is gone.
-		if now.Sub(c.RenewedAt) >= ttl {
-			w.lose(log, c, "no confirmed renewal within the lease TTL: "+err.Error())
-			return false
-		}
-		log.Warn("renewal failed; retrying", "error", err)
+		// The server is unreachable or failing. Only the server decides the
+		// lease: a lapsed lease is renewed when the server is back, and only a
+		// takeover ends this execution, so the agent keeps working.
+		w.retry(log, c, now, err)
 		return true
+	}
+}
+
+// retry records a renewal that did not reach a decision of the server; the
+// next attempt waits one renewal interval. It never marks the credential lost
+// or stops the agent.
+func (w *loop) retry(log *slog.Logger, c remote.Credential, now time.Time, err error) {
+	if w.disconnected == nil {
+		w.disconnected = map[string]outage{}
+	}
+	o, known := w.disconnected[c.ExecutionID]
+	if !known {
+		o.since = now
+	}
+	o.last = now
+	w.disconnected[c.ExecutionID] = o
+	log.Warn("renewal failed; retrying", "error", err, "disconnected_since", o.since)
+}
+
+// reconnected logs the first confirmed renewal after failed ones.
+func (w *loop) reconnected(log *slog.Logger, c remote.Credential, now time.Time) {
+	if o, known := w.disconnected[c.ExecutionID]; known {
+		delete(w.disconnected, c.ExecutionID)
+		log.Info("renewal confirmed again", "disconnected_for", now.Sub(o.since))
 	}
 }
 

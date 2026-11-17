@@ -150,23 +150,6 @@ func TestWorkerStopsTheAgentWhenTakenOver(t *testing.T) {
 	}
 }
 
-func TestWorkerAssumesLossAfterATTLWithoutTheServer(t *testing.T) {
-	h := newHarness(t)
-	_, c := h.claimed("partition")
-	h.http.Close()
-	h.advance(30 * time.Second)
-	if live, _ := h.loop.pass(t.Context()); live != 1 || len(h.stopped) != 0 {
-		t.Fatal("a short outage keeps the credential live")
-	}
-	h.advance(61 * time.Second)
-	if live, _ := h.loop.pass(t.Context()); live != 0 {
-		t.Fatal("a TTL without a confirmed renewal must end the execution")
-	}
-	if got := h.credential(); !got.Lost || got.ExecutionID != c.ExecutionID || len(h.stopped) != 1 {
-		t.Fatalf("partition loss must stop the agent: %+v %v", got, h.stopped)
-	}
-}
-
 func TestWorkerRemovesReleasedClaims(t *testing.T) {
 	h := newHarness(t)
 	p, c := h.claimed("released")

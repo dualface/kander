@@ -80,22 +80,6 @@ func TestWorkerRenewsIntegrationWithoutTaskObservationOrDelivery(t *testing.T) {
 		t.Fatal("integration worker delivered a task message or stopped a live command")
 	}
 }
-func TestWorkerStopsIntegrationCommandAfterLossAndPreservesIdentity(t *testing.T) {
-	h := newHarness(t)
-	_, c := h.integration()
-	h.http.Close()
-	h.advance(91 * time.Second)
-	if live, _ := h.loop.pass(t.Context()); live != 0 {
-		t.Fatal("partitioned integration remained live")
-	}
-	got := h.credential()
-	if !got.Lost || got.AuthorityExecutionID != c.AuthorityExecutionID || len(h.stopped) != 1 || h.stopped[0] != 4242 {
-		t.Fatalf("lost integration: %+v %v", got, h.stopped)
-	}
-	if live, _ := h.loop.pass(t.Context()); live != 0 || len(h.stopped) != 1 {
-		t.Fatal("uncertain stop was repeated")
-	}
-}
 func TestWorkerRemovesReleasedIntegrationWithoutStoppingCommand(t *testing.T) {
 	h := newHarness(t)
 	p, c := h.integration()
