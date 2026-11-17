@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Fix: a line such as `- 结果: 测试通过`, `- RESULT: x` or `- OWNER: x` in the body of a card is now ordinary text. Metadata fields are read and written only in the card header (the text before the first `## ` line), so such a line no longer makes `kander update` fail with `board.transaction_managed`, no longer changes `kander list --json`, the completion report, the coordinator `RESULT` check or the issue work set, and no longer makes `start`, `move`, takeover or the `WINDOW` write-back fail with a non-unique field.
+- Breaking: the Chinese schema names (`类型`, `结果`, `任务目标`, `自审`, `<填写>` and the rest) are no longer recognized. A new card holds them as plain text. A card written before 2026-09-07 (its header has `- 创建时间:` with an earlier time) is read with its Chinese names converted to English in memory: `kander show` prints English names and reading writes nothing; the next write that changes the card text stores the English names.
+
 ## v1.4.3 — 2026-11-17
 
 - herdr-core launcher: the tab title of a task agent or orchestrator is no longer cut to 40 characters; the card title (control characters removed) or the orchestrate reference is used whole, with no trailing `…`.

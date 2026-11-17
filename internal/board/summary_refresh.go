@@ -47,7 +47,7 @@ func refreshFrom(ctx context.Context, root string, snap summarySnapshot, strong 
 			next[id] = cached
 			continue
 		}
-		text, err := readDocument(entry)
+		text, err := readCardText(entry)
 		if err != nil {
 			return BoardView{}, stats, nil, errors.Join(err, locks.close())
 		}

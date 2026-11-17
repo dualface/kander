@@ -12,13 +12,12 @@ import (
 
 var (
 	headingRe    = regexp.MustCompile(`(?m)^## `)
-	resultRe     = regexp.MustCompile(`(?m)^- ` + TokenPattern(FieldResult) + `:\s*(.*?)\s*$`)
-	oldGroupRe   = regexp.MustCompile(`(?m)^` + TokenPattern(FieldTaskGroup) + `:[ \t]*(.*?)[ \t\r]*$`)
+	oldGroupRe   = regexp.MustCompile(`(?m)^` + FieldTaskGroup + `:[ \t]*(.*?)[ \t\r]*$`)
 	completeRe   = FieldLineRe(FieldFinishedAt)
 	startRe      = FieldLineRe(FieldStartedAt)
-	prereqLineRe = regexp.MustCompile(`^` + TokenPattern(MarkerPrerequisites) + `[ \t]*:[ \t]*(.*?)[ \t\r]*$`)
-	selfReviewRe = regexp.MustCompile(`(?m)^(?:- )?` + TokenPattern(MarkerSelfReview) + `[ \t]*:[ \t]*\S`)
-	cardReviewRe = regexp.MustCompile(`(?m)^(?:- )?` + TokenPattern(MarkerCardReview) + `[ \t]*:[ \t]*\S`)
+	prereqLineRe = regexp.MustCompile(`^` + MarkerPrerequisites + `[ \t]*:[ \t]*(.*?)[ \t\r]*$`)
+	selfReviewRe = regexp.MustCompile(`(?m)^(?:- )?` + MarkerSelfReview + `[ \t]*:[ \t]*\S`)
+	cardReviewRe = regexp.MustCompile(`(?m)^(?:- )?` + MarkerCardReview + `[ \t]*:[ \t]*\S`)
 	checkboxRe   = regexp.MustCompile(`(?m)^- \[[ xX]\][ \t]*\S`)
 )
 
@@ -28,21 +27,24 @@ func metadataValueRe(name string) *regexp.Regexp {
 	if cached, ok := metadataValueCache.Load(name); ok {
 		return cached.(*regexp.Regexp)
 	}
-	re := regexp.MustCompile(`(?m)^- ` + TokenPattern(name) + `:[ \t]*(.*?)[ \t\r]*$`)
+	re := regexp.MustCompile(`(?m)^- ` + regexp.QuoteMeta(name) + `:[ \t]*(.*?)[ \t\r]*$`)
 	actual, _ := metadataValueCache.LoadOrStore(name, re)
 	return actual.(*regexp.Regexp)
 }
 
-// MetadataFrom reads a `- field:` metadata value.
+// MetadataFrom reads a `- field:` metadata value from the card header; a line
+// with the same spelling in a body section is ordinary text.
 func MetadataFrom(text, name string) string {
-	match := metadataValueRe(name).FindStringSubmatch(text)
+	match := metadataValueRe(name).FindStringSubmatch(CardHeader(text))
 	if match == nil {
 		return ""
 	}
 	return match[1]
 }
 
-// ReadDocument reads the task document as UTF-8.
+// readDocument reads the task document as UTF-8, byte for byte. Paths that compare
+// disk bytes (migration, recovery, replay) use it; readers of the card's meaning
+// use readCardText.
 func readDocument(entry Entry) (string, error) {
 	data, err := fs.ReadRegularFile(boardRootFromEntry(entry), entry.Document)
 	if err != nil {
@@ -54,6 +56,24 @@ func readDocument(entry Entry) (string, error) {
 		return "", kanbanError("board.task_document_is_not_valid_utf_8", entry.Document)
 	}
 	return string(data), nil
+}
+
+// readCardText reads the task document for its meaning: a card written before the
+// schema rename comes back with English schema names. The disk is not touched.
+func readCardText(entry Entry) (string, error) {
+	text, _, err := readCardTextLegacy(entry)
+	return text, err
+}
+
+// readCardTextLegacy is readCardText that also reports whether the card on disk
+// uses the legacy Chinese schema names.
+func readCardTextLegacy(entry Entry) (string, bool, error) {
+	text, err := readDocument(entry)
+	if err != nil {
+		return "", false, err
+	}
+	text, legacy := normalizeLegacyCard(text)
+	return text, legacy, nil
 }
 
 // TitleFrom returns the first level-one heading.
@@ -68,7 +88,7 @@ func TitleFrom(text string) string {
 
 // SectionBody returns the body of a ## section.
 func SectionBody(text, heading string) (string, bool) {
-	re := regexp.MustCompile(`(?m)^## ` + TokenPattern(heading) + `\s*$`)
+	re := regexp.MustCompile(`(?m)^## ` + regexp.QuoteMeta(heading) + `\s*$`)
 	loc := re.FindStringIndex(text)
 	if loc == nil {
 		return "", false
@@ -82,13 +102,7 @@ func SectionBody(text, heading string) (string, bool) {
 	return strings.TrimSpace(text[loc[1]:end]), true
 }
 
-func resultFrom(text string) string {
-	match := resultRe.FindStringSubmatch(text)
-	if match == nil {
-		return ""
-	}
-	return match[1]
-}
+func resultFrom(text string) string { return MetadataFrom(text, FieldResult) }
 
 // TaskGroupFrom also recognizes legacy group metadata in the discussion section.
 func TaskGroupFrom(text string) string {
@@ -167,24 +181,29 @@ func prerequisiteIDsFrom(text, taskID string) ([]string, error) {
 
 func completionMetadata(text string) (string, error) {
 	value := nowStamp()
-	matches := completeRe.FindAllStringIndex(text, -1)
+	header := CardHeader(text)
+	matches := completeRe.FindAllStringIndex(header, -1)
 	if len(matches) == 1 {
-		return completeRe.ReplaceAllString(text, RenderField(FieldFinishedAt, value)), nil
+		return editHeader(text, func(h string) string {
+			return completeRe.ReplaceAllString(h, RenderField(FieldFinishedAt, value))
+		}), nil
 	}
 	if len(matches) > 1 {
 		return "", kanbanError("board.task_document_must_contain_exactly_one_completion_time_metadata")
 	}
-	started := startRe.FindAllStringIndex(text, -1)
+	started := startRe.FindAllStringIndex(header, -1)
 	if len(started) != 1 {
 		return "", kanbanError("board.task_document_must_contain_exactly_one_start_time_metadata")
 	}
 	replaced := false
-	return startRe.ReplaceAllStringFunc(text, func(s string) string {
-		if replaced {
-			return s
-		}
-		replaced = true
-		return s + "\n" + RenderField(FieldFinishedAt, value)
+	return editHeader(text, func(h string) string {
+		return startRe.ReplaceAllStringFunc(h, func(s string) string {
+			if replaced {
+				return s
+			}
+			replaced = true
+			return s + "\n" + RenderField(FieldFinishedAt, value)
+		})
 	}), nil
 }
 

@@ -137,7 +137,7 @@ func archiveInvocation(ctx *reviewContext, options archiveOptions, arguments []s
 		}
 		// *_RESOLVED records are rewritten by launches and review runs; keeping them
 		// out of the snapshot keeps the batch's frozen task context stable.
-		task = []byte(board.WithoutResolvedRecords(string(task)))
+		task = []byte(board.WithoutResolvedRecords(board.NormalizeLegacyCard(string(task))))
 	}
 	reviewContext := []byte{}
 	if len(arguments) >= 6 {

@@ -21,8 +21,8 @@ func TestMetadataFromReusesCompiledPatternWithoutChangingSemantics(t *testing.T)
 	}
 
 	legacy := "# 旧\n\n- 类型: Chore\n- SIZE: large\n"
-	if got := MetadataFrom(legacy, FieldType); got != "Chore" {
-		t.Fatalf("legacy TYPE %q", got)
+	if got := MetadataFrom(legacy, FieldType); got != "" {
+		t.Fatalf("Chinese TYPE of a card that is not converted %q", got)
 	}
 
 	wrapped := "- TYPE: one\nstill-type\n- SIZE: small\n"

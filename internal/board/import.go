@@ -343,10 +343,8 @@ func validateImportSection(name, body string) error {
 		trimmed := strings.TrimSpace(line)
 		value := strings.TrimSpace(strings.TrimPrefix(trimmed, "- "))
 		for _, field := range importFields {
-			for _, accepted := range AcceptedNames(field) {
-				if strings.HasPrefix(value, accepted+":") {
-					return kanbanError("board.import_contract_section_must_not_rewrite_metadata", name)
-				}
+			if strings.HasPrefix(value, field+":") {
+				return kanbanError("board.import_contract_section_must_not_rewrite_metadata", name)
 			}
 		}
 		for _, marker := range importRecordMarkers {

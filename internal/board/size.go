@@ -62,7 +62,7 @@ func addSize(text, size string) string {
 		newline = "\r\n"
 	}
 	line := "- SIZE: " + size + newline
-	if at := FieldLineRe(FieldType).FindStringIndex(text); at != nil {
+	if at := FieldLineRe(FieldType).FindStringIndex(CardHeader(text)); at != nil {
 		end := at[1]
 		if end < len(text) && text[end] == '\n' {
 			end++

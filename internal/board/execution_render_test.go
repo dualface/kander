@@ -5,27 +5,21 @@ import (
 	"testing"
 )
 
-// A card written before the token rename still keeps its owner, session and
-// window fields unique after a start or a takeover: each legacy line is updated
-// in place and takes the canonical name, rather than an English duplicate being
-// appended next to the Chinese one.
 func TestSetExecutionFieldInsertsBelowTheAnchor(t *testing.T) {
 	updated, err := setExecutionField("- OWNER: claude\n- SESSION: claude abc\n- WINDOW: old\n", FieldWindow, FieldSession, "herdr:w1:t9:w1:p9")
 	if err != nil || !strings.Contains(updated, "- WINDOW: herdr:w1:t9:w1:p9\n") {
 		t.Fatalf("replace: %q %v", updated, err)
 	}
-	inserted, err := setExecutionField("- 负责人: claude\n- 会话: claude abc\n- 开始时间: 2026-09-04 12:00\n", FieldWindow, FieldSession, "foreground")
-	if err != nil || !strings.Contains(inserted, "- 会话: claude abc\n- "+FieldWindow+": foreground\n") {
+	inserted, err := setExecutionField("- OWNER: claude\n- SESSION: claude abc\n- STARTED_AT: 2026-09-04 12:00\n", FieldWindow, FieldSession, "foreground")
+	if err != nil || !strings.Contains(inserted, "- SESSION: claude abc\n- "+FieldWindow+": foreground\n") {
 		t.Fatalf("insert: %q %v", inserted, err)
-	}
-	legacy, err := setExecutionField("- 负责人: claude\n- 会话: claude abc\n- 窗口: old\n", FieldWindow, FieldSession, "herdr:t1:p1")
-	if err != nil || strings.Contains(legacy, "窗口") || len(FieldLineRe(FieldWindow).FindAllString(legacy, -1)) != 1 {
-		t.Fatalf("legacy: %q %v", legacy, err)
 	}
 }
 
-func TestStartAndTakeoverUpdateLegacyFieldsInPlace(t *testing.T) {
-	legacy := "# 旧卡\n\n- 负责人:\n- 会话:\n- 窗口:\n- 开始时间:\n- 完成时间:\n"
+// A legacy card is converted when it is read, so a start or a takeover renders
+// the English names and keeps each field unique.
+func TestStartAndTakeoverKeepFieldsUnique(t *testing.T) {
+	legacy, _ := normalizeLegacyCard("# 旧卡\n\n- 创建时间: 2026-09-01 03:00\n- 负责人:\n- 会话:\n- 窗口:\n- 开始时间:\n- 完成时间:\n")
 
 	started, err := renderStart(legacy, "claude", TaskStartInput{Session: "claude abc", Window: "herdr:t1:p1"})
 	if err != nil {
@@ -45,13 +39,7 @@ func TestStartAndTakeoverUpdateLegacyFieldsInPlace(t *testing.T) {
 			t.Fatalf("missing %q in %q", want, started)
 		}
 	}
-	for _, legacyName := range []string{"负责人", "会话", "窗口", "开始时间"} {
-		if strings.Contains(started, "- "+legacyName+":") {
-			t.Fatalf("legacy field %s survived in %q", legacyName, started)
-		}
-	}
 
-	// A takeover rewrites the same three fields on a card that is still legacy.
 	takenOver, err := renderTakeover(legacy, TakeoverInput{Owner: "grok", Session: "grok xyz", Window: "tmux:s1:w1:p1"})
 	if err != nil {
 		t.Fatal(err)
@@ -62,9 +50,9 @@ func TestStartAndTakeoverUpdateLegacyFieldsInPlace(t *testing.T) {
 		}
 	}
 
-	// The start path also has to cope with a legacy card that never had a
-	// session or window field at all.
-	old := "# 旧卡\n\n- 负责人:\n- 开始时间:\n- 完成时间:\n"
+	// The start path also has to cope with a card that never had a session or
+	// window field at all.
+	old := "# Card\n\n- OWNER:\n- STARTED_AT:\n- FINISHED_AT:\n"
 	filled, err := renderStart(old, "claude", TaskStartInput{Session: "claude abc", Window: "foreground"})
 	if err != nil {
 		t.Fatal(err)

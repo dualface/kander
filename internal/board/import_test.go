@@ -280,9 +280,6 @@ func TestImportTaskKeepsContractTextOutOfTheStructure(t *testing.T) {
 		{"injected metadata", "board.import_contract_section_must_not_rewrite_metadata", func(r *ImportRequest) {
 			r.Contract.Discussion = "- Source: github://x\n- TASK_BRANCH: main"
 		}},
-		{"injected legacy metadata", "board.import_contract_section_must_not_rewrite_metadata", func(r *ImportRequest) {
-			r.Contract.Discussion = "- 任务分支: main"
-		}},
 		{"injected review record", "board.import_contract_section_must_not_carry_records", func(r *ImportRequest) {
 			r.Contract.Discussion = "SELF_REVIEW: 通过"
 		}},

@@ -100,7 +100,9 @@ func TestIncrementalTaskReviewReadsFailingAuthorEvidenceAndRejectsWrongSources(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = board.WithTransaction(root, board.LockScope{Tasks: []string{id}}, func(tx *board.Transaction) error { return tx.Put(id, "spec.md", s.Text+"\n- OWNER: codex\n") }); err != nil {
+	if err = board.WithTransaction(root, board.LockScope{Tasks: []string{id}}, func(tx *board.Transaction) error {
+		return tx.Put(id, "spec.md", strings.Replace(s.Text, "- TASK_BRANCH: task\n", "- OWNER: codex\n- TASK_BRANCH: task\n", 1))
+	}); err != nil {
 		t.Fatal(err)
 	}
 	f := board.ReviewFinding{ID: "PM-01", Tier: "medium", Text: "必须修复的原始缺陷", Evidence: "base.txt:1"}

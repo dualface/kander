@@ -582,11 +582,11 @@ func finishConfirm(tx *Transaction, s Snapshot, text string, revision uint64, l 
 	return putTransition(tx, l, t.withCard(s, text, revision))
 }
 
-// setExecutionField writes one metadata field, inserting it right below anchor
-// when the card lacks it. A legacy localized field is updated in place.
+// setExecutionField writes one metadata field of the card header, inserting it
+// right below anchor when the card lacks it.
 func setExecutionField(text, field, anchor, value string) (string, error) {
 	pattern := FieldLineRe(field)
-	lines := pattern.FindAllString(text, -1)
+	lines := pattern.FindAllString(CardHeader(text), -1)
 	if len(lines) > 1 {
 		return "", kanbanError("launch.task_document_must_contain_exactly_one_metadata_field", field)
 	}
@@ -594,23 +594,27 @@ func setExecutionField(text, field, anchor, value string) (string, error) {
 		return replaceFieldLine(pattern, text, RenderField(field, value)), nil
 	}
 	anchorRe := FieldLineRe(anchor)
-	anchors := anchorRe.FindAllString(text, -1)
+	anchors := anchorRe.FindAllString(CardHeader(text), -1)
 	if len(anchors) != 1 {
 		return "", kanbanError("launch.task_document_must_contain_exactly_one_metadata_field", anchor)
 	}
 	return replaceFieldLine(anchorRe, text, anchors[0]+"\n"+RenderField(field, value)), nil
 }
 
+// replaceFieldLine replaces every match of pattern in the card header with line;
+// the body is never searched.
 func replaceFieldLine(pattern *regexp.Regexp, text, line string) string {
-	return pattern.ReplaceAllStringFunc(text, func(string) string { return line })
+	return editHeader(text, func(header string) string {
+		return pattern.ReplaceAllStringFunc(header, func(string) string { return line })
+	})
 }
 
 // renderStart fills the metadata of a start. OWNER and STARTED_AT must be blank:
 // a filled value means an earlier execution left the card.
 func renderStart(text, owner string, in TaskStartInput) (string, error) {
 	for _, field := range []string{FieldOwner, FieldStartedAt} {
-		pattern := regexp.MustCompile(`(?m)^- ` + TokenPattern(field) + `:\s*$`)
-		if len(pattern.FindAllStringIndex(text, -1)) != 1 {
+		pattern := regexp.MustCompile(`(?m)^- ` + field + `:\s*$`)
+		if len(pattern.FindAllStringIndex(CardHeader(text), -1)) != 1 {
 			return "", kanbanError("launch.task_document_must_contain_exactly_one_metadata_field", field)
 		}
 		value := owner
@@ -624,11 +628,11 @@ func renderStart(text, owner string, in TaskStartInput) (string, error) {
 		return "", err
 	}
 	// WINDOW moves below SESSION: a card can list the two in another order.
-	windowLine := regexp.MustCompile(`(?m)^- ` + TokenPattern(FieldWindow) + `:.*\n?`)
-	if len(windowLine.FindAllStringIndex(text, -1)) > 1 {
+	windowLine := regexp.MustCompile(`(?m)^- ` + FieldWindow + `:.*\n?`)
+	if len(windowLine.FindAllStringIndex(CardHeader(text), -1)) > 1 {
 		return "", kanbanError("launch.task_document_must_contain_exactly_one_metadata_field", FieldWindow)
 	}
-	text = windowLine.ReplaceAllString(text, "")
+	text = editHeader(text, func(header string) string { return windowLine.ReplaceAllString(header, "") })
 	if text, err = setExecutionField(text, FieldWindow, FieldSession, in.Window); err != nil {
 		return "", err
 	}
@@ -641,7 +645,7 @@ func renderStart(text, owner string, in TaskStartInput) (string, error) {
 func renderTakeover(text string, in TakeoverInput) (string, error) {
 	for _, pair := range [][2]string{{FieldOwner, in.Owner}, {FieldSession, in.Session}} {
 		pattern := FieldLineRe(pair[0])
-		if len(pattern.FindAllStringIndex(text, -1)) != 1 {
+		if len(pattern.FindAllStringIndex(CardHeader(text), -1)) != 1 {
 			return "", kanbanError("launch.task_document_must_contain_exactly_one_metadata_field", pair[0])
 		}
 		text = replaceFieldLine(pattern, text, RenderField(pair[0], pair[1]))

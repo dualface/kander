@@ -518,9 +518,14 @@ func TestSpecAliasesAndDuplicateContractRejected(t *testing.T) {
 			t.Fatalf("alias accepted: %q", name)
 		}
 	}
-	for _, extra := range []string{"\n- TASK_GROUP: 20260907-forged-group\n- TASK_GROUP: 20260907-other-group\n", "\n## GOAL\n\nforged\n"} {
-		if err := UpdateDocument(root, s.Entry.TaskID, UpdateOptions{Document: "spec.md", Text: s.Text + extra, ExpectedRevision: s.Revision}); err == nil {
-			t.Fatal("ambiguous contract accepted")
+	// A repeated metadata field is ambiguous only inside the card header.
+	headerDuplicate := strings.Replace(s.Text, "\n## GOAL", "\n- TASK_GROUP: 20260907-forged-group\n- TASK_GROUP: 20260907-other-group\n\n## GOAL", 1)
+	for label, text := range map[string]string{"duplicate header field": headerDuplicate, "duplicate section": s.Text + "\n## GOAL\n\nforged\n"} {
+		if text == s.Text {
+			t.Fatalf("%s: fixture did not change the card", label)
+		}
+		if err := UpdateDocument(root, s.Entry.TaskID, UpdateOptions{Document: "spec.md", Text: text, ExpectedRevision: s.Revision}); err == nil {
+			t.Fatalf("%s: ambiguous contract accepted", label)
 		}
 	}
 }

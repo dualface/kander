@@ -71,7 +71,7 @@ func scanContext(ctx context.Context, root string, ids []string, dispatches bool
 		if e != nil {
 			return b, e
 		}
-		text, e := readDocument(entry)
+		text, e := readCardText(entry)
 		if e != nil {
 			b.documentErrors[id] = e
 		} else {
