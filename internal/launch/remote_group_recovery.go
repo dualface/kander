@@ -29,7 +29,7 @@ func prepareRemoteGroupRecovery(ctx context.Context, session *remote.Session, re
 	input := api.GroupRecover{Request: request, ObservedRevision: task.Revision, Observation: api.AgentObservation{Status: "stopped", Reason: "finished member recovery"}}
 	var tasks []string
 	if task.State == "working" || task.State == "review" {
-		if task.Claim == nil || task.Claim.Status == api.ClaimLost || task.Claim.Status == api.ClaimReleased {
+		if task.Claim == nil || task.Claim.Status == api.ClaimLost || task.Claim.Status == api.ClaimLapsed || task.Claim.Status == api.ClaimReleased {
 			generation := uint64(0)
 			if task.Claim != nil {
 				generation = task.Claim.Generation

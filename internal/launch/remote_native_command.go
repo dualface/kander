@@ -41,7 +41,7 @@ func runImplicitNativeResume(ctx context.Context, session *remote.Session, card 
 	if journal.Value.Phase == "pending" {
 		return executeRemoteResume(saved.Input, saved.Options, saved.NewRound, timeout, journal)
 	}
-	ownedStopped := found && !credential.Lost && card.Claim != nil && card.Claim.Status == api.ClaimActive && card.Claim.ClientID == session.Client.ClientID() && card.Claim.ExecutionID == credential.ExecutionID && observeLocalExecution(ctx, credential).Status == "stopped"
+	ownedStopped := found && !credential.Lost && card.Claim != nil && api.ClaimStands(card.Claim.Status) && card.Claim.ClientID == session.Client.ClientID() && card.Claim.ExecutionID == credential.ExecutionID && observeLocalExecution(ctx, credential).Status == "stopped"
 	if journal.Value.Phase == "complete" {
 		if !ownedStopped || saved.CompletedExecution == "" || saved.CompletedExecution != credential.ExecutionID {
 			return reportNativeReceipt(card.TaskID)

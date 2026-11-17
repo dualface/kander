@@ -76,7 +76,7 @@ func (s *Session) reviewAuthority(ctx context.Context, operation, replay string,
 		if task.State != "working" && task.State != "review" {
 			continue
 		}
-		if task.Claim == nil || task.Claim.Status != api.ClaimActive {
+		if task.Claim == nil || !api.ClaimStands(task.Claim.Status) {
 			return nil, false, &api.Error{Code: api.CodeLeaseInvalid, Message: "review member has no live execution: " + id}
 		}
 		members = append(members, api.PublicationMember{TaskID: id, Revision: task.Revision, Generation: task.Claim.Generation})

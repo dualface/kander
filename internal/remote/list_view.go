@@ -38,12 +38,12 @@ func (s *Session) machineList(ctx context.Context, list api.TaskList, observe bo
 		if s.SceneIsLocal(item.TaskID, item.Claim, item.Window, item.Session) {
 			task.Session, task.Window = item.Session, item.Window
 			task.Launcher, _, _ = strings.Cut(item.Window, ":")
-			if observe != nil && item.Claim.Status == api.ClaimActive && item.Window != "" {
+			if observe != nil && api.ClaimStands(item.Claim.Status) && item.Window != "" {
 				positions = append(positions, len(out.Tasks))
 				requests = append(requests, board.AgentStatusRequest{TaskID: item.TaskID, Session: item.Session, Window: item.Window})
 			}
 		}
-		if item.Claim != nil && (item.Claim.Status == api.ClaimLost || observe != nil && item.Claim.Observation != nil) {
+		if item.Claim != nil && (item.Claim.Status == api.ClaimLost || item.Claim.Status == api.ClaimLapsed || observe != nil && item.Claim.Observation != nil) {
 			agent := ClaimAgent(item.Claim, list.ObservedAt, time.Now())
 			task.Agent = &agent
 		}

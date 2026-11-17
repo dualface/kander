@@ -32,7 +32,7 @@ func (s *Session) checkExecution(ctx context.Context, credential Credential) err
 	if err != nil {
 		return err
 	}
-	if card.Claim == nil || card.Claim.Generation != credential.Generation || card.Claim.ExecutionID != credential.ExecutionID || card.Claim.ClientID != credential.ClientID || card.Claim.Status != api.ClaimActive {
+	if card.Claim == nil || card.Claim.Generation != credential.Generation || card.Claim.ExecutionID != credential.ExecutionID || card.Claim.ClientID != credential.ClientID || !api.ClaimStands(card.Claim.Status) {
 		return &api.Error{Code: api.CodeLeaseInvalid, Message: config.Text("remote.git_owner_changed")}
 	}
 	return nil

@@ -249,7 +249,7 @@ func (s *Session) Integrate(ctx context.Context, dir string, options Integration
 			last = retireClaimEnded
 			continue
 		}
-		if current.Status != api.ClaimActive {
+		if !api.ClaimStands(current.Status) {
 			return api.Integration{}, integrationFailure("remote.integration_recovery_required")
 		}
 		credential, found, err := s.credentialFor(current.ID, attempt.Request.ExecutionID)

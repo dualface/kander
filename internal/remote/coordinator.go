@@ -36,14 +36,14 @@ func (s *Session) AcquireCoordinator(ctx context.Context, request board.Coordina
 		if credential.Lost && bound {
 			return api.GroupGrant{}, &api.Error{Code: api.CodeLeaseInvalid, Message: "this coordinator execution already lost its lease"}
 		}
-		if !credential.Lost && view.Claim != nil && view.Claim.Status == api.ClaimActive && credential.Generation == view.Claim.Generation {
+		if !credential.Lost && view.Claim != nil && api.ClaimStands(view.Claim.Status) && credential.Generation == view.Claim.Generation {
 			execution, proof = credential.ExecutionID, credential.Claim()
 		}
 	}
 	input := api.GroupClaim{Request: request, ExecutionID: execution, Decision: decision}
 	if view.Claim != nil {
 		input.ExpectedGeneration = view.Claim.Generation
-		if view.Claim.ExecutionID == execution && view.Claim.Status != api.ClaimActive {
+		if view.Claim.ExecutionID == execution && !api.ClaimStands(view.Claim.Status) {
 			return api.GroupGrant{}, &api.Error{Code: api.CodeLeaseInvalid, Message: "a lost coordinator execution cannot acquire a later generation"}
 		}
 	}

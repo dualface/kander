@@ -101,7 +101,7 @@ func (s *Session) publishCommit(ctx context.Context, dir, task, commit, purpose 
 	if err != nil {
 		return value, err
 	}
-	if taskView.Claim == nil || taskView.Claim.Generation != credential.Generation || taskView.Claim.ExecutionID != credential.ExecutionID || taskView.Claim.Status != api.ClaimActive {
+	if taskView.Claim == nil || taskView.Claim.Generation != credential.Generation || taskView.Claim.ExecutionID != credential.ExecutionID || !api.ClaimStands(taskView.Claim.Status) {
 		return value, &api.Error{Code: api.CodeLeaseInvalid, Message: config.Text("remote.git_owner_changed")}
 	}
 	ref := api.DeliveryRef(s.Info.ID, task, credential.Generation, commit)

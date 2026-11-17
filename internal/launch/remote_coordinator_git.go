@@ -15,7 +15,7 @@ func verifyRemoteCoordinatorGitFacts(ctx context.Context, s *remote.Session, cwd
 		if err != nil {
 			return err
 		}
-		if task.Claim == nil || task.Claim.Status != api.ClaimActive || task.Delivery == nil || task.Delivery.Purpose == "baseline" || task.Delivery.Commit != d.Commit || task.Delivery.Generation != task.Claim.Generation || task.Delivery.ExecutionID != task.Claim.ExecutionID || board.MetadataFrom(task.Text, board.FieldTaskBranch) != d.Branch {
+		if task.Claim == nil || !api.ClaimStands(task.Claim.Status) || task.Delivery == nil || task.Delivery.Purpose == "baseline" || task.Delivery.Commit != d.Commit || task.Delivery.Generation != task.Claim.Generation || task.Delivery.ExecutionID != task.Claim.ExecutionID || board.MetadataFrom(task.Text, board.FieldTaskBranch) != d.Branch {
 			return launchError("board.coordinator_conflict", "delivery differs from the service execution")
 		}
 		_, err = s.FetchDelivery(ctx, cwd, d.TaskID, d.Commit)

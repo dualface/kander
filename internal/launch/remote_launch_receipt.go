@@ -39,7 +39,7 @@ func recoverRemoteLaunch(ctx context.Context, service *remote.Session, journal *
 	if err != nil {
 		return err
 	}
-	if current.Claim == nil || current.Claim.ExecutionID != value.ExecutionID || current.Claim.Generation != grant.Claim.Generation || current.Claim.Status != api.ClaimActive {
+	if current.Claim == nil || current.Claim.ExecutionID != value.ExecutionID || current.Claim.Generation != grant.Claim.Generation || !api.ClaimStands(current.Claim.Status) {
 		return launchError("remote.launch_reconciliation_required", journal.Path)
 	}
 	credential := remote.Credential{ServerURL: service.ServerURL, ClientID: service.Client.ClientID(), ProjectID: service.Info.ID, TaskID: current.TaskID, ExecutionID: value.ExecutionID, Generation: grant.Claim.Generation, Token: grant.Token, RenewInterval: grant.RenewInterval, TTL: grant.TTL, Session: cmp.Or(board.MetadataFrom(current.Text, board.FieldSession), value.Session), Window: cmp.Or(board.MetadataFrom(current.Text, board.FieldWindow), value.Window), RenewedAt: time.Now().UTC()}

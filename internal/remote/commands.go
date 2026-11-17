@@ -416,14 +416,14 @@ func RunMove(args []string) int {
 }
 
 // reclaimRefusal refuses a takeover by the execution that already owns the
-// claim. A live claim needs no takeover; a lost or released one cannot be taken
-// again under the same execution ID.
-func reclaimRefusal(current *api.ClaimView, execution string, now time.Time) error {
+// claim. A claim that still stands (active or lapsed) needs no takeover; a
+// lost or released one cannot be taken again under the same execution ID.
+func reclaimRefusal(current *api.ClaimView, execution string) error {
 	if current == nil || current.ExecutionID != execution {
 		return nil
 	}
 	key := "remote.execution_cannot_reclaim"
-	if current.Status == api.ClaimActive && now.Before(current.ExpiresAt) {
+	if api.ClaimStands(current.Status) {
 		key = "remote.execution_already_holder"
 	}
 	return &api.Error{Code: api.CodeLeaseInvalid, Message: config.Text(key)}
@@ -448,7 +448,7 @@ func claim(ctx context.Context, s *Session, task, owner, decision string) int {
 		if current.Claim != nil {
 			req.ExpectedGeneration = current.Claim.Generation
 		}
-		if err := reclaimRefusal(current.Claim, execution, time.Now()); err != nil {
+		if err := reclaimRefusal(current.Claim, execution); err != nil {
 			return fail(err)
 		}
 		if id := board.MetadataFrom(current.Text, "DISPATCH_ID"); id != "" {

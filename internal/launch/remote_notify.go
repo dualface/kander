@@ -69,7 +69,7 @@ func notifyRemoteForExecution(task, message, messageFile, pane string, messageSe
 	if recovered, found, err := session.RecoverRequest(ctx, logical); found || err != nil {
 		return recovered, err
 	}
-	if expectedExecution != "" && (card.Claim == nil || card.Claim.ExecutionID != expectedExecution || card.Claim.Status != api.ClaimActive) {
+	if expectedExecution != "" && (card.Claim == nil || card.Claim.ExecutionID != expectedExecution || !api.ClaimStands(card.Claim.Status)) {
 		return out, &api.Error{Code: api.CodeLeaseInvalid, Message: config.Text("remote.git_owner_changed")}
 	}
 	if card.State != "working" && card.State != "review" {
@@ -142,7 +142,7 @@ func notifyRemoteForExecution(task, message, messageFile, pane string, messageSe
 			request.Kind = api.RequestFix
 		}
 	}
-	if card.Claim == nil || card.Claim.Status != api.ClaimActive {
+	if card.Claim == nil || !api.ClaimStands(card.Claim.Status) {
 		return out, &api.Error{Code: api.CodeLeaseInvalid, Message: config.Text("remote.git_owner_changed")}
 	}
 	request.TargetGeneration = card.Claim.Generation

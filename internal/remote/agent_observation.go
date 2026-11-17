@@ -15,8 +15,11 @@ func ClaimAgent(claim *api.ClaimView, serverNow, localNow time.Time) board.ListA
 	if claim == nil {
 		return result
 	}
-	if claim.Status == api.ClaimLost {
+	switch claim.Status {
+	case api.ClaimLost:
 		result.Reason = config.Text("remote.lease_lost_agent_unknown")
+	case api.ClaimLapsed:
+		result.Reason = config.Text("remote.lease_lapsed_agent_unknown", serverNow.Sub(claim.ExpiresAt).Round(time.Second).String())
 	}
 	observation := claim.Observation
 	if observation == nil {
@@ -35,7 +38,7 @@ func ClaimAgent(claim *api.ClaimView, serverNow, localNow time.Time) board.ListA
 	}
 	ttl := claim.ExpiresAt.Sub(claim.RenewedAt)
 	age := serverNow.Sub(observation.ObservedAt)
-	if claim.Status != api.ClaimActive || !serverNow.Before(claim.ExpiresAt) || age < 0 || age > ttl {
+	if !api.ClaimStands(claim.Status) || age < 0 || age > ttl {
 		result.Reason = config.Text("remote.agent_observation_stale")
 		return result
 	}
