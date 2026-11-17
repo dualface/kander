@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -97,5 +98,29 @@ func TestWorkerRemovesReleasedIntegrationWithoutStoppingCommand(t *testing.T) {
 	all, err := remote.Credentials(h.home)
 	if err != nil || len(all) != 0 || len(h.stopped) != 0 {
 		t.Fatalf("normal integration end: %+v %v", all, err)
+	}
+}
+
+// An integration revision conflict ends the command even though the server
+// still shows the integration's generation: the members its claim froze
+// changed under an unchanged lease.
+func TestWorkerStopsIntegrationCommandOnRevisionConflict(t *testing.T) {
+	h := newHarness(t)
+	_, c := h.integration()
+	h.http.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/integrations/"+c.TaskID+"/renew") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			_, _ = w.Write([]byte(`{"code":"revision_conflict","message":"integration member version or execution changed"}`))
+			return
+		}
+		h.srv.Handler().ServeHTTP(w, r)
+	})
+	h.advance(16 * time.Second)
+	if live, _ := h.loop.pass(t.Context()); live != 0 {
+		t.Fatal("a revision conflict kept the integration command live")
+	}
+	if got := h.credential(); !got.Lost || got.AuthorityExecutionID != c.AuthorityExecutionID || len(h.stopped) != 1 || h.stopped[0] != 4242 {
+		t.Fatalf("revision conflict: %+v %v", got, h.stopped)
 	}
 }

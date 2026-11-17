@@ -281,8 +281,10 @@ func (w *loop) step(ctx context.Context, c remote.Credential) bool {
 		return false
 	case api.IsCode(err, api.CodeLeaseInvalid) || api.IsCode(err, api.CodeHeldByOther) || api.IsCode(err, api.CodeNotFound) || c.ResourceKind == "integration" && api.IsCode(err, api.CodeRevisionConflict):
 		// A released claim is a normal end; a lost or replaced one ends this
-		// execution. Only the server's own view decides: a refusal while the
-		// view still shows this generation active or lapsed proves nothing.
+		// execution. Only the server's own view decides: a lease refusal while
+		// the view still shows this generation active or lapsed proves
+		// nothing. An integration revision conflict is decisive by itself: the
+		// members its claim froze changed under an unchanged lease.
 		var claim *api.ClaimView
 		var lookupErr error
 		if c.ResourceKind == "integration" {
@@ -312,7 +314,7 @@ func (w *loop) step(ctx context.Context, c remote.Credential) bool {
 				log.Error("credential removal failed", "error", err)
 			}
 			return false
-		case claim != nil && claim.Generation == c.Generation && (claim.Status == api.ClaimActive || claim.Status == api.ClaimLapsed):
+		case claim != nil && claim.Generation == c.Generation && api.ClaimStands(claim.Status) && !api.IsCode(err, api.CodeRevisionConflict):
 			log.Error("renewal refused while the server still shows this generation; retrying", "error", err, "status", claim.Status)
 			return true
 		}
