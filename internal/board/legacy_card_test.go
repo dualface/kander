@@ -1,6 +1,7 @@
 package board
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -383,4 +384,34 @@ func TestExecutionWritesLeaveBodyFieldLinesAlone(t *testing.T) {
 		t.Fatalf("window: %v", err)
 	}
 	check("window write-back", "claude", "w4")
+}
+
+// A move that changes no text leaves a legacy card in Chinese on disk, so the
+// journal must record those bytes: recovery of a move interrupted after the
+// rename compares them with the card at the target.
+func TestInterruptedMoveOfLegacyCardRecovers(t *testing.T) {
+	root := tempBoard(t)
+	s := writeLegacyDirCard(t, root, "legacy-recovery", legacyDirCard)
+	id := s.Entry.TaskID
+	stop := errors.New("interrupted")
+	err := withTransactionCheckpoint(nil, root, LockScope{Tasks: []string{id}, ExclusiveBoard: true}, func(at string) error {
+		if at == "revision" {
+			return stop
+		}
+		return nil
+	}, func(tx *Transaction) error { return tx.Relocate(id, "todo") })
+	if !errors.Is(err, stop) {
+		t.Fatalf("interruption: %v", err)
+	}
+	if err = RecoverTransactions(root); err != nil {
+		t.Fatalf("recovery: %v", err)
+	}
+	recovered := transactionSnapshot(t, root, id)
+	if recovered.Entry.State != "todo" {
+		t.Fatalf("state %s", recovered.Entry.State)
+	}
+	disk, err := os.ReadFile(recovered.Entry.Document)
+	if err != nil || string(disk) != legacyDirCard {
+		t.Fatalf("card bytes changed by recovery: %v", err)
+	}
 }

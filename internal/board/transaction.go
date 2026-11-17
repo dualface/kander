@@ -378,7 +378,13 @@ func (tx *Transaction) Relocate(id, state string) error {
 				return kanbanError("board.transaction_invalid", "duplicate move")
 			}
 		}
-		text := s.Text
+		// Recovery compares this text with the bytes at the target, so it is the
+		// text on disk: a legacy card read as English still sits there in Chinese
+		// unless this transaction stages a write of it.
+		text, err := readDocument(s.Entry)
+		if err != nil {
+			return err
+		}
 		for _, file := range tx.record.Files {
 			if filepath.Join(tx.root, file.Path) == s.Entry.Document {
 				text = file.After
