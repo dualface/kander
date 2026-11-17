@@ -527,7 +527,13 @@ func TestIntegrationCountersRefineTheKernel(t *testing.T) {
 func TestIntegrationEvidenceRefinesTheKernel(t *testing.T) {
 	r := newIntegrationRig(t, "refine-evidence")
 	input := r.input("evidence-execution")
+	if _, err := r.a.TaskIntegration(t.Context(), r.member.TaskID); !api.IsCode(err, api.CodeNotFound) {
+		t.Fatalf("task integration before the integration: %v", err)
+	}
 	done := integrate(t, r.a, input, "evidence", r.owner)
+	if view, err := r.a.TaskIntegration(t.Context(), r.member.TaskID); err != nil || view.Phase != "integrated" || view.Generation != done.Generation {
+		t.Fatalf("task integration of the published receipt: %+v %v", view, err)
+	}
 	project := r.probe.project
 	task, generation := r.member.TaskID, r.member.Generation
 
@@ -697,6 +703,11 @@ func TestIntegrationCompletionNeedsNoReceiptWhenNotApplicable(t *testing.T) {
 	if got, err := f.srv.CompletionEvidence(a.ID(), task.TaskID, g.Claim.Generation); err == nil {
 		t.Fatalf("an open review needs no receipt: %+v", got)
 	}
+	// An open review is not "not applicable": the empty state refuses, so the view
+	// has no integration to show.
+	if _, err := a.TaskIntegration(ctx, task.TaskID); !api.IsCode(err, api.CodeNotFound) {
+		t.Fatalf("task integration of an open review: %v", err)
+	}
 	raw, err := a.ReviewAggregate(ctx, "", "batch-na", own)
 	if err != nil {
 		t.Fatal(err)
@@ -720,6 +731,11 @@ func TestIntegrationCompletionNeedsNoReceiptWhenNotApplicable(t *testing.T) {
 	}
 	if _, ok := serverintegration.Step(empty, serverintegration.Completion{Closed: true, PlanNA: true, NoDelivery: true}, integrationParams(empty)); !ok {
 		t.Fatal("the kernel refused a task that needs no integration")
+	}
+	// The task view of the same facts: the kernel accepts the empty state, and the
+	// view answers not-applicable instead of not_found.
+	if view, err := a.TaskIntegration(ctx, task.TaskID); err != nil || view.Phase != "not-applicable" || view.Request.Members[0].Generation != g.Claim.Generation {
+		t.Fatalf("task integration of a task that needs none: %+v %v", view, err)
 	}
 	if got, err := f.srv.CompletionEvidence(a.ID(), task.TaskID, g.Claim.Generation); err != nil || got.Phase != "not-applicable" {
 		t.Fatalf("completion evidence of a task that needs no integration: %+v %v", got, err)

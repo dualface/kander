@@ -32,8 +32,17 @@ func (p *project) taskIntegration(task string) (api.Integration, error) {
 	if !found {
 		progress, reviewErr := board.IntegrationReviewProgress(p.board, id)
 		delivery, deliveryErr := p.latestDelivery(id)
-		if reviewErr == nil && deliveryErr == nil && progress.Status == "closed" && progress.PlanTarget == "N/A" && (delivery == nil || delivery.Purpose == "baseline") {
-			return api.Integration{Phase: "not-applicable", Request: api.IntegrationRequest{Purpose: "deliver", Commit: "N/A", Members: []api.IntegrationMember{{TaskID: id, Generation: claim.Generation}}}}, nil
+		if reviewErr == nil && deliveryErr == nil {
+			// Without a receipt the kernel state is empty, so the event accepts only
+			// the case that needs no integration.
+			empty, err := p.projectIntegration(api.Integration{}, false, nil)
+			if err != nil {
+				return value, err
+			}
+			notApplicable := serverintegration.Completion{Closed: progress.Status == "closed", PlanNA: progress.PlanTarget == "N/A", NoDelivery: delivery == nil || delivery.Purpose == "baseline"}
+			if empty.accepts(notApplicable) {
+				return api.Integration{Phase: "not-applicable", Request: api.IntegrationRequest{Purpose: "deliver", Commit: "N/A", Members: []api.IntegrationMember{{TaskID: id, Generation: claim.Generation}}}}, nil
+			}
 		}
 		return value, apiError(api.CodeNotFound, "task generation has no published final integration")
 	}
