@@ -645,3 +645,33 @@ func TestIntegrationReplayedCompletionFinishesAnInterruptedCleanup(t *testing.T)
 		t.Fatalf("the replayed completion kept the merge ref: %s", refs)
 	}
 }
+
+func TestIntegrationFailedDeletionOfTheCarriedRefLeavesNoRefAfterCompletion(t *testing.T) {
+	f := newIntegrationFixture(t)
+	f.mergeIdentity()
+	f.advanceTarget("other.txt")
+	f.interruptBeforePush()
+	options := f.options("carried-ref-stuck")
+	if _, err := f.a.Integrate(t.Context(), f.first, options); err == nil {
+		t.Fatal("the interrupted push intent was not reported")
+	}
+	f.dropIntegrationCredentials()
+	// The first deletion of a merge ref fails, as it does with a stale lock file.
+	f.gitWrapper(`case "$*" in *"update-ref -d refs/kander/auto-merge/"*)
+ if [ ! -e "$KANDER_TEST_FAILED_ONCE" ]; then : > "$KANDER_TEST_FAILED_ONCE"; exit 1; fi;;
+esac
+exec "$KANDER_TEST_REAL_GIT" "$@"
+`)
+	t.Setenv("KANDER_TEST_FAILED_ONCE", filepath.Join(f.root, "failed-once"))
+	if _, err := f.a.Integrate(t.Context(), f.first, options); err == nil {
+		t.Fatal("the failed deletion was not reported")
+	}
+	result, err := f.a.Integrate(t.Context(), f.first, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if refs := f.privateRefs(); refs != "" {
+		t.Fatalf("a stuck deletion left a ref after completion: %s", refs)
+	}
+	f.complete(result)
+}

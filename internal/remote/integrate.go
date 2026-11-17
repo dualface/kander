@@ -184,14 +184,13 @@ func (s *Session) Integrate(ctx context.Context, dir string, options Integration
 			}
 			carried := carriedAutoMerge(&state)
 			request, err := s.prepareIntegration(ctx, dir, options, actor, carried)
-			if carried != nil && (err == nil || errors.Is(err, errTargetMoved)) {
-				// The carried merge is adopted, stale or unused by now.
-				if dropErr := dropAutoMerge(ctx, dir, *carried); dropErr != nil {
-					return api.Integration{}, dropErr
-				}
-			}
 			if errors.Is(err, errTargetMoved) {
 				last = retireTargetMoved
+				if carried != nil {
+					if err := dropAutoMerge(ctx, dir, *carried); err != nil {
+						return api.Integration{}, err
+					}
+				}
 				continue
 			}
 			if err != nil {
@@ -201,6 +200,13 @@ func (s *Session) Integrate(ctx context.Context, dir string, options Integration
 			state.Attempts = append(state.Attempts, attempt)
 			if err := storeIntegrationOperation(journal, &state); err != nil {
 				return api.Integration{}, err
+			}
+			// The carried merge is adopted or stale by now. The new attempt is in the
+			// journal first, so a failed deletion leaves only refs a completion drops.
+			if carried != nil {
+				if err := dropAutoMerge(ctx, dir, *carried); err != nil {
+					return api.Integration{}, err
+				}
 			}
 		}
 		knownClaim := attempt.Claimed
