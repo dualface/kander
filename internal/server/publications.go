@@ -159,7 +159,11 @@ func (s *Server) publicationRoutes(mux *http.ServeMux) {
 				if err != nil {
 					return err
 				}
-				if !claimedState(snapshot.Entry.State) || !found || claim.Generation != member.Generation || claim.Status != api.ClaimActive {
+				standing, err := p.standing(claim, found, member.Generation)
+				if err != nil {
+					return err
+				}
+				if !claimedState(snapshot.Entry.State) || !standing {
 					return apiError(api.CodeLeaseInvalid, "publication member is not the observed execution")
 				}
 			}
