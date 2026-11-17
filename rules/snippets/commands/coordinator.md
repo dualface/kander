@@ -89,10 +89,19 @@ kander coordinator integrate <absolute-integration.json>
 kander coordinator integration-show <target-ref>
 ```
 
-`integrate` is an explicit distributed Git operation. Its UTF-8 JSON input is at most 64 KiB and requires `operation_id`, `purpose`, `target_ref`, `commit`, and `decision`. The commit is a complete SHA. Use a stable operation ID when recovering an interrupted command; changing its source, target, actor or scope requires a new ID.
+`integrate` is an explicit distributed Git operation. Its UTF-8 JSON input is at most 64 KiB and requires `operation_id`, `purpose`, `target_ref`, `commit`, and `decision`. The commit is a complete SHA. The optional `via_commit` is a complete SHA and only applies to `deliver`. Use a stable operation ID when recovering an interrupted command; changing its source, target, actor, scope or `via_commit` requires a new ID.
 
 A standalone delivery specifies `task_id` and purpose `deliver`. A group operation specifies `group_id`: `initialize` creates its `refs/heads/group/<group-id>` anchor, `assemble` advances that ref using the listed `contributors`, and `deliver` integrates the group's closed review target into the explicitly named final target. Group operations require the current private coordinator credential. Standalone delivery requires the task holder. Contributions require live review generations and their immutable delivery refs in the registered common remote.
 
-The client verifies remote identity, delivery availability and ancestry before claiming the exclusive target lease. It records push intent before an update and uses the observed target SHA as a compare-and-swap condition. A divergent target requires a new reviewed integration commit. Neither a cached Git object nor a successful local command alone proves publication. The service records completion only after a fresh remote observation verifies that the source is contained in the target.
+A `deliver` request always names the closed review target as `commit`. It succeeds when that commit is contained in the target in one of four ways, tried in this order; the receipt records which one as `containment`:
+
+1. With `via_commit`, only this rule applies: the commit must be on the common remote and descend from both the review target and the current target. The target then advances to it, or stays when it equals the target (`via`).
+2. The review target is an ancestor of the target (`contained`). Nothing is pushed.
+3. The target is an ancestor of the review target (`fast_forward`). The review target is pushed.
+4. The target holds a run of commits that repeats the review range commit by commit, in order, with equal patches (`replayed`; a rebased push is the usual case). Nothing is pushed.
+
+Anything else is refused and the target is not pushed; the error suggests a `via_commit`. A `via` receipt records `via_commit`, and `commit..via_commit` is the content no review saw. A `replayed` receipt records the review range and the range of the target that repeats it. `integration-show` prints these fields. Each contributing member's latest delivery must be an ancestor of the review target or of the target after the integration. The target branch may hold more than the review target; that never blocks the integration.
+
+The client verifies remote identity, delivery availability and ancestry before claiming the exclusive target lease. It records push intent before an update and uses the observed target SHA as a compare-and-swap condition. Neither a cached Git object nor a successful local command alone proves publication. The service records completion only after a fresh remote observation verifies that the integrated commit is contained in the target.
 
 The worker renews the target lease for the integration command's recorded process identity. A lost lease stops that command. Its operation journal retains uncertain effects; recovery inspects the remote and the service receipt before another update. Published receipts remain readable after later target generations. `integration-show` prints the public target record without any private credential. Distributed wrap-up evidence copies its `id`, `request.execution_id`, `generation`, `request.commit`, `observed_target`, and `request.target_ref`; see `snippets/commands/dispatch.md` "Distributed wrap-up evidence".
