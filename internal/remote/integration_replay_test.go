@@ -12,6 +12,7 @@ import (
 func replayFixture(t *testing.T) (f *integrationFixture, mid string) {
 	t.Helper()
 	f = newIntegrationGitFixture(t)
+	f.mergeIdentity()
 	mid = f.commit
 	f.commit = commitFile(t, f.first, "extra.txt", "extra work\n", "Add extra work")
 	f.reviewedTask()
@@ -106,6 +107,7 @@ func TestIntegrationReplayRejectsRangesThatAreNotEqualCommitByCommit(t *testing.
 
 func TestIntegrationReplayRejectsAMergeInTheReviewRange(t *testing.T) {
 	f := newIntegrationGitFixture(t)
+	f.mergeIdentity()
 	deliveryGit(t, f.first, "checkout", "-q", "-b", "side", f.base)
 	side := commitFile(t, f.first, "side.txt", "side work\n", "Side work")
 	deliveryGit(t, f.first, "checkout", "-q", "-")
