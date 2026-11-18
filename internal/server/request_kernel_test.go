@@ -85,6 +85,19 @@ func (r requestProbe) unchanged(id string, gen, card uint64, e serverrequest.Eve
 	}
 }
 
+// shellRefuses runs fn, which the kernel accepts as e but the shell refuses
+// before it writes: the error has the given code, the projection is kept, and no
+// request exists.
+func (r requestProbe) shellRefuses(id string, gen, card uint64, e serverrequest.Event, code string, fn func() error) {
+	r.t.Helper()
+	before, params := r.state(id, gen, card, 0)
+	err := fn()
+	after, _ := r.state(id, gen, card, 0)
+	if _, ok := serverrequest.Step(before, e, params); !ok || !api.IsCode(err, code) || after != before || r.revision(id) != 0 {
+		r.t.Fatalf("%T on %+v: kernel accepted %v, error %v, after %+v, request revision %d", e, before, ok, err, after, r.revision(id))
+	}
+}
+
 // returns runs fn, which the kernel accepts as e without changing the request
 // (a repeated answer, a second creation), and asserts the projection is kept
 // and the entrance returned the request.

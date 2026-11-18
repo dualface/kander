@@ -343,3 +343,20 @@ func (p *project) evidence(task string, fn func(*board.Transaction) error) error
 	scope.Groups = append(scope.Groups, serviceGroup)
 	return board.WithTransaction(p.board, scope, fn)
 }
+
+// SetFixProposalCheck replaces the evidence check of a new fix proposal and
+// returns the function that restores it.
+func SetFixProposalCheck(check func(*board.Transaction, board.DispatchInput) error) (restore func()) {
+	previous := checkFixProposal
+	checkFixProposal = check
+	return func() { checkFixProposal = previous }
+}
+
+// BoardRoot is the board directory of project id.
+func (s *Server) BoardRoot(id string) (string, error) {
+	p, err := s.project(id)
+	if err != nil {
+		return "", err
+	}
+	return p.board, nil
+}

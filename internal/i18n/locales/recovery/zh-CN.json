@@ -49,6 +49,7 @@
   "launch.process_identity_not_recorded": "警告：{{.V0}}：没有记录进程身份，kander check 将报 unknown：{{.V1}}\n",
   "launch.native_resume_unsupported": "{{.V0}} 运行在 {{.V1}} 上，不支持原生恢复。下一步：用 kander check {{.V0}} 核对 executor；用 kander resume {{.V0}} --adopt --decision <引用> 结束未决启动，或者用 kander resume {{.V0}} --agent <agent> --message <消息> 替换 executor。",
   "board.coordinator_all_blocked": "任务组 {{.V0}}：reconcile 没有接受任何成员。第一个原因：{{.V1}}",
+  "board.coordinator_blocked_more": "完整原因在本次 reconcile 输出到 stdout 的检查点 JSON 里，之后也可以用 kander coordinator show {{.V0}} 查看。",
   "board.recover_request_invalid": "recover 请求必须包含 group_id、member、expected_revision、expected_epoch、decision 与 reason。",
   "board.recover_not_blocked": "{{.V0}} 在这个 checkpoint 中没有阻塞，无需恢复。成员失败时先运行 kander coordinator reconcile。",
   "board.recover_state": "{{.V0}} 在 {{.V1}} 列。恢复只接受 working、review、done、archived、trash 列的成员；backlog、todo 列的成员没有可恢复的执行。",

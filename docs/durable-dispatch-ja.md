@@ -109,6 +109,8 @@ kander dispatch show <task-id> <id>
 
 - **系譜の正当性**：指摘が指定バッチに実在し、自カードに割り当てられていることを自動検証。
 - **冪等性**：同一 `dispatch_id` でのリトライは既存バインドを継承。同一 ID でのバインド改ざんはエラーとなります。
+- **作成時のチェック**：タスクを保持しないクライアントが `kander notify --kind fix`（または `kander dispatch prepare`）で提案を送ります。サーバーは新しい fix 提案を作成するとき、何かを書き込む前に証拠を一度チェックします。証拠が通らない提案はリクエストを作らず、コマンドは証拠のすべての問題を 1 行ずつ一度に列挙して失敗するので、送信側は 1 回で修正できます。順序は固定です：バッチ、与えた順の各 finding、与えた順の作者参照、最後に欠けている作者原本（finding の run、finding、record の順）。finding に属する行は `<run_id>/<finding_id>` で始まり、フィールド名、指定値、期待値を示します。欠けている作者原本は 1 件 1 行で、`finding.run_id`、`finding.finding_id`、`record_id`、`author`、`artifact.path` を示し、lineage 上の前ラウンドの原本も含みます。finding が失敗した場合は作者原本を比較せず、その旨を 1 行で示します。行には識別子、コミット、タスク ID、作者名、カード内の相対パスだけを含み、finding の本文、証拠、根拠は含みません。拒否のコードは `board.dispatch_evidence_invalid`（`board_rejected`、HTTP 422）です。最後の行が次の手順です：`kander notify` で送ったものは、証拠ファイルを直して `--dispatch-id` を省略するか新しい dispatch ID でやり直します（拒否された ID には完了した拒否の受領が残り、同じ ID で証拠を変えると `idempotency_mismatch` になります）。非ホルダーの `kander dispatch prepare` で送ったものは、意図ファイルを直し、`created_at` と `confirm_by` を更新または削除してやり直します。拒否は何も作らないので、同じ dispatch ID を再利用できます。すでに提案を持つ dispatch ID は元の提案を返し、再チェックしません。
+- **prepare 時のチェック**：ホルダーの `dispatch prepare` は同じ問題リストで再度チェックし、次の手順は付けません。提案の作成後に起きた変化（後続の run、前進したバッチ、working カードへの新しい処置など）はここで拒否されます。作成時のチェックは後のチェックの合格を保証しません。
 
 ---
 

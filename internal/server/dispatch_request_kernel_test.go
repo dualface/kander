@@ -352,3 +352,24 @@ func TestProposalSlotRefinesTheKernel(t *testing.T) {
 	err = h.prepare("slot-prepare", stamped)
 	expectCode(t, err, api.CodeEvidenceIncomplete)
 }
+
+// The check of the evidence belongs to the shell: after the kernel accepted the
+// creation and the slot, a refusal writes nothing, so neither the request nor
+// the projection of its proposal changes.
+func TestFixProposalRefusalIsAShellRefusal(t *testing.T) {
+	h := newReviewedHolder(t, "fix-proposal-shell")
+	gen, card := h.grant.Claim.Generation, h.card.Revision
+	in := h.fixInput("fix-shell", func(f *board.DispatchFixBinding) { f.Findings[0].FindingID = "PM-404" })
+	slot, _, err := h.f.srv.ProposalSlot(h.holder.ID(), h.task, in.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	create := serverrequest.Create{Held: true, Standing: true, Target: 1, Prop: true, InRev: 1}
+	h.probe.shellRefuses(api.CollaborationRequestID("fix-shell"), gen, card, create, api.CodeBoardRejected, func() error {
+		_, err := h.sendFix("fix-shell", in)
+		return err
+	})
+	if after, _, err := h.f.srv.ProposalSlot(h.holder.ID(), h.task, in.ID); err != nil || after != slot {
+		t.Fatalf("the slot of a refused proposal changed: %+v -> %+v %v", slot, after, err)
+	}
+}
