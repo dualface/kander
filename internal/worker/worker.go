@@ -247,6 +247,7 @@ func (w *loop) step(ctx context.Context, c remote.Credential) bool {
 		if c.ResourceKind == "integration" {
 			return w.integrationRenewed(ctx, log, c)
 		}
+		observeStart := time.Now()
 		observeCtx, stopObservation := context.WithTimeout(ctx, 2*time.Second)
 		observation := w.observe(observeCtx, c)
 		stopObservation()
@@ -268,9 +269,11 @@ func (w *loop) step(ctx context.Context, c remote.Credential) bool {
 			}
 		}
 		if c.ResourceKind != "group" && observation.Status != "stopped" {
-			// The observation and its report run on the clock of callCtx;
-			// delivery gets a fresh budget so a slow terminal cannot starve it.
-			deliverCtx, stopDeliver := context.WithTimeout(ctx, min(interval, 10*time.Second))
+			// The observation and its report have their own bounds, so their
+			// time is added back: a slow terminal cannot starve delivery, and
+			// the renewal and delivery calls together keep the callCtx budget.
+			deadline, _ := callCtx.Deadline()
+			deliverCtx, stopDeliver := context.WithDeadline(ctx, deadline.Add(time.Since(observeStart)))
 			w.deliver(deliverCtx, log, project, &c)
 			stopDeliver()
 		}
