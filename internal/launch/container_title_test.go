@@ -122,12 +122,20 @@ func TestResumeAndNotifyRecoveryPlaceContainerWithLabel(t *testing.T) {
 	id, path := makeTodo(t, root, "tab-resume")
 	startThenReview(t, root, "claude", id, path)
 	probe := useTitleBackend(t, "tab not named")
+	cleanups := recordCleanup(t)
 
-	_, stderr, err := capture(t, func() error { return commandResume(root, nil, "title-test", id, "go on", "", true, 61) })
+	// A named agent with a decision makes this a takeover, not a plain resume.
+	agent := "claude"
+	_, stderr, err := capture(t, func() error {
+		return commandResume(root, &agent, "title-test", id, "go on", "", true, 61, DispatchOptions{Decision: "user approved"})
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantPlacement(t, probe, "kb-")
+	if len(*cleanups) != 1 {
+		t.Fatalf("takeover cleanups=%+v, want one", *cleanups)
+	}
 	if !strings.Contains(stderr, "tab not named") {
 		t.Fatalf("takeover warning missing from stderr: %q", stderr)
 	}
