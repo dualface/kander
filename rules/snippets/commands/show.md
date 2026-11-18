@@ -17,6 +17,19 @@ kander show [--document <relative-path>] <task-id>
 - `task-id`: the card.
 - `--document <relative-path>`: print this document of the card instead of its body: `spec.md`, `plan.md`, `report.md`, an ordinary attachment, or a file below `reviews/` or `dispatches/`. The path follows the rules of `kander update --document`: relative and canonical, with no `.` or `..` segment, no backslash or colon, no segment that starts with `.` or ends with a space or a dot, and `spec.md` in lower case. Given at most once. An empty value is a path error, not a usage error.
 
+## Examples
+
+```text
+# Print a card
+kander show 20261118-example-task
+
+# Print a card as JSON to read its revision
+kander show --json 20261118-example-task
+
+# Print the plan document of a card
+kander show --document plan.md 20261118-example-task
+```
+
 ## Preconditions
 
 - A located board that contains the card, in any state.

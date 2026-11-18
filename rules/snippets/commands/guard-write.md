@@ -4,7 +4,7 @@ Source: moved from `KANDER-KANBAN-RULES.md` "Command Contract"
 
 ## Purpose and users
 
-An advisory pre-write check that agent hooks call before writing a path; agents edit cards through `update`, never through this command.
+Runs the advisory pre-write check that agent hooks call before writing a path. Agents edit cards through `update`, never through this command.
 
 ## Syntax
 
@@ -15,6 +15,13 @@ kander guard-write <path>
 ## Arguments
 
 - `path`: the path about to be written.
+
+## Examples
+
+```text
+# Check a path before writing it
+kander guard-write src/main.go
+```
 
 ## Preconditions
 

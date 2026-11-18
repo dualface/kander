@@ -25,10 +25,60 @@ kander review <plan|extend-plan|assign|disposition|interpret|advance|close> --sc
 
 ## Arguments
 
-- Reviewer run: `[agent]` an optional configured agent with a review template; `--task <id>` (repeated) binds the run to cards; `--run-id`, `--batch-id`, `--previous-run-id` identify the run, its batch, and the predecessor of an incremental round; `--requirements-file <JSON>` names the batch requirements for a new batch; `--advance-file <JSON>` advances the batch target; then `<CWD> <base-commit> <commit> <role> <task-goal|absolute-spec-path> [review-context] [reviewed-commit]`.
-- Evidence subcommands: the words `plan`, `extend-plan`, `assign`, `disposition`, `interpret`, `map-legacy`, `aggregate`, `advance`, `close`, and `progress` select an evidence subcommand; each takes an absolute CWD and a JSON file or an ID as shown in Syntax. `--schema` prints the JSON schema of a subcommand's input.
-- `batch` is not a subcommand (no documented caller): batches are named in the plan by `plan` and `extend-plan`, advanced by `advance`, and closed by `close`.
-- `extend-plan` with `resolve_batch` accepts an unplanned batch that already ran, on the evidence of one closed planned batch (`snippets/review-evidence-gate.md` "Review Evidence Completion Gate").
+- `[agent]`: an optional configured agent with a review template.
+- `--task <id>`: repeated; binds the run to cards.
+- `--run-id <id>`, `--batch-id <id>`, `--previous-run-id <id>`: identify the run, its batch, and the predecessor of an incremental round.
+- `--requirements-file <JSON>`: names the batch requirements for a new batch.
+- `--advance-file <JSON>`: advances the batch target.
+- `<CWD> <base-commit> <commit> <role> <task-goal|absolute-spec-path> [review-context] [reviewed-commit]`: the positional arguments of a reviewer run, after its flags.
+- `plan`, `extend-plan`, `assign`, `disposition`, `interpret`, `map-legacy`, `aggregate`, `advance`, `close`, `progress`: select an evidence subcommand; each takes an absolute CWD and a JSON file or an ID as shown in Syntax.
+- `confirm`: the subcommand that confirms a prepared publication as its holder; see "Additional Syntax".
+- `--schema`: prints the JSON schema of the input of a subcommand.
+- `batch`: not a subcommand (no documented caller); batches are named in the plan by `plan` and `extend-plan`, advanced by `advance`, and closed by `close`.
+- `resolve_batch`: a field of the `extend-plan` input that accepts an unplanned batch that already ran, on the evidence of one closed planned batch (`snippets/review-evidence-gate.md` "Review Evidence Completion Gate").
+
+## Examples
+
+```text
+# Run one reviewer role on a commit range
+kander review /tmp/worktree origin/develop HEAD PMQA "Review the example change"
+
+# Publish a review plan
+kander review plan /tmp/worktree /tmp/plan.json
+
+# Print the input schema of the plan file
+kander review plan --schema
+
+# Extend a review plan
+kander review extend-plan /tmp/worktree /tmp/extension.json
+
+# Assign a reviewer to a batch
+kander review assign /tmp/worktree /tmp/assignment.json
+
+# Record the disposition of the findings
+kander review disposition /tmp/worktree /tmp/record.json 3
+
+# Record how the receiver reads a report
+kander review interpret /tmp/worktree /tmp/interpretation.json
+
+# Map a legacy batch to the plan
+kander review map-legacy /tmp/worktree /tmp/map.json
+
+# Print the disposition view of a batch
+kander review aggregate /tmp/worktree 20261118-example-task-batch-1
+
+# Advance the target of a batch
+kander review advance /tmp/worktree /tmp/advance.json
+
+# Close a batch
+kander review close /tmp/worktree /tmp/close.json
+
+# Print the progress of a card in its plan
+kander review progress /tmp/worktree 20261118-example-task
+
+# Confirm a prepared publication as its holder
+kander review confirm /tmp/worktree publication-1 20261118-example-task
+```
 
 ## Preconditions
 
@@ -58,6 +108,12 @@ kander review <plan|extend-plan|assign|disposition|interpret|advance|close> --sc
 - A refusal over a value the request names (`expected_revision`, `view_hash`, `previous_target`, `previous_record_id`, `rebind_cycles`, `sync_targets`) keeps its label as the start of the message and then writes the value the request holds, the value the board holds (a request value that does not have the form of its field, such as a short SHA in `previous_target` or text in `view_hash`, is written as `<invalid>`), and the next step, which is to read the current state again (`kander review aggregate` or `kander review progress`, and for the revision of a plan `kander show --document reviews/plan.json <task-id>`) and to confirm that the decision still holds before the request is written again. A message never writes a token, a claim or lease proof, an execution credential, a report body, or a disposition reason. A close request with no `author` is refused as `close author required`, an advance whose `previous_target` is the batch target but whose `target` does not move, is no full commit, or has no `reason` is refused as `batch target invalid` (only a different `previous_target` is `batch target CAS conflict`), and a batch or plan that is not there is refused as `missing batch` or `missing plan` with its ID; neither is a CAS refusal. A review over a member that is not in `working/` or `review/` names the member and its state. For a member in `backlog/` or `todo/` it offers to wait until the member starts and, when the card has a `TASK_GROUP` and is still an unstarted member, `kander coordinator remove-member` after the user decides (see `coordinator.md`); it never offers `remove-member` for a card without a group or in `done/`, `archived/`, or `trash/`.
 - A dirty worktree, a base that is not an ancestor, a reused run ID with changed inputs, a four- or six-key new batch, a batch outside the plan of a member (the error names `extend-plan`), a `resolve_batch` request that fails a condition of the gate snippet, a `close` on a conclusion run of another execution cycle, a `seal` over a dropped `required` batch with no planned replacement, a `release_obligation` with no `decision` or nothing to release, a `release_obligation` of kind `recovery` under a plan that requires a role, a target that differs from a frozen task context (the error names the frozen snapshot), a worktree other than the plan's `cwd`, conflicting review pins of one batch (change a pin with `kander update --contract-decision-file`), incomplete publication, or a gate failure of an evidence subcommand.
 - Fewer than 5 or more than 7 positional arguments, a missing JSON path, or `--schema` on a subcommand without a schema is a usage error.
+
+## Additional Syntax
+
+```text
+kander review confirm <absolute-CWD> <publication-id> <task-id>
+```
 
 ## Distributed holder confirmation (v2)
 

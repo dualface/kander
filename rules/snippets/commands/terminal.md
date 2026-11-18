@@ -18,6 +18,16 @@ kander terminal test <name> [--keep] [--skip-focus]
 - `list`: print every launcher and whether its environment holds.
 - `test <name> [--keep] [--skip-focus]`: open a container through that launcher and verify it; `--keep` leaves the container open, `--skip-focus` skips the focus check.
 
+## Examples
+
+```text
+# List the launchers and their environment
+kander terminal list
+
+# Test a launcher and keep its container
+kander terminal test tmux --keep
+```
+
 ## Preconditions
 
 - `test` needs the launcher's environment (see `snippets/commands/start.md` "Launchers").

@@ -4,7 +4,7 @@ Source: moved from `KANDER-KANBAN-RULES.md` "Command Contract" ("Resuming the Or
 
 ## Purpose and users
 
-Wakes the original executing agent of a `working/` or `review/` card with a message, or, with `--agent`, hands the card to a brand-new session (a user-authorized takeover), or, with `--adopt`, keeps the running executor of an unfinished start. Used by the orchestrator only through `notify`, which chooses resumption itself; used directly by the user.
+Wakes the original executing agent of a `working/` or `review/` card with a message. With `--agent` it hands the card to a brand-new session (a user-authorized takeover); with `--adopt` it keeps the running executor of an unfinished start. Used by the orchestrator only through `notify`, which chooses resumption itself; used directly by the user.
 
 ## Syntax
 
@@ -23,6 +23,23 @@ kander resume --adopt --decision <reference> <task-id>
 - `--decision <reference>`: the user decision. Required with `--adopt`, and with `--agent` when the current execution record is `pending` or `unresolved`. `--agent` on a `running` record may omit it. Kander records the reference and does not verify it.
 - `--launcher <launcher>`: as for `start`.
 - `--dispatch-id`, `--kind fix|sync|wrap-up`, `--base <full-SHA>`, `--evidence-file <JSON>`: durable dispatch (`snippets/commands/dispatch.md`).
+- `--release`: with `--decision`, ends the lease of a stopped local execution without changing the card content; it takes only the task ID and `--decision`. See "Additional Syntax".
+
+## Examples
+
+```text
+# Wake the agent of a card with a message
+kander resume --message "Please continue" 20261118-example-task
+
+# Take a card over with a new session
+kander resume --agent codex --decision user-2026-11-19 --message "Continue the work" 20261118-example-task
+
+# Keep the running executor of an unfinished start
+kander resume --adopt --decision user-2026-11-19 20261118-example-task
+
+# Release the stopped execution of a card
+kander resume --release --decision user-2026-11-19 20261118-example-task
+```
 
 ## Preconditions
 

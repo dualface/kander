@@ -17,6 +17,19 @@ kander list [--agent-status] [backlog|todo|working|review|done|archived|trash]
 - `state`: one of `backlog`, `todo`, `working`, `review`, `done`, `archived`, `trash`.
 - `--agent-status`: with the global `--json` only; observe the executing agent of every `working` or `review` card with a non-empty `WINDOW`.
 
+## Examples
+
+```text
+# List every card
+kander list
+
+# List the cards in working
+kander list working
+
+# Print the board snapshot with the agent status as JSON
+kander list --json --agent-status
+```
+
 ## Preconditions
 
 - A located board.

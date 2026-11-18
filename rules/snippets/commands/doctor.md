@@ -4,7 +4,7 @@ Source: new in this file; the rule files did not describe this command beyond it
 
 ## Purpose and users
 
-Checks the installation (binary, rules root, agent rules integration, terminal tools) and repairs what it can: missing or outdated rule files, templates, and snippets are rewritten from the embedded copies; locally modified files are listed and, in an interactive session, backed up and replaced on request. Run by the user, also after every upgrade.
+Checks the installation and repairs what it can. The check covers the binary, rules root, agent rules integration, and terminal tools; missing or outdated rule files, templates, and snippets are rewritten from the embedded copies; locally modified files are listed and, in an interactive session, backed up and replaced on request. Run by the user, also after every upgrade.
 
 ## Syntax
 
@@ -15,6 +15,13 @@ kander doctor
 ## Arguments
 
 None.
+
+## Examples
+
+```text
+# Check the installation and repair it
+kander doctor
+```
 
 ## Preconditions
 

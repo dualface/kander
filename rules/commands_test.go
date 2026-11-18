@@ -2,12 +2,13 @@ package rules
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
 
 // contractSections is the fixed section order of every command contract.
-var contractSections = []string{"## Purpose and users", "## Syntax", "## Arguments", "## Preconditions", "## Effects", "## Output", "## Rejections"}
+var contractSections = []string{"## Purpose and users", "## Syntax", "## Arguments", "## Examples", "## Preconditions", "## Effects", "## Output", "## Rejections"}
 
 // contractCommands lists the commands that have a contract file. Whether the command tree has
 // exactly these commands is checked where the whole tree is linked (cmd/kander).
@@ -175,6 +176,168 @@ func TestGlobalJSONFlagIsNotInASyntaxLine(t *testing.T) {
 			if strings.Contains(line, "--json") {
 				t.Errorf("%s: a Syntax line names the global --json: %s", cmd, line)
 			}
+		}
+	}
+}
+
+// parsedContracts parses every contract as the command it documents; the contract of notify
+// documents request as well.
+func parsedContracts(t *testing.T) map[string]Contract {
+	t.Helper()
+	parsed := map[string]Contract{}
+	for _, cmd := range contractCommands(t) {
+		names := []string{cmd}
+		if cmd == "notify" {
+			names = append(names, "request")
+		}
+		for _, name := range names {
+			contract, err := EmbeddedContract(name)
+			if err != nil {
+				t.Fatalf("%s: %v", name, err)
+			}
+			parsed[name] = contract
+		}
+	}
+	return parsed
+}
+
+// The summary is the first sentence of Purpose and users: one sentence, at most 25 words.
+func TestEverySummaryIsOneShortSentence(t *testing.T) {
+	for name, contract := range parsedContracts(t) {
+		if !strings.HasSuffix(contract.Summary, ".") {
+			t.Errorf("%s: the summary does not end with a period: %q", name, contract.Summary)
+		}
+		if words := len(strings.Fields(contract.Summary)); words > 25 {
+			t.Errorf("%s: the summary has %d words, limit 25: %q", name, words, contract.Summary)
+		}
+	}
+}
+
+func TestFirstSentence(t *testing.T) {
+	for text, want := range map[string]string{
+		"Prints `kander v1.2`. Used by all.":         "Prints `kander v1.2`.",
+		"Prints it.":                                 "Prints it.",
+		"No period at all":                           "No period at all",
+		"Runs `a. b` and stops. Then more.\nSecond.": "Runs `a. b` and stops.",
+	} {
+		if got := FirstSentence(text); got != want {
+			t.Errorf("FirstSentence(%q) = %q, want %q", text, got, want)
+		}
+	}
+}
+
+// Every argument entry has a name and a text; a command without arguments says None. and has
+// no entries.
+func TestEveryArgumentEntryParses(t *testing.T) {
+	for name, contract := range parsedContracts(t) {
+		for _, argument := range contract.Arguments {
+			if len(argument.Names) == 0 || strings.TrimSpace(argument.Text) == "" {
+				t.Errorf("%s: an argument entry has no name or no text: %+v", name, argument)
+			}
+		}
+	}
+	for _, name := range []string{"config", "doctor", "install", "version"} {
+		if contract := parsedContracts(t)[name]; len(contract.Arguments) != 0 {
+			t.Errorf("%s: want no arguments, got %+v", name, contract.Arguments)
+		}
+		data, _ := File("snippets/commands/" + name + ".md")
+		if !strings.Contains(string(data), "\n## Arguments\n\nNone.\n\n## Examples\n") {
+			t.Errorf("%s: the Arguments section must be the single line None.", name)
+		}
+	}
+}
+
+var syntaxLongFlag = regexp.MustCompile(`--[a-z][a-z-]*`)
+
+// Every long flag a Syntax line names is the name of an argument entry, except the global flags.
+func TestEverySyntaxFlagHasAnArgumentEntry(t *testing.T) {
+	for _, cmd := range contractCommands(t) {
+		data, _ := File("snippets/commands/" + cmd + ".md")
+		var documented strings.Builder
+		contract, err := ParseContract(cmd, string(data))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, argument := range contract.Arguments {
+			documented.WriteString(strings.Join(argument.Names, " ") + " ")
+		}
+		for _, line := range CommandSyntaxLines(string(data)) {
+			for _, flag := range syntaxLongFlag.FindAllString(line, -1) {
+				if flag == "--lang" || flag == "--json" || flag == "--help" {
+					continue
+				}
+				if !regexp.MustCompile(regexp.QuoteMeta(flag) + `\b`).MatchString(documented.String()) {
+					t.Errorf("%s: %s is in a Syntax line and in no argument entry", cmd, flag)
+				}
+			}
+		}
+	}
+}
+
+// Every contract has Examples, each a "# description" and a command, and the command of an
+// example starts with the command the contract documents.
+func TestEveryContractHasExamples(t *testing.T) {
+	for name, contract := range parsedContracts(t) {
+		if len(contract.Examples) == 0 {
+			t.Errorf("%s: no examples", name)
+		}
+		for _, example := range contract.Examples {
+			if strings.TrimSpace(example.Description) == "" || !strings.HasPrefix(example.Command, "kander "+name) {
+				t.Errorf("%s: example %+v does not start with `kander %s`", name, example, name)
+			}
+		}
+	}
+}
+
+// request is described by its own section of the notify contract.
+func TestRequestHasItsOwnSection(t *testing.T) {
+	data, _ := File("snippets/commands/notify.md")
+	text := string(data)
+	idx := strings.Index(text, "\n## Request command\n")
+	if idx < 0 || idx < strings.Index(text, "\n## Rejections\n") {
+		t.Fatal("notify.md has no Request command section after the fixed sections")
+	}
+	request, notify := parsedContracts(t)["request"], parsedContracts(t)["notify"]
+	if request.Summary == notify.Summary || !strings.HasPrefix(request.Summary, "Proposes") && !strings.Contains(request.Summary, "request") {
+		t.Errorf("the request summary is not its own: %q", request.Summary)
+	}
+	for _, line := range request.Usage {
+		if !strings.HasPrefix(line, "kander request ") {
+			t.Errorf("request usage line %q", line)
+		}
+	}
+	for _, line := range notify.Usage {
+		if !strings.HasPrefix(line, "kander notify ") {
+			t.Errorf("notify usage line %q", line)
+		}
+	}
+}
+
+func TestCommandOrderFollowsTheReadmeTable(t *testing.T) {
+	order := CommandOrder()
+	for _, want := range []string{"config", "notify", "request", "review", "issue"} {
+		if !slices.Contains(order, want) {
+			t.Errorf("CommandOrder lacks %s: %v", want, order)
+		}
+	}
+	if slices.Index(order, "request") != slices.Index(order, "notify")+1 {
+		t.Errorf("request does not follow notify: %v", order)
+	}
+	if len(order) != len(contractCommands(t))+1 {
+		t.Errorf("CommandOrder %v does not list every contract and request", order)
+	}
+}
+
+func TestSyntaxPaths(t *testing.T) {
+	for line, want := range map[string][]string{
+		"kander move <task-id> <backlog|todo> --owner x":          {"move"},
+		"kander review <plan|close> --schema":                     {"review plan", "review close"},
+		"kander server start [--data DIR]":                        {"server start"},
+		"kander issue show NUMBER [--repo HOST/OWNER/REPO]":       {"issue show"},
+		"kander request answer <task-id> accepted|done [note...]": {"request answer"},
+	} {
+		if got := SyntaxPaths(line); !slices.Equal(got, want) {
+			t.Errorf("SyntaxPaths(%q) = %v, want %v", line, got, want)
 		}
 	}
 }

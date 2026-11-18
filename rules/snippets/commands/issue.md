@@ -25,6 +25,29 @@ kander issue result NUMBER --card TASK_ID [--repo HOST/OWNER/REPO] [--agent NAME
 - `import NUMBER [--repo ...] [--comments] [--type feature|bug|chore|research] [--large] [--language LANG]`: create a card from an issue.
 - `triage NUMBER [--card TASK_ID] [--repo ...] [--agent NAME] [--launcher NAME]`: start a triage session.
 - `result NUMBER --card TASK_ID [--repo ...] [--agent NAME] [--launcher NAME] [--action start|inspect|apply|decide] [--file JSON]`: reconcile the completed result of the issue's work set (the anchor card plus its `SOURCE_ISSUE` siblings, `KANDER-ISSUE-RULES.md` "Completed Result Reconciliation"). `--card` is always the anchor card.
+- `--operation-id <stable-id>`: with `result` in a distributed project, distinguishes an intentionally new result session; see "Additional Syntax".
+
+## Examples
+
+```text
+# Show the repository that issue commands use
+kander issue repo --json
+
+# List the open issues with a label
+kander issue list --state open --label bug --limit 20
+
+# Print one issue with its comments as JSON
+kander issue show 42 --comments --json
+
+# Import an issue as a card in backlog
+kander issue import 42 --comments --type bug
+
+# Start a triage session for an issue
+kander issue triage 42 --agent claude
+
+# Inspect the result of a finished work set
+kander issue result 42 --card 20261118-example-task --action inspect
+```
 
 ## Preconditions
 

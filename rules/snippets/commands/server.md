@@ -2,7 +2,7 @@
 
 ## Purpose and users
 
-Run and administer the shared board service from the single `kander` executable.
+Runs and administers the shared board service from the single `kander` executable.
 
 ## Syntax
 
@@ -28,6 +28,36 @@ kander server projects [--data DIR]
 - `import`: explicitly import a paused v1 board into an empty service project. When no process holds the data directory lock, it imports offline under that lock. When a local server serves the data directory, that server performs the import and keeps serving. `--from` defaults to the board v1 commands locate: `KANBAN_DIR`, then the main worktree's `kanban/`, then an upward search.
 - `maintain`: offline legacy file-card maintenance. `--maintenance` acknowledges that all writers and executors are paused.
 - `projects`: list the registry without writing or requiring a running server.
+- `--foreground`: with `start`, serve in this process instead of detaching.
+- `--project NAME`: the project name that `import` and `maintain` act on.
+- `--remote URL`: with `import`, the Git remote URL that the first registration of the project name binds.
+- `--from KANBAN_DIR`: with `import`, the paused v1 board to import.
+- `--maintenance`: with `maintain`, acknowledge that all writers and executors are paused.
+
+## Examples
+
+```text
+# Start a background server
+kander server start --data /tmp/kander-data --listen 127.0.0.1:7878
+
+# Print the state of the running server as JSON
+kander server status --json
+
+# Stop the running server
+kander server stop
+
+# Restart the server with its current settings
+kander server restart
+
+# Import a paused v1 board into an empty project
+kander server import --project demo --from /tmp/kanban
+
+# Maintain legacy file cards of a project offline
+kander server maintain --project demo --maintenance
+
+# List the projects of the registry
+kander server projects
+```
 
 ## Preconditions
 

@@ -14,6 +14,17 @@ kander config
 
 ## Arguments
 
+None.
+
+## Examples
+
+```text
+# Print the effective configuration as JSON
+kander config --json
+
+# Print the effective configuration as text
+kander config
+```
 
 ## Preconditions
 

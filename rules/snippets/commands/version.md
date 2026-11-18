@@ -16,6 +16,13 @@ kander version
 
 None.
 
+## Examples
+
+```text
+# Print the binary version
+kander version
+```
+
 ## Preconditions
 
 None.

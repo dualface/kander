@@ -21,6 +21,13 @@ kander update <task-id> --document <relative-path> --file <UTF8-input> --expect-
 - `--contract-decision-file <UTF8-decision>`: a user-authorized contract change after `todo/`; Kander records the decision and the old and new frozen fields in `CONTRACT_DECISIONS`.
 - `--dispatch-id <id> --execution-epoch <epoch>`: required on a card that carries a `DISPATCH_ID`.
 
+## Examples
+
+```text
+# Publish a new body of a card
+kander update 20261118-example-task --document spec.md --file /tmp/spec.md --expect-revision 3
+```
+
 ## Preconditions
 
 - Obtain the revision from `kander show --json <task-id>` first; prepare the replacement in a separate file.

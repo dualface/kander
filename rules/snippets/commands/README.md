@@ -2,7 +2,7 @@
 
 Before running any `kander` command in this session, read `<rules root>/snippets/commands/README.md` once. Before the first use of a command, read its contract file.
 
-`--help` prints Syntax and contract path. Global flags: `--lang`, `--json` (`docs/json-output.md`). The final block matches `KANDER-KANBAN-RULES.md` "Command Contract".
+`--help` prints summary, syntax, arguments, and examples; `kander help --json [<command>]` prints JSON. Global flags: `--lang`, `--json`. The final block matches `KANDER-KANBAN-RULES.md` "Command Contract".
 
 First: `show`, `update`, `move`, `check`.
 

@@ -4,7 +4,7 @@ Source: moved from `KANDER-KANBAN-RULES.md` "Command Contract" ("Notify and Reco
 
 ## Purpose and users
 
-The single interface for the orchestrator to dispatch items back to the original executing agent: review findings (`--kind fix`), task branch synchronization (`--kind sync`), and post-integration wrap-up (`--kind wrap-up`). The orchestrator does not call `resume` separately; resumption is chosen inside `notify`.
+Dispatches items back to the original executing agent. It is the single interface the orchestrator uses for review findings (`--kind fix`), task branch synchronization (`--kind sync`), and post-integration wrap-up (`--kind wrap-up`). The orchestrator does not call `resume` separately; resumption is chosen inside `notify`.
 
 ## Syntax
 
@@ -19,6 +19,34 @@ kander notify [--pane HERDR-PANE-ID] [--timeout SECONDS] (--message TEXT | --mes
 - `--timeout SECONDS`: greater than 60; default 120.
 - `--pane HERDR-PANE-ID`: explicit delivery target; no reverse lookup is performed.
 - `--dispatch-id`, `--kind fix|sync|wrap-up`, `--base <full-SHA>`, `--evidence-file <JSON>`: durable dispatch (`snippets/commands/dispatch.md`).
+- `fix|sync|review|stop`: with `request`, the kind of work the proposal asks for.
+- `message...`: with `request`, the text of the proposal.
+- `list`, `show`, `answer`: the subcommands of `request`: list the requests of a card, print one request, and answer one as the live holder.
+- `request-id`: the request that `request show` prints or `request answer` answers.
+- `accepted|done|rejected`: the answer of the holder.
+- `note...`: an optional note of the answer.
+
+## Examples
+
+```text
+# Send a plain message to the agent of a card
+kander notify --message "Please continue" 20261118-example-task
+
+# Dispatch review findings back to the agent
+kander notify --kind fix --dispatch-id dispatch-1 --message-file /tmp/message.md --evidence-file /tmp/evidence.json 20261118-example-task
+
+# Propose a fix to the holder of a card
+kander request 20261118-example-task fix "Fix the review findings"
+
+# List the requests of a card
+kander request list 20261118-example-task
+
+# Print one request as JSON
+kander request show 20261118-example-task request-1
+
+# Answer a request as the holder
+kander request answer 20261118-example-task request-1 done "Fixed in the latest commit"
+```
 
 ## Preconditions
 
@@ -63,6 +91,10 @@ The worker reserves delivery only while that version and generation remain curre
 When a new proposal is a `fix` dispatch, the server checks its `evidence.fix` before it creates the request, with the check that `kander dispatch prepare` runs at the holder (`snippets/commands/dispatch.md`). A failed check creates no proposal: the command exits nonzero and prints every problem at once, one line each. A line that belongs to a finding starts with `<run_id>/<finding_id>`, names the field, and gives the provided and the expected value; every missing author original is one line with `finding.run_id`, `finding.finding_id`, `record_id`, `author` and `artifact.path`. The lines never carry the text, the evidence or the basis of a finding. Correct the evidence file and run `kander notify` again without `--dispatch-id`, or with a new dispatch ID: the refused ID keeps its stored refusal, so changed evidence under it is an `idempotency_mismatch`. The holder's `prepare` still checks again and refuses what changed after the creation.
 
 Before transport the client saves a private operation receipt. A lost response is reconciled against the original request after restart, including when a successor now holds the task. It never silently retargets pending material. An uncertain terminal attempt remains recorded and is not automatically repeated. A pane override must match the current private local execution; foreign pane addresses are refused before any terminal operation.
+
+## Request command
+
+Proposes a piece of work to the live holder of a card through the shared service. Any client may propose; only the live holder answers. `request list` and `request show` read the requests of a card, and `request answer` lets the holder accept, finish, or reject one. The forms are under "Additional Syntax".
 
 ## Additional Syntax
 

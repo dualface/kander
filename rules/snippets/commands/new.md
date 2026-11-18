@@ -21,6 +21,16 @@ kander new [--large] [--language <agent language>] <feature|bug|chore|research> 
 - `--language <agent language>`: the card `LANGUAGE`; default is the configured `agent_language`.
 - `title...`: the words of the title, joined by single spaces. A word that starts with `-` must come after `--`, as in `kander new chore slug -- -dash title`.
 
+## Examples
+
+```text
+# Create a small card
+kander new feature example-slug Add an example
+
+# Create a large card in a given language
+kander new --large --language en bug example-slug Fix the example
+```
+
 ## Preconditions
 
 - A located board; the task ID must be unique across the board.

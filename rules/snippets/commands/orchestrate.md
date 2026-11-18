@@ -4,7 +4,7 @@ Source: moved from `KANDER-KANBAN-RULES.md` "Command Contract" (syntax) and `KAN
 
 ## Purpose and users
 
-Hands a confirmed plan with two or more cards, or with at least one task group, to a separate orchestrator session that advances and reports them in its own window. Used by the card creator under intake option 2; a plan of exactly one standalone card uses `start` instead.
+Hands a confirmed plan to a separate orchestrator session. The plan has two or more cards, or at least one task group; the session advances and reports them in its own window. Used by the card creator under intake option 2; a plan of exactly one standalone card uses `start` instead.
 
 ## Syntax
 
@@ -17,6 +17,17 @@ kander orchestrate [--agent <configured-agent>] [--launcher <launcher>] (--messa
 - `task-id|task-group-id...`: the cards and groups in plan order; a group ID expands to its current members.
 - `--message TEXT | --message-file FILE`: exactly one; the plan notes (order, parallel cards, groups and their merge-back steps, user decisions).
 - `--agent`, `--launcher`: as for `start`; the default agent tier is `large`.
+- `--operation-id <stable-id>`: identifies an intentionally new confirmed orchestration of a distributed project; reuse its value when retrying.
+
+## Examples
+
+```text
+# Hand a task group to an orchestrator session
+kander orchestrate --message-file /tmp/plan.md 20261118-example-group
+
+# Hand two cards to an orchestrator with a given agent and launcher
+kander orchestrate --agent claude --launcher tmux --message "Run the cards in order" 20261118-example-task 20261118-second-example-task
+```
 
 ## Preconditions
 

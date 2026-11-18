@@ -4,7 +4,7 @@ Source: moved from `KANDER-KANBAN-RULES.md` "Command Contract" (syntax) and `KAN
 
 ## Purpose and users
 
-Durable group checkpoints for the orchestrator: `claim` fences one coordinator, `reconcile` records every observation, `show` reads the committed checkpoint. `recover` is the audited last resort for a blocked member; it runs only on an explicit user decision. `remove-member` takes one unstarted member out of the group on an explicit user decision. The JSON shapes and the recovery protocol are in `snippets/coordinator-checkpoints.md` "Coordinator Checkpoints" and `snippets/orchestrate-start.md` "Durable Coordinator Recovery".
+Keeps durable group checkpoints for the orchestrator: `claim` fences one coordinator, `reconcile` records every observation, `show` reads the committed checkpoint. `recover` is the audited last resort for a blocked member; it runs only on an explicit user decision. `remove-member` takes one unstarted member out of the group on an explicit user decision. The JSON shapes and the recovery protocol are in `snippets/coordinator-checkpoints.md` "Coordinator Checkpoints" and `snippets/orchestrate-start.md` "Durable Coordinator Recovery".
 
 ## Syntax
 
@@ -23,6 +23,34 @@ kander coordinator remove-member <absolute-request.json>
 - `reconcile <absolute-observations.json>`: group_id, expected_revision, the authority from the claim, a members object keyed by task ID (each with its card revision and, when bound, dispatch_id, epoch, base, and completed delivery_commit), and an optional absolute `cwd` for read-only Git verification.
 - `recover <absolute-request.json>`: group_id, member, expected_revision, expected_epoch, decision (the user decision reference), and reason. All six are required. The member's column selects the mode.
 - `remove-member <absolute-request.json>`: the same six fields. `member` is the card that leaves the group.
+
+## Examples
+
+```text
+# Read the checkpoint of a group
+kander coordinator show 20261118-example-group
+
+# Claim a group as its coordinator
+kander coordinator claim /tmp/claim.json
+
+# Record the observations of the members
+kander coordinator reconcile /tmp/observations.json
+
+# Recover a blocked member after a user decision
+kander coordinator recover /tmp/recover.json
+
+# Remove an unstarted member from the group
+kander coordinator remove-member /tmp/remove-member.json
+
+# Release the claim of a group
+kander coordinator release /tmp/release.json
+
+# Integrate a reviewed commit into its target
+kander coordinator integrate /tmp/integration.json
+
+# Show the integration state of a target ref
+kander coordinator integration-show refs/heads/develop
+```
 
 ## Preconditions
 

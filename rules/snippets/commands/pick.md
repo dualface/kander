@@ -16,6 +16,16 @@ kander pick [task-id]
 
 - `task-id`: the card; without it, the command lists the `backlog/` cards and asks which to pick. Automation passes the ID.
 
+## Examples
+
+```text
+# Move a card from backlog to todo
+kander pick 20261118-example-task
+
+# List the cards in backlog and choose one
+kander pick
+```
+
 ## Preconditions
 
 - The same gate as `kander move <task-id> todo`: `SELF_REVIEW:` and, when required, `CARD_REVIEW:` records and complete contract sections.

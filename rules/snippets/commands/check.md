@@ -20,6 +20,22 @@ kander check overlap --source <ref> [--head <ref>]
 - `check delivery --base <ref> [--commit <ref>]`: `git diff --check` and line-count candidates of `base..commit`; `--commit` defaults to `HEAD`.
 - `check overlap --source <ref> [--head <ref>]`: paths changed on both sides of the merge base; `--head` defaults to `HEAD`.
 
+## Examples
+
+```text
+# Check the whole board
+kander check
+
+# Check one card
+kander check 20261118-example-task
+
+# Check a delivery against its base and print JSON
+kander check delivery --base origin/develop --json
+
+# Find the paths changed on both sides of a branch
+kander check overlap --source origin/develop --json
+```
+
 ## Preconditions
 
 - `check` needs a located board. `delivery` and `overlap` are board-free and run in any Git worktree; `delivery` rejects a non-ancestor base.

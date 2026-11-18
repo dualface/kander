@@ -17,6 +17,16 @@ kander init [--server <URL>] [--project <name>] [project-path]
 - `project-path`: checkout whose project binding to initialize; default is the current checkout.
 - `--server <URL>`, `--project <name>`: the binding fields to save; see "Binding fields" below.
 
+## Examples
+
+```text
+# Bind the current checkout to the configured project
+kander init
+
+# Bind a checkout to a project of a server
+kander init --server http://127.0.0.1:7878 --project demo /tmp/checkout
+```
+
 ## Preconditions
 
 - A readable scope configuration and reachable compatible service.

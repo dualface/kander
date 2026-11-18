@@ -18,6 +18,16 @@ kander start [--agent <configured-agent>] [--launcher <launcher>] [task-id]
 - `--agent <configured-agent>`: override the configured execution agent for this invocation only.
 - `--launcher <launcher>`: a built-in launcher name (`auto`, `tmux`, `tmux-session`, `herdr`, `luvus`, `dsh`, `foreground`, `console`) or one provided by a loaded terminal definition (see "Launchers" below).
 
+## Examples
+
+```text
+# Start the agent of a todo card
+kander start 20261118-example-task
+
+# Start a card with a given agent and launcher
+kander start --agent codex --launcher tmux 20261118-example-task
+```
+
 ## Preconditions
 
 - The card is in `todo/` with its gates passed; `start` accepts only `todo` cards. Never `move ... working` first and then `start`.

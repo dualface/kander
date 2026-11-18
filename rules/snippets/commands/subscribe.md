@@ -19,6 +19,16 @@ kander subscribe [--refresh SECONDS] [--heartbeat SECONDS] (<task-group> <task-i
 - `--refresh SECONDS`: default 1.
 - `--heartbeat SECONDS`: default 900; the heartbeat starts after the snapshot is queued and restarts only after each heartbeat is queued.
 
+## Examples
+
+```text
+# Stream the events of a group and its members
+kander subscribe 20261118-example-group 20261118-example-task
+
+# Watch a standalone card
+kander subscribe --watch 20261118-example-task
+```
+
 ## Preconditions
 
 - `subscribe` requires an explicit group ID and non-empty member IDs and validates ownership. A nonexistent or empty target, a duplicate member, or overlapping expansions fail before subscribing.

@@ -17,6 +17,16 @@ kander dismiss [--timeout SECONDS] <task-id>
 - `task-id`: a card in `done/` or `archived/`.
 - `--timeout SECONDS`: greater than 60; default 120.
 
+## Examples
+
+```text
+# Exit the agent of a finished card and close its container
+kander dismiss 20261118-example-task
+
+# Wait up to 180 seconds for the agent to exit
+kander dismiss --timeout 180 20261118-example-task
+```
+
 ## Preconditions
 
 - `dismiss` accepts only `done/` or `archived/` cards. It locates the pane by the card `WINDOW` (or a unique session reverse lookup). It requires the agent and session to match, the agent to be idle, and the container to hold only that pane. The agent definition must declare an `exit_command`.

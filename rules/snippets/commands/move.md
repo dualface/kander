@@ -24,6 +24,22 @@ kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--owner
 - `--delivery-commit <full-SHA>`: the final delivery commit of a bound completion. In distributed mode it is also the delivery commit that a move into `review/` publishes; for a single card it is the closed review target `C`.
 - `--disposition <card-relative-path>`: the disposition artifact of a bound completion.
 
+## Examples
+
+```text
+# Claim a card for this session
+kander move 20261118-example-task working --owner claude
+
+# Hand a finished group member to the orchestrator
+kander move 20261118-example-task review
+
+# Complete a card
+kander move 20261118-example-task done --result completed
+
+# Archive a card that the user cancelled
+kander move 20261118-example-task archived --result cancelled --reason "Cancelled by the user" --decision user-2026-11-19
+```
+
 ## Preconditions
 
 - The transition exists in `KANDER-KANBAN-RULES.md` "State Model".

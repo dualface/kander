@@ -4,7 +4,7 @@ Source: new in this file
 
 ## Purpose and users
 
-Removes what Kander wrote for the agents in the current scope: the Kander load commands in the agent rules files, the agent rules extensions, and the rule files and state files of the rules root. Then turns rules injection off, so a later `kander doctor` or bare `kander` start writes no agent file again. Used by the user.
+Removes what Kander wrote for the agents in the current scope. That is the Kander load commands in the agent rules files, the agent rules extensions, and the rule files and state files of the rules root. Then turns rules injection off, so a later `kander doctor` or bare `kander` start writes no agent file again. Used by the user.
 
 ## Syntax
 
@@ -15,6 +15,13 @@ kander uninstall [--yes]
 ## Arguments
 
 - `--yes`: skip the confirmation. Required when standard input or standard error is not a terminal.
+
+## Examples
+
+```text
+# Remove what Kander wrote for the agents
+kander uninstall --yes
+```
 
 ## Preconditions
 

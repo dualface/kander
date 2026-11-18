@@ -16,6 +16,13 @@ kander install
 
 None.
 
+## Examples
+
+```text
+# Run the interactive installer
+kander install
+```
+
 ## Preconditions
 
 - An interactive terminal.

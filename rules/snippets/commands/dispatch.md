@@ -24,6 +24,28 @@ kander dispatch settle <task-id> <dispatch-id> <dispatch-revision>
 - `fail|cancel <task-id> <dispatch-id> <dispatch-revision> <reason> [--decision <reference>]`: record the terminal decision and release the binding. An accepted round requires `--decision`.
 - `settle <task-id> <dispatch-id> <dispatch-revision>`: end the binding of a completed round of the current execution cycle.
 
+## Examples
+
+```text
+# Create an intent without sending it
+kander dispatch prepare /tmp/intent.json
+
+# Obtain the wrap-up grant on behalf of a member
+kander dispatch authorize-wrap-up /tmp/request.json
+
+# Print a dispatch and its receipts
+kander dispatch show 20261118-example-task dispatch-1
+
+# Record that a dispatch failed
+kander dispatch fail 20261118-example-task dispatch-1 3 "The agent stopped"
+
+# Cancel an accepted dispatch after a user decision
+kander dispatch cancel 20261118-example-task dispatch-1 3 "Replaced by a new round" --decision user-2026-11-19
+
+# End the binding of a completed round
+kander dispatch settle 20261118-example-task dispatch-1 3
+```
+
 ## Preconditions
 
 - The configured server project. The rules of the "Durable Dispatch" section below.
