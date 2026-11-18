@@ -617,3 +617,26 @@ func TestPreparedFixDispatchIsReplayedOnARenamedBatchRecord(t *testing.T) {
 		t.Fatal("a new dispatch was prepared on a renamed batch record")
 	}
 }
+
+// A batch record under another batch_id adds no member to the scope of a
+// proposal, whatever task IDs it lists: the proposal learns the difference.
+func TestFixProposalScopeIgnoresARenamedBatchRecord(t *testing.T) {
+	root, in, run, _ := twoFindingFixture(t)
+	path := control(root, "groups", reviewControlGroup, "batches", run.BatchID+".json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var batch ReviewBatch
+	if err = DecodeReviewJSON(raw, &batch); err != nil {
+		t.Fatal(err)
+	}
+	batch.BatchID, batch.TaskIDs = "renamed", []string{"20260101-ghost-task"}
+	if err = os.WriteFile(path, []byte(reviewJSON(batch)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if scope := FixProposalScope(root, in.Evidence.Fix); len(scope.Tasks) != 0 {
+		t.Fatalf("scope of a renamed batch record: %+v", scope)
+	}
+	wantLines(t, checkProposal(t, root, in), `batch_id: provided "`+run.BatchID+`", the batch record holds "renamed"`)
+}

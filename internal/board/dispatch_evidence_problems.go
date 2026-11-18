@@ -77,12 +77,14 @@ func readFixBatchOutside(root, batchID string) (batch ReviewBatch, readable bool
 
 // FixProposalScope is the lock scope CheckDispatchFixProposal reads under: the
 // review control group and the member cards of the batch. The caller adds its
-// own groups and cards. A batch that cannot be read adds no member: the check
-// inside the transaction reads it again and reports the problem or the failure
-// at its place in the order of the checks of the creation.
+// own groups and cards. A batch the check cannot go on with, unreadable or
+// stored under another batch_id, adds no member: the check inside the transaction
+// reads it again and reports the problem or the failure at its place in the order
+// of the checks of the creation, and the members such a record names may not be
+// cards at all.
 func FixProposalScope(root string, fix *DispatchFixBinding) LockScope {
 	scope := LockScope{Groups: []string{reviewControlGroup}}
-	if batch, readable, _, err := readFixBatchOutside(root, fix.BatchID); readable && err == nil {
+	if batch, readable, problem, err := readFixBatchOutside(root, fix.BatchID); readable && problem == "" && err == nil {
 		scope.Tasks = slices.Clone(batch.TaskIDs)
 	}
 	return scope
