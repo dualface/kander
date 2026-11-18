@@ -19,7 +19,7 @@ import (
 func commandService(t *testing.T, cfg *config.Config) *remote.Session {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	srv, err := server.Open(server.Options{DataDir: t.TempDir(), TTL: 20 * time.Second, RenewInterval: 200 * time.Millisecond, Logger: logger})
+	srv, err := server.Open(server.Options{DataDir: t.TempDir(), TTL: 20 * time.Second, RenewInterval: time.Second, Logger: logger})
 	if err != nil {
 		t.Fatal(err)
 	}
