@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -405,4 +406,22 @@ func NewExecutionID() string {
 		panic(err)
 	}
 	return "x-" + hex.EncodeToString(b)
+}
+
+// CheckProject refuses a command that needs a project binding in a checkout without one: it
+// prints the reason and returns the exit status, 0 when the checkout is bound.
+func CheckProject() int {
+	cfg, err := config.Load(false)
+	if err == nil && cfg.Project.Name == "" {
+		err = ErrNotConfigured
+	}
+	switch {
+	case err == nil:
+		return 0
+	case errors.Is(err, ErrNotConfigured):
+		fmt.Fprintln(os.Stderr, config.Text("remote.not_configured"))
+	default:
+		fmt.Fprintf(os.Stderr, "kander: %s\n", err)
+	}
+	return 1
 }

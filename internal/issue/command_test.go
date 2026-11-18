@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dualface/kander/internal/command/commandtest"
 	"github.com/dualface/kander/internal/config"
 )
 
@@ -79,8 +80,10 @@ func runIssue(t *testing.T, resolver IssueProvider, args ...string) (int, string
 		}
 		return resolver
 	}
-	code := runWith(factory, args, &stdout, &stderr)
-	return code, stdout.String(), stderr.String()
+	code, helpText, argumentErrors := commandtest.Capture(func() int {
+		return commandtest.Run(newCommand(factory, &stdout, &stderr), args...)
+	})
+	return code, stdout.String() + helpText, stderr.String() + argumentErrors
 }
 
 func TestIssueRepoTextOutput(t *testing.T) {

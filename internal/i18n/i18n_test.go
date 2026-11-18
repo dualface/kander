@@ -155,10 +155,10 @@ func TestText(t *testing.T) {
 		args     []any
 		want     string
 	}{
-		{"en", "cli.subcommand_is_not_implemented", []any{"demo"}, "subcommand is not implemented: demo"},
-		{"cn", "cli.subcommand_is_not_implemented", []any{"demo"}, "子命令尚未实现: demo"},
-		{"ja", "cli.subcommand_is_not_implemented", []any{"demo"}, "サブコマンドは未実装です: demo"},
-		{"unknown", "cli.subcommand_is_not_implemented", []any{"demo"}, "子命令尚未实现: demo"},
+		{"en", "cli.error_unknown_command", []any{"demo"}, "unknown command demo"},
+		{"cn", "cli.error_unknown_command", []any{"demo"}, "未知命令 demo"},
+		{"ja", "cli.error_unknown_command", []any{"demo"}, "未知のコマンド demo"},
+		{"unknown", "cli.error_unknown_command", []any{"demo"}, "未知命令 demo"},
 		{"en", "config.unknown_task_scale", []any{"a\"b"}, "unknown task scale: \"a\\\"b\""},
 		{"cn", "install.rule_missing", []any{"{{.V9}} <&>"}, "规则文件缺失: {{.V9}} <&>"},
 		{"en", "missing.id", nil, "missing.id"},
@@ -205,7 +205,7 @@ func TestCatalogCallSites(t *testing.T) {
 				if !ok {
 					return true
 				}
-				if qualifier.Name != "config" && qualifier.Name != "i18n" {
+				if qualifier.Name != "config" && qualifier.Name != "i18n" && qualifier.Name != "command" {
 					return true
 				}
 				name = fun.Sel.Name
@@ -214,13 +214,9 @@ func TestCatalogCallSites(t *testing.T) {
 				}
 			}
 			switch name {
-			case "Text", "t", "text", "launchError", "notifyError", "probeError", "takeoverError", "windowError", "kanbanError", "configErrorf":
-			case "newGate", "wrapFS", "configErrorfWrap", "parsePositiveFloat":
+			case "Text", "t", "text", "Usage", "launchError", "notifyError", "probeError", "takeoverError", "windowError", "kanbanError", "configErrorf":
+			case "newGate", "wrapFS", "configErrorfWrap":
 				offset = 1
-			case "usageFail":
-				if f.Name.Name == "board" || f.Name.Name == "launch" {
-					offset = 1
-				}
 			default:
 				return true
 			}

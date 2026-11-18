@@ -39,7 +39,7 @@ kander install
 kander uninstall [--yes]
 kander terminal list
 kander terminal test <name> [--keep] [--skip-focus]
-kander init [--maintenance] [project-path]
+kander init [--server <URL>] [--project <name>] [project-path]
 kander list [--mobile|--json [--agent-status]] [backlog|todo|working|review|done|archived|trash]
 kander show [--json] [--document <relative-path>] <task-id>
 kander new [--large] [--language <agent language>] <feature|bug|chore|research> <slug> <title...>
@@ -61,7 +61,7 @@ kander check [--all] [task-id ...]
 kander check delivery --base <ref> [--commit <ref>] [--json]
 kander check overlap --source <ref> [--head <ref>] [--json]
 kander guard-write <path>
-kander subscribe [--refresh SECONDS] [--heartbeat SECONDS] (<task-group> <task-id>... [--watch <task-id|task-group-id>...] | --watch <task-id|task-group-id>...)
+kander subscribe [--refresh SECONDS] [--heartbeat SECONDS] (<task-group> <task-id>... [--watch <task-id|task-group-id>]... | --watch <task-id|task-group-id> [--watch <task-id|task-group-id>]...)
 kander coordinator show <group-id>
 kander coordinator claim <absolute-claim.json>
 kander coordinator reconcile <absolute-observations.json>

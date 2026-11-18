@@ -12,6 +12,7 @@ import (
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command/commandtest"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/server"
@@ -106,7 +107,7 @@ func TestRemoteDispatchCLIUsesHolderAuthorityAndProposesForForeignHolder(t *test
 	if _, err := project.Dispatch(t.Context(), card.TaskID, input.ID); !api.IsCode(err, api.CodeNotFound) {
 		t.Fatalf("foreign proposal became a dispatch: %v", err)
 	}
-	if code := remote.RunRequest([]string{"show", card.TaskID, request.ID, "--json"}); code != 0 {
+	if code := commandtest.Run(remote.NewRequestCommand(), "show", card.TaskID, request.ID, "--json"); code != 0 {
 		t.Fatalf("request inspection failed: %d", code)
 	}
 

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,8 +20,8 @@ func TestCheckCommandUsesLivenessInFullBinary(t *testing.T) {
 	t.Setenv(config.EnvLangCLI, "1")
 	config.ApplyLanguageArgument([]string{"kander", "--lang", "cn"})
 
-	if cli.Commands["check"] == nil {
-		t.Fatal("check is not registered")
+	if _, _, err := cli.NewRoot().Find([]string{"check"}); err != nil {
+		t.Fatalf("check is not registered: %v", err)
 	}
 
 	t.Chdir(t.TempDir())
@@ -66,38 +65,18 @@ func TestCheckCommandDeliveryBoardFree(t *testing.T) {
 	t.Setenv(board.EnvBoardDir, filepath.Join(t.TempDir(), "missing-board"))
 	t.Chdir(t.TempDir())
 
-	got := cli.Commands["check"]
-	if got == nil {
-		t.Fatal("check is not registered")
-	}
-	stdoutR, stdoutW, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	stderrR, stderrW, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	oldOut, oldErr := os.Stdout, os.Stderr
-	os.Stdout, os.Stderr = stdoutW, stderrW
-	code := got([]string{"delivery", "--base", "HEAD", "--json"})
-	_ = stdoutW.Close()
-	_ = stderrW.Close()
-	os.Stdout, os.Stderr = oldOut, oldErr
-	outBytes, _ := io.ReadAll(stdoutR)
-	errBytes, _ := io.ReadAll(stderrR)
-	_ = stdoutR.Close()
-	_ = stderrR.Close()
-	if string(errBytes) != "" {
+	result := runKander(t, "check", "delivery", "--base", "HEAD", "--json")
+	outBytes, errBytes, code := result.stdout, result.stderr, result.code
+	if errBytes != "" {
 		t.Fatalf("json stderr=%q", errBytes)
 	}
 	if code != 3 {
 		t.Fatalf("exit=%d stdout=%s", code, outBytes)
 	}
-	if !strings.Contains(string(outBytes), `"check":"delivery"`) || !strings.Contains(string(outBytes), `"status":"error"`) {
+	if !strings.Contains(outBytes, `"check":"delivery"`) || !strings.Contains(outBytes, `"status":"error"`) {
 		t.Fatalf("expected delivery JSON error, got %s", outBytes)
 	}
-	if !strings.Contains(string(outBytes), `"code":"not-repository"`) {
+	if !strings.Contains(outBytes, `"code":"not-repository"`) {
 		t.Fatalf("expected not-repository error, got %s", outBytes)
 	}
 }

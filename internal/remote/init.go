@@ -1,32 +1,33 @@
 package remote
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
+	"github.com/spf13/cobra"
+
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 )
 
-// RunInit binds a checkout to a service project. It never creates a local board.
-func RunInit(args []string) int {
-	args, url, urlGiven, err := takeValue(args, "--server")
-	if err != nil {
-		return printUsage("init")
+// NewInitCommand builds kander init, which binds a checkout to a service project. It never
+// creates a local board.
+func NewInitCommand() *cobra.Command {
+	var url, name string
+	c := &cobra.Command{
+		Use:  "init [project-path]",
+		Args: command.Args(0, 1),
 	}
-	args, name, nameGiven, err := takeValue(args, "--project")
-	if err != nil {
-		return printUsage("init")
+	c.RunE = func(_ *cobra.Command, args []string) error {
+		return runInit(args, url, c.Flags().Changed("server"), name, c.Flags().Changed("project"))
 	}
-	args, maintenance := takeFlag(args, "--maintenance")
-	if len(args) > 1 || len(args) == 1 && strings.HasPrefix(args[0], "-") {
-		return printUsage("init")
-	}
-	if maintenance {
-		return fail(errors.New(config.Text("remote.init_maintenance_server")))
-	}
+	c.Flags().StringVar(&url, "server", "", "")
+	c.Flags().StringVar(&name, "project", "", "")
+	return c
+}
+
+func runInit(args []string, url string, urlGiven bool, name string, nameGiven bool) error {
 	dir, err := os.Getwd()
 	if err != nil {
 		return fail(err)
@@ -77,5 +78,5 @@ func RunInit(args []string) int {
 	if session.Info.BoardPath != "" {
 		fmt.Fprintln(stdout, config.Text("remote.project_board_path", session.Info.BoardPath))
 	}
-	return 0
+	return nil
 }

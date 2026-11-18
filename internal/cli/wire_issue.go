@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"github.com/spf13/cobra"
+
 	"github.com/dualface/kander/internal/issue"
 	"github.com/dualface/kander/internal/issue/ghcli"
+	"github.com/dualface/kander/internal/worker"
 )
 
 // IssueProvider builds the GitHub CLI provider. The TUI reuses this factory so
@@ -12,12 +15,6 @@ func IssueProvider() issue.IssueProvider {
 }
 
 func init() {
-	command := issue.Command(IssueProvider)
-	required := RequireService(command)
-	Commands["issue"] = func(args []string) int {
-		if len(args) > 0 && (args[0] == "import" || args[0] == "triage" || args[0] == "result") {
-			return required(args)
-		}
-		return command(args)
-	}
+	Register(func() *cobra.Command { return issue.NewCommand(IssueProvider) })
+	Register(worker.NewCommand)
 }

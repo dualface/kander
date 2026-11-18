@@ -16,6 +16,7 @@ import (
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/command/commandtest"
 )
 
 func openIdentityServer(t *testing.T, dir string, logs io.Writer) *Server {
@@ -253,7 +254,7 @@ func TestReadyLogNamesEveryProjectBoard(t *testing.T) {
 func runProjectsCommand(t *testing.T, args ...string) (int, string, string) {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
-	code := listProjects(args, &stdout, &stderr)
+	code := commandtest.Run(newProjectsCommand(&stdout, &stderr), args...)
 	return code, stdout.String(), stderr.String()
 }
 

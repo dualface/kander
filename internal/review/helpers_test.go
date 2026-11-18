@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dualface/kander/internal/command/commandtest"
 	"github.com/dualface/kander/internal/config"
 )
 
@@ -37,7 +38,7 @@ func captureRun(t *testing.T, args []string) (int, string, string) {
 	outCh, errCh := drain(stdoutR), drain(stderrR)
 	oldOut, oldErr := os.Stdout, os.Stderr
 	os.Stdout, os.Stderr = stdoutW, stderrW
-	code := Run(args)
+	code := commandtest.Run(NewCommand(), args...)
 	_ = stdoutW.Close()
 	_ = stderrW.Close()
 	os.Stdout, os.Stderr = oldOut, oldErr

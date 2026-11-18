@@ -1,9 +1,12 @@
 package config
 
 import (
+	"io"
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/spf13/pflag"
 
 	"github.com/dualface/kander/internal/i18n"
 )
@@ -14,27 +17,25 @@ var (
 	configLanguage      string
 )
 
-// ApplyLanguageArgument scans argv for --lang and sets KANDER_LANG / KANDER_LANG_CLI.
+// ApplyLanguageArgument reads --lang from argv with pflag and sets KANDER_LANG / KANDER_LANG_CLI.
+// Every other argument is ignored: the command tree reports their errors itself.
 func ApplyLanguageArgument(arguments []string) {
 	langMu.Lock()
 	defer langMu.Unlock()
 	_ = os.Unsetenv(EnvLangCLI)
 	cliLanguageOverride = ""
-	var value string
-	for i := 0; i < len(arguments); i++ {
-		arg := arguments[i]
-		if arg == "--lang" && i+1 < len(arguments) {
-			value = arguments[i+1]
-			break
-		}
-		if strings.HasPrefix(arg, "--lang=") {
-			value = strings.TrimPrefix(arg, "--lang=")
-			break
-		}
-	}
-	if contains(Languages, value) {
-		cliLanguageOverride = value
-		_ = os.Setenv(EnvLang, value)
+	var flags pflag.FlagSet
+	flags.Init("lang", pflag.ContinueOnError)
+	flags.SetInterspersed(true)
+	flags.SetOutput(io.Discard)
+	flags.ParseErrorsAllowlist.UnknownFlags = true
+	// Declared only so that --help does not stop the scan before a --lang that follows it.
+	flags.BoolP("help", "h", false, "")
+	value := flags.String("lang", "", "")
+	_ = flags.Parse(arguments)
+	if contains(Languages, *value) {
+		cliLanguageOverride = *value
+		_ = os.Setenv(EnvLang, *value)
 		_ = os.Setenv(EnvLangCLI, "1")
 	}
 }

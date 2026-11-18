@@ -57,18 +57,20 @@ func TestHelpListsAllCommandsAndLang(t *testing.T) {
 		t.Fatalf("code=%d err=%s", code, err)
 	}
 	required := []string{
-		"doctor", "config", "review", "init",
+		"doctor", "config", "init",
 		"version",
 		"install",
 		"issue",
-		"list / ls", "show", "new", "move", "pick", "start", "orchestrate", "resume",
-		"notify", "dismiss", "check", "subscribe",
+		"show", "new", "move", "pick", "request",
 		"--lang {cn,en,ja}",
 	}
 	for _, item := range required {
 		if !strings.Contains(out, item) {
 			t.Fatalf("help missing %q\n%s", item, out)
 		}
+	}
+	if strings.Contains(out, "worker") {
+		t.Fatalf("help lists the internal worker command\n%s", out)
 	}
 }
 
@@ -80,35 +82,6 @@ func TestHelpEnglish(t *testing.T) {
 	}
 	if !strings.Contains(out, "usage: kander") {
 		t.Fatalf("expected english help: %s", out)
-	}
-}
-
-func TestUnimplementedCommands(t *testing.T) {
-	resetLang(t)
-	implemented := map[string]struct{}{
-		"init": {}, "list": {}, "ls": {}, "show": {},
-		"new": {}, "move": {}, "pick": {},
-		"guard-write": {}, "update": {}, "dispatch": {},
-		"doctor": {}, "config": {},
-		"version": {}, "install": {}, "uninstall": {}, "issue": {}, "terminal": {},
-	}
-	names := append([]string{"ls"}, commandNames...)
-	for _, name := range names {
-		if _, ok := implemented[name]; ok {
-			continue
-		}
-		code, _, err := captureRun(t, []string{"kander", name})
-		if code == 0 {
-			t.Fatalf("%s exited 0", name)
-		}
-		canonical := name
-		if name == "ls" {
-			canonical = "list"
-		}
-		want := "子命令尚未实现: " + canonical
-		if !strings.Contains(err, want) {
-			t.Fatalf("%s stderr=%q want %q", name, err, want)
-		}
 	}
 }
 
@@ -130,17 +103,6 @@ func TestVersionCommand(t *testing.T) {
 	code, _, err = captureRun(t, []string{"kander", "version", "extra"})
 	if code != 2 || !strings.Contains(err, "kander version") {
 		t.Fatalf("code=%d stderr=%q", code, err)
-	}
-}
-
-func TestUnimplementedEnglish(t *testing.T) {
-	resetLang(t)
-	code, _, err := captureRun(t, []string{"kander", "--lang=en", "start"})
-	if code == 0 {
-		t.Fatal("expected non-zero")
-	}
-	if !strings.Contains(err, "subcommand is not implemented: start") {
-		t.Fatalf("stderr=%q", err)
 	}
 }
 
@@ -190,11 +152,8 @@ func TestDefaultRunner(t *testing.T) {
 	old := DefaultRunner
 	t.Cleanup(func() { DefaultRunner = old })
 	called := false
-	DefaultRunner = func(args []string) int {
+	DefaultRunner = func() int {
 		called = true
-		if len(args) != 0 {
-			t.Fatalf("args=%v", args)
-		}
 		return 7
 	}
 	if code := Run([]string{"kander"}); code != 7 || !called {

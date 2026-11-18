@@ -8,9 +8,7 @@
   "check.commit_target": "target: {{.V0}}",
   "check.crossed_limit": "1000 行上限を超えたファイル:",
   "check.diff_check": "diff-check: {{.V0}}",
-  "check.duplicate_flag": "繰り返されたオプション: {{.V0}}",
   "check.error": "エラー {{.V0}}: {{.V1}}",
-  "check.flag_does_not_take_value": "{{.V0}} は値を取りません",
   "check.git_unavailable": "PATH 上に git がありません",
   "check.internal": "内部チェックエラー",
   "check.invalid_ref": "ref を commit に解決できません",
@@ -25,7 +23,5 @@
   "check.overlap_paths": "重複パス:",
   "check.parse_tree_entry": "git tree entry 出力が無効です",
   "check.parse_truncated": "git name-status 出力が切り詰められました",
-  "check.status": "{{.V0}} チェック: {{.V1}}",
-  "check.unexpected_argument": "予期しない引数: {{.V0}}",
-  "check.unknown_option": "不明なオプション: {{.V0}}"
+  "check.status": "{{.V0}} チェック: {{.V1}}"
 }

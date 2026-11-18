@@ -8,6 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
+
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 )
 
@@ -21,64 +24,24 @@ type listOptions struct {
 	json       bool
 }
 
-// runList implements `kander issue list`.
-func runList(factory func() IssueProvider, args []string, stdout, stderr io.Writer) int {
+func newListCommand(factory func() IssueProvider, stdout, stderr io.Writer) *cobra.Command {
 	var options listOptions
-	for index := 0; index < len(args); index++ {
-		arg := args[index]
-		switch {
-		case arg == "-h" || arg == "--help":
-			fmt.Fprintln(stdout, usageText())
-			return 0
-		case arg == "--json":
-			options.json = true
-		case matchesLongOption(arg, "--state"):
-			value, next, ok := optionValue(args, index, "--state", stderr)
-			if !ok {
-				return 2
-			}
-			index = next
-			options.state = value
-		case matchesLongOption(arg, "--label"):
-			value, next, ok := optionValue(args, index, "--label", stderr)
-			if !ok {
-				return 2
-			}
-			index = next
-			options.labels = append(options.labels, value)
-		case matchesLongOption(arg, "--search"):
-			value, next, ok := optionValue(args, index, "--search", stderr)
-			if !ok {
-				return 2
-			}
-			index = next
-			options.search = value
-		case matchesLongOption(arg, "--limit"):
-			value, next, ok := optionValue(args, index, "--limit", stderr)
-			if !ok {
-				return 2
-			}
-			index = next
-			limit, err := strconv.Atoi(strings.TrimSpace(value))
-			if err != nil {
-				fmt.Fprintln(stderr, config.Text("issue.error_invalid_value", "--limit", value))
-				return 2
-			}
-			options.limit = limit
-		case matchesLongOption(arg, "--repo"):
-			value, next, ok := optionValue(args, index, "--repo", stderr)
-			if !ok {
-				return 2
-			}
-			index = next
-			options.repository = value
-			options.hasRepo = true
-		default:
-			fmt.Fprintln(stderr, config.Text("issue.error_unknown_argument", arg))
-			fmt.Fprintln(stderr, usageText())
-			return 2
-		}
+	c := &cobra.Command{Use: "list", Args: command.Args(0, 0)}
+	c.RunE = func(*cobra.Command, []string) error {
+		options.hasRepo = c.Flags().Changed("repo")
+		return command.Exit(runList(factory, options, stdout, stderr))
 	}
+	addRepoFlag(c, &options.repository)
+	command.Checked(c.Flags(), &options.state, "state", "", nonBlank("state"))
+	c.Flags().StringArrayVar(&options.labels, "label", nil, "")
+	command.Checked(c.Flags(), &options.search, "search", "", nonBlank("search"))
+	c.Flags().IntVar(&options.limit, "limit", 0, "")
+	c.Flags().BoolVar(&options.json, "json", false, "")
+	return c
+}
+
+// runList implements `kander issue list`.
+func runList(factory func() IssueProvider, options listOptions, stdout, stderr io.Writer) int {
 	query, err := (IssueQuery{
 		State:  options.state,
 		Labels: options.labels,

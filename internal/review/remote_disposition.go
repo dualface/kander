@@ -30,9 +30,6 @@ func runRemoteDisposition(cfg *config.Config, args []string) int {
 	if err := remote.RequireBinding(cfg); err != nil {
 		return dispositionFailure(err)
 	}
-	if len(args) < 3 || len(args) > 4 || (args[0] == "disposition" || args[0] == "confirm") != (len(args) == 4) {
-		return dispositionFailure(newGateMsg(2, config.CommandUsage("review")))
-	}
 	action, cwd, input := args[0], args[1], args[2]
 	if !remoteDispositionCommands[action] {
 		return dispositionFailure(archiveError("review " + action + " is not available in server mode yet"))

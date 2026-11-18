@@ -6,9 +6,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
+
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 )
 
@@ -20,50 +24,53 @@ type RepositoryResolver interface {
 	ResolveRepository(ctx context.Context, directory string, explicit string) (Repository, error)
 }
 
-// Command returns the `kander issue` runner bound to a provider factory. The
-// factory runs once per invocation so every call re-reads the environment.
-func Command(factory func() IssueProvider) func(args []string) int {
-	return func(args []string) int {
-		return runWith(factory, args, os.Stdout, os.Stderr)
+// NewCommand returns `kander issue` bound to a provider factory. The factory runs once per
+// invocation so every call re-reads the environment.
+func NewCommand(factory func() IssueProvider) *cobra.Command {
+	return newCommand(factory, os.Stdout, os.Stderr)
+}
+
+func newCommand(factory func() IssueProvider, stdout, stderr io.Writer) *cobra.Command {
+	return command.Group("issue",
+		newRepoCommand(factory, stdout, stderr),
+		newListCommand(factory, stdout, stderr),
+		newShowCommand(factory, stdout, stderr),
+		command.RequireProject(newImportCommand(factory, stdout, stderr)),
+		command.RequireProject(newResultCommand(factory, stdout, stderr)),
+		command.RequireProject(newTriageCommand(factory, stdout, stderr)),
+	)
+}
+
+// nonBlank is the validator of a flag whose value must not be empty.
+func nonBlank(name string) func(string) error {
+	return func(value string) error {
+		if strings.TrimSpace(value) == "" {
+			return command.Usage("issue.error_missing_value", "--"+name)
+		}
+		return nil
 	}
 }
 
-func runWith(factory func() IssueProvider, args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 {
-		fmt.Fprintln(stderr, usageText())
-		return 2
-	}
-	switch args[0] {
-	case "-h", "--help", "help":
-		fmt.Fprintln(stdout, usageText())
-		return 0
-	case "repo":
-		return runRepo(factory, args[1:], stdout, stderr)
-	case "list":
-		return runList(factory, args[1:], stdout, stderr)
-	case "show":
-		return runShow(factory, args[1:], stdout, stderr)
-	case "import":
-		return runImport(factory, args[1:], stdout, stderr)
-	case "result":
-		return runResult(factory, args[1:], stdout, stderr)
-	case "triage":
-		return runTriage(factory, args[1:], stdout, stderr)
-	default:
-		fmt.Fprintln(stderr, config.Text("issue.error_unknown_argument", args[0]))
-		fmt.Fprintln(stderr, usageText())
-		return 2
-	}
+// addRepoFlag registers --repo, which names the repository explicitly.
+func addRepoFlag(c *cobra.Command, repository *string) {
+	command.Checked(c.Flags(), repository, "repo", "", nonBlank("repo"))
 }
 
-func usageText() string {
-	return config.CommandUsage("issue")
+// numberArgs accepts exactly one positive issue number.
+func numberArgs(c *cobra.Command, args []string) error {
+	if err := command.Args(1, 1)(c, args); err != nil {
+		return err
+	}
+	if number, err := strconv.Atoi(strings.TrimSpace(args[0])); err != nil || number <= 0 {
+		return command.Usage("issue.error_invalid_value", "NUMBER", args[0])
+	}
+	return nil
 }
 
-// commandContext bounds one provider interaction the same way for every
-// subcommand.
-func commandContext() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), 60*time.Second)
+// issueNumber is the number numberArgs accepted.
+func issueNumber(args []string) int {
+	number, _ := strconv.Atoi(strings.TrimSpace(args[0]))
+	return number
 }
 
 type repoOptions struct {
@@ -72,30 +79,19 @@ type repoOptions struct {
 	json       bool
 }
 
-func runRepo(factory func() IssueProvider, args []string, stdout, stderr io.Writer) int {
+func newRepoCommand(factory func() IssueProvider, stdout, stderr io.Writer) *cobra.Command {
 	var options repoOptions
-	for index := 0; index < len(args); index++ {
-		arg := args[index]
-		switch {
-		case arg == "-h" || arg == "--help":
-			fmt.Fprintln(stdout, usageText())
-			return 0
-		case arg == "--json":
-			options.json = true
-		case matchesLongOption(arg, "--repo"):
-			value, next, ok := optionValue(args, index, "--repo", stderr)
-			if !ok {
-				return 2
-			}
-			index = next
-			options.repository = value
-			options.hasRepo = true
-		default:
-			fmt.Fprintln(stderr, config.Text("issue.error_unknown_argument", arg))
-			fmt.Fprintln(stderr, usageText())
-			return 2
-		}
+	c := &cobra.Command{Use: "repo", Args: command.Args(0, 0)}
+	c.RunE = func(*cobra.Command, []string) error {
+		options.hasRepo = c.Flags().Changed("repo")
+		return command.Exit(runRepo(factory, options, stdout, stderr))
 	}
+	addRepoFlag(c, &options.repository)
+	c.Flags().BoolVar(&options.json, "json", false, "")
+	return c
+}
+
+func runRepo(factory func() IssueProvider, options repoOptions, stdout, stderr io.Writer) int {
 	repository, code := resolveRepository(factory(), options.repository, options.hasRepo, stderr)
 	if code != 0 {
 		return code
@@ -109,6 +105,12 @@ func runRepo(factory func() IssueProvider, args []string, stdout, stderr io.Writ
 	}
 	writeRepositoryText(stdout, repository)
 	return 0
+}
+
+// commandContext bounds one provider interaction the same way for every
+// subcommand.
+func commandContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), 60*time.Second)
 }
 
 // resolveRepository resolves the working directory once and maps every failure
@@ -181,43 +183,4 @@ func writeRepositoryText(w io.Writer, repository Repository) {
 
 func formatError(err error) string {
 	return "kander issue: " + Message(err)
-}
-
-// splitLongOption recognizes --name=value and returns the inline value.
-func splitLongOption(arg, name string) (string, bool) {
-	prefix := name + "="
-	if !strings.HasPrefix(arg, prefix) {
-		return "", false
-	}
-	return strings.TrimPrefix(arg, prefix), true
-}
-
-// matchesLongOption reports whether arg is the long option name, in either the
-// `--name value` or the `--name=value` form. Every long option accepts both.
-func matchesLongOption(arg, name string) bool {
-	return arg == name || strings.HasPrefix(arg, name+"=")
-}
-
-// optionValue consumes the value of a long option that takes one argument.
-// The caller matches the option with matchesLongOption, so both the
-// `--name value` and the `--name=value` form arrive here; an empty value is a
-// usage error rather than an option that silently falls back to its default.
-// It returns the value, the next index and whether parsing succeeded.
-func optionValue(args []string, index int, name string, stderr io.Writer) (string, int, bool) {
-	value := ""
-	next := index
-	if inline, ok := splitLongOption(args[index], name); ok {
-		value = inline
-	} else if index+1 >= len(args) {
-		fmt.Fprintln(stderr, config.Text("issue.error_missing_value", name))
-		return "", index, false
-	} else {
-		value = args[index+1]
-		next = index + 1
-	}
-	if strings.TrimSpace(value) == "" {
-		fmt.Fprintln(stderr, config.Text("issue.error_missing_value", name))
-		return "", index, false
-	}
-	return value, next, true
 }

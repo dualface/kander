@@ -13,10 +13,6 @@ import (
 // validateContextMode builds the review context. scale overrides the task scale
 // read from the spec argument when the bound cards decided it (pinned batches).
 func validateContextMode(agent string, arguments []string, replay bool, scale string) (reviewContext, error) {
-	if len(arguments) < 5 || len(arguments) > 7 {
-		usage()
-		return reviewContext{}, &gateError{code: 2}
-	}
 	cwdText, base, commit, roleInput, taskInput := arguments[0], arguments[1], arguments[2], arguments[3], arguments[4]
 	rawReviewContext := ""
 	if len(arguments) >= 6 {

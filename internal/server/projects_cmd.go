@@ -4,13 +4,15 @@ import (
 	"cmp"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/internal/command"
 )
 
 // projectList is the --json output of `kander server projects`.
@@ -18,26 +20,28 @@ type projectList struct {
 	Projects []api.Project `json:"projects"`
 }
 
-// runProjects is `kander server projects`: a read-only listing of the
-// registry. It takes no lock and writes nothing, so it also runs beside a
-// serving instance; projects.json is replaced atomically.
-func runProjects(args []string) int {
-	return listProjects(args, os.Stdout, os.Stderr)
+// NewProjectsCommand builds `kander server projects`: a read-only listing of the registry. It
+// takes no lock and writes nothing, so it also runs beside a serving instance; projects.json is
+// replaced atomically.
+func NewProjectsCommand() *cobra.Command { return newProjectsCommand(os.Stdout, os.Stderr) }
+
+func newProjectsCommand(stdout, stderr io.Writer) *cobra.Command {
+	var data string
+	var jsonOut bool
+	c := &cobra.Command{
+		Use:  "projects",
+		Args: command.Args(0, 0),
+		RunE: func(*cobra.Command, []string) error {
+			return command.Exit(listProjects(data, jsonOut, stdout, stderr))
+		},
+	}
+	c.Flags().StringVar(&data, "data", "", "")
+	c.Flags().BoolVar(&jsonOut, "json", false, "")
+	return c
 }
 
-func listProjects(args []string, stdout, stderr io.Writer) int {
-	flags := flag.NewFlagSet("kander server projects", flag.ContinueOnError)
-	flags.SetOutput(stderr)
-	data := flags.String("data", "", "data directory")
-	jsonOut := flags.Bool("json", false, "print JSON")
-	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
-		if errors.Is(err, flag.ErrHelp) {
-			return 0
-		}
-		fmt.Fprintln(stderr, "usage: kander server projects [--data DIR] [--json]")
-		return 2
-	}
-	dir, err := dataDir(*data)
+func listProjects(data string, jsonOut bool, stdout, stderr io.Writer) int {
+	dir, err := dataDir(data)
 	if err != nil {
 		fmt.Fprintln(stderr, "kander server:", err)
 		return 1
@@ -52,7 +56,7 @@ func listProjects(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "kander server:", err)
 		return 1
 	}
-	if *jsonOut {
+	if jsonOut {
 		if projects == nil {
 			projects = []api.Project{}
 		}

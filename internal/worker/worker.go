@@ -18,9 +18,12 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/spf13/cobra"
+
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/version"
 )
@@ -71,13 +74,26 @@ type Options struct {
 // binary without it keeps requests open for the holder to read.
 var Deliver func(window, session, text string) error
 
-// Run is `kander worker`: it holds the worker lock of the client home and
-// renews until idle or signaled.
-func Run(args []string) int {
-	if len(args) != 0 {
-		fmt.Fprintln(os.Stderr, "usage: kander worker")
-		return 2
+// NewCommand builds `kander worker`, the internal command that holds the worker lock of the
+// client home and renews until idle or signaled. It takes no arguments.
+func NewCommand() *cobra.Command {
+	c := &cobra.Command{
+		Use:    "worker",
+		Hidden: true,
+		Args:   command.Args(0, 0),
+		RunE:   func(*cobra.Command, []string) error { return command.Exit(run()) },
 	}
+	// The command has no contract file: its help and its usage are the one line below.
+	const description = "kander worker is a command Kander runs internally; it takes no arguments."
+	c.SetHelpFunc(func(c *cobra.Command, _ []string) { fmt.Fprintln(c.OutOrStdout(), description) })
+	c.SetUsageFunc(func(c *cobra.Command) error {
+		_, err := fmt.Fprint(c.ErrOrStderr(), description)
+		return err
+	})
+	return c
+}
+
+func run() int {
 	home, err := remote.Home()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "kander worker:", err)

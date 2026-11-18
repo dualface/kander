@@ -18,6 +18,11 @@ import (
 	"github.com/dualface/kander/internal/process"
 )
 
+// ServerStartArguments is the command line of the detached foreground server a start launches.
+func ServerStartArguments(dir string, o StartOptions) []string {
+	return []string{"server", "start", "--foreground", "--data", dir, "--listen", o.Listen, "--ttl", o.TTL.String(), "--renew", o.Renew.String()}
+}
+
 // Controller owns bounded start/stop operations. Executable is injectable for
 // subprocess tests. A server outlives the command that starts it.
 type Controller struct {
@@ -94,7 +99,7 @@ func (c Controller) Start(ctx context.Context, o StartOptions) (api.ServerInfo, 
 			return api.ServerInfo{}, err
 		}
 	}
-	cmd := exec.Command(exe, "server", "start", "--foreground", "--data", dir, "--listen", o.Listen, "--ttl", o.TTL.String(), "--renew", o.Renew.String())
+	cmd := exec.Command(exe, ServerStartArguments(dir, o)...)
 	cmd.Stdout, cmd.Stderr = log.File, log.File
 	process.Detach(cmd)
 	if err := cmd.Start(); err != nil {

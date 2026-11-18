@@ -1,7 +1,6 @@
 package review
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,7 +16,7 @@ import (
 
 const (
 	treeObserveInterval = 0.2
-	windowsJobBootstrap = "--kander-windows-job-bootstrap"
+	windowsJobBootstrap = "job-bootstrap"
 	emptyReviewContext  = "None provided."
 )
 
@@ -81,10 +80,6 @@ type reviewContext struct {
 
 func userError(message string) {
 	fmt.Fprintln(os.Stderr, config.Text("review.error")+": "+message)
-}
-
-func usage() {
-	fmt.Fprintln(os.Stderr, config.CommandUsage("review"))
 }
 
 func positiveInteger(value, variable string) (int, error) {
@@ -266,9 +261,6 @@ func containsAgent(name string) bool {
 }
 
 func splitAgentArgs(args []string) (agent string, rest []string, err error) {
-	if len(args) == 0 {
-		return "", nil, errUsage
-	}
 	if containsAgent(args[0]) {
 		return args[0], args[1:], nil
 	}
@@ -280,8 +272,6 @@ func splitAgentArgs(args []string) (agent string, rest []string, err error) {
 	}
 	return "", args, nil
 }
-
-var errUsage = errors.New("usage")
 
 // reportLanguageFromConfig returns the agent_language the review report should be written in.
 // A missing or invalid config is an error rather than an empty language. A config that has not

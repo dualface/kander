@@ -13,46 +13,40 @@ import (
 	"github.com/dualface/kander/internal/config"
 )
 
-func TestParseOptionsErrors(t *testing.T) {
+func TestOptionValidation(t *testing.T) {
 	setupCheckLang(t)
-	_, err := parseOptions(checkDelivery, nil)
-	if err == nil || err.Code != errCodeUsage {
-		t.Fatalf("missing base: %+v", err)
+	for _, test := range []struct {
+		mode string
+		opt  options
+		want bool
+	}{
+		{checkDelivery, options{commit: "HEAD"}, false},
+		{checkDelivery, options{base: " ", commit: "HEAD"}, false},
+		{checkDelivery, options{base: "HEAD", commit: " "}, false},
+		{checkDelivery, options{base: "HEAD", commit: "HEAD"}, true},
+		{checkOverlap, options{head: "HEAD"}, false},
+		{checkOverlap, options{source: "HEAD", head: ""}, false},
+		{checkOverlap, options{source: "HEAD", head: "HEAD"}, true},
+	} {
+		err := test.opt.validate(test.mode)
+		if (err == nil) != test.want || err != nil && err.Code != errCodeUsage {
+			t.Fatalf("%s %+v: %+v", test.mode, test.opt, err)
+		}
 	}
-	_, err = parseOptions(checkDelivery, []string{"--base"})
-	if err == nil || err.Code != errCodeUsage {
-		t.Fatalf("missing value: %+v", err)
-	}
-	_, err = parseOptions(checkDelivery, []string{"--source", "HEAD"})
-	if err == nil || !strings.Contains(err.Message, "--source") {
-		t.Fatalf("unknown for delivery: %+v", err)
-	}
-	_, err = parseOptions(checkOverlap, []string{"--json", "--json", "--source", "HEAD"})
-	if err == nil || err.Code != errCodeUsage {
-		t.Fatalf("duplicate json: %+v", err)
-	}
-	opt, err := parseOptions(checkDelivery, []string{"--json", "--base", "--all"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if opt.base != "--all" || !opt.json {
-		t.Fatalf("option-looking ref: %+v", opt)
-	}
-	opt, err = parseOptions(checkDelivery, []string{"--base", "--json"})
-	if err == nil || err.Code != errCodeUsage || !opt.json {
-		t.Fatalf("reserved value with json: opt=%+v err=%+v", opt, err)
-	}
-	opt, err = parseOptions(checkDelivery, []string{"--unknown", "--json"})
-	if err == nil || err.Code != errCodeUsage || !opt.json {
-		t.Fatalf("unknown option with trailing json: opt=%+v err=%+v", opt, err)
-	}
-	opt, err = parseOptions(checkDelivery, []string{"--base", "--commit=HEAD", "--json"})
-	if err == nil || err.Code != errCodeUsage || !opt.json {
-		t.Fatalf("equals reserved value with json: opt=%+v err=%+v", opt, err)
-	}
-	opt, err = parseOptions(checkDelivery, []string{"--base", "HEAD", "--json=false"})
-	if err == nil || err.Code != errCodeUsage || !opt.json || !strings.Contains(err.Message, "does not take a value") {
-		t.Fatalf("valued json: opt=%+v err=%+v", opt, err)
+}
+
+func TestArgumentErrorsExitUsage(t *testing.T) {
+	setupCheckLang(t)
+	for _, args := range [][]string{
+		{"delivery", "--base"},
+		{"delivery", "--source", "HEAD"},
+		{"delivery", "--base", "HEAD", "--base", "HEAD"},
+		{"delivery", "--base", "HEAD", "extra"},
+	} {
+		code, out, errb := captureRun(t, args)
+		if code != exitUsage || out != "" || !strings.Contains(errb, "kander check delivery") {
+			t.Fatalf("%v code=%d stdout=%q stderr=%q", args, code, out, errb)
+		}
 	}
 }
 
@@ -354,7 +348,7 @@ func TestDeliveryHumanEscapesControls(t *testing.T) {
 
 func TestUsageHumanEscapesControls(t *testing.T) {
 	setupCheckLang(t)
-	argument := "bad" + string(rune(0x1b)) + "[31m\ninjected" + string(rune(0x9b))
+	argument := "--bad" + string(rune(0x1b)) + "[31m\ninjected" + string(rune(0x9b))
 	code, out, errb := captureRun(t, []string{"delivery", argument})
 	if code != exitUsage || out != "" {
 		t.Fatalf("code=%d stdout=%q stderr=%q", code, out, errb)
@@ -499,10 +493,7 @@ func TestUsageJSON(t *testing.T) {
 	setupCheckLang(t)
 	cases := [][]string{
 		{"delivery", "--json"},
-		{"delivery", "--unknown", "--json"},
-		{"delivery", "--base", "--json"},
-		{"delivery", "--base", "--commit=HEAD", "--json"},
-		{"delivery", "--base", "HEAD", "--json=garbage"},
+		{"delivery", "--base", " ", "--json"},
 	}
 	for _, args := range cases {
 		code, out, errb := captureRun(t, args)

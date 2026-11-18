@@ -12,6 +12,9 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/spf13/cobra"
+
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	kfs "github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/rules"
@@ -57,18 +60,19 @@ var (
 	uninstallTerminal            = func() bool { return isTTY(os.Stdin) && isTTY(os.Stderr) }
 )
 
-// RunUninstall is the kander uninstall subcommand.
-func RunUninstall(args []string) int {
-	yes := false
-	for _, arg := range args {
-		if arg == "--yes" {
-			yes = true
-			continue
-		}
-		fmt.Fprintln(os.Stderr, config.CommandUsage("uninstall"))
-		fmt.Fprintln(os.Stderr, config.Text("cli.error_unknown_option", arg))
-		return 2
+// NewUninstallCommand builds kander uninstall.
+func NewUninstallCommand() *cobra.Command {
+	var yes bool
+	c := &cobra.Command{
+		Use:  "uninstall",
+		Args: command.Args(0, 0),
+		RunE: func(*cobra.Command, []string) error { return command.Exit(runUninstall(yes)) },
 	}
+	c.Flags().BoolVar(&yes, "yes", false, "")
+	return c
+}
+
+func runUninstall(yes bool) int {
 	paths, err := config.CurrentInstallPaths()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "kander:", err)

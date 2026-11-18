@@ -1,5 +1,4 @@
 {
-  "issue.error_unknown_argument": "予期しない引数: {{.V0}}",
   "issue.error_missing_value": "オプション {{.V0}} には値が必要です",
   "issue.error_invalid_repository": "無効なリポジトリ参照 \"{{.V0}}\"：[HOST/]OWNER/REPO 形式で指定してください",
   "issue.error_not_repository": "Git ワークツリーではありません: {{.V0}}",

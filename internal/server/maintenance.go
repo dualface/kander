@@ -3,14 +3,16 @@ package server
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"log/slog"
 	"os"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/version"
 )
 
@@ -64,30 +66,32 @@ func Maintain(options Options, project string, acknowledged bool) (result Mainte
 	return result, nil
 }
 
-func runMaintain(args []string) int {
-	flags := flag.NewFlagSet("kander server maintain", flag.ContinueOnError)
-	data := flags.String("data", "", "server data directory")
-	project := flags.String("project", "", "registered project name")
-	maintenance := flags.Bool("maintenance", false, "acknowledge all task writers and executors are paused")
-	if err := flags.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return 0
-		}
-		return 2
+// NewMaintainCommand builds `kander server maintain`, the offline form migration of one project.
+func NewMaintainCommand() *cobra.Command {
+	var data, project string
+	var maintenance bool
+	c := &cobra.Command{
+		Use:  "maintain",
+		Args: command.Args(0, 0),
+		RunE: func(*cobra.Command, []string) error { return command.Exit(runMaintain(data, project, maintenance)) },
 	}
-	if flags.NArg() != 0 || *project == "" {
-		fmt.Fprintln(os.Stderr, "usage: kander server maintain [--data DIR] --project NAME [--maintenance]")
-		return 2
-	}
-	dir, err := dataDir(*data)
+	c.PreRunE = func(*cobra.Command, []string) error { return command.Required(c, "project") }
+	c.Flags().StringVar(&data, "data", "", "")
+	c.Flags().StringVar(&project, "project", "", "")
+	c.Flags().BoolVar(&maintenance, "maintenance", false, "")
+	return c
+}
+
+func runMaintain(data, project string, maintenance bool) int {
+	dir, err := dataDir(data)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
-	result, err := Maintain(Options{DataDir: dir, Logger: logger, Version: version.String()}, *project, *maintenance)
+	result, err := Maintain(Options{DataDir: dir, Logger: logger, Version: version.String()}, project, maintenance)
 	if err != nil {
-		logger.Error("offline maintenance failed", "project_name", *project, "changed_tasks", result.ChangedTasks, "error", err)
+		logger.Error("offline maintenance failed", "project_name", project, "changed_tasks", result.ChangedTasks, "error", err)
 		return 1
 	}
 	if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {

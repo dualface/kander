@@ -6,47 +6,43 @@ import (
 	"os"
 	"strings"
 
+	"github.com/spf13/cobra"
+
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/terminal"
 	_ "github.com/dualface/kander/internal/terminal/builtin"
 )
 
-// Run implements terminal list/test. It never requires or creates a board.
-func Run(args []string) int { return run(args, os.Stdout, os.Stderr) }
+// NewCommand builds kander terminal, whose list and test subcommands never require or create
+// a board.
+func NewCommand() *cobra.Command { return newCommand(os.Stdout, os.Stderr) }
 
-func run(args []string, out, diagnostics io.Writer) int {
-	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
-		fmt.Fprintln(out, config.CommandUsage("terminal"))
-		return 0
+func newCommand(out, diagnostics io.Writer) *cobra.Command {
+	list := &cobra.Command{
+		Use:  "list",
+		Args: command.Args(0, 0),
+		RunE: func(*cobra.Command, []string) error { return command.Exit(list(out)) },
 	}
-	if len(args) == 1 && args[0] == "list" {
-		return list(out)
+	var options Options
+	test := &cobra.Command{
+		Use:  "test <name>",
+		Args: command.Args(1, 1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			backend, err := selectBackend(args[0])
+			if err == nil {
+				err = Check(backend, options, out)
+			}
+			if err != nil {
+				fmt.Fprintln(diagnostics, err)
+				return command.Exit(1)
+			}
+			return nil
+		},
 	}
-	if len(args) < 2 || args[0] != "test" || strings.HasPrefix(args[1], "-") {
-		fmt.Fprintln(diagnostics, config.CommandUsage("terminal"))
-		return 2
-	}
-	options := Options{}
-	for _, arg := range args[2:] {
-		switch arg {
-		case "--keep":
-			options.Keep = true
-		case "--skip-focus":
-			options.SkipFocus = true
-		default:
-			fmt.Fprintln(diagnostics, config.CommandUsage("terminal"))
-			return 2
-		}
-	}
-	backend, err := selectBackend(args[1])
-	if err == nil {
-		err = Check(backend, options, out)
-	}
-	if err != nil {
-		fmt.Fprintln(diagnostics, err)
-		return 1
-	}
-	return 0
+	test.Flags().BoolVar(&options.Keep, "keep", false, "")
+	test.Flags().BoolVar(&options.SkipFocus, "skip-focus", false, "")
+	return command.Group("terminal", list, test)
 }
 
 func list(out io.Writer) int {

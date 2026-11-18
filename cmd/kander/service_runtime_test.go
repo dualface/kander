@@ -14,8 +14,8 @@ import (
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/cli"
 	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/launch"
 	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/server"
 )
@@ -157,31 +157,33 @@ func TestClientInitBindsIndependentDirectoriesAndPreservesScope(t *testing.T) {
 
 }
 
-func TestRuntimeRechecksBindingBeforeLifecycleStorageBoundary(t *testing.T) {
+// A command that needs a project binding refuses to run in a checkout without one, before it
+// parses nothing further or touches any storage.
+func TestUnboundCheckoutRefusesEveryCommandThatNeedsAProject(t *testing.T) {
 	t.Chdir(t.TempDir())
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
 	t.Setenv(board.EnvBoardDir, filepath.Join(t.TempDir(), "forbidden-board"))
 	cfg := config.DefaultConfig()
 	cfg.Server.URL = "http://127.0.0.1:1"
-	cfg.Project.Name = "binding-race"
 	if _, err := config.Save(cfg); err != nil {
 		t.Fatal(err)
 	}
-	called := false
-	guarded := cli.RequireService(func(args []string) int {
-		called = true
-		cfg.Server.URL = ""
-		cfg.Project.Name = ""
-		// The configuration changes after outer dispatch has checked it.
-		if _, err := config.Save(cfg); err != nil {
-			t.Fatal(err)
+	var checked int
+	for _, leaf := range commandLeaves(cli.NewRoot()) {
+		if leaf.Annotations[command.NeedsProject] != "true" {
+			continue
 		}
-		return launch.RunResumeRemote(args)
-	})
-	if code := guarded([]string{"20261112-stale-boundary-task", "--message", "continue"}); code == 0 || !called {
-		t.Fatal("lifecycle runner failed to recheck its binding")
+		checked++
+		args := append(strings.Fields(leaf.path), sampleArguments(t, leaf)...)
+		result := runKander(t, args...)
+		if result.code != 1 || !strings.Contains(result.stderr, config.Text("remote.not_configured")) {
+			t.Errorf("%s: exit=%d stderr=%q", leaf.path, result.code, result.stderr)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no command declares the project binding")
 	}
 	if _, err := os.Lstat(os.Getenv(board.EnvBoardDir)); !os.IsNotExist(err) {
-		t.Fatal("changed binding selected local storage")
+		t.Fatal("an unbound command selected local storage")
 	}
 }

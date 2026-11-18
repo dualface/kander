@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/dualface/kander/internal/command/commandtest"
 )
 
 type resultCommandProvider struct {
@@ -23,7 +25,7 @@ func TestResultCommandRoundTripAndLaunchIsolation(t *testing.T) {
 	run := func(args ...string) (int, string) {
 		t.Helper()
 		var out, stderr bytes.Buffer
-		code := runWith(factory, append(append([]string{}, base...), args...), &out, &stderr)
+		code := commandtest.Run(newCommand(factory, &out, &stderr), append(append([]string{}, base...), args...)...)
 		if code != 0 {
 			return code, stderr.String()
 		}

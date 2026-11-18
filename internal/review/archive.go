@@ -5,10 +5,14 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/version"
@@ -32,79 +36,62 @@ type archiveExecution struct {
 
 func archiveError(detail string) error { return newGate(2, "review.archive_invalid", detail) }
 
-func parseArchiveOptions(args []string) (archiveOptions, []string, error) {
-	var options archiveOptions
-	var prefix []string
-	if len(args) > 0 && containsAgent(args[0]) {
-		prefix = append(prefix, args[0])
-		args = args[1:]
-	}
-	seen := map[string]bool{}
-	for len(args) > 0 && strings.HasPrefix(args[0], "--") {
-		flag := args[0]
-		if len(args) < 2 || args[1] == "" {
-			return options, nil, archiveError(flag)
+// archiveFlags are the flags that bind a review to board cards: --task may repeat, the others
+// are given once.
+type archiveFlags struct {
+	tasks                                                     []string
+	runID, batchID, previousID, requirementsFile, advanceFile string
+}
+
+func (f *archiveFlags) register(c *cobra.Command) {
+	c.Flags().StringArrayVar(&f.tasks, "task", nil, "")
+	command.OnceNonEmpty(c.Flags(), &f.runID, "run-id", "")
+	command.OnceNonEmpty(c.Flags(), &f.batchID, "batch-id", "")
+	command.OnceNonEmpty(c.Flags(), &f.previousID, "previous-run-id", "")
+	command.OnceNonEmpty(c.Flags(), &f.requirementsFile, "requirements-file", "")
+	command.OnceNonEmpty(c.Flags(), &f.advanceFile, "advance-file", "")
+}
+
+// options checks the flags against each other and returns the archive options: any archive flag
+// needs --task, and a task-bound review needs a batch and gets a run ID when it names none.
+func (f archiveFlags) options(c *cobra.Command) (archiveOptions, error) {
+	options := archiveOptions{runID: f.runID, batchID: f.batchID, previousID: f.previousID, requirementsFile: f.requirementsFile, advanceFile: f.advanceFile}
+	for _, value := range f.tasks {
+		id, err := board.NormalizeTaskID(value)
+		if err != nil {
+			return options, command.UsageText(err.Error())
 		}
-		value := args[1]
-		args = args[2:]
-		if flag != "--task" && seen[flag] {
-			return options, nil, archiveError("duplicate " + flag)
-		}
-		seen[flag] = true
-		switch flag {
-		case "--task":
-			id, err := board.NormalizeTaskID(value)
-			if err != nil {
-				return options, nil, err
-			}
-			duplicate := false
-			for _, old := range options.tasks {
-				if old == id {
-					duplicate = true
-				}
-			}
-			if !duplicate {
-				options.tasks = append(options.tasks, id)
-			}
-		case "--run-id":
-			options.runID = value
-		case "--batch-id":
-			options.batchID = value
-		case "--previous-run-id":
-			options.previousID = value
-		case "--requirements-file":
-			options.requirementsFile = value
-		case "--advance-file":
-			options.advanceFile = value
-		default:
-			return options, nil, archiveError(flag)
+		if !slices.Contains(options.tasks, id) {
+			options.tasks = append(options.tasks, id)
 		}
 	}
-	if len(options.tasks) == 0 && len(seen) > 0 {
-		return options, nil, archiveError("--task required")
+	if len(options.tasks) == 0 {
+		for _, name := range []string{"run-id", "batch-id", "previous-run-id", "requirements-file", "advance-file"} {
+			if c.Flags().Changed(name) {
+				return options, command.UsageText(archiveError("--task required").Error())
+			}
+		}
+		return options, nil
 	}
-	if len(options.tasks) > 0 {
-		if options.batchID == "" {
-			return options, nil, archiveError("--batch-id required")
+	if options.batchID == "" {
+		return options, command.UsageText(archiveError("--batch-id required").Error())
+	}
+	if options.runID == "" {
+		var err error
+		if options.runID, err = board.NewReviewID(); err != nil {
+			return options, err
 		}
-		if options.runID == "" {
-			var err error
-			options.runID, err = board.NewReviewID()
-			if err != nil {
-				return options, nil, err
-			}
+	}
+	for _, id := range []string{options.runID, options.batchID} {
+		if !board.ValidReviewID(id) {
+			return options, command.UsageText(archiveError("run/batch ID").Error())
 		}
-		for _, id := range []string{options.runID, options.batchID} {
-			if !board.ValidReviewID(id) {
-				return options, nil, archiveError("run/batch ID")
-			}
-		}
-		if options.previousID != "" && !board.ValidReviewID(options.previousID) {
-			return options, nil, archiveError("previous run ID")
-		}
+	}
+	if options.previousID != "" && !board.ValidReviewID(options.previousID) {
+		return options, command.UsageText(archiveError("previous run ID").Error())
 	}
 	sort.Strings(options.tasks)
-	return options, append(prefix, args...), nil
+	return options, nil
 }
 
 func archiveInvocation(ctx *reviewContext, options archiveOptions, arguments []string, root string, findingsSchema int, stores ...reviewStore) (bool, error) {

@@ -3,7 +3,6 @@ package review
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -36,52 +35,13 @@ func openServerReviewStore(cfg *config.Config, cwd string, commits ...string) (r
 	return newRemoteReviewStore(session)
 }
 
-// Run is the entry point of the `kander review` subcommand. args excludes the program name and the subcommand name.
-// Every board-backed form goes through the server.
-func Run(args []string) (exitCode int) {
-	if len(args) > 0 && args[0] == windowsJobBootstrap {
-		return windowsJobBootstrapMain(args[1:])
-	}
+// runReview is the single review of `kander review`: one reviewer run over a delivery. args are
+// the positional arguments. Every board-backed form goes through the server.
+func runReview(options archiveOptions, args []string) (exitCode int) {
 	applyUmask()
 	config.BindEffectiveLanguage()
-	if len(args) == 0 {
-		usage()
-		return 2
-	}
-	if _, err := config.Load(false); err != nil {
-		userError(err.Error())
-		return 1
-	}
-	if dispositionCommand(args[0]) {
-		return runDispositionMode(args)
-	}
-	options, args, err := parseArchiveOptions(args)
-	if err != nil {
-		userError(err.Error())
-		return 2
-	}
-	agent, rest, err := splitAgentArgs(args)
-	if err != nil {
-		if errors.Is(err, errUsage) {
-			usage()
-			return 2
-		}
-		var ge *gateError
-		if errors.As(err, &ge) {
-			if ge.message != "" {
-				userError(ge.message)
-			} else {
-				usage()
-			}
-			return ge.code
-		}
-		fmt.Fprintln(os.Stderr, err)
-		return 2
-	}
-	if len(rest) < 5 || len(rest) > 7 {
-		usage()
-		return 2
-	}
+	// The command checked the arguments before the review started.
+	agent, rest, _ := splitAgentArgs(args)
 	archiveRoot := ""
 	var stores []reviewStore
 	replay := false
@@ -131,6 +91,7 @@ func Run(args []string) (exitCode int) {
 	pinRole := reviewerConfigRole(role)
 	var pinning reviewPinning
 	if len(options.tasks) > 0 {
+		var err error
 		pinning, err = boundReviewPinning(archiveRoot, options.tasks, pinRole, stores...)
 		if err != nil {
 			userError(err.Error())

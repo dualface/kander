@@ -168,7 +168,7 @@ func TestAuditRefreshDurationOverflow(t *testing.T) {
 		for _, raw := range []string{"1e300", "9223372036.854776", "1e-300", "0.0000000009", "0", "-1", "NaN", "Inf", "-Inf", "invalid"} {
 			t.Run(flag+"/"+raw, func(t *testing.T) {
 				_, errText := parseSubscribeArgs([]string{flag, raw, "20260907-clock-group", "20260907-clock-task"})
-				if errText == "" || errText == "usage" {
+				if errText == "" {
 					t.Fatalf("invalid interval %s %s accepted: %q", flag, raw, errText)
 				}
 			})

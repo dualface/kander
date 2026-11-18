@@ -9,11 +9,12 @@ import (
 	"maps"
 	"math"
 	"os"
-	"strconv"
-	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 )
@@ -85,14 +86,6 @@ type groupEvent struct {
 
 var nowFn = time.Now
 
-func parsePositiveFloat(raw, id string, args ...any) (float64, error) {
-	value, err := strconv.ParseFloat(raw, 64)
-	if _, valid := subscriptionInterval(value); err != nil || !valid {
-		return 0, fmt.Errorf("%s", t(id, args...))
-	}
-	return value, nil
-}
-
 // subscriptionInterval rejects values that would overflow or truncate to zero.
 func subscriptionInterval(seconds float64) (time.Duration, bool) {
 	nanoseconds := seconds * float64(time.Second)
@@ -103,67 +96,40 @@ func subscriptionInterval(seconds float64) (time.Duration, bool) {
 	return time.Duration(nanoseconds), true
 }
 
-func parseSubscribeArgs(args []string) (subscribeOptions, string) {
-	opts := subscribeOptions{Refresh: defaultRefresh, Heartbeat: defaultHeartbeat}
-	var positionals []string
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		switch {
-		case arg == "--refresh" || strings.HasPrefix(arg, "--refresh="):
-			raw := strings.TrimPrefix(arg, "--refresh=")
-			if arg == "--refresh" {
-				if i+1 >= len(args) {
-					return opts, t("liveness.missing_refresh_value")
-				}
-				i++
-				raw = args[i]
+func validInterval(seconds float64) bool {
+	_, valid := subscriptionInterval(seconds)
+	return valid
+}
+
+// NewSubscribeCommand builds kander subscribe against the server.
+func NewSubscribeCommand() *cobra.Command {
+	return command.RequireProject(newSubscribeCommand(runSubscribe))
+}
+
+// newSubscribeCommand parses the subscription and hands it to run.
+func newSubscribeCommand(run func(subscribeOptions) int) *cobra.Command {
+	opts := subscribeOptions{}
+	c := &cobra.Command{
+		Use: "subscribe [<task-group> <task-id>...]",
+		// Cards outside any task group are monitored through --watch alone, so a
+		// subscription may name no group and no members when it watches something.
+		Args: func(c *cobra.Command, args []string) error {
+			if len(args) == 0 && len(opts.Watch) > 0 {
+				return nil
 			}
-			value, err := parsePositiveFloat(raw, "liveness.refresh_interval_must_be_greater_than_0")
-			if err != nil {
-				return opts, err.Error()
-			}
-			opts.Refresh = value
-		case arg == "--heartbeat" || strings.HasPrefix(arg, "--heartbeat="):
-			raw := strings.TrimPrefix(arg, "--heartbeat=")
-			if arg == "--heartbeat" {
-				if i+1 >= len(args) {
-					return opts, t("liveness.missing_heartbeat_value")
-				}
-				i++
-				raw = args[i]
-			}
-			value, err := parsePositiveFloat(raw, "liveness.heartbeat_interval_must_be_greater_than_0")
-			if err != nil {
-				return opts, err.Error()
-			}
-			opts.Heartbeat = value
-		case arg == "--watch":
-			if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
-				return opts, t("liveness.missing_watch_value")
-			}
-			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				i++
-				opts.Watch = append(opts.Watch, args[i])
-			}
-		case strings.HasPrefix(arg, "--watch="):
-			opts.Watch = append(opts.Watch, strings.TrimPrefix(arg, "--watch="))
-		case strings.HasPrefix(arg, "-"):
-			return opts, t("board.unknown_option", arg)
-		default:
-			positionals = append(positionals, arg)
+			return command.Args(2, -1)(c, args)
+		},
+	}
+	c.RunE = func(_ *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			opts.Group, opts.Members = args[0], args[1:]
 		}
+		return command.Exit(run(opts))
 	}
-	// Cards outside any task group are monitored through --watch alone, so a
-	// subscription may name no group and no members when it watches something.
-	if len(positionals) == 0 && len(opts.Watch) > 0 {
-		return opts, ""
-	}
-	if len(positionals) < 2 {
-		return opts, "usage"
-	}
-	opts.Group = positionals[0]
-	opts.Members = positionals[1:]
-	return opts, ""
+	command.Float(c.Flags(), &opts.Refresh, "refresh", defaultRefresh, validInterval, "", "liveness.refresh_interval_must_be_greater_than_0")
+	command.Float(c.Flags(), &opts.Heartbeat, "heartbeat", defaultHeartbeat, validInterval, "", "liveness.heartbeat_interval_must_be_greater_than_0")
+	c.Flags().StringArrayVar(&opts.Watch, "watch", nil, "")
+	return c
 }
 
 func uniqueStrings(values []string) bool {
@@ -375,10 +341,6 @@ func subscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 	}
 }
 
-func usageSubscribe(w io.Writer) error {
-	return writeSubscriptionDiagnostic(w, config.CommandUsage("subscribe"))
-}
-
 // A merged stdout/stderr pipe must not turn an output failure into another
 // unbounded write. When diagnostics also fail, the nonzero exit is the signal.
 func writeSubscriptionDiagnostic(w io.Writer, message string) error {
@@ -396,30 +358,8 @@ func writeSubscriptionDiagnostic(w io.Writer, message string) error {
 	return errors.Join(err, cleanup())
 }
 
-// RunSubscribeRemote implements kander subscribe against the server.
-func RunSubscribeRemote(args []string) int {
-	opts, parseErr := parseSubscribeArgs(args)
-	if parseErr == "usage" {
-		if err := usageSubscribe(os.Stderr); err != nil {
-			return 1
-		}
-		return 2
-	}
-	if parseErr != "" {
-		if strings.HasPrefix(parseErr, t("liveness.unknown_option")) || strings.HasPrefix(parseErr, t("liveness.missing_prefix")) {
-			if err := usageSubscribe(os.Stderr); err != nil {
-				return 1
-			}
-			if err := writeSubscriptionDiagnostic(os.Stderr, parseErr); err != nil {
-				return 1
-			}
-			return 2
-		}
-		if err := writeSubscriptionDiagnostic(os.Stderr, "kander: "+parseErr); err != nil {
-			return 1
-		}
-		return 1
-	}
+// runSubscribe implements kander subscribe against the server.
+func runSubscribe(opts subscribeOptions) int {
 	if _, err := config.Load(false); err != nil {
 		if outputErr := writeSubscriptionDiagnostic(os.Stderr, "kander: "+err.Error()); outputErr != nil {
 			return 1

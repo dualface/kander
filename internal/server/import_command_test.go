@@ -117,7 +117,7 @@ func TestFormatImportBytes(t *testing.T) {
 func runImportCommand(t *testing.T, dir, source string, signals chan os.Signal) (code int, stdout, stderr *syncBuffer) {
 	t.Helper()
 	stdout, stderr = &syncBuffer{}, &syncBuffer{}
-	code = importCommand([]string{"--data", dir, "--project", "demo", "--from", source}, stdout, stderr, false, signals)
+	code = importCommand(importOptions{data: dir, name: "demo", from: source}, stdout, stderr, false, signals)
 	return code, stdout, stderr
 }
 
@@ -181,7 +181,7 @@ func TestImportCommandCancelsAnOfflineImportBeforeTheCopyEnds(t *testing.T) {
 		stderr.waitContains(t, config.Text("server.import_interrupt_cancelling"))
 	})
 	stdout := &syncBuffer{}
-	code := importCommand([]string{"--data", dir, "--project", "demo", "--from", source}, stdout, stderr, false, signals)
+	code := importCommand(importOptions{data: dir, name: "demo", from: source}, stdout, stderr, false, signals)
 	if code != 130 || stdout.String() != "" {
 		t.Fatalf("exit %d stdout %q\n%s", code, stdout.String(), stderr.String())
 	}
@@ -210,7 +210,7 @@ func TestImportCommandFinishesAnOfflineImportInterruptedAfterTheCopy(t *testing.
 		stderr.waitContains(t, config.Text("server.import_interrupt_finishing"))
 	})
 	stdout := &syncBuffer{}
-	code := importCommand([]string{"--data", t.TempDir(), "--project", "demo", "--from", source}, stdout, stderr, false, signals)
+	code := importCommand(importOptions{data: t.TempDir(), name: "demo", from: source}, stdout, stderr, false, signals)
 	var result api.ImportResult
 	if code != 0 || json.Unmarshal([]byte(stdout.String()), &result) != nil || result.Tasks != 2 {
 		t.Fatalf("exit %d stdout %q\n%s", code, stdout.String(), stderr.String())
@@ -267,7 +267,7 @@ func TestImportCommandCancelsAnOnlineImportBeforeTheCopyEnds(t *testing.T) {
 		signals <- os.Interrupt
 	}()
 	stdout, stderr := &syncBuffer{}, &syncBuffer{}
-	code := importCommand([]string{"--data", dir, "--project", "demo", "--from", source}, stdout, stderr, false, signals)
+	code := importCommand(importOptions{data: dir, name: "demo", from: source}, stdout, stderr, false, signals)
 	if code != 130 || stdout.String() != "" || !strings.Contains(stderr.String(), config.Text("server.import_cancelled")) || strings.Contains(stderr.String(), config.Text("server.import_cancelled_late")) {
 		t.Fatalf("exit %d stdout %q\n%s", code, stdout.String(), stderr.String())
 	}
@@ -302,7 +302,7 @@ func TestImportCommandTellsAnInterruptedOnlineImportToCheckTheResult(t *testing.
 		stderr.waitContains(t, config.Text("server.import_progress_publish"))
 		signals <- os.Interrupt
 	}()
-	code := importCommand([]string{"--data", dir, "--project", "demo", "--from", source}, stdout, stderr, false, signals)
+	code := importCommand(importOptions{data: dir, name: "demo", from: source}, stdout, stderr, false, signals)
 	if code != 130 || stdout.String() != "" || !strings.Contains(stderr.String(), config.Text("server.import_cancelled_late")) {
 		t.Fatalf("exit %d stdout %q\n%s", code, stdout.String(), stderr.String())
 	}
@@ -361,7 +361,7 @@ func TestImportCommandTreatsAnOnlineCancelWithoutProgressAsUnknown(t *testing.T)
 		signals <- os.Interrupt
 	}()
 	stdout, stderr := &syncBuffer{}, &syncBuffer{}
-	code := importCommand([]string{"--data", dir, "--project", "demo", "--from", source}, stdout, stderr, false, signals)
+	code := importCommand(importOptions{data: dir, name: "demo", from: source}, stdout, stderr, false, signals)
 	if code != 130 || stdout.String() != "" || !strings.Contains(stderr.String(), config.Text("server.import_cancelled_late")) || strings.Contains(stderr.String(), config.Text("server.import_cancelled")+"\n") {
 		t.Fatalf("exit %d stdout %q\n%s", code, stdout.String(), stderr.String())
 	}

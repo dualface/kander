@@ -3,6 +3,7 @@ package terminalcheck
 import (
 	"bytes"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dualface/kander/internal/command/commandtest"
 	"github.com/dualface/kander/internal/terminal"
 )
 
@@ -160,6 +162,14 @@ func TestConformanceLoadFailureBeforeCreate(t *testing.T) {
 	if !strings.Contains(output.String(), "[embedded] tmux") || !strings.Contains(output.String(), "[embedded] herdr") {
 		t.Fatal("embedded sources absent")
 	}
+}
+
+// run executes kander terminal with args, writing the listing to out and every diagnostic,
+// including the report of an argument error, to diagnostics.
+func run(args []string, out, diagnostics io.Writer) int {
+	code, _, reported := commandtest.Capture(func() int { return commandtest.Run(newCommand(out, diagnostics), args...) })
+	_, _ = io.WriteString(diagnostics, reported)
+	return code
 }
 
 func TestTerminalCommandUsage(t *testing.T) {

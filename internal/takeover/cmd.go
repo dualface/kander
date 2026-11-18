@@ -2,20 +2,19 @@ package takeover
 
 import (
 	"fmt"
-	"io"
-	"math"
 	"os"
-	"strconv"
-	"strings"
+
+	"github.com/spf13/cobra"
 
 	"github.com/dualface/kander/internal/cli"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/launch"
 	"github.com/dualface/kander/internal/remote"
 )
 
 func init() {
-	cli.Commands["dismiss"] = cli.RequireService(RunDismissRemote)
+	cli.Register(NewCommand)
 	launch.CleanupTakeover = Cleanup
 }
 
@@ -24,64 +23,20 @@ func fail(err error) int {
 	return 1
 }
 
-func usage(w io.Writer) {
-	fmt.Fprintln(w, config.CommandUsage("dismiss"))
+// NewCommand builds kander dismiss, which exits an agent and closes its container against the
+// server.
+func NewCommand() *cobra.Command {
+	var timeout float64
+	c := command.RequireProject(&cobra.Command{
+		Use:  "dismiss <task-id>",
+		Args: command.Args(1, 1),
+		RunE: func(_ *cobra.Command, args []string) error { return command.Exit(run(args[0], timeout)) },
+	})
+	command.Seconds(c.Flags(), &timeout, "timeout", 120, "", "takeover.dismiss_timeout_must_be_a_finite_number_greater_than")
+	return c
 }
 
-func usageFail(id string, args ...any) int {
-	usage(os.Stderr)
-	if id != "" {
-		fmt.Fprintln(os.Stderr, t(id, args...))
-	}
-	return 2
-}
-
-func takeValue(args []string, i int) (string, int, bool) {
-	if i+1 >= len(args) {
-		return "", i, false
-	}
-	return args[i+1], i + 1, true
-}
-
-// RunDismissRemote implements kander dismiss against the server.
-func RunDismissRemote(args []string) int {
-	for _, arg := range args {
-		if arg == "-h" || arg == "--help" {
-			usage(os.Stdout)
-			return 0
-		}
-	}
-	timeout := 120.0
-	var positional []string
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		switch {
-		case arg == "--timeout":
-			val, next, ok := takeValue(args, i)
-			if !ok {
-				return usageFail("launch.missing_timeout_value")
-			}
-			n, err := strconv.ParseFloat(val, 64)
-			if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
-				return fail(takeoverError("takeover.dismiss_timeout_must_be_a_finite_number_greater_than"))
-			}
-			timeout, i = n, next
-		case strings.HasPrefix(arg, "--timeout="):
-			n, err := strconv.ParseFloat(strings.TrimPrefix(arg, "--timeout="), 64)
-			if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
-				return fail(takeoverError("takeover.dismiss_timeout_must_be_a_finite_number_greater_than"))
-			}
-			timeout = n
-		default:
-			if strings.HasPrefix(arg, "-") {
-				return usageFail("board.unknown_option", arg)
-			}
-			positional = append(positional, arg)
-		}
-	}
-	if len(positional) != 1 {
-		return usageFail("launch.task_id_is_required")
-	}
+func run(task string, timeout float64) int {
 	cfg, err := config.Load(false)
 	if err != nil {
 		return fail(err)
@@ -89,7 +44,7 @@ func RunDismissRemote(args []string) int {
 	if err := remote.RequireBinding(cfg); err != nil {
 		return fail(err)
 	}
-	if err := commandRemoteDismiss(cfg, positional[0], timeout); err != nil {
+	if err := commandRemoteDismiss(cfg, task, timeout); err != nil {
 		return fail(err)
 	}
 	return 0

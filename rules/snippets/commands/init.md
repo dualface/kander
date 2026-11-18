@@ -9,15 +9,13 @@ Binds a checkout to a service project. Used by the user when configuring a clien
 ## Syntax
 
 ```text
-kander init [--maintenance] [project-path]
+kander init [--server <URL>] [--project <name>] [project-path]
 ```
-
-This historical syntax remains indexed for compatibility. `--maintenance` is rejected with the service operator's maintenance direction; it never changes a local board.
 
 ## Arguments
 
 - `project-path`: checkout whose project binding to initialize; default is the current checkout.
-- `--maintenance`: unsupported client maintenance request. Use the offline server command below.
+- `--server <URL>`, `--project <name>`: the binding fields to save; see "Binding fields" below.
 
 ## Preconditions
 
@@ -43,12 +41,8 @@ This historical syntax remains indexed for compatibility. `--maintenance` is rej
 
 Run `kander server stop` and pause every executor and external writer. Run `kander server maintain [--data DIR] --project NAME`. If active cards require form migration, add `--maintenance` only after all writers are paused. The command takes the exclusive server data-directory lock and never starts an HTTP listener or stops agents. It converts imported legacy file cards using the existing board redo journal. A repeat reports zero changes. Original import snapshots and evidence bytes stay intact. Keep writers paused after failure and retry the same maintenance command; never choose or delete a partial copy manually.
 
-## Additional Syntax
-
-```text
-kander init [--server <URL>] [--project <name>] [project-path]
-```
+## Binding fields
 
 The optional URL and name are validated with the normal configuration schema. The client checks protocol compatibility, registers the project with its canonical Git origin and saves only the requested binding fields in the project's sparse `.kander-config.json`. A concurrent overlay edit refuses the save. Repeating the binding returns the same project. Different checkout paths do not affect project identity. A name already bound to another origin is refused.
 
-Without these flags, `init` uses the existing binding at the selected project path. `--maintenance` does not open a local board: run explicit import or service maintenance through `kander server`. A missing project name fails with `kander init --project <name>`. Unreachable loopback services offer interactive startup with the storage paths and default `[Y/n]`; Agent and noninteractive calls fail with `kander server start` and the data directory. Remote unavailable services fail. No path falls back to local storage.
+Without these flags, `init` uses the existing binding at the selected project path. A missing project name fails with `kander init --project <name>`. Unreachable loopback services offer interactive startup with the storage paths and default `[Y/n]`; Agent and noninteractive calls fail with `kander server start` and the data directory. Remote unavailable services fail. No path falls back to local storage.

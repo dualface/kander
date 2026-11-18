@@ -8,6 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
+
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 )
 
@@ -19,52 +22,21 @@ type showOptions struct {
 	json       bool
 }
 
-// runShow implements `kander issue show NUMBER`.
-func runShow(factory func() IssueProvider, args []string, stdout, stderr io.Writer) int {
+func newShowCommand(factory func() IssueProvider, stdout, stderr io.Writer) *cobra.Command {
 	var options showOptions
-	positional := 0
-	for index := 0; index < len(args); index++ {
-		arg := args[index]
-		switch {
-		case arg == "-h" || arg == "--help":
-			fmt.Fprintln(stdout, usageText())
-			return 0
-		case arg == "--json":
-			options.json = true
-		case arg == "--comments":
-			options.comments = true
-		case matchesLongOption(arg, "--repo"):
-			value, next, ok := optionValue(args, index, "--repo", stderr)
-			if !ok {
-				return 2
-			}
-			index = next
-			options.repository = value
-			options.hasRepo = true
-		case strings.HasPrefix(arg, "-"):
-			fmt.Fprintln(stderr, config.Text("issue.error_unknown_argument", arg))
-			fmt.Fprintln(stderr, usageText())
-			return 2
-		default:
-			positional++
-			if positional > 1 {
-				fmt.Fprintln(stderr, config.Text("issue.error_unknown_argument", arg))
-				fmt.Fprintln(stderr, usageText())
-				return 2
-			}
-			number, err := strconv.Atoi(strings.TrimSpace(arg))
-			if err != nil || number <= 0 {
-				fmt.Fprintln(stderr, config.Text("issue.error_invalid_value", "NUMBER", arg))
-				return 2
-			}
-			options.number = number
-		}
+	c := &cobra.Command{Use: "show NUMBER", Args: numberArgs}
+	c.RunE = func(_ *cobra.Command, args []string) error {
+		options.hasRepo, options.number = c.Flags().Changed("repo"), issueNumber(args)
+		return command.Exit(runShow(factory, options, stdout, stderr))
 	}
-	if positional == 0 {
-		fmt.Fprintln(stderr, config.Text("issue.error_missing_value", "NUMBER"))
-		fmt.Fprintln(stderr, usageText())
-		return 2
-	}
+	addRepoFlag(c, &options.repository)
+	c.Flags().BoolVar(&options.comments, "comments", false, "")
+	c.Flags().BoolVar(&options.json, "json", false, "")
+	return c
+}
+
+// runShow implements `kander issue show NUMBER`.
+func runShow(factory func() IssueProvider, options showOptions, stdout, stderr io.Writer) int {
 	provider := factory()
 	repository, code := resolveRepository(provider, options.repository, options.hasRepo, stderr)
 	if code != 0 {

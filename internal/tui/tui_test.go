@@ -508,7 +508,7 @@ func TestDefaultRunRejectsNonTTY(t *testing.T) {
 	defer devNull.Close()
 	os.Stdout, os.Stderr = devNull, devNull
 	defer func() { os.Stdout, os.Stderr = oldOut, oldErr }()
-	if Run(nil) == 0 {
+	if Run() == 0 {
 		t.Fatal("non tty")
 	}
 }

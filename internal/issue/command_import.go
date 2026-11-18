@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 )
 
@@ -22,87 +24,43 @@ type issueImportOptions struct {
 	json       bool
 }
 
+func newImportCommand(factory func() IssueProvider, stdout, stderr io.Writer) *cobra.Command {
+	var options issueImportOptions
+	c := &cobra.Command{Use: "import NUMBER", Args: numberArgs}
+	c.RunE = func(_ *cobra.Command, args []string) error {
+		options.hasRepo, options.number = c.Flags().Changed("repo"), issueNumber(args)
+		return command.Exit(runImport(factory, options, stdout, stderr))
+	}
+	addRepoFlag(c, &options.repository)
+	c.Flags().BoolVar(&options.comments, "comments", false, "")
+	command.Checked(c.Flags(), &options.taskType, "type", "", func(value string) error {
+		if !importTaskTypeAllowed(strings.TrimSpace(value)) {
+			return command.Usage("issue.error_invalid_value", "--type", value)
+		}
+		return nil
+	})
+	c.Flags().BoolVar(&options.large, "large", false, "")
+	command.Checked(c.Flags(), &options.language, "language", "", func(value string) error {
+		if strings.TrimSpace(value) == "" {
+			return command.Usage("issue.error_missing_value", "--language")
+		}
+		if _, err := config.ValidateAgentLanguage(strings.TrimSpace(value)); err != nil {
+			return command.Usage("config.agent_language_invalid")
+		}
+		return nil
+	})
+	c.Flags().BoolVar(&options.json, "json", false, "")
+	return c
+}
+
 // runImport implements `kander issue import NUMBER`. The command resolves the
 // repository before it touches the network, so a usage or location error never
 // costs an API call.
-func runImport(factory func() IssueProvider, args []string, stdout, stderr io.Writer) int {
-	var options issueImportOptions
-	positional := 0
-	for index := 0; index < len(args); index++ {
-		arg := args[index]
-		switch {
-		case arg == "-h" || arg == "--help":
-			fmt.Fprintln(stdout, usageText())
-			return 0
-		case arg == "--json":
-			options.json = true
-		case arg == "--comments":
-			options.comments = true
-		case arg == "--large":
-			options.large = true
-		case matchesLongOption(arg, "--repo"):
-			value, next, ok := optionValue(args, index, "--repo", stderr)
-			if !ok {
-				return 2
-			}
-			index = next
-			options.repository = value
-			options.hasRepo = true
-		case matchesLongOption(arg, "--type"):
-			value, next, ok := optionValue(args, index, "--type", stderr)
-			if !ok {
-				return 2
-			}
-			index = next
-			options.taskType = value
-		case matchesLongOption(arg, "--language"):
-			value, next, ok := optionValue(args, index, "--language", stderr)
-			if !ok {
-				return 2
-			}
-			index = next
-			options.language = value
-		case strings.HasPrefix(arg, "-"):
-			fmt.Fprintln(stderr, config.Text("issue.error_unknown_argument", arg))
-			fmt.Fprintln(stderr, usageText())
-			return 2
-		default:
-			positional++
-			if positional > 1 {
-				fmt.Fprintln(stderr, config.Text("issue.error_unknown_argument", arg))
-				fmt.Fprintln(stderr, usageText())
-				return 2
-			}
-			number, err := strconv.Atoi(strings.TrimSpace(arg))
-			if err != nil || number <= 0 {
-				fmt.Fprintln(stderr, config.Text("issue.error_invalid_value", "NUMBER", arg))
-				return 2
-			}
-			options.number = number
-		}
-	}
-	if positional == 0 {
-		fmt.Fprintln(stderr, config.Text("issue.error_missing_value", "NUMBER"))
-		fmt.Fprintln(stderr, usageText())
-		return 2
-	}
+func runImport(factory func() IssueProvider, options issueImportOptions, stdout, stderr io.Writer) int {
 	taskType := strings.TrimSpace(options.taskType)
-	if taskType != "" && !importTaskTypeAllowed(taskType) {
-		fmt.Fprintln(stderr, config.Text("issue.error_invalid_value", "--type", options.taskType))
-		return 2
-	}
 	language := strings.TrimSpace(options.language)
-	if options.language != "" && language == "" {
-		fmt.Fprintln(stderr, config.Text("issue.error_missing_value", "--language"))
-		return 2
-	}
 	if language != "" {
-		validated, err := config.ValidateAgentLanguage(language)
-		if err != nil {
-			fmt.Fprintln(stderr, config.Text("config.agent_language_invalid"))
-			return 2
-		}
-		language = validated
+		language, _ = config.ValidateAgentLanguage(language)
 	} else {
 		cfg, err := config.Load(false)
 		if err != nil {

@@ -1,18 +1,16 @@
 package install
 
 import (
-	"fmt"
-	"os"
+	"github.com/spf13/cobra"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/command"
 )
 
-// Run is the kander install subcommand.
-func Run(args []string) int {
-	for _, arg := range args {
-		fmt.Fprintln(os.Stderr, config.CommandUsage("install"))
-		fmt.Fprintln(os.Stderr, config.Text("cli.error_unknown_option", arg))
-		return 2
+// NewInstallCommand builds kander install.
+func NewInstallCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:  "install",
+		Args: command.Args(0, 0),
+		RunE: func(*cobra.Command, []string) error { return command.Exit(RunInteractive()) },
 	}
-	return RunInteractive()
 }

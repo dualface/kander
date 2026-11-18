@@ -1,270 +1,131 @@
-// Package cli registers every kander subcommand, parses the global --lang, and dispatches to the implementation packages.
-//
-// New commands extend this table; implementation packages bind their Runner.
-// The binary main.go remains a single call to Run.
+// Package cli assembles the single kander cobra command tree: implementation packages
+// register their commands here, and Run parses the global --lang, executes the tree, and
+// returns the process exit code. The binary main.go remains a single call to Run.
 package cli
 
 import (
 	"fmt"
-	"io"
 	"os"
+	"slices"
 	"strings"
 
+	"github.com/spf13/cobra"
+
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/install"
 	"github.com/dualface/kander/internal/menu"
+	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/terminalcheck"
 	"github.com/dualface/kander/internal/version"
 )
 
-// Runner is a subcommand entry point. args excludes the program name and the subcommand name.
-type Runner func(args []string) int
+// builders construct the top-level commands. A tree is built for every Run, so no flag state
+// survives from one run to the next.
+var builders []func() *cobra.Command
 
-var commandNames = []string{
-	"doctor",
-	"server",
-	"config",
-	"version",
-	"install",
-	"uninstall",
-	"review",
-	"init",
-	"issue",
-	"terminal",
-	"list",
-	"show",
-	"new",
-	"move",
-	"pick",
-	"start",
-	"orchestrate",
-	"resume",
-	"notify",
-	"dismiss",
-	"check",
-	"guard-write",
-	"update",
-	"dispatch",
-	"coordinator",
-	"subscribe",
-}
-
-var aliases = map[string]string{
-	"ls": "list",
-}
-
-// Commands is the single command registry. Every entry starts unimplemented; later packages override entries by name.
-var Commands = map[string]Runner{}
+// Register adds the top-level command build returns to the tree. Implementation packages call
+// it from init; registering one name twice is a programming error that NewRoot reports.
+func Register(build func() *cobra.Command) { builders = append(builders, build) }
 
 // DefaultRunner is what runs without a subcommand. internal/tui sets it on registration,
 // so a bare kander opens the alt-screen board; when nil, the usage text is printed.
-var DefaultRunner Runner
+var DefaultRunner func() int
 
 func init() {
-	for _, name := range commandNames {
-		Commands[name] = Unimplemented(name)
+	Register(menu.NewDoctorCommand)
+	Register(menu.NewConfigCommand)
+	Register(newVersionCommand)
+	Register(install.NewInstallCommand)
+	Register(install.NewUninstallCommand)
+	Register(terminalcheck.NewCommand)
+	Register(remote.NewInitCommand)
+	Register(remote.NewShowCommand)
+	Register(remote.NewNewCommand)
+	Register(remote.NewUpdateCommand)
+	Register(remote.NewMoveCommand)
+	Register(remote.NewPickCommand)
+	Register(remote.NewGuardWriteCommand)
+	Register(remote.NewRequestCommand)
+}
+
+func newVersionCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:  "version",
+		Args: command.Args(0, 0),
+		RunE: func(*cobra.Command, []string) error {
+			fmt.Fprintln(os.Stdout, "kander "+version.String())
+			return nil
+		},
 	}
-	Commands["doctor"] = menu.Doctor
-	Commands["config"] = menu.Config
-	Commands["version"] = runVersion
-	Commands["install"] = install.Run
-	Commands["uninstall"] = install.RunUninstall
-	Commands["terminal"] = terminalcheck.Run
 }
 
-func runVersion(args []string) int {
-	if len(args) != 0 {
-		fmt.Fprintln(os.Stderr, config.CommandUsage("version"))
-		return 2
-	}
-	fmt.Fprintln(os.Stdout, "kander "+version.String())
-	return 0
-}
-
-// Unimplemented returns a placeholder that exits non-zero in a stable way instead of panicking.
-func Unimplemented(name string) Runner {
-	return func(args []string) int {
-		fmt.Fprintln(os.Stderr, unimplementedMessage(name))
-		return 1
-	}
-}
-
-func unimplementedMessage(name string) string {
-	return config.Text(
-		"cli.subcommand_is_not_implemented", name,
-	)
-}
-
-func usage(w io.Writer) {
-	fmt.Fprintln(w, config.Text("cli.usage"))
-	fmt.Fprintln(w, config.Text("cli.commands"))
-	for _, name := range commandNames {
-		label := name
-		if name == "list" {
-			label = "list / ls"
+// NewRoot builds the command tree of every registered command.
+func NewRoot() *cobra.Command {
+	var root *cobra.Command
+	root = command.NewRoot(func() string { return rootUsage(root) })
+	root.PersistentFlags().Var(languageValue{}, "lang", "")
+	root.RunE = func(*cobra.Command, []string) error {
+		if DefaultRunner == nil {
+			return command.UsageText("")
 		}
-		if name == "notify" {
-			label = "notify / request"
-		}
-		fmt.Fprintf(w, "  %s\n", label)
+		return command.Exit(DefaultRunner())
 	}
-	fmt.Fprintln(w, config.Text("cli.global_options"))
+	root.PersistentPreRunE = func(c *cobra.Command, _ []string) error {
+		if command.ProjectRequired(c) {
+			return command.Exit(remote.CheckProject())
+		}
+		return nil
+	}
+	seen := map[string]bool{}
+	for _, build := range builders {
+		c := build()
+		if seen[c.Name()] {
+			panic("cli: command registered twice: " + c.Name())
+		}
+		seen[c.Name()] = true
+		root.AddCommand(c)
+	}
+	return root
 }
 
-type parsedArgs struct {
-	help    bool
-	command string
-	rest    []string
-	langErr string
+// languageValue is the --lang flag; the value itself is applied before the tree runs.
+type languageValue struct{}
+
+func (languageValue) String() string { return "" }
+func (languageValue) Type() string   { return "lang" }
+func (languageValue) Set(raw string) error {
+	if !slices.Contains(config.Languages, raw) {
+		return command.Usage("cli.error_lang_must_be_cn_or_en")
+	}
+	return nil
 }
 
-func parseArgs(arguments []string) parsedArgs {
-	var parsed parsedArgs
-	args := arguments
-	if len(args) > 0 {
-		args = args[1:]
-	}
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		if arg == "--" {
-			if parsed.command == "" && i+1 < len(args) {
-				parsed.command = args[i+1]
-				parsed.rest = append([]string{}, args[i+2:]...)
-			} else {
-				parsed.rest = append(parsed.rest, args[i+1:]...)
-			}
-			return parsed
-		}
-		if arg == "-h" || arg == "--help" {
-			if parsed.command == "" {
-				parsed.help = true
-				continue
-			}
-			parsed.rest = append(parsed.rest, arg)
+// rootUsage is the top-level usage text; the command list comes from the tree.
+func rootUsage(root *cobra.Command) string {
+	var b strings.Builder
+	fmt.Fprintln(&b, config.Text("cli.usage"))
+	fmt.Fprintln(&b, config.Text("cli.commands"))
+	for _, c := range root.Commands() {
+		if c.Hidden || c.Name() == "help" {
 			continue
 		}
-		if arg == "--lang" {
-			if i+1 >= len(args) {
-				parsed.langErr = "missing"
-				return parsed
-			}
-			i++
-			continue
+		label := c.Name()
+		if len(c.Aliases) > 0 {
+			label += " / " + strings.Join(c.Aliases, " / ")
 		}
-		if strings.HasPrefix(arg, "--lang=") {
-			continue
-		}
-		if parsed.command == "" {
-			if strings.HasPrefix(arg, "-") {
-				parsed.langErr = "unknown:" + arg
-				return parsed
-			}
-			parsed.command = arg
-			continue
-		}
-		parsed.rest = append(parsed.rest, arg)
+		fmt.Fprintf(&b, "  %s\n", label)
 	}
-	return parsed
+	b.WriteString(config.Text("cli.global_options"))
+	return b.String()
 }
 
-func validateLang(arguments []string) string {
-	args := arguments
-	if len(args) > 0 {
-		args = args[1:]
-	}
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		var value string
-		switch {
-		case arg == "--lang":
-			if i+1 >= len(args) {
-				return "missing"
-			}
-			value = args[i+1]
-			i++
-		case strings.HasPrefix(arg, "--lang="):
-			value = strings.TrimPrefix(arg, "--lang=")
-		default:
-			continue
-		}
-		if !containsString(config.Languages, value) {
-			return value
-		}
-	}
-	return ""
-}
-
-func containsString(list []string, value string) bool {
-	for _, item := range list {
-		if item == value {
-			return true
-		}
-	}
-	return false
-}
-
-func failUsage(message string) int {
-	usage(os.Stderr)
-	if message != "" {
-		fmt.Fprintln(os.Stderr, message)
-	}
-	return 2
-}
-
-func langErrorMessage(kind string) string {
-	if kind == "missing" {
-		return config.Text("cli.error_lang_must_be_cn_or_en")
-	}
-	if strings.HasPrefix(kind, "unknown:") {
-		return config.Text(
-			"cli.error_unknown_option", strings.TrimPrefix(kind, "unknown:"),
-		)
-	}
-	return config.Text("cli.error_lang_must_be_cn_or_en")
-}
-
-func unknownCommandMessage(name string) string {
-	return config.Text("cli.error_unknown_command", name)
-}
-
-// Run parses os.Args-shaped arguments and dispatches. It returns the process exit code.
+// Run executes os.Args-shaped arguments and returns the process exit code.
 func Run(arguments []string) int {
-	langKind := validateLang(arguments)
-	config.ApplyLanguageArgument(arguments)
-	if langKind != "" {
-		return failUsage(langErrorMessage(langKind))
+	args := arguments
+	if len(args) > 0 {
+		args = args[1:]
 	}
-	parsed := parseArgs(arguments)
-	if parsed.langErr != "" {
-		return failUsage(langErrorMessage(parsed.langErr))
-	}
-	if parsed.help && parsed.command == "" {
-		usage(os.Stdout)
-		return 0
-	}
-	if parsed.command == "" {
-		if DefaultRunner != nil {
-			return DefaultRunner(parsed.rest)
-		}
-		return failUsage("")
-	}
-	if parsed.command == "help" {
-		usage(os.Stdout)
-		return 0
-	}
-	name := parsed.command
-	if canonical, ok := aliases[name]; ok {
-		name = canonical
-	}
-	runner, ok := Commands[name]
-	if !ok {
-		return failUsage(unknownCommandMessage(parsed.command))
-	}
-	// `kander <command> --help` prints the command's contract usage for every registered
-	// command in one place; the contract file is the single source of that text.
-	if len(parsed.rest) == 1 && (parsed.rest[0] == "-h" || parsed.rest[0] == "--help") {
-		fmt.Fprintln(os.Stdout, config.CommandUsage(name))
-		return 0
-	}
-	return runner(parsed.rest)
+	config.ApplyLanguageArgument(args)
+	return command.Execute(NewRoot(), args)
 }

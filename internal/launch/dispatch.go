@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"strings"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
@@ -48,44 +47,3 @@ func DispatchObservation(ctx context.Context, s board.Snapshot) liveness.Report 
 
 // PrintDispatchResult reports durable state, never terminal prompt echo.
 func PrintDispatchResult(d board.Dispatch) error { return json.NewEncoder(os.Stdout).Encode(d) }
-
-// ParseDispatchOptions shares the notify/resume flag spelling and rejects duplicates.
-func ParseDispatchOptions(args []string) ([]string, DispatchOptions, error) {
-	var o DispatchOptions
-	var rest []string
-	values := map[string]*string{"--dispatch-id": &o.ID, "--kind": &o.Kind, "--base": &o.Base, "--evidence-file": &o.EvidenceFile}
-	seen := map[string]bool{}
-	for i := 0; i < len(args); i++ {
-		name, value, inline := strings.Cut(args[i], "=")
-		field, ok := values[name]
-		if !ok {
-			rest = append(rest, args[i])
-			// Preserve the value boundary owned by the notify/resume parser.
-			// A message or path may itself look like a dispatch control option.
-			if !inline && i+1 < len(args) {
-				switch name {
-				case "--message", "--message-file", "--timeout", "--agent", "--launcher", "--pane", "--decision":
-					i++
-					rest = append(rest, args[i])
-				}
-			}
-			continue
-		}
-		if seen[name] {
-			return nil, o, launchError("board.unknown_option", name)
-		}
-		seen[name] = true
-		if !inline {
-			i++
-			if i >= len(args) {
-				return nil, o, launchError("board.option_requires_a_value", name)
-			}
-			value = args[i]
-		}
-		if value == "" {
-			return nil, o, launchError("board.option_requires_a_value", name)
-		}
-		*field = value
-	}
-	return rest, o, nil
-}

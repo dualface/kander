@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dualface/kander/internal/command/commandtest"
 	"github.com/dualface/kander/internal/config"
 )
 
@@ -222,7 +223,7 @@ func TestRunUninstallConfirmation(t *testing.T) {
 	uninstallPromptOut = &bytes.Buffer{}
 	run := func(args ...string) int {
 		uninstallPromptIn = strings.NewReader(in)
-		return RunUninstall(args)
+		return commandtest.Run(NewUninstallCommand(), args...)
 	}
 	if code := run(); code != 2 {
 		t.Fatalf("no terminal without --yes: code=%d", code)

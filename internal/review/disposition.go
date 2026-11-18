@@ -12,34 +12,17 @@ import (
 	"github.com/dualface/kander/internal/config"
 )
 
-func dispositionCommand(name string) bool {
-	switch name {
-	case "plan", "extend-plan", "advance", "assign", "disposition", "interpret", "map-legacy", "aggregate", "close", "progress", "confirm":
-		return true
-	}
-	return false
-}
-
 // runDisposition runs one evidence command once the arguments and the
 // configuration are checked. The client binds it to the server project of the
 // checkout; tests bind it to a board directory.
 var runDisposition = runRemoteDisposition
 
-func runDispositionMode(args []string) int {
-	if len(args) >= 2 && args[1] == "--schema" {
-		if len(args) != 2 || !schemaCommand(args[0]) {
-			return dispositionFailure(newGateMsg(2, config.CommandUsage("review")))
-		}
-		return printEvidenceSchema(args[0])
-	}
-	if len(args) < 3 {
-		return dispositionFailure(newGateMsg(2, config.CommandUsage("review")))
-	}
+func runDispositionMode(action string, args []string) int {
 	cfg, loadErr := config.Load(true)
 	if loadErr != nil {
 		return dispositionFailure(loadErr)
 	}
-	return runDisposition(cfg, args)
+	return runDisposition(cfg, append([]string{action}, args...))
 }
 func dispositionFailure(err error) int { userError(err.Error()); return 2 }
 func validatePlanGit(p board.ReviewPlan) error {

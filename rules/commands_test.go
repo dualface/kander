@@ -1,13 +1,7 @@
 package rules
 
 import (
-	"go/ast"
-	"go/parser"
-	"go/token"
-	"os"
-	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	"testing"
 )
@@ -15,21 +9,16 @@ import (
 // contractSections is the fixed section order of every command contract.
 var contractSections = []string{"## Purpose and users", "## Syntax", "## Arguments", "## Preconditions", "## Effects", "## Output", "## Rejections"}
 
-// registeredCommands reads the frozen command registry from the CLI package source, so the
-// contract set follows the binary and not a copy of the list.
-func registeredCommands(t *testing.T) []string {
+// contractCommands lists the commands that have a contract file. Whether the command tree has
+// exactly these commands is checked where the whole tree is linked (cmd/kander).
+func contractCommands(t *testing.T) []string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("..", "internal", "cli", "cli.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	block := regexp.MustCompile(`(?s)var commandNames = \[\]string\{(.*?)\n\}`).FindStringSubmatch(string(data))
-	if block == nil {
-		t.Fatal("commandNames not found in internal/cli/cli.go")
-	}
 	var names []string
-	for _, m := range regexp.MustCompile(`"([a-z-]+)"`).FindAllStringSubmatch(block[1], -1) {
-		names = append(names, m[1])
+	for _, name := range Names() {
+		if !strings.HasPrefix(name, "snippets/commands/") || name == "snippets/commands/README.md" {
+			continue
+		}
+		names = append(names, strings.TrimSuffix(strings.TrimPrefix(name, "snippets/commands/"), ".md"))
 	}
 	if len(names) < 20 {
 		t.Fatalf("suspiciously few commands: %v", names)
@@ -65,12 +54,12 @@ func tableBlock(t *testing.T, text, where string) string {
 	return block
 }
 
-func TestEveryCommandHasAContract(t *testing.T) {
+func TestEveryContractIsWellFormed(t *testing.T) {
 	readme, err := File("snippets/commands/README.md")
 	if err != nil {
 		t.Fatal(err)
 	}
-	commands := registeredCommands(t)
+	commands := contractCommands(t)
 	for _, cmd := range commands {
 		name := "snippets/commands/" + cmd + ".md"
 		data, err := File(name)
@@ -91,18 +80,6 @@ func TestEveryCommandHasAContract(t *testing.T) {
 		}
 		if !strings.Contains(string(readme), "`"+name+"`") {
 			t.Fatalf("README does not list %s", name)
-		}
-	}
-	known := map[string]bool{}
-	for _, cmd := range commands {
-		known[cmd] = true
-	}
-	for _, name := range Names() {
-		if !strings.HasPrefix(name, "snippets/commands/") || name == "snippets/commands/README.md" {
-			continue
-		}
-		if cmd := strings.TrimSuffix(strings.TrimPrefix(name, "snippets/commands/"), ".md"); !known[cmd] {
-			t.Fatalf("%s documents a command the CLI does not register", name)
 		}
 	}
 }
@@ -134,7 +111,7 @@ func TestCommandTableIsSingleSource(t *testing.T) {
 			t.Fatalf("table line is not in the %s contract Syntax block:\n%s", cmd, line)
 		}
 	}
-	for _, cmd := range registeredCommands(t) {
+	for _, cmd := range contractCommands(t) {
 		data, _ := File("snippets/commands/" + cmd + ".md")
 		for _, syntax := range syntaxBlock(t, string(data)) {
 			if !inTable[syntax] {
@@ -163,160 +140,5 @@ func TestCommandIndexWordLimits(t *testing.T) {
 		if strings.Contains(text, title) {
 			t.Fatalf("KANDER-KANBAN-RULES.md still carries %s", title)
 		}
-	}
-}
-
-// parserFunctions names, per command, the Go functions that parse its arguments. The flags a
-// contract documents must all be parsed by one of them, and every "--flag" literal in them
-// must be documented by a command that lists the function.
-var parserFunctions = map[string][]string{
-	"server":      {"cmd/kander/server.go:runServer", "internal/server/main.go:importCommand", "internal/server/maintenance.go:runMaintain", "internal/server/projects_cmd.go:listProjects"},
-	"config":      {"internal/menu/commands.go:parseConfigArgs"},
-	"doctor":      {"internal/menu/commands.go:Doctor"},
-	"version":     {"internal/cli/cli.go:runVersion"},
-	"install":     {"internal/install/cmd.go:Run"},
-	"uninstall":   {"internal/install/uninstall.go:RunUninstall"},
-	"terminal":    {"internal/terminalcheck/command.go:run"},
-	"init":        {"internal/remote/init.go:RunInit"},
-	"list":        {"internal/remote/commands.go:RunListWithAgentStatus"},
-	"show":        {"internal/remote/commands.go:RunShow"},
-	"new":         {"internal/remote/commands.go:RunNew"},
-	"move":        {"internal/remote/commands.go:RunMove"},
-	"pick":        {"internal/remote/commands.go:RunPick"},
-	"update":      {"internal/remote/commands.go:RunUpdate"},
-	"dispatch":    {"internal/launch/remote_dispatch.go:runRemoteDispatch"},
-	"guard-write": {"internal/remote/guard.go:RunGuardWrite"},
-	"check":       {"internal/check/args.go:parseOptions", "internal/liveness/check.go:RunCheckRemote"},
-	"subscribe":   {"internal/liveness/subscribe.go:parseSubscribeArgs"},
-	"start":       {"internal/launch/cmd.go:RunStartRemote", "internal/launch/cmd.go:parseAgentLauncher"},
-	"resume":      {"internal/launch/cmd.go:RunResumeRemote", "internal/launch/dispatch.go:ParseDispatchOptions"},
-	"notify":      {"internal/notify/cmd.go:RunNotifyRemote", "internal/launch/dispatch.go:ParseDispatchOptions", "internal/remote/request_cmd.go:RunRequest"},
-	"orchestrate": {"internal/launch/orchestrate.go:RunOrchestrateRemote", "internal/launch/cmd.go:parseAgentLauncher"},
-	"coordinator": {"internal/launch/coordinator.go:coordinatorArgs", "internal/launch/coordinator.go:RunCoordinatorRemote"},
-	"dismiss":     {"internal/takeover/cmd.go:RunDismissRemote"},
-	"review":      {"internal/review/archive.go:parseArchiveOptions", "internal/review/disposition.go:runDispositionMode"},
-	"issue":       {"internal/issue/command.go:runRepo", "internal/issue/command_list.go:runList", "internal/issue/command_show.go:runShow", "internal/issue/command_import.go:runImport", "internal/issue/command_triage.go:runTriage", "internal/issue/command_result.go:runResult"},
-}
-
-var flagLiteral = regexp.MustCompile(`^--[a-z][a-z-]*=?$`)
-var flagInSyntax = regexp.MustCompile(`--[a-z][a-z-]*`)
-
-// functionFlagLiterals returns every "--flag" string literal inside the named function.
-func functionFlagLiterals(t *testing.T, ref string) map[string]bool {
-	t.Helper()
-	file, fn, _ := strings.Cut(ref, ":")
-	fset := token.NewFileSet()
-	parsed, err := parser.ParseFile(fset, filepath.Join("..", filepath.FromSlash(file)), nil, 0)
-	if err != nil {
-		t.Fatalf("%s: %v", ref, err)
-	}
-	out := map[string]bool{}
-	found := false
-	for _, decl := range parsed.Decls {
-		f, ok := decl.(*ast.FuncDecl)
-		if !ok || f.Name.Name != fn {
-			continue
-		}
-		found = true
-		ast.Inspect(f.Body, func(n ast.Node) bool {
-			// flag.FlagSet registers names without the leading dashes.
-			if call, ok := n.(*ast.CallExpr); ok {
-				if method, ok := call.Fun.(*ast.SelectorExpr); ok {
-					receiver, ok := method.X.(*ast.Ident)
-					if ok && receiver.Name == "flags" {
-						index := -1
-						switch method.Sel.Name {
-						case "String", "Bool", "Duration":
-							index = 0
-						case "StringVar", "BoolVar", "DurationVar":
-							index = 1
-						}
-						if index >= 0 && len(call.Args) > index {
-							if name, ok := call.Args[index].(*ast.BasicLit); ok && name.Kind == token.STRING {
-								value := "--" + strings.Trim(name.Value, "\"`")
-								if flagLiteral.MatchString(value) {
-									out[value] = true
-								}
-							}
-						}
-					}
-				}
-			}
-			lit, ok := n.(*ast.BasicLit)
-			if !ok || lit.Kind != token.STRING {
-				return true
-			}
-			value := strings.Trim(lit.Value, "\"`")
-			if flagLiteral.MatchString(value) && value != "--help" {
-				out[strings.TrimSuffix(value, "=")] = true
-			}
-			return true
-		})
-	}
-	if !found {
-		t.Fatalf("%s: function not found", ref)
-	}
-	return out
-}
-
-func TestContractFlagsMatchParsers(t *testing.T) {
-	commands := registeredCommands(t)
-	if len(parserFunctions) != len(commands) {
-		t.Fatalf("parserFunctions covers %d commands, registry has %d", len(parserFunctions), len(commands))
-	}
-	documented := map[string]map[string]bool{}
-	for _, cmd := range commands {
-		data, err := File("snippets/commands/" + cmd + ".md")
-		if err != nil {
-			t.Fatal(err)
-		}
-		flags := map[string]bool{}
-		for _, line := range CommandSyntaxLines(string(data)) {
-			for _, flag := range flagInSyntax.FindAllString(line, -1) {
-				flags[flag] = true
-			}
-		}
-		documented[cmd] = flags
-	}
-	literals := map[string]map[string]bool{}
-	users := map[string][]string{}
-	for cmd, refs := range parserFunctions {
-		for _, ref := range refs {
-			if literals[ref] == nil {
-				literals[ref] = functionFlagLiterals(t, ref)
-			}
-			users[ref] = append(users[ref], cmd)
-		}
-	}
-	var problems []string
-	for cmd, flags := range documented {
-		for flag := range flags {
-			parsed := false
-			for _, ref := range parserFunctions[cmd] {
-				if literals[ref][flag] {
-					parsed = true
-				}
-			}
-			if !parsed {
-				problems = append(problems, cmd+": documented flag "+flag+" is parsed by none of its functions")
-			}
-		}
-	}
-	for ref, flags := range literals {
-		for flag := range flags {
-			known := false
-			for _, cmd := range users[ref] {
-				if documented[cmd][flag] {
-					known = true
-				}
-			}
-			if !known {
-				problems = append(problems, ref+": parses "+flag+", which no contract of its commands documents")
-			}
-		}
-	}
-	sort.Strings(problems)
-	if len(problems) != 0 {
-		t.Fatalf("contract and parser flags differ:\n%s", strings.Join(problems, "\n"))
 	}
 }

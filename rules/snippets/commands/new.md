@@ -19,6 +19,7 @@ kander new [--large] [--language <agent language>] <feature|bug|chore|research> 
 - `title...`: the remaining words form the title.
 - `--large`: `SIZE: large` (large-task documents, `report.md` required for completion). Default is `small`.
 - `--language <agent language>`: the card `LANGUAGE`; default is the configured `agent_language`.
+- `title...`: the words of the title, joined by single spaces. A word that starts with `-` must come after `--`, as in `kander new chore slug -- -dash title`.
 
 ## Preconditions
 

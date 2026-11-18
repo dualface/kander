@@ -7,7 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 )
@@ -96,14 +99,36 @@ type WrapUpRequest struct {
 	ReclaimDecision  string               `json:"reclaim_decision,omitempty"`
 }
 
-// RunDispatchRemote implements kander dispatch against the server.
-func RunDispatchRemote(args []string) int {
-	cfg, err := config.Load(false)
-	if err != nil {
-		return fail(err)
+// NewDispatchCommand builds kander dispatch, the durable dispatch protocol against the server.
+func NewDispatchCommand() *cobra.Command {
+	var decision string
+	run := func(action string) func(*cobra.Command, []string) error {
+		return func(_ *cobra.Command, args []string) error {
+			cfg, err := config.Load(false)
+			if err != nil {
+				return command.Exit(fail(err))
+			}
+			if err := remote.RequireBinding(cfg); err != nil {
+				return command.Exit(fail(err))
+			}
+			return command.Exit(runRemoteDispatch(dispatchArguments{action: action, args: args, decision: decision}, cfg))
+		}
 	}
-	if err := remote.RequireBinding(cfg); err != nil {
-		return fail(err)
+	sub := func(use string, args int) *cobra.Command {
+		name, _, _ := strings.Cut(use, " ")
+		return command.RequireProject(&cobra.Command{Use: use, Args: command.Args(args, args), RunE: run(name)})
 	}
-	return runRemoteDispatch(args, cfg)
+	end := func(use string) *cobra.Command {
+		c := sub(use+" <task-id> <dispatch-id> <dispatch-revision> <reason>", 4)
+		c.Flags().StringVar(&decision, "decision", "", "")
+		return c
+	}
+	return command.Group("dispatch",
+		sub("prepare <intent.json>", 1),
+		sub("authorize-wrap-up <request.json>", 1),
+		sub("show <task-id> <dispatch-id>", 2),
+		end("fail"),
+		end("cancel"),
+		sub("settle <task-id> <dispatch-id> <dispatch-revision>", 3),
+	)
 }

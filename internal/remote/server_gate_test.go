@@ -16,6 +16,7 @@ import (
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/command/commandtest"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/servicectl"
 	"github.com/dualface/kander/internal/version"
@@ -260,7 +261,7 @@ func TestListAfterStartupOrRestartQuestionRenewsOperationBudget(t *testing.T) {
 				serverPromptInput = deadlineServerAnswer{ctx: ctx}
 				return ctx, cancel
 			}
-			if code := RunList([]string{"--json"}); code != 0 || output.Len() == 0 {
+			if code := commandtest.Run(NewListCommand(nil), "--json"); code != 0 || output.Len() == 0 {
 				t.Fatalf("list after question exit=%d output=%q", code, output.String())
 			}
 			if !errors.Is(original.Err(), context.DeadlineExceeded) {

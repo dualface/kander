@@ -1,21 +1,35 @@
 package launch
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/spf13/cobra"
+
+	"github.com/dualface/kander/internal/command/commandtest"
 )
 
-func TestDispatchOptionsPreserveOtherOptionValues(t *testing.T) {
-	for _, option := range []string{"--message", "--message-file", "--timeout", "--agent", "--launcher", "--pane"} {
-		for _, value := range []string{"--kind=sync", "--dispatch-id", "--base=literal"} {
-			t.Run(option+"/"+value, func(t *testing.T) {
-				original := []string{"task", option, value}
-				args := append(append([]string{}, original...), "--kind", "fix")
-				rest, options, err := ParseDispatchOptions(args)
-				if err != nil || !reflect.DeepEqual(rest, original) || options != (DispatchOptions{Kind: "fix"}) {
-					t.Fatalf("literal argument reinterpreted: rest=%q options=%+v err=%v", rest, options, err)
-				}
-			})
-		}
+func TestDispatchFlagsAreGivenOnceAndNeverEmpty(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		args []string
+		want int
+	}{
+		{"all", []string{"--dispatch-id", "d1", "--kind=fix", "--base", "abc", "--evidence-file", "e.json"}, 0},
+		{"value that looks like a flag", []string{"--base", "--kind=sync", "--kind", "fix"}, 0},
+		{"repeated", []string{"--kind", "fix", "--kind=sync"}, 2},
+		{"empty", []string{"--dispatch-id="}, 2},
+		{"missing value", []string{"--evidence-file"}, 2},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var options DispatchOptions
+			c := &cobra.Command{Use: "demo", RunE: func(*cobra.Command, []string) error { return nil }}
+			AddDispatchFlags(c, &options)
+			if code := commandtest.Run(c, test.args...); code != test.want {
+				t.Fatalf("code=%d want=%d", code, test.want)
+			}
+			if test.name == "value that looks like a flag" && (options.Base != "--kind=sync" || options.Kind != "fix") {
+				t.Fatalf("options=%+v", options)
+			}
+		})
 	}
 }

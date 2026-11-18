@@ -9,13 +9,13 @@ Streams board events for a task group and its watched external cards or groups a
 ## Syntax
 
 ```text
-kander subscribe [--refresh SECONDS] [--heartbeat SECONDS] (<task-group> <task-id>... [--watch <task-id|task-group-id>...] | --watch <task-id|task-group-id>...)
+kander subscribe [--refresh SECONDS] [--heartbeat SECONDS] (<task-group> <task-id>... [--watch <task-id|task-group-id>]... | --watch <task-id|task-group-id> [--watch <task-id|task-group-id>]...)
 ```
 
 ## Arguments
 
 - `<task-group> <task-id>...`: the group and its complete member set; the command validates ownership.
-- `--watch <task-id|task-group-id>...`: external cards or groups, repeated per direct reference and re-expanded on each observation; alone it monitors standalone cards without a group.
+- `--watch <task-id|task-group-id>`: one external card or group, repeated once per direct reference and re-expanded on each observation; alone it monitors standalone cards without a group. Each reference needs its own `--watch`.
 - `--refresh SECONDS`: default 1.
 - `--heartbeat SECONDS`: default 900; the heartbeat starts after the snapshot is queued and restarts only after each heartbeat is queued.
 

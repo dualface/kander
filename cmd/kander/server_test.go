@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"net"
 	"net/http/httptrace"
@@ -18,8 +17,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/command/commandtest"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/server"
 	"github.com/dualface/kander/internal/servicectl"
@@ -32,7 +34,8 @@ func TestMain(m *testing.M) {
 		os.Exit(runServer(os.Args[2:]))
 	}
 	if os.Getenv("KANDER_TEST_SERVER_CHILD") == "hang" && len(os.Args) > 2 && os.Args[1] == "server" {
-		f := flag.NewFlagSet("child", flag.ExitOnError)
+		var f pflag.FlagSet
+		f.Init("child", pflag.ExitOnError)
 		dir := f.String("data", "", "")
 		f.Bool("foreground", false, "")
 		f.String("listen", "", "")
@@ -49,6 +52,9 @@ func TestMain(m *testing.M) {
 	}
 	os.Exit(m.Run())
 }
+
+// runServer runs kander server with the arguments after its name.
+func runServer(args []string) int { return commandtest.Run(newServerCommand(), args...) }
 
 func serverCommandEnv(t *testing.T) (servicectl.Controller, string, string) {
 	t.Helper()

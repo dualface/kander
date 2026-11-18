@@ -17,6 +17,7 @@ import (
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/command/commandtest"
 )
 
 type legacyMaintenanceFixture struct {
@@ -282,7 +283,7 @@ func TestMaintainCommandUsesTheOfflineProducerAndReleasesItsLock(t *testing.T) {
 	}
 	previous := os.Stdout
 	os.Stdout = write
-	code := RunOffline([]string{"maintain", "--data", fixture.data, "--project", "legacy", "--maintenance"})
+	code := commandtest.Run(NewMaintainCommand(), "--data", fixture.data, "--project", "legacy", "--maintenance")
 	os.Stdout = previous
 	_ = write.Close()
 	raw, err := io.ReadAll(read)

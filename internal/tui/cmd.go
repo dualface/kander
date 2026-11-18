@@ -73,7 +73,7 @@ var (
 )
 
 // Run is the default TUI entry point used when no subcommand is given.
-func Run(_ []string) int {
+func Run() int {
 	postInstall := os.Getenv(install.EnvPostInstall) != ""
 	_ = os.Unsetenv(install.EnvPostInstall)
 
@@ -278,7 +278,7 @@ func firstLaunchDoctor(postInstall bool) {
 		config.ApplyLanguageArgument([]string{"kander", "--lang", config.ResolveScopeLanguage()})
 		defer config.ApplyLanguageArgument(nil)
 	}
-	_ = menu.Doctor(nil)
+	_ = menu.Doctor()
 }
 
 // waitDoctorAck keeps the startup doctor report on screen until the user presses

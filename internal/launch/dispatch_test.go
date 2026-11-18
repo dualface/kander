@@ -8,7 +8,7 @@ import (
 	"github.com/dualface/kander/internal/config"
 )
 
-func TestDispatchPromptTranslationsAndFlagParsing(t *testing.T) {
+func TestDispatchPromptTranslations(t *testing.T) {
 	for _, lang := range []string{"en", "cn", "ja"} {
 		config.ApplyLanguageArgument([]string{"kander", "--lang", lang})
 		t.Setenv(config.EnvLang, lang)
@@ -23,12 +23,5 @@ func TestDispatchPromptTranslationsAndFlagParsing(t *testing.T) {
 				t.Fatalf("%s missing %s: %s", lang, part, prompt)
 			}
 		}
-	}
-	rest, o, err := ParseDispatchOptions([]string{"task", "--dispatch-id=id-one", "--kind", "sync", "--base", strings.Repeat("a", 40)})
-	if err != nil || len(rest) != 1 || o.ID != "id-one" || o.Kind != "sync" {
-		t.Fatalf("%+v %v", o, err)
-	}
-	if _, _, err = ParseDispatchOptions([]string{"--kind", "fix", "--kind=sync"}); err == nil {
-		t.Fatal("duplicate accepted")
 	}
 }

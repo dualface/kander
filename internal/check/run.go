@@ -5,23 +5,55 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/spf13/cobra"
+
+	"github.com/dualface/kander/internal/command"
+	"github.com/dualface/kander/internal/liveness"
 )
 
-// Run is the kander check command for the board-free Git analyzers; the caller
-// has already matched args[0] against checkDelivery or checkOverlap. Every other
-// form of check goes through the server.
-func Run(args []string) int { return runMode(args[0], args[1:]) }
+// NewCommand builds kander check. The Git analyzers delivery and overlap run locally and
+// never touch the board; every other form of check goes through the server.
+func NewCommand() *cobra.Command {
+	var all bool
+	c := command.RequireProject(&cobra.Command{
+		Use:  "check [task-id...]",
+		Args: cobra.ArbitraryArgs,
+		RunE: func(_ *cobra.Command, tasks []string) error { return command.Exit(liveness.RunCheckRemote(tasks, all)) },
+	})
+	c.Flags().BoolVar(&all, "all", false, "")
+	c.AddCommand(newModeCommand(checkDelivery), newModeCommand(checkOverlap))
+	return c
+}
 
-func runMode(mode string, args []string) int {
-	opt, parseErr := parseOptions(mode, args)
-	if opt.help && parseErr == nil {
-		fmt.Fprintln(os.Stdout, config.CommandUsage("check"))
-		return 0
+// newModeCommand builds one Git analyzer: delivery takes --base and --commit, overlap takes
+// --source and --head.
+func newModeCommand(mode string) *cobra.Command {
+	opt := options{commit: "HEAD", head: "HEAD"}
+	c := &cobra.Command{
+		Use:  mode,
+		Args: command.Args(0, 0),
+		RunE: func(*cobra.Command, []string) error {
+			if parseErr := opt.validate(mode); parseErr != nil {
+				if !opt.json {
+					return command.UsageText(escapeText(parseErr.Message))
+				}
+				return command.Exit(writeModeError(mode, parseErr, exitUsage))
+			}
+			return command.Exit(runMode(mode, opt))
+		},
 	}
-	if parseErr != nil {
-		return writeModeError(mode, opt.json, parseErr, exitUsage)
+	c.Flags().BoolVar(&opt.json, "json", false, "")
+	if mode == checkDelivery {
+		command.Once(c.Flags(), &opt.base, "base", "")
+		command.Once(c.Flags(), &opt.commit, "commit", "")
+	} else {
+		command.Once(c.Flags(), &opt.source, "source", "")
+		command.Once(c.Flags(), &opt.head, "head", "")
 	}
+	return c
+}
+
+func runMode(mode string, opt options) int {
 	ctx, cancel := context.WithTimeout(context.Background(), gitOverallLimit)
 	defer cancel()
 	git := newGitRunner(nil)
@@ -35,22 +67,19 @@ func runMode(mode string, args []string) int {
 	}
 }
 
-func writeModeError(mode string, jsonMode bool, errInfo *CheckError, code int) int {
-	if jsonMode {
-		var payload any
-		if mode == checkDelivery {
-			payload = deliveryError(errInfo.Code, errInfo.Message)
-		} else {
-			payload = overlapError(errInfo.Code, errInfo.Message)
-		}
-		if writeErr := writeJSON(payload); writeErr != nil {
-			fmt.Fprintln(os.Stderr, "kander: "+t("check.internal"))
-			return exitExec
-		}
-		return code
+// writeModeError reports a usage error found after the flags were parsed as the JSON result
+// the caller asked for.
+func writeModeError(mode string, errInfo *CheckError, code int) int {
+	var payload any
+	if mode == checkDelivery {
+		payload = deliveryError(errInfo.Code, errInfo.Message)
+	} else {
+		payload = overlapError(errInfo.Code, errInfo.Message)
 	}
-	fmt.Fprintln(os.Stderr, config.CommandUsage("check"))
-	fmt.Fprintln(os.Stderr, "kander: "+escapeText(errInfo.Message))
+	if writeErr := writeJSON(payload); writeErr != nil {
+		fmt.Fprintln(os.Stderr, "kander: "+t("check.internal"))
+		return exitExec
+	}
 	return code
 }
 

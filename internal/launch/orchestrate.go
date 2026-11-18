@@ -10,8 +10,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 )
@@ -345,60 +348,30 @@ func orchestratorWindowName(firstTaskID string) string {
 	return strings.TrimRight(string(name), "-")
 }
 
-// RunOrchestrateRemote implements kander orchestrate against the server.
-func RunOrchestrateRemote(args []string) int {
-	for _, arg := range args {
-		if arg == "-h" || arg == "--help" {
-			fmt.Fprintln(os.Stdout, config.CommandUsage("orchestrate"))
-			return 0
+// NewOrchestrateCommand builds kander orchestrate: it hands a plan to a separate orchestrator
+// session against the server.
+func NewOrchestrateCommand() *cobra.Command {
+	var agent, launcher, handover, handoverFile, operationID string
+	c := command.RequireProject(&cobra.Command{
+		Use:  "orchestrate <task-id|task-group-id>...",
+		Args: command.Args(1, -1),
+	})
+	c.RunE = func(_ *cobra.Command, references []string) error {
+		return command.Exit(runOrchestrate(OrchestrateRequest{OperationID: operationID, References: references, Agent: agent, Launcher: launcher}, handover, c.Flags().Changed("message"), handoverFile))
+	}
+	AddAgentFlags(c, &agent, &launcher)
+	command.Checked(c.Flags(), &operationID, "operation-id", "", func(id string) error {
+		if !api.ValidIdentity(id) {
+			return command.Usage("remote.launch_operation_id_invalid")
 		}
-	}
-	rest, agent, launcher, _, message := parseAgentLauncher(args)
-	if message != "" {
-		return orchestrateUsageFail(message)
-	}
-	var handover, handoverFile, operationID string
-	var handoverSet bool
-	var references []string
-	for i := 0; i < len(rest); i++ {
-		arg := rest[i]
-		switch {
-		case arg == "--operation-id":
-			val, next, ok := takeValue(rest, i)
-			if !ok || !api.ValidIdentity(val) {
-				return orchestrateUsageFail(t("remote.launch_operation_id_invalid"))
-			}
-			operationID, i = val, next
-		case strings.HasPrefix(arg, "--operation-id="):
-			operationID = strings.TrimPrefix(arg, "--operation-id=")
-			if !api.ValidIdentity(operationID) {
-				return orchestrateUsageFail(t("remote.launch_operation_id_invalid"))
-			}
-		case arg == "--message":
-			val, next, ok := takeValue(rest, i)
-			if !ok {
-				return orchestrateUsageFail(t("launch.missing_message_value"))
-			}
-			handover, handoverSet, i = val, true, next
-		case strings.HasPrefix(arg, "--message="):
-			handover, handoverSet = strings.TrimPrefix(arg, "--message="), true
-		case arg == "--message-file":
-			val, next, ok := takeValue(rest, i)
-			if !ok {
-				return orchestrateUsageFail(t("launch.missing_message_file_value"))
-			}
-			handoverFile, i = val, next
-		case strings.HasPrefix(arg, "--message-file="):
-			handoverFile = strings.TrimPrefix(arg, "--message-file=")
-		case strings.HasPrefix(arg, "-"):
-			return orchestrateUsageFail(t("board.unknown_option", arg))
-		default:
-			references = append(references, arg)
-		}
-	}
-	if len(references) == 0 {
-		return orchestrateUsageFail(t("orchestrate.requires_at_least_one_task"))
-	}
+		return nil
+	})
+	c.Flags().StringVar(&handover, "message", "", "")
+	c.Flags().StringVar(&handoverFile, "message-file", "", "")
+	return c
+}
+
+func runOrchestrate(request OrchestrateRequest, handover string, handoverSet bool, handoverFile string) int {
 	text, err := readTaskMessage(handover, handoverSet, handoverFile, "orchestrate")
 	if err != nil {
 		return fail(err)
@@ -410,9 +383,8 @@ func RunOrchestrateRemote(args []string) int {
 	if err := remote.RequireBinding(cfg); err != nil {
 		return fail(err)
 	}
-	result, err := StartOrchestrator(OrchestrateRequest{
-		OperationID: operationID, References: references, Handover: text, Agent: agent, Launcher: launcher,
-	})
+	request.Handover = text
+	result, err := StartOrchestrator(request)
 	for _, warning := range result.Warnings {
 		fmt.Fprint(os.Stderr, warning)
 	}
@@ -425,10 +397,4 @@ func RunOrchestrateRemote(args []string) int {
 		fmt.Println(t("orchestrate.started", result.Agent, result.Launcher, strconv.Itoa(len(result.Tasks)), result.Address))
 	}
 	return 0
-}
-
-func orchestrateUsageFail(message string) int {
-	fmt.Fprintln(os.Stderr, config.CommandUsage("orchestrate"))
-	fmt.Fprintln(os.Stderr, message)
-	return 2
 }

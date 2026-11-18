@@ -3,20 +3,19 @@ package notify
 import (
 	"encoding/json"
 	"fmt"
-	"io"
-	"math"
 	"os"
-	"strconv"
-	"strings"
+
+	"github.com/spf13/cobra"
 
 	"github.com/dualface/kander/internal/cli"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/launch"
 	"github.com/dualface/kander/internal/remote"
 )
 
 func init() {
-	cli.Commands["notify"] = cli.RequireService(RunNotifyRemote)
+	cli.Register(NewCommand)
 }
 
 func fail(err error) int {
@@ -24,94 +23,28 @@ func fail(err error) int {
 	return 1
 }
 
-func usage(w io.Writer) {
-	fmt.Fprintln(w, config.CommandUsage("notify"))
-}
-
-func usageFail(id string, args ...any) int {
-	usage(os.Stderr)
-	if id != "" {
-		fmt.Fprintln(os.Stderr, t(id, args...))
-	}
-	return 2
-}
-
-func takeValue(args []string, i int) (string, int, bool) {
-	if i+1 >= len(args) {
-		return "", i, false
-	}
-	return args[i+1], i + 1, true
-}
-
-// RunNotifyRemote implements kander notify against the server.
-func RunNotifyRemote(args []string) int {
-	for _, arg := range args {
-		if arg == "-h" || arg == "--help" {
-			usage(os.Stdout)
-			return 0
-		}
-	}
-	args, dispatchOptions, dispatchErr := launch.ParseDispatchOptions(args)
-	if dispatchErr != nil {
-		return fail(dispatchErr)
-	}
-	timeout := 120.0
+// NewCommand builds kander notify, which delivers a message to the executing agent of a card
+// against the server.
+func NewCommand() *cobra.Command {
 	var message, messageFile, pane string
-	var messageSet bool
-	var positional []string
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		switch {
-		case arg == "--message":
-			val, next, ok := takeValue(args, i)
-			if !ok {
-				return usageFail("launch.missing_message_value")
-			}
-			message, messageSet, i = val, true, next
-		case strings.HasPrefix(arg, "--message="):
-			message, messageSet = strings.TrimPrefix(arg, "--message="), true
-		case arg == "--message-file":
-			val, next, ok := takeValue(args, i)
-			if !ok {
-				return usageFail("launch.missing_message_file_value")
-			}
-			messageFile, i = val, next
-		case strings.HasPrefix(arg, "--message-file="):
-			messageFile = strings.TrimPrefix(arg, "--message-file=")
-		case arg == "--pane":
-			val, next, ok := takeValue(args, i)
-			if !ok {
-				return usageFail("notify.missing_pane_value")
-			}
-			pane, i = val, next
-		case strings.HasPrefix(arg, "--pane="):
-			pane = strings.TrimPrefix(arg, "--pane=")
-		case arg == "--timeout":
-			val, next, ok := takeValue(args, i)
-			if !ok {
-				return usageFail("launch.missing_timeout_value")
-			}
-			n, err := strconv.ParseFloat(val, 64)
-			if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
-				return fail(notifyError("notify.notify_timeout_must_be_a_finite_number_greater_than"))
-			}
-			timeout, i = n, next
-		case strings.HasPrefix(arg, "--timeout="):
-			n, err := strconv.ParseFloat(strings.TrimPrefix(arg, "--timeout="), 64)
-			if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
-				return fail(notifyError("notify.notify_timeout_must_be_a_finite_number_greater_than"))
-			}
-			timeout = n
-		default:
-			if strings.HasPrefix(arg, "-") {
-				return usageFail("board.unknown_option", arg)
-			}
-			positional = append(positional, arg)
-		}
+	var timeout float64
+	var dispatch launch.DispatchOptions
+	c := command.RequireProject(&cobra.Command{
+		Use:  "notify <task-id>",
+		Args: command.Args(1, 1),
+	})
+	c.RunE = func(_ *cobra.Command, args []string) error {
+		return command.Exit(run(args[0], message, messageFile, pane, c.Flags().Changed("message"), timeout, dispatch))
 	}
-	if len(positional) != 1 {
-		return usageFail("launch.task_id_is_required")
-	}
+	c.Flags().StringVar(&message, "message", "", "")
+	c.Flags().StringVar(&messageFile, "message-file", "", "")
+	c.Flags().StringVar(&pane, "pane", "", "")
+	command.Seconds(c.Flags(), &timeout, "timeout", 120, "", "notify.notify_timeout_must_be_a_finite_number_greater_than")
+	launch.AddDispatchFlags(c, &dispatch)
+	return c
+}
+
+func run(task, message, messageFile, pane string, messageSet bool, timeout float64, dispatch launch.DispatchOptions) int {
 	cfg, err := config.Load(false)
 	if err != nil {
 		return fail(err)
@@ -119,7 +52,7 @@ func RunNotifyRemote(args []string) int {
 	if err := remote.RequireBinding(cfg); err != nil {
 		return fail(err)
 	}
-	request, err := launch.NotifyRemote(positional[0], message, messageFile, pane, messageSet, timeout, dispatchOptions)
+	request, err := launch.NotifyRemote(task, message, messageFile, pane, messageSet, timeout, dispatch)
 	if err != nil {
 		return fail(err)
 	}

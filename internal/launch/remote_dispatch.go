@@ -17,10 +17,14 @@ import (
 	"github.com/dualface/kander/internal/remote"
 )
 
-func runRemoteDispatch(args []string, cfg *config.Config) int {
-	if len(args) == 0 {
-		return usageFail("dispatch", "")
-	}
+// dispatchArguments are the arguments of one kander dispatch subcommand.
+type dispatchArguments struct {
+	action   string
+	args     []string
+	decision string
+}
+
+func runRemoteDispatch(a dispatchArguments, cfg *config.Config) int {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fail(err)
@@ -34,11 +38,9 @@ func runRemoteDispatch(args []string, cfg *config.Config) int {
 	operationCtx, finishOperation := session.OperationContext(ctx)
 	defer finishOperation()
 	ctx = operationCtx
-	if args[0] == "show" {
-		if len(args) != 3 {
-			return usageFail("dispatch", "")
-		}
-		value, err := session.Project.Dispatch(ctx, args[1], args[2])
+	args := a.args
+	if a.action == "show" {
+		value, err := session.Project.Dispatch(ctx, args[0], args[1])
 		if err != nil {
 			return fail(err)
 		}
@@ -49,13 +51,10 @@ func runRemoteDispatch(args []string, cfg *config.Config) int {
 	}
 	var task string
 	var command api.DispatchCommand
-	action := args[0]
+	action := a.action
 	switch action {
 	case "prepare":
-		if len(args) != 2 {
-			return usageFail("dispatch", "")
-		}
-		data, err := os.ReadFile(args[1])
+		data, err := os.ReadFile(args[0])
 		if err != nil {
 			return fail(err)
 		}
@@ -72,19 +71,8 @@ func runRemoteDispatch(args []string, cfg *config.Config) int {
 		}
 		command.Input = &input
 	case "fail", "cancel":
-		decision := ""
-		for i := 1; i < len(args); i++ {
-			if args[i] == "--decision" && i+1 < len(args) {
-				decision = args[i+1]
-				args = append(append([]string{}, args[:i]...), args[i+2:]...)
-				break
-			}
-		}
-		if len(args) != 5 {
-			return usageFail("dispatch", "")
-		}
-		task, command.DispatchID, command.Reason, command.Decision = args[1], args[2], args[4], decision
-		command.Revision, err = strconv.ParseUint(args[3], 10, 64)
+		task, command.DispatchID, command.Reason, command.Decision = args[0], args[1], args[3], a.decision
+		command.Revision, err = strconv.ParseUint(args[2], 10, 64)
 		if err != nil {
 			return fail(err)
 		}
@@ -94,19 +82,13 @@ func runRemoteDispatch(args []string, cfg *config.Config) int {
 		}
 		action = "end"
 	case "settle":
-		if len(args) != 4 {
-			return usageFail("dispatch", "")
-		}
-		task, command.DispatchID = args[1], args[2]
-		command.Revision, err = strconv.ParseUint(args[3], 10, 64)
+		task, command.DispatchID = args[0], args[1]
+		command.Revision, err = strconv.ParseUint(args[2], 10, 64)
 		if err != nil {
 			return fail(err)
 		}
 	case "authorize-wrap-up":
-		if len(args) != 2 {
-			return usageFail("dispatch", "")
-		}
-		data, err := os.ReadFile(args[1])
+		data, err := os.ReadFile(args[0])
 		if err != nil {
 			return fail(err)
 		}
@@ -122,8 +104,6 @@ func runRemoteDispatch(args []string, cfg *config.Config) int {
 			return fail(err)
 		}
 		return 0
-	default:
-		return usageFail("dispatch", "")
 	}
 	current, err := session.Project.Show(ctx, task)
 	if err != nil {

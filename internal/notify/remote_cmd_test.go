@@ -12,6 +12,7 @@ import (
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/command/commandtest"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/server"
@@ -62,7 +63,7 @@ func TestRemoteNotifyCommandQueuesWithoutLocalBoardOrTerminal(t *testing.T) {
 	if _, err := project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{ClientID: "holder", ExecutionID: "notify-holder", Owner: "claude"}); err != nil {
 		t.Fatal(err)
 	}
-	if code := RunNotifyRemote([]string{"--message", "queued remotely", card.TaskID}); code != 0 {
+	if code := commandtest.Run(NewCommand(), "--message", "queued remotely", card.TaskID); code != 0 {
 		t.Fatalf("remote notify failed: %d", code)
 	}
 	requests, err := project.Requests(t.Context(), card.TaskID)

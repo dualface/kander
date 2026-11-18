@@ -83,7 +83,7 @@ func TestPostInstallOpensInterfaceWithoutBoard(t *testing.T) {
 	t.Cleanup(func() { runBoardTUI = origRun })
 
 	bindStartupService(t)
-	if code := Run(nil); code != 0 {
+	if code := Run(); code != 0 {
 		t.Fatalf("Run exit=%d", code)
 	}
 	if os.Getenv(install.EnvPostInstall) != "" {
@@ -138,7 +138,7 @@ func TestPostInstallFirstLaunchCreatesConfigInInstallLanguage(t *testing.T) {
 	t.Cleanup(func() { runBoardTUI = origRun })
 
 	bindStartupService(t)
-	if code := Run(nil); code != 0 {
+	if code := Run(); code != 0 {
 		t.Fatalf("Run exit=%d", code)
 	}
 	created, err := config.LoadScope(true)
@@ -202,7 +202,7 @@ func TestMissingConfigOpensInterfaceWithoutWizard(t *testing.T) {
 	t.Cleanup(func() { runBoardTUI = origRun })
 
 	bindStartupService(t)
-	if code := Run(nil); code != 0 {
+	if code := Run(); code != 0 {
 		t.Fatalf("Run exit=%d", code)
 	}
 	if _, err := os.Stat(cfgPath); err != nil {
@@ -274,7 +274,7 @@ func TestExistingConfigWithEmptyServiceShowsWelcome(t *testing.T) {
 	t.Cleanup(func() { runBoardTUI = origRun })
 
 	bindStartupService(t)
-	if code := Run(nil); code != 0 {
+	if code := Run(); code != 0 {
 		t.Fatalf("Run exit=%d", code)
 	}
 	if captured == nil {
@@ -352,7 +352,7 @@ func TestExistingConfigDoesNotOpenOptions(t *testing.T) {
 	t.Cleanup(func() { runBoardTUI = origRun })
 
 	bindStartupService(t)
-	if code := Run(nil); code != 0 {
+	if code := Run(); code != 0 {
 		t.Fatalf("Run exit=%d", code)
 	}
 	if captured == nil {
@@ -429,7 +429,7 @@ func TestStartupVersionGateStaleStampRunsDoctor(t *testing.T) {
 		t.Fatal(err)
 	}
 	bindStartupService(t)
-	if code := Run(nil); code != 0 {
+	if code := Run(); code != 0 {
 		t.Fatalf("Run exit=%d", code)
 	}
 	if !*doctorRan || !*ackRan {
@@ -451,7 +451,7 @@ func TestStartupVersionGateCurrentStampSkipsDoctor(t *testing.T) {
 		t.Fatal(err)
 	}
 	bindStartupService(t)
-	if code := Run(nil); code != 0 {
+	if code := Run(); code != 0 {
 		t.Fatalf("Run exit=%d", code)
 	}
 	if *doctorRan || *ackRan {
@@ -468,7 +468,7 @@ func TestUnconfiguredTUIDoesNotOpenLocalBoard(t *testing.T) {
 	old := runBoardTUI
 	runBoardTUI = func(*App) error { called = true; return nil }
 	t.Cleanup(func() { runBoardTUI = old })
-	if code := Run(nil); code == 0 || called {
+	if code := Run(); code == 0 || called {
 		t.Fatal("unconfigured TUI opened a board")
 	}
 	if _, err := os.Lstat(root); !os.IsNotExist(err) {

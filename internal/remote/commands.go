@@ -13,9 +13,12 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/spf13/cobra"
+
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 )
 
@@ -35,9 +38,10 @@ func (out commandOutput) Write(data []byte) (int, error) {
 var stdout io.Writer = commandOutput{}
 var stderr io.Writer = commandOutput{diagnostic: true}
 
-func fail(err error) int {
+// fail reports err and ends the command with exit status 1.
+func fail(err error) error {
 	fmt.Fprintf(stderr, "kander: %s\n", describe(err))
-	return 1
+	return command.Exit(1)
 }
 
 // describe renders a server error with the v1 localized text when the board
@@ -59,41 +63,6 @@ func describe(err error) string {
 	return err.Error()
 }
 
-func printUsage(cmd string) int {
-	fmt.Fprintln(stderr, config.CommandUsage(cmd))
-	return 2
-}
-
-func takeValue(args []string, name string) ([]string, string, bool, error) {
-	rest := make([]string, 0, len(args))
-	value, found := "", false
-	for i := 0; i < len(args); i++ {
-		if args[i] != name {
-			rest = append(rest, args[i])
-			continue
-		}
-		if i+1 >= len(args) {
-			return nil, "", true, errors.New(name)
-		}
-		value, found = args[i+1], true
-		i++
-	}
-	return rest, value, found, nil
-}
-
-func takeFlag(args []string, name string) ([]string, bool) {
-	rest := make([]string, 0, len(args))
-	found := false
-	for _, arg := range args {
-		if arg == name {
-			found = true
-			continue
-		}
-		rest = append(rest, arg)
-	}
-	return rest, found
-}
-
 func open(ctx context.Context) (*Session, *config.Config, error) {
 	cfg, err := config.Load(false)
 	if err != nil {
@@ -112,21 +81,32 @@ func location(s *Session, task string) string {
 	return "kander-server:" + s.Info.Name + "/" + task
 }
 
-// RunList implements kander list in server mode.
-func RunList(args []string) int { return RunListWithAgentStatus(args, nil) }
+// NewListCommand builds kander list. observe supplies this host's terminal observer for
+// --agent-status; the board package cannot import it.
+func NewListCommand(observe board.AgentStatusFunc) *cobra.Command {
+	var machine, mobile, agentStatus bool
+	c := &cobra.Command{
+		Use:     "list [state]",
+		Aliases: []string{"ls"},
+		Args:    command.Args(0, 1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			state := ""
+			if len(args) == 1 {
+				state = args[0]
+			}
+			return runList(state, machine, agentStatus, observe)
+		},
+	}
+	c.PreRunE = func(*cobra.Command, []string) error {
+		return command.First(command.Exclusive(c, "mobile", "json"), command.Needs(c, "agent-status", "json"))
+	}
+	c.Flags().BoolVar(&machine, "json", false, "")
+	c.Flags().BoolVar(&mobile, "mobile", false, "")
+	c.Flags().BoolVar(&agentStatus, "agent-status", false, "")
+	return c
+}
 
-// RunListWithAgentStatus supplies this host's terminal observer to a REST list.
-func RunListWithAgentStatus(args []string, observe board.AgentStatusFunc) int {
-	args, machine := takeFlag(args, "--json")
-	args, _ = takeFlag(args, "--mobile")
-	args, agentStatus := takeFlag(args, "--agent-status")
-	if len(args) > 1 || len(args) == 1 && strings.HasPrefix(args[0], "-") {
-		return printUsage("list")
-	}
-	state := ""
-	if len(args) == 1 {
-		state = args[0]
-	}
+func runList(state string, machine, agentStatus bool, observe board.AgentStatusFunc) error {
 	ctx, cancel := commandContext()
 	defer cancel()
 	s, _, err := open(ctx)
@@ -159,7 +139,7 @@ func RunListWithAgentStatus(args []string, observe board.AgentStatusFunc) int {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", t.State, t.TaskID, t.Title, cmpOr(owner, "-"))
 	}
 	w.Flush()
-	return 0
+	return nil
 }
 
 func cmpOr(value, fallback string) string {
@@ -169,29 +149,30 @@ func cmpOr(value, fallback string) string {
 	return value
 }
 
-func encode(value any) int {
+func encode(value any) error {
 	if err := json.NewEncoder(stdout).Encode(value); err != nil {
 		return fail(err)
 	}
-	return 0
+	return nil
 }
 
-// RunShow implements kander show in server mode.
-func RunShow(args []string) int {
-	args, machine := takeFlag(args, "--json")
-	once := 0
-	for _, arg := range args {
-		if arg == "--document" {
-			once++
-		}
+// NewShowCommand builds kander show.
+func NewShowCommand() *cobra.Command {
+	var machine bool
+	var document string
+	c := &cobra.Command{
+		Use:  "show <task-id>",
+		Args: command.Args(1, 1),
 	}
-	args, document, withDocument, err := takeValue(args, "--document")
-	if err != nil || once > 1 {
-		return printUsage("show")
+	c.RunE = func(_ *cobra.Command, args []string) error {
+		return runShow(args[0], document, c.Flags().Changed("document"), machine)
 	}
-	if len(args) != 1 || strings.HasPrefix(args[0], "-") {
-		return printUsage("show")
-	}
+	c.Flags().BoolVar(&machine, "json", false, "")
+	command.Once(c.Flags(), &document, "document", "")
+	return c
+}
+
+func runShow(task, document string, withDocument, machine bool) error {
 	ctx, cancel := commandContext()
 	defer cancel()
 	s, _, err := open(ctx)
@@ -202,7 +183,7 @@ func RunShow(args []string) int {
 	defer finishOperation()
 	ctx = operationCtx
 	if withDocument {
-		d, err := s.Project.Document(ctx, args[0], document)
+		d, err := s.Project.Document(ctx, task, document)
 		if err != nil {
 			return fail(err)
 		}
@@ -210,9 +191,9 @@ func RunShow(args []string) int {
 			return encode(d)
 		}
 		io.WriteString(stdout, d.Text)
-		return 0
+		return nil
 	}
-	t, err := s.Project.Show(ctx, args[0])
+	t, err := s.Project.Show(ctx, task)
 	if err != nil {
 		return fail(err)
 	}
@@ -225,24 +206,26 @@ func RunShow(args []string) int {
 	}
 	fmt.Fprintln(stdout)
 	io.WriteString(stdout, t.Text)
-	return 0
+	return nil
 }
 
-// RunNew implements kander new in server mode.
-func RunNew(args []string) int {
-	args, large := takeFlag(args, "--large")
-	args, language, languageGiven, err := takeValue(args, "--language")
-	if err != nil {
-		return printUsage("new")
+// NewNewCommand builds kander new.
+func NewNewCommand() *cobra.Command {
+	var large bool
+	var language string
+	c := &cobra.Command{
+		Use:  "new <feature|bug|chore|research> <slug> <title...>",
+		Args: command.Args(3, -1),
 	}
-	for _, arg := range args {
-		if strings.HasPrefix(arg, "-") {
-			return printUsage("new")
-		}
+	c.RunE = func(_ *cobra.Command, args []string) error {
+		return runNew(args[0], args[1], strings.Join(args[2:], " "), large, language, c.Flags().Changed("language"))
 	}
-	if len(args) < 3 {
-		return printUsage("new")
-	}
+	c.Flags().BoolVar(&large, "large", false, "")
+	c.Flags().StringVar(&language, "language", "", "")
+	return c
+}
+
+func runNew(kind, slug, title string, large bool, language string, languageGiven bool) error {
 	ctx, cancel := commandContext()
 	defer cancel()
 	s, cfg, err := open(ctx)
@@ -257,16 +240,16 @@ func RunNew(args []string) int {
 	}
 	if language, err = config.ValidateAgentLanguage(language); err != nil {
 		if languageGiven {
-			return printUsage("new")
+			return command.UsageText(err.Error())
 		}
 		return fail(err)
 	}
-	t, err := s.Project.NewTask(ctx, client.NewKey(), api.NewTask{Type: args[0], Slug: args[1], Title: strings.Join(args[2:], " "), Language: language, Large: large})
+	t, err := s.Project.NewTask(ctx, client.NewKey(), api.NewTask{Type: kind, Slug: slug, Title: title, Language: language, Large: large})
 	if err != nil {
 		return fail(err)
 	}
 	fmt.Fprintln(stdout, location(s, t.TaskID))
-	return 0
+	return nil
 }
 
 // claimFor returns the credential this process presents for task, or nil.
@@ -278,32 +261,45 @@ func claimFor(s *Session, task string) (*client.Claim, error) {
 	return c.Claim(), nil
 }
 
-// RunUpdate implements kander update in server mode.
-func RunUpdate(args []string) int {
-	values := map[string]string{}
-	for _, name := range []string{"--document", "--file", "--expect-revision", "--contract-decision-file", "--dispatch-id", "--execution-epoch"} {
-		var err error
-		if args, values[name], _, err = takeValue(args, name); err != nil {
-			return printUsage("update")
-		}
+// NewUpdateCommand builds kander update.
+func NewUpdateCommand() *cobra.Command {
+	var o updateOptions
+	c := &cobra.Command{
+		Use:  "update <task-id>",
+		Args: command.Args(1, 1),
+		PreRunE: func(c *cobra.Command, _ []string) error {
+			return command.First(
+				command.Required(c, "document", "file", "expect-revision"),
+				command.Together(c, "dispatch-id", "execution-epoch"),
+			)
+		},
+		RunE: func(_ *cobra.Command, args []string) error { return runUpdate(args[0], o) },
 	}
-	if len(args) != 1 || values["--document"] == "" || values["--file"] == "" || values["--expect-revision"] == "" {
-		return printUsage("update")
-	}
-	authorization, authErr := executionAuthorization(values)
+	command.Once(c.Flags(), &o.document, "document", "")
+	command.Once(c.Flags(), &o.file, "file", "")
+	c.Flags().Uint64Var(&o.revision, "expect-revision", 0, "")
+	command.Once(c.Flags(), &o.decisionFile, "contract-decision-file", "")
+	command.Once(c.Flags(), &o.dispatchID, "dispatch-id", "")
+	c.Flags().Uint64Var(&o.epoch, "execution-epoch", 0, "")
+	return c
+}
+
+type updateOptions struct {
+	document, file, decisionFile, dispatchID string
+	revision, epoch                          uint64
+}
+
+func runUpdate(task string, o updateOptions) error {
+	authorization, authErr := executionAuthorization(o.dispatchID, o.epoch)
 	if authErr != nil {
-		return printUsage("update")
+		return command.UsageText(authErr.Error())
 	}
-	revision, err := strconv.ParseUint(values["--expect-revision"], 10, 64)
-	if err != nil {
-		return printUsage("update")
-	}
-	text, err := readUTF8(values["--file"])
+	text, err := readUTF8(o.file)
 	if err != nil {
 		return fail(err)
 	}
 	decision := ""
-	if path := values["--contract-decision-file"]; path != "" {
+	if path := o.decisionFile; path != "" {
 		if decision, err = readUTF8(path); err != nil {
 			return fail(err)
 		}
@@ -317,16 +313,16 @@ func RunUpdate(args []string) int {
 	operationCtx, finishOperation := s.OperationContext(ctx)
 	defer finishOperation()
 	ctx = operationCtx
-	claim, err := claimFor(s, args[0])
+	claim, err := claimFor(s, task)
 	if err != nil {
 		return fail(err)
 	}
-	t, err := s.Project.PutDocument(ctx, client.NewKey(), args[0], api.Document{Path: values["--document"], Text: text, ExpectedRevision: revision, ContractDecision: decision, Authorization: authorization}, claim)
+	t, err := s.Project.PutDocument(ctx, client.NewKey(), task, api.Document{Path: o.document, Text: text, ExpectedRevision: o.revision, ContractDecision: decision, Authorization: authorization}, claim)
 	if err != nil {
 		return fail(err)
 	}
 	fmt.Fprintln(stdout, t.Revision)
-	return 0
+	return nil
 }
 
 func readUTF8(path string) (string, error) {
@@ -340,22 +336,47 @@ func readUTF8(path string) (string, error) {
 	return string(data), nil
 }
 
-// RunMove implements kander move in server mode. A move into working with
-// --owner is a claim; the grant is stored as this host's credential.
-func RunMove(args []string) int {
-	values := map[string]string{}
-	for _, name := range []string{"--owner", "--result", "--reason", "--decision", "--duplicate-of", "--expect-revision", "--dispatch-id", "--execution-epoch", "--delivery-commit", "--disposition"} {
-		var err error
-		if args, values[name], _, err = takeValue(args, name); err != nil {
-			return printUsage("move")
-		}
+// NewMoveCommand builds kander move. A move into working with --owner is a claim; the grant
+// is stored as this host's credential.
+func NewMoveCommand() *cobra.Command {
+	var o moveOptions
+	c := &cobra.Command{
+		Use:  "move <task-id> <state>",
+		Args: command.Args(2, 2),
+		PreRunE: func(c *cobra.Command, _ []string) error {
+			return command.Together(c, "dispatch-id", "execution-epoch")
+		},
 	}
-	if len(args) != 2 || strings.HasPrefix(args[0], "-") || strings.HasPrefix(args[1], "-") {
-		return printUsage("move")
+	c.RunE = func(_ *cobra.Command, args []string) error { return runMove(args[0], args[1], o) }
+	flags := c.Flags()
+	flags.StringVar(&o.owner, "owner", "", "")
+	flags.StringVar(&o.result, "result", "", "")
+	flags.StringVar(&o.reason, "reason", "", "")
+	flags.StringVar(&o.decision, "decision", "", "")
+	flags.StringVar(&o.duplicateOf, "duplicate-of", "", "")
+	flags.Uint64Var(&o.revision, "expect-revision", 0, "")
+	command.Once(flags, &o.dispatchID, "dispatch-id", "")
+	flags.Uint64Var(&o.epoch, "execution-epoch", 0, "")
+	flags.StringVar(&o.deliveryCommit, "delivery-commit", "", "")
+	flags.StringVar(&o.disposition, "disposition", "", "")
+	o.cmd = c
+	return c
+}
+
+type moveOptions struct {
+	cmd                                                      *cobra.Command
+	owner, result, reason, decision, duplicateOf, dispatchID string
+	deliveryCommit, disposition                              string
+	revision, epoch                                          uint64
+}
+
+func runMove(task, state string, o moveOptions) error {
+	authorization, authErr := executionAuthorization(o.dispatchID, o.epoch)
+	if authErr != nil {
+		return command.UsageText(authErr.Error())
 	}
-	authorization, authErr := executionAuthorization(values)
-	if authErr != nil || authorization.DispatchID != "" && values["--owner"] != "" {
-		return printUsage("move")
+	if authorization.DispatchID != "" && o.owner != "" {
+		return command.Usage("cli.error_flags_exclusive", "--dispatch-id, --owner")
 	}
 
 	ctx, cancel := commandContext()
@@ -367,23 +388,19 @@ func RunMove(args []string) int {
 	operationCtx, finishOperation := s.OperationContext(ctx)
 	defer finishOperation()
 	ctx = operationCtx
-	task, state := args[0], args[1]
-	if state == "working" && values["--owner"] != "" {
-		return claim(ctx, s, task, values["--owner"], values["--decision"])
+	if state == "working" && o.owner != "" {
+		return claim(ctx, s, task, o.owner, o.decision)
 	}
-	req := api.Move{Authorization: authorization, DeliveryCommit: values["--delivery-commit"], State: state, Result: values["--result"], Reason: values["--reason"], Decision: values["--decision"], DuplicateOf: values["--duplicate-of"]}
-	if path := values["--disposition"]; path != "" {
+	req := api.Move{Authorization: authorization, DeliveryCommit: o.deliveryCommit, State: state, Result: o.result, Reason: o.reason, Decision: o.decision, DuplicateOf: o.duplicateOf}
+	if path := o.disposition; path != "" {
 		id, err := board.NormalizeTaskID(task)
 		if err != nil {
 			return fail(err)
 		}
 		req.Disposition = &board.ArtifactReference{TaskID: id, Path: path}
 	}
-	if raw := values["--expect-revision"]; raw != "" {
-		v, err := strconv.ParseUint(raw, 10, 64)
-		if err != nil {
-			return printUsage("move")
-		}
+	if o.cmd.Flags().Changed("expect-revision") {
+		v := o.revision
 		req.ExpectedRevision = &v
 	}
 	before, err := s.Project.Show(ctx, task)
@@ -406,13 +423,10 @@ func RunMove(args []string) int {
 		if t.MoveReceipt == nil || t.MoveReceipt.Dispatch == nil {
 			return fail(&api.Error{Code: api.CodeEvidenceIncomplete, Message: config.Text("remote.dispatch_receipt_missing")})
 		}
-		if err := json.NewEncoder(stdout).Encode(t.MoveReceipt); err != nil {
-			return fail(err)
-		}
-		return 0
+		return encode(t.MoveReceipt)
 	}
 	fmt.Fprintln(stdout, location(s, t.TaskID))
-	return 0
+	return nil
 }
 
 // reclaimRefusal refuses a takeover by the execution that already owns the
@@ -430,7 +444,7 @@ func reclaimRefusal(current *api.ClaimView, execution string) error {
 }
 
 // claim takes a todo task, or with a decision takes over a lost claim.
-func claim(ctx context.Context, s *Session, task, owner, decision string) int {
+func claim(ctx context.Context, s *Session, task, owner, decision string) error {
 	execution := os.Getenv(EnvExecutionID)
 	if execution == "" {
 		execution = NewExecutionID()
@@ -481,14 +495,19 @@ func claim(ctx context.Context, s *Session, task, owner, decision string) int {
 	}
 	fmt.Fprintln(stdout, location(s, grant.Task.TaskID))
 	fmt.Fprintln(stderr, config.Text("remote.claimed", grant.Task.TaskID, grant.Claim.Generation, execution))
-	return 0
+	return nil
 }
 
-// RunPick implements kander pick in server mode.
-func RunPick(args []string) int {
-	if len(args) > 1 || len(args) == 1 && strings.HasPrefix(args[0], "-") {
-		return printUsage("pick")
+// NewPickCommand builds kander pick.
+func NewPickCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:  "pick [task-id]",
+		Args: command.Args(0, 1),
+		RunE: func(_ *cobra.Command, args []string) error { return runPick(args) },
 	}
+}
+
+func runPick(args []string) error {
 	ctx, cancel := commandContext()
 	defer cancel()
 	session, _, err := open(ctx)
@@ -515,16 +534,14 @@ func RunPick(args []string) int {
 		return fail(err)
 	}
 	fmt.Fprintln(stdout, location(session, moved.TaskID))
-	return 0
+	return nil
 }
 
-func executionAuthorization(values map[string]string) (board.ExecutionAuthorization, error) {
-	id, raw := values["--dispatch-id"], values["--execution-epoch"]
-	if id == "" && raw == "" {
+func executionAuthorization(id string, epoch uint64) (board.ExecutionAuthorization, error) {
+	if id == "" && epoch == 0 {
 		return board.ExecutionAuthorization{}, nil
 	}
-	epoch, err := strconv.ParseUint(raw, 10, 64)
-	if err != nil || id == "" || epoch == 0 || !api.ValidIdentity(id) {
+	if id == "" || epoch == 0 || !api.ValidIdentity(id) {
 		return board.ExecutionAuthorization{}, errors.New("invalid dispatch authorization")
 	}
 	return board.ExecutionAuthorization{DispatchID: id, Epoch: epoch}, nil

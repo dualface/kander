@@ -6,57 +6,63 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
-	"strings"
 	"unicode/utf8"
+
+	"github.com/spf13/cobra"
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command"
 )
+
+type resultOptions struct {
+	repository, card, agent, launcher, action, file, operationID string
+	hasRepo                                                      bool
+	number                                                       int
+}
+
+func newResultCommand(factory func() IssueProvider, stdout, stderr io.Writer) *cobra.Command {
+	options := resultOptions{action: "start"}
+	c := &cobra.Command{Use: "result NUMBER", Args: numberArgs}
+	c.PreRunE = func(*cobra.Command, []string) error {
+		if err := command.Required(c, "card"); err != nil {
+			return err
+		}
+		if c.Flags().Changed("operation-id") && options.action != "start" {
+			return command.Usage("cli.error_flag_needs", "--operation-id", "--action start")
+		}
+		return nil
+	}
+	c.RunE = func(_ *cobra.Command, args []string) error {
+		options.hasRepo, options.number = c.Flags().Changed("repo"), issueNumber(args)
+		return command.Exit(runResult(factory, options, stdout, stderr))
+	}
+	addRepoFlag(c, &options.repository)
+	command.Checked(c.Flags(), &options.card, "card", "", nonBlank("card"))
+	command.Checked(c.Flags(), &options.agent, "agent", "", nonBlank("agent"))
+	command.Checked(c.Flags(), &options.launcher, "launcher", "", nonBlank("launcher"))
+	command.Checked(c.Flags(), &options.action, "action", "", func(value string) error {
+		if value != "start" && value != "inspect" && value != "apply" && value != "decide" {
+			return command.Usage("issue.error_invalid_value", "--action", value)
+		}
+		return nil
+	})
+	command.Checked(c.Flags(), &options.file, "file", "", nonBlank("file"))
+	command.Checked(c.Flags(), &options.operationID, "operation-id", "", func(value string) error {
+		if !api.ValidIdentity(value) {
+			return command.Usage("issue.error_invalid_value", "--operation-id", value)
+		}
+		return nil
+	})
+	return c
+}
 
 // runResult exposes the controlled inspection, assessment and decision protocol.
 // No raw gh write command is part of the agent workflow.
-func runResult(factory func() IssueProvider, args []string, stdout, stderr io.Writer) int {
-	values := map[string]string{"--action": "start"}
-	number := 0
-	for i := 0; i < len(args); i++ {
-		if args[i] == "--help" || args[i] == "-h" {
-			fmt.Fprintln(stdout, usageText())
-			return 0
-		}
-		name := strings.SplitN(args[i], "=", 2)[0]
-		switch name {
-		case "--repo", "--card", "--agent", "--launcher", "--action", "--file", "--operation-id":
-			value, next, ok := optionValue(args, i, name, stderr)
-			if !ok {
-				return 2
-			}
-			i = next
-			values[name] = value
-		default:
-			parsed, err := strconv.Atoi(args[i])
-			if err != nil || parsed <= 0 || number != 0 {
-				fmt.Fprintln(stderr, usageText())
-				return 2
-			}
-			number = parsed
-		}
-	}
-	if number == 0 || values["--card"] == "" {
-		fmt.Fprintln(stderr, usageText())
-		return 2
-	}
-	action := values["--action"]
-	if action != "start" && action != "inspect" && action != "apply" && action != "decide" {
-		fmt.Fprintln(stderr, usageText())
-		return 2
-	}
-	if operation := values["--operation-id"]; operation != "" && (action != "start" || !api.ValidIdentity(operation)) {
-		fmt.Fprintln(stderr, usageText())
-		return 2
-	}
+func runResult(factory func() IssueProvider, options resultOptions, stdout, stderr io.Writer) int {
+	action, number := options.action, options.number
 	provider := factory()
-	repository, code := resolveRepository(provider, values["--repo"], values["--repo"] != "", stderr)
+	repository, code := resolveRepository(provider, options.repository, options.hasRepo, stderr)
 	if code != 0 {
 		return code
 	}
@@ -76,13 +82,13 @@ func runResult(factory func() IssueProvider, args []string, stdout, stderr io.Wr
 	var out any
 	switch action {
 	case "start":
-		out, err = StartResult(ctx, writer, root, repository, number, TriageOptions{OperationID: values["--operation-id"], CardID: values["--card"], Agent: values["--agent"], Launcher: values["--launcher"]})
+		out, err = StartResult(ctx, writer, root, repository, number, TriageOptions{OperationID: options.operationID, CardID: options.card, Agent: options.agent, Launcher: options.launcher})
 	case "inspect":
-		out, err = InspectResult(ctx, writer, root, repository, number, values["--card"])
+		out, err = InspectResult(ctx, writer, root, repository, number, options.card)
 	case "apply", "decide":
 		var data []byte
 		var file *os.File
-		file, err = os.Open(values["--file"])
+		file, err = os.Open(options.file)
 		if err == nil {
 			data, err = io.ReadAll(io.LimitReader(file, 65537))
 			err = errors.Join(err, file.Close())
@@ -94,13 +100,13 @@ func runResult(factory func() IssueProvider, args []string, stdout, stderr io.Wr
 				var proposal ResultProposal
 				err = board.DecodeReviewJSON(data, &proposal)
 				if err == nil {
-					out, err = ApplyResult(ctx, writer, root, repository, number, values["--card"], proposal)
+					out, err = ApplyResult(ctx, writer, root, repository, number, options.card, proposal)
 				}
 			} else {
 				var decision ResultDecision
 				err = board.DecodeReviewJSON(data, &decision)
 				if err == nil {
-					out, err = DecideResult(ctx, writer, root, repository, number, values["--card"], decision)
+					out, err = DecideResult(ctx, writer, root, repository, number, options.card, decision)
 				}
 			}
 		}

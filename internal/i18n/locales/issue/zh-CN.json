@@ -1,5 +1,4 @@
 {
-  "issue.error_unknown_argument": "意外的参数: {{.V0}}",
   "issue.error_missing_value": "选项 {{.V0}} 需要一个值",
   "issue.error_invalid_repository": "无效的仓库引用 \"{{.V0}}\"：应为 [HOST/]OWNER/REPO",
   "issue.error_not_repository": "不是 Git 工作树: {{.V0}}",

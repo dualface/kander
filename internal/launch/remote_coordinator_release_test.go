@@ -16,7 +16,6 @@ import (
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/cli"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/server"
@@ -201,9 +200,9 @@ func TestEndExecutionBelongsToReleaseOnly(t *testing.T) {
 	}
 }
 
-// The public entrance checks the project binding before it runs the command.
-// The refusal of a malformed or unconfirmed command comes first, so a
-// coordinator that has no project binding still learns the new syntax.
+// The command tree checks the arguments before the project binding. The refusal of a malformed
+// or unconfirmed command comes first, so a coordinator that has no project binding still learns
+// the confirmed syntax.
 func TestCoordinatorArgumentRefusalPrecedesTheBindingCheck(t *testing.T) {
 	t.Setenv(config.EnvLang, "en")
 	t.Setenv(config.EnvLangCLI, "1")
@@ -212,7 +211,7 @@ func TestCoordinatorArgumentRefusalPrecedesTheBindingCheck(t *testing.T) {
 	if _, err := config.Save(config.DefaultConfig()); err != nil {
 		t.Fatal(err)
 	}
-	run := cli.Commands["coordinator"]
+	run := RunCoordinatorRemote
 	status, _, diagnostics := captureBoth(t, func() int { return run([]string{"release", "/tmp/release.json"}) })
 	if status != 2 || !slices.Contains(strings.Split(diagnostics, "\n"), releaseSyntax) {
 		t.Fatalf("status %d: %q", status, diagnostics)

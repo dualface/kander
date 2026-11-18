@@ -163,7 +163,7 @@ func TestRemoteCheckReadsServiceEvidenceWithoutLocalKanban(t *testing.T) {
 		t.Fatal(err)
 	}
 	task := subscriptionRemoteCard(t, executor, "check-remote", "")
-	code, out, stderr := capture(t, func() int { return RunCheckRemote([]string{task.TaskID}) })
+	code, out, stderr := capture(t, func() int { return RunCheckRemote([]string{task.TaskID}, false) })
 	if code != 0 {
 		t.Fatalf("remote check: %d %s %s", code, out, stderr)
 	}

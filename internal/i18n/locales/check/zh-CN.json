@@ -8,9 +8,7 @@
   "check.commit_target": "target: {{.V0}}",
   "check.crossed_limit": "跨越 1000 行上限的文件:",
   "check.diff_check": "diff-check: {{.V0}}",
-  "check.duplicate_flag": "重复的选项: {{.V0}}",
   "check.error": "错误 {{.V0}}: {{.V1}}",
-  "check.flag_does_not_take_value": "{{.V0}} 不接受值",
   "check.git_unavailable": "PATH 上找不到 git",
   "check.internal": "内部检查错误",
   "check.invalid_ref": "无法将 ref 解析为 commit",
@@ -25,7 +23,5 @@
   "check.overlap_paths": "重叠路径:",
   "check.parse_tree_entry": "git tree entry 输出无效",
   "check.parse_truncated": "git name-status 输出被截断",
-  "check.status": "{{.V0}} 检查: {{.V1}}",
-  "check.unexpected_argument": "意外参数: {{.V0}}",
-  "check.unknown_option": "未知选项: {{.V0}}"
+  "check.status": "{{.V0}} 检查: {{.V1}}"
 }

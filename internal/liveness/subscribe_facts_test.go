@@ -359,11 +359,11 @@ func TestSubscribeRegroupWithinWatchedUnionRequiresReconciliation(t *testing.T) 
 }
 
 func TestSubscribeWatchOnlyMonitorsCardsOutsideTaskGroups(t *testing.T) {
-	if opts, errText := parseSubscribeArgs([]string{"--heartbeat", "600", "--watch", "a-task", "b-task"}); errText != "" || opts.Group != "" || len(opts.Members) != 0 || len(opts.Watch) != 2 {
+	if opts, errText := parseSubscribeArgs([]string{"--heartbeat", "600", "--watch", "a-task", "--watch", "b-task"}); errText != "" || opts.Group != "" || len(opts.Members) != 0 || len(opts.Watch) != 2 {
 		t.Fatalf("watch-only args: opts=%+v err=%q", opts, errText)
 	}
 	for _, args := range [][]string{{}, {"20260913-only-group"}, {"--refresh", "1"}} {
-		if _, errText := parseSubscribeArgs(args); errText != "usage" {
+		if _, errText := parseSubscribeArgs(args); errText == "" {
 			t.Fatalf("args %v: err=%q", args, errText)
 		}
 	}

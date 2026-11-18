@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
@@ -41,9 +40,6 @@ func runRemoteCoordinator(ctx context.Context, cfg *config.Config, args []string
 			return fail(err)
 		}
 		return 0
-	}
-	if !filepath.IsAbs(args[1]) {
-		return coordinatorUsageFail()
 	}
 	data, err := os.ReadFile(args[1])
 	if err != nil {
@@ -138,8 +134,6 @@ func runRemoteCoordinator(ctx context.Context, cfg *config.Config, args []string
 		}
 		fmt.Fprintln(os.Stderr, config.Text("remote.coordinator_release_final", value.Claim.ExecutionID, request.GroupID, value.Claim.Generation))
 		return 0
-	default:
-		return coordinatorUsageFail()
 	}
 	if err := json.NewEncoder(os.Stdout).Encode(checkpoint); err != nil {
 		return fail(err)

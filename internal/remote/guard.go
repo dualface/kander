@@ -6,15 +6,23 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/spf13/cobra"
+
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 )
 
-// RunGuardWrite is an advisory guard for client-side writes. Formal task
-// documents are published through REST; KANBAN_DIR never selects a write root.
-func RunGuardWrite(args []string) int {
-	if len(args) != 1 || strings.HasPrefix(args[0], "-") {
-		return printUsage("guard-write")
+// NewGuardWriteCommand builds kander guard-write, an advisory guard for client-side writes.
+// Formal task documents are published through REST; KANBAN_DIR never selects a write root.
+func NewGuardWriteCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:  "guard-write <path>",
+		Args: command.Args(1, 1),
+		RunE: func(_ *cobra.Command, args []string) error { return runGuardWrite(args[0]) },
 	}
+}
+
+func runGuardWrite(target string) error {
 	ctx, cancel := commandContext()
 	defer cancel()
 	session, _, err := open(ctx)
@@ -24,7 +32,7 @@ func RunGuardWrite(args []string) int {
 	operationCtx, finishOperation := session.OperationContext(ctx)
 	defer finishOperation()
 	ctx = operationCtx
-	path, err := filepath.Abs(args[0])
+	path, err := filepath.Abs(target)
 	if err != nil {
 		return fail(err)
 	}
@@ -50,11 +58,11 @@ func RunGuardWrite(args []string) int {
 				if err := session.checkExecution(ctx, credential); err != nil {
 					return fail(err)
 				}
-				return 0
+				return nil
 			}
 		}
 		// Board-free sessions have no task credential. This permits local code
 		// inspection only; every formal mutation still requires service authority.
 	}
-	return 0
+	return nil
 }

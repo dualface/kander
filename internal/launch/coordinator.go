@@ -8,10 +8,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"time"
 
+	"github.com/spf13/cobra"
+
+	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/review"
@@ -92,46 +95,67 @@ func finishReconcile(c board.CoordinatorCheckpoint, err error) int {
 	return status
 }
 
-// releaseSyntax is the confirmed form of the release command. It is not part
-// of the localized text, so a translation cannot change the syntax.
+// releaseSyntax is the confirmed form of the release command. It is not part of the localized
+// text, so a translation cannot change the syntax, and it does not come from the installed
+// contract, which stays old until the rules are refreshed.
 const releaseSyntax = "kander coordinator release --end-execution <absolute-release.json>"
 
-func coordinatorUsageFail() int {
-	fmt.Fprintln(os.Stderr, config.CommandUsage("coordinator"))
-	return 2
+// NewCoordinatorCommand builds kander coordinator: checkpoint operations and explicitly
+// requested, leased Git integration against the server. Subscription events remain read-only
+// wakeups.
+func NewCoordinatorCommand() *cobra.Command {
+	sub := func(action, argument string, valid func(string) error) *cobra.Command {
+		return command.RequireProject(&cobra.Command{
+			Use: action + " " + argument,
+			Args: func(c *cobra.Command, args []string) error {
+				if err := command.Args(1, 1)(c, args); err != nil {
+					return err
+				}
+				return valid(args[0])
+			},
+			RunE: func(_ *cobra.Command, args []string) error { return command.Exit(runCoordinator(action, args[0])) },
+		})
+	}
+	anything := func(string) error { return nil }
+	absolute := func(path string) error {
+		if !filepath.IsAbs(path) {
+			return command.Usage("cli.error_absolute_path", path)
+		}
+		return nil
+	}
+	// Release ends the calling execution for good, so it takes an explicit confirmation. The
+	// flag stands directly after the subcommand and before the path; a flag after the path is
+	// an extra argument. Without it nothing runs and no request is sent, and the message spells
+	// the confirmed syntax for a coordinator that still reads an older copy of the rules. The
+	// check is an argument check, so it runs before the project binding.
+	var endExecution bool
+	release := sub("release", "<release.json>", func(path string) error {
+		if !endExecution {
+			return command.UsageText(config.Text("remote.coordinator_release_needs_end_execution") + "\n" + releaseSyntax)
+		}
+		return absolute(path)
+	})
+	release.Flags().BoolVar(&endExecution, "end-execution", false, "")
+	release.Flags().SetInterspersed(false)
+	return command.Group("coordinator",
+		sub("show", "<group-id>", anything),
+		sub("claim", "<claim.json>", absolute),
+		sub("reconcile", "<observations.json>", absolute),
+		sub("recover", "<request.json>", absolute),
+		sub("remove-member", "<request.json>", absolute),
+		release,
+		sub("integrate", "<integration.json>", absolute),
+		sub("integration-show", "<target-ref>", func(ref string) error {
+			if !api.IntegrationTarget(ref) {
+				return command.Usage("cli.error_invalid_value", "<target-ref>", ref)
+			}
+			return nil
+		}),
+	)
 }
 
-// coordinatorArgs checks the shape of the arguments before any configuration is
-// read, and returns the arguments without the release confirmation. Release
-// ends the calling execution for good, so it takes an explicit confirmation.
-// Without it nothing runs and no request is sent, and the message spells the
-// new syntax for a coordinator that still reads an older copy of the rules.
-// The binding check of the public entrance runs this first, so a refusal is
-// not hidden behind a configuration error.
-func coordinatorArgs(args []string) (rest []string, status int, refused bool) {
-	confirmed := false
-	if len(args) == 3 && args[0] == "release" && args[1] == "--end-execution" {
-		confirmed, args = true, []string{args[0], args[2]}
-	}
-	if len(args) == 2 && args[0] == "release" && !confirmed && args[1] != "--end-execution" {
-		fmt.Fprintln(os.Stderr, config.Text("remote.coordinator_release_needs_end_execution"))
-		fmt.Fprintln(os.Stderr, releaseSyntax)
-		return nil, 2, true
-	}
-	if len(args) != 2 || slices.Contains(args, "--end-execution") {
-		return nil, coordinatorUsageFail(), true
-	}
-	return args, 0, false
-}
-
-// RunCoordinatorRemote runs checkpoint operations and explicitly requested,
-// leased Git integration against the server. Subscription events remain
-// read-only wakeups.
-func RunCoordinatorRemote(args []string) int {
-	args, status, refused := coordinatorArgs(args)
-	if refused {
-		return status
-	}
+func runCoordinator(action, argument string) int {
+	args := []string{action, argument}
 	cfg, err := config.Load(false)
 	if err != nil {
 		return fail(err)
@@ -139,7 +163,7 @@ func RunCoordinatorRemote(args []string) int {
 	if err := remote.RequireBinding(cfg); err != nil {
 		return fail(err)
 	}
-	if args[0] == "integrate" || args[0] == "integration-show" {
+	if action == "integrate" || action == "integration-show" {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 		return runRemoteIntegration(ctx, cfg, args)

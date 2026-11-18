@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"io"
 	"strconv"
-	"strings"
 
+	"github.com/spf13/cobra"
+
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 )
 
@@ -18,64 +20,24 @@ type triageCommandOptions struct {
 	launcher   string
 }
 
+func newTriageCommand(factory func() IssueProvider, stdout, stderr io.Writer) *cobra.Command {
+	var options triageCommandOptions
+	c := &cobra.Command{Use: "triage NUMBER", Args: numberArgs}
+	c.RunE = func(_ *cobra.Command, args []string) error {
+		options.hasRepo, options.number = c.Flags().Changed("repo"), issueNumber(args)
+		return command.Exit(runTriage(factory, options, stdout, stderr))
+	}
+	addRepoFlag(c, &options.repository)
+	command.Checked(c.Flags(), &options.card, "card", "", nonBlank("card"))
+	command.Checked(c.Flags(), &options.agent, "agent", "", nonBlank("agent"))
+	command.Checked(c.Flags(), &options.launcher, "launcher", "", nonBlank("launcher"))
+	return c
+}
+
 // runTriage implements `kander issue triage NUMBER`. The command prepares the
 // evidence and starts the takeover session through the shared StartTriage path,
 // so the TUI and the CLI always launch the same way.
-func runTriage(factory func() IssueProvider, args []string, stdout, stderr io.Writer) int {
-	var options triageCommandOptions
-	positional := 0
-	for index := 0; index < len(args); index++ {
-		arg := args[index]
-		switch {
-		case arg == "-h" || arg == "--help":
-			fmt.Fprintln(stdout, usageText())
-			return 0
-		case matchesLongOption(arg, "--repo"), matchesLongOption(arg, "--card"),
-			matchesLongOption(arg, "--agent"), matchesLongOption(arg, "--launcher"):
-			name := arg
-			if eq := strings.Index(name, "="); eq >= 0 {
-				name = name[:eq]
-			}
-			value, next, ok := optionValue(args, index, name, stderr)
-			if !ok {
-				return 2
-			}
-			index = next
-			switch name {
-			case "--repo":
-				options.repository = value
-				options.hasRepo = true
-			case "--card":
-				options.card = value
-			case "--agent":
-				options.agent = value
-			case "--launcher":
-				options.launcher = value
-			}
-		case strings.HasPrefix(arg, "-"):
-			fmt.Fprintln(stderr, config.Text("issue.error_unknown_argument", arg))
-			fmt.Fprintln(stderr, usageText())
-			return 2
-		default:
-			positional++
-			if positional > 1 {
-				fmt.Fprintln(stderr, config.Text("issue.error_unknown_argument", arg))
-				fmt.Fprintln(stderr, usageText())
-				return 2
-			}
-			number, err := strconv.Atoi(strings.TrimSpace(arg))
-			if err != nil || number <= 0 {
-				fmt.Fprintln(stderr, config.Text("issue.error_invalid_value", "NUMBER", arg))
-				return 2
-			}
-			options.number = number
-		}
-	}
-	if positional == 0 {
-		fmt.Fprintln(stderr, config.Text("issue.error_missing_value", "NUMBER"))
-		fmt.Fprintln(stderr, usageText())
-		return 2
-	}
+func runTriage(factory func() IssueProvider, options triageCommandOptions, stdout, stderr io.Writer) int {
 	provider := factory()
 	repository, code := resolveRepository(provider, options.repository, options.hasRepo, stderr)
 	if code != 0 {

@@ -22,12 +22,12 @@ func TestIssueTriageUsageErrors(t *testing.T) {
 		want string
 	}{
 		{"help", []string{"triage", "--help"}, 0, config.CommandUsage("issue")},
-		{"missing number", []string{"triage"}, 2, config.Text("issue.error_missing_value", "NUMBER")},
+		{"missing number", []string{"triage"}, 2, config.Text("cli.error_argument_count", "1", 0)},
 		{"invalid number", []string{"triage", "abc"}, 2, config.Text("issue.error_invalid_value", "NUMBER", "abc")},
 		{"zero number", []string{"triage", "0"}, 2, config.Text("issue.error_invalid_value", "NUMBER", "0")},
-		{"unknown option", []string{"triage", "42", "--nope"}, 2, config.Text("issue.error_unknown_argument", "--nope")},
-		{"missing value", []string{"triage", "42", "--card"}, 2, config.Text("issue.error_missing_value", "--card")},
-		{"extra positional", []string{"triage", "42", "43"}, 2, config.Text("issue.error_unknown_argument", "43")},
+		{"unknown option", []string{"triage", "42", "--nope"}, 2, config.Text("board.unknown_option", "--nope")},
+		{"missing value", []string{"triage", "42", "--card"}, 2, config.Text("board.option_requires_a_value", "--card")},
+		{"extra positional", []string{"triage", "42", "43"}, 2, config.Text("cli.error_argument_count", "1", 2)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			code, stdout, stderr := runIssue(t, stub, tc.args...)

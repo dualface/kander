@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"log/slog"
@@ -17,32 +16,20 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/spf13/cobra"
+	"golang.org/x/term"
+
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/servicectl"
 	"github.com/dualface/kander/internal/version"
-	"golang.org/x/term"
 )
 
 // DefaultListen binds loopback; serving a LAN is an explicit choice because
 // the first version has no authentication.
 const DefaultListen = api.DefaultListen
-
-// RunOffline dispatches commands that hold the data lock without serving HTTP.
-func RunOffline(args []string) int {
-	if len(args) > 0 {
-		switch args[0] {
-		case "import":
-			return runImport(args[1:])
-		case "maintain":
-			return runMaintain(args[1:])
-		case "projects":
-			return runProjects(args[1:])
-		}
-	}
-	return 2
-}
 
 // RunForeground serves until cancellation, a signal, or authenticated shutdown.
 func RunForeground(ctx context.Context, options Options, listen string) error {
@@ -86,31 +73,37 @@ func RunForeground(ctx context.Context, options Options, listen string) error {
 
 func dataDir(value string) (string, error) { return servicectl.DataDir(value) }
 
-// runImport is `kander server import`. When no process holds the data
-// directory lock it imports offline; when a serving instance holds it, that
-// instance imports through its administration route. Without --from the
-// source is the board v1 commands locate. The progress goes to stderr and the
-// result to stdout.
-func runImport(args []string) int {
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt)
-	defer signal.Stop(signals)
-	return importCommand(args, os.Stdout, os.Stderr, term.IsTerminal(int(os.Stderr.Fd())), signals)
+// NewImportCommand builds `kander server import`. When no process holds the data directory
+// lock it imports offline; when a serving instance holds it, that instance imports through its
+// administration route. Without --from the source is the board v1 commands locate. The
+// progress goes to stderr and the result to stdout.
+func NewImportCommand() *cobra.Command {
+	var o importOptions
+	c := &cobra.Command{
+		Use:  "import",
+		Args: command.Args(0, 0),
+		RunE: func(*cobra.Command, []string) error {
+			signals := make(chan os.Signal, 1)
+			signal.Notify(signals, os.Interrupt)
+			defer signal.Stop(signals)
+			return command.Exit(importCommand(o, os.Stdout, os.Stderr, term.IsTerminal(int(os.Stderr.Fd())), signals))
+		},
+	}
+	c.PreRunE = func(*cobra.Command, []string) error { return command.Required(c, "project") }
+	c.Flags().StringVar(&o.data, "data", "", "")
+	c.Flags().StringVar(&o.name, "project", "", "")
+	c.Flags().StringVar(&o.remote, "remote", "", "")
+	c.Flags().StringVar(&o.from, "from", "", "")
+	return c
 }
 
-// importCommand is runImport with its streams and interrupt source given. A
-// receive on signals is one Ctrl+C.
-func importCommand(args []string, stdout, stderr io.Writer, tty bool, signals chan os.Signal) int {
-	flags := flag.NewFlagSet("kander server import", flag.ContinueOnError)
-	flags.SetOutput(stderr)
-	data := flags.String("data", "", "data directory")
-	name := flags.String("project", "", "project name (the clients' project.name)")
-	remoteURL := flags.String("remote", "", "Git remote URL the project binds to")
-	from := flags.String("from", "", "v1 board directory (default: the kanban/ that v1 commands locate)")
-	if err := flags.Parse(args); err != nil || flags.NArg() != 0 || *name == "" {
-		fmt.Fprintln(stderr, "usage: kander server import [--data DIR] --project NAME [--remote URL] [--from KANBAN_DIR]")
-		return 2
-	}
+// importOptions are the flags of `kander server import`.
+type importOptions struct{ data, name, remote, from string }
+
+// importCommand runs the import with its streams and interrupt source given. A receive on
+// signals is one Ctrl+C.
+func importCommand(o importOptions, stdout, stderr io.Writer, tty bool, signals chan os.Signal) int {
+	data, name, remoteURL, from := &o.data, &o.name, &o.remote, &o.from
 	// The log lines share stderr with the status line, so they go through the reporter.
 	report := newImportReporter(stderr, tty)
 	logger := slog.New(slog.NewJSONHandler(report, nil))

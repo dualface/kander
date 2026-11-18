@@ -3,12 +3,14 @@ package menu
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 )
 
@@ -54,34 +56,30 @@ func printConfig(cfg *config.Config) error {
 	return nil
 }
 
-var errHelp = errors.New("help")
-
-func parseConfigArgs(args []string) (jsonOut bool, err error) {
-	for _, arg := range args {
-		switch arg {
-		case "--json":
-			jsonOut = true
-		case "-h", "--help":
-			fmt.Println(config.CommandUsage("config"))
-			return false, errHelp
-		default:
-			return false, errors.New(config.Text("board.unknown_option", arg))
-		}
+// NewDoctorCommand builds kander doctor.
+func NewDoctorCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:  "doctor",
+		Args: command.Args(0, 0),
+		RunE: func(*cobra.Command, []string) error { return command.Exit(Doctor()) },
 	}
-	return jsonOut, nil
+}
+
+// NewConfigCommand builds kander config.
+func NewConfigCommand() *cobra.Command {
+	var jsonOut bool
+	c := &cobra.Command{
+		Use:  "config",
+		Args: command.Args(0, 0),
+		RunE: func(*cobra.Command, []string) error { return command.Exit(runConfig(jsonOut)) },
+	}
+	c.Flags().BoolVar(&jsonOut, "json", false, "")
+	return c
 }
 
 // Doctor implements kander doctor.
-func Doctor(args []string) int {
+func Doctor() int {
 	prepareLanguage()
-	for _, arg := range args {
-		if arg == "-h" || arg == "--help" {
-			fmt.Println(config.CommandUsage("doctor"))
-			return 0
-		}
-		fmt.Fprintln(os.Stderr, "kander:", config.Text("board.unknown_option", arg))
-		return 2
-	}
 	// printDoctorWithTools runs the version guard first, so an older binary
 	// stops before the herdr install prompt and every repair.
 	if printDoctorWithTools(CheckTerminalTools(), true, stdinStderrTTY()) {
@@ -90,17 +88,8 @@ func Doctor(args []string) int {
 	return 1
 }
 
-// Config implements kander config [--json].
-func Config(args []string) int {
+func runConfig(jsonOut bool) int {
 	prepareLanguage()
-	jsonOut, err := parseConfigArgs(args)
-	if err != nil {
-		if errors.Is(err, errHelp) {
-			return 0
-		}
-		fmt.Fprintln(os.Stderr, "kander:", err)
-		return 2
-	}
 	cfg, err := config.Load(false)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "kander:", err)

@@ -11,6 +11,7 @@ import (
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command/commandtest"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/terminal"
@@ -151,7 +152,7 @@ func (d *remoteDismiss) saveGroupCredential(t *testing.T, change func(*remote.Cr
 func (d *remoteDismiss) run(t *testing.T) (code int, stdout, stderr string) {
 	t.Helper()
 	stdout, stderr, _ = capture(t, func() error {
-		code = RunDismissRemote([]string{d.task})
+		code = commandtest.Run(NewCommand(), d.task)
 		return nil
 	})
 	return code, stdout, stderr

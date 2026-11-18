@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command/commandtest"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/issue"
 	"github.com/dualface/kander/internal/remote"
@@ -51,9 +52,11 @@ func TestIssueResultCommandUsesServiceWithoutLocalBoard(t *testing.T) {
 	if _, err := config.Save(cfg); err != nil {
 		t.Fatal(err)
 	}
-	command := issue.Command(func() issue.IssueProvider { return f.provider })
+	run := func(args []string) int {
+		return commandtest.Run(issue.NewCommand(func() issue.IssueProvider { return f.provider }), args...)
+	}
 	base := []string{"result", "42", "--repo", "github.com/test/repo", "--card", f.cardID}
-	code, data := captureIssueResultCommand(t, func() int { return command(append(base, "--action", "inspect")) })
+	code, data := captureIssueResultCommand(t, func() int { return run(append(base, "--action", "inspect")) })
 	if code != 0 {
 		t.Fatalf("remote inspection: %d %s", code, data)
 	}
@@ -70,7 +73,7 @@ func TestIssueResultCommandUsesServiceWithoutLocalBoard(t *testing.T) {
 	if err := os.WriteFile(path, raw, 0600); err != nil {
 		t.Fatal(err)
 	}
-	code, data = captureIssueResultCommand(t, func() int { return command(append(base, "--action", "apply", "--file", path)) })
+	code, data = captureIssueResultCommand(t, func() int { return run(append(base, "--action", "apply", "--file", path)) })
 	if code != 0 || f.provider.posts != 1 {
 		t.Fatalf("remote apply: %d %s posts=%d", code, data, f.provider.posts)
 	}
@@ -83,7 +86,7 @@ func TestIssueResultCommandUsesServiceWithoutLocalBoard(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{"unknown":true}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if code, _ := captureIssueResultCommand(t, func() int { return command(append(base, "--action", "apply", "--file", path)) }); code != 1 {
+	if code, _ := captureIssueResultCommand(t, func() int { return run(append(base, "--action", "apply", "--file", path)) }); code != 1 {
 		t.Fatalf("unknown proposal field code=%d", code)
 	}
 	if f.provider.posts != 1 {

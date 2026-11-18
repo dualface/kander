@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/internal/command/commandtest"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/version"
 )
@@ -59,8 +60,9 @@ func showDocumentFixture(t *testing.T) (run func(args ...string) (int, string, s
 	return func(args ...string) (int, string, string) {
 		var out, errOut bytes.Buffer
 		stdout, stderr = &out, &errOut
-		code := RunShow(args)
-		return code, out.String(), errOut.String()
+		// An argument error is reported on the process stderr, not on the command's own stream.
+		code, _, reported := commandtest.Capture(func() int { return commandtest.Run(NewShowCommand(), args...) })
+		return code, out.String(), errOut.String() + reported
 	}, &paths
 }
 

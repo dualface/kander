@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"unicode/utf8"
 
@@ -33,9 +33,6 @@ func runRemoteIntegration(ctx context.Context, cfg *config.Config, args []string
 	defer finishOperation()
 	ctx = operationCtx
 	if args[0] == "integration-show" {
-		if !api.IntegrationTarget(args[1]) {
-			return coordinatorUsageFail()
-		}
 		value, err := session.Project.Integration(ctx, api.IntegrationID(args[1]))
 		if err != nil {
 			return fail(err)
@@ -44,9 +41,6 @@ func runRemoteIntegration(ctx context.Context, cfg *config.Config, args []string
 			return fail(err)
 		}
 		return 0
-	}
-	if !filepath.IsAbs(args[1]) {
-		return coordinatorUsageFail()
 	}
 	file, err := os.Open(args[1])
 	if err != nil {
@@ -58,7 +52,8 @@ func runRemoteIntegration(ctx context.Context, cfg *config.Config, args []string
 		return fail(err)
 	}
 	if len(data) > 65536 || !utf8.Valid(data) {
-		return coordinatorUsageFail()
+		fmt.Fprintln(os.Stderr, "kander: "+t("remote.integration_input_invalid"))
+		return 2
 	}
 	var options remote.IntegrationOptions
 	if err := board.DecodeReviewJSON(data, &options); err != nil {

@@ -1,5 +1,4 @@
 {
-  "issue.error_unknown_argument": "unexpected argument: {{.V0}}",
   "issue.error_missing_value": "option {{.V0}} requires a value",
   "issue.error_invalid_repository": "invalid repository reference \"{{.V0}}\": expected [HOST/]OWNER/REPO",
   "issue.error_not_repository": "not a Git worktree: {{.V0}}",
