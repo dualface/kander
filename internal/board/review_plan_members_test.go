@@ -1,7 +1,9 @@
 package board
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -12,10 +14,14 @@ import (
 
 // membersWorld is a plan of one started group card whose only batch closed
 // without a review, and a second started card of the same group with no plan.
+// candidate is the card a request adds; it is the second card unless a test names
+// another one. before is the capture a refused request is compared with.
 type membersWorld struct {
 	root          string
 	first, second string
+	candidate     string
 	plan          ReviewPlan
+	before        map[string]string
 }
 
 func newMembersWorld(t *testing.T, slug string, sealed bool) *membersWorld {
@@ -23,6 +29,7 @@ func newMembersWorld(t *testing.T, slug string, sealed bool) *membersWorld {
 	useEnglish(t)
 	root := tempBoard(t)
 	w := &membersWorld{root: root, first: gateCard(t, root, slug+"-a"), second: gateCard(t, root, slug+"-b")}
+	w.candidate = w.second
 	p := ReviewPlan{Schema: 1, Sealed: sealed, PlanID: "plan-" + slug, Author: "coordinator", Basis: "fixture", CWD: "/repo", TaskIDs: []string{w.first}, Batches: []ReviewPlanBatch{
 		{BatchID: "first", TaskIDs: []string{w.first}, Base: sha("a"), TargetCommit: sha("b"), Requirements: noReviewRequirements()},
 	}}
@@ -43,6 +50,10 @@ func (w *membersWorld) refresh(t *testing.T) {
 }
 
 func (w *membersWorld) extend(x ReviewPlanExtension) error {
+	var err error
+	if w.before, err = w.files(); err != nil {
+		return err
+	}
 	x.PlanID, x.ExpectedRevision, x.Author, x.Basis = w.plan.PlanID, w.plan.Revision, "coordinator", "the second card started"
 	return ExtendReviewPlan(w.root, x)
 }
@@ -117,21 +128,93 @@ func (w *membersWorld) groupFile(t *testing.T, name string) (string, bool) {
 	return text, ok
 }
 
+// absent is the capture value of a file that does not exist.
+const absent = "<absent>"
+
+// capture records the raw bytes a refused request must leave alone: the record of
+// every batch of the plan, the plan copy of the first member, the card file of the
+// candidate, and whether the candidate has a plan copy. extend runs it before the
+// request; a test that calls the board directly runs it itself.
+func (w *membersWorld) capture(t *testing.T) {
+	t.Helper()
+	var err error
+	if w.before, err = w.files(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (w *membersWorld) files() (map[string]string, error) {
+	got := map[string]string{}
+	err := WithTransaction(w.root, reviewScope([]string{w.first, w.candidate}, true), func(tx *Transaction) error {
+		for _, b := range w.plan.Batches {
+			raw, exists, e := tx.ReadGroup(reviewControlGroup, reviewBatchName(b.BatchID))
+			if e != nil {
+				return e
+			}
+			got["batch record "+b.BatchID] = shownBytes(raw, exists)
+		}
+		for _, file := range []struct{ label, id, name string }{
+			{"plan copy of the first member", w.first, "reviews/plan.json"},
+			{"card file of the candidate", w.candidate, "spec.md"},
+			{"plan copy of the candidate", w.candidate, "reviews/plan.json"},
+		} {
+			text, e := tx.Read(file.id, file.name)
+			if e != nil && !errors.Is(e, os.ErrNotExist) {
+				return e
+			}
+			got[file.label] = shownBytes([]byte(text), e == nil)
+		}
+		return nil
+	})
+	return got, err
+}
+
+func shownBytes(raw []byte, exists bool) string {
+	if !exists {
+		return absent
+	}
+	return string(raw)
+}
+
+// differences lists, by label, what changed since capture.
+func (w *membersWorld) differences(t *testing.T) []string {
+	t.Helper()
+	if w.before == nil {
+		t.Fatal("no capture before the request")
+	}
+	now, err := w.files()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var changed []string
+	for label, was := range w.before {
+		if now[label] != was {
+			changed = append(changed, label)
+		}
+	}
+	slices.Sort(changed)
+	return changed
+}
+
 // untouched checks that a refused request changed no plan, copy, pointer, cycle
-// record, or history. The second card keeps the plan it had, if any.
+// record, history, batch record, or candidate card file. The candidate keeps the
+// plan pointer it had, if any.
 func (w *membersWorld) untouched(t *testing.T, pointer string) {
 	t.Helper()
+	if changed := w.differences(t); len(changed) != 0 {
+		t.Fatalf("a refused request changed: %v", changed)
+	}
 	if got := readOwedPlan(t, w.root, w.plan.PlanID); reviewJSON(got) != reviewJSON(w.plan) {
 		t.Fatalf("plan changed: %+v", got)
 	}
 	if reviewJSON(readPlanCopy(t, w.root, w.first)) != reviewJSON(w.plan) {
 		t.Fatal("the plan copy of the first member changed")
 	}
-	if id, ok := w.planOf(t, w.second); id != pointer || ok != (pointer != "") {
-		t.Fatalf("the plan pointer of the second card is %q", id)
+	if id, ok := w.planOf(t, w.candidate); id != pointer || ok != (pointer != "") {
+		t.Fatalf("the plan pointer of the candidate is %q", id)
 	}
-	if _, ok := w.groupFile(t, "tracked-cycles/"+w.second+".json"); ok != (pointer != "") {
-		t.Fatal("the second card got a cycle record")
+	if _, ok := w.groupFile(t, "tracked-cycles/"+w.candidate+".json"); ok != (pointer != "") {
+		t.Fatal("the candidate got a cycle record")
 	}
 	if _, ok := w.groupFile(t, fmt.Sprintf("plan-history/%s/%d.json", w.plan.PlanID, w.plan.Revision+1)); ok {
 		t.Fatal("a history record was written")
@@ -341,6 +424,7 @@ func TestAddMembersIsExclusiveAndVersioned(t *testing.T) {
 	t.Run("resolve_batch", func(t *testing.T) {
 		x := ReviewPlanExtension{PlanID: w.plan.PlanID, ExpectedRevision: w.plan.Revision, Author: "coordinator", Basis: "fixture", AddMembers: []string{w.second},
 			ResolveBatch: &ReviewBatchResolutionRequest{BatchID: "stray", CoveringBatchID: "first"}}
+		w.capture(t)
 		err := ResolveReviewBatch(w.root, x, ReviewResolutionGit{CWD: "/repo"})
 		if err == nil || !strings.Contains(err.Error(), "excludes every other extend-plan operation") {
 			t.Fatalf("error: %v", err)
@@ -348,6 +432,7 @@ func TestAddMembersIsExclusiveAndVersioned(t *testing.T) {
 		w.untouched(t, "")
 	})
 	t.Run("stale revision", func(t *testing.T) {
+		w.capture(t)
 		err := ExtendReviewPlan(w.root, ReviewPlanExtension{PlanID: w.plan.PlanID, ExpectedRevision: w.plan.Revision + 1, Author: "coordinator", Basis: "fixture", AddMembers: []string{w.second}})
 		want := fmt.Sprintf("expected_revision is %d, but plan %s is at revision %d", w.plan.Revision+1, w.plan.PlanID, w.plan.Revision)
 		if err == nil || !strings.Contains(err.Error(), want) {
