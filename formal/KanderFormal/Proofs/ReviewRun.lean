@@ -52,7 +52,7 @@ theorem finalized_frozen {p : Params} {x y : Rn} {e : Event} {s' : State} (hf : 
       y.contract = x.contract ∧ y.evidence = x.evidence ∧ y.originals = x.originals := by
   rcases accepted_cases h with ⟨i, c, b, r, rfl⟩ | ⟨i, c, sa, b, r, rfl⟩ | ⟨tp, tl, te, ez, si, rfl⟩ | ⟨sm, rfl⟩ |
     ⟨sm, rfl⟩ | ⟨sm, rfl⟩ | ⟨l, ex, ez, ro, rs, inv, cm, si, rfl⟩ | ⟨si, g, ex, m, ig, rfl⟩ | ⟨si, g, ex, rfl⟩ |
-    ⟨si, g, ig, v, rfl⟩ | ⟨si, g, rfl⟩
+    ⟨si, g, ig, v, rfl⟩ | ⟨si, g, rfl⟩ | ⟨si, g, d, lv, nc, bo, ns, rfl⟩
   · rw [create_refused (Or.inl (by omega))] at h; cases h
   · rw [step_retry] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp [hf]
   · rw [update_refused_finalized p x hf] at h; cases h
@@ -64,6 +64,7 @@ theorem finalized_frozen {p : Params} {x y : Rn} {e : Event} {s' : State} (hf : 
   · rw [step_skip] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp [hf]
   · rw [step_verify] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp [hf]
   · rw [step_passSkipped] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp [hf]
+  · rw [step_abandon] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp [hf]
 
 /-- Runs a list of events, stopping at the first refusal. -/
 def runSeq (p : Params) : State → List Event → Option State
@@ -144,7 +145,7 @@ theorem artifacts_only_prepared {p : Params} {z y : Rn} {e : Event} {s' : State}
     (hc : y.prompt ≠ z.prompt ∨ y.contract ≠ z.contract ∨ y.evidence ≠ z.evidence) : z.phase = 1 := by
   rcases accepted_cases h with ⟨i, c, b, r, rfl⟩ | ⟨i, c, sa, b, r, rfl⟩ | ⟨tp, tl, te, ez, si, rfl⟩ | ⟨sm, rfl⟩ |
     ⟨sm, rfl⟩ | ⟨sm, rfl⟩ | ⟨l, ex, ez, ro, rs, inv, cm, si, rfl⟩ | ⟨si, g, ex, m, ig, rfl⟩ | ⟨si, g, ex, rfl⟩ |
-    ⟨si, g, ig, v, rfl⟩ | ⟨si, g, rfl⟩
+    ⟨si, g, ig, v, rfl⟩ | ⟨si, g, rfl⟩ | ⟨si, g, d, lv, nc, bo, ns, rfl⟩
   · rw [step_create] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp at hc
   · rw [step_retry] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp at hc
   · rw [step_update] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp at hc
@@ -156,6 +157,7 @@ theorem artifacts_only_prepared {p : Params} {z y : Rn} {e : Event} {s' : State}
   · rw [step_skip] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp at hc
   · rw [step_verify] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp at hc
   · rw [step_passSkipped] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp at hc
+  · rw [step_abandon] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp at hc
 
 /-- Theorem 3: the originals are written only by an accepted finalization, from
 a run that was not finalized. -/
@@ -167,7 +169,7 @@ theorem originals_only_finalize {p : Params} {z y : Rn} {e : Event} {s' : State}
         z.originals = false ∧ y.originals = true ∧ z.phase ≠ 6 := by
   rcases accepted_cases h with ⟨i, c, b, r, rfl⟩ | ⟨i, c, sa, b, r, rfl⟩ | ⟨tp, tl, te, ez, si, rfl⟩ | ⟨sm, rfl⟩ |
     ⟨sm, rfl⟩ | ⟨sm, rfl⟩ | ⟨l, ex, ez, ro, rs, inv, cm, si, rfl⟩ | ⟨si, g, ex, m, ig, rfl⟩ | ⟨si, g, ex, rfl⟩ |
-    ⟨si, g, ig, v, rfl⟩ | ⟨si, g, rfl⟩
+    ⟨si, g, ig, v, rfl⟩ | ⟨si, g, rfl⟩ | ⟨si, g, d, lv, nc, bo, ns, rfl⟩
   · rw [step_create] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp at hc
   · rw [step_retry] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp at hc
   · rw [step_update] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp at hc
@@ -188,14 +190,16 @@ theorem originals_only_finalize {p : Params} {z y : Rn} {e : Event} {s' : State}
   · rw [step_skip] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp at hc
   · rw [step_verify] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp at hc
   · rw [step_passSkipped] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp at hc
+  · rw [step_abandon] at h; split at h <;> cases h; have := enc_inj hy; subst this; simp at hc
 
 /-! ## Theorem 4: the retry branch of `Prepare` -/
 
 /-- Theorem 4: an accepted retry changes nothing; it is accepted only for an
-existing run whose identity, cards, frozen input, batch, and requirements hold. -/
+existing run that is not abandoned and whose identity, cards, frozen input,
+batch, and requirements hold. -/
 theorem retry_spec {p : Params} {z : Rn} {s' : State} {i c sa b r : Bool}
     (h : step M p (enc z) ⟨"retry", [boolV i, boolV c, boolV sa, boolV b, boolV r]⟩ = some s') :
-    s' = enc z ∧ z.phase ≠ 0 ∧ i = true ∧ c = true ∧ sa = true ∧ b = true ∧ r = true := by
+    s' = enc z ∧ z.phase ≠ 0 ∧ i = true ∧ c = true ∧ sa = true ∧ b = true ∧ r = true ∧ z.abandoned = false := by
   rw [step_retry] at h
   split at h
   · rename_i hg; cases h; exact ⟨rfl, hg⟩
@@ -207,7 +211,7 @@ theorem retry_refused {p : Params} {z : Rn} {i c sa b r : Bool}
     step M p (enc z) ⟨"retry", [boolV i, boolV c, boolV sa, boolV b, boolV r]⟩ = none := by
   rw [step_retry]
   split
-  · rename_i hg; obtain ⟨h0, hi, hc, hs, hb, hr⟩ := hg; rcases h with h | h | h | h | h | h <;> simp_all
+  · rename_i hg; obtain ⟨h0, hi, hc, hs, hb, hr, -⟩ := hg; rcases h with h | h | h | h | h | h <;> simp_all
   · rfl
 
 /-! ## Theorems 5 and 6: per-card publication -/
@@ -222,7 +226,7 @@ theorem stage_spec {p : Params} {z y : Rn} {s' : State} {si g ex m ig : Bool}
   rw [step_stage] at h
   split at h
   · rename_i hg; cases h; have := enc_inj hy; subst this
-    obtain ⟨h6, -, -, hs, hp, hx, -, -⟩ := hg
+    obtain ⟨h6, -, -, hs, hp, hx, -, -, -⟩ := hg
     exact ⟨hp, hs, hx, h6, rfl⟩
   · cases h
 
@@ -235,7 +239,7 @@ theorem skip_spec {p : Params} {z y : Rn} {s' : State} {si g ex : Bool}
   rw [step_skip] at h
   split at h
   · rename_i hg; cases h; have := enc_inj hy; subst this
-    obtain ⟨h6, -, -, hs, hp, hx⟩ := hg
+    obtain ⟨h6, -, -, hs, hp, hx, -⟩ := hg
     exact ⟨hp, hs, hx, h6, rfl⟩
   · cases h
 
@@ -282,14 +286,16 @@ theorem input_conflict_refused (p : Params) (z : Rn) (g ex m ig ig' v : Bool) :
 
 /-- The safety properties of a run instance: the initial state before the run
 exists; a skipped member is published; a published member belongs to a finalized
-run; the originals exist only for a finalized run, and an `ok` run with
-originals has launch status `started` and exit code 0. -/
+run; the originals exist only for a finalized run, an `ok` run with
+originals has launch status `started` and exit code 0, and an abandoned member
+is skipped (so published, and its run finalized). -/
 structure Props (z : Rn) : Prop where
-  fresh : z.phase = 0 → z = ⟨0, 0, 0, false, false, false, false, false, false, false⟩
+  fresh : z.phase = 0 → z = ⟨0, 0, 0, false, false, false, false, false, false, false, false⟩
   skippedPub : z.skipped = true → z.published = true
   pubFinal : z.published = true → z.phase = 6
   origFinal : z.originals = true → z.phase = 6
   okFacts : z.originals = true → z.exec = 1 → z.launch = 2 ∧ z.exitZero = true
+  abandonedSkipped : z.abandoned = true → z.skipped = true
 
 def Inv (p : Params) (s : State) : Prop :=
   M.StateConforms p s ∧ ∀ z, s = enc z → Props z
@@ -297,26 +303,26 @@ def Inv (p : Params) (s : State) : Prop :=
 theorem init (p : Params) : Inv p (initial M p) := by
   refine ⟨initial_conforms wellTyped p, ?_⟩
   intro z hz
-  have : z = ⟨0, 0, 0, false, false, false, false, false, false, false⟩ := enc_inj (hz.symm.trans rfl)
+  have : z = ⟨0, 0, 0, false, false, false, false, false, false, false, false⟩ := enc_inj (hz.symm.trans rfl)
   subst this
-  exact ⟨fun _ => rfl, by simp, by simp, by simp, by simp⟩
+  exact ⟨fun _ => rfl, by simp, by simp, by simp, by simp, by simp⟩
 
 macro "props_close" : tactic =>
-  `(tactic| (refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> intros <;> simp_all [finalized] <;> omega))
+  `(tactic| (refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩ <;> intros <;> simp_all [finalized] <;> omega))
 
 theorem step_inv (p : Params) (s s' : State) (e : Event) (hi : Inv p s)
     (h : KanderFormal.step M p s e = some s') : Inv p s' := by
   obtain ⟨hc, hp⟩ := hi
   refine ⟨step_preserves_conforms hc h, ?_⟩
   obtain ⟨z, rfl, hph, hl, hex⟩ := shape hc
-  obtain ⟨P1, P2, P3, P4, P5⟩ := hp z rfl
+  obtain ⟨P1, P2, P3, P4, P5, P6⟩ := hp z rfl
   intro y hy
   rcases accepted_cases h with ⟨i, c, b, r, rfl⟩ | ⟨i, c, sa, b, r, rfl⟩ | ⟨tp, tl, te, ez, si, rfl⟩ | ⟨sm, rfl⟩ |
     ⟨sm, rfl⟩ | ⟨sm, rfl⟩ | ⟨l, ex, ez, ro, rs, inv, cm, si, rfl⟩ | ⟨si, g, ex, m, ig, rfl⟩ | ⟨si, g, ex, rfl⟩ |
-    ⟨si, g, ig, v, rfl⟩ | ⟨si, g, rfl⟩
+    ⟨si, g, ig, v, rfl⟩ | ⟨si, g, rfl⟩ | ⟨si, g, d, lv, nc, bo, ns, rfl⟩
   · rw [step_create] at h; split at h <;> cases h; have := enc_inj hy; subst this
     rename_i hg; obtain ⟨h0, -⟩ := hg; have := P1 h0; subst this; props_close
-  · rw [step_retry] at h; split at h <;> cases h; have := enc_inj hy; subst this; exact ⟨P1, P2, P3, P4, P5⟩
+  · rw [step_retry] at h; split at h <;> cases h; have := enc_inj hy; subst this; exact ⟨P1, P2, P3, P4, P5, P6⟩
   · rw [step_update] at h; split at h <;> cases h; have := enc_inj hy; subst this
     rename_i hg; props_close
   · rw [step_storePrompt] at h; split at h <;> cases h; have := enc_inj hy; subst this
@@ -331,8 +337,10 @@ theorem step_inv (p : Params) (s s' : State) (e : Event) (hi : Inv p s)
     rename_i hg; props_close
   · rw [step_skip] at h; split at h <;> cases h; have := enc_inj hy; subst this
     rename_i hg; props_close
-  · rw [step_verify] at h; split at h <;> cases h; have := enc_inj hy; subst this; exact ⟨P1, P2, P3, P4, P5⟩
-  · rw [step_passSkipped] at h; split at h <;> cases h; have := enc_inj hy; subst this; exact ⟨P1, P2, P3, P4, P5⟩
+  · rw [step_verify] at h; split at h <;> cases h; have := enc_inj hy; subst this; exact ⟨P1, P2, P3, P4, P5, P6⟩
+  · rw [step_passSkipped] at h; split at h <;> cases h; have := enc_inj hy; subst this; exact ⟨P1, P2, P3, P4, P5, P6⟩
+  · rw [step_abandon] at h; split at h <;> cases h; have := enc_inj hy; subst this
+    rename_i hg; props_close
 
 /-- The review run machine's proof obligation certificate. -/
 def cert : SafetyCert M where
@@ -355,16 +363,26 @@ theorem reachable_ok_facts {p : Params} {z : Rn} (hr : Reachable M p (enc z)) (h
     (he : z.exec = 1) : z.launch = 2 ∧ z.exitZero = true :=
   ((reachable_inv hr).2 z rfl).okFacts ho he
 
-/-! ## Theorem 7: a published member is frozen -/
+/-! ## Theorems 7 and 9: members that hold a copy, were skipped, or were abandoned -/
 
-/-- Theorem 7: once a member is published, no accepted event changes its
-instance, and so none changes the run once every member is published. -/
+/-- An abandoned member of a reachable run was skipped, so published, and its run
+is finalized. -/
+theorem reachable_abandoned_settled {p : Params} {z : Rn} (hr : Reachable M p (enc z))
+    (ha : z.abandoned = true) : z.skipped = true ∧ z.published = true ∧ z.phase = 6 := by
+  have hi := (reachable_inv hr).2 z rfl
+  have hs := hi.abandonedSkipped ha
+  have hp := hi.skippedPub hs
+  exact ⟨hs, hp, hi.pubFinal hp⟩
+
+/-- Theorem 7 (first sentence): on a reachable run, once a member holds a copy
+(published and not skipped), no accepted event changes its instance. -/
 theorem published_frozen {p : Params} {z y : Rn} {e : Event} {s' : State} (hr : Reachable M p (enc z))
-    (hp : z.published = true) (h : step M p (enc z) e = some s') (hy : s' = enc y) : y = z := by
+    (hp : z.published = true) (hs : z.skipped = false) (h : step M p (enc z) e = some s') (hy : s' = enc y) :
+    y = z := by
   have hf : z.phase = 6 := ((reachable_inv hr).2 z rfl).pubFinal hp
   rcases accepted_cases h with ⟨i, c, b, r, rfl⟩ | ⟨i, c, sa, b, r, rfl⟩ | ⟨tp, tl, te, ez, si, rfl⟩ | ⟨sm, rfl⟩ |
     ⟨sm, rfl⟩ | ⟨sm, rfl⟩ | ⟨l, ex, ez, ro, rs, inv, cm, si, rfl⟩ | ⟨si, g, ex, m, ig, rfl⟩ | ⟨si, g, ex, rfl⟩ |
-    ⟨si, g, ig, v, rfl⟩ | ⟨si, g, rfl⟩
+    ⟨si, g, ig, v, rfl⟩ | ⟨si, g, rfl⟩ | ⟨si, g, d, lv, nc, bo, ns, rfl⟩
   · rw [create_refused (Or.inl (by omega))] at h; cases h
   · rw [step_retry] at h; split at h <;> cases h; exact (enc_inj hy).symm
   · rw [update_refused_finalized p z hf] at h; cases h
@@ -376,5 +394,113 @@ theorem published_frozen {p : Params} {z y : Rn} {e : Event} {s' : State} (hr : 
   · rw [step_skip] at h; split at h <;> cases h; simp_all
   · rw [step_verify] at h; split at h <;> cases h; exact (enc_inj hy).symm
   · rw [step_passSkipped] at h; split at h <;> cases h; exact (enc_inj hy).symm
+  · rw [step_abandon] at h; split at h <;> cases h; simp_all
+
+/-- Theorem 7 (second sentence): on a reachable run, an accepted event changes a
+skipped member only when it is `abandon`, and then it changes only `abandoned`. -/
+theorem skipped_only_abandon {p : Params} {z y : Rn} {e : Event} {s' : State} (hr : Reachable M p (enc z))
+    (hs : z.skipped = true) (h : step M p (enc z) e = some s') (hy : s' = enc y) :
+    y = z ∨ (y = { z with abandoned := true } ∧
+      ∃ si g d lv nc bo ns : Bool,
+        e = ⟨"abandon", [boolV si, boolV g, boolV d, boolV lv, boolV nc, boolV bo, boolV ns]⟩) := by
+  have hi := (reachable_inv hr).2 z rfl
+  have hp := hi.skippedPub hs
+  have hf : z.phase = 6 := hi.pubFinal hp
+  rcases accepted_cases h with ⟨i, c, b, r, rfl⟩ | ⟨i, c, sa, b, r, rfl⟩ | ⟨tp, tl, te, ez, si, rfl⟩ | ⟨sm, rfl⟩ |
+    ⟨sm, rfl⟩ | ⟨sm, rfl⟩ | ⟨l, ex, ez, ro, rs, inv, cm, si, rfl⟩ | ⟨si, g, ex, m, ig, rfl⟩ | ⟨si, g, ex, rfl⟩ |
+    ⟨si, g, ig, v, rfl⟩ | ⟨si, g, rfl⟩ | ⟨si, g, d, lv, nc, bo, ns, rfl⟩
+  · rw [create_refused (Or.inl (by omega))] at h; cases h
+  · rw [step_retry] at h; split at h <;> cases h; exact .inl (enc_inj hy).symm
+  · rw [update_refused_finalized p z hf] at h; cases h
+  · rw [(store_only_prepared p _ (by omega) sm).1] at h; cases h
+  · rw [(store_only_prepared p _ (by omega) sm).2.1] at h; cases h
+  · rw [(store_only_prepared p _ (by omega) sm).2.2] at h; cases h
+  · rw [finalize_refused_finalized p z hf] at h; cases h
+  · rw [step_stage] at h; split at h <;> cases h; simp_all
+  · rw [step_skip] at h; split at h <;> cases h; simp_all
+  · rw [step_verify] at h; split at h <;> cases h; simp_all
+  · rw [step_passSkipped] at h; split at h <;> cases h; exact .inl (enc_inj hy).symm
+  · rw [step_abandon] at h; split at h <;> cases h
+    have := enc_inj hy; subst this
+    refine .inr ⟨?_, si, g, d, lv, nc, bo, ns, rfl⟩
+    simp [hp, hs]
+
+/-- Theorem 7 (third sentence): on a reachable run, once a member is abandoned, no
+accepted event changes its instance. -/
+theorem abandoned_frozen {p : Params} {z y : Rn} {e : Event} {s' : State} (hr : Reachable M p (enc z))
+    (ha : z.abandoned = true) (h : step M p (enc z) e = some s') (hy : s' = enc y) : y = z := by
+  obtain ⟨hs, hp, hf⟩ := reachable_abandoned_settled hr ha
+  rcases accepted_cases h with ⟨i, c, b, r, rfl⟩ | ⟨i, c, sa, b, r, rfl⟩ | ⟨tp, tl, te, ez, si, rfl⟩ | ⟨sm, rfl⟩ |
+    ⟨sm, rfl⟩ | ⟨sm, rfl⟩ | ⟨l, ex, ez, ro, rs, inv, cm, si, rfl⟩ | ⟨si, g, ex, m, ig, rfl⟩ | ⟨si, g, ex, rfl⟩ |
+    ⟨si, g, ig, v, rfl⟩ | ⟨si, g, rfl⟩ | ⟨si, g, d, lv, nc, bo, ns, rfl⟩
+  · rw [create_refused (Or.inl (by omega))] at h; cases h
+  · rw [step_retry] at h; split at h <;> cases h; simp_all
+  · rw [update_refused_finalized p z hf] at h; cases h
+  · rw [(store_only_prepared p _ (by omega) sm).1] at h; cases h
+  · rw [(store_only_prepared p _ (by omega) sm).2.1] at h; cases h
+  · rw [(store_only_prepared p _ (by omega) sm).2.2] at h; cases h
+  · rw [finalize_refused_finalized p z hf] at h; cases h
+  · rw [step_stage] at h; split at h <;> cases h; simp_all
+  · rw [step_skip] at h; split at h <;> cases h; simp_all
+  · rw [step_verify] at h; split at h <;> cases h; simp_all
+  · rw [step_passSkipped] at h; split at h <;> cases h; simp_all
+  · rw [step_abandon] at h; split at h <;> cases h; simp_all
+
+/-! ## Theorem 9: the abandon event -/
+
+/-- Theorem 9: a member takes an abandon only when the run is finalized, the member
+holds no copy, the run is not abandoned, and the seven facts hold; it is published,
+skipped, and abandoned afterwards, and nothing else changes. The shell writes the
+abandonment and no member card file exactly when the run's instances accept. -/
+theorem abandon_spec {p : Params} {z y : Rn} {s' : State} {si g d lv nc bo ns : Bool}
+    (h : step M p (enc z) ⟨"abandon", [boolV si, boolV g, boolV d, boolV lv, boolV nc, boolV bo, boolV ns]⟩ =
+      some s') (hy : s' = enc y) :
+    z.phase = 6 ∧ (z.published = false ∨ z.skipped = true) ∧ z.abandoned = false ∧ si = true ∧ g = true ∧
+      d = true ∧ lv = true ∧ nc = true ∧ bo = true ∧ ns = true ∧
+      y = { z with published := true, skipped := true, abandoned := true } := by
+  rw [step_abandon] at h
+  split at h
+  · rename_i hg; cases h; have := enc_inj hy; subst this
+    obtain ⟨h6, hc, ha, hsi, hg, hd, hlv, hnc, hbo, hns⟩ := hg
+    exact ⟨h6, hc, ha, hsi, hg, hd, hlv, hnc, hbo, hns, rfl⟩
+  · cases h
+
+/-- Theorem 9: an abandon is refused when the run is not finalized, the member holds
+a copy (published and not skipped), the run is already abandoned, or one fact fails;
+the state does not change. -/
+theorem abandon_refused {p : Params} {z : Rn} {si g d lv nc bo ns : Bool}
+    (h : z.phase ≠ 6 ∨ (z.published = true ∧ z.skipped = false) ∨ z.abandoned = true ∨ si = false ∨ g = false ∨
+      d = false ∨ lv = false ∨ nc = false ∨ bo = false ∨ ns = false) :
+    step M p (enc z) ⟨"abandon", [boolV si, boolV g, boolV d, boolV lv, boolV nc, boolV bo, boolV ns]⟩ = none := by
+  rw [step_abandon]
+  split
+  · rename_i hg
+    obtain ⟨h6, hc, ha, hsi, hg, hd, hlv, hnc, hbo, hns⟩ := hg
+    rcases h with h | h | h | h | h | h | h | h | h | h <;> simp_all
+  · rfl
+
+/-- Theorem 9: once a run is abandoned, `retry`, `stage`, `skip`, `passSkipped`,
+`verify`, and `abandon` are all refused. -/
+theorem abandoned_terminal (p : Params) (z : Rn) (ha : z.abandoned = true) (i c sa b r si g ex m ig ig' v d lv nc bo ns : Bool) :
+    step M p (enc z) ⟨"retry", [boolV i, boolV c, boolV sa, boolV b, boolV r]⟩ = none ∧
+      step M p (enc z) ⟨"stage", [boolV si, boolV g, boolV ex, boolV m, boolV ig]⟩ = none ∧
+      step M p (enc z) ⟨"skip", [boolV si, boolV g, boolV ex]⟩ = none ∧
+      step M p (enc z) ⟨"passSkipped", [boolV si, boolV g]⟩ = none ∧
+      step M p (enc z) ⟨"verify", [boolV si, boolV g, boolV ig', boolV v]⟩ = none ∧
+      step M p (enc z) ⟨"abandon", [boolV si, boolV g, boolV d, boolV lv, boolV nc, boolV bo, boolV ns]⟩ = none := by
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+  · rw [step_retry]; simp [ha]
+  · rw [step_stage]; simp [ha]
+  · rw [step_skip]; simp [ha]
+  · rw [step_passSkipped]; simp [ha]
+  · rw [step_verify]; simp [ha]
+  · rw [step_abandon]; simp [ha]
+
+/-- Theorem 9: the query `consumable` is false for an abandoned run, so the shell
+never reads its conclusion or findings. -/
+theorem abandoned_not_consumable (p : Params) (z : Rn) (ha : z.abandoned = true) :
+    evalQuery M p (enc z) consumableQuery = some (boolV false) := by
+  simp [evalQuery, consumableQuery, eval, phaseIs, eq, notE, andE, f, enc, lookup, indexOf, evalCmp, boolAnd,
+    boolNot, enumV, boolV, M, reviewRunMachine, Machine.ctorsOf, ha]
 
 end KanderFormal.Proofs.ReviewRun

@@ -11,6 +11,14 @@ instance with each run-level event; `published` and `skipped` are the member's
 own. A run's publication is complete when every instance has `published`, which
 the shell computes from the queries `complete` and `consumable`.
 
+`abandoned` marks a finalized run that no process can publish any more and that
+a member's holder retired with a decision reference. The run leaves its batch:
+`consumable` is false for it, and no event but a query reads it afterwards. An
+abandoned member is also `published` and `skipped`, so the run counts as settled
+for the checks that ask whether every member is published or skipped, and the
+shell filters an abandoned run out wherever it reads a run's conclusion,
+findings, or chain.
+
 `phase`, `launch`, and `exec` are the persisted strings of `ReviewRun`
 (`internal/board/review_run.go`). A string that is not one of the persisted
 values is `other`: `UpdateReviewRun` stores any phase, launch status, and
@@ -72,12 +80,12 @@ def createEvent : EventDecl where
 def retryFacts : List String := ["ids", "cards", "sameInput", "batchKnown", "reqOk"]
 
 /-- The same ID again: the identity, the remaining members' cards, the frozen
-input (schema 1 and equal), the batch, and the requirements hold. Nothing is
-written and the reviewer is not started again. -/
+input (schema 1 and equal), the batch, and the requirements hold, and the run
+is not abandoned. Nothing is written and the reviewer is not started again. -/
 def retryEvent : EventDecl where
   name := "retry"
   args := boolArgs retryFacts
-  guard := andE exists_ (allArgs retryFacts)
+  guard := andE exists_ (andE (allArgs retryFacts) (notE (f "abandoned")))
   assigns := []
 
 /-! ## Execution (`UpdateReviewRun`, `StoreReviewArtifact`, `FinalizeReviewRun`) -/
@@ -140,7 +148,7 @@ def stageEvent : EventDecl where
   args := boolArgs ["sameInput", "groupOk", "excluded", "memberOk", "integrity"]
   guard := andE (phaseIs "finalized") (andE (a "sameInput") (andE (a "groupOk")
     (andE (notE (f "skipped")) (andE (notE (f "published"))
-      (andE (notE (a "excluded")) (andE (a "memberOk") (a "integrity")))))))
+      (andE (notE (a "excluded")) (andE (a "memberOk") (andE (a "integrity") (notE (f "abandoned")))))))))
   assigns := [("published", tt)]
 
 /-- A member that left the batch during the run takes no copy and is marked
@@ -149,7 +157,7 @@ def skipEvent : EventDecl where
   name := "skip"
   args := boolArgs ["sameInput", "groupOk", "excluded"]
   guard := andE (phaseIs "finalized") (andE (a "sameInput") (andE (a "groupOk")
-    (andE (notE (f "skipped")) (andE (notE (f "published")) (a "excluded")))))
+    (andE (notE (f "skipped")) (andE (notE (f "published")) (andE (a "excluded") (notE (f "abandoned")))))))
   assigns := [("published", tt), ("skipped", tt)]
 
 /-- A member that is already published (and not skipped) is verified against
@@ -158,15 +166,43 @@ def verifyEvent : EventDecl where
   name := "verify"
   args := boolArgs ["sameInput", "groupOk", "integrity", "verified"]
   guard := andE (phaseIs "finalized") (andE (a "sameInput") (andE (a "groupOk")
-    (andE (f "published") (andE (notE (f "skipped")) (andE (a "integrity") (a "verified"))))))
+    (andE (f "published") (andE (notE (f "skipped")) (andE (a "integrity")
+      (andE (a "verified") (notE (f "abandoned"))))))))
   assigns := []
 
-/-- A skipped member passes unchanged. -/
+/-- A skipped member of a run that is not abandoned passes unchanged. -/
 def passSkippedEvent : EventDecl where
   name := "passSkipped"
   args := boolArgs ["sameInput", "groupOk"]
-  guard := andE (phaseIs "finalized") (andE (a "sameInput") (andE (a "groupOk") (f "skipped")))
+  guard := andE (phaseIs "finalized") (andE (a "sameInput") (andE (a "groupOk")
+    (andE (f "skipped") (notE (f "abandoned")))))
   assigns := []
+
+def abandonFacts : List String :=
+  ["sameInput", "groupOk", "decision", "live", "noCopies", "batchOpen", "noSuccessor"]
+
+/-- `AbandonReviewRunWithTransaction`: a finalized run that no process can publish
+any more leaves its batch. Every member that holds no copy (not published, or
+published and skipped) is marked published, skipped, and abandoned. The facts are
+the frozen input read in the transaction (`sameInput`), the card's task group
+(`groupOk`), a non-empty decision reference and reason (`decision`), at least one
+live member (`live`), no member that holds a copy (`noCopies`), a batch that is
+not closed (`batchOpen`), and no run that names this run as its predecessor
+(`noSuccessor`). Nothing is written to a member card. -/
+def abandonEvent : EventDecl where
+  name := "abandon"
+  args := boolArgs abandonFacts
+  guard := andE (phaseIs "finalized") (andE (orE (notE (f "published")) (f "skipped"))
+    (andE (notE (f "abandoned")) (allArgs abandonFacts)))
+  assigns := [("published", tt), ("skipped", tt), ("abandoned", tt)]
+
+/-- A run whose conclusion and findings may be read: finalized, published, `ok`, and
+not abandoned. -/
+def consumableQuery : QueryDecl where
+  name := "consumable"
+  ty := .base .bool
+  body := andE (phaseIs "finalized") (andE (f "published")
+    (andE (eq (f "exec") (.enumLit "exec" "ok")) (notE (f "abandoned"))))
 
 /-! ## Machine -/
 
@@ -188,15 +224,16 @@ def reviewRunMachine : Machine where
     { name := "evidence", ty := .scalar .bool, init := boolV false },
     { name := "originals", ty := .scalar .bool, init := boolV false },
     { name := "published", ty := .scalar .bool, init := boolV false },
-    { name := "skipped", ty := .scalar .bool, init := boolV false }
+    { name := "skipped", ty := .scalar .bool, init := boolV false },
+    { name := "abandoned", ty := .scalar .bool, init := boolV false }
   ]
   events := [createEvent, retryEvent, updateEvent, storePromptEvent, storeContractEvent, storeEvidenceEvent,
-    finalizeEvent, stageEvent, skipEvent, verifyEvent, passSkippedEvent]
+    finalizeEvent, stageEvent, skipEvent, verifyEvent, passSkippedEvent, abandonEvent]
   queries := [
     { name := "final", ty := .base .bool, body := phaseIs "finalized" },
     { name := "complete", ty := .base .bool, body := andE (phaseIs "finalized") (f "published") },
-    { name := "consumable", ty := .base .bool,
-      body := andE (phaseIs "finalized") (andE (f "published") (eq (f "exec") (.enumLit "exec" "ok"))) }
+    consumableQuery,
+    { name := "abandoned", ty := .base .bool, body := f "abandoned" }
   ]
 
 end KanderFormal.Machines.ReviewRun

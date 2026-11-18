@@ -275,7 +275,8 @@ def dispatchEvents : List Event :=
 one fact failing, the phase updates the driver makes and the odd ones the entrance
 accepts, the finalizations of an `ok` run (valid, invalid report, launch status
 other than started, empty report, missing originals), a failure with and without
-a reason, a launch failure, and an interruption. -/
+a reason, a launch failure, an interruption, and the abandon with every fact
+holding and with each of the seven facts failing. -/
 def runEvents : List Event :=
   let t := boolV true
   let x := boolV false
@@ -295,7 +296,10 @@ def runEvents : List Event :=
     ⟨"stage", [t, t, x, x, t]⟩, ⟨"stage", [t, t, x, t, x]⟩,
     ⟨"skip", [t, t, t]⟩, ⟨"skip", [t, t, x]⟩, ⟨"skip", [t, x, t]⟩,
     ⟨"verify", [t, t, t, t]⟩, ⟨"verify", [t, t, t, x]⟩, ⟨"verify", [t, t, x, t]⟩,
-    ⟨"passSkipped", [t, t]⟩, ⟨"passSkipped", [t, x]⟩ ]
+    ⟨"passSkipped", [t, t]⟩, ⟨"passSkipped", [t, x]⟩,
+    ⟨"abandon", [t, t, t, t, t, t, t]⟩, ⟨"abandon", [x, t, t, t, t, t, t]⟩, ⟨"abandon", [t, x, t, t, t, t, t]⟩,
+    ⟨"abandon", [t, t, x, t, t, t, t]⟩, ⟨"abandon", [t, t, t, x, t, t, t]⟩, ⟨"abandon", [t, t, t, t, x, t, t]⟩,
+    ⟨"abandon", [t, t, t, t, t, x, t]⟩, ⟨"abandon", [t, t, t, t, t, t, x]⟩ ]
 
 /-- The review findings vector alphabet: a read-in of every schema with a
 structured, an unstructured, a block-marked, and an unconsumable report, the
@@ -698,6 +702,13 @@ def entries : List Entry := [
       ``KanderFormal.Proofs.ReviewRun.publish_needs_finalized,
       ``KanderFormal.Proofs.ReviewRun.input_conflict_refused,
       ``KanderFormal.Proofs.ReviewRun.published_frozen,
+      ``KanderFormal.Proofs.ReviewRun.skipped_only_abandon,
+      ``KanderFormal.Proofs.ReviewRun.abandoned_frozen,
+      ``KanderFormal.Proofs.ReviewRun.abandon_spec,
+      ``KanderFormal.Proofs.ReviewRun.abandon_refused,
+      ``KanderFormal.Proofs.ReviewRun.abandoned_terminal,
+      ``KanderFormal.Proofs.ReviewRun.abandoned_not_consumable,
+      ``KanderFormal.Proofs.ReviewRun.reachable_abandoned_settled,
       ``KanderFormal.Proofs.ReviewRun.init,
       ``KanderFormal.Proofs.ReviewRun.step_inv,
       ``KanderFormal.Proofs.ReviewRun.reachable_inv,
