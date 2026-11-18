@@ -9,6 +9,7 @@ import (
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/command"
+	"github.com/dualface/kander/internal/config"
 )
 
 // jsonRun holds what one review run reports with --json: the reviewer's report, the messages
@@ -17,11 +18,14 @@ var jsonRun struct {
 	report   bytes.Buffer
 	messages []string
 	run      *board.ReviewRun
+	// published is set once the evidence of run is published to every card. A run that was only
+	// prepared (recordRun) is a diagnostic of a failure, never a result.
+	published bool
 }
 
 func resetJSONRun() {
 	jsonRun.report.Reset()
-	jsonRun.messages, jsonRun.run = nil, nil
+	jsonRun.messages, jsonRun.run, jsonRun.published = nil, nil, false
 }
 
 // reportStream is where the report of a review goes: stdout, or with --json the report field
@@ -41,8 +45,12 @@ func remarkStream() io.Writer {
 	return os.Stderr
 }
 
-// recordRun keeps the run of the archive for the result object.
+// recordRun keeps the run of the archive for the result object, or for the diagnostic of a
+// failure before the evidence was published.
 func recordRun(run board.ReviewRun) { jsonRun.run = &run }
+
+// markPublished records that the evidence of the run reached every card.
+func markPublished() { jsonRun.published = true }
 
 // reviewResult is the result object of kander review. The run fields appear when the review
 // was bound to cards with --task.
@@ -64,9 +72,12 @@ func reviewExit(code int) int {
 		return code
 	}
 	run := jsonRun.run
-	if code != 0 && run == nil {
-		message := strings.Join(jsonRun.messages, "\n")
-		return command.FailStatus(code, command.Coded("review_failed", errors.New(message)))
+	if code != 0 && !jsonRun.published {
+		messages := jsonRun.messages
+		if run != nil {
+			messages = append(messages[:len(messages):len(messages)], config.Text("review.json_prepared_not_published", run.RunID, run.BatchID))
+		}
+		return command.FailStatus(code, command.Coded("review_failed", errors.New(strings.Join(messages, "\n"))))
 	}
 	result := reviewResult{ExitCode: code, Report: jsonRun.report.String()}
 	if run != nil {

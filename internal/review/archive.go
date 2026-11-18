@@ -294,6 +294,7 @@ func (a *archiveExecution) publish() int {
 	if len(failures) > 0 {
 		return 2
 	}
+	markPublished()
 	if err = a.backend().Complete(run.RunID); err != nil {
 		userError(err.Error())
 		return 2

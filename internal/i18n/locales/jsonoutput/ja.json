@@ -8,5 +8,6 @@
   "menu.doctor_confirm_session_file": "エージェント {{.V0}} のセッションファイルを保存するか確認が必要です",
   "menu.doctor_confirm_herdr_install": "ターミナルバックエンドが無く、herdr をインストールするか確認が必要です",
   "menu.doctor_confirm_brew_upgrade": "Homebrew の kander が古く、アップグレードするか確認が必要です",
-  "menu.doctor_confirm_required": "doctor に確認が必要な修復があり、--json には質問できるターミナルがありません（{{.V0}}、計 {{.V1}} 件）。何も修復していません。ターミナルで kander doctor を実行してください"
+  "menu.doctor_confirm_required": "doctor に確認が必要な修復があり、--json には質問できるターミナルがありません（{{.V0}}、計 {{.V1}} 件）。何も修復していません。ターミナルで kander doctor を実行してください",
+  "review.json_prepared_not_published": "実行 {{.V0}}（バッチ {{.V1}}）は準備されましたが、証拠はカードに公開されませんでした"
 }

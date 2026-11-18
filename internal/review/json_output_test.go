@@ -7,7 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command"
+	"github.com/dualface/kander/internal/command/commandtest"
 )
 
 func jsonObject(t *testing.T, text string) map[string]any {
@@ -80,5 +84,37 @@ func TestAggregateJSONViewHashClosesTheBatch(t *testing.T) {
 	closeJSON := commandOK(t, "close", w.h.repo, dispositionJSON(t, w.h, "close-json", r))
 	if closureOf(t, closeJSON).BatchID != "batch" {
 		t.Fatalf("close: %s", closeJSON)
+	}
+}
+
+// A run that was only prepared in the archive is not published evidence: a failure after the
+// preparation is the error object, with the run in its diagnostic, while a run whose evidence
+// reached the cards is the result object with the status of the run.
+func TestReviewExitSeparatesPreparedFromPublished(t *testing.T) {
+	exit := func(code int, publish bool) (int, string, string) {
+		c := &cobra.Command{Use: "probe", RunE: func(*cobra.Command, []string) error {
+			resetJSONRun()
+			var run board.ReviewRun
+			run.RunID, run.BatchID, run.ExecutionStatus = "early-run", "batch", "ok"
+			recordRun(run)
+			if publish {
+				markPublished()
+			}
+			userError("publication failed")
+			return command.Exit(reviewExit(code))
+		}}
+		return commandtest.Capture(func() int { return commandtest.Run(c, "--json") })
+	}
+	code, stdout, stderr := exit(2, false)
+	if code != 2 || stdout != "" {
+		t.Fatalf("prepared only: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	detail := jsonObject(t, stderr)["error"].(map[string]any)
+	if detail["code"] != "review_failed" || !strings.Contains(detail["message"].(string), "publication failed") || !strings.Contains(detail["message"].(string), "early-run") {
+		t.Fatalf("prepared only: stderr=%q", stderr)
+	}
+	code, stdout, _ = exit(1, true)
+	if result := jsonObject(t, stdout); code != 1 || result["run_id"] != "early-run" || result["exit_code"] != float64(1) {
+		t.Fatalf("published: code=%d stdout=%q", code, stdout)
 	}
 }

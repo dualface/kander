@@ -8,5 +8,6 @@
   "menu.doctor_confirm_session_file": "Agent {{.V0}} 需要确认是否保存其会话文件",
   "menu.doctor_confirm_herdr_install": "没有安装任何终端后端，需要确认是否安装 herdr",
   "menu.doctor_confirm_brew_upgrade": "Homebrew 里的 kander 版本过旧，需要确认是否升级",
-  "menu.doctor_confirm_required": "doctor 有需要确认的修复，而 --json 没有终端可以提问（{{.V0}}；共 {{.V1}} 项）。没有做任何修复。请在终端里运行 kander doctor"
+  "menu.doctor_confirm_required": "doctor 有需要确认的修复，而 --json 没有终端可以提问（{{.V0}}；共 {{.V1}} 项）。没有做任何修复。请在终端里运行 kander doctor",
+  "review.json_prepared_not_published": "运行 {{.V0}}（批次 {{.V1}}）已准备，但它的证据没有发布到卡片"
 }
