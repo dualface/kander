@@ -44,7 +44,7 @@ The project identity derives from the exact name. With `h` the first 16 hex digi
 
 Project responses (`GET` and `POST /api/v1/projects`, and the import result) carry `board_path`, the absolute board directory on the server host; `projects.json` never stores it. `kander init` prints it after the binding, and the human-readable `kander config` asks the bound server for it with one `GET` bounded to 3 seconds, sending no write and creating no file; an unreachable server, a missing binding or an unregistered name prints it as unavailable without changing the exit code. `kander config --json` stays offline and unchanged.
 
-`kander server projects [--data DIR] [--json]` lists every project with its name, ID, remote, creation time and board path. It reads `projects.json` without the data directory lock and writes nothing, so it also runs beside a serving instance. A missing data directory lists nothing.
+`kander server projects [--data DIR]` lists every project with its name, ID, remote, creation time and board path. It reads `projects.json` without the data directory lock and writes nothing, so it also runs beside a serving instance. A missing data directory lists nothing.
 
 v2 development data is not migrated. When `projects.json` holds a project whose ID is not derived from its name, or whose name breaks the rule, the server refuses to open and `kander server projects` exits nonzero; remove the data directory and import the boards again.
 
@@ -306,7 +306,7 @@ The source board is never changed and stays as the local backup; review original
 
 ```text
 kander server start [--data DIR] [--listen ADDR] [--ttl D] [--renew D] [--foreground]
-kander server status [--json]
+kander server status
 kander server stop
 kander server restart
 ```

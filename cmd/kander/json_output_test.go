@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -19,6 +20,7 @@ import (
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/server"
+	"github.com/dualface/kander/rules"
 )
 
 // jsonLine parses text as exactly one JSON object and a newline.
@@ -64,9 +66,27 @@ func requireFailure(t *testing.T, r commandResult, what, code string, status int
 
 func TestJSONIsRefusedWhereItHasNoMeaning(t *testing.T) {
 	t.Chdir(t.TempDir())
-	for _, args := range [][]string{{"--json"}, {"worker", "--json"}, {"list", "--mobile", "--json"}, {"--json", "list", "--mobile"}} {
+	for _, args := range [][]string{{"--json"}, {"worker", "--json"}} {
 		r := runKander(t, args...)
 		requireFailure(t, r, strings.Join(args, " "), "usage", 2)
+	}
+}
+
+// list --mobile no longer exists: it is an unknown flag with or without --json, wherever the
+// global flag stands.
+func TestJSONListMobileIsAnUnknownFlag(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	for _, args := range [][]string{{"list", "--mobile", "--json"}, {"--json", "list", "--mobile"}} {
+		r := runKander(t, args...)
+		detail := requireFailure(t, r, strings.Join(args, " "), "usage", 2)
+		if message, _ := detail["message"].(string); !strings.Contains(message, "--mobile") {
+			t.Fatalf("%v: message %q does not name the unknown flag", args, message)
+		}
+	}
+	text := runKander(t, "list", "--mobile")
+	if text.code != 2 || text.stdout != "" || !strings.Contains(text.stderr, "--mobile") {
+		t.Fatalf("list --mobile: exit=%d\nstdout=%s\nstderr=%s", text.code, text.stdout, text.stderr)
 	}
 }
 
@@ -276,6 +296,11 @@ func TestJSONBoundMoveAndDispatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	epoch := strconv.FormatUint(dispatch.Authorization.Epoch, 10)
+	// The prompt that Kander generates for the executing agent names the field it has to read.
+	prompt, err := rules.File("templates/prompt/dispatch.md")
+	if err != nil || !strings.Contains(string(prompt), "replayed=false") {
+		t.Fatalf("the dispatch prompt does not name the replayed field: %v", err)
+	}
 	for _, replayed := range []bool{false, true} {
 		got := requireResult(t, runKander(t, "move", "--json", task.TaskID, "working", "--dispatch-id", dispatch.Input.ID, "--execution-epoch", epoch), "bound move", "dispatch", "replayed")
 		if got["replayed"] != replayed {
@@ -615,4 +640,47 @@ func TestJSONSubscribeFailures(t *testing.T) {
 			t.Fatalf("a diagnostic line is neither a notice nor the error: %v", line)
 		}
 	}
+}
+
+// The Git analyzers print their completed result as one object, and nothing on stderr; the
+// exit status is the one of the analysis.
+func TestJSONCheckAnalyzers(t *testing.T) {
+	repo := t.TempDir()
+	gitIn := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", repo, "-c", "user.name=t", "-c", "user.email=t@t"}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	gitIn("init", "-q", "-b", "main")
+	gitIn("commit", "-q", "--allow-empty", "-m", "base")
+	if err := os.WriteFile(filepath.Join(repo, "a.txt"), []byte("a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitIn("add", "a.txt")
+	gitIn("commit", "-q", "-m", "change")
+	t.Chdir(repo)
+	t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(repo))
+
+	delivery := requireResult(t, runKander(t, "check", "delivery", "--json", "--base", "HEAD~1"), "check delivery", "schema_version", "check", "status", "diff_check", "added_over_limit")
+	if delivery["check"] != "delivery" || delivery["status"] != "pass" {
+		t.Fatalf("delivery: %v", delivery)
+	}
+	overlap := requireResult(t, runKander(t, "check", "overlap", "--json", "--source", "HEAD~1"), "check overlap", "schema_version", "check", "status", "paths")
+	if overlap["check"] != "overlap" || overlap["status"] != "pass" {
+		t.Fatalf("overlap: %v", overlap)
+	}
+	// Whitespace damage is a finding: the result with exit status 1, not a failure.
+	if err := os.WriteFile(filepath.Join(repo, "b.txt"), []byte("trailing \n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitIn("add", "b.txt")
+	gitIn("commit", "-q", "-m", "whitespace")
+	finding := runKander(t, "check", "delivery", "--json", "--base", "HEAD~1")
+	if finding.code != 1 || finding.stderr != "" || jsonLine(t, finding.stdout)["status"] != "fail" {
+		t.Fatalf("finding: %+v", finding)
+	}
+	// An analysis that could not finish is the error object.
+	requireFailure(t, runKander(t, "check", "delivery", "--json", "--base", "no-such-ref"), "unknown ref", "check_invalid_ref", 3)
 }

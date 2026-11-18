@@ -142,3 +142,39 @@ func TestCommandIndexWordLimits(t *testing.T) {
 		}
 	}
 }
+
+// Every contract tells in its Output section what the command prints with the global --json.
+func TestEveryContractDescribesItsJSONOutput(t *testing.T) {
+	for _, cmd := range contractCommands(t) {
+		data, err := File("snippets/commands/" + cmd + ".md")
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(data)
+		start := strings.Index(text, "\n## Output\n")
+		end := strings.Index(text, "\n## Rejections\n")
+		if start < 0 || end < start {
+			t.Fatalf("%s: no Output section", cmd)
+		}
+		output := text[start:end]
+		if !strings.Contains(output, "--json") && !strings.Contains(output, "JSON") {
+			t.Errorf("%s: the Output section does not describe the JSON output", cmd)
+		}
+	}
+}
+
+// The global flags are named in the README once, and no Syntax line repeats --json.
+func TestGlobalJSONFlagIsNotInASyntaxLine(t *testing.T) {
+	readme, _ := File("snippets/commands/README.md")
+	if !strings.Contains(string(readme), "--json") {
+		t.Fatal("the README does not name the global --json")
+	}
+	for _, cmd := range contractCommands(t) {
+		data, _ := File("snippets/commands/" + cmd + ".md")
+		for _, line := range syntaxBlock(t, string(data)) {
+			if strings.Contains(line, "--json") {
+				t.Errorf("%s: a Syntax line names the global --json: %s", cmd, line)
+			}
+		}
+	}
+}

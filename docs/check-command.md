@@ -4,11 +4,11 @@
 
 ```sh
 kander check [--all] [task-id ...]
-kander check delivery --base <ref> [--commit <ref>] [--json]
-kander check overlap --source <ref> [--head <ref>] [--json]
+kander check delivery --base <ref> [--commit <ref>]
+kander check overlap --source <ref> [--head <ref>]
 ```
 
-Git is invoked with `exec.CommandContext` and a direct argv. There is no shell, and refs are resolved to commit IDs with `--end-of-options` before any diff. Paths are read from `git diff --name-status -z --find-copies-harder`. Every Git subprocess sets `GIT_OPTIONAL_LOCKS=0`, `GIT_TERMINAL_PROMPT=0`, `GIT_NO_LAZY_FETCH=1`, and a C locale so missing objects fail instead of fetching and so error JSON stays stable. Commit and path fields never include host-absolute paths or timestamps, and invalid-ref errors do not echo the supplied ref.
+Git is invoked with `exec.CommandContext` and a direct argv. There is no shell, and refs are resolved to commit IDs with `--end-of-options` before any diff. Paths are read from `git diff --name-status -z --find-copies-harder`. Every Git subprocess sets `GIT_OPTIONAL_LOCKS=0`, `GIT_TERMINAL_PROMPT=0`, `GIT_NO_LAZY_FETCH=1`, and a C locale so missing objects fail instead of fetching and so error text stays stable. Commit and path fields never include host-absolute paths or timestamps, and invalid-ref errors do not echo the supplied ref.
 
 ## Liveness results
 
@@ -35,7 +35,7 @@ The no-mode form probes `working/` cards and prints one line per card with its s
 | 2 | Argument error |
 | 3 | Git, repository, ref/ancestry, output-limit, or internal error |
 
-An incomplete check never reports PASS. `--json` is a valueless switch; `--json=<value>` is a usage error that is itself written as JSON. `--json` writes one object and a trailing newline on stdout for completed results and for recognized argument, Git, output-limit, and internal errors. Successful JSON runs leave stderr empty.
+An incomplete check never reports PASS. With the global `--json` (see [JSON output](json-output.md)), a completed check (`pass`, `fail`, `review-required`, `action-required`) is one object and a trailing newline on stdout with stderr empty. A check that could not finish (exit 2 or 3) writes nothing to stdout and the error object to stderr, `{"error":{"code":"check_<kind>","message":...}}`, where `<kind>` is the former `error.code` with `-` written as `_`; `usage` is the code of an argument error.
 
 ## Delivery
 
@@ -49,7 +49,7 @@ An incomplete check never reports PASS. `--json` is a valueless switch; `--json=
 
 Status precedence: `error > fail > review-required > pass`.
 
-JSON top-level fields, and only these: `schema_version` (1), `check` (`delivery`), `status`, `base_commit`, `target_commit`, `diff_check`, `added_over_limit`, `crossed_limit`, `error`. `diff_check` has `status` (`pass` or `fail`) and `diagnostics`. Each candidate has `status`, `path`, `base_path`, `base_lines`, `target_lines`. Empty arrays encode as `[]`. `error` is `null` when the check completed.
+JSON top-level fields, and only these: `schema_version` (1), `check` (`delivery`), `status`, `base_commit`, `target_commit`, `diff_check`, `added_over_limit`, `crossed_limit`, `error`. `diff_check` has `status` (`pass` or `fail`) and `diagnostics`. Each candidate has `status`, `path`, `base_path`, `base_lines`, `target_lines`. Empty arrays encode as `[]`. `error` is `null`: a check that could not finish has no result object.
 
 ## Overlap
 
@@ -63,4 +63,4 @@ Every `path`, `base_path`, and `paths` element is `{"utf8": <string-or-null>, "b
 
 ## Human output
 
-Without `--json`, en / zh-CN / ja catalogs print a short report. Untrusted paths and diagnostics are escaped onto one terminal line: newlines, ANSI ESC, C1 controls, and other non-printing runes cannot inject extra rows or sequences. `--json` is honored even when it appears after another argument error, so recognized usage failures still emit one JSON object.
+Without `--json`, en / zh-CN / ja catalogs print a short report. Untrusted paths and diagnostics are escaped onto one terminal line: newlines, ANSI ESC, C1 controls, and other non-printing runes cannot inject extra rows or sequences. `--json` is honored even when it appears after another argument error, so recognized usage failures still emit the error object.

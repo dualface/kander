@@ -108,6 +108,18 @@ func describeMessage(f *Failure) string {
 	return message
 }
 
+// marshal encodes v as compact JSON without the HTML escapes of encoding/json, so that a message
+// that holds <name> stays readable.
+func marshal(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(v); err != nil {
+		return nil, err
+	}
+	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
+}
+
 // session is the output state of the one command a process runs. Execute resets it for every
 // run, so tests that run several commands in one process do not see each other.
 type session struct {
@@ -200,7 +212,7 @@ func Result(v any) int { return ResultStatus(v, 0) }
 // analysis (check, coordinator reconcile): the object is the result, the status is not a
 // failure.
 func ResultStatus(v any, status int) int {
-	data, err := json.Marshal(v)
+	data, err := marshal(v)
 	if err == nil && !bytes.HasPrefix(data, []byte("{")) {
 		err = errors.New("the result of a command must be a JSON object")
 	}
@@ -222,8 +234,8 @@ func ObjectStatus(v any, status int) int {
 	if JSON() {
 		return ResultStatus(v, status)
 	}
-	if err := json.NewEncoder(os.Stdout).Encode(v); err != nil {
-		return Fail(err)
+	if code := Emit(v); code != 0 {
+		return code
 	}
 	return status
 }
@@ -231,7 +243,7 @@ func ObjectStatus(v any, status int) int {
 // Emit writes one JSON object line to stdout at once. A streaming command uses it for what it
 // has to say while it runs: the lines of a stream, the object of the moment it can serve.
 func Emit(v any) int {
-	data, err := json.Marshal(v)
+	data, err := marshal(v)
 	if err != nil {
 		return Fail(err)
 	}
@@ -309,7 +321,7 @@ func ErrorLine(err error) string {
 	if !JSON() {
 		return "kander: " + message
 	}
-	data, _ := json.Marshal(map[string]any{"error": Notice{Code: code, Message: message}})
+	data, _ := marshal(map[string]any{"error": Notice{Code: code, Message: message}})
 	return string(data)
 }
 
@@ -326,7 +338,7 @@ func FailReported(err error) int {
 }
 
 func writeLine(w io.Writer, v any) {
-	data, err := json.Marshal(v)
+	data, err := marshal(v)
 	if err != nil {
 		return
 	}
@@ -383,7 +395,7 @@ func finish(c *cobra.Command, err error) int {
 	if len(notices) > 0 && !streaming {
 		object["notices"] = notices
 	}
-	data, _ := json.Marshal(object)
+	data, _ := marshal(object)
 	fmt.Fprintln(os.Stderr, string(data))
 	return status
 }
@@ -399,7 +411,7 @@ func writeResult(result []byte, notices []Notice) {
 		result = []byte("{}")
 	}
 	if len(notices) > 0 {
-		extra, _ := json.Marshal(notices)
+		extra, _ := marshal(notices)
 		body := bytes.TrimSuffix(result, []byte("}"))
 		if len(bytes.TrimSpace(body)) > 1 {
 			body = append(body, ',')

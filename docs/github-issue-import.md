@@ -11,7 +11,7 @@ The import operation is **idempotent**, **bounded**, and published within a **si
 ```sh
 kander issue import NUMBER [--repo HOST/OWNER/REPO] [--comments]
                            [--type feature|bug|chore|research] [--large]
-                           [--language LANG] [--json]
+                           [--language LANG]
 ```
 
 - `--repo`: Target repository identity (e.g. `github.com/owner/repo` or `owner/repo`). Reuses existing `gh` CLI credentials without asking for tokens.
@@ -19,7 +19,7 @@ kander issue import NUMBER [--repo HOST/OWNER/REPO] [--comments]
 - `--type`: Overrides automatic label inference.
 - `--large`: Explicitly sets `SIZE: large`. Imported cards are always created in directory form.
 - `--language`: Sets the card's `LANGUAGE` field (defaults to the configured `agent_language`).
-- `--json`: Emits machine-readable output: `task_id`, `state`, `path`, `existing`, `source_key`, `source_url`, `comments_loaded`.
+- The global `--json` emits machine-readable output: `task_id`, `state`, `path`, `existing`, `source_key`, `source_url`, `comments_loaded`.
 
 ### Interactive TUI Overlay (`g`)
 

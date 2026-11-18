@@ -12,6 +12,7 @@ import (
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command/commandtest"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/process"
 	"github.com/dualface/kander/internal/remote"
@@ -85,8 +86,12 @@ func TestRemoteAdoptionProvesLocalProcessWithoutReadingBoard(t *testing.T) {
 	if err := session.SaveCredential(credential); err != nil {
 		t.Fatal(err)
 	}
-	if err := commandRemoteAdopt(cfg, card.TaskID, "explicit local process adoption"); err != nil {
-		t.Fatal(err)
+	// With --json the adoption is one object and nothing on stderr.
+	code, adopted, diagnostics := commandtest.Capture(func() int {
+		return RunResumeRemote([]string{card.TaskID, "--adopt", "--json", "--decision", "explicit local process adoption"})
+	})
+	if want := `{"action":"adopt","task_id":"` + card.TaskID + `"}` + "\n"; code != 0 || diagnostics != "" || adopted != want {
+		t.Fatalf("adopt --json: %d %q %q, want %q", code, adopted, diagnostics, want)
 	}
 	state, err := session.Project.ExecutionState(t.Context(), card.TaskID, *credential.Claim())
 	if err != nil || state.Record.Status != board.ExecutionRunning || state.Task.Revision != grant.Task.Revision {

@@ -1,18 +1,18 @@
 # Board snapshot
 
-`kander list --json` prints a machine-readable snapshot of the board. It is the interface an external view (first the Kander view of the dsh plugin) reads the board and the executing agents through, instead of parsing the table of `kander list` or reading `kanban/` directly. The released command contract is `rules/snippets/commands/list.md`; this document is the full contract.
+`kander list --json` (the global `--json`, see [JSON output](json-output.md)) prints a machine-readable snapshot of the board. It is the interface an external view (first the Kander view of the dsh plugin) reads the board and the executing agents through, instead of parsing the table of `kander list` or reading `kanban/` directly. The released command contract is `rules/snippets/commands/list.md`; this document is the full contract.
 
 ## Command
 
 ```text
-kander list [--json [--agent-status]] [backlog|todo|working|review|done|archived|trash]
+kander list [--agent-status] [backlog|todo|working|review|done|archived|trash]
 ```
 
-- `--json` prints one JSON object on stdout and exits 0. Without `--json` the table output is unchanged.
-- `--agent-status` (only with `--json`) fills the agent objects. Without it the command runs no terminal probe at all.
+- With the global `--json` the command prints one JSON object on stdout and exits 0. Without it the table output is unchanged.
+- `--agent-status` (only with the global `--json`) fills the agent objects. Without it the command runs no terminal probe at all.
 - A state argument limits the snapshot to the cards of that state.
-- `--agent-status` without `--json`, an unknown state, or an unknown option is a usage error (exit 2).
-- Board read failures exit 1 with the same messages as the table form; journal and invalid-entry advisories go to stderr as before, never into the JSON.
+- `--agent-status` without `--json`, an unknown state, or an unknown option is a usage error (exit 2); with `--json` it is the error object with the code `usage`.
+- Board read failures exit 1 with the same messages as the table form, as the error object with `--json`. Journal and invalid-entry advisories go to stderr as before; with `--json` they are the `notices` field of the object, never another field.
 
 ## Schema version 1
 

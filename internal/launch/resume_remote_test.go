@@ -2,6 +2,7 @@ package launch
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/internal/command/commandtest"
 	"github.com/dualface/kander/internal/process"
 	"github.com/dualface/kander/internal/remote"
 )
@@ -179,8 +181,16 @@ func TestRemoteReleaseAndFreshTakeoverAcrossIndependentClones(t *testing.T) {
 		t.Fatal(err)
 	}
 	old = markRemoteExecutorStopped(t, session, task.TaskID)
-	if code := RunResumeRemote([]string{task.TaskID, "--release", "--decision", "Release stopped executor for another host"}); code != 0 {
-		t.Fatalf("release exit %d", code)
+	// With --json the release is one object and nothing on stderr.
+	code, released, diagnostics := commandtest.Capture(func() int {
+		return RunResumeRemote([]string{task.TaskID, "--release", "--json", "--decision", "Release stopped executor for another host"})
+	})
+	var releaseResult struct {
+		Action string `json:"action"`
+		TaskID string `json:"task_id"`
+	}
+	if err := json.Unmarshal([]byte(released), &releaseResult); code != 0 || diagnostics != "" || err != nil || releaseResult.Action != "release" || releaseResult.TaskID != task.TaskID {
+		t.Fatalf("release exit %d stdout=%q stderr=%q %v", code, released, diagnostics, err)
 	}
 	lost, err := session.Project.Show(t.Context(), task.TaskID)
 	if err != nil || lost.Claim.Status != api.ClaimLost {
