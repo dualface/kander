@@ -12,6 +12,7 @@ import (
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/remote"
 )
@@ -113,7 +114,7 @@ func (s *remoteReviewStore) Prepare(input board.ReviewInput, requirements map[st
 	}
 	proof, err := s.session.ReviewAuthority(context.Background(), "review-prepare", request, ids)
 	if err != nil {
-		return board.ReviewRun{}, false, err
+		return board.ReviewRun{}, false, awaitingRun(input.RunID, err)
 	}
 	if proof == nil {
 		proof = &client.Claim{}
@@ -125,6 +126,17 @@ func (s *remoteReviewStore) Prepare(input board.ReviewInput, requirements map[st
 		err = json.Unmarshal(raw, &result)
 	}
 	return result.Run, result.Fresh, err
+}
+
+// awaitingRun names the run in a wait for holder confirmation. A review that
+// is started again without its run ID makes a new run with new material, which
+// the holders must confirm again; only the same ID resumes this one.
+func awaitingRun(run string, err error) error {
+	var pending *remote.ConfirmationPending
+	if !errors.As(err, &pending) {
+		return err
+	}
+	return &api.Error{Code: pending.Cause.Code, Message: config.Text("remote.review_run_confirmation_pending", run, pending.Cause.Message)}
 }
 func (s *remoteReviewStore) Staging(id string) (string, error) {
 	if !board.ValidReviewID(id) {
@@ -211,7 +223,7 @@ func (s *remoteReviewStore) Publish(id string) (board.ReviewRun, map[string]erro
 	}
 	proof, err := s.session.ReviewAuthority(context.Background(), "review-publish:"+id, id, run.TaskIDs)
 	if err != nil {
-		return run, nil, err
+		return run, nil, awaitingRun(id, err)
 	}
 	if proof == nil {
 		proof = &client.Claim{}
