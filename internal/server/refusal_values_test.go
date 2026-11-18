@@ -162,6 +162,15 @@ func num(v uint64) string { return strconv.FormatUint(v, 10) }
 // english renders the board refusals in English; the server renders them in its own language.
 func english(t *testing.T) {
 	t.Helper()
+	previous := config.CLILanguage()
 	t.Setenv(config.EnvLangCLI, "1")
 	t.Setenv(config.EnvLang, "en")
+	config.ApplyLanguageArgument([]string{"kander", "--lang", "en"})
+	t.Cleanup(func() {
+		if previous == "" {
+			config.ApplyLanguageArgument([]string{"kander"})
+			return
+		}
+		config.ApplyLanguageArgument([]string{"kander", "--lang", previous})
+	})
 }

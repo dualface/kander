@@ -13,8 +13,17 @@ import (
 // english renders the refusal texts in English so the tests can name the values.
 func english(t *testing.T) {
 	t.Helper()
+	previous := config.CLILanguage()
 	t.Setenv(config.EnvLangCLI, "1")
 	t.Setenv(config.EnvLang, "en")
+	config.ApplyLanguageArgument([]string{"kander", "--lang", "en"})
+	t.Cleanup(func() {
+		if previous == "" {
+			config.ApplyLanguageArgument([]string{"kander"})
+			return
+		}
+		config.ApplyLanguageArgument([]string{"kander", "--lang", previous})
+	})
 }
 
 // requireRefusal requires a board error of the given code whose text holds every
