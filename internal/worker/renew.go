@@ -212,11 +212,13 @@ func (w *loop) renewOne(ctx context.Context, c remote.Credential) {
 			w.retry(log, c, now, errors.Join(err, lookupErr))
 		case claim != nil && claim.Generation == c.Generation && claim.Status == api.ClaimReleased:
 			log.Info("claim released; credential removed")
+			w.withdrawWork(c)
 			if err := remote.RemoveCredential(w.o.Home, c); err != nil {
 				log.Error("credential removal failed", "error", err)
 			}
 		case claim != nil && claim.Generation == c.Generation && api.ClaimStands(claim.Status) && !api.IsCode(err, api.CodeRevisionConflict):
 			log.Error("renewal refused while the server still shows this generation; retrying", "error", err, "status", claim.Status)
+			w.withdrawWork(c)
 		default:
 			w.markLost(log, c, err.Error())
 		}
@@ -228,12 +230,23 @@ func (w *loop) renewOne(ctx context.Context, c remote.Credential) {
 	}
 }
 
+// withdrawWork cancels the work step a credential is owed. A renewal that the
+// server did not confirm, or the release of the claim, supersedes the earlier
+// confirmation: a work step still waiting behind a slow one must not run for it.
+func (w *loop) withdrawWork(c remote.Credential) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	delete(w.owed, keyOf(c))
+}
+
 // retry records a renewal that did not reach a decision of the server; the
-// next attempt waits one renewal interval. It never marks the credential lost
-// or stops the agent.
+// next attempt waits one renewal interval, and the work owed from an earlier
+// confirmation is withdrawn. It never marks the credential lost or stops the
+// agent.
 func (w *loop) retry(log *slog.Logger, c remote.Credential, now time.Time, err error) {
 	w.mu.Lock()
 	key := keyOf(c)
+	delete(w.owed, key)
 	o, known := w.disconnected[key]
 	if !known {
 		o.since = now

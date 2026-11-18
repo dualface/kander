@@ -100,68 +100,112 @@ func requireRenewedAt(t *testing.T, p *client.Project, c remote.Credential, want
 	}
 }
 
-// A slow observation of the first credential must not hold back the renewal of
-// the second one.
+// hookGate blocks a worker hook until the test lets it go, and reports the
+// first time the hook is entered.
+type hookGate struct {
+	once    sync.Once
+	entered chan struct{}
+	release chan struct{}
+}
+
+func newHookGate() *hookGate {
+	return &hookGate{entered: make(chan struct{}), release: make(chan struct{})}
+}
+
+func (g *hookGate) hold() {
+	g.once.Do(func() { close(g.entered) })
+	<-g.release
+}
+
+func (g *hookGate) waitEntered(t *testing.T) {
+	t.Helper()
+	select {
+	case <-g.entered:
+	case <-time.After(waitCap):
+		t.Fatal("the hook was not entered")
+	}
+}
+
+// requireRenewalsWhileHeld waits until both credentials are renewed, the hook
+// is blocked, and then makes the leases due again: the work loop stays in the
+// hook, so a renewal that reaches the server now comes from the renewal loop
+// alone.
+func requireRenewalsWhileHeld(t *testing.T, h *harness, events <-chan string, gate *hookGate, p *client.Project, first, second remote.Credential) {
+	t.Helper()
+	expectRenewalOf(t, events, first.TaskID, second.TaskID)
+	gate.waitEntered(t)
+	requireRenewedAt(t, p, first, h.now())
+	requireRenewedAt(t, p, second, h.now())
+	h.advance(16 * time.Second)
+	expectRenewalOf(t, events, first.TaskID, second.TaskID)
+	requireRenewedAt(t, p, first, h.now())
+	requireRenewedAt(t, p, second, h.now())
+}
+
+// A slow observation of one credential must not hold back the renewal of any
+// credential, neither in the first batch nor in a later one.
 func TestRenewalDoesNotWaitForAnObservation(t *testing.T) {
 	events, wrap := renewalEvents()
 	h := newHarnessWrapped(t, 0, wrap)
 	p, first := h.claimedAs("a-first", "exec-first")
 	_, second := h.claimedAs("b-second", "exec-second")
-	release := make(chan struct{})
+	gate := newHookGate()
 	o := h.workerOptions()
 	o.Observe = func(context.Context, remote.Credential) api.AgentObservation {
-		<-release
+		gate.hold()
 		return api.AgentObservation{Status: "alive"}
 	}
 	h.advance(16 * time.Second)
 	stop := serveWorker(t, o)
 	defer stop()
-	defer close(release)
-	expectRenewalOf(t, events, first.TaskID, second.TaskID)
-	requireRenewedAt(t, p, first, h.now())
-	requireRenewedAt(t, p, second, h.now())
+	defer close(gate.release)
+	requireRenewalsWhileHeld(t, h, events, gate, p, first, second)
 }
 
-// A slow terminal delivery of the first credential must not hold back the
-// renewal of the second one.
+// A slow terminal delivery of one credential must not hold back the renewal of
+// any credential, neither in the first batch nor in a later one.
 func TestRenewalDoesNotWaitForADelivery(t *testing.T) {
 	events, wrap := renewalEvents()
 	h := newHarnessWrapped(t, 0, wrap)
 	p, first := h.claimedAs("a-first", "exec-first", true)
-	_, second := h.claimedAs("b-second", "exec-second")
-	if _, err := h.project("host-b").CreateRequest(t.Context(), "", first.TaskID, api.NewCollabRequest{Kind: api.RequestFix, Message: "fix it", TargetGeneration: 1}); err != nil {
-		t.Fatal(err)
+	_, second := h.claimedAs("b-second", "exec-second", true)
+	for _, c := range []remote.Credential{first, second} {
+		if _, err := h.project("host-b").CreateRequest(t.Context(), "", c.TaskID, api.NewCollabRequest{Kind: api.RequestFix, Message: "fix it", TargetGeneration: 1}); err != nil {
+			t.Fatal(err)
+		}
 	}
-	release := make(chan struct{})
+	gate := newHookGate()
 	o := h.workerOptions()
 	o.Deliver = func(string, string, string) error {
-		<-release
+		gate.hold()
 		return nil
 	}
 	h.advance(16 * time.Second)
 	stop := serveWorker(t, o)
 	defer stop()
-	defer close(release)
-	expectRenewalOf(t, events, first.TaskID, second.TaskID)
-	requireRenewedAt(t, p, first, h.now())
-	requireRenewedAt(t, p, second, h.now())
+	defer close(gate.release)
+	requireRenewalsWhileHeld(t, h, events, gate, p, first, second)
 }
 
-// renewalGate holds every renewal at the server until want of them are in
-// flight at once, then lets all of them pass. peak is the highest number that
-// was in flight together.
+// renewalGate holds every renewal at the server. It lets them all pass once
+// total of them are in flight at once, or once want of them are and no more
+// arrived within settle. peak is the highest number in flight together.
 type renewalGate struct {
 	mu       sync.Mutex
 	want     int
+	total    int
+	settle   time.Duration
 	inflight int
 	peak     int
 	open     chan struct{}
-	opened   bool
+	once     sync.Once
 }
 
-func newRenewalGate(want int) *renewalGate {
-	return &renewalGate{want: want, open: make(chan struct{})}
+func newRenewalGate(want, total int, settle time.Duration) *renewalGate {
+	return &renewalGate{want: want, total: total, settle: settle, open: make(chan struct{})}
 }
+
+func (g *renewalGate) release() { g.once.Do(func() { close(g.open) }) }
 
 func (g *renewalGate) wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -172,19 +216,19 @@ func (g *renewalGate) wrap(next http.Handler) http.Handler {
 		g.mu.Lock()
 		g.inflight++
 		g.peak = max(g.peak, g.inflight)
-		last := g.inflight >= g.want && !g.opened
-		g.opened = g.opened || last
-		g.mu.Unlock()
-		if last {
-			// Give a renewal loop without a cap time to start the renewals
-			// beyond want before the gate opens: a loop that is not capped shows
-			// a peak above want.
-			time.Sleep(100 * time.Millisecond)
-			close(g.open)
+		switch {
+		case g.inflight >= g.total:
+			g.release()
+		case g.inflight == g.want:
+			// A renewal loop without a cap starts the rest at once, which the
+			// peak shows. A capped one starts none until one is released, so
+			// the wait for them ends by the timer.
+			time.AfterFunc(g.settle, g.release)
 		}
+		g.mu.Unlock()
 		select {
 		case <-g.open:
-		case <-time.After(5 * time.Second):
+		case <-time.After(waitCap):
 		}
 		next.ServeHTTP(w, r)
 		g.mu.Lock()
@@ -201,7 +245,7 @@ func (g *renewalGate) highest() int {
 
 // Renewals are made together: the server waits until all four are in flight.
 func TestRenewalsRunConcurrently(t *testing.T) {
-	gate := newRenewalGate(4)
+	gate := newRenewalGate(4, 4, 0)
 	h := newHarnessWrapped(t, 0, gate.wrap)
 	for i := range 4 {
 		h.claimedAs(fmt.Sprintf("concurrent-%d", i), fmt.Sprintf("exec-%d", i))
@@ -215,7 +259,7 @@ func TestRenewalsRunConcurrently(t *testing.T) {
 
 // No more than renewConcurrency renewals are in flight, however many are due.
 func TestRenewalConcurrencyIsLimited(t *testing.T) {
-	gate := newRenewalGate(renewConcurrency)
+	gate := newRenewalGate(renewConcurrency, 12, time.Second)
 	h := newHarnessWrapped(t, 0, gate.wrap)
 	for i := range 12 {
 		h.claimedAs(fmt.Sprintf("limited-%02d", i), fmt.Sprintf("exec-%02d", i))
@@ -303,33 +347,17 @@ func serveInOrder(t *testing.T, h *harness, ids ...string) {
 	}
 }
 
-// stepGate blocks the observation of one task until the test lets it go, and
-// reports when the observation started.
+// stepGate is a hookGate for the observation of one task.
 type stepGate struct {
-	task    string
-	once    sync.Once
-	entered chan struct{}
-	release chan struct{}
+	*hookGate
+	task string
 }
 
-func newStepGate(task string) *stepGate {
-	return &stepGate{task: task, entered: make(chan struct{}), release: make(chan struct{})}
-}
+func newStepGate(task string) *stepGate { return &stepGate{hookGate: newHookGate(), task: task} }
 
 func (g *stepGate) hold(c remote.Credential) {
-	if c.TaskID != g.task {
-		return
-	}
-	g.once.Do(func() { close(g.entered) })
-	<-g.release
-}
-
-func (g *stepGate) waitEntered(t *testing.T) {
-	t.Helper()
-	select {
-	case <-g.entered:
-	case <-time.After(waitCap):
-		t.Fatal("the work step did not start")
+	if c.TaskID == g.task {
+		g.hookGate.hold()
 	}
 }
 
@@ -581,6 +609,7 @@ func newHandoverRig(t *testing.T, h *harness) *handoverRig {
 	r := newRigOn(t, h)
 	o := r.options()
 	o.Tick = 10 * time.Millisecond
+	o.Stop = h.workerOptions().Stop
 	w := newLoop(o)
 	lock := &workerLock{home: r.home}
 	if err := lock.acquire(t.Context()); err != nil {
@@ -838,4 +867,122 @@ func TestStoppingTheRenewalLoopRecordsNoOutage(t *testing.T) {
 	}
 	h.loop.startRenewals(t.Context())
 	waitFor(t, "the renewal of the restarted loop", func() bool { return h.credentialOf(c).RenewedAt.Equal(h.now()) })
+}
+
+// observedBy counts the observations per task.
+type observedBy struct {
+	mu sync.Mutex
+	n  map[string]int
+}
+
+func (o *observedBy) add(task string) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.n == nil {
+		o.n = map[string]int{}
+	}
+	o.n[task]++
+}
+
+func (o *observedBy) count(task string) int {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.n[task]
+}
+
+// A confirmed renewal owes one work step. A later renewal that the server did
+// not confirm, or the release of the claim, withdraws it: the work loop must not
+// serve the credential when it gets to it behind a slow step.
+func TestLaterRenewalOutcomeWithdrawsTheOwedWork(t *testing.T) {
+	for _, outcome := range []string{"failure", "release"} {
+		t.Run(outcome, func(t *testing.T) {
+			var failing atomic.Pointer[string]
+			h := newHarnessWrapped(t, 0, func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if resource, ok := isRenewal(r); ok && failing.Load() != nil && resource == *failing.Load() {
+						http.Error(w, "unavailable", http.StatusServiceUnavailable)
+						return
+					}
+					next.ServeHTTP(w, r)
+				})
+			})
+			_, a := h.claimedAs("a-slow", "exec-a")
+			pb, b := h.claimedAs("b-later", "exec-b")
+			serveInOrder(t, h, a.TaskID, b.TaskID)
+			gate := newStepGate(a.TaskID)
+			var observed observedBy
+			h.loop.o.Observe = func(_ context.Context, c remote.Credential) api.AgentObservation {
+				observed.add(c.TaskID)
+				gate.hold(c)
+				return api.AgentObservation{Status: "alive"}
+			}
+			h.advance(16 * time.Second)
+			h.loop.renewRound(t.Context())
+			wait := background(t, func() { _, _ = h.loop.workRound(t.Context()) })
+			gate.waitEntered(t)
+			// b was renewed and is owed a work step behind the blocked step of a.
+			if outcome == "failure" {
+				failing.Store(&b.TaskID)
+			} else if _, err := pb.Move(t.Context(), "", b.TaskID, api.Move{State: "trash", Result: "trashed", Reason: "test", Decision: "test"}, b.Claim()); err != nil {
+				t.Fatal(err)
+			}
+			h.advance(16 * time.Second)
+			h.loop.renewRound(t.Context())
+			close(gate.release)
+			wait()
+			if got := observed.count(b.TaskID); got != 0 {
+				t.Fatalf("the work owed by an earlier renewal ran after a %s: %d observations", outcome, got)
+			}
+		})
+	}
+}
+
+// A lease lost during the last work step of a round is stopped in that round.
+func TestLostMarkOfTheLastWorkStepIsStoppedInTheSameRound(t *testing.T) {
+	h := newHarness(t)
+	_, c := h.claimed("last-step")
+	gate := newStepGate(c.TaskID)
+	h.loop.o.Observe = func(_ context.Context, c remote.Credential) api.AgentObservation {
+		gate.hold(c)
+		return api.AgentObservation{Status: "alive"}
+	}
+	h.advance(16 * time.Second)
+	h.loop.renewRound(t.Context())
+	wait := background(t, func() { _, _ = h.loop.workRound(t.Context()) })
+	gate.waitEntered(t)
+	h.advance(100 * time.Second)
+	h.takeOver(c)
+	h.loop.renewRound(t.Context())
+	close(gate.release)
+	wait()
+	if got := h.stoppedPIDs(); len(got) != 1 {
+		t.Fatalf("the agent must be stopped before the round ends: %v", got)
+	}
+}
+
+// A lease lost while the probe of a replaced binary runs is stopped before the
+// renewals pause for the handover.
+func TestLostMarkDuringTheProbeIsStoppedBeforeTheHandover(t *testing.T) {
+	h := newHarness(t)
+	r := newHandoverRig(t, h)
+	_, c := r.claimed("probe-lost")
+	r.probe = func() error {
+		r.advance(100 * time.Second)
+		r.takeOver(c)
+		waitFor(t, "the renewal loop to mark the lease lost", func() bool {
+			r.w.mu.Lock()
+			defer r.w.mu.Unlock()
+			return len(r.w.lostMarks) == 1
+		})
+		return nil
+	}
+	var stoppedAtSpawn int
+	r.spawn = func(string, string) (Successor, error) {
+		stoppedAtSpawn = len(r.stoppedPIDs())
+		return nil, errors.New("no successor in this test")
+	}
+	r.handover(t)
+	if stoppedAtSpawn != 1 {
+		t.Fatalf("the agent must be stopped before the successor starts: %d stopped", stoppedAtSpawn)
+	}
 }

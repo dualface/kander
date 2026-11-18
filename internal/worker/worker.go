@@ -263,6 +263,9 @@ func (w *loop) workRound(ctx context.Context) (int, error) {
 			live++
 		}
 	}
+	// A lease lost during the last work step is stopped in this round, not the
+	// next one, which may be a handover away.
+	w.stopMarked(ctx, stopped)
 	w.warnSlow("work round exceeded the renewal interval", started, credentials)
 	return live, nil
 }
