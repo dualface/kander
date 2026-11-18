@@ -104,12 +104,15 @@ const gateVersion = "v0.0.1"
 
 // fakeGo records every call: its arguments and the variables the gate is meant
 // to control. It answers `go env NAME...` with the value of FAKE_NAME. A
-// directory counts as empty only when it exists and ls -A prints nothing.
+// directory counts as empty only when it exists and ls -A succeeds and prints
+// nothing.
 const fakeGo = `#!/bin/sh
 dir_state() {
 	if [ ! -d "$1" ]; then
 		printf 'missing'
-	elif [ -n "$(ls -A "$1")" ]; then
+	elif ! listing=$(ls -A "$1"); then
+		printf 'unreadable'
+	elif [ -n "$listing" ]; then
 		printf 'nonempty'
 	else
 		printf 'empty'
