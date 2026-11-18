@@ -63,8 +63,8 @@ func TestWindowsRenameRetriesUntilContenderCloses(t *testing.T) {
 	root, target := newRenameTarget(t)
 	contender := openContender(t, target, shareWithoutDelete)
 	retries := renameStats.busyRetries.Load()
-	// The contender is released only after the replacement was refused as busy once, so the success below can only come
-	// from a retry, however long the setup before the first rename takes.
+	// The contender is released about 200ms after the replacement was refused as busy once, so the success below can
+	// only come from a retry, however long the setup before the first rename takes.
 	done := make(chan struct{})
 	var released sync.WaitGroup
 	released.Add(1)
@@ -78,6 +78,7 @@ func TestWindowsRenameRetriesUntilContenderCloses(t *testing.T) {
 			case <-time.After(time.Millisecond):
 			}
 		}
+		time.Sleep(200 * time.Millisecond)
 		closeHandle(contender)
 	}()
 	err := WriteTextAtomic(root, target, "new", true)
