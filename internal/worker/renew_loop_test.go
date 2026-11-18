@@ -11,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/dualface/kander/internal/api"
@@ -101,21 +102,28 @@ func requireRenewedAt(t *testing.T, p *client.Project, c remote.Credential, want
 }
 
 // hookGate blocks a worker hook until the test lets it go, and reports the
-// first time the hook is entered.
+// first time the hook is entered. The hook is let go when the test ends, so a
+// test that fails early leaves no goroutine blocked in it.
 type hookGate struct {
 	once    sync.Once
+	opened  sync.Once
 	entered chan struct{}
 	release chan struct{}
 }
 
-func newHookGate() *hookGate {
-	return &hookGate{entered: make(chan struct{}), release: make(chan struct{})}
+func newHookGate(t *testing.T) *hookGate {
+	g := &hookGate{entered: make(chan struct{}), release: make(chan struct{})}
+	t.Cleanup(g.let)
+	return g
 }
 
 func (g *hookGate) hold() {
 	g.once.Do(func() { close(g.entered) })
 	<-g.release
 }
+
+// let releases the hook, now and for every later call.
+func (g *hookGate) let() { g.opened.Do(func() { close(g.release) }) }
 
 func (g *hookGate) waitEntered(t *testing.T) {
 	t.Helper()
@@ -149,7 +157,7 @@ func TestRenewalDoesNotWaitForAnObservation(t *testing.T) {
 	h := newHarnessWrapped(t, 0, wrap)
 	p, first := h.claimedAs("a-first", "exec-first")
 	_, second := h.claimedAs("b-second", "exec-second")
-	gate := newHookGate()
+	gate := newHookGate(t)
 	o := h.workerOptions()
 	o.Observe = func(context.Context, remote.Credential) api.AgentObservation {
 		gate.hold()
@@ -158,7 +166,7 @@ func TestRenewalDoesNotWaitForAnObservation(t *testing.T) {
 	h.advance(16 * time.Second)
 	stop := serveWorker(t, o)
 	defer stop()
-	defer close(gate.release)
+	defer gate.let() // runs before stop: the worker cannot return from a held hook
 	requireRenewalsWhileHeld(t, h, events, gate, p, first, second)
 }
 
@@ -174,7 +182,7 @@ func TestRenewalDoesNotWaitForADelivery(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	gate := newHookGate()
+	gate := newHookGate(t)
 	o := h.workerOptions()
 	o.Deliver = func(string, string, string) error {
 		gate.hold()
@@ -183,29 +191,25 @@ func TestRenewalDoesNotWaitForADelivery(t *testing.T) {
 	h.advance(16 * time.Second)
 	stop := serveWorker(t, o)
 	defer stop()
-	defer close(gate.release)
+	defer gate.let() // runs before stop: the worker cannot return from a held hook
 	requireRenewalsWhileHeld(t, h, events, gate, p, first, second)
 }
 
-// renewalGate holds every renewal at the server. It lets them all pass once
-// total of them are in flight at once, or once want of them are and no more
-// arrived within settle. peak is the highest number in flight together.
+// renewalGate holds every renewal at the server until want of them are in
+// flight at once, then lets all of them pass. peak is the highest number in
+// flight together.
 type renewalGate struct {
 	mu       sync.Mutex
 	want     int
-	total    int
-	settle   time.Duration
 	inflight int
 	peak     int
 	open     chan struct{}
 	once     sync.Once
 }
 
-func newRenewalGate(want, total int, settle time.Duration) *renewalGate {
-	return &renewalGate{want: want, total: total, settle: settle, open: make(chan struct{})}
+func newRenewalGate(want int) *renewalGate {
+	return &renewalGate{want: want, open: make(chan struct{})}
 }
-
-func (g *renewalGate) release() { g.once.Do(func() { close(g.open) }) }
 
 func (g *renewalGate) wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -216,14 +220,8 @@ func (g *renewalGate) wrap(next http.Handler) http.Handler {
 		g.mu.Lock()
 		g.inflight++
 		g.peak = max(g.peak, g.inflight)
-		switch {
-		case g.inflight >= g.total:
-			g.release()
-		case g.inflight == g.want:
-			// A renewal loop without a cap starts the rest at once, which the
-			// peak shows. A capped one starts none until one is released, so
-			// the wait for them ends by the timer.
-			time.AfterFunc(g.settle, g.release)
+		if g.inflight >= g.want {
+			g.once.Do(func() { close(g.open) })
 		}
 		g.mu.Unlock()
 		select {
@@ -245,7 +243,7 @@ func (g *renewalGate) highest() int {
 
 // Renewals are made together: the server waits until all four are in flight.
 func TestRenewalsRunConcurrently(t *testing.T) {
-	gate := newRenewalGate(4, 4, 0)
+	gate := newRenewalGate(4)
 	h := newHarnessWrapped(t, 0, gate.wrap)
 	for i := range 4 {
 		h.claimedAs(fmt.Sprintf("concurrent-%d", i), fmt.Sprintf("exec-%d", i))
@@ -258,22 +256,44 @@ func TestRenewalsRunConcurrently(t *testing.T) {
 }
 
 // No more than renewConcurrency renewals are in flight, however many are due.
+// The bubble of synctest runs the calls without a network: it returns from Wait
+// only when every goroutine is blocked, so a call that a missing cap would have
+// started shows up in the count without any wait on the clock.
 func TestRenewalConcurrencyIsLimited(t *testing.T) {
-	gate := newRenewalGate(renewConcurrency, 12, time.Second)
-	h := newHarnessWrapped(t, 0, gate.wrap)
-	for i := range 12 {
-		h.claimedAs(fmt.Sprintf("limited-%02d", i), fmt.Sprintf("exec-%02d", i))
-	}
-	h.advance(16 * time.Second)
-	h.loop.renewRound(t.Context())
-	if got := gate.highest(); got != renewConcurrency {
-		t.Fatalf("renewals in flight together: peak %d, want %d", got, renewConcurrency)
-	}
-	for _, c := range mustCredentials(t, h.home) {
-		if !c.RenewedAt.Equal(h.now()) {
-			t.Fatalf("a due credential was not renewed: %s", c.TaskID)
+	synctest.Test(t, func(t *testing.T) {
+		const due = 12
+		var mu sync.Mutex
+		inflight, peak, finished := 0, 0, 0
+		release := make(chan struct{})
+		renew := func(context.Context, remote.Credential) {
+			mu.Lock()
+			inflight++
+			peak = max(peak, inflight)
+			mu.Unlock()
+			<-release
+			mu.Lock()
+			inflight--
+			finished++
+			mu.Unlock()
 		}
-	}
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			renewBounded(t.Context(), make([]remote.Credential, due), renew)
+		}()
+		synctest.Wait()
+		mu.Lock()
+		held := inflight
+		mu.Unlock()
+		if held != renewConcurrency {
+			t.Fatalf("%d renewals in flight with %d due, want %d", held, due, renewConcurrency)
+		}
+		close(release)
+		<-done
+		if peak != renewConcurrency || finished != due {
+			t.Fatalf("peak %d (want %d), finished %d (want %d)", peak, renewConcurrency, finished, due)
+		}
+	})
 }
 
 // takeOver lets host-b take the task over from the stale host-a execution.
@@ -353,7 +373,9 @@ type stepGate struct {
 	task string
 }
 
-func newStepGate(task string) *stepGate { return &stepGate{hookGate: newHookGate(), task: task} }
+func newStepGate(t *testing.T, task string) *stepGate {
+	return &stepGate{hookGate: newHookGate(t), task: task}
+}
 
 func (g *stepGate) hold(c remote.Credential) {
 	if c.TaskID == g.task {
@@ -384,7 +406,7 @@ func TestLostCredentialIsStoppedBetweenWorkSteps(t *testing.T) {
 	_, y := h.claimedAs("b-y", "exec-y")
 	_, z := h.claimedAs("c-z", "exec-z")
 	serveInOrder(t, h, x.TaskID, y.TaskID, z.TaskID)
-	gate := newStepGate(y.TaskID)
+	gate := newStepGate(t, y.TaskID)
 	var stoppedBeforeZ atomic.Int64
 	stoppedBeforeZ.Store(-1)
 	h.loop.o.Observe = func(_ context.Context, c remote.Credential) api.AgentObservation {
@@ -401,7 +423,7 @@ func TestLostCredentialIsStoppedBetweenWorkSteps(t *testing.T) {
 	h.advance(100 * time.Second)
 	h.takeOver(x)
 	h.loop.renewRound(t.Context())
-	close(gate.release)
+	gate.let()
 	wait()
 	if got := stoppedBeforeZ.Load(); got != 1 {
 		t.Fatalf("the agent of the lost credential must be stopped before the next work step: %d stopped when it began", got)
@@ -427,14 +449,19 @@ func TestWorkLoopSkipsACredentialWhoseRenewalDidNotConfirm(t *testing.T) {
 	}
 }
 
-// recording is a log handler that keeps every record.
+// recording is a log handler that keeps every record. onHandle, when set, runs
+// before the record is kept and may block the logging call.
 type recording struct {
-	mu      sync.Mutex
-	records []slog.Record
+	mu       sync.Mutex
+	records  []slog.Record
+	onHandle func(slog.Record)
 }
 
 func (r *recording) Enabled(context.Context, slog.Level) bool { return true }
 func (r *recording) Handle(_ context.Context, rec slog.Record) error {
+	if r.onHandle != nil {
+		r.onHandle(rec)
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.records = append(r.records, rec)
@@ -537,7 +564,7 @@ func TestWorkStepToleratesAReleasedCredential(t *testing.T) {
 	logs := &recording{}
 	h.loop.o.Logger = slog.New(logs)
 	p, c := h.claimed("released-midway")
-	gate := newStepGate(c.TaskID)
+	gate := newStepGate(t, c.TaskID)
 	h.loop.o.Observe = func(_ context.Context, c remote.Credential) api.AgentObservation {
 		gate.hold(c)
 		return api.AgentObservation{Status: "alive"}
@@ -554,7 +581,7 @@ func TestWorkStepToleratesAReleasedCredential(t *testing.T) {
 	if all := mustCredentials(t, h.home); len(all) != 0 {
 		t.Fatalf("the renewal loop removes a released credential: %+v", all)
 	}
-	close(gate.release)
+	gate.let()
 	wait()
 	if got := logs.errors(); len(got) != 0 {
 		t.Fatalf("a released credential is not an error of the work step: %v", got)
@@ -602,6 +629,40 @@ type handoverRig struct {
 	lock   *workerLock
 	self   *handover
 	opened *renewals
+	clock  *heldClock
+	onStop atomic.Pointer[func(pid int)]
+}
+
+// heldClock is the clock of the worker in a handoverRig. It follows the clock
+// of the harness, unless it is held: then the worker sees no time pass while a
+// test moves the clock of the server, so it cannot renew a lease the test is
+// about to take over.
+type heldClock struct {
+	mu   sync.Mutex
+	h    *harness
+	held bool
+	at   time.Time
+}
+
+func (c *heldClock) now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.held {
+		return c.at
+	}
+	return c.h.now()
+}
+
+func (c *heldClock) hold() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.held, c.at = true, c.h.now()
+}
+
+func (c *heldClock) resume() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.held = false
 }
 
 func newHandoverRig(t *testing.T, h *harness) *handoverRig {
@@ -609,7 +670,16 @@ func newHandoverRig(t *testing.T, h *harness) *handoverRig {
 	r := newRigOn(t, h)
 	o := r.options()
 	o.Tick = 10 * time.Millisecond
-	o.Stop = h.workerOptions().Stop
+	clock := &heldClock{h: h}
+	o.Now = clock.now
+	hr := &handoverRig{rig: r, clock: clock}
+	record := h.workerOptions().Stop
+	o.Stop = func(pid int) error {
+		if hook := hr.onStop.Load(); hook != nil {
+			(*hook)(pid)
+		}
+		return record(pid)
+	}
 	w := newLoop(o)
 	lock := &workerLock{home: r.home}
 	if err := lock.acquire(t.Context()); err != nil {
@@ -623,7 +693,8 @@ func newHandoverRig(t *testing.T, h *harness) *handoverRig {
 	w.startRenewals(t.Context())
 	t.Cleanup(w.stopRenewals)
 	r.writeExecutable("v2")
-	return &handoverRig{rig: r, w: w, lock: lock, self: self, opened: w.renewing}
+	hr.w, hr.lock, hr.self, hr.opened = w, lock, self, w.renewing
+	return hr
 }
 
 func (r *handoverRig) handover(t *testing.T) handoverResult {
@@ -773,7 +844,7 @@ func TestALostCredentialBehindABlockedStepIsStoppedOnce(t *testing.T) {
 	_, a := h.claimed("a-task")
 	g, request := h.groupClaimedFor("29991231-late-group", "exec-group")
 	serveInOrder(t, h, a.TaskID, g.TaskID)
-	gate := newStepGate(a.TaskID)
+	gate := newStepGate(t, a.TaskID)
 	h.loop.o.Observe = func(_ context.Context, c remote.Credential) api.AgentObservation {
 		if c.TaskID == g.TaskID {
 			// A stale copy of the lost group would be observed as stopped and
@@ -791,7 +862,7 @@ func TestALostCredentialBehindABlockedStepIsStoppedOnce(t *testing.T) {
 	h.advance(100 * time.Second)
 	h.takeOverGroup(g, request)
 	h.loop.renewRound(t.Context())
-	close(gate.release)
+	gate.let()
 	wait()
 	if got := h.stoppedPIDs(); len(got) != 1 {
 		t.Fatalf("the agent of the lost group is stopped once: %v", got)
@@ -892,9 +963,10 @@ func (o *observedBy) count(task string) int {
 
 // A confirmed renewal owes one work step. A later renewal that the server did
 // not confirm, or the release of the claim, withdraws it: the work loop must not
-// serve the credential when it gets to it behind a slow step.
+// serve the credential when it gets to it behind a slow step. The log call that
+// reports the outcome is held, so the work must be withdrawn before it.
 func TestLaterRenewalOutcomeWithdrawsTheOwedWork(t *testing.T) {
-	for _, outcome := range []string{"failure", "release"} {
+	for outcome, message := range map[string]string{"failure": "renewal failed; retrying", "release": "claim released; credential removed"} {
 		t.Run(outcome, func(t *testing.T) {
 			var failing atomic.Pointer[string]
 			h := newHarnessWrapped(t, 0, func(next http.Handler) http.Handler {
@@ -909,7 +981,14 @@ func TestLaterRenewalOutcomeWithdrawsTheOwedWork(t *testing.T) {
 			_, a := h.claimedAs("a-slow", "exec-a")
 			pb, b := h.claimedAs("b-later", "exec-b")
 			serveInOrder(t, h, a.TaskID, b.TaskID)
-			gate := newStepGate(a.TaskID)
+			gate := newStepGate(t, a.TaskID)
+			logGate := newHookGate(t)
+			logs := &recording{onHandle: func(rec slog.Record) {
+				if rec.Message == message {
+					logGate.hold()
+				}
+			}}
+			h.loop.o.Logger = slog.New(logs)
 			var observed observedBy
 			h.loop.o.Observe = func(_ context.Context, c remote.Credential) api.AgentObservation {
 				observed.add(c.TaskID)
@@ -927,12 +1006,16 @@ func TestLaterRenewalOutcomeWithdrawsTheOwedWork(t *testing.T) {
 				t.Fatal(err)
 			}
 			h.advance(16 * time.Second)
-			h.loop.renewRound(t.Context())
-			close(gate.release)
+			renewed := background(t, func() { h.loop.renewRound(t.Context()) })
+			logGate.waitEntered(t)
+			// The renewal of b is inside its log call; a goes on to b now.
+			gate.let()
 			wait()
 			if got := observed.count(b.TaskID); got != 0 {
 				t.Fatalf("the work owed by an earlier renewal ran after a %s: %d observations", outcome, got)
 			}
+			logGate.let()
+			renewed()
 		})
 	}
 }
@@ -941,7 +1024,7 @@ func TestLaterRenewalOutcomeWithdrawsTheOwedWork(t *testing.T) {
 func TestLostMarkOfTheLastWorkStepIsStoppedInTheSameRound(t *testing.T) {
 	h := newHarness(t)
 	_, c := h.claimed("last-step")
-	gate := newStepGate(c.TaskID)
+	gate := newStepGate(t, c.TaskID)
 	h.loop.o.Observe = func(_ context.Context, c remote.Credential) api.AgentObservation {
 		gate.hold(c)
 		return api.AgentObservation{Status: "alive"}
@@ -953,11 +1036,31 @@ func TestLostMarkOfTheLastWorkStepIsStoppedInTheSameRound(t *testing.T) {
 	h.advance(100 * time.Second)
 	h.takeOver(c)
 	h.loop.renewRound(t.Context())
-	close(gate.release)
+	gate.let()
 	wait()
 	if got := h.stoppedPIDs(); len(got) != 1 {
 		t.Fatalf("the agent must be stopped before the round ends: %v", got)
 	}
+}
+
+// takeOverWhileHeld lets the server lapse and hands the tasks to host-b while
+// the worker still sees the old time, then lets the worker see the new time.
+// The worker finds each lease lost at its next renewal.
+func (r *handoverRig) takeOverWhileHeld(cs ...remote.Credential) {
+	r.clock.hold()
+	r.advance(100 * time.Second)
+	for _, c := range cs {
+		r.takeOver(c)
+	}
+	r.clock.resume()
+}
+
+// markedLost reports whether the renewal loop has marked a lease lost that the
+// work loop has not stopped yet.
+func (r *handoverRig) markedLost() bool {
+	r.w.mu.Lock()
+	defer r.w.mu.Unlock()
+	return len(r.w.lostMarks) > 0
 }
 
 // A lease lost while the probe of a replaced binary runs is stopped before the
@@ -967,13 +1070,8 @@ func TestLostMarkDuringTheProbeIsStoppedBeforeTheHandover(t *testing.T) {
 	r := newHandoverRig(t, h)
 	_, c := r.claimed("probe-lost")
 	r.probe = func() error {
-		r.advance(100 * time.Second)
-		r.takeOver(c)
-		waitFor(t, "the renewal loop to mark the lease lost", func() bool {
-			r.w.mu.Lock()
-			defer r.w.mu.Unlock()
-			return len(r.w.lostMarks) == 1
-		})
+		r.takeOverWhileHeld(c)
+		waitFor(t, "the renewal loop to mark the lease lost", r.markedLost)
 		return nil
 	}
 	var stoppedAtSpawn int
@@ -984,5 +1082,57 @@ func TestLostMarkDuringTheProbeIsStoppedBeforeTheHandover(t *testing.T) {
 	r.handover(t)
 	if stoppedAtSpawn != 1 {
 		t.Fatalf("the agent must be stopped before the successor starts: %d stopped", stoppedAtSpawn)
+	}
+}
+
+// A lease marked lost while the handover stops another agent is stopped before
+// the lock is released, not left for the new worker or the next round.
+func TestLostMarkDuringAStopIsStoppedBeforeTheLockIsReleased(t *testing.T) {
+	var holdB atomic.Bool
+	releaseB := make(chan struct{})
+	var firstB sync.Once
+	h := newHarnessWrapped(t, 0, func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if resource, ok := isRenewal(r); ok && holdB.Load() && strings.Contains(resource, "b-second") {
+				firstB.Do(func() { <-releaseB })
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
+	r := newHandoverRig(t, h)
+	_, a := r.claimedAs("a-first", "exec-a")
+	_, b := r.claimedAs("b-second", "exec-b")
+	holdB.Store(true)
+	stopA := newHookGate(t)
+	hook := func(int) {
+		// The first stop is the one of a: b is marked while it is in progress.
+		stopA.hold()
+	}
+	r.onStop.Store(&hook)
+	r.probe = func() error {
+		r.takeOverWhileHeld(a, b)
+		waitFor(t, "the renewal loop to mark a lost", r.markedLost)
+		return nil
+	}
+	var stoppedAtSpawn int
+	r.spawn = func(string, string) (Successor, error) {
+		stoppedAtSpawn = len(r.stoppedPIDs())
+		return nil, errors.New("no successor in this test")
+	}
+	wait := background(t, func() { r.handover(t) })
+	stopA.waitEntered(t)
+	// The renewal of b has been held at the server since the probe; it gets the
+	// answer now, while the stop of a is in progress.
+	close(releaseB)
+	waitFor(t, "the renewal loop to mark b lost", func() bool {
+		r.w.mu.Lock()
+		defer r.w.mu.Unlock()
+		_, marked := r.w.lostMarks[keyOf(b)]
+		return marked
+	})
+	stopA.let()
+	wait()
+	if stoppedAtSpawn != 2 {
+		t.Fatalf("both agents must be stopped before the successor starts: %d stopped", stoppedAtSpawn)
 	}
 }

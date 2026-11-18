@@ -99,12 +99,24 @@ func (w *loop) renewRound(ctx context.Context) {
 		}
 		return
 	}
+	var due []remote.Credential
+	for _, c := range credentials {
+		if !c.Lost && w.renewDue(c, started) {
+			due = append(due, c)
+		}
+	}
+	renewBounded(ctx, due, w.renewOne)
+	if ctx.Err() == nil {
+		w.warnSlow("renewal round exceeded the renewal interval", started, credentials)
+	}
+}
+
+// renewBounded calls renew for every credential, at most renewConcurrency at a
+// time, and returns when the calls are done. Once ctx ends it starts no more.
+func renewBounded(ctx context.Context, due []remote.Credential, renew func(context.Context, remote.Credential)) {
 	var wg sync.WaitGroup
 	slots := make(chan struct{}, renewConcurrency)
-	for _, c := range credentials {
-		if c.Lost || !w.renewDue(c, started) {
-			continue
-		}
+	for _, c := range due {
 		select {
 		case slots <- struct{}{}:
 		case <-ctx.Done():
@@ -115,13 +127,10 @@ func (w *loop) renewRound(ctx context.Context) {
 		go func() {
 			defer wg.Done()
 			defer func() { <-slots }()
-			w.renewOne(ctx, c)
+			renew(ctx, c)
 		}()
 	}
 	wg.Wait()
-	if ctx.Err() == nil {
-		w.warnSlow("renewal round exceeded the renewal interval", started, credentials)
-	}
 }
 
 // renewDue reports whether the credential is due: its last renewal is one
@@ -211,14 +220,16 @@ func (w *loop) renewOne(ctx context.Context, c remote.Credential) {
 			// The refusal cannot be read against the server's view yet.
 			w.retry(log, c, now, errors.Join(err, lookupErr))
 		case claim != nil && claim.Generation == c.Generation && claim.Status == api.ClaimReleased:
-			log.Info("claim released; credential removed")
+			// The owed work goes first: a log call can block, and the work loop
+			// must not start a step for a claim the server released.
 			w.withdrawWork(c)
+			log.Info("claim released; credential removed")
 			if err := remote.RemoveCredential(w.o.Home, c); err != nil {
 				log.Error("credential removal failed", "error", err)
 			}
 		case claim != nil && claim.Generation == c.Generation && api.ClaimStands(claim.Status) && !api.IsCode(err, api.CodeRevisionConflict):
-			log.Error("renewal refused while the server still shows this generation; retrying", "error", err, "status", claim.Status)
 			w.withdrawWork(c)
+			log.Error("renewal refused while the server still shows this generation; retrying", "error", err, "status", claim.Status)
 		default:
 			w.markLost(log, c, err.Error())
 		}

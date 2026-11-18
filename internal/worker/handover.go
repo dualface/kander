@@ -217,9 +217,12 @@ func (w *loop) tryHandover(ctx context.Context, h *handover, lock *workerLock) (
 		h.fail(w.o, current)
 		return handoverNone, nil
 	}
-	// Leases lost while the probe ran are stopped before the renewals pause.
+	// Leases lost while the probe ran are stopped before the renewals pause. A
+	// lease marked lost during those stops is stopped once the renewal loop has
+	// exited, while this worker still holds the lock and nothing marks any more.
 	w.stopMarked(ctx, map[credentialKey]struct{}{})
 	w.stopRenewals()
+	w.stopMarked(ctx, map[credentialKey]struct{}{})
 	lock.release()
 	next, err := w.o.Spawn(w.o.Home, h.executable)
 	if err == nil {
