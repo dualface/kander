@@ -75,7 +75,9 @@ With `--json`:
 - `start`, `restart`, and `status`: one object, the server info: `url`, `version`, `pid`, `data_dir`, `log_path`, `projects`, `listen`, `ttl`, `renew`. A server that is not running makes `status` fail with the code `server_not_running`.
 - `start --foreground`: stdout stays empty until the server can serve, then one line holds `listen`, `data_dir`, `pid`, and `version`. The JSON log lines stay on stderr. A failure after that line leaves it in place and ends stderr with one error object.
 - `stop`: `stopped` (boolean, false when no server was running) and `target`.
-- `import`: the import result, with no progress output. `maintain`: the maintenance result. `projects`: `projects`, an array of `id`, `name`, `remote`, `created_at`, `board_path`.
+- `import`: the import result, with no progress output. Fields: `project` (`id`, `name`, `remote` when set, `created_at`, `board_path` when set), `source` (the absolute source path of this request, also for an earlier import of the same snapshot), `files` and `tasks` (counts), `snapshot` (the digest of the source board; the published board equals it except for the `SIZE` lines in `defaulted_size`), `existing` (`true` only when the snapshot was imported before; otherwise left out), `defaulted_size` (an array of the cards whose `SIZE` line the import defaulted; left out when empty), and `warnings` (an array of `task_ids` and `message`: a board check problem accepted because every card it concerns is closed; left out when empty). `defaulted_size` and `warnings` are the same for an earlier import of the same snapshot.
+- `maintain`: the maintenance result: `project` (the same object as in the import result), `changed_tasks` (the number of file cards converted to directory cards, 0 when there was nothing to convert), and `snapshot` (the digest of the board after the migration).
+- `projects`: `projects`, an array of `id`, `name`, `remote`, `created_at`, `board_path`.
 
 ## Rejections
 

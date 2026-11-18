@@ -524,16 +524,28 @@ func TestJSONServerCommands(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	imported := runServerJSON(t, "import", "--json", "--data", dir, "--project", "json-demo", "--from", source)
-	if imported.stderr != "" || imported.code != 0 || !strings.Contains(imported.stdout, `"source"`) {
-		t.Fatalf("import: %+v", imported)
+	// The fields the contract lists for the import result, with their types; the optional ones
+	// (existing, defaulted_size, warnings) are left out of an empty first import.
+	imported := requireResult(t, runServerJSON(t, "import", "--json", "--data", dir, "--project", "json-demo", "--from", source), "import", "project", "source", "files", "tasks", "snapshot")
+	for _, optional := range []string{"existing", "defaulted_size", "warnings"} {
+		if _, present := imported[optional]; present {
+			t.Fatalf("import: the empty field %q is not left out: %v", optional, imported)
+		}
 	}
-	jsonLine(t, imported.stdout)
+	if project, _ := imported["project"].(map[string]any); project["name"] != "json-demo" || project["id"] == "" || project["created_at"] == nil {
+		t.Fatalf("import: project %v", imported["project"])
+	}
+	if _, ok := imported["files"].(float64); !ok {
+		t.Fatalf("import: files %v", imported["files"])
+	}
 	listed = requireResult(t, runServerJSON(t, "projects", "--json", "--data", dir), "projects after import", "projects")
 	if projects, _ := listed["projects"].([]any); len(projects) != 1 || projects[0].(map[string]any)["name"] != "json-demo" {
 		t.Fatalf("projects after import: %v", listed)
 	}
-	requireResult(t, runServerJSON(t, "maintain", "--json", "--data", dir, "--project", "json-demo", "--maintenance"), "maintain")
+	maintained := requireResult(t, runServerJSON(t, "maintain", "--json", "--data", dir, "--project", "json-demo", "--maintenance"), "maintain", "project", "changed_tasks", "snapshot")
+	if _, ok := maintained["changed_tasks"].(float64); !ok || maintained["snapshot"] == "" {
+		t.Fatalf("maintain: %v", maintained)
+	}
 	// A failure writes only the error object, with no log line before it.
 	requireFailure(t, runServerJSON(t, "maintain", "--json", "--data", dir, "--project", "no-such-project"), "maintain unknown", api.CodeNotFound, 1)
 }
