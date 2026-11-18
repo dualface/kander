@@ -235,7 +235,7 @@ kander review progress <绝对工作目录> <task-id>
 - 每个新成员都必须处于 `working/` 或 `review/`，`TASK_GROUP` 与计划成员相同且非空（成员没有共同组的计划，例如一张独立卡的计划，不接受新成员），不属于任何计划，没有成员排除记录，没有计划外批次的运行，并且报告语言与计划的 `report_language` 相同。
 - 计划不能已封存，`expected_revision` 必须等于计划修订号。列表不能为空，且必须是有效的任务 ID。该操作与其他所有 `extend-plan` 操作互斥，包括 `resolve_batch`。
 - 一个请求就是一个决定：有一张卡不满足条件，就什么都不写，错误写出该卡和不满足的条件。
-- 一个事务记录 `task_ids` 中的卡、每个新成员当前的执行周期（写在计划里，也写在 `tracked-cycles/<id>.json`）和计划指针 `task-plans/<id>.json`，并重写每个成员的计划副本。计划修订号加 1，`plan-history/<plan>/<revision>.json` 保存加入前的计划和这次请求。
+- 一个事务记录 `task_ids` 中的卡、每个新成员当前的执行周期（写在计划里，也写在 `tracked-cycles/<id>.json`）和计划指针 `task-plans/<id>.json`，并重写每个仍接收副本的成员的计划副本（已排除或已归档的成员保留旧副本）。计划修订号加 1，`plan-history/<plan>/<revision>.json` 保存加入前的计划和这次请求。
 - 新成员不在任何已有批次里，所以没有为它欠下的批次。像其他成员一样，在前一批次关闭后用 `batch` 追加包含它的批次；在每个成员（包括新成员）都进入某个批次之前，`seal` 会被拒绝。
 - 服务模式下请求在服务端执行。每个已启动新成员的持有者，和每个已启动计划成员的持有者一样，用 `kander review confirm` 确认同一份发布材料。先升级服务端再升级客户端：旧服务端会拒绝未知字段 `add_members`。
 
