@@ -20,7 +20,7 @@
   "board.refusal_rebind_differs": "请求的周期与当前周期不同的成员（任务、请求值、当前值）：{{.V0}}",
   "board.refusal_next_rebind": "下一步：从 kander review progress <CWD> <task-id> 照抄 rebind_cycles，再重写请求。",
   "board.refusal_sync_target": "sync_targets 给批次 {{.V0}} 写的是 {{.V1}}，但它的 target_commit 是 {{.V2}}",
-  "board.refusal_next_sync": "下一步：用 kander review progress <CWD> <task-id> 读取 batch_target 并使用它，确认同步仍然成立，再重写请求。",
+  "board.refusal_next_sync": "下一步：用 kander review progress <CWD> <task-id> 读取 plan_target 和 batch_target；两者不同时使用 batch_target，相同时把该批次从 sync_targets 中去掉。确认同步仍然成立，再重写请求。",
   "board.refusal_disposition_ref": "任务 {{.V2}} 在运行 {{.V0}} 中针对发现 {{.V1}} 的记录链止于记录 {{.V4}}，但 previous_record_id 是 {{.V3}}",
   "board.refusal_next_disposition": "下一步：用 kander review aggregate <CWD> <batch-id> 重新读取该运行的发现与记录，确认处置在最后一条记录之后仍然适用，再把 previous_record_id 设为它并重写记录。",
   "board.refusal_kernel_facts": "内核拒绝了 {{.V0}}，因为下列事实为假：{{.V1}}",
@@ -52,7 +52,5 @@
   "board.refusal_task_state": "期望状态 {{.V0}}，当前状态 {{.V1}}",
   "board.refusal_next_rebind_none": "下一步：没有成员的周期发生变化，请求不需要 rebind_cycles；只写 kander review progress 在 rebind_cycles 里列出的成员。",
   "board.refusal_wrapup_named": "author 和 reason 都必须给出",
-  "board.refusal_next_dispatch": "下一步：用 kander dispatch show {{.V0}} {{.V1}} 读取该轮，确认决定仍然成立，再重写请求。",
-  "board.refusal_next_request": "下一步：用 kander request show {{.V0}} {{.V1}} --json 读取该请求，确认回答仍然成立，再重写。",
-  "board.refusal_next_card": "下一步：用 kander show --json {{.V0}} 读取该卡，按它当前的修订号检查派发，再重写请求。"
+  "board.refusal_next_dispatch": "下一步：用 kander dispatch show {{.V0}} {{.V1}} 读取该轮，确认决定仍然成立，再重写请求。"
 }

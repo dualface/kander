@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
@@ -269,7 +268,7 @@ func sameRequestedDispatch(old api.CollabRequest, input api.NewCollabRequest) bo
 func bindRefusal(proposalTask, task string, named, current uint64) string {
 	var parts []string
 	if proposalTask != task {
-		parts = append(parts, fmt.Sprintf("the proposal names task %s, the request path names task %s", boundedValue(proposalTask), task))
+		parts = append(parts, fmt.Sprintf("the proposal names task %s, the request path names task %s", board.RefusalTaskID(proposalTask), task))
 	}
 	if named != current {
 		parts = append(parts, fmt.Sprintf("the request has card_revision %d, the card is at revision %d", named, current))
@@ -279,19 +278,4 @@ func bindRefusal(proposalTask, task string, named, current uint64) string {
 		text += ": " + strings.Join(parts, "; ")
 	}
 	return text + ". Next step: read the card with kander show --json " + task + " and propose again against its current revision"
-}
-
-// boundedValue cuts a value the caller wrote to one bounded line before the server
-// writes it back in a message.
-func boundedValue(s string) string {
-	s = strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
-			return ' '
-		}
-		return r
-	}, s)
-	if runes := []rune(s); len(runes) > 96 {
-		s = string(runes[:96]) + "…"
-	}
-	return s
 }

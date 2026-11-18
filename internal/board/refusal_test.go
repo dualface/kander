@@ -71,6 +71,11 @@ func TestCloseRequestRefusal(t *testing.T) {
 	_, _, err = ReviewClosureEdges(v, other)
 	requireRefusal(t, err, "board.review_evidence_invalid", []string{"close target/revision/view CAS", "view_hash is " + other.ViewHash, "hashes to " + ReviewViewDigest(v), "stdout bytes"}, "expected_revision is")
 
+	pasted := good
+	pasted.ViewHash = "tok-pasted-by-mistake"
+	_, _, err = ReviewClosureEdges(v, pasted)
+	requireRefusal(t, err, "board.review_evidence_invalid", []string{"view_hash is <invalid>", "hashes to " + ReviewViewDigest(v)}, "tok-pasted-by-mistake")
+
 	anyone := good
 	anyone.BatchID = "another"
 	_, _, err = ReviewClosureEdges(v, anyone)
@@ -131,16 +136,23 @@ func TestSealAndAppendKernelRefusal(t *testing.T) {
 // change, and the ones with another cycle.
 func TestRebindRefusal(t *testing.T) {
 	english(t)
-	changed := map[string]string{"task-a": "cycle-2", "task-b": "cycle-3", "task-c": "cycle-4"}
-	requested := map[string]string{"task-a": "cycle-2", "task-c": "cycle-0", "task-d": "cycle-9"}
+	d1, d2, d3, d4, d5 := strings.Repeat("1", 64), strings.Repeat("2", 64), strings.Repeat("3", 64), strings.Repeat("4", 64), strings.Repeat("5", 64)
+	a, b, c, d := "20260101-a-task", "20260101-b-task", "20260101-c-task", "20260101-d-task"
+	changed := map[string]string{a: d1, b: d2, c: d3}
+	requested := map[string]string{a: d1, c: d4, d: d5}
 	err := rebindRefusal(changed, requested)
-	requireRefusal(t, err, "board.review_evidence_invalid", []string{"copy rebind_cycles",
+	requireRefusal(t, err, "board.review_evidence_invalid", []string{
 		"cycle rebind CAS requires exactly all changed members",
-		"task-b=cycle-3",
-		"did not change: task-d",
-		"task-c: cycle-0, cycle-4",
+		"copy rebind_cycles",
+		b + "=" + d2,
+		"did not change: " + d,
+		c + ": " + d4 + ", " + d3,
 		"kander review progress",
-	}, "task-a")
+	}, a+"=")
+
+	// A requested cycle that is no digest is not written back.
+	err = rebindRefusal(map[string]string{a: d1}, map[string]string{a: "tok-pasted-by-mistake"})
+	requireRefusal(t, err, "board.review_evidence_invalid", []string{a + ": <invalid>, " + d1}, "tok-pasted-by-mistake")
 }
 
 // R22: a review over a member that is not in working or review names the member

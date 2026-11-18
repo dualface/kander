@@ -20,7 +20,7 @@
   "board.refusal_rebind_differs": "リクエストのサイクルが現在と異なるメンバー（タスク、リクエスト値、現在値）: {{.V0}}",
   "board.refusal_next_rebind": "次の手順: kander review progress <CWD> <task-id> から rebind_cycles をそのまま写し、リクエストを書き直してください。",
   "board.refusal_sync_target": "sync_targets はバッチ {{.V0}} に {{.V1}} を指定していますが、その target_commit は {{.V2}} です",
-  "board.refusal_next_sync": "次の手順: kander review progress <CWD> <task-id> で batch_target を読んで使い、同期がまだ有効か確認して、リクエストを書き直してください。",
+  "board.refusal_next_sync": "次の手順: kander review progress <CWD> <task-id> で plan_target と batch_target を読み、異なる場合は batch_target を使い、同じ場合はそのバッチを sync_targets から外してください。同期がまだ有効か確認して、リクエストを書き直してください。",
   "board.refusal_disposition_ref": "ラン {{.V0}} の指摘 {{.V1}} に対するタスク {{.V2}} の記録チェーンは記録 {{.V4}} で終わっていますが、previous_record_id は {{.V3}} です",
   "board.refusal_next_disposition": "次の手順: kander review aggregate <CWD> <batch-id> でランの指摘と記録を読み直し、最後の記録の後でも処置が有効か確認して、previous_record_id にそれを指定して記録を書き直してください。",
   "board.refusal_kernel_facts": "カーネルが {{.V0}} を拒否しました。次の事実が偽です: {{.V1}}",
@@ -52,7 +52,5 @@
   "board.refusal_task_state": "期待した状態 {{.V0}}、現在の状態 {{.V1}}",
   "board.refusal_next_rebind_none": "次の手順: サイクルが変わったメンバーはないため、リクエストに rebind_cycles は不要です。kander review progress が rebind_cycles に示すメンバーだけを指定してください。",
   "board.refusal_wrapup_named": "author と reason の両方が必要です",
-  "board.refusal_next_dispatch": "次の手順: kander dispatch show {{.V0}} {{.V1}} でラウンドを読み、決定がまだ有効か確認して、リクエストを書き直してください。",
-  "board.refusal_next_request": "次の手順: kander request show {{.V0}} {{.V1}} --json でリクエストを読み、回答がまだ有効か確認して、書き直してください。",
-  "board.refusal_next_card": "次の手順: kander show --json {{.V0}} でカードを読み、現在のリビジョンに対して派回を確認して、リクエストを書き直してください。"
+  "board.refusal_next_dispatch": "次の手順: kander dispatch show {{.V0}} {{.V1}} でラウンドを読み、決定がまだ有効か確認して、リクエストを書き直してください。"
 }

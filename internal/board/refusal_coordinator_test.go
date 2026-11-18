@@ -87,6 +87,8 @@ func TestReconcileRefusalNamesValues(t *testing.T) {
 	token.Authority.Token = "someone-else-secret"
 	owner := r
 	owner.Authority.Owner = "someone-else"
+	pasted := r
+	pasted.Authority.Owner = firstToken
 	epoch := r
 	epoch.Authority.Epoch += 2
 	for name, tc := range map[string]struct {
@@ -94,9 +96,10 @@ func TestReconcileRefusalNamesValues(t *testing.T) {
 		want    []string
 		absent  []string
 	}{
-		"token": {token, []string{"stale coordinator authority", "the token differs"}, []string{"owner is", "epoch is", "expected_revision"}},
-		"owner": {owner, []string{"stale coordinator authority", "owner is someone-else", "belongs to coordinator"}, []string{"the token differs", "epoch is", "expected_revision"}},
-		"epoch": {epoch, []string{"stale coordinator authority", "epoch is 3", "authority is at epoch 1"}, []string{"the token differs", "owner is", "expected_revision"}},
+		"token":                 {token, []string{"stale coordinator authority", "the token differs"}, []string{"owner is", "epoch is", "expected_revision"}},
+		"owner":                 {owner, []string{"stale coordinator authority", "owner is someone-else", "belongs to coordinator"}, []string{"the token differs", "epoch is", "expected_revision"}},
+		"owner holding a token": {pasted, []string{"stale coordinator authority", "owner is <invalid>"}, []string{"the token differs", "epoch is", "expected_revision"}},
+		"epoch":                 {epoch, []string{"stale coordinator authority", "epoch is 3", "authority is at epoch 1"}, []string{"the token differs", "owner is", "expected_revision"}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := ReconcileCoordinator(context.Background(), root, tc.request, nil)

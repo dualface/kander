@@ -39,7 +39,7 @@ func TestAdvanceRefusals(t *testing.T) {
 	requireRefusal(t, err, "board.review_evidence_invalid", []string{"batch target invalid", "target " + registered + " equals previous_target", "reason must not be empty"}, "but batch batch has target_commit", "CAS")
 
 	err = advance(1, ReviewAdvance{PreviousTarget: registered, Target: "abc", Reason: "member fix"})
-	requireRefusal(t, err, "board.review_evidence_invalid", []string{"batch target invalid", "target abc is not a full commit SHA"}, "CAS")
+	requireRefusal(t, err, "board.review_evidence_invalid", []string{"batch target invalid", "target <invalid> is not a full commit SHA"}, "CAS")
 
 	err = AdvanceReviewBatch(root, ReviewBatchAdvance{BatchID: "missing-batch", ExpectedRevision: 1, Advance: ReviewAdvance{PreviousTarget: registered, Target: final, Reason: "member fix", Deliveries: map[string]string{final: id}}})
 	requireRefusal(t, err, "board.review_evidence_invalid", []string{"missing batch: missing-batch"}, "CAS")
@@ -101,7 +101,7 @@ func TestSyncTargetRefusal(t *testing.T) {
 	drifted, wrong := strings.Repeat("c", 40), strings.Repeat("d", 40)
 	driftBatchTarget(t, root, "batch", drifted)
 	err := ExtendReviewPlan(root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: 1, SyncTargets: map[string]string{"batch": wrong}, Author: "coordinator", Basis: "sync"})
-	requireRefusal(t, err, "board.review_evidence_invalid", []string{"sync target CAS requires the current batch target", "sync_targets names " + wrong + " for batch batch", "target_commit is " + drifted, "batch_target with kander review progress"})
+	requireRefusal(t, err, "board.review_evidence_invalid", []string{"sync target CAS requires the current batch target", "sync_targets names " + wrong + " for batch batch", "target_commit is " + drifted, "plan_target and batch_target with kander review progress"})
 }
 
 // R12: a resolution of an unplanned batch names a missing plan, and the revision

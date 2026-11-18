@@ -75,6 +75,21 @@ func TestRequestConflictsNameTheirValues(t *testing.T) {
 		if strings.Contains(err.Error(), "the request has card_revision") {
 			t.Fatal("the card revision holds and is not named")
 		}
+
+		long := intent
+		long.TaskID = "20260101-" + strings.Repeat("long-", 30) + "task"
+		input.Dispatch = &long
+		_, err = k.sender.CreateRequest(t.Context(), "long-task", k.task, input)
+		refusal(t, err, api.CodeRevisionConflict, http.StatusConflict, "", "the proposal names task "+long.TaskID+",")
+
+		bad := intent
+		bad.TaskID = "tok-pasted/by mistake"
+		input.Dispatch = &bad
+		_, err = k.sender.CreateRequest(t.Context(), "bad-task", k.task, input)
+		refusal(t, err, api.CodeRevisionConflict, http.StatusConflict, "", "the proposal names task <invalid>,")
+		if strings.Contains(err.Error(), "tok-pasted") {
+			t.Fatal("an invalid task ID is written back")
+		}
 	})
 
 	t.Run("an answer to another revision of the request", func(t *testing.T) {

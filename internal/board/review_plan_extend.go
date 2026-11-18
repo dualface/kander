@@ -290,7 +290,7 @@ func syncPlanTargets(tx *Transaction, pk *planKernel, p ReviewPlan, x ReviewPlan
 		case !found || b.PlanID != p.PlanID || b.BatchID != batchID:
 			refusal = reviewError("sync target batch missing")
 		case b.TargetCommit != expected:
-			refusal = reviewRefusal("sync target CAS requires the current batch target", t("board.refusal_next_sync"), t("board.refusal_sync_target", batchID, quoted(expected), b.TargetCommit))
+			refusal = reviewRefusal("sync target CAS requires the current batch target", t("board.refusal_next_sync"), t("board.refusal_sync_target", batchID, shown(expected, validCommit), b.TargetCommit))
 		case index < 0:
 			refusal = reviewError("unplanned batch")
 		case p.Batches[index].TargetCommit == b.TargetCommit:

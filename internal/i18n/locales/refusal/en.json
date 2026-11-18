@@ -20,7 +20,7 @@
   "board.refusal_rebind_differs": "members whose requested cycle differs from the current one (task, requested, current): {{.V0}}",
   "board.refusal_next_rebind": "Next step: copy rebind_cycles from kander review progress <CWD> <task-id> and write the request again.",
   "board.refusal_sync_target": "sync_targets names {{.V1}} for batch {{.V0}}, but its target_commit is {{.V2}}",
-  "board.refusal_next_sync": "Next step: read batch_target with kander review progress <CWD> <task-id>, use it, make sure the sync still holds, and write the request again.",
+  "board.refusal_next_sync": "Next step: read plan_target and batch_target with kander review progress <CWD> <task-id>; when they differ, use batch_target, and when they match, leave that batch out of sync_targets. Make sure the sync still holds, and write the request again.",
   "board.refusal_disposition_ref": "the chain of finding {{.V1}} of run {{.V0}} for task {{.V2}} ends at record {{.V4}}, but previous_record_id is {{.V3}}",
   "board.refusal_next_disposition": "Next step: re-read the findings and the records of the run with kander review aggregate <CWD> <batch-id>, confirm that the disposition still applies after the last record, and write the record again with previous_record_id set to it.",
   "board.refusal_kernel_facts": "the kernel refused {{.V0}} because these facts are false: {{.V1}}",
@@ -52,7 +52,5 @@
   "board.refusal_task_state": "expected state {{.V0}}, current state {{.V1}}",
   "board.refusal_next_rebind_none": "Next step: no member's cycle changed, so the request needs no rebind_cycles; send only the members that kander review progress lists in rebind_cycles.",
   "board.refusal_wrapup_named": "author and reason must both be given",
-  "board.refusal_next_dispatch": "Next step: read the round with kander dispatch show {{.V0}} {{.V1}}, confirm that the decision still holds, and write the request again.",
-  "board.refusal_next_request": "Next step: read the request with kander request show {{.V0}} {{.V1}} --json, confirm that the answer still holds, and write it again.",
-  "board.refusal_next_card": "Next step: read the card with kander show --json {{.V0}}, inspect the dispatch against its current revision, and write the request again."
+  "board.refusal_next_dispatch": "Next step: read the round with kander dispatch show {{.V0}} {{.V1}}, confirm that the decision still holds, and write the request again."
 }

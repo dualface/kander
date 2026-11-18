@@ -3,6 +3,7 @@ package board
 import (
 	"fmt"
 	"maps"
+	"regexp"
 	"slices"
 	"strings"
 	"unicode"
@@ -60,6 +61,41 @@ func quoted(s string) string {
 // refusalValueLimit bounds a request value written into a message; it is longer
 // than any commit, hash, or ID the board accepts.
 const refusalValueLimit = 96
+
+var digestPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+func isDigest(s string) bool { return digestPattern.MatchString(s) }
+
+func isTaskID(s string) bool {
+	_, err := NormalizeTaskID(s)
+	return err == nil
+}
+
+// shown writes a value the request names only when it has the form its field has.
+// Any other text may be a token or a report that went into the wrong field, so
+// the message says the value is invalid and does not repeat it.
+func shown(s string, valid func(string) bool) string {
+	switch {
+	case s == "":
+		return `""`
+	case valid(s):
+		return s
+	}
+	return "<invalid>"
+}
+
+// shownOwner writes the owner of a request unless it is one of the tokens of the
+// group, which a caller may have put into the wrong field.
+func shownOwner(owner string, tokens ...string) string {
+	if slices.Contains(tokens, owner) {
+		return "<invalid>"
+	}
+	return quoted(owner)
+}
+
+// RefusalTaskID writes a task ID a caller named in full when it is one, and
+// otherwise marks it invalid, for the messages of the service.
+func RefusalTaskID(s string) string { return shown(s, isTaskID) }
 
 // refusalFact is one fact a kernel event carries and whether it was true.
 type refusalFact struct {
@@ -192,13 +228,13 @@ func closeRequestRefusal(v ReviewBatchView, r ReviewCloseRequest) error {
 	b := v.Batch
 	var parts []string
 	if r.BatchID != b.BatchID {
-		parts = append(parts, t("board.refusal_close_batch_id", quoted(r.BatchID), b.BatchID))
+		parts = append(parts, t("board.refusal_close_batch_id", shown(r.BatchID, ValidReviewID), b.BatchID))
 	}
 	if r.ExpectedRevision != b.Revision {
 		parts = append(parts, t("board.refusal_revision_batch", b.BatchID, r.ExpectedRevision, b.Revision))
 	}
 	if hash := ReviewViewDigest(v); r.ViewHash != hash {
-		parts = append(parts, t("board.refusal_view_hash", quoted(r.ViewHash), hash))
+		parts = append(parts, t("board.refusal_view_hash", shown(r.ViewHash, isDigest), hash))
 	}
 	if len(parts) > 0 {
 		return reviewRefusal("close target/revision/view CAS", t("board.refusal_next_close", b.BatchID), parts...)
@@ -215,13 +251,13 @@ func closeRequestRefusal(v ReviewBatchView, r ReviewCloseRequest) error {
 func advanceRefusal(a ReviewAdvance, b ReviewBatch) error {
 	var parts []string
 	if a.PreviousTarget != b.TargetCommit {
-		parts = append(parts, t("board.refusal_previous_target", quoted(a.PreviousTarget), b.BatchID, b.TargetCommit))
+		parts = append(parts, t("board.refusal_previous_target", shown(a.PreviousTarget, validCommit), b.BatchID, b.TargetCommit))
 	}
 	if a.Target == a.PreviousTarget {
-		parts = append(parts, t("board.refusal_target_same", quoted(a.Target)))
+		parts = append(parts, t("board.refusal_target_same", shown(a.Target, validCommit)))
 	}
 	if !validCommit(a.Target) {
-		parts = append(parts, t("board.refusal_target_not_commit", quoted(a.Target)))
+		parts = append(parts, t("board.refusal_target_not_commit", shown(a.Target, validCommit)))
 	}
 	if strings.TrimSpace(a.Reason) == "" {
 		parts = append(parts, t("board.refusal_reason_required"))
@@ -248,10 +284,10 @@ func runAdvanceRefusal(b ReviewBatch, commit string, a *ReviewAdvance) error {
 		parts = append(parts, t("board.refusal_advance_missing", b.BatchID, b.TargetCommit, commit))
 	default:
 		if a.PreviousTarget != b.TargetCommit {
-			parts = append(parts, t("board.refusal_previous_target", quoted(a.PreviousTarget), b.BatchID, b.TargetCommit))
+			parts = append(parts, t("board.refusal_previous_target", shown(a.PreviousTarget, validCommit), b.BatchID, b.TargetCommit))
 		}
 		if a.Target != commit {
-			parts = append(parts, t("board.refusal_advance_target", quoted(a.Target), commit))
+			parts = append(parts, t("board.refusal_advance_target", shown(a.Target, validCommit), commit))
 		}
 		if strings.TrimSpace(a.Reason) == "" {
 			parts = append(parts, t("board.refusal_reason_required"))
@@ -278,12 +314,12 @@ func rebindRefusal(changed, requested map[string]string) error {
 		if got, ok := requested[id]; !ok {
 			missing = append(missing, id)
 		} else if got != changed[id] {
-			differs = append(differs, fmt.Sprintf("%s: %s, %s", id, quoted(got), quoted(changed[id])))
+			differs = append(differs, fmt.Sprintf("%s: %s, %s", id, shown(got, isDigest), quoted(changed[id])))
 		}
 	}
 	for _, id := range slices.Sorted(maps.Keys(requested)) {
 		if _, ok := changed[id]; !ok {
-			extra = append(extra, id)
+			extra = append(extra, shown(id, isTaskID))
 		}
 	}
 	var parts []string
@@ -311,7 +347,7 @@ func rebindRefusal(changed, requested map[string]string) error {
 // and the status, so the previous record is the only fact that can fail.
 func dispositionRefusal(d ReviewDisposition, last string) error {
 	return reviewRefusal("disposition predecessor CAS conflict", t("board.refusal_next_disposition"),
-		t("board.refusal_disposition_ref", d.RunID, d.FindingID, d.TaskID, quoted(d.PreviousRecordID), quoted(last)))
+		t("board.refusal_disposition_ref", d.RunID, d.FindingID, d.TaskID, shown(d.PreviousRecordID, ValidReviewID), quoted(last)))
 }
 
 // memberStateRefusal is the refusal of a review over a member that is not in
@@ -384,7 +420,7 @@ func authorityRefusal(c CoordinatorCheckpoint, exists bool, r CoordinatorReconci
 	}
 	var parts []string
 	if c.Authority.Owner != r.Authority.Owner {
-		parts = append(parts, t("board.refusal_authority_owner", quoted(r.Authority.Owner), c.Authority.Owner))
+		parts = append(parts, t("board.refusal_authority_owner", shownOwner(r.Authority.Owner, r.Authority.Token, c.Authority.Token), c.Authority.Owner))
 	}
 	if c.Authority.Epoch != r.Authority.Epoch {
 		parts = append(parts, t("board.refusal_authority_epoch", r.Authority.Epoch, c.Authority.Epoch))
