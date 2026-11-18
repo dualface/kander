@@ -440,9 +440,12 @@ func checkUnplannedReviewRunsMode(tx *Transaction, p ReviewPlan, importHistory b
 	return checkUnplannedReviewRunsGate(tx, p, importHistory, true)
 }
 
-// checkUnplannedReviewRunsGate is the check of an existing plan (check and the
-// completion gate), where an abandoned run left its batch: with skipAbandoned the
-// batch that only an abandoned run named is no unplanned batch any more.
+// checkUnplannedReviewRunsGate serves two callers, and skipAbandoned tells them
+// apart. The check and the completion gate of an existing plan pass true: an
+// abandoned run left its batch, so a batch that only an abandoned run named is no
+// unplanned batch any more. The admission of a new plan passes false (through
+// checkUnplannedReviewRuns), and add_members does the same through
+// unplannedReviewRun, so every run record of a card still counts there.
 func checkUnplannedReviewRunsGate(tx *Transaction, p ReviewPlan, importHistory, skipAbandoned bool) error {
 	batch, listed, err := unplannedReviewRun(tx, p, p.TaskIDs, !importHistory, skipAbandoned)
 	if err != nil {
