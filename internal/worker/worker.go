@@ -19,6 +19,7 @@ import (
 	"unicode"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
@@ -80,13 +81,23 @@ func NewCommand() *cobra.Command {
 	c := &cobra.Command{
 		Use:    "worker",
 		Hidden: true,
-		Args:   command.Args(0, 0),
-		RunE: func(*cobra.Command, []string) error {
+		Args: func(c *cobra.Command, args []string) error {
+			if err := command.Args(0, 0)(c, args); err != nil {
+				return err
+			}
 			if err := command.NoJSON(); err != nil {
 				return err
 			}
-			return command.Exit(run())
+			// Not even a global flag: the worker is started with no arguments, and any flag
+			// that was given, whatever its value, is a mistake that would otherwise start it.
+			var given []string
+			c.Flags().Visit(func(f *pflag.Flag) { given = append(given, f.Name) })
+			if len(given) > 0 {
+				return command.Usage("board.unknown_option", "--"+given[0])
+			}
+			return nil
 		},
+		RunE: func(*cobra.Command, []string) error { return command.Exit(run()) },
 	}
 	// The command has no contract file: its help and its usage are the one line below.
 	const description = "kander worker is a command Kander runs internally; it takes no arguments."
