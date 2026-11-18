@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"sort"
 	"strings"
@@ -470,23 +471,41 @@ func TestGeneratedCommandLinesParse(t *testing.T) {
 		}
 		promptText.Write(data)
 	}
-	templates, err := os.ReadFile(filepath.Join("..", "..", "rules", "templates", "prompt", "result.md"))
-	if err != nil {
-		t.Fatal(err)
+	templateFiles, err := filepath.Glob(filepath.Join("..", "..", "rules", "templates", "prompt", "*.md"))
+	if err != nil || len(templateFiles) == 0 {
+		t.Fatalf("prompt templates: %v %v", templateFiles, err)
 	}
+	var templateText strings.Builder
+	for _, file := range templateFiles {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		templateText.Write(data)
+	}
+	// Each command line the prompts name, with the sample values of the rendered prompts.
 	for _, line := range []string{
 		"kander config --json",
 		"kander show " + "20260101-golden-task",
 		"kander move 20260101-golden-task working --dispatch-id dispatch-1 --execution-epoch 2",
 		"kander move 20260101-golden-task working",
+		"kander check",
 	} {
 		if !strings.Contains(promptText.String(), line) {
 			t.Errorf("the prompt samples no longer contain %q", line)
 		}
 		assertParses(t, strings.Fields(strings.TrimPrefix(line, "kander ")))
 	}
-	if !strings.Contains(string(templates), "issue result {{.Number}} --repo {{.Host}}/{{.Owner}}/{{.Repo}} --card {{.CardID}} with --action inspect") {
-		t.Error("the issue result prompt changed")
+	for template, line := range map[string]string{
+		"{{.Command}} issue result {{.Number}} --repo {{.Host}}/{{.Owner}}/{{.Repo}} --card {{.CardID}} with --action inspect": "issue result 42 --repo github.com/owner/repo --card " + sampleTask + " --action inspect",
+		"{{.Command}} issue import {{.Number}}": "issue import 42",
+		"{{.Command}} show --json {{.CardID}}":  "show --json " + sampleTask,
+		"{{.Command}} update":                   "update " + sampleTask + " --document spec.md --file input.md --expect-revision 3",
+	} {
+		if !strings.Contains(templateText.String(), template) {
+			t.Errorf("the prompt templates no longer contain %q", template)
+		}
+		assertParses(t, strings.Fields(line))
 	}
 	for _, line := range []string{
 		"issue result 42 --repo github.com/owner/repo --card " + sampleTask + " --action inspect",
@@ -539,5 +558,17 @@ func TestEveryCommandHasAContractAndTheOtherWayAround(t *testing.T) {
 	}
 	if !maps.Equal(commands, contracts) {
 		t.Fatalf("commands %v\ncontracts %v", slices.Sorted(maps.Keys(commands)), slices.Sorted(maps.Keys(contracts)))
+	}
+}
+
+// The internal job bootstrap of review receives a reviewer command line, which must reach it
+// without being read as flags.
+func TestJobBootstrapTakesItsCommandLineVerbatim(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the bootstrap runs a real job object on Windows")
+	}
+	// The bootstrap is a stub on POSIX that exits 125; an argument error would exit 2.
+	if result := runKander(t, "review", "job-bootstrap", "event", "codex", "--model", "x", "--unknown", "--", "-y"); result.code != 125 {
+		t.Fatalf("exit=%d stderr=%s", result.code, result.stderr)
 	}
 }
