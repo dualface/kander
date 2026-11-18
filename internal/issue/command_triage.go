@@ -38,6 +38,11 @@ func newTriageCommand(factory func() IssueProvider, stdout, stderr io.Writer) *c
 // evidence and starts the takeover session through the shared StartTriage path,
 // so the TUI and the CLI always launch the same way.
 func runTriage(factory func() IssueProvider, options triageCommandOptions, stdout, stderr io.Writer) int {
+	// The session always starts: refuse a launcher that takes the terminal before anything,
+	// the server session and its client state included, is opened.
+	if err := gateLauncher(options.launcher); err != nil {
+		return failTriage(stderr, err, 1)
+	}
 	provider := factory()
 	repository, code := resolveRepository(provider, options.repository, options.hasRepo, stderr)
 	if code != 0 {

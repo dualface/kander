@@ -24,6 +24,13 @@ func runRemoteResume(cfg *config.Config, agent *string, launcher, task, message,
 	if err != nil {
 		return fail(err)
 	}
+	if agent != nil || options.Decision != "" {
+		// An explicit takeover always starts an agent. An implicit resume may only deliver the
+		// message to a live executor, so it checks the launcher once it knows it launches.
+		if err := refuseConfiguredLauncher(cfg, launcher); err != nil {
+			return fail(err)
+		}
+	}
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fail(err)

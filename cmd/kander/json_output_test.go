@@ -394,7 +394,14 @@ func TestJSONInteractiveFormsAreRefusedWithoutEffects(t *testing.T) {
 		"start with foreground":    {"start", "--json", "--launcher", "foreground", id},
 		"start with console":       {"start", "--json", "--launcher", "console", id},
 		"orchestrate with console": {"orchestrate", "--json", "--launcher", "console", "--message", "go", id},
+		"resume with foreground":   {"resume", "--json", "--agent", "claude", "--decision", "test", "--message", "go", "--launcher", "foreground", id},
+		"issue triage foreground":  {"issue", "triage", "--json", "--launcher", "foreground", "42"},
+		"issue result foreground":  {"issue", "result", "--json", "--launcher", "foreground", "--card", id, "42"},
 	}
+	// The refusal comes before the client state of the first run: with an empty client home
+	// nothing is created in it.
+	clientHome := t.TempDir()
+	t.Setenv(remote.EnvClientHome, clientHome)
 	for name, args := range forms {
 		r := runKander(t, args...)
 		requireFailure(t, r, name, "interactive_required", 2)
@@ -402,6 +409,9 @@ func TestJSONInteractiveFormsAreRefusedWithoutEffects(t *testing.T) {
 	after, err := os.ReadFile(configPath)
 	if err != nil || string(after) != string(before) {
 		t.Fatalf("the configuration changed: %v", err)
+	}
+	if entries, _ := os.ReadDir(clientHome); len(entries) != 0 {
+		t.Fatalf("the refusals created client state: %v", entries)
 	}
 	if got := cardField(t, id, board.FieldOwner); got != "" {
 		t.Fatalf("the card was claimed: owner=%q", got)

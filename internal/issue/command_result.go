@@ -60,6 +60,11 @@ func newResultCommand(factory func() IssueProvider, stdout, stderr io.Writer) *c
 // No raw gh write command is part of the agent workflow.
 func runResult(factory func() IssueProvider, options resultOptions, stdout, stderr io.Writer) int {
 	action, number := options.action, options.number
+	if action == "start" {
+		if err := gateLauncher(options.launcher); err != nil {
+			return failTriage(stderr, err, 1)
+		}
+	}
 	provider := factory()
 	repository, code := resolveRepository(provider, options.repository, options.hasRepo, stderr)
 	if code != 0 {

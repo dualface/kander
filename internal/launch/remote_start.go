@@ -45,6 +45,11 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 	if err != nil {
 		return result, err
 	}
+	// Every form of launchRemote starts an agent, so the launcher is checked before the server
+	// session is opened, which creates the client identity on first use.
+	if err := refuseConfiguredLauncher(cfg, launcherOverride); err != nil {
+		return result, err
+	}
 	cwd, err := os.Getwd()
 	if err != nil {
 		return result, err
@@ -63,9 +68,6 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 	task, err := session.Project.Show(ctx, taskID)
 	cancel()
 	if err != nil {
-		return result, err
-	}
-	if err := refuseConfiguredLauncher(cfg, launcherOverride); err != nil {
 		return result, err
 	}
 	begin := session.BeginAction

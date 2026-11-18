@@ -63,6 +63,11 @@ func StartOrchestrator(request OrchestrateRequest) (OrchestrateResult, error) {
 	if err := remote.RequireBinding(cfg); err != nil {
 		return OrchestrateResult{}, err
 	}
+	// The session always starts, so a launcher that takes the terminal is refused before the
+	// server session of this host is opened (which creates the client identity on first use).
+	if err := refuseConfiguredLauncher(cfg, request.Launcher); err != nil {
+		return OrchestrateResult{}, err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), remoteCall)
 	loaded, service, root, err := remoteOrchestrateBoard(ctx, cfg)
 	cancel()
