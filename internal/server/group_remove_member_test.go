@@ -182,6 +182,10 @@ func TestRemoveMemberRouteRefusesAMemberTheServerClaimed(t *testing.T) {
 
 func TestRemoveMemberRouteRefusesAStaleRequest(t *testing.T) {
 	f := newRemovalFixture(t)
+	before, err := f.host.Events(t.Context(), "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	stale := f.request(f.members[0])
 	stale.ExpectedRevision++
 	if _, err := f.remove(t, "stale", stale, f.proof); err == nil {
@@ -193,4 +197,28 @@ func TestRemoveMemberRouteRefusesAStaleRequest(t *testing.T) {
 		t.Fatal("a blank reason was accepted")
 	}
 	f.requireUnchanged(t)
+	// A refusal tells subscribers of the card nothing.
+	page, err := f.host.Events(t.Context(), before.Cursor, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range page.Events {
+		if e.Kind == api.EventTaskChanged {
+			t.Fatalf("a refused removal published %+v", e)
+		}
+	}
+}
+
+// A lease whose clock ran out and that nobody took over still stands.
+func TestRemoveMemberRouteWorksUnderALapsedLease(t *testing.T) {
+	f := newRemovalFixture(t)
+	f.fixture.clock.advance(91 * time.Second)
+	view, err := f.host.Group(t.Context(), f.grant.Checkpoint.GroupID)
+	if err != nil || view.Claim == nil || view.Claim.Status != api.ClaimLapsed {
+		t.Fatalf("the fixture lease did not lapse: %+v %v", view.Claim, err)
+	}
+	next, err := f.remove(t, "lapsed", f.request(f.members[0]), f.proof)
+	if err != nil || len(next.Members) != 2 || len(next.Removals) != 1 {
+		t.Fatalf("%+v %v", next, err)
+	}
 }

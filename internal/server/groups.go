@@ -165,7 +165,7 @@ func (s *Server) groupRoutes(mux *http.ServeMux) {
 		written := p.groupWrite(r.Header.Get(api.HeaderIdempotencyKey), "group-remove-member:"+input.GroupID, input.GroupID, input, holderOf(r), func(extension board.TransactionExtension) (board.CoordinatorCheckpoint, error) {
 			return board.RemoveCoordinatorMemberWithTransaction(r.Context(), p.board, input, extension, p.memberUnclaimed(input.Member))
 		})
-		if written.err == nil {
+		if written.err == nil && written.status == http.StatusOK {
 			// The card left its group: subscribers of the card see the new group.
 			p.changed(input.Member, 0)
 		}
