@@ -182,6 +182,7 @@ func classify(err error) (code, message string, ok bool) {
 // fail reports err as the failure of an issue command: the error object with --json, otherwise
 // the text on stderr. It returns status.
 func fail(stderr io.Writer, err error, status int) int {
+	status = explicitStatus(err, status)
 	if command.JSON() {
 		return command.FailStatus(status, &command.Failure{Err: err, Status: status, Code: codeOf(err), Message: Message(err)})
 	}
@@ -192,10 +193,21 @@ func fail(stderr io.Writer, err error, status int) int {
 // failTriage is fail for the commands that also report launch failures, whose text is already
 // localized: a failure that is not a structured issue failure keeps its own sanitized message.
 func failTriage(stderr io.Writer, err error, status int) int {
+	status = explicitStatus(err, status)
 	if command.JSON() {
 		return command.FailStatus(status, &command.Failure{Err: err, Status: status, Code: codeOf(err), Message: TriageError(err)})
 	}
 	fmt.Fprintln(stderr, formatTriageError(err))
+	return status
+}
+
+// explicitStatus is the exit status of a failure: the status err carries (the refusal of an
+// interactive form is 2), else status.
+func explicitStatus(err error, status int) int {
+	var failure *command.Failure
+	if errors.As(err, &failure) && failure.Status != 0 {
+		return failure.Status
+	}
 	return status
 }
 
