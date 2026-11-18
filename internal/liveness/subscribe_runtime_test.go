@@ -137,13 +137,14 @@ fi
 	updateErr := make(chan error, 1)
 	go func() {
 		defer close(updates)
-		timer := time.NewTicker(8 * time.Millisecond)
-		defer timer.Stop()
 		for {
+			// Wait after each update, not on a fixed tick: when a slow fsync makes an
+			// update outlast the tick, a ticker leaves the board lock never free, and
+			// the subscription's shared-lock poll starves behind this writer.
 			select {
 			case <-done:
 				return
-			case <-timer.C:
+			case <-time.After(8 * time.Millisecond):
 				if err := factsUpdate(root, id, func(s string) string { return s + "\nChanged.\n" }); err != nil {
 					updateErr <- err
 					return
