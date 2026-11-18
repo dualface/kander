@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"slices"
@@ -106,7 +107,7 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 				return request, apiError(api.CodeInvalidRequest, "dispatch proposal message differs from its visible request")
 			}
 			if !newRequestKernel(frame, nil).accepts(frame.bindEvent(input.Dispatch.TaskID == normalized, input.CardRevision)) {
-				return request, apiError(api.CodeRevisionConflict, "dispatch request must bind the inspected card version")
+				return request, apiError(api.CodeRevisionConflict, bindRefusal(input.Dispatch.TaskID, normalized, input.CardRevision, task.Revision))
 			}
 			raw, err := json.Marshal(input.Dispatch)
 			if err != nil || len(raw) > 512<<10 {
@@ -218,7 +219,7 @@ func (p *project) answerRequest(key, id, requestID string, answer api.CollabAnsw
 		case leaseBad:
 			return request, apiError(api.CodeLeaseInvalid, "request targets another generation")
 		case expectedBad:
-			return request, apiError(api.CodeRevisionConflict, "request revision changed")
+			return request, apiError(api.CodeRevisionConflict, fmt.Sprintf("request revision changed: the answer has expected_revision %d, the request is at revision %d", answer.ExpectedRevision, request.Revision))
 		case firstAcceptance && !window:
 			return request, apiError(api.CodeEvidenceIncomplete, "dispatch proposal acceptance window has elapsed")
 		case firstAcceptance && card != request.CardRevision:
@@ -259,4 +260,21 @@ func sameRequestedDispatch(old api.CollabRequest, input api.NewCollabRequest) bo
 	left, _ := json.Marshal(stored)
 	right, _ := json.Marshal(input.Dispatch)
 	return string(left) == string(right)
+}
+
+// bindRefusal is the text of a dispatch request that does not bind the card
+// version it inspected: its proposal names another task than the request path, or
+// its card_revision is not the card's current revision.
+func bindRefusal(proposalTask, task string, named, current uint64) string {
+	var parts []string
+	if proposalTask != task {
+		parts = append(parts, fmt.Sprintf("the proposal names task %s, the request path names task %s", proposalTask, task))
+	}
+	if named != current {
+		parts = append(parts, fmt.Sprintf("the request has card_revision %d, the card is at revision %d", named, current))
+	}
+	if len(parts) == 0 {
+		return "dispatch request must bind the inspected card version"
+	}
+	return "dispatch request must bind the inspected card version: " + strings.Join(parts, "; ")
 }
