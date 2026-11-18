@@ -1,12 +1,8 @@
 package remote_test
 
 import (
-	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -120,66 +116,6 @@ func (p *preparedElsewhere) retryAs(version, recorded string) {
 func TestPrepareRetryAfterUpgradeFindsCompletedPublication(t *testing.T) {
 	p := newPreparedElsewhere(t)
 	p.retryAs("v-b", "v-a")
-	p.retryAs("v-c", "")
-}
-
-// legacyReplayKey is the replay record name of a client before the version left
-// the key: a hash of the operation name and the whole material, version
-// included.
-func legacyReplayKey(t *testing.T, request api.ReviewPrepare) string {
-	t.Helper()
-	raw, err := json.Marshal(request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var material any
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	if err := decoder.Decode(&material); err != nil {
-		t.Fatal(err)
-	}
-	logical, err := json.Marshal(material)
-	if err != nil {
-		t.Fatal(err)
-	}
-	data, err := json.Marshal(struct {
-		Operation string
-		Material  json.RawMessage
-	}{"review-prepare", logical})
-	if err != nil {
-		t.Fatal(err)
-	}
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:]) + ".json"
-}
-
-func TestPrepareRetryFindsPublicationRecordedByOlderClient(t *testing.T) {
-	p := newPreparedElsewhere(t)
-	root, err := p.a.LocalDataRoot()
-	if err != nil {
-		t.Fatal(err)
-	}
-	history := filepath.Join(root, "review-operations")
-	entries, err := os.ReadDir(history)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Replace the record of this client by the one an older client wrote.
-	for _, entry := range entries {
-		if err := os.Remove(filepath.Join(history, entry.Name())); err != nil {
-			t.Fatal(err)
-		}
-	}
-	older, err := json.Marshal([]string{p.id})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(history, legacyReplayKey(t, p.prepareRequest("v-a"))), older, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	p.retryAs("v-b", "v-a")
-
-	// The publication is now also recorded under the current key.
 	p.retryAs("v-c", "")
 }
 

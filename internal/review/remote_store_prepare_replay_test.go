@@ -10,11 +10,13 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/dualface/kander/internal/api"
@@ -30,6 +32,12 @@ const (
 	upgradeBase  = "3333333333333333333333333333333333333333"
 	upgradeHead  = "4444444444444444444444444444444444444444"
 )
+
+// sentPrepare is a prepare request as the server received it.
+type sentPrepare struct {
+	publication string
+	body        []byte
+}
 
 // legacyHistoryName is the replay record name of a client from before the
 // version left the key: a hash of the operation and the whole material.
@@ -75,7 +83,23 @@ func TestPrepareAfterUpgradeReusesJointPublication(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			httpServer := httptest.NewServer(srv.Handler())
+			// The retry must send the frozen material of the first prepare.
+			var mu sync.Mutex
+			var prepares []sentPrepare
+			handler := srv.Handler()
+			httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/reviews/runtime/prepare") {
+					body, err := io.ReadAll(r.Body)
+					if err != nil {
+						t.Error(err)
+					}
+					r.Body = io.NopCloser(bytes.NewReader(body))
+					mu.Lock()
+					prepares = append(prepares, sentPrepare{publication: r.Header.Get(api.HeaderPublication), body: body})
+					mu.Unlock()
+				}
+				handler.ServeHTTP(w, r)
+			}))
 			t.Cleanup(func() { httpServer.Close(); _ = srv.Close() })
 			a, _ := client.New(httpServer.URL, "host-a")
 			b, _ := client.New(httpServer.URL, "host-b")
@@ -152,6 +176,13 @@ func TestPrepareAfterUpgradeReusesJointPublication(t *testing.T) {
 				t.Fatalf("confirmed prepare: %+v %v", run, err)
 			}
 
+			mu.Lock()
+			first := prepares[len(prepares)-1]
+			mu.Unlock()
+			if first.publication == "" {
+				t.Fatal("the joint prepare carried no publication")
+			}
+
 			if legacy {
 				// Replace the record of this client by the one an older client wrote.
 				root, err := holder.LocalDataRoot()
@@ -214,6 +245,13 @@ func TestPrepareAfterUpgradeReusesJointPublication(t *testing.T) {
 			again, fresh, err := store.Prepare(input, requirements, nil, originals, "v-b")
 			if err != nil || fresh || again.KanderVersion != "v-a" {
 				t.Fatalf("prepare as another version: %+v fresh=%v %v", again, fresh, err)
+			}
+			mu.Lock()
+			retried := prepares[len(prepares)-1]
+			mu.Unlock()
+			var sent api.ReviewPrepare
+			if err := json.Unmarshal(retried.body, &sent); err != nil || retried.publication != first.publication || sent.Version != "v-a" {
+				t.Fatalf("the retry did not send the frozen material of publication %s: %s version %q: %v", first.publication, retried.publication, sent.Version, err)
 			}
 			if publications() != beforePublications || requests() != beforeRequests {
 				t.Fatalf("the retry created publications %d -> %d or requests %d -> %d", beforePublications, publications(), beforeRequests, requests())
