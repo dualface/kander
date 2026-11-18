@@ -3,6 +3,7 @@ package command_test
 import (
 	"encoding/json"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
@@ -189,5 +190,48 @@ func TestJSONIsGlobalAndFalseTurnsItOff(t *testing.T) {
 		if (stdout != "") != want {
 			t.Fatalf("%q: stdout=%q", args, stdout)
 		}
+	}
+}
+
+// A --json value that strconv.ParseBool refuses is a usage error, and the values it accepts
+// turn JSON on or off exactly as the error scan of an unparsed command line reads them.
+func TestJSONFlagValueIsParsedLikeABool(t *testing.T) {
+	c := &cobra.Command{Use: "probe", RunE: func(*cobra.Command, []string) error {
+		if command.JSON() {
+			return command.Exit(command.Result(struct{}{}))
+		}
+		return nil
+	}}
+	for value, want := range map[string]bool{"1": true, "t": true, "T": true, "TRUE": true, "0": false, "f": false, "F": false, "FALSE": false} {
+		_, stdout, _ := run(c, "--json="+value)
+		if (stdout != "") != want {
+			t.Fatalf("--json=%s: stdout=%q", value, stdout)
+		}
+	}
+	for _, value := range []string{"flase", "yes", "", "2"} {
+		code, stdout, stderr := run(c, "--json="+value)
+		if code != 2 || stdout != "" || stderr == "" {
+			t.Fatalf("--json=%s: code=%d stdout=%q stderr=%q", value, code, stdout, stderr)
+		}
+	}
+}
+
+// A result that cannot be written to stdout is a failure, not a success with a missing object.
+func TestResultWriteFailureIsAFailure(t *testing.T) {
+	closed, err := os.CreateTemp(t.TempDir(), "stdout")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := closed.Close(); err != nil {
+		t.Fatal(err)
+	}
+	c := &cobra.Command{Use: "probe", RunE: func(*cobra.Command, []string) error {
+		// The result is written when the command ends, so stdout goes bad before that.
+		os.Stdout = closed
+		return command.Exit(command.Result(map[string]string{"k": "v"}))
+	}}
+	code, _, stderr := commandtest.Capture(func() int { return commandtest.Run(c, "--json") })
+	if code != 1 || !strings.Contains(stderr, `"error"`) {
+		t.Fatalf("code=%d stderr=%q", code, stderr)
 	}
 }

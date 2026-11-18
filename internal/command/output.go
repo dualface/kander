@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -156,7 +157,10 @@ type jsonFlag struct{}
 func (jsonFlag) String() string { return "false" }
 func (jsonFlag) Type() string   { return "bool" }
 func (jsonFlag) Set(raw string) error {
-	on := raw != "false"
+	on, err := strconv.ParseBool(raw)
+	if err != nil {
+		return err
+	}
 	current.mu.Lock()
 	current.json = on
 	current.mu.Unlock()
@@ -361,7 +365,9 @@ func finish(c *cobra.Command, err error) int {
 	}
 	if err == nil {
 		if !streaming || len(result) > 0 {
-			writeResult(result, notices)
+			if werr := writeResult(result, notices); werr != nil {
+				return writeFailed(werr)
+			}
 		}
 		return status
 	}
@@ -369,7 +375,9 @@ func finish(c *cobra.Command, err error) int {
 	if errors.As(err, &exit) {
 		if failure == nil {
 			if len(result) > 0 {
-				writeResult(result, notices)
+				if werr := writeResult(result, notices); werr != nil {
+					return writeFailed(werr)
+				}
 				return exit.Code
 			}
 			failure = fmt.Errorf("exit status %d", exit.Code)
@@ -406,7 +414,7 @@ func isUsage(err error) bool {
 }
 
 // writeResult writes the result object with the notices spliced in as a last field.
-func writeResult(result []byte, notices []Notice) {
+func writeResult(result []byte, notices []Notice) error {
 	if len(result) == 0 {
 		result = []byte("{}")
 	}
@@ -418,7 +426,18 @@ func writeResult(result []byte, notices []Notice) {
 		}
 		result = append(append(append(body, []byte(`"notices":`)...), extra...), '}')
 	}
-	_, _ = os.Stdout.Write(append(result, '\n'))
+	_, err := os.Stdout.Write(append(result, '\n'))
+	return err
+}
+
+// writeFailed reports that the result could not be written to stdout. The exit status is 1
+// whatever the status of the command was: a caller that reads the result must not take a
+// truncated or missing object for it.
+func writeFailed(err error) int {
+	code, message := Describe(err)
+	data, _ := marshal(map[string]any{"error": Notice{Code: code, Message: message}})
+	fmt.Fprintln(os.Stderr, string(data))
+	return 1
 }
 
 // begin resets the session for a run of args.
