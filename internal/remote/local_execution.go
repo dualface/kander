@@ -39,8 +39,14 @@ const (
 	reasonUnreadable = "unreadable"
 )
 
+// RefusalText renders a fragment a refusal condition embeds, catalog key
+// "remote.local_execution.<name>".
+func RefusalText(name string, args ...any) string {
+	return config.Text("remote.local_execution."+name, args...)
+}
+
 func reasonText(name string, args ...any) string {
-	return config.Text("remote.local_execution.reason_"+name, args...)
+	return RefusalText("reason_"+name, args...)
 }
 
 // LocalExecutionRefused builds the refusal of an operation that needs the
@@ -48,13 +54,13 @@ func reasonText(name string, args ...any) string {
 // appends the failed condition with its values; the values never include a
 // credential token.
 func LocalExecutionRefused(condition string, args ...any) error {
-	return errors.New(config.Text("remote.local_execution_refused", config.Text("remote.local_execution_required"), config.Text("remote.local_execution."+condition, args...)))
+	return errors.New(config.Text("remote.local_execution_refused", config.Text("remote.local_execution_required"), RefusalText(condition, args...)))
 }
 
 // RefusalValue renders a value for a refusal, localizing the empty one.
 func RefusalValue(value string) string {
 	if value == "" {
-		return config.Text("remote.local_execution.value_empty")
+		return RefusalText("value_empty")
 	}
 	return value
 }
@@ -80,7 +86,7 @@ func (s *Session) allowCoordinator(task string, text string, claimExecution, bou
 	case errors.As(err, &fault):
 		reason = reasonText(reasonDamaged)
 	case err != nil:
-		reason = reasonText(reasonUnreadable, err.Error())
+		reason = reasonText(reasonUnreadable)
 	case !found:
 		reason = reasonText(reasonMissing)
 	case credential.ResourceKind != "group":

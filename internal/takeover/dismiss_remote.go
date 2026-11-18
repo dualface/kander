@@ -136,10 +136,10 @@ func commandRemoteDismiss(cfg *config.Config, task string, timeout float64) erro
 func recordMismatch(record board.ExecutionRecord, owner, session string) string {
 	var fields []string
 	if record.Owner != owner {
-		fields = append(fields, fmt.Sprintf("OWNER record %q, card %q", record.Owner, owner))
+		fields = append(fields, remote.RefusalText("record_owner", fmt.Sprintf("%q", record.Owner), fmt.Sprintf("%q", owner)))
 	}
 	if record.Session != session {
-		fields = append(fields, fmt.Sprintf("SESSION record %q, retained %q", record.Session, session))
+		fields = append(fields, remote.RefusalText("record_session", fmt.Sprintf("%q", record.Session), fmt.Sprintf("%q", session)))
 	}
 	return strings.Join(fields, "; ")
 }
@@ -150,19 +150,19 @@ func recordMismatch(record board.ExecutionRecord, owner, session string) string 
 func taskChanges(before, after api.Task, local remote.RetainedExecution) string {
 	var changes []string
 	if after.Revision != before.Revision {
-		changes = append(changes, fmt.Sprintf("revision %d -> %d", before.Revision, after.Revision))
+		changes = append(changes, remote.RefusalText("change_revision", before.Revision, after.Revision))
 	}
 	if after.State != before.State {
-		changes = append(changes, fmt.Sprintf("state %s -> %s", before.State, after.State))
+		changes = append(changes, remote.RefusalText("change_state", before.State, after.State))
 	}
 	if after.Claim == nil {
-		return strings.Join(append(changes, "claim removed"), "; ")
+		return strings.Join(append(changes, remote.RefusalText("change_claim_removed")), "; ")
 	}
 	if after.Claim.ExecutionID != local.ExecutionID {
-		changes = append(changes, fmt.Sprintf("claim execution %s -> %s", local.ExecutionID, after.Claim.ExecutionID))
+		changes = append(changes, remote.RefusalText("change_claim_execution", local.ExecutionID, after.Claim.ExecutionID))
 	}
 	if after.Claim.Generation != local.Generation {
-		changes = append(changes, fmt.Sprintf("claim generation %d -> %d", local.Generation, after.Claim.Generation))
+		changes = append(changes, remote.RefusalText("change_claim_generation", local.Generation, after.Claim.Generation))
 	}
 	return strings.Join(changes, "; ")
 }

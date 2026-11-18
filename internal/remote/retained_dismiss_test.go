@@ -126,6 +126,7 @@ func TestRetainedForDismissRefusesBindingsThatAreNotTheMembersCoordinator(t *tes
 	}{
 		{"task executor", "predecessor-exec", "", []string{"predecessor-exec", dismissMemberExec, empty}},
 		{"differing variables", dismissCoordinator, "other-coordinator", []string{dismissCoordinator, dismissMemberExec, "other-coordinator"}},
+		{"claim execution with another coordinator", dismissMemberExec, "other-coordinator", []string{dismissMemberExec, "other-coordinator"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -178,6 +179,17 @@ func TestRetainedForDismissRefusesAnInvalidGroupCredential(t *testing.T) {
 		{"released", func(t *testing.T, f dismissFixture) {
 			RemoveCredentialOrFail(t, f, f.saveGroup(t, nil))
 		}, "missing or was released", ""},
+		{"tombstone beside a valid credential", func(t *testing.T, f dismissFixture) {
+			f.saveGroup(t, nil)
+			if err := os.WriteFile(strings.TrimSuffix(f.groupPath(), ".json")+".released", []byte("released\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}, "missing or was released", ""},
+		{"unreadable", func(t *testing.T, f dismissFixture) {
+			if err := os.MkdirAll(f.groupPath(), 0o700); err != nil {
+				t.Fatal(err)
+			}
+		}, "could not be read", "is a directory"},
 		{"lost", func(t *testing.T, f dismissFixture) {
 			f.saveGroup(t, func(c *Credential) { c.Lost, c.LostReason = true, "taken_over" })
 		}, "lost: taken_over", ""},
@@ -263,7 +275,8 @@ func TestRefusalConditionsRenderTheirValuesInEveryLanguage(t *testing.T) {
 	if len(conditions) != 13 {
 		t.Fatalf("expected 13 conditions, have %d", len(conditions))
 	}
-	reasons := map[string]int{reasonMissing: 0, reasonNotGroup: 0, reasonLost: 1, reasonMismatch: 0, reasonDamaged: 0, reasonUnreadable: 1}
+	reasons := map[string]int{reasonMissing: 0, reasonNotGroup: 0, reasonLost: 1, reasonMismatch: 0, reasonDamaged: 0, reasonUnreadable: 0}
+	fragments := map[string]int{"label_task_id": 0, "label_claim_execution_id": 0, "record_owner": 2, "record_session": 2, "change_revision": 2, "change_state": 2, "change_claim_removed": 0, "change_claim_execution": 2, "change_claim_generation": 2}
 	for _, lang := range []string{"en", "cn", "ja"} {
 		check := func(key string, count int) {
 			t.Helper()
@@ -286,6 +299,9 @@ func TestRefusalConditionsRenderTheirValuesInEveryLanguage(t *testing.T) {
 		}
 		for reason, count := range reasons {
 			check("remote.local_execution.reason_"+reason, count)
+		}
+		for fragment, count := range fragments {
+			check("remote.local_execution."+fragment, count)
 		}
 		check("remote.local_execution.value_empty", 0)
 		check("remote.local_execution_refused", 2)

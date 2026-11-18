@@ -13,6 +13,7 @@ import (
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/internal/terminal"
 )
 
 const (
@@ -48,6 +49,12 @@ func bindDismissProcess(t *testing.T, execution, coordinator string) {
 
 func newRemoteDismiss(t *testing.T, slug string) *remoteDismiss {
 	t.Helper()
+	// Terminal definitions come from the share directories below HOME: a user
+	// definition named herdr would replace the fake terminal's launcher.
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	terminal.ReloadDefinitions()
+	t.Cleanup(terminal.ReloadDefinitions)
 	root, _ := setupBoard(t)
 	task, path := makeDone(t, root, slug, "herdr:w1:t8:w1:p8")
 	text, err := os.ReadFile(path)
@@ -240,6 +247,8 @@ func TestRemoteDismissRefusesProcessesThatDoNotOwnTheMember(t *testing.T) {
 			[]string{"predecessor-exec", dismissClaim, empty}},
 		{"differing variables", dismissCoordinator, "other-coordinator", func(t *testing.T, d *remoteDismiss) { d.joinGroup(t); d.saveGroupCredential(t, nil) },
 			[]string{dismissCoordinator, "other-coordinator"}},
+		{"claim execution with another coordinator", dismissClaim, "other-coordinator", func(t *testing.T, d *remoteDismiss) { d.joinGroup(t); d.saveGroupCredential(t, nil) },
+			[]string{dismissClaim, "other-coordinator"}},
 		{"coordinator of a card without a group", dismissCoordinator, dismissCoordinator, func(t *testing.T, d *remoteDismiss) { d.saveGroupCredential(t, nil) },
 			[]string{dismissCoordinator, "-refused-dismiss-task"}},
 		{"coordinator without the group credential", dismissCoordinator, dismissCoordinator, func(t *testing.T, d *remoteDismiss) { d.joinGroup(t) },
@@ -326,7 +335,7 @@ func TestRemoteDismissRefusalsNameTheFailedCondition(t *testing.T) {
 		d.retain(t, nil)
 		d.record.Owner = "someone-else"
 		bindDismissProcess(t, "", "")
-		d.requireRefused(t, "OWNER", `"someone-else"`)
+		d.requireRefused(t, t_("remote.local_execution.record_owner", `"someone-else"`, `"claude"`))
 	})
 	t.Run("session without a reference", func(t *testing.T) {
 		d := newRemoteDismiss(t, "session-invalid")
@@ -346,7 +355,7 @@ func TestRemoteDismissRefusalsNameTheFailedCondition(t *testing.T) {
 		}
 		bindDismissProcess(t, "", "")
 		code, _, stderr := d.run(t)
-		if code == 0 || !strings.Contains(stderr, "revision 10 -> 11") || !strings.Contains(stderr, d.task) {
+		if code == 0 || !strings.Contains(stderr, t_("remote.local_execution.change_revision", 10, 11)) || !strings.Contains(stderr, d.task) {
 			t.Fatalf("exit %d: %s", code, stderr)
 		}
 		if d.terminalLog("prompt") || d.terminalLog("close") {

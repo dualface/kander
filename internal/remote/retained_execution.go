@@ -68,13 +68,16 @@ func (s *Session) retained(task api.Task, dismiss bool) (RetainedExecution, erro
 	case task.Claim == nil:
 		return value, LocalExecutionRefused(RefusalNoClaim, task.TaskID)
 	case !api.ValidIdentity(task.TaskID):
-		return value, LocalExecutionRefused(RefusalInvalidIdentity, "task ID", quoted(task.TaskID))
+		return value, LocalExecutionRefused(RefusalInvalidIdentity, RefusalText("label_task_id"), quoted(task.TaskID))
 	case !api.ValidIdentity(task.Claim.ExecutionID):
-		return value, LocalExecutionRefused(RefusalInvalidIdentity, "claim execution ID", quoted(task.Claim.ExecutionID))
+		return value, LocalExecutionRefused(RefusalInvalidIdentity, RefusalText("label_claim_execution_id"), quoted(task.Claim.ExecutionID))
 	case task.Claim.ClientID != s.Client.ClientID():
 		return value, LocalExecutionRefused(RefusalForeignClient, task.Claim.ClientID, s.Client.ClientID())
 	}
 	bound := os.Getenv(EnvExecutionID)
+	if coordinator := os.Getenv(EnvCoordinatorExecutionID); dismiss && bound != "" && coordinator != "" && coordinator != bound {
+		return value, LocalExecutionRefused(RefusalBoundExecution, bound, task.Claim.ExecutionID, coordinator)
+	}
 	byCoordinator := bound != "" && bound != task.Claim.ExecutionID
 	var credential Credential
 	var found bool
