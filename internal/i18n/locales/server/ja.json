@@ -42,6 +42,7 @@
   "remote.coordinator_holder_recovery_required": "タスク保持者が復旧するか、先に実行権を明示的に引き継いでください",
   "remote.coordinator_stopped_required": "復旧にはローカル実行の停止確認が必要です",
   "remote.coordinator_release_needs_end_execution": "release はこのコーディネーター実行のグループリースを恒久的に終了します。この実行は以後このグループを claim できず、グループのメンバーを dismiss することもできません。dismiss が必要な場合は、先に dismiss してから release してください。release の後は、新しいオーケストレーターセッションだけが、観測したチェックポイントのリビジョン、epoch、決定参照を添えてグループを引き継げます。リクエストは送信していません。それでも release する場合は、次を実行してください:",
+  "remote.coordinator_end_execution_position": "--end-execution は release の直後、パスの前にだけ置けます",
   "remote.coordinator_release_final": "グループ {{.V1}} を世代 {{.V2}} で release しました。実行 {{.V0}} は以後このグループを claim できず、グループのメンバーを dismiss することもできません。新しいオーケストレーターセッションだけが、観測したチェックポイントのリビジョン、epoch、決定参照を添えてグループを引き継げます。",
   "remote.coordinator_execution_released": "コーディネーター実行 {{.V0}} はグループ {{.V1}} のリースを release 済みで、このグループを再び claim できません。新しいオーケストレーターセッションを開始してください。kander coordinator show {{.V1}} でチェックポイントを読み、観測したリビジョンと epoch、決定参照を添えて claim します。",
   "remote.coordinator_execution_lost": "コーディネーター実行 {{.V0}} は世代 {{.V2}} でグループ {{.V1}} のリースを失っており、このグループを再び claim できません。まずユーザーに報告してください。続行するには、新しいオーケストレーターセッションが、観測したチェックポイントのリビジョン、epoch、決定参照を添えて claim します（kander coordinator show {{.V1}}）。",

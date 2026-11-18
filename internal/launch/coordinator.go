@@ -8,9 +8,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
@@ -100,6 +102,29 @@ func finishReconcile(c board.CoordinatorCheckpoint, err error) int {
 // contract, which stays old until the rules are refreshed.
 const releaseSyntax = "kander coordinator release --end-execution <absolute-release.json>"
 
+// leadingFlag is a switch that must come before the positional arguments of its command: a
+// positional argument already read makes it a usage error. flags is the set the flag is
+// registered on, whose Args holds the positional arguments read so far.
+type leadingFlag struct {
+	flags *pflag.FlagSet
+	given bool
+}
+
+func (f *leadingFlag) String() string { return strconv.FormatBool(f.given) }
+func (f *leadingFlag) Type() string   { return "bool" }
+
+func (f *leadingFlag) Set(value string) error {
+	given, err := strconv.ParseBool(value)
+	if err != nil {
+		return err
+	}
+	if len(f.flags.Args()) > 0 {
+		return command.Usage("remote.coordinator_end_execution_position")
+	}
+	f.given = given
+	return nil
+}
+
 // NewCoordinatorCommand builds kander coordinator: checkpoint operations and explicitly
 // requested, leased Git integration against the server. Subscription events remain read-only
 // wakeups.
@@ -124,19 +149,20 @@ func NewCoordinatorCommand() *cobra.Command {
 		return nil
 	}
 	// Release ends the calling execution for good, so it takes an explicit confirmation. The
-	// flag stands directly after the subcommand and before the path; a flag after the path is
-	// an extra argument. Without it nothing runs and no request is sent, and the message spells
+	// flag stands directly after the subcommand and before the path; after the path it is a
+	// usage error. Without it nothing runs and no request is sent, and the message spells
 	// the confirmed syntax for a coordinator that still reads an older copy of the rules. The
 	// check is an argument check, so it runs before the project binding.
-	var endExecution bool
+	var endExecution leadingFlag
 	release := sub("release", "<release.json>", func(path string) error {
-		if !endExecution {
+		if !endExecution.given {
 			return command.UsageText(config.Text("remote.coordinator_release_needs_end_execution") + "\n" + releaseSyntax)
 		}
 		return absolute(path)
 	})
-	release.Flags().BoolVar(&endExecution, "end-execution", false, "")
-	release.Flags().SetInterspersed(false)
+	endExecution.flags = release.Flags()
+	release.Flags().Var(&endExecution, "end-execution", "")
+	release.Flags().Lookup("end-execution").NoOptDefVal = "true"
 	return command.Group("coordinator",
 		sub("show", "<group-id>", anything),
 		sub("claim", "<claim.json>", absolute),

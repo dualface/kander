@@ -175,6 +175,10 @@ func TestUnboundCheckoutRefusesEveryCommandThatNeedsAProject(t *testing.T) {
 		}
 		checked++
 		args := append(strings.Fields(leaf.path), sampleArguments(t, leaf)...)
+		if leaf.path == "coordinator release" {
+			// The confirmation is an argument check, which precedes the binding check.
+			args = []string{"coordinator", "release", "--end-execution", "/abs/release.json"}
+		}
 		result := runKander(t, args...)
 		if result.code != 1 || !strings.Contains(result.stderr, config.Text("remote.not_configured")) {
 			t.Errorf("%s: exit=%d stderr=%q", leaf.path, result.code, result.stderr)

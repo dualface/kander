@@ -192,6 +192,10 @@ func TestEndExecutionBelongsToReleaseOnly(t *testing.T) {
 			t.Errorf("%v: status %d, output %q", args, status, out)
 		}
 	}
+	_, _, diagnostics := f.run(t, "release", f.path, "--end-execution")
+	if !strings.Contains(diagnostics, config.Text("remote.coordinator_end_execution_position")) {
+		t.Fatalf("a flag after the path is not explained: %q", diagnostics)
+	}
 	if n := f.requests.Load(); n != 0 {
 		t.Fatalf("the commands sent %d requests", n)
 	}
