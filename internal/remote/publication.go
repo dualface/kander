@@ -163,7 +163,8 @@ func (s *Session) liveReviewMembers(ctx context.Context, tasks []string) ([]api.
 // joint reports that choice. Any other process without a credential for the
 // member is refused here with the holder named, because the server refuses
 // every unproven write to a claimed card. A credential of an older generation
-// is sent as it is, and the server answers with the takeover.
+// held by any other process is sent as it is, and the server answers with the
+// takeover.
 //
 // The choice only selects the flow. The server still requires the holder's
 // confirmation of the exact material before it publishes, so a process that
@@ -181,15 +182,24 @@ func (s *Session) singleMemberAuthority(operation string, tasks []string, member
 		return proof, false, err
 	}
 	member := members[0]
-	if proof != nil && proof.Members[member.TaskID].Generation != 0 {
+	var held uint64
+	if proof != nil {
+		held = proof.Members[member.TaskID].Generation
+	}
+	if held == member.Generation {
 		return proof, false, nil
 	}
-	// The holder alone submits its own disposition of the findings.
+	// The holder alone submits its own disposition of the findings. A
+	// coordinator that still holds a replaced generation's credential asks the
+	// current holder too, so the stale proof is never sent in its place.
 	if operation != "review-disposition" {
 		coordinator, err := s.coordinatesTask(shown[member.TaskID])
 		if err != nil || coordinator {
 			return nil, coordinator, err
 		}
+	}
+	if held != 0 {
+		return proof, false, nil
 	}
 	claim := shown[member.TaskID].Claim
 	return nil, false, &api.Error{Code: api.CodeHeldByOther, Message: config.Text("remote.review_member_held_by_other", member.TaskID, claim.ExecutionID, claim.Owner, claim.Generation)}

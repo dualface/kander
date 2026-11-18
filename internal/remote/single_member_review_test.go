@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -60,6 +61,8 @@ type singleMember struct {
 	t                  *testing.T
 	holder, coordinate *remote.Session
 	log                *writeLog
+	clock              *atomic.Int64
+	url                string
 	task               api.Task
 	grant              api.ClaimGrant
 	ids                []string
@@ -75,7 +78,9 @@ func newSingleMember(t *testing.T, cardGroup, coordGroup string) *singleMember {
 	t.Setenv(remote.EnvCoordinatorExecutionID, "")
 	t.Setenv(config.EnvLang, "en")
 	t.Setenv(config.EnvLangCLI, "1")
-	srv, err := server.Open(server.Options{DataDir: filepath.Join(t.TempDir(), "server"), Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	clock := &atomic.Int64{}
+	clock.Store(time.Now().UnixNano())
+	srv, err := server.Open(server.Options{DataDir: filepath.Join(t.TempDir(), "server"), TTL: 90 * time.Second, RenewInterval: 15 * time.Second, Now: func() time.Time { return time.Unix(0, clock.Load()) }, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +100,7 @@ func newSingleMember(t *testing.T, cardGroup, coordGroup string) *singleMember {
 		}
 		return s
 	}
-	f := &singleMember{t: t, holder: open(a, "holder"), coordinate: open(b, "coordinator"), log: log}
+	f := &singleMember{t: t, holder: open(a, "holder"), coordinate: open(b, "coordinator"), log: log, clock: clock, url: httpServer.URL}
 	card := f.todo("single-card", cardGroup)
 	members := []string{card.TaskID}
 	if coordGroup != "" {
@@ -316,5 +321,27 @@ func TestSingleMemberRefusesProcessesThatAreNotHolderOrCoordinator(t *testing.T)
 				t.Fatalf("refused command wrote: %+v", writes)
 			}
 		})
+	}
+}
+
+// A coordinator that still holds the credential of a replaced generation asks
+// the current holder instead of sending that proof.
+func TestCoordinatorWithStaleMemberCredentialAsksCurrentHolder(t *testing.T) {
+	f := newSingleMember(t, "20261118-single-group", "20261118-single-group")
+	stale := remote.Credential{ServerURL: f.url, ClientID: f.coordinate.Client.ClientID(), ProjectID: f.coordinate.Info.ID, TaskID: f.ids[0], ExecutionID: "stale-execution", Generation: f.grant.Claim.Generation, Token: strings.Repeat("a", 64)}
+	if err := f.coordinate.SaveCredential(stale); err != nil {
+		t.Fatal(err)
+	}
+	f.clock.Add(int64(91 * time.Second))
+	successor, _ := client.New(f.url, "host-c")
+	grant, err := successor.Project(f.coordinate.Info.ID).Takeover(t.Context(), "", f.ids[0], api.ClaimRequest{ClientID: "host-c", ExecutionID: "successor", Owner: "codex", ExpectedGeneration: f.grant.Claim.Generation, Decision: "explicit test takeover"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.coordinate.AggregateReview(t.Context(), singleBatch)
+	pendingPublicationID(t, err)
+	requests := f.requests()
+	if len(requests) != 1 || requests[0].TargetGeneration != grant.Claim.Generation {
+		t.Fatalf("current holder was not asked: %+v", requests)
 	}
 }

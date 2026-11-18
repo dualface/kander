@@ -3,9 +3,11 @@
 package review
 
 import (
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -138,6 +140,32 @@ func (r *coordinatedRun) awaitHolder(err error) {
 	}
 }
 
+// assign runs the real assign command path of the coordinator for a published
+// run: it waits for the holder once, then writes the assignment.
+func (r *coordinatedRun) assign(run board.ReviewRun) {
+	r.t.Helper()
+	assignment := board.ReviewAssignment{RunID: run.RunID, BatchID: run.BatchID, Author: "coordinator", Basis: "single member fixture", Items: map[string][]string{}}
+	data, err := json.Marshal(assignment)
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	input := filepath.Join(r.t.TempDir(), "assignment.json")
+	if err := os.WriteFile(input, data, 0o600); err != nil {
+		r.t.Fatal(err)
+	}
+	_, err = remoteEvidenceAction(r.t.Context(), r.coordinate, "/host-b/clone", "assign", input, nil)
+	if !api.IsCode(err, api.CodeEvidenceIncomplete) {
+		r.t.Fatalf("want a wait for the holder: %v", err)
+	}
+	id := regexp.MustCompile(`review-[0-9a-f]{64}`).FindString(err.Error())
+	if _, err := r.holder.ConfirmReviewPublication(r.t.Context(), id, r.ids[0]); err != nil {
+		r.t.Fatal(err)
+	}
+	if _, err := remoteEvidenceAction(r.t.Context(), r.coordinate, "/host-b/clone", "assign", input, nil); err != nil {
+		r.t.Fatalf("confirmed assign: %v", err)
+	}
+}
+
 func TestCoordinatorRunPublishesAfterHolderConfirmation(t *testing.T) {
 	for _, members := range []int{1, 2} {
 		t.Run(map[int]string{1: "one member", 2: "one live of two members"}[members], func(t *testing.T) {
@@ -151,12 +179,15 @@ func TestCoordinatorRunPublishesAfterHolderConfirmation(t *testing.T) {
 			originals := map[string][]byte{"task-context.md": []byte("frozen task"), "review-context.md": []byte("context")}
 			_, _, err = r.store.Prepare(r.input(), requirements, nil, originals, "test")
 			r.awaitHolder(err)
+			if members == 2 && strings.Contains(err.Error(), r.ids[1]) {
+				t.Fatalf("wait names the member that left the batch: %v", err)
+			}
 			run, fresh, err := r.store.Prepare(r.input(), requirements, nil, originals, "test")
 			if err != nil || !fresh {
 				t.Fatalf("confirmed prepare: %+v %v", run, err)
 			}
 			run.LaunchStatus, run.ExecutionStatus = "started", "ok"
-			if run, err = r.store.Finalize(run, []byte("PASS\n")); err != nil {
+			if run, err = r.store.Finalize(run, []byte(emptyStructuredReview)); err != nil {
 				t.Fatal(err)
 			}
 			_, _, err = r.store.Publish(run.RunID)
@@ -164,6 +195,9 @@ func TestCoordinatorRunPublishesAfterHolderConfirmation(t *testing.T) {
 			published, _, err := r.store.Publish(run.RunID)
 			if err != nil || !published.Published[r.ids[0]] {
 				t.Fatalf("confirmed publish: %+v %v", published, err)
+			}
+			if members == 1 {
+				r.assign(published)
 			}
 		})
 	}
