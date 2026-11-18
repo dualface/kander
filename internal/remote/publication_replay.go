@@ -76,15 +76,16 @@ func (s *Session) publicationHistory(operation, replay string, raw json.RawMessa
 
 // completedReviewPublication recognizes a prior successful operation before
 // looking at versions changed by that very publication or by a later executor.
-// It returns only an immutable receipt; it grants no new write authority.
-func (s *Session) completedReviewPublication(ctx context.Context, operation, replay string, raw json.RawMessage) (*client.Claim, bool, error) {
+// It returns only an immutable receipt, with the publication it names; it
+// grants no new write authority. A nil proof means there is none.
+func (s *Session) completedReviewPublication(ctx context.Context, operation, replay string, raw json.RawMessage) (*client.Claim, api.Publication, error) {
 	ids, err := s.publicationHistory(operation, replay, raw, "")
 	if err != nil {
-		return nil, false, err
+		return nil, api.Publication{}, err
 	}
 	logical, err := verificationIdentity(operation, raw)
 	if err != nil {
-		return nil, false, err
+		return nil, api.Publication{}, err
 	}
 	for _, id := range slices.Backward(ids) {
 		publication, err := s.Project.Publication(ctx, id)
@@ -92,18 +93,18 @@ func (s *Session) completedReviewPublication(ctx context.Context, operation, rep
 			continue
 		}
 		if err != nil {
-			return nil, false, err
+			return nil, api.Publication{}, err
 		}
 		if publication.Operation != operation {
-			return nil, false, errors.New(config.Text("remote.review_material_conflict"))
+			return nil, api.Publication{}, errors.New(config.Text("remote.review_material_conflict"))
 		}
 		material, err := verificationIdentity(operation, publication.Payload)
 		if err != nil || !bytes.Equal(material, logical) {
-			return nil, false, errors.New(config.Text("remote.review_material_conflict"))
+			return nil, api.Publication{}, errors.New(config.Text("remote.review_material_conflict"))
 		}
 		if publication.Status == "published" {
-			return &client.Claim{PublicationID: id, PublicationPayload: publication.Payload}, true, nil
+			return &client.Claim{PublicationID: id, PublicationPayload: publication.Payload}, publication, nil
 		}
 	}
-	return nil, false, nil
+	return nil, api.Publication{}, nil
 }

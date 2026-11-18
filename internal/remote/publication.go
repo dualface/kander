@@ -70,39 +70,27 @@ func (s *Session) reviewAuthority(ctx context.Context, operation, replay string,
 	if err != nil {
 		return nil, false, err
 	}
-	var members []api.PublicationMember
-	var shown map[string]api.Task
-	read, routed := len(tasks) <= 1, false
-	if read {
+	saved, publication, err := s.completedReviewPublication(ctx, operation, replay, raw)
+	if err != nil {
+		return nil, false, err
+	}
+	if saved != nil {
 		// The replay records are shared by every execution of this client
-		// home, so an operation on one card is routed for this execution first.
-		// A saved result then never replaces the holder's direct proof, and
-		// never answers a process that is neither holder nor coordinator.
-		members, shown, err = s.liveReviewMembers(ctx, tasks)
-		switch {
-		case api.IsCode(err, api.CodeLeaseInvalid):
-			// A released claim cannot take part in a new write, but the saved
-			// result of a published operation still answers a retry.
-			read = false
-		case err != nil:
-			return nil, false, err
-		case len(members) == 1:
-			proof, joint, err := s.singleMemberAuthority(operation, tasks, members, shown)
-			if err != nil || !joint {
+		// home. A one-member publication is routed for the calling execution
+		// first, so a saved result never replaces the holder's direct proof
+		// and never answers a process that is neither holder nor coordinator.
+		if len(publication.Members) == 1 {
+			if proof, direct, err := s.replayRoute(ctx, operation, tasks, publication.Members[0].TaskID); err != nil || direct {
 				return proof, false, err
 			}
-			routed = true
 		}
+		return saved, true, nil
 	}
-	if proof, found, err := s.completedReviewPublication(ctx, operation, replay, raw); err != nil || found {
-		return proof, found, err
+	members, shown, err := s.liveReviewMembers(ctx, tasks)
+	if err != nil {
+		return nil, false, err
 	}
-	if !read {
-		if members, shown, err = s.liveReviewMembers(ctx, tasks); err != nil {
-			return nil, false, err
-		}
-	}
-	if len(members) <= 1 && !routed {
+	if len(members) <= 1 {
 		proof, joint, err := s.singleMemberAuthority(operation, tasks, members, shown)
 		if err != nil || !joint {
 			return proof, false, err
@@ -156,6 +144,22 @@ func (s *Session) reviewAuthority(ctx context.Context, operation, replay string,
 		return nil, false, &ConfirmationPending{Cause: &api.Error{Code: api.CodeEvidenceIncomplete, Message: config.Text("remote.review_confirmation_pending", id, strings.Join(pending, ", "))}}
 	}
 	return &client.Claim{PublicationID: id, PublicationPayload: raw}, false, nil
+}
+
+// replayRoute routes a saved one-member publication for the calling execution.
+// direct reports that the proof or the refusal replaces the saved result. A card
+// that left the batch, or whose claim was released, leaves the saved result as
+// the answer, so a retry of a published operation still succeeds.
+func (s *Session) replayRoute(ctx context.Context, operation string, tasks []string, member string) (proof *client.Claim, direct bool, err error) {
+	members, shown, err := s.liveReviewMembers(ctx, tasks)
+	if api.IsCode(err, api.CodeLeaseInvalid) {
+		return nil, false, nil
+	}
+	if err != nil || len(members) != 1 || members[0].TaskID != member {
+		return nil, false, err
+	}
+	proof, joint, err := s.singleMemberAuthority(operation, tasks, members, shown)
+	return proof, !joint, err
 }
 
 // liveReviewMembers reads each task once and returns the version of every

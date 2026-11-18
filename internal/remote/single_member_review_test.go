@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -66,6 +67,7 @@ type singleMember struct {
 	task               api.Task
 	grant              api.ClaimGrant
 	ids                []string
+	planned            []string
 }
 
 // newSingleMember creates a claimed card in cardGroup and a coordinator
@@ -73,6 +75,14 @@ type singleMember struct {
 // supervises a second card, and an empty cardGroup leaves the card out of
 // every group.
 func newSingleMember(t *testing.T, cardGroup, coordGroup string) *singleMember {
+	t.Helper()
+	return newSingleMemberOf(t, cardGroup, coordGroup, false)
+}
+
+// newSingleMemberOf with trashed also plans a second card of the group, held by
+// the same holder, that leaves the batch before the first review write, so the
+// batch keeps two cards and one of them live.
+func newSingleMemberOf(t *testing.T, cardGroup, coordGroup string, trashed bool) *singleMember {
 	t.Helper()
 	t.Setenv(remote.EnvExecutionID, "")
 	t.Setenv(remote.EnvCoordinatorExecutionID, "")
@@ -121,7 +131,29 @@ func newSingleMember(t *testing.T, cardGroup, coordGroup string) *singleMember {
 	if err := f.holder.SaveCredential(credential); err != nil {
 		t.Fatal(err)
 	}
+	planned := f.ids
+	var second remote.Credential
+	if trashed {
+		other := f.todo("left-card", cardGroup)
+		grant, err := f.holder.Project.Claim(t.Context(), "", other.TaskID, api.ClaimRequest{ClientID: a.ClientID(), ExecutionID: "execution-left", Owner: "codex"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		second = remote.Credential{ServerURL: httpServer.URL, ClientID: a.ClientID(), ProjectID: info.ID, TaskID: other.TaskID, ExecutionID: grant.Claim.ExecutionID, Generation: grant.Claim.Generation, Token: grant.Token}
+		if err := f.holder.SaveCredential(second); err != nil {
+			t.Fatal(err)
+		}
+		// The server sorts a plan's members in place, so a plan written in
+		// another order would not match its own receipt.
+		planned = slices.Sorted(slices.Values([]string{card.TaskID, other.TaskID}))
+	}
+	f.planned = planned
 	f.publish("review-plan", f.plan("single-plan"))
+	if trashed {
+		if _, err := f.holder.Project.Move(t.Context(), client.NewKey(), second.TaskID, api.Move{State: "trash", Result: "trashed", Reason: "left the batch", Decision: "fixture decision"}, second.Claim()); err != nil {
+			t.Fatal(err)
+		}
+	}
 	f.log.take()
 	return f
 }
@@ -148,13 +180,13 @@ func (f *singleMember) todo(slug, group string) api.Task {
 }
 
 func (f *singleMember) plan(id string) board.ReviewPlan {
-	return board.ReviewPlan{Schema: 1, PlanID: id, Sealed: true, Author: "coordinator", Basis: "single member", CWD: "/host-a/clone", ReportLanguage: "en", TaskIDs: f.ids, Batches: []board.ReviewPlanBatch{{BatchID: singleBatch, TaskIDs: f.ids, Base: "N/A", TargetCommit: "N/A", Requirements: map[string]string{"PMQA": "N/A: fixture", "Security": "N/A: repository policy"}}}}
+	return board.ReviewPlan{Schema: 1, PlanID: id, Sealed: true, Author: "coordinator", Basis: "single member", CWD: "/host-a/clone", ReportLanguage: "en", TaskIDs: f.planned, Batches: []board.ReviewPlanBatch{{BatchID: singleBatch, TaskIDs: f.planned, Base: "N/A", TargetCommit: "N/A", Requirements: map[string]string{"PMQA": "N/A: fixture", "Security": "N/A: repository policy"}}}}
 }
 
 // publish runs a write the holder proves directly.
 func (f *singleMember) publish(operation string, plan board.ReviewPlan) {
 	f.t.Helper()
-	proof, err := f.holder.ReviewAuthority(f.t.Context(), operation, plan, f.ids)
+	proof, err := f.holder.ReviewAuthority(f.t.Context(), operation, plan, f.planned)
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -349,15 +381,25 @@ func TestCoordinatorWithStaleMemberCredentialAsksCurrentHolder(t *testing.T) {
 // Executions on one client home share the replay records of published
 // operations, and each still takes its own route.
 func TestSharedClientHomeKeepsEachExecutionsRoute(t *testing.T) {
+	sharedClientHomeRoutes(t, newSingleMember(t, "20261118-single-group", ""))
+}
+
+// The same holds when a second card of the batch left before the first write,
+// so the batch keeps two cards and the publication has one member.
+func TestSharedClientHomeRoutesAfterAMemberLeftTheBatch(t *testing.T) {
+	sharedClientHomeRoutes(t, newSingleMemberOf(t, "20261118-single-group", "", true))
+}
+
+func sharedClientHomeRoutes(t *testing.T, f *singleMember) {
+	t.Helper()
 	const group = "20261118-single-group"
-	f := newSingleMember(t, group, "")
 	coordinator := &remote.Session{Client: f.coordinate.Client, Project: f.coordinate.Project, Info: f.coordinate.Info, ServerURL: f.url, Home: f.holder.Home}
 	as := func(execution, coordinating string) {
 		t.Setenv(remote.EnvExecutionID, execution)
 		t.Setenv(remote.EnvCoordinatorExecutionID, coordinating)
 	}
 	as("coordinator-execution", "coordinator-execution")
-	request := board.CoordinatorClaim{GroupID: group, Owner: "coordinator", Token: "label", Basis: "shared home fixture", Members: f.ids}
+	request := board.CoordinatorClaim{GroupID: group, Owner: "coordinator", Token: "label", Basis: "shared home fixture", Members: f.planned}
 	if _, err := coordinator.AcquireCoordinator(t.Context(), request, ""); err != nil {
 		t.Fatal(err)
 	}
