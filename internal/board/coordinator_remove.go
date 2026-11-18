@@ -3,11 +3,14 @@ package board
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"os"
 	"reflect"
 	"regexp"
 	"slices"
 	"strings"
 
+	"github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/statemachine/cardlifecycle"
 )
 
@@ -101,25 +104,27 @@ func RemoveCoordinatorMemberWithTransaction(ctx context.Context, root string, r 
 		if c, exists, e = readCheckpoint(tx, r.GroupID); e != nil {
 			return e
 		}
-		if !exists {
-			return coordinatorError("checkpoint missing")
-		}
-		if e = verifyCoordinatorRemovals(tx, c); e != nil {
-			return e
-		}
-		g := newGroupKernel(c, true, len(c.Members))
-		facts, refusal, e := collectRemoveFacts(tx, c, r, id)
-		if e != nil {
-			return e
+		g := newGroupKernel(c, exists, len(c.Members))
+		facts, refusal := removeFacts{known: true, unstarted: true, membership: true, remaining: true, noDependents: true, blockedAfter: int(g.state.Blocked)}, error(nil)
+		if exists {
+			if e = verifyCoordinatorRemovals(tx, c); e != nil {
+				return e
+			}
+			if facts, refusal, e = collectRemoveFacts(tx, c, r, id); e != nil {
+				return e
+			}
 		}
 		next, ok := g.step(g.removeMember(r, facts))
 		if !ok {
+			if !exists {
+				return coordinatorError("checkpoint missing")
+			}
 			// The request CAS and the revision room are the kernel's alone: asked
 			// with every fact true, the refusal is theirs.
 			if _, cas := g.step(g.removeMember(r, removeFacts{known: true, unstarted: true, membership: true, remaining: true, noDependents: true, blockedAfter: int(g.state.Blocked)})); !cas {
-				return coordinatorError("remove CAS")
+				return removeCASError(c, r)
 			}
-			return refusal
+			return firstError(refusal, coordinatorError("remove refused"))
 		}
 		s, e := tx.Snapshot(id)
 		if e != nil {
@@ -144,6 +149,18 @@ func RemoveCoordinatorMemberWithTransaction(ctx context.Context, root string, r 
 		return putCheckpoint(tx, &c)
 	}, extensions...)
 	return c, err
+}
+
+// removeCASError names what the refused request got wrong: the revision, the
+// epoch, or the room below the revision ceiling.
+func removeCASError(c CoordinatorCheckpoint, r CoordinatorRemoveMember) error {
+	switch {
+	case r.ExpectedRevision != c.Revision:
+		return kanbanError("board.remove_member_stale_revision", r.GroupID, r.ExpectedRevision, c.Revision)
+	case r.ExpectedEpoch != c.Authority.Epoch:
+		return kanbanError("board.remove_member_stale_epoch", r.GroupID, r.ExpectedEpoch, c.Authority.Epoch)
+	}
+	return kanbanError("board.remove_member_revision_limit", r.GroupID)
 }
 
 // collectRemoveFacts reads the facts of a removal in the order the refusals are
@@ -206,8 +223,6 @@ func startedReason(tx *Transaction, s Snapshot, m CoordinatorMember) (string, er
 		return t("board.remove_member_reason_mirror"), nil
 	case authFrom(s.Text) != (ExecutionAuthorization{}):
 		return t("board.remove_member_reason_dispatch"), nil
-	case MetadataFrom(s.Text, "REVIEWS") != "":
-		return t("board.remove_member_reason_reviews"), nil
 	}
 	l, err := readExecutionLedger(tx, s)
 	if err != nil {
@@ -223,6 +238,11 @@ func startedReason(tx *Transaction, s Snapshot, m CoordinatorMember) (string, er
 	if len(rounds) > 0 {
 		return t("board.remove_member_reason_rounds"), nil
 	}
+	if reviewed, err := memberReviewed(tx, s); err != nil {
+		return "", err
+	} else if reviewed {
+		return t("board.remove_member_reason_reviews"), nil
+	}
 	if _, planned, err := readTaskPlan(tx, s.Entry.TaskID); err != nil {
 		return "", err
 	} else if planned {
@@ -234,6 +254,32 @@ func startedReason(tx *Transaction, s Snapshot, m CoordinatorMember) (string, er
 		return t("board.remove_member_reason_excluded"), nil
 	}
 	return "", nil
+}
+
+// memberReviewed says whether a review run names the card: the index the
+// publication wrote into its REVIEWS section, or a persisted run of the review
+// control group that lists it as a member, published or not.
+func memberReviewed(tx *Transaction, s Snapshot) (bool, error) {
+	indexes, err := ParseReviewIndexes(s.Text)
+	if err != nil || len(indexes) > 0 {
+		return len(indexes) > 0, err
+	}
+	entries, err := fs.ListDirectory(tx.root, control(tx.root, "groups", reviewControlGroup, "runs"))
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	for _, entry := range entries {
+		var run ReviewRun
+		if ok, err := readReviewJSON(tx, reviewRunName(entry.Name), &run); err != nil {
+			return false, err
+		} else if ok && containsID(run.TaskIDs, s.Entry.TaskID) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // removalDependents lists the remaining members whose PREREQUISITES name the

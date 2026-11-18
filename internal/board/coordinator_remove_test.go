@@ -174,7 +174,7 @@ func TestRemoveMemberLeavesTheRestOfTheGroupWorking(t *testing.T) {
 		t.Fatalf("%+v %v", taken, err)
 	}
 	// A second removal needs the checkpoint it was decided on.
-	if _, err := RemoveCoordinatorMember(context.Background(), root, removeRequest(c, ids[1])); err == nil || !strings.Contains(err.Error(), "remove CAS") {
+	if _, err := RemoveCoordinatorMember(context.Background(), root, removeRequest(c, ids[1])); !refusedWith(err, "board.remove_member_stale_revision") {
 		t.Fatalf("a request on the old revision: %v", err)
 	}
 }
@@ -286,18 +286,26 @@ func TestRemoveMemberRefusals(t *testing.T) {
 	t.Run("stale revision", func(t *testing.T) {
 		r := good
 		r.ExpectedRevision++
-		requireRemovalRefused(t, root, c, ids, r, "remove CAS")
+		requireRemovalRefused(t, root, c, ids, r, "board.remove_member_stale_revision")
 	})
 	t.Run("fenced epoch", func(t *testing.T) {
 		r := good
 		r.ExpectedEpoch++
-		requireRemovalRefused(t, root, c, ids, r, "remove CAS")
+		requireRemovalRefused(t, root, c, ids, r, "board.remove_member_stale_epoch")
 	})
 	t.Run("no checkpoint", func(t *testing.T) {
 		r := good
 		r.GroupID = otherRemoveGroup
-		if _, err := RemoveCoordinatorMember(context.Background(), root, r); err == nil || !strings.Contains(err.Error(), "checkpoint missing") {
+		before := removeSnapshot(t, root, c.GroupID, ids...)
+		if _, err := RemoveCoordinatorMember(context.Background(), root, r); !refusedWith(err, "board.coordinator_conflict") {
 			t.Fatalf("%v", err)
+		}
+		if after := removeSnapshot(t, root, c.GroupID, ids...); len(after) != len(before) {
+			t.Fatal("a refused removal wrote")
+		}
+		// The refusal is the kernel's: no checkpoint, no removal.
+		if _, taken := newGroupKernel(CoordinatorCheckpoint{}, false, 0).step(newGroupKernel(c, true, len(c.Members)).removeMember(r, removeFacts{known: true, unstarted: true, membership: true, remaining: true, noDependents: true})); taken {
+			t.Fatal("the kernel took a removal with no checkpoint")
 		}
 	})
 	t.Run("not a member of the checkpoint", func(t *testing.T) {
@@ -317,6 +325,13 @@ func TestRemoveMemberRefusals(t *testing.T) {
 		defer putCardText(t, root, ids[2], func(text string) string {
 			return strings.Replace(text, "```text\nPREREQUISITES: "+ids[0]+","+ids[1]+"\n```\n", "", 1)
 		})
+		requireRemovalRefused(t, root, c, ids, removeRequest(c, ids[0]), "board.remove_member_dependents")
+	})
+	t.Run("an archived member that lists it still refuses", func(t *testing.T) {
+		root := tempBoard(t)
+		ids, c := removeGroup(t, root, "archived-dependent-a", "archived-dependent-b", "archived-dependent-c")
+		putCardText(t, root, ids[1], func(text string) string { return prerequisiteBlock(text, ids[0]) })
+		moveWith(t, root, ids[1], "archived", MoveOptions{Result: "cancelled", Reason: "no longer needed", Decision: "user-decision-4"})
 		requireRemovalRefused(t, root, c, ids, removeRequest(c, ids[0]), "board.remove_member_dependents")
 	})
 }
@@ -356,8 +371,19 @@ func TestRemoveMemberRefusesAStartedMember(t *testing.T) {
 		"dispatch binding": func(t *testing.T, root, id string) {
 			putCardText(t, root, id, func(text string) string { text, _ = setMetadata(text, "DISPATCH_ID", "bound-round"); return text })
 		},
-		"review runs": func(t *testing.T, root, id string) {
-			putCardText(t, root, id, func(text string) string { text, _ = setMetadata(text, "REVIEWS", "reviews/index.json"); return text })
+		"review index": func(t *testing.T, root, id string) {
+			// The line a publication appends to the REVIEWS section of the card.
+			line, _ := json.Marshal(ReviewIndex{RunID: "run-removal-test", BatchID: "batch-removal-test", Role: "PMQA", ExecutionStatus: "ok"})
+			putCardText(t, root, id, func(text string) string { text, _ = appendReviewIndex(text, string(line)); return text })
+		},
+		"persisted review run": func(t *testing.T, root, id string) {
+			var run ReviewRun
+			run.RunID, run.BatchID, run.TaskIDs = "run-removal-test", "batch-removal-test", []string{id}
+			if err := WithTransaction(root, LockScope{Groups: []string{reviewControlGroup}, ExclusiveBoard: true}, func(tx *Transaction) error {
+				return tx.PutGroup(reviewControlGroup, reviewRunName(run.RunID), reviewJSON(run))
+			}); err != nil {
+				t.Fatal(err)
+			}
 		},
 		"review plan": func(t *testing.T, root, id string) {
 			plan := ReviewPlan{Schema: 1, PlanID: "plan-removal-test", TaskIDs: []string{id}}
