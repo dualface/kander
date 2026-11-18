@@ -340,8 +340,9 @@ of a new checkpoint, of an existing one at the right and at wrong revisions, wit
 the same token, without room, with other members, and as a replay; a reconcile
 that changed and one that did not, with each count of blocked members, at the
 right and at the previous revision as a retry, with a wrong authority, a
-request-level failure, and each shell fact failing; and a recovery with each
-fact failing. -/
+request-level failure, and each shell fact failing; a recovery with each
+fact failing; and a removal at the right and at wrong revisions and epochs, with
+each fact failing, and with each blocked count. -/
 def coordinatorEvents : List Event :=
   let claim (er ee : Nat) (sm ts rm mo mb : Bool) : Event :=
     ⟨"claim", [natV er, natV ee, boolV sm, boolV ts, boolV rm, boolV mo, boolV mb]⟩
@@ -350,6 +351,8 @@ def coordinatorEvents : List Event :=
       boolV ch, natV ba, boolV rm]⟩
   let rcv (er ee : Nat) (rm kn mb ex mo : Bool) : Event :=
     ⟨"recover", [natV er, natV ee, boolV rm, boolV kn, boolV mb, boolV ex, boolV mo]⟩
+  let rmv (er ee : Nat) (rm kn un mb rem nd : Bool) (ba : Nat) : Event :=
+    ⟨"removeMember", [natV er, natV ee, boolV rm, boolV kn, boolV un, boolV mb, boolV rem, boolV nd, natV ba]⟩
   [ claim 0 0 false false true true true, claim 1 1 false false true true true, claim 2 1 false false true true true,
     claim 2 2 false false true true true, claim 1 1 false true true true true, claim 1 1 false false false true true,
     claim 1 1 false false true false true, claim 1 1 false false true true false, claim 0 0 true false true true true,
@@ -363,7 +366,11 @@ def coordinatorEvents : List Event :=
     rcn true true 1 1 false true true true true true 1 true, rcn true true 1 1 false true true true false true 1 false,
     rcv 1 1 true true true true true, rcv 2 1 true true true true true, rcv 2 2 true true true true true,
     rcv 0 0 true true true true true, rcv 1 1 false true true true true, rcv 1 1 true false true true true,
-    rcv 1 1 true true false true true, rcv 1 1 true true true false true, rcv 1 1 true true true true false ]
+    rcv 1 1 true true false true true, rcv 1 1 true true true false true, rcv 1 1 true true true true false,
+    rmv 1 1 true true true true true true 0, rmv 2 1 true true true true true true 0, rmv 2 2 true true true true true true 0,
+    rmv 0 0 true true true true true true 0, rmv 1 1 false true true true true true 0, rmv 1 1 true false true true true true 0,
+    rmv 1 1 true true false true true true 0, rmv 1 1 true true true false true true 0, rmv 1 1 true true true true false true 0,
+    rmv 1 1 true true true true true false 0, rmv 1 1 true true true true true true 1, rmv 1 1 true true true true true true 2 ]
 
 /-- The coordinator member vector alphabet. Columns: 0 early, 1 working, 2 review,
 3 done, 4 archived, 5 trash. The walking events are tried with the revision and
@@ -773,6 +780,7 @@ def entries : List Entry := [
       ``KanderFormal.Proofs.Coordinator.claim_spec,
       ``KanderFormal.Proofs.Coordinator.reconcile_spec,
       ``KanderFormal.Proofs.Coordinator.recover_spec,
+      ``KanderFormal.Proofs.Coordinator.removeMember_spec,
       ``KanderFormal.Proofs.Coordinator.claim_replay,
       ``KanderFormal.Proofs.Coordinator.claim_refused_cas,
       ``KanderFormal.Proofs.Coordinator.claim_refused_token,
@@ -786,6 +794,14 @@ def entries : List Entry := [
       ``KanderFormal.Proofs.Coordinator.recover_refused_cas,
       ``KanderFormal.Proofs.Coordinator.recover_refused_not_blocked,
       ``KanderFormal.Proofs.Coordinator.recover_refused_count,
+      ``KanderFormal.Proofs.Coordinator.removeMember_refused_cas,
+      ``KanderFormal.Proofs.Coordinator.removeMember_refused_none,
+      ``KanderFormal.Proofs.Coordinator.removeMember_refused_member,
+      ``KanderFormal.Proofs.Coordinator.removeMember_refused_started,
+      ``KanderFormal.Proofs.Coordinator.removeMember_refused_last,
+      ``KanderFormal.Proofs.Coordinator.removeMember_refused_dependents,
+      ``KanderFormal.Proofs.Coordinator.removeMember_refused_room,
+      ``KanderFormal.Proofs.Coordinator.removeMember_blocked_not_higher,
       ``KanderFormal.Proofs.Coordinator.stale_retry_after_write,
       ``KanderFormal.Proofs.Coordinator.epoch_change,
       ``KanderFormal.Proofs.Coordinator.rev_monotone,

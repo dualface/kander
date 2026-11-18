@@ -48,7 +48,8 @@ theorem step_inv (p : Params) (s s' : State) (e : Event) (hi : Inv p s)
   obtain ⟨P1, P2⟩ := hp z rfl
   intro y hy
   rcases accepted_cases h with ⟨er, ee, sm, ts, rm, mo, mb, rfl⟩ |
-    ⟨os, ts, ea, er, sm, mo, mm, rc, rf, ch, ba, rm, rfl⟩ | ⟨er, ee, rm, kn, mb, ex, mo, rfl⟩
+    ⟨os, ts, ea, er, sm, mo, mm, rc, rf, ch, ba, rm, rfl⟩ | ⟨er, ee, rm, kn, mb, ex, mo, rfl⟩ |
+    ⟨er, ee, rm, kn, un, mb, rem, nd, ba, rfl⟩
   · rw [step_claim p z hr he] at h
     split at h
     · split at h
@@ -82,6 +83,14 @@ theorem step_inv (p : Params) (s s' : State) (e : Event) (hi : Inv p s)
     · rename_i hg
       cases h; have := enc_inj hy; subst this
       obtain ⟨-, -, -, -, ⟨hex, -⟩, -⟩ := hg
+      obtain ⟨a1, a2⟩ := P2 hex
+      exact ⟨by simp [hex], fun _ => ⟨by simpa using a1, by simp; omega⟩⟩
+    · cases h
+  · rw [step_removeMember p z he hb] at h
+    split at h
+    · rename_i hg
+      cases h; have := enc_inj hy; subst this
+      obtain ⟨-, -, -, -, -, ⟨hex, -⟩, -⟩ := hg
       obtain ⟨a1, a2⟩ := P2 hex
       exact ⟨by simp [hex], fun _ => ⟨by simpa using a1, by simp; omega⟩⟩
     · cases h
@@ -174,6 +183,26 @@ theorem recover_spec {p : Params} {z y : Gp} {s' : State} {er ee : Nat} {rm kn m
   rw [step_recover p z hz.2.1 hz.2.2] at h
   split at h
   · rename_i hg; cases h; exact ⟨hg.2.2.1, hg.2.2.2.1, hg.2.2.2.2.1, (enc_inj hy).symm⟩
+  · cases h
+
+/-- An accepted removal needed the revision and epoch it names, an existing
+checkpoint, room below the ceiling, a member the shell found in the checkpoint
+and on the board, unstarted, with at least one member left and no remaining
+member that lists it as a prerequisite, and a blocked count that is not higher
+than before. It raises the revision by one, keeps the epoch, forgets the last
+request, and records the blocked count the remaining mirrors have. -/
+theorem removeMember_spec {p : Params} {z y : Gp} {s' : State} {er ee : Nat} {rm kn un mb rem nd : Bool} {ba : Nat}
+    (hz : Fits p z)
+    (h : step M p (enc z) ⟨"removeMember", [natV er, natV ee, boolV rm, boolV kn, boolV un, boolV mb, boolV rem,
+        boolV nd, natV ba]⟩ = some s')
+    (hy : s' = enc y) :
+    er = z.rev ∧ ee = z.epoch ∧ RemOk z rm kn un mb rem nd ∧ ba ≤ z.blocked ∧
+      y = ⟨z.exists_, z.rev + 1, z.epoch, false, ba⟩ := by
+  rw [step_removeMember p z hz.2.1 hz.2.2] at h
+  split at h
+  · rename_i hg
+    cases h
+    exact ⟨hg.2.2.2.1, hg.2.2.2.2.1, hg.2.2.2.2.2.1, hg.2.2.2.2.2.2.1, (enc_inj hy).symm⟩
   · cases h
 
 /-- Theorem 1: a claim of the same hash returns the checkpoint as it is, whatever
@@ -285,6 +314,75 @@ theorem recover_refused_count (p : Params) (z : Gp) (hz : Fits p z) (hb : z.bloc
     step M p (enc z) ⟨"recover", [natV er, natV ee, boolV rm, boolV kn, boolV mb, boolV ex, boolV mo]⟩ = none := by
   rw [step_recover p z hz.2.1 hz.2.2]; simp [RecvOk, hb]
 
+/-- Theorem 1: a removal that names another revision or epoch than the
+checkpoint's is refused. -/
+theorem removeMember_refused_cas (p : Params) (z : Gp) (hz : Fits p z) (er ee : Nat) (hc : er ≠ z.rev ∨ ee ≠ z.epoch)
+    (rm kn un mb rem nd : Bool) (ba : Nat) :
+    step M p (enc z) ⟨"removeMember", [natV er, natV ee, boolV rm, boolV kn, boolV un, boolV mb, boolV rem, boolV nd,
+        natV ba]⟩ = none := by
+  rw [step_removeMember p z hz.2.1 hz.2.2]
+  have : ¬(er = z.rev ∧ ee = z.epoch) := by intro ⟨h1, h2⟩; rcases hc with hc | hc <;> simp_all
+  simp
+  intro _ _ _ h1 h2; exact absurd ⟨h1, h2⟩ this
+
+/-- Theorem 1: a removal of a group that has no checkpoint is refused. -/
+theorem removeMember_refused_none (p : Params) (z : Gp) (hz : Fits p z) (hx : z.exists_ = false) (er ee : Nat)
+    (rm kn un mb rem nd : Bool) (ba : Nat) :
+    step M p (enc z) ⟨"removeMember", [natV er, natV ee, boolV rm, boolV kn, boolV un, boolV mb, boolV rem, boolV nd,
+        natV ba]⟩ = none := by
+  rw [step_removeMember p z hz.2.1 hz.2.2]; simp [RemOk, hx]
+
+/-- Theorem 1: a removal of a card that is not a member of the checkpoint, or
+whose group on the board is another one, is refused. -/
+theorem removeMember_refused_member (p : Params) (z : Gp) (hz : Fits p z) (er ee : Nat) (rm un mb rem nd : Bool)
+    (ba : Nat) :
+    (step M p (enc z) ⟨"removeMember", [natV er, natV ee, boolV rm, boolV false, boolV un, boolV mb, boolV rem,
+        boolV nd, natV ba]⟩ = none) ∧
+    (step M p (enc z) ⟨"removeMember", [natV er, natV ee, boolV rm, boolV true, boolV un, boolV false, boolV rem,
+        boolV nd, natV ba]⟩ = none) := by
+  rw [step_removeMember p z hz.2.1 hz.2.2, step_removeMember p z hz.2.1 hz.2.2]; simp [RemOk]
+
+/-- Theorem 1: a removal of a member that has started is refused. -/
+theorem removeMember_refused_started (p : Params) (z : Gp) (hz : Fits p z) (er ee : Nat) (rm kn mb rem nd : Bool)
+    (ba : Nat) :
+    step M p (enc z) ⟨"removeMember", [natV er, natV ee, boolV rm, boolV kn, boolV false, boolV mb, boolV rem,
+        boolV nd, natV ba]⟩ = none := by
+  rw [step_removeMember p z hz.2.1 hz.2.2]; simp [RemOk]
+
+/-- Theorem 1: a removal of the last member is refused: the group would have no
+member left to continue it. -/
+theorem removeMember_refused_last (p : Params) (z : Gp) (hz : Fits p z) (er ee : Nat) (rm kn un mb nd : Bool)
+    (ba : Nat) :
+    step M p (enc z) ⟨"removeMember", [natV er, natV ee, boolV rm, boolV kn, boolV un, boolV mb, boolV false,
+        boolV nd, natV ba]⟩ = none := by
+  rw [step_removeMember p z hz.2.1 hz.2.2]; simp [RemOk]
+
+/-- Theorem 1: a removal of a card a remaining member lists as a prerequisite is
+refused, so no group is held up by a card outside it. -/
+theorem removeMember_refused_dependents (p : Params) (z : Gp) (hz : Fits p z) (er ee : Nat)
+    (rm kn un mb rem : Bool) (ba : Nat) :
+    step M p (enc z) ⟨"removeMember", [natV er, natV ee, boolV rm, boolV kn, boolV un, boolV mb, boolV rem,
+        boolV false, natV ba]⟩ = none := by
+  rw [step_removeMember p z hz.2.1 hz.2.2]; simp [RemOk]
+
+/-- Theorem 1: a removal with no room below the revision ceiling is refused. -/
+theorem removeMember_refused_room (p : Params) (z : Gp) (hz : Fits p z) (er ee : Nat)
+    (kn un mb rem nd : Bool) (ba : Nat) :
+    step M p (enc z) ⟨"removeMember", [natV er, natV ee, boolV false, boolV kn, boolV un, boolV mb, boolV rem,
+        boolV nd, natV ba]⟩ = none := by
+  rw [step_removeMember p z hz.2.1 hz.2.2]; simp [RemOk]
+
+/-- Theorem 7: a removal never raises the blocked count, and a removal that
+records the same count as the checkpoint has keeps the group's wrap-up decision
+as it was. -/
+theorem removeMember_blocked_not_higher {p : Params} {z y : Gp} {s' : State} {er ee : Nat}
+    {rm kn un mb rem nd : Bool} {ba : Nat} (hz : Fits p z)
+    (h : step M p (enc z) ⟨"removeMember", [natV er, natV ee, boolV rm, boolV kn, boolV un, boolV mb, boolV rem,
+        boolV nd, natV ba]⟩ = some s')
+    (hy : s' = enc y) : y.blocked ≤ z.blocked ∧ y.exists_ = z.exists_ := by
+  obtain ⟨-, -, -, hb, rfl⟩ := removeMember_spec hz h hy
+  exact ⟨hb, rfl⟩
+
 /-- Theorem 1: a claim or a recovery forgets the last request, so a request that
 read an older revision is refused afterwards. -/
 theorem stale_retry_after_write {p : Params} {z y : Gp} {s' : State} {e : Event} (hz : Fits p z)
@@ -305,7 +403,8 @@ theorem epoch_change {p : Params} {z y : Gp} {e : Event} {s' : State} (hz : Fits
         e = ⟨"claim", [natV er, natV ee, boolV sm, boolV ts, boolV rm, boolV mo, boolV mb]⟩) ∧
         y.epoch = z.epoch + 1) := by
   rcases accepted_cases h with ⟨er, ee, sm, ts, rm, mo, mb, rfl⟩ |
-    ⟨os, ts, ea, er, sm, mo, mm, rc, rf, ch, ba, rm, rfl⟩ | ⟨er, ee, rm, kn, mb, ex, mo, rfl⟩
+    ⟨os, ts, ea, er, sm, mo, mm, rc, rf, ch, ba, rm, rfl⟩ | ⟨er, ee, rm, kn, mb, ex, mo, rfl⟩ |
+    ⟨er, ee, rm, kn, un, mb, rem, nd, ba, rfl⟩
   · rcases claim_spec hz h hy with ⟨-, rfl⟩ | ⟨-, -, rfl⟩
     · simp
     · exact ⟨by simp, fun _ => ⟨⟨er, ee, sm, ts, rm, mo, mb, rfl⟩, rfl⟩⟩
@@ -314,19 +413,22 @@ theorem epoch_change {p : Params} {z y : Gp} {e : Event} {s' : State} (hz : Fits
     · have := h1 rfl; subst this; simp
     · obtain ⟨-, rfl⟩ := h2 rfl; simp
   · obtain ⟨-, -, -, rfl⟩ := recover_spec hz h hy; simp
+  · obtain ⟨-, -, -, -, rfl⟩ := removeMember_spec hz h hy; simp
 
 /-- Theorem 2: every accepted event keeps or raises the revision, and never
 lowers it. -/
 theorem rev_monotone {p : Params} {z y : Gp} {e : Event} {s' : State} (hz : Fits p z)
     (h : step M p (enc z) e = some s') (hy : s' = enc y) : z.rev ≤ y.rev := by
   rcases accepted_cases h with ⟨er, ee, sm, ts, rm, mo, mb, rfl⟩ |
-    ⟨os, ts, ea, er, sm, mo, mm, rc, rf, ch, ba, rm, rfl⟩ | ⟨er, ee, rm, kn, mb, ex, mo, rfl⟩
+    ⟨os, ts, ea, er, sm, mo, mm, rc, rf, ch, ba, rm, rfl⟩ | ⟨er, ee, rm, kn, mb, ex, mo, rfl⟩ |
+    ⟨er, ee, rm, kn, un, mb, rem, nd, ba, rfl⟩
   · rcases claim_spec hz h hy with ⟨-, rfl⟩ | ⟨-, -, rfl⟩ <;> simp
   · obtain ⟨-, -, h1, h2⟩ := reconcile_spec hz h hy
     cases ch
     · have := h1 rfl; subst this; simp
     · obtain ⟨-, rfl⟩ := h2 rfl; simp
   · obtain ⟨-, -, -, rfl⟩ := recover_spec hz h hy; simp
+  · obtain ⟨-, -, -, -, rfl⟩ := removeMember_spec hz h hy; simp
 
 /-! ## Theorem 3: the blocked members of a group -/
 

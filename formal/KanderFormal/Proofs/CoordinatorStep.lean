@@ -63,6 +63,7 @@ theorem shape {p : Params} {s : State} (h : M.StateConforms p s) :
 theorem find_claim : M.findEvent "claim" = some claimEvent := rfl
 theorem find_reconcile : M.findEvent "reconcile" = some reconcileEvent := rfl
 theorem find_recover : M.findEvent "recover" = some recoverEvent := rfl
+theorem find_removeMember : M.findEvent "removeMember" = some removeMemberEvent := rfl
 theorem ty_exists : M.fieldTy "exists" = some (.scalar .bool) := rfl
 theorem ty_rev : M.fieldTy "rev" = some (.scalar (.nat "maxRev")) := rfl
 theorem ty_epoch : M.fieldTy "epoch" = some (.scalar (.nat "maxEpoch")) := rfl
@@ -70,8 +71,8 @@ theorem ty_last : M.fieldTy "last" = some (.scalar .bool) := rfl
 theorem ty_blocked : M.fieldTy "blocked" = some (.scalar (.nat "members")) := rfl
 
 macro "cp_simp" "[" ts:Lean.Parser.Tactic.simpLemma,* "]" : tactic =>
-  `(tactic| simp [step, find_claim, find_reconcile, find_recover, ty_exists, ty_rev, ty_epoch, ty_last, ty_blocked,
-      lookup, claimEvent, reconcileEvent, recoverEvent, replayE, boolArg, revArg, epochArg, countArg, eq, inc,
+  `(tactic| simp [step, find_claim, find_reconcile, find_recover, find_removeMember, ty_exists, ty_rev, ty_epoch, ty_last, ty_blocked,
+      lookup, claimEvent, reconcileEvent, recoverEvent, removeMemberEvent, replayE, boolArg, revArg, epochArg, countArg, eq, inc,
       bindArgs, Ty.conforms, STy.conforms, eval, evalCmp, natAdd, natSub, boolAnd, boolOr, boolNot, indexOf, boolV, natV,
       f, a, tt, ff, andE, orE, notE, evalAssigns, applyUpdates, enc, or_assoc, and_assoc, Bool.and_assoc,
       Bool.or_assoc, map_ite, ite_and_self, ite_ite_none, $ts,*])
@@ -147,5 +148,26 @@ theorem step_recover (p : Params) (x : Gp) (he : x.epoch ≤ p "maxEpoch") (hb :
   by_cases h1 : er ≤ p "maxRev" <;> by_cases h2 : ee ≤ p "maxEpoch" <;> by_cases h3 : r + 1 ≤ p "maxRev" <;>
     by_cases h4 : 1 ≤ b <;> cases e <;>
     cp_simp [h1, h2, h3, h4, he, hb, RecvOk] <;> ite_close
+
+/-- The conditions of an accepted removal apart from the revision, epoch, and
+counts. -/
+def RemOk (x : Gp) (rm kn un mb rem nd : Bool) : Prop :=
+  x.exists_ = true ∧ rm = true ∧ kn = true ∧ un = true ∧ mb = true ∧ rem = true ∧ nd = true
+
+instance (x : Gp) (rm kn un mb rem nd : Bool) : Decidable (RemOk x rm kn un mb rem nd) := by
+  unfold RemOk; infer_instance
+
+theorem step_removeMember (p : Params) (x : Gp) (he : x.epoch ≤ p "maxEpoch") (hb : x.blocked ≤ p "members") (er ee : Nat)
+    (rm kn un mb rem nd : Bool) (ba : Nat) :
+    step M p (enc x) ⟨"removeMember", [natV er, natV ee, boolV rm, boolV kn, boolV un, boolV mb, boolV rem, boolV nd,
+        natV ba]⟩ =
+      if er ≤ p "maxRev" ∧ ee ≤ p "maxEpoch" ∧ ba ≤ p "members" ∧ er = x.rev ∧ ee = x.epoch ∧
+          RemOk x rm kn un mb rem nd ∧ ba ≤ x.blocked ∧ x.rev + 1 ≤ p "maxRev" then
+        some (enc ⟨x.exists_, x.rev + 1, x.epoch, false, ba⟩) else none := by
+  obtain ⟨e, r, ep, l, b⟩ := x
+  simp only at he hb
+  by_cases h1 : er ≤ p "maxRev" <;> by_cases h2 : ee ≤ p "maxEpoch" <;> by_cases h3 : r + 1 ≤ p "maxRev" <;>
+    by_cases h4 : ba ≤ p "members" <;> by_cases h5 : ba ≤ b <;> cases e <;>
+    cp_simp [h1, h2, h3, h4, h5, he, hb, RemOk] <;> ite_close
 
 end KanderFormal.Proofs.Coordinator

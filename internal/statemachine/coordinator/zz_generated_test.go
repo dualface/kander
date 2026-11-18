@@ -47,6 +47,18 @@ var vectorEvents = []Event{
 	Recover{ExpRev: 1, ExpEpoch: 1, Room: true, Known: true, MemberBlocked: false, Expect: true, MemberOk: true},
 	Recover{ExpRev: 1, ExpEpoch: 1, Room: true, Known: true, MemberBlocked: true, Expect: false, MemberOk: true},
 	Recover{ExpRev: 1, ExpEpoch: 1, Room: true, Known: true, MemberBlocked: true, Expect: true, MemberOk: false},
+	RemoveMember{ExpRev: 1, ExpEpoch: 1, Room: true, Known: true, Unstarted: true, Membership: true, Remaining: true, NoDependents: true, BlockedAfter: 0},
+	RemoveMember{ExpRev: 2, ExpEpoch: 1, Room: true, Known: true, Unstarted: true, Membership: true, Remaining: true, NoDependents: true, BlockedAfter: 0},
+	RemoveMember{ExpRev: 2, ExpEpoch: 2, Room: true, Known: true, Unstarted: true, Membership: true, Remaining: true, NoDependents: true, BlockedAfter: 0},
+	RemoveMember{ExpRev: 0, ExpEpoch: 0, Room: true, Known: true, Unstarted: true, Membership: true, Remaining: true, NoDependents: true, BlockedAfter: 0},
+	RemoveMember{ExpRev: 1, ExpEpoch: 1, Room: false, Known: true, Unstarted: true, Membership: true, Remaining: true, NoDependents: true, BlockedAfter: 0},
+	RemoveMember{ExpRev: 1, ExpEpoch: 1, Room: true, Known: false, Unstarted: true, Membership: true, Remaining: true, NoDependents: true, BlockedAfter: 0},
+	RemoveMember{ExpRev: 1, ExpEpoch: 1, Room: true, Known: true, Unstarted: false, Membership: true, Remaining: true, NoDependents: true, BlockedAfter: 0},
+	RemoveMember{ExpRev: 1, ExpEpoch: 1, Room: true, Known: true, Unstarted: true, Membership: false, Remaining: true, NoDependents: true, BlockedAfter: 0},
+	RemoveMember{ExpRev: 1, ExpEpoch: 1, Room: true, Known: true, Unstarted: true, Membership: true, Remaining: false, NoDependents: true, BlockedAfter: 0},
+	RemoveMember{ExpRev: 1, ExpEpoch: 1, Room: true, Known: true, Unstarted: true, Membership: true, Remaining: true, NoDependents: false, BlockedAfter: 0},
+	RemoveMember{ExpRev: 1, ExpEpoch: 1, Room: true, Known: true, Unstarted: true, Membership: true, Remaining: true, NoDependents: true, BlockedAfter: 1},
+	RemoveMember{ExpRev: 1, ExpEpoch: 1, Room: true, Known: true, Unstarted: true, Membership: true, Remaining: true, NoDependents: true, BlockedAfter: 2},
 }
 
 func encodeParams(p Params) string {
@@ -75,6 +87,8 @@ func encodeEvent(e Event) string {
 		return vectortest.Event("reconcile", "ownerSame", vectortest.Bool(ev.OwnerSame), "tokenSame", vectortest.Bool(ev.TokenSame), "argEpoch", vectortest.Uint(ev.ArgEpoch), "expRev", vectortest.Uint(ev.ExpRev), "same", vectortest.Bool(ev.Same), "membersOk", vectortest.Bool(ev.MembersOk), "membership", vectortest.Bool(ev.Membership), "recoveries", vectortest.Bool(ev.Recoveries), "reqFail", vectortest.Bool(ev.ReqFail), "changed", vectortest.Bool(ev.Changed), "blockedAfter", vectortest.Uint(ev.BlockedAfter), "room", vectortest.Bool(ev.Room))
 	case Recover:
 		return vectortest.Event("recover", "expRev", vectortest.Uint(ev.ExpRev), "expEpoch", vectortest.Uint(ev.ExpEpoch), "room", vectortest.Bool(ev.Room), "known", vectortest.Bool(ev.Known), "memberBlocked", vectortest.Bool(ev.MemberBlocked), "expect", vectortest.Bool(ev.Expect), "memberOk", vectortest.Bool(ev.MemberOk))
+	case RemoveMember:
+		return vectortest.Event("removeMember", "expRev", vectortest.Uint(ev.ExpRev), "expEpoch", vectortest.Uint(ev.ExpEpoch), "room", vectortest.Bool(ev.Room), "known", vectortest.Bool(ev.Known), "unstarted", vectortest.Bool(ev.Unstarted), "membership", vectortest.Bool(ev.Membership), "remaining", vectortest.Bool(ev.Remaining), "noDependents", vectortest.Bool(ev.NoDependents), "blockedAfter", vectortest.Uint(ev.BlockedAfter))
 	}
 	return "null"
 }

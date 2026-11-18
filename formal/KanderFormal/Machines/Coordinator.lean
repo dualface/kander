@@ -96,6 +96,22 @@ def recoverEvent : EventDecl where
       (andE (a "memberOk") (.cmp .ge (f "blocked") (.natLit 1)))))))))
   assigns := [("rev", inc (f "rev")), ("last", ff), ("blocked", .sub (f "blocked") (.natLit 1))]
 
+/-- `RemoveCoordinatorMemberWithTransaction`: the request names the revision and
+epoch it was decided on. The member must be in the checkpoint (`known`), belong
+to the group on the board (`membership`), be unstarted (`unstarted`), leave at
+least one member behind (`remaining`), and be named by no remaining member's
+`PREREQUISITES` (`noDependents`). The revision rises by one, the epoch stays, the
+last request is forgotten, and the blocked count is the one the remaining mirrors
+have, which can only be lower (`blockedAfter`). -/
+def removeMemberEvent : EventDecl where
+  name := "removeMember"
+  args := [revArg "expRev", epochArg "expEpoch", boolArg "room", boolArg "known", boolArg "unstarted",
+    boolArg "membership", boolArg "remaining", boolArg "noDependents", countArg "blockedAfter"]
+  guard := andE (f "exists") (andE (eq (a "expRev") (f "rev")) (andE (eq (a "expEpoch") (f "epoch"))
+    (andE (a "room") (andE (a "known") (andE (a "unstarted") (andE (a "membership") (andE (a "remaining")
+      (andE (a "noDependents") (.cmp .le (a "blockedAfter") (f "blocked"))))))))))
+  assigns := [("rev", inc (f "rev")), ("last", ff), ("blocked", a "blockedAfter")]
+
 def coordinatorMachine : Machine where
   name := "coordinator"
   enums := []
@@ -107,7 +123,7 @@ def coordinatorMachine : Machine where
     { name := "last", ty := .scalar .bool, init := .scalar (.bool false) },
     { name := "blocked", ty := .scalar (.nat "members"), init := .scalar (.nat 0) }
   ]
-  events := [claimEvent, reconcileEvent, recoverEvent]
+  events := [claimEvent, reconcileEvent, recoverEvent, removeMemberEvent]
   queries := [
     -- `refuseBlockedWrapUp`: a wrap-up is refused while a checkpoint has a blocked member.
     { name := "wrapUpBlocked", ty := .base .bool, body := andE (f "exists") (.cmp .ge (f "blocked") (.natLit 1)) },
