@@ -138,11 +138,35 @@ When an S multi-file transaction is interrupted, readers first report pending re
 
 All writes go through internal/fs, keeping POSIX private permissions and Windows creation-time protections (DACL/reparse denial). Binary original artifacts are recovered losslessly via the log's base64 byte fields; ordinary text keeps a compatible log format.
 
+## Abandoning a run that cannot be published
+
+A finalized run counts only when every member holds its copy or was skipped. In server mode only the run's writer can publish it, and it needs the writer secret that lives in the private directory of the client that prepared the run, the same client ID, and a claim of every remaining member on the generation the writer recorded. A run can lose all three: the claim is taken over (the generation moves on), the run is looked at from another host, or another client holds the card. Such a run blocks aggregation, `kander check`, and the target advance of its batch for good. `kander review abandon <absolute-CWD> <absolute-abandon.json>` with `{"run_id", "decision", "reason"}` retires it. `kander review abandon --schema` prints the fields.
+
+**Meaning.** The abandoned run is taken out of its batch.
+
+- Nothing is written into a member card: no copy, no manifest, no `REVIEWS` line. The run record gets an `abandonment` object (`decision`, `reason`, `abandoned_at`), and every member becomes published and skipped, so the run counts as settled. The originals stay on the server until the archive cleanup removes them.
+- The run is no run of the batch. The batch view lists it in `abandoned_runs` (run ID, decision, reason) and not in `runs`, so its findings bind nothing and nobody has to assign or dispose them. The closure keeps the view and so the audit line. A batch without an abandoned run keeps the bytes of its view.
+- It cannot be the predecessor of another run, cannot satisfy a role, and is not published, prepared, or consumed again; each of these is refused with an error that says the run is abandoned. A role of the batch still needs a passing, published conclusion run, so a new run satisfies it.
+- A batch with a run abandoned still counts as touched: it cannot be retargeted for that reason.
+
+The decision is a reference to a user decision. Kander records it and does not verify it, like the decision of `superseded_runs`, `coordinator release`, and `coordinator remove-member`.
+
+**Guard.** The kernel accepts the abandon (`abandon` of the review run machine) only when all of these hold: the run is finalized; no member holds a copy (every member is unpublished, or published and skipped); the run is not abandoned yet; the decision and the reason are non-empty; the batch is not closed; no run names it as `previous_run_id`; at least one member is in working or review and has not left the batch; and the run read in the transaction is the requested run, with its group bound. A run with no such member needs one member moved back to working first, because without one nobody can confirm the abandon. A run whose members all left the batch is settled by the skip of the publication path instead. The same request again returns the first result and writes nothing, even after the batch closed or a member left; another decision or reason is a conflict.
+
+**Authorization.** The abandon is a review write on the member cards, so it uses the authority of the other review writes (`reviewWrite`, operation `review-abandon`, the members of the run) and no writer credential. With one live member, the holder of its current generation proves it directly; a process that coordinates the group asks the holder through the joint publication, the command ends with `evidence_incomplete` and a review request on the card, and the same command with the same arguments succeeds once the holder confirmed. With two or more live members every holder confirms the same material. Any other process is refused with `held_by_other`, and a run with no live member is refused for every caller. A confirmation binds the operation, the request (run ID, decision, reason), the member revisions, and the generations, so it cannot be used for another request. A publish confirmed before the abandon is refused by the kernel afterwards.
+
+**Next step in the errors.** For a finalized run, the `incomplete publication` error of `kander check` and of aggregation keeps its prefix and names the two ways out: publish it again with the same run ID, or retire it with `kander review abandon` and a decision reference. A run that is not finalized has neither way, so its error stays as it was.
+
+**Difference from `superseded_runs`.** `superseded_runs` of the close request retires a successful run that is already published and is outside the chain of its role; its findings stay binding and the run stays in the closure's view. An abandon retires a run that was never published, before any record depends on it, and removes it from the view.
+
+An older server rejects the `abandon` action (`unsupported review action`), and an older client cannot read a run record with `abandonment` or a batch view with `abandoned_runs` (it decodes strictly): upgrade the server first, then every client that handles a batch with an abandoned run.
+
 ## Consumption Interfaces and Checks
 
 - `board.InterpretReview` / `ReviewNeedsInterpretation`: immutable receiver interpretations and pending-format status; `check` treats a missing interpretation as progress and conflicting copies as damage.
 - `board.PrepareReviewRun` / `UpdateReviewRun` / `FinalizeReviewRun`: intent and execution facts.
 - `board.PublishReviewRun`: publishes per card and returns failures without erasing successful receipts.
+- `board.AbandonReviewRunWithTransaction`: retires a finalized run that cannot be published (see "Abandoning a run that cannot be published").
 - `board.ParseReviewIndexes` and ReviewInput/ReviewRun/ReviewBatch/ReviewManifest: shared types; board does not depend on review.
 - `board.ReadReviewRun` / `ReadReviewOriginal`: read committed facts and verify original artifacts.
 - `board.UnlinkedReviewRuns` / `UnlinkedReviewRunsWarning`: the advisory start-time lookup of same-role runs outside a new run's predecessor chain.

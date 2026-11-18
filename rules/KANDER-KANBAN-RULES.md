@@ -74,11 +74,12 @@ kander review assign <absolute-CWD> <absolute-assignment.json>
 kander review disposition <absolute-CWD> <absolute-author-record.json> <expected-card-revision>
 kander review interpret <absolute-CWD> <absolute-interpretation.json>
 kander review map-legacy <absolute-CWD> <absolute-map.json>
+kander review abandon <absolute-CWD> <absolute-abandon.json>
 kander review aggregate <absolute-CWD> <batch-id>
 kander review advance <absolute-CWD> <absolute-advance-request.json>
 kander review close <absolute-CWD> <absolute-close-request.json>
 kander review progress <absolute-CWD> <task-id>
-kander review <plan|extend-plan|assign|disposition|interpret|advance|close> --schema
+kander review <plan|extend-plan|assign|disposition|interpret|advance|close|abandon> --schema
 kander issue repo [--repo HOST/OWNER/REPO] [--json]
 kander issue list [--repo HOST/OWNER/REPO] [--state open|closed|all] [--label NAME] [--search TEXT] [--limit N] [--json]
 kander issue show NUMBER [--repo HOST/OWNER/REPO] [--comments] [--json]
