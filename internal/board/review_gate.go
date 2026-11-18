@@ -431,11 +431,20 @@ func CheckReviewGate(root string, ids []string) []Problem {
 	return problems
 }
 
+// checkUnplannedReviewRuns is the admission of a new plan: every run record of a
+// member counts, an abandoned one too.
 func checkUnplannedReviewRuns(tx *Transaction, p ReviewPlan) error {
-	return checkUnplannedReviewRunsMode(tx, p, false)
+	return checkUnplannedReviewRunsGate(tx, p, false, false)
 }
 func checkUnplannedReviewRunsMode(tx *Transaction, p ReviewPlan, importHistory bool) error {
-	batch, listed, err := unplannedReviewRun(tx, p, p.TaskIDs, !importHistory)
+	return checkUnplannedReviewRunsGate(tx, p, importHistory, true)
+}
+
+// checkUnplannedReviewRunsGate is the check of an existing plan (check and the
+// completion gate), where an abandoned run left its batch: with skipAbandoned the
+// batch that only an abandoned run named is no unplanned batch any more.
+func checkUnplannedReviewRunsGate(tx *Transaction, p ReviewPlan, importHistory, skipAbandoned bool) error {
+	batch, listed, err := unplannedReviewRun(tx, p, p.TaskIDs, !importHistory, skipAbandoned)
 	if err != nil {
 		return err
 	}
@@ -456,8 +465,8 @@ func checkUnplannedReviewRunsMode(tx *Transaction, p ReviewPlan, importHistory b
 // unplannedReviewRun finds the first run of one of ids in a batch that no batch of
 // p names and no resolution of p covers. listed is false when no run exists at
 // all. With enforce false every run record is still read and validated, but none
-// counts as unplanned.
-func unplannedReviewRun(tx *Transaction, p ReviewPlan, ids []string, enforce bool) (batch string, listed bool, err error) {
+// counts as unplanned; with skipAbandoned an abandoned run does not count either.
+func unplannedReviewRun(tx *Transaction, p ReviewPlan, ids []string, enforce, skipAbandoned bool) (batch string, listed bool, err error) {
 	planned := map[string]bool{}
 	for _, b := range p.Batches {
 		planned[b.BatchID] = true
@@ -481,8 +490,7 @@ func unplannedReviewRun(tx *Transaction, p ReviewPlan, ids []string, enforce boo
 		if !ok {
 			return "", true, reviewError("missing run")
 		}
-		// An abandoned run left its batch, so it makes no unplanned batch.
-		if reviewRunAbandoned(run) {
+		if skipAbandoned && reviewRunAbandoned(run) {
 			continue
 		}
 		for _, id := range ids {

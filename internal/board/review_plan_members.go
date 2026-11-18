@@ -105,7 +105,7 @@ func memberAdditionFacts(tx *Transaction, p ReviewPlan, group, id string, cas bo
 	// recorded, never a member who joins afterwards, so no resolution excuses a run.
 	unresolved := p
 	unresolved.ResolvedBatches = nil
-	batch, _, err := unplannedReviewRun(tx, unresolved, []string{id}, true)
+	batch, _, err := unplannedReviewRun(tx, unresolved, []string{id}, true, false)
 	if err != nil {
 		return
 	}

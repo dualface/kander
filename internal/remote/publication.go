@@ -275,17 +275,18 @@ func (s *Session) singleMemberAuthority(operation string, tasks []string, member
 }
 
 // requireAbandonCaller refuses a review abandon of several live members from a
-// process that holds the credential of none of them and coordinates none of their
-// groups. Every holder still confirms the exact material before the server
-// writes; this keeps a stranger from creating that material and one confirmation
-// request per holder, as a single-member abandon already refuses it.
+// process that holds the credential of the current generation of none of them
+// and coordinates none of their groups. Every holder still confirms the exact
+// material before the server writes; this keeps a stranger from creating that
+// material and one confirmation request per holder, as a single-member abandon
+// already refuses it.
 func (s *Session) requireAbandonCaller(members []api.PublicationMember, shown map[string]api.Task) error {
 	for _, member := range members {
 		credential, found, err := s.Credential(member.TaskID)
 		if err != nil {
 			return err
 		}
-		if found && !credential.Lost {
+		if found && !credential.Lost && credential.Generation == member.Generation {
 			return nil
 		}
 		coordinator, err := s.coordinatesTask(shown[member.TaskID])

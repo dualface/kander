@@ -156,7 +156,7 @@ func TestSettledReadersTreatAnAbandonedRunAsSettled(t *testing.T) {
 		if !reviewRunComplete(transactionRun(t, tx, lost.RunID)) {
 			t.Error("an abandoned run is not complete")
 		}
-		batchID, listed, err := unplannedReviewRun(tx, ReviewPlan{Batches: []ReviewPlanBatch{{BatchID: "batch"}}}, []string{b.id}, true)
+		batchID, listed, err := unplannedReviewRun(tx, ReviewPlan{Batches: []ReviewPlanBatch{{BatchID: "batch"}}}, []string{b.id}, true, true)
 		if err != nil || batchID != "" || !listed {
 			t.Errorf("unplannedReviewRun: %q %v %v", batchID, listed, err)
 		}
@@ -328,5 +328,32 @@ func TestPrepareOfAnAbandonedRunSaysSoAfterTheMembersFinished(t *testing.T) {
 	_, _, err = PrepareReviewRun(b.root, archiveInput([]string{b.id}, run.RunID, "PMQA"), nil, nil, archiveOriginals(), "test")
 	if err == nil || !strings.Contains(err.Error(), "abandoned") {
 		t.Fatalf("the abandoned message is hidden by the member state: %v", err)
+	}
+}
+
+// An abandoned run leaves the check and the completion gate, but a new plan and an
+// added member still see the run record of a card: the admission of a card
+// that ran outside every plan does not change.
+func TestAbandonedRunStaysAnUnplannedRunForAddMembers(t *testing.T) {
+	w := newMembersWorld(t, "abandoned-join", false)
+	in := archiveInput([]string{w.second}, "stray-lost", "PMQA")
+	in.BatchID, in.Base, in.Commit = "stray", sha("b"), sha("c")
+	run, _, err := PrepareReviewRun(w.root, in, archiveRequirements(), nil, archiveOriginals(), "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run.LaunchStatus, run.ExecutionStatus = "started", "ok"
+	if run, err = FinalizeReviewRun(w.root, run, structuredReport(emptyFindings())); err != nil {
+		t.Fatal(err)
+	}
+	if err := AbandonReviewRunWithTransaction(w.root, ReviewAbandonRequest{RunID: run.RunID, Decision: "d", Reason: "r"}); err != nil {
+		t.Fatal(err)
+	}
+	err = w.extend(ReviewPlanExtension{AddMembers: []string{w.second}})
+	if err == nil || !strings.Contains(err.Error(), w.second) || !strings.Contains(err.Error(), "stray") {
+		t.Fatalf("an abandoned run let its card join the plan: %v", err)
+	}
+	if got, exists := w.planOf(t, w.second); exists {
+		t.Fatalf("the card got a plan pointer: %s", got)
 	}
 }

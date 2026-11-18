@@ -190,6 +190,19 @@ func TestStrangerCannotAskForAJointAbandon(t *testing.T) {
 	if !api.IsCode(err, api.CodeHeldByOther) {
 		t.Fatalf("a stranger was not refused: %v", err)
 	}
+	// A credential of another generation is no authority either, also before the
+	// worker has marked it lost.
+	for _, id := range r.ids {
+		grant := r.grants[id]
+		stale := remote.Credential{ServerURL: r.stranger.ServerURL, ClientID: "host-c", ProjectID: r.stranger.Info.ID, TaskID: id, ExecutionID: "stale-" + id, Generation: grant.Claim.Generation + 1, Token: grant.Token}
+		if err := r.stranger.SaveCredential(stale); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err = remoteEvidenceAction(t.Context(), r.stranger, "/host-c/clone", "abandon", abandonFile, nil)
+	if !api.IsCode(err, api.CodeHeldByOther) {
+		t.Fatalf("a credential of another generation was accepted: %v", err)
+	}
 	if got := requests(); got != before {
 		t.Fatalf("a stranger created %d requests", got-before)
 	}
