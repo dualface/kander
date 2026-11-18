@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/dualface/kander/internal/board"
 )
 
 func jsonObject(t *testing.T, text string) map[string]any {
@@ -49,5 +51,34 @@ func TestReviewSchemaWithJSON(t *testing.T) {
 	result := jsonObject(t, stdout)
 	if result["command"] != "plan" || !strings.HasPrefix(result["schema"].(string), "command: plan\n") {
 		t.Fatalf("result=%v", result)
+	}
+}
+
+// A batch aggregated with --json closes with the view_hash of the printed object: the compact
+// line is not the text the digest is taken over, so the object carries the digest itself.
+func TestAggregateJSONViewHashClosesTheBatch(t *testing.T) {
+	w := newRemoteWorld(t)
+	w.plan(t, true, w.batch("batch", "", w.h.head, w.h.head))
+	code, out, stderr := captureRun(t, []string{"aggregate", w.h.repo, "batch", "--json"})
+	var printed struct {
+		ViewHash string `json:"view_hash"`
+		Batch    struct {
+			Revision uint64 `json:"revision"`
+		} `json:"batch"`
+	}
+	if err := json.Unmarshal([]byte(out), &printed); code != 0 || stderr != "" || err != nil || strings.Count(out, "\n") != 1 {
+		t.Fatalf("aggregate --json: %d %q %q %v", code, out, stderr, err)
+	}
+	if want := board.ReviewViewDigest(w.view(t, "batch")); printed.ViewHash != want {
+		t.Fatalf("view_hash %q, want %q", printed.ViewHash, want)
+	}
+	// The digest of the compact line is not the one close compares.
+	if board.ReviewDigest([]byte(out)) == printed.ViewHash {
+		t.Fatal("the compact line hashes to the view digest")
+	}
+	r := board.ReviewCloseRequest{BatchID: "batch", ExpectedRevision: printed.Batch.Revision, ViewHash: printed.ViewHash, Author: "owner", Roles: map[string]board.ReviewRoleConclusion{}}
+	closeJSON := commandOK(t, "close", w.h.repo, dispositionJSON(t, w.h, "close-json", r))
+	if closureOf(t, closeJSON).BatchID != "batch" {
+		t.Fatalf("close: %s", closeJSON)
 	}
 }

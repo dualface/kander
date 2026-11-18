@@ -33,7 +33,7 @@ Source: moved from `KANDER-KANBAN-RULES.md` "Review Evidence Completion Gate".
   }
   ```
 
-  Run `kander review plan <absolute-CWD> <absolute-plan.json>`, then preserve the exact stdout bytes of `kander review aggregate <absolute-CWD> <batch-id>` in a private file. Read `batch.revision` from that JSON and calculate the SHA-256 of the exact file bytes. Use those values in the close request:
+  Run `kander review plan <absolute-CWD> <absolute-plan.json>`, then preserve the exact stdout bytes of `kander review aggregate <absolute-CWD> <batch-id>` in a private file. Read `batch.revision` from that JSON and calculate the SHA-256 of the exact file bytes. With `--json` the output is one line, and its `view_hash` field is that digest: use it, and do not hash the line. Use those values in the close request:
 
   ```json
   {

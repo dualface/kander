@@ -99,9 +99,22 @@ kander review confirm /tmp/worktree publication-1 20261118-example-task
 
 ## Output
 
-- The reviewer run prints the generated run ID on stderr and the report on stdout; task-bound runs publish into each card. `aggregate` prints the generated disposition view (preserve its exact bytes for `close`); `progress` prints the plan state, with `exclusion` for a member that left the plan, `resolved_batches` with the result of each finding of a resolved unplanned batch, and optional `next_actions` (`{action, batch_id, role, run_ids, task_id}`; `append-cycle-batch` names a rebound member with no batch; `supersede-duplicate-runs` lists two or more successful chain heads of one role in an unclosed batch; only heads that qualify as parallel duplicates, or root runs with a user decision reference and the runs that continue them, can go into `superseded_runs`); `--schema` prints the input schema.
+- The reviewer run prints the generated run ID on stderr and the report on stdout; task-bound runs publish into each card. `aggregate` prints the generated disposition view (preserve its exact bytes for `close`; with `--json` use the `view_hash` field, see below); `progress` prints the plan state, with `exclusion` for a member that left the plan, `resolved_batches` with the result of each finding of a resolved unplanned batch, and optional `next_actions` (`{action, batch_id, role, run_ids, task_id}`; `append-cycle-batch` names a rebound member with no batch; `supersede-duplicate-runs` lists two or more successful chain heads of one role in an unclosed batch; only heads that qualify as parallel duplicates, or root runs with a user decision reference and the runs that continue them, can go into `superseded_runs`); `--schema` prints the input schema.
 - A new run prints a stderr warning when another run of its batch and role is outside its predecessor chain and is still running or a successful chain head; finalized failed runs never trigger it. The run continues and the exit code is unchanged. Resolve the duplicate with `--previous-run-id` or the close request's `superseded_runs`.
-- With `--json`, the reviewer run is one object: `exit_code`, `report` (the report text), and for a task-bound run `run_id`, `batch_id`, `execution_status`, `failure_reason`, and `task_ids`. The run ID line, the card publication lines, and the other stderr remarks are notices (`review_archive_identity`, `review_card_published`, `review_interpretation_pending`, `review_process_evidence`, `review_output`, `review_error`). A run that published evidence, or that succeeded, is this object with the exit status of the run; any other failure is the error object with the code `review_failed`. The evidence subcommands print the same object as without `--json`, on one line; `--schema` prints `command` and `schema` (the schema text).
+- With `--json`, the reviewer run is one object: `exit_code`, `report` (the report text), and for a task-bound run `run_id`, `batch_id`, `execution_status`, `failure_reason`, and `task_ids`. The run ID line, the card publication lines, and the other stderr remarks are notices (`review_archive_identity`, `review_card_published`, `review_interpretation_pending`, `review_process_evidence`, `review_output`, `review_error`). A run that published evidence, or that succeeded, is this object with the exit status of the run; any other failure is the error object with the code `review_failed`. `--schema` prints `command` and `schema` (the schema text). The evidence subcommands print the same object as without `--json`, on one line, with these fields:
+
+  | Form | Object |
+  | --- | --- |
+  | `plan`, `extend-plan` (including `resolve_batch`) | `plan_id` |
+  | `advance` | `batch_id` |
+  | `assign`, `interpret`, `map-legacy` | `run_id` |
+  | `disposition` | `record_id` |
+  | `confirm` | `publication_id`, `task_id`, `status` (`confirmed`), `digest` |
+  | `aggregate` | the disposition view: `schema`, `batch`, `runs`; with `--json` also `view_hash` |
+  | `close` | the closure: `schema`, `plan_id`, `batch_id`, `target_commit`, `request`, `git`, `role_statuses`, `view`, `closed_at` |
+  | `progress` | the plan state: `task_id`, `status`, and when present `plan_id`, `exclusion`, `pending`, `rebind_cycles`, `plan_target`, `batch_target`, `batch_id`, `next_actions`, `resolved_batches` |
+
+  The close request binds the SHA-256 of the exact text form of the view: the two-space indented JSON with a final newline. The single line of `aggregate --json` is not that text, so its `view_hash` field is the digest to put in `view_hash` of the close request; never hash the line itself, and never reserialize it.
 
 ## Rejections
 

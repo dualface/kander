@@ -116,6 +116,9 @@ func runRemoteDisposition(cfg *config.Config, args []string) int {
 		return dispositionFailure(err)
 	}
 	if command.JSON() {
+		if view, ok := typed.(*board.ReviewBatchView); ok {
+			return command.Result(aggregateResult(view))
+		}
 		return command.Result(typed)
 	}
 	data, err := json.MarshalIndent(typed, "", "  ")
@@ -275,4 +278,21 @@ func remoteEvidenceAction(ctx context.Context, session *remote.Session, cwd, act
 		return nil, err
 	}
 	return session.Project.ReviewAction(ctx, client.NewKey(), action, payload, proof)
+}
+
+// aggregateResult is the aggregate view with its view_hash. The digest of the view is the one
+// close compares, taken over the indented text form, so the compact JSON line cannot be hashed
+// by the caller.
+func aggregateResult(view *board.ReviewBatchView) any {
+	data, err := json.Marshal(view)
+	if err != nil {
+		return view
+	}
+	fields := map[string]json.RawMessage{}
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return view
+	}
+	hash, _ := json.Marshal(board.ReviewViewDigest(*view))
+	fields["view_hash"] = hash
+	return fields
 }
