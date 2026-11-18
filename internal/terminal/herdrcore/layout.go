@@ -117,7 +117,7 @@ func (h hc) setLayout(ctx context.Context, doc any, version uint64) error {
 }
 
 // encodeJSON is compact JSON that leaves <, > and & as they are: the layout
-// document is written back unchanged except for the one tab name.
+// document is written back unchanged except for the one tab's name and place.
 func encodeJSON(value any) (string, error) {
 	var out bytes.Buffer
 	encoder := json.NewEncoder(&out)
@@ -128,11 +128,12 @@ func encodeJSON(value any) (string, error) {
 	return strings.TrimSpace(out.String()), nil
 }
 
-// nameTab waits for Herdr App to create the tab and then sets its name in the
-// layout document. Only that one name is written: everything else in the
+// placeTab waits for Herdr App to create the tab and then, in one versioned
+// write of the layout document, sets its name and moves it to the end of its
+// space. Only that tab's name and position change: everything else in the
 // document is written back as it was read. A version conflict rereads the
-// document, up to maxConflicts times.
-func (h hc) nameTab(ctx context.Context, space, tab, title string) error {
+// document and redoes both changes on it, up to maxConflicts times.
+func (h hc) placeTab(ctx context.Context, space, tab, title string) error {
 	deadline := time.Now().Add(tabWait)
 	conflicts := 0
 	for {
@@ -140,7 +141,7 @@ func (h hc) nameTab(ctx context.Context, space, tab, title string) error {
 		if err != nil {
 			return err
 		}
-		if setTabName(doc, space, tab, title) {
+		if placeTabLast(doc, space, tab, title) {
 			err := h.setLayout(ctx, doc, version)
 			if !errors.Is(err, errConflict) {
 				return err
@@ -161,9 +162,11 @@ func (h hc) nameTab(ctx context.Context, space, tab, title string) error {
 	}
 }
 
-// setTabName sets the name of the tab with the given ID inside the given
-// space and reports whether the tab exists.
-func setTabName(doc any, space, tab, title string) bool {
+// placeTabLast sets the name of the tab with the given ID inside the given
+// space and moves that tab entry, as it is, to the end of the space's tabs.
+// Herdr App inserts a new tab after the active one, so the order it wrote is
+// not the order Kander wants. It reports whether the tab exists.
+func placeTabLast(doc any, space, tab, title string) bool {
 	root, _ := doc.(map[string]any)
 	spaces, _ := root["spaces"].([]any)
 	for _, entry := range spaces {
@@ -172,12 +175,17 @@ func setTabName(doc any, space, tab, title string) bool {
 			continue
 		}
 		tabs, _ := spaceEntry["tabs"].([]any)
-		for _, tabValue := range tabs {
+		for i, tabValue := range tabs {
 			tabEntry, _ := tabValue.(map[string]any)
-			if tabEntry["id"] == tab {
-				tabEntry["name"] = title
-				return true
+			if tabEntry["id"] != tab {
+				continue
 			}
+			tabEntry["name"] = title
+			moved := make([]any, 0, len(tabs))
+			moved = append(moved, tabs[:i]...)
+			moved = append(moved, tabs[i+1:]...)
+			spaceEntry["tabs"] = append(moved, tabValue)
+			return true
 		}
 	}
 	return false

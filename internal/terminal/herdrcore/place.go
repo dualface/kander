@@ -1,5 +1,6 @@
 // Package herdrcore contains the layout protocol the herdr-core definition
-// uses to give every new terminal its own named tab in the caller's space.
+// uses to give every new terminal its own named tab, placed last, in the
+// caller's space.
 package herdrcore
 
 import (
@@ -39,7 +40,7 @@ const (
 var idPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 // PlaceTab gives the new terminal the caller's Herdr App space and a new tab
-// of its own, then names that tab. Without a caller space there is nothing to
+// of its own, then names that tab and places it last in the space. Without a caller space there is nothing to
 // place into and the result is OK. Every problem degrades: the terminal keeps
 // running, only the placement or the tab name is missing.
 func PlaceTab(ctx context.Context, call terminal.HookCall) terminal.HookResult {
@@ -69,7 +70,7 @@ func PlaceTab(ctx context.Context, call terminal.HookCall) terminal.HookResult {
 	if title == "" {
 		return terminal.HookResult{Status: terminal.HookOK}
 	}
-	if err := h.nameTab(ctx, space, tab, title); err != nil {
+	if err := h.placeTab(ctx, space, tab, title); err != nil {
 		if errors.Is(err, errTabMissing) {
 			return degraded("herdr_core.tab_missing", tabWait.String())
 		}
