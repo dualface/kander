@@ -136,9 +136,6 @@ func addPlanMembers(tx *Transaction, pk *planKernel, p *ReviewPlan, x ReviewPlan
 			return e
 		}
 		if !pk.step(ev) {
-			if len(parts) == 0 {
-				parts = []string{t("board.refusal_state_unknown")}
-			}
 			return reviewRefusal("plan member addition refused", t("board.review_add_members_next"), parts...)
 		}
 		cycles[id] = planCycle(s)
