@@ -10,11 +10,11 @@ import (
 // fixture: its repositories and commits must not read the developer's own Git
 // configuration, whatever that configuration asks Git to do.
 func TestIntegrationFixtureIgnoresHostileUserGitConfig(t *testing.T) {
-	for name, config := range map[string]func(dir string) string{
-		"commit signing": func(string) string {
+	for name, hostile := range map[string]func(t *testing.T, dir string) string{
+		"commit signing": func(*testing.T, string) string {
 			return "[commit]\n\tgpgsign = true\n[gpg]\n\tprogram = /nonexistent/bogus-gpg\n"
 		},
-		"global hook and default branch": func(dir string) string {
+		"global hook and default branch": func(t *testing.T, dir string) string {
 			hooks := filepath.Join(dir, "hooks")
 			if err := os.Mkdir(hooks, 0o700); err != nil {
 				t.Fatal(err)
@@ -24,18 +24,24 @@ func TestIntegrationFixtureIgnoresHostileUserGitConfig(t *testing.T) {
 			}
 			return "[core]\n\thooksPath = " + filepath.ToSlash(hooks) + "\n[init]\n\tdefaultBranch = trunk\n"
 		},
-		"default ignore file": func(dir string) string {
-			ignore := filepath.Join(dir, "ignore")
-			if err := os.WriteFile(ignore, []byte("work.txt\n"), 0o600); err != nil {
+		// Git reads the default ignore file below XDG_CONFIG_HOME when no
+		// configuration names one, so the file is placed there.
+		"default ignore file": func(t *testing.T, dir string) string {
+			home := filepath.Join(dir, "xdg")
+			if err := os.MkdirAll(filepath.Join(home, "git"), 0o700); err != nil {
 				t.Fatal(err)
 			}
-			return "[core]\n\texcludesFile = " + filepath.ToSlash(ignore) + "\n"
+			if err := os.WriteFile(filepath.Join(home, "git", "ignore"), []byte("work.txt\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("XDG_CONFIG_HOME", home)
+			return ""
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			path := filepath.Join(dir, "hostile.gitconfig")
-			if err := os.WriteFile(path, []byte(config(dir)), 0o600); err != nil {
+			if err := os.WriteFile(path, []byte(hostile(t, dir)), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			t.Setenv("GIT_CONFIG_GLOBAL", path)
