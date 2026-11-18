@@ -85,6 +85,25 @@ func TestIntegrationOfAStandaloneCardInWorkingNamesTheMoveIntoReview(t *testing.
 	}
 }
 
+func TestIntegrationOfAStandaloneCardInReviewWithoutItsDeliveryNamesTheReturn(t *testing.T) {
+	f := closedPlanFixture(t)
+	f.moveIntoReview()
+	// A baseline replaces the latest delivery, so the card in review no longer
+	// has a delivery of its current execution.
+	if _, err := f.a.PublishBaseline(t.Context(), f.first, f.task.TaskID, f.base, f.credential); err != nil {
+		t.Fatal(err)
+	}
+	_, err := f.a.Integrate(t.Context(), f.first, f.options("standalone-stale"))
+	if err == nil {
+		t.Fatal("a card without a current delivery was integrated")
+	}
+	back, publish := "kander move "+f.task.TaskID+" working", "kander move "+f.task.TaskID+" review --delivery-commit "+f.commit
+	at, from := strings.Index(err.Error(), back), strings.Index(err.Error(), publish)
+	if at < 0 || from < at {
+		t.Fatalf("refusal %q must name the return before the publication", err)
+	}
+}
+
 func TestDeliveryRefusalsHaveTheSamePlaceholdersInEveryLanguage(t *testing.T) {
 	const sha = "0123456789abcdef"
 	for _, lang := range []string{"en", "ja", "cn"} {
