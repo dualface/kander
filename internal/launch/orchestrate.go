@@ -358,6 +358,7 @@ func NewOrchestrateCommand() *cobra.Command {
 		Use:  "orchestrate <task-id|task-group-id>...",
 		Args: command.Args(1, -1),
 	})
+	c.PreRunE = func(c *cobra.Command, _ []string) error { return RequireMessage(c, "orchestrate") }
 	c.RunE = func(_ *cobra.Command, references []string) error {
 		return command.Exit(runOrchestrate(OrchestrateRequest{OperationID: operationID, References: references, Agent: agent, Launcher: launcher}, handover, c.Flags().Changed("message"), handoverFile))
 	}

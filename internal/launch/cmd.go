@@ -56,14 +56,31 @@ func AddDispatchFlags(c *cobra.Command, o *DispatchOptions) {
 	command.OnceNonEmpty(c.Flags(), &o.EvidenceFile, "evidence-file", "")
 }
 
+// RequireMessage is the argument check of a command that takes its text from exactly one of
+// --message and --message-file: giving neither, or both, is an argument error. Reading the text
+// is left to the command body.
+func RequireMessage(c *cobra.Command, name string) error {
+	if c.Flags().Changed("message") == c.Flags().Changed("message-file") {
+		return command.Usage("launch.requires_exactly_one_of_message_or_message_file", name)
+	}
+	return nil
+}
+
 // NewStartCommand builds kander start.
 func NewStartCommand() *cobra.Command {
 	var agent, launcher string
-	c := &cobra.Command{
+	c := command.RequireProject(&cobra.Command{
 		Use:  "start [task-id]",
 		Args: command.Args(0, 1),
+		// Choosing a task from a list needs a terminal; --json refuses it as an argument error.
+		PreRunE: func(_ *cobra.Command, args []string) error {
+			if len(args) == 0 && command.JSON() {
+				return command.Interactive(t("launch.interactive_select_task"))
+			}
+			return nil
+		},
 		RunE: func(_ *cobra.Command, args []string) error { return command.Exit(runStart(agent, launcher, args)) },
-	}
+	})
 	AddAgentFlags(c, &agent, &launcher)
 	return c
 }
@@ -71,10 +88,10 @@ func NewStartCommand() *cobra.Command {
 // NewResumeCommand builds kander resume.
 func NewResumeCommand() *cobra.Command {
 	var o resumeOptions
-	c := &cobra.Command{
+	c := command.RequireProject(&cobra.Command{
 		Use:  "resume <task-id>",
 		Args: command.Args(1, 1),
-	}
+	})
 	c.PreRunE = func(_ *cobra.Command, args []string) error { return o.validate(c, args[0]) }
 	c.RunE = func(_ *cobra.Command, args []string) error { return command.Exit(runResume(c, args[0], o)) }
 	flags := c.Flags()
@@ -104,7 +121,7 @@ func (o resumeOptions) validate(c *cobra.Command, task string) error {
 		return command.Usage("remote.release_takes_only_a_decision")
 	}
 	if !o.release && !o.adopt {
-		return nil
+		return RequireMessage(c, "resume")
 	}
 	for _, name := range []string{"agent", "message", "message-file", "launcher", "timeout", "dispatch-id", "kind", "base", "evidence-file"} {
 		if c.Flags().Changed(name) {

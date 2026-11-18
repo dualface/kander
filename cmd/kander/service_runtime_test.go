@@ -179,6 +179,8 @@ func TestUnboundCheckoutRefusesEveryCommandThatNeedsAProject(t *testing.T) {
 			// The confirmation is an argument check, which precedes the binding check.
 			args = []string{"coordinator", "release", "--end-execution", "/abs/release.json"}
 		}
+		// Argument errors precede the binding check, so the command line is a complete one.
+		args = append(args, requiredFlags[leaf.path]...)
 		result := runKander(t, args...)
 		if result.code != 1 || !strings.Contains(result.stderr, config.Text("remote.not_configured")) {
 			t.Errorf("%s: exit=%d stderr=%q", leaf.path, result.code, result.stderr)
@@ -190,4 +192,13 @@ func TestUnboundCheckoutRefusesEveryCommandThatNeedsAProject(t *testing.T) {
 	if _, err := os.Lstat(os.Getenv(board.EnvBoardDir)); !os.IsNotExist(err) {
 		t.Fatal("an unbound command selected local storage")
 	}
+}
+
+// requiredFlags are the flags a command line of each command path needs to be a complete one.
+var requiredFlags = map[string][]string{
+	"issue result": {"--card", sampleTask},
+	"notify":       {"--message", "text"},
+	"orchestrate":  {"--message", "text"},
+	"resume":       {"--message", "text"},
+	"update":       {"--document", "spec.md", "--file", "/nonexistent/input.md", "--expect-revision", "1"},
 }

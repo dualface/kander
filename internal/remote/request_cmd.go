@@ -27,16 +27,21 @@ import (
 //
 // Anyone may ask; only the live holder answers, with its execution credential.
 func NewRequestCommand() *cobra.Command {
-	send := &cobra.Command{
-		Use:  "request <task-id> fix|sync|review|stop <message...>",
-		Args: command.Args(3, -1),
-		RunE: func(_ *cobra.Command, args []string) error {
-			if !slices.Contains([]string{api.RequestFix, api.RequestSync, api.RequestReview, api.RequestStop}, args[1]) {
-				return command.Usage("remote.request_kind_invalid", args[1])
+	send := command.RequireProject(&cobra.Command{
+		Use: "request <task-id> fix|sync|review|stop <message...>",
+		Args: func(c *cobra.Command, args []string) error {
+			if err := command.Args(3, -1)(c, args); err != nil {
+				return err
 			}
+			if !slices.Contains([]string{api.RequestFix, api.RequestSync, api.RequestReview, api.RequestStop}, args[1]) {
+				return command.Usage("remote.request_kind_invalid", command.Escape(args[1]))
+			}
+			return nil
+		},
+		RunE: func(_ *cobra.Command, args []string) error {
 			return runRequestSend(args[0], args[1], strings.Join(args[2:], " "))
 		},
-	}
+	})
 	list := &cobra.Command{
 		Use:  "list <task-id>",
 		Args: command.Args(1, 1),
@@ -48,13 +53,21 @@ func NewRequestCommand() *cobra.Command {
 		RunE: func(_ *cobra.Command, args []string) error { return runRequestShow(args[0], args[1]) },
 	}
 	answer := &cobra.Command{
-		Use:  "answer <task-id> <request-id> accepted|done|rejected [note...]",
-		Args: command.Args(3, -1),
+		Use: "answer <task-id> <request-id> accepted|done|rejected [note...]",
+		Args: func(c *cobra.Command, args []string) error {
+			if err := command.Args(3, -1)(c, args); err != nil {
+				return err
+			}
+			if !slices.Contains([]string{api.RequestAccepted, api.RequestDone, api.RequestRejected}, args[2]) {
+				return command.Usage("cli.error_invalid_value", "<status>", command.Escape(args[2]))
+			}
+			return nil
+		},
 		RunE: func(_ *cobra.Command, args []string) error {
 			return runRequestAnswer(args[0], args[1], args[2], strings.Join(args[3:], " "))
 		},
 	}
-	send.AddCommand(list, show, answer)
+	send.AddCommand(command.RequireProject(list), command.RequireProject(show), command.RequireProject(answer))
 	return send
 }
 

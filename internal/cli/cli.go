@@ -77,12 +77,6 @@ func NewRoot() *cobra.Command {
 		}
 		return command.Exit(DefaultRunner())
 	}
-	root.PersistentPreRunE = func(c *cobra.Command, _ []string) error {
-		if command.ProjectRequired(c) {
-			return command.Exit(remote.CheckProject())
-		}
-		return nil
-	}
 	seen := map[string]bool{}
 	for _, build := range builders {
 		c := build()
@@ -92,6 +86,7 @@ func NewRoot() *cobra.Command {
 		seen[c.Name()] = true
 		root.AddCommand(c)
 	}
+	command.GateProject(root, remote.CheckProject)
 	return root
 }
 

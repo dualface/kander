@@ -15,11 +15,11 @@ import (
 // NewGuardWriteCommand builds kander guard-write, an advisory guard for client-side writes.
 // Formal task documents are published through REST; KANBAN_DIR never selects a write root.
 func NewGuardWriteCommand() *cobra.Command {
-	return &cobra.Command{
+	return command.RequireProject(&cobra.Command{
 		Use:  "guard-write <path>",
 		Args: command.Args(1, 1),
 		RunE: func(_ *cobra.Command, args []string) error { return runGuardWrite(args[0]) },
-	}
+	})
 }
 
 func runGuardWrite(target string) error {

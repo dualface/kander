@@ -26,6 +26,7 @@ func NewCommand() *cobra.Command {
 		Use:  "notify <task-id>",
 		Args: command.Args(1, 1),
 	})
+	c.PreRunE = func(c *cobra.Command, _ []string) error { return launch.RequireMessage(c, "notify") }
 	c.RunE = func(_ *cobra.Command, args []string) error {
 		return command.Exit(run(args[0], message, messageFile, pane, c.Flags().Changed("message"), timeout, dispatch))
 	}

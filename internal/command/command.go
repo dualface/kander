@@ -128,13 +128,45 @@ func RequireProject(c *cobra.Command, unless ...string) *cobra.Command {
 	return c
 }
 
-// ProjectRequired reports whether c, as invoked, needs a project binding.
+// ProjectRequired reports whether c, as invoked, needs a project binding. A bool flag named in
+// unless lifts the requirement only when its parsed value is true, so --schema=false does not.
 func ProjectRequired(c *cobra.Command) bool {
 	if c.Annotations[NeedsProject] != "true" {
 		return false
 	}
-	flag := c.Annotations[ProjectUnless]
-	return flag == "" || !c.Flags().Changed(flag)
+	name := c.Annotations[ProjectUnless]
+	if name == "" {
+		return true
+	}
+	if on, err := c.Flags().GetBool(name); err == nil {
+		return !on
+	}
+	return !c.Flags().Changed(name)
+}
+
+// GateProject makes every command of the tree that needs a project binding run check before its
+// body. The gate stands behind the argument validation and the flag rules of the command, so a
+// malformed command line is an argument error whether or not the checkout is bound, and in
+// front of everything the body does, such as reading an input file. check reports the refusal
+// itself and returns the exit status, 0 when the checkout is bound.
+func GateProject(root *cobra.Command, check func() int) {
+	var walk func(c *cobra.Command)
+	walk = func(c *cobra.Command) {
+		if run := c.RunE; run != nil {
+			c.RunE = func(c *cobra.Command, args []string) error {
+				if ProjectRequired(c) {
+					if err := Exit(check()); err != nil {
+						return err
+					}
+				}
+				return run(c, args)
+			}
+		}
+		for _, child := range c.Commands() {
+			walk(child)
+		}
+	}
+	walk(root)
 }
 
 // Execute runs root with args and returns the process exit code.

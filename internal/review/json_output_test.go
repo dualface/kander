@@ -35,13 +35,13 @@ func TestReviewRunWithJSON(t *testing.T) {
 	if result["exit_code"] != float64(0) || strings.TrimSpace(result["report"].(string)) == "" {
 		t.Fatalf("result=%v", result)
 	}
-	// A role that does not exist fails before any reviewer starts: the error object, the status of the text form.
+	// A role that does not exist is an argument error before any reviewer starts: the usage error object, the status of the text form.
 	code, stdout, stderr = h.review("codex", "Nobody", "确认改动正确", "--json")
 	if code != 2 || stdout != "" {
 		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	detail := jsonObject(t, stderr)["error"].(map[string]any)
-	if detail["code"] != "review_failed" || !strings.Contains(detail["message"].(string), "Nobody") {
+	if detail["code"] != "usage" || !strings.Contains(detail["message"].(string), "Nobody") {
 		t.Fatalf("stderr=%q", stderr)
 	}
 }

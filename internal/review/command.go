@@ -19,7 +19,7 @@ func newCommand(run func(options archiveOptions, args []string) int) *cobra.Comm
 	var flags archiveFlags
 	c := command.RequireProject(&cobra.Command{
 		Use:  "review [agent] <CWD> <base-commit> <commit> <role> <task-goal|absolute-spec-path> [review-context] [reviewed-commit]",
-		Args: command.Args(5, 8),
+		Args: reviewArgs,
 	})
 	c.RunE = func(c *cobra.Command, args []string) error {
 		resetJSONRun()
@@ -58,6 +58,28 @@ func newCommand(run func(options archiveOptions, args []string) int) *cobra.Comm
 		newEvidenceCommand("confirm", "<absolute-CWD> <publication-id> <task-id>", 3),
 	)
 	return c
+}
+
+// reviewArgs checks the shape of a single review before anything runs: the number of arguments,
+// with or without the leading reviewer agent, and that the role is one the review knows. A role
+// that is known but not admitted for this run is refused later, when the archive is read.
+func reviewArgs(c *cobra.Command, args []string) error {
+	if err := command.Args(5, 8)(c, args); err != nil {
+		return err
+	}
+	_, rest, err := splitAgentArgs(args)
+	var gate *gateError
+	if errors.As(err, &gate) {
+		// The command reports a reviewer agent it does not know with its own status.
+		return nil
+	}
+	if err := command.Args(5, 7)(c, rest); err != nil {
+		return err
+	}
+	if _, ok := parseReviewRole(rest[3]); !ok {
+		return command.Usage("review.unsupported_role", command.Escape(rest[3]))
+	}
+	return nil
 }
 
 // newEvidenceCommand builds one evidence subcommand taking arity positional arguments. A

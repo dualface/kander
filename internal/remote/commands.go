@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -100,10 +101,18 @@ func location(s *Session, task string) string {
 // --agent-status; the board package cannot import it.
 func NewListCommand(observe board.AgentStatusFunc) *cobra.Command {
 	var agentStatus bool
-	c := &cobra.Command{
+	c := command.RequireProject(&cobra.Command{
 		Use:     "list [state]",
 		Aliases: []string{"ls"},
-		Args:    command.Args(0, 1),
+		Args: func(c *cobra.Command, args []string) error {
+			if err := command.Args(0, 1)(c, args); err != nil {
+				return err
+			}
+			if len(args) == 1 && !slices.Contains(board.States, args[0]) {
+				return command.Usage("board.unknown_state", command.Escape(args[0]))
+			}
+			return nil
+		},
 		RunE: func(_ *cobra.Command, args []string) error {
 			state := ""
 			if len(args) == 1 {
@@ -111,7 +120,7 @@ func NewListCommand(observe board.AgentStatusFunc) *cobra.Command {
 			}
 			return runList(state, agentStatus, observe)
 		},
-	}
+	})
 	c.PreRunE = func(*cobra.Command, []string) error {
 		if agentStatus && !command.JSON() {
 			return command.Usage("cli.error_flag_needs", "--agent-status", "--json")
@@ -171,10 +180,10 @@ func emit(value any) error { return command.Exit(command.Object(value)) }
 // NewShowCommand builds kander show.
 func NewShowCommand() *cobra.Command {
 	var document string
-	c := &cobra.Command{
+	c := command.RequireProject(&cobra.Command{
 		Use:  "show <task-id>",
 		Args: command.Args(1, 1),
-	}
+	})
 	c.RunE = func(_ *cobra.Command, args []string) error {
 		return runShow(args[0], document, c.Flags().Changed("document"))
 	}
@@ -223,10 +232,18 @@ func runShow(task, document string, withDocument bool) error {
 func NewNewCommand() *cobra.Command {
 	var large bool
 	var language string
-	c := &cobra.Command{
-		Use:  "new <feature|bug|chore|research> <slug> <title...>",
-		Args: command.Args(3, -1),
-	}
+	c := command.RequireProject(&cobra.Command{
+		Use: "new <feature|bug|chore|research> <slug> <title...>",
+		Args: func(c *cobra.Command, args []string) error {
+			if err := command.Args(3, -1)(c, args); err != nil {
+				return err
+			}
+			if !slices.Contains(board.TaskTypes(), args[0]) {
+				return command.Usage("board.unknown_task_type", command.Escape(args[0]))
+			}
+			return nil
+		},
+	})
 	c.RunE = func(_ *cobra.Command, args []string) error {
 		return runNew(args[0], args[1], strings.Join(args[2:], " "), large, language, c.Flags().Changed("language"))
 	}
@@ -273,7 +290,7 @@ func claimFor(s *Session, task string) (*client.Claim, error) {
 // NewUpdateCommand builds kander update.
 func NewUpdateCommand() *cobra.Command {
 	var o updateOptions
-	c := &cobra.Command{
+	c := command.RequireProject(&cobra.Command{
 		Use:  "update <task-id>",
 		Args: command.Args(1, 1),
 		PreRunE: func(c *cobra.Command, _ []string) error {
@@ -283,7 +300,7 @@ func NewUpdateCommand() *cobra.Command {
 			)
 		},
 		RunE: func(_ *cobra.Command, args []string) error { return runUpdate(args[0], o) },
-	}
+	})
 	command.Once(c.Flags(), &o.document, "document", "")
 	command.Once(c.Flags(), &o.file, "file", "")
 	c.Flags().Uint64Var(&o.revision, "expect-revision", 0, "")
@@ -352,13 +369,13 @@ func readUTF8(path string) (string, error) {
 // is stored as this host's credential.
 func NewMoveCommand() *cobra.Command {
 	var o moveOptions
-	c := &cobra.Command{
+	c := command.RequireProject(&cobra.Command{
 		Use:  "move <task-id> <state>",
 		Args: command.Args(2, 2),
 		PreRunE: func(c *cobra.Command, _ []string) error {
 			return command.Together(c, "dispatch-id", "execution-epoch")
 		},
-	}
+	})
 	c.RunE = func(_ *cobra.Command, args []string) error { return runMove(args[0], args[1], o) }
 	flags := c.Flags()
 	flags.StringVar(&o.owner, "owner", "", "")
@@ -526,17 +543,21 @@ func claim(ctx context.Context, s *Session, task, owner, decision string) error 
 
 // NewPickCommand builds kander pick.
 func NewPickCommand() *cobra.Command {
-	return &cobra.Command{
+	return command.RequireProject(&cobra.Command{
 		Use:  "pick [task-id]",
 		Args: command.Args(0, 1),
+		// Choosing a task from a list needs a terminal; --json refuses it as an argument error.
+		PreRunE: func(_ *cobra.Command, args []string) error {
+			if len(args) == 0 && command.JSON() {
+				return command.Interactive(config.Text("remote.interactive_select_task"))
+			}
+			return nil
+		},
 		RunE: func(_ *cobra.Command, args []string) error { return runPick(args) },
-	}
+	})
 }
 
 func runPick(args []string) error {
-	if len(args) == 0 && command.JSON() {
-		return command.Interactive(config.Text("remote.interactive_select_task"))
-	}
 	ctx, cancel := commandContext()
 	defer cancel()
 	session, _, err := open(ctx)
