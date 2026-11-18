@@ -268,7 +268,11 @@ func (w *loop) step(ctx context.Context, c remote.Credential) bool {
 			}
 		}
 		if c.ResourceKind != "group" && observation.Status != "stopped" {
-			w.deliver(callCtx, log, project, &c)
+			// The observation and its report run on the clock of callCtx;
+			// delivery gets a fresh budget so a slow terminal cannot starve it.
+			deliverCtx, stopDeliver := context.WithTimeout(ctx, min(interval, 10*time.Second))
+			w.deliver(deliverCtx, log, project, &c)
+			stopDeliver()
 		}
 		if err := remote.WriteCredential(w.o.Home, c); err != nil {
 			log.Error("credential write failed", "error", err)

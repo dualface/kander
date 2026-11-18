@@ -30,10 +30,14 @@ type harness struct {
 func (h *harness) now() time.Time          { return time.Unix(0, h.at.Load()) }
 func (h *harness) advance(d time.Duration) { h.at.Add(int64(d)) }
 
-func newHarness(t *testing.T) *harness {
+func newHarness(t *testing.T) *harness { return newHarnessRenewing(t, 0) }
+
+// newHarnessRenewing grants leases with the given renew interval; zero keeps
+// the server default.
+func newHarnessRenewing(t *testing.T, renew time.Duration) *harness {
 	h := &harness{t: t, home: t.TempDir()}
 	h.at.Store(time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC).UnixNano())
-	s, err := server.Open(server.Options{DataDir: t.TempDir(), Now: h.now, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	s, err := server.Open(server.Options{DataDir: t.TempDir(), Now: h.now, RenewInterval: renew, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,5 +223,28 @@ func TestWorkerDeliversRequestsOnce(t *testing.T) {
 	requests, err := b.Requests(t.Context(), c.TaskID)
 	if err != nil || requests[0].Status != api.RequestAccepted {
 		t.Fatalf("a delivered request is accepted: %+v %v", requests, err)
+	}
+}
+
+// An observation slower than the renew interval must not use up the time the
+// same pass has for delivering requests.
+func TestWorkerDeliversAfterASlowObservation(t *testing.T) {
+	const renew = 100 * time.Millisecond
+	h := newHarnessRenewing(t, renew)
+	h.loop.o.Observe = func(context.Context, remote.Credential) api.AgentObservation {
+		time.Sleep(3 * renew)
+		return api.AgentObservation{Status: "alive"}
+	}
+	_, c := h.claimed("slow-observation", true)
+	r, err := h.project("host-b").CreateRequest(t.Context(), "", c.TaskID, api.NewCollabRequest{Kind: api.RequestSync, Message: "status", TargetGeneration: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.advance(time.Second)
+	if _, err := h.loop.pass(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.lines) != 1 || !strings.Contains(h.lines[0], r.ID) {
+		t.Fatalf("the request was not delivered after a slow observation: %q", h.lines)
 	}
 }
