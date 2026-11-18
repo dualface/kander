@@ -64,5 +64,14 @@
   "board.review_add_member_group": "{{.V0}} is in task group {{.V1}}, but the members of plan {{.V2}} are in task group {{.V3}}",
   "board.review_add_member_language": "{{.V0}} reports in {{.V1}}, but plan {{.V2}} reports in {{.V3}}",
   "board.review_add_member_unplanned_run": "{{.V0}} has a run in batch {{.V1}}, which no batch of plan {{.V2}} names",
-  "board.review_add_members_next": "Next step: add only cards of the plan's task group that are in working or review, belong to no plan, and have no run outside the plan; leave out the others and write the request again. A card that has not started joins with a later add_members once it runs."
+  "board.review_add_members_next": "Next step: add only cards of the plan's task group that are in working or review, belong to no plan, and have no run outside the plan; leave out the others and write the request again. A card that has not started joins with a later add_members once it runs.",
+  "board.review_run_abandoned": "run is abandoned and left its batch; it can no longer be published, prepared again, used as a predecessor, or read",
+  "board.review_abandon_hint": "publish it again with the same run ID, or retire it with kander review abandon and a user decision reference when no process can publish it",
+  "board.review_abandon_unfinished": "only a finalized run can be abandoned; a run that is not finalized has to finish first",
+  "board.review_abandon_has_copies": "a member already holds a copy of this run, so it is published and cannot be abandoned",
+  "board.review_abandon_batch_closed": "the batch of this run is closed, so the run cannot be abandoned",
+  "board.review_abandon_successor": "another run names this run as previous_run_id ({{.V0}}), so it cannot be abandoned",
+  "board.review_abandon_no_live": "no member of this run is in working or review and still in the batch, so nobody can confirm the abandon. Move a member back to working first, then abandon",
+  "board.review_abandon_decision_required": "an abandon needs a non-empty decision reference and a non-empty reason",
+  "board.review_abandon_conflict": "the run is already abandoned with another decision or reason; the abandon cannot be recorded twice with different values"
 }

@@ -96,7 +96,7 @@ func walkCoordinatorMember(ctx context.Context, tx *Transaction, pass *coordinat
 				return m, e
 			}
 			for _, run := range runs {
-				if !reviewRunComplete(run) {
+				if !reviewRunComplete(run) || reviewRunAbandoned(run) {
 					continue
 				}
 				if e = verifyPublishedReview(tx, run); e != nil {

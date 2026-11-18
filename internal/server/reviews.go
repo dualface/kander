@@ -240,6 +240,8 @@ func reviewStaticResult(request any) any {
 		return map[string]string{"run_id": value.RunID}
 	case board.LegacyFindingMap:
 		return map[string]string{"run_id": value.RunID}
+	case board.ReviewAbandonRequest:
+		return map[string]string{"run_id": value.RunID}
 	}
 	return nil
 }

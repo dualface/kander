@@ -161,5 +161,8 @@
   "review.schema.extend-plan.retarget_batches.key.previous_target": "各エントリで必須。バッチの現在のターゲット commit。比較して交換するために使います。",
   "review.schema.extend-plan.retarget_batches.key.base": "各エントリで必須。新しい base。完全な commit SHA で、新しい target の祖先です。後続のバッチは直前のバッチの target を使います。",
   "review.schema.extend-plan.retarget_batches.key.target": "各エントリで必須。新しいターゲット commit（完全な commit SHA）。計画済みの後続バッチがあるバッチは target を変えません。配信なしバッチの target は、CWD のリポジトリの HEAD またはその祖先でなければなりません。",
-  "review.schema.extend-plan.add_members": "封印されていない計画に、計画のタスクグループの開始済みメンバーを加えます。タスク ID の配列です。各タスクは working または review にあり、計画の全メンバーが共有するタスクグループに属し、まだどの計画にも属さず、メンバー除外記録がなく、計画外のバッチに run がなく、計画と同じレポート言語でなければなりません。1 つでも条件を満たさないとリクエスト全体を拒否して何も書かず、エラーにタスクとその条件を示します。封印するには新しいメンバーをバッチに入れる必要があり、batch で追加します。他のすべての操作と同時には使えません。分散モードでは、開始済みの新メンバーそれぞれの保持者が kander review confirm で同じ公開内容を確認します。"
+  "review.schema.extend-plan.add_members": "封印されていない計画に、計画のタスクグループの開始済みメンバーを加えます。タスク ID の配列です。各タスクは working または review にあり、計画の全メンバーが共有するタスクグループに属し、まだどの計画にも属さず、メンバー除外記録がなく、計画外のバッチに run がなく、計画と同じレポート言語でなければなりません。1 つでも条件を満たさないとリクエスト全体を拒否して何も書かず、エラーにタスクとその条件を示します。封印するには新しいメンバーをバッチに入れる必要があり、batch で追加します。他のすべての操作と同時には使えません。分散モードでは、開始済みの新メンバーそれぞれの保持者が kander review confirm で同じ公開内容を確認します。",
+  "review.schema.abandon.run_id": "放棄する終了済み run の run ID。コピーを持たないメンバーがいて、どのプロセスも公開できず、他の run から previous_run_id として指定されていないもの。",
+  "review.schema.abandon.decision": "この放棄を認めるユーザー決定への参照。空にできません。Kander は記録するだけで検証しません。",
+  "review.schema.abandon.reason": "この run を公開できない理由。空にできません。run はバッチから外れ、その指摘はバッチを拘束しなくなり、ロール要件は新しい run で満たす必要があります。"
 }

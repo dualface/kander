@@ -18,7 +18,7 @@ import (
 
 func dispositionCommand(name string) bool {
 	switch name {
-	case "plan", "extend-plan", "advance", "assign", "disposition", "interpret", "map-legacy", "aggregate", "close", "progress", "confirm":
+	case "plan", "extend-plan", "advance", "assign", "disposition", "interpret", "map-legacy", "abandon", "aggregate", "close", "progress", "confirm":
 		return true
 	}
 	return false
@@ -46,7 +46,7 @@ func runDispositionMode(args []string, required bool) int {
 		return runRemoteDisposition(cfg, args)
 	}
 	action, cwd, input := args[0], args[1], args[2]
-	if action == "confirm" {
+	if action == "confirm" || action == "abandon" {
 		return dispositionFailure(remote.ErrNotConfigured)
 	}
 	if !filepath.IsAbs(cwd) {

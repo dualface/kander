@@ -31,6 +31,10 @@ type ReviewBatchView struct {
 	Schema int             `json:"schema"`
 	Batch  ReviewBatch     `json:"batch"`
 	Runs   []ReviewRunView `json:"runs"`
+	// AbandonedRuns lists the runs of the batch that were abandoned: they are no
+	// longer runs of the batch, so Runs holds neither them nor their findings.
+	// omitempty keeps views of batches without one byte-identical.
+	AbandonedRuns []ReviewAbandonedRun `json:"abandoned_runs,omitempty"`
 }
 type ReviewRoleConclusion struct {
 	RunID    string `json:"run_id"`
@@ -137,6 +141,10 @@ func aggregateReviewBatch(tx *Transaction, b ReviewBatch) (ReviewBatchView, erro
 	f := reviewplan.Aggregate{Published: true, Lineage: true, Ledger: true}
 	refusal := func() error {
 		for _, run := range runs {
+			if reviewRunAbandoned(run) {
+				view.AbandonedRuns = append(view.AbandonedRuns, ReviewAbandonedRun{RunID: run.RunID, Decision: run.Abandonment.Decision, Reason: run.Abandonment.Reason})
+				continue
+			}
 			if err := verifyPublishedReview(tx, run); err != nil {
 				f.Published, f.Lineage, f.Ledger = false, false, false
 				return err

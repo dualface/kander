@@ -64,5 +64,14 @@
   "board.review_add_member_group": "{{.V0}} 属于任务组 {{.V1}}，而计划 {{.V2}} 的成员属于任务组 {{.V3}}",
   "board.review_add_member_language": "{{.V0}} 的报告语言是 {{.V1}}，而计划 {{.V2}} 的报告语言是 {{.V3}}",
   "board.review_add_member_unplanned_run": "{{.V0}} 在批次 {{.V1}} 中有审核运行，而计划 {{.V2}} 的任何批次都不含该批次",
-  "board.review_add_members_next": "下一步：只加入计划所在任务组中、处于 working 或 review、不属于任何计划、也没有计划外运行的卡；其余的去掉后重新写出请求。尚未启动的卡，启动后再用 add_members 加入。"
+  "board.review_add_members_next": "下一步：只加入计划所在任务组中、处于 working 或 review、不属于任何计划、也没有计划外运行的卡；其余的去掉后重新写出请求。尚未启动的卡，启动后再用 add_members 加入。",
+  "board.review_run_abandoned": "该运行已被放弃并已离开批次：不能再发布、再准备、当前驱或被读取",
+  "board.review_abandon_hint": "可用同一个 run ID 再发布；没有进程能发布它时，用 kander review abandon 带用户决定引用放弃它",
+  "board.review_abandon_unfinished": "只有已结束的运行才能放弃；未结束的运行要先结束",
+  "board.review_abandon_has_copies": "已有成员持有该运行的副本，运行已发布，不能放弃",
+  "board.review_abandon_batch_closed": "该运行所在的批次已关闭，不能放弃运行",
+  "board.review_abandon_successor": "另有运行把它写作 previous_run_id（{{.V0}}），不能放弃",
+  "board.review_abandon_no_live": "该运行没有处于 working 或 review 且仍在批次中的成员，没有人能确认放弃。请先让一个成员回到 working，再放弃",
+  "board.review_abandon_decision_required": "放弃需要非空的决定引用和非空的理由",
+  "board.review_abandon_conflict": "该运行已用另一个决定或理由放弃；不能用不同的值记录两次放弃"
 }

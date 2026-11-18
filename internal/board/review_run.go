@@ -17,9 +17,13 @@ type ReviewRun struct {
 	DurationMS      int64             `json:"duration_ms"`
 	Hashes          map[string]string `json:"hashes"`
 	Published       map[string]bool   `json:"published"`
-	// SkippedMembers took no copy: they left the batch before publication.
+	// SkippedMembers took no copy: they left the batch before publication, or the
+	// run was abandoned and no member holds a copy.
 	SkippedMembers []string `json:"skipped_members,omitempty"`
 	// MemberCycles binds the run to the execution cycle of each member when it was
 	// created. omitempty keeps runs written before the field byte-identical.
 	MemberCycles map[string]string `json:"member_cycles,omitempty"`
+	// Abandonment records that the run was retired because no process could publish
+	// it. omitempty keeps runs written before the field byte-identical.
+	Abandonment *ReviewAbandonment `json:"abandonment,omitempty"`
 }

@@ -27,6 +27,8 @@ import (
 //     the entrance that needs them reads them.
 //   - Published and Skipped are the member's entries in Published and
 //     SkippedMembers.
+//   - Abandoned is whether the run records an Abandonment. An abandoned run is no
+//     run of its batch: review_abandon.go lists what filters it out.
 //
 // Integrity facts (IDs, cards, batch binding, hashes, manifest, index lines)
 // stay hand-written: an entrance computes them in the order it always has and
@@ -37,8 +39,9 @@ import (
 //
 // UpdateReviewRun and FinalizeReviewRun write the run the caller presents. The
 // kernel models the fields they advance (phase, launch status, execution result,
-// exit code); the entrances still replace Published, SkippedMembers, Hashes, and
-// MemberCycles with the caller's values, which no production caller changes.
+// exit code); the entrances still replace Published, SkippedMembers, Hashes,
+// MemberCycles, and Abandonment with the caller's values, which no production
+// caller changes.
 
 var kernelRunPhases = map[string]reviewrun.Phase{
 	"prepared": reviewrun.PhasePrepared, "launching": reviewrun.PhaseLaunching, "running": reviewrun.PhaseRunning,
@@ -114,6 +117,7 @@ func projectReviewRun(run ReviewRun, exists bool, member string) reviewrun.State
 	st.Phase, st.Launch, st.Exec = kernelRunPhase(run.Phase), kernelRunLaunch(run.LaunchStatus), kernelRunExec(run.ExecutionStatus)
 	st.ExitZero, st.Originals = run.ExitCode == 0, len(run.Hashes) > 0
 	st.Published, st.Skipped = run.Published[member], slices.Contains(run.SkippedMembers, member)
+	st.Abandoned = run.Abandonment != nil
 	return st
 }
 
@@ -182,6 +186,8 @@ func retryReviewRun(tx *Transaction, run ReviewRun, input ReviewInput, requireme
 	switch {
 	case !same:
 		return reviewError(input.RunID + ": input conflict: " + t("board.review_run_input_conflict"))
+	case reviewRunAbandoned(run):
+		return abandonedRunError(run.RunID)
 	case !known:
 		return reviewError("missing batch")
 	}

@@ -32,6 +32,7 @@ func frozenTaskContextSnapshot(tx *Transaction, batch ReviewBatch, previousRunID
 	if err != nil {
 		return "", err
 	}
+	runs = withoutAbandonedRuns(runs)
 	var candidates []ReviewRun
 	for _, run := range runs {
 		if run.Phase == "finalized" && run.InputHashes["task-context.md"] == batch.TaskContextHash {

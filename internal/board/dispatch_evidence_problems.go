@@ -264,7 +264,7 @@ func (c fixRunCheck) problems(run ReviewRun, ref DispatchFindingReference) (prob
 	}
 	var successors []string
 	for _, other := range c.runs {
-		if !c.completed && other.PreviousRunID == run.RunID {
+		if !c.completed && other.PreviousRunID == run.RunID && !reviewRunAbandoned(other) {
 			successors = append(successors, other.RunID)
 		}
 	}

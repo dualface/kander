@@ -16,8 +16,11 @@ type ReviewNextAction struct {
 
 // reviewChainHeads returns the successful runs of role that no other successful
 // run names as previous_run_id. More than one head means at most one chain can
-// conclude; the others close only when they qualify for superseded_runs.
+// conclude; the others close only when they qualify for superseded_runs. An
+// abandoned run left its batch: it is no head, and its previous_run_id does not
+// count as a reference.
 func reviewChainHeads(runs []ReviewRun, role string) []string {
+	runs = withoutAbandonedRuns(runs)
 	referenced := map[string]bool{}
 	for _, r := range runs {
 		if r.Role == role && r.ExecutionStatus == "ok" && r.PreviousRunID != "" {

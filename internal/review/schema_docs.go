@@ -130,6 +130,11 @@ func evidenceSchemaDocs() map[string]map[string]schemaMeta {
 			"findings.NON_BLOCKING[].lineage.run_id":     req(""),
 			"findings.NON_BLOCKING[].lineage.finding_id": req(""),
 		},
+		"abandon": {
+			"run_id":   req(""),
+			"decision": req(""),
+			"reason":   req(""),
+		},
 		"assign": {
 			"run_id":      req(""),
 			"batch_id":    req(""),

@@ -288,6 +288,7 @@ func batchResolutionCheck(tx *Transaction, p ReviewPlan, r ReviewBatchResolution
 	if facts.runs, err = batchRuns(tx, *b); err != nil {
 		return facts, err
 	}
+	facts.runs = withoutAbandonedRuns(facts.runs)
 	if len(facts.runs) == 0 {
 		return facts, reviewError(t("board.review_resolve_no_run", r.BatchID))
 	}

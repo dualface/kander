@@ -242,6 +242,7 @@ func validateTaskReviewMode(tx *Transaction, id string, completion, importHistor
 			if e != nil {
 				return progress, e
 			}
+			runs = withoutAbandonedRuns(runs)
 			progress.NextActions = append(progress.NextActions, duplicateRunActions(b, runs)...)
 			stale, e := staleRunActions(tx, b, runs)
 			if e != nil {
@@ -381,7 +382,7 @@ func checkPendingDispositions(tx *Transaction, b ReviewBatch) (pending []string,
 	if err != nil {
 		return nil, err
 	}
-	for _, run := range runs {
+	for _, run := range withoutAbandonedRuns(runs) {
 		if run.Phase != "finalized" || !allPublished(run) {
 			continue
 		}

@@ -64,5 +64,14 @@
   "board.review_add_member_group": "{{.V0}} はタスクグループ {{.V1}} にありますが、計画 {{.V2}} のメンバーはタスクグループ {{.V3}} にあります",
   "board.review_add_member_language": "{{.V0}} のレポート言語は {{.V1}} ですが、計画 {{.V2}} は {{.V3}} です",
   "board.review_add_member_unplanned_run": "{{.V0}} には、計画 {{.V2}} のどのバッチにも含まれないバッチ {{.V1}} の run があります",
-  "board.review_add_members_next": "次の手順: 計画のタスクグループのカードのうち、working または review にあり、どの計画にも属さず、計画外の run がないものだけを加え、他は外してリクエストを書き直してください。まだ開始していないカードは、開始後に改めて add_members で加えます。"
+  "board.review_add_members_next": "次の手順: 計画のタスクグループのカードのうち、working または review にあり、どの計画にも属さず、計画外の run がないものだけを加え、他は外してリクエストを書き直してください。まだ開始していないカードは、開始後に改めて add_members で加えます。",
+  "board.review_run_abandoned": "この run は放棄済みでバッチから外れています。再公開、再準備、前任としての指定、読み取りはできません",
+  "board.review_abandon_hint": "同じ run ID で再公開するか、どのプロセスも公開できない場合は kander review abandon にユーザー決定の参照を付けて放棄してください",
+  "board.review_abandon_unfinished": "放棄できるのは終了済みの run だけです。未終了の run は先に終了させてください",
+  "board.review_abandon_has_copies": "すでにメンバーがこの run のコピーを保持しており、公開済みのため放棄できません",
+  "board.review_abandon_batch_closed": "この run のバッチは閉じているため、run を放棄できません",
+  "board.review_abandon_successor": "別の run がこの run を previous_run_id に指定しているため（{{.V0}}）、放棄できません",
+  "board.review_abandon_no_live": "この run には working または review にあり、バッチに残っているメンバーがいないため、放棄を確認する人がいません。先にメンバーを working に戻してから放棄してください",
+  "board.review_abandon_decision_required": "放棄には空でない決定参照と空でない理由が必要です",
+  "board.review_abandon_conflict": "この run はすでに別の決定または理由で放棄されています。異なる値で 2 回記録することはできません"
 }
