@@ -1,8 +1,6 @@
 package board
 
 import (
-	"bufio"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -89,40 +87,4 @@ func selectedEntries(entries map[string]Entry, state string) []Entry {
 		return out[i].TaskID < out[j].TaskID
 	})
 	return out
-}
-
-func selectFromState(board Board, state string, stdin *os.File, stdout *os.File) (Entry, error) {
-	candidates := selectedEntries(board.Entries, state)
-	if len(candidates) == 0 {
-		return Entry{}, kanbanError("board.no_tasks_in", state)
-	}
-	for i, entry := range candidates {
-		text, err := ReadDocument(entry)
-		if err != nil {
-			return Entry{}, err
-		}
-		_, _ = stdout.WriteString(itoa(i+1) + ". " + entry.TaskID + "\t" + TitleFrom(text) + "\n")
-	}
-	reader := bufio.NewReader(stdin)
-	for {
-		_, _ = stdout.WriteString(t("board.choose_a_task_number"))
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			return Entry{}, kanbanError("board.no_task_selected_specify_task_id")
-		}
-		choice := strings.TrimSpace(line)
-		n := 0
-		ok := true
-		for _, r := range choice {
-			if r < '0' || r > '9' {
-				ok = false
-				break
-			}
-			n = n*10 + int(r-'0')
-		}
-		if ok && choice != "" && n >= 1 && n <= len(candidates) {
-			return candidates[n-1], nil
-		}
-		_, _ = stdout.WriteString(t("board.enter_a_number_from_1_to", itoa(len(candidates))))
-	}
 }

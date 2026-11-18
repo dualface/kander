@@ -2,13 +2,10 @@ package issue
 
 import (
 	"fmt"
-	"github.com/dualface/kander/internal/remote"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 
-	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 )
 
@@ -25,10 +22,6 @@ type triageCommandOptions struct {
 // evidence and starts the takeover session through the shared StartTriage path,
 // so the TUI and the CLI always launch the same way.
 func runTriage(factory func() IssueProvider, args []string, stdout, stderr io.Writer) int {
-	return runTriageMode(factory, args, stdout, stderr, false)
-}
-
-func runTriageMode(factory func() IssueProvider, args []string, stdout, stderr io.Writer, required bool) int {
 	var options triageCommandOptions
 	positional := 0
 	for index := 0; index < len(args); index++ {
@@ -91,41 +84,8 @@ func runTriageMode(factory func() IssueProvider, args []string, stdout, stderr i
 
 	ctx, cancel := commandContext()
 	defer cancel()
-	cfg, err := config.Load(true)
-	if err != nil {
-		fmt.Fprintln(stderr, formatTriageError(err))
-		return 1
-	}
 	triageOptions := TriageOptions{CardID: options.card, Agent: options.agent, Launcher: options.launcher}
-	var outcome TriageOutcome
-	if required {
-		if err := remote.RequireBinding(cfg); err != nil {
-			fmt.Fprintln(stderr, formatError(err))
-			return 1
-		}
-	}
-	if remote.ServiceSelected(cfg, required) {
-		cwd, cwdErr := os.Getwd()
-		if cwdErr != nil {
-			fmt.Fprintln(stderr, formatTriageError(cwdErr))
-			return 1
-		}
-		session, openErr := remote.Open(ctx, cfg, cwd)
-		if openErr != nil {
-			fmt.Fprintln(stderr, formatTriageError(openErr))
-			return 1
-		}
-		operationCtx, finishOperation := session.OperationContext(ctx)
-		defer finishOperation()
-		ctx = operationCtx
-		outcome, err = StartRemoteTriage(ctx, session, provider, remote.ProjectDir(cwd), repository, options.number, triageOptions, false)
-	} else {
-		var root string
-		root, err = board.BoardRoot()
-		if err == nil {
-			outcome, err = StartTriage(ctx, provider, root, repository, options.number, triageOptions)
-		}
-	}
+	outcome, err := startTriage(ctx, provider, repository, options.number, triageOptions)
 	if err != nil {
 		fmt.Fprintln(stderr, formatTriageError(err))
 		return 1

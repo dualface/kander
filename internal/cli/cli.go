@@ -53,7 +53,7 @@ var aliases = map[string]string{
 	"ls": "list",
 }
 
-// Commands is the frozen registry. Every entry starts unimplemented; later packages override entries by name.
+// Commands is the single command registry. Every entry starts unimplemented; later packages override entries by name.
 var Commands = map[string]Runner{}
 
 // DefaultRunner is what runs without a subcommand. internal/tui sets it on registration,
@@ -265,9 +265,6 @@ func Run(arguments []string) int {
 	if len(parsed.rest) == 1 && (parsed.rest[0] == "-h" || parsed.rest[0] == "--help") {
 		fmt.Fprintln(os.Stdout, config.CommandUsage(name))
 		return 0
-	}
-	if remoteRunner, ok := RemoteCommands[name]; ok {
-		runner = remoteRunner
 	}
 	return runner(parsed.rest)
 }

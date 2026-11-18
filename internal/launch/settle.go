@@ -1,14 +1,11 @@
 package launch
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/issue"
-	"github.com/dualface/kander/internal/liveness"
 )
 
 // exitUnresolved separates an unresolved start from a failed one (1) and a usage
@@ -80,11 +77,6 @@ func (e *UnresolvedError) NextSteps() []string {
 		return []string{t("launch.unmarked_executor_stop_first", e.Window), takeover}
 	}
 	return []string{fmt.Sprintf("%s resume %s --adopt --decision <reference>", e.Command, e.TaskID), takeover}
-}
-
-func isUnresolved(err error) bool {
-	var unresolved *UnresolvedError
-	return errors.As(err, &unresolved)
 }
 
 // recordUnresolved ends a start attempt as unresolved and builds its result. A
@@ -182,105 +174,4 @@ func exitLaunch(err error) int {
 		unresolved.hold()
 	}
 	return exitUnresolved
-}
-
-// requireTakeoverDecision refuses a takeover of an unfinished start without a user
-// decision, before a dispatch binds. board.BeginTakeover enforces the same rule.
-func requireTakeoverDecision(root, task, decision string) error {
-	record, exists, err := board.CurrentExecution(root, task)
-	if err != nil {
-		return err
-	}
-	if exists && record.StartUnfinished() && strings.TrimSpace(decision) == "" {
-		return launchError("board.takeover_decision_required", task, record.Status)
-	}
-	return nil
-}
-
-// adoptLivenessFn observes the recorded address only: a pane found elsewhere by
-// reverse lookup is not the executor this record started.
-var adoptLivenessFn = func(s board.Snapshot) liveness.Report {
-	return liveness.ClassifyTaskLookupContext(context.Background(), s.Entry, s.Text, false)
-}
-
-// commandAdopt keeps the running executor of an unfinished start. Foreground and
-// console cards are observed by their process identity, and an executor whose
-// starter is gone is the case adoption exists for. A pane that runs the agent
-// without a session marker gets the marker first when its session can be
-// proven, and is probed again. Every other observation refuses: an unknown
-// executor is never adopted.
-func commandAdopt(root, task, decision string) error {
-	s, err := board.ReadSnapshot(root, task)
-	if err != nil {
-		return err
-	}
-	if s.Entry.State != "review" && s.Entry.State != "working" {
-		return launchError("launch.only_tasks_in_review_or_working_can_be_resumed", s.Entry.TaskID, s.Entry.State)
-	}
-	cfg, err := loadEffective()
-	if err != nil {
-		return err
-	}
-	if err = cfg.Rules.CheckTaskGroup(board.TaskGroupFrom(s.Text)); err != nil {
-		return err
-	}
-	record, err := board.BindExecutionCursor(root, s.Entry)
-	if err != nil {
-		return err
-	}
-	if !record.StartUnfinished() {
-		return launchError("board.adopt_needs_unfinished_start", s.Entry.TaskID, record.Status)
-	}
-	// A card that names another identity cannot be adopted whatever the probe says.
-	if err = board.CheckAdoptable(s, record); err != nil {
-		return err
-	}
-	report := adoptLivenessFn(s)
-	if unmarkedPane(report) && markerRepairable(board.MetadataFrom(s.Text, board.FieldSession)) {
-		if err = repairSessionMarker(root, s, record); err != nil {
-			return err
-		}
-		report = adoptLivenessFn(s)
-	}
-	if report.Status != liveness.Alive && report.Status != liveness.AliveOrphaned {
-		if unmarkedPane(report) {
-			return launchError("launch.adopt_unmarked_pane", s.Entry.TaskID, t("launch.unmarked_executor_stop_first", orNA(board.MetadataFrom(s.Text, board.FieldWindow))))
-		}
-		return launchError("launch.adopt_liveness_unconfirmed", s.Entry.TaskID, report.Status, report.Detail)
-	}
-	if _, err = adoptExecutionFn(root, s, decision); err != nil {
-		return err
-	}
-	fmt.Println(t("launch.adopted", s.Entry.TaskID, orNA(board.MetadataFrom(s.Text, board.FieldWindow))))
-	return nil
-}
-
-// unmarkedPane reports a probe that saw the agent in a pane without a session
-// marker. The launch writes the marker; after it only adoption can, so until
-// then no probe of that pane can prove the executor alive.
-func unmarkedPane(report liveness.Report) bool {
-	return report.Status == liveness.Unknown && report.Evidence != nil && report.Evidence.Unmarked
-}
-
-// adoptionBlocker says why adoption cannot end an unfinished start, or returns ""
-// when it can: the card must still show the identity of the attempt, and the pane
-// must be able to prove its executor or be marked by adoption. Whether adoption
-// can mark it is a static judgement: a hint never runs session discovery.
-func adoptionBlocker(s board.Snapshot, record board.ExecutionRecord) string {
-	if board.StartIdentityChanged(s, record) {
-		return t("launch.start_identity_changed")
-	}
-	if !markerRepairable(board.MetadataFrom(s.Text, board.FieldSession)) && unmarkedPane(adoptLivenessFn(s)) {
-		return t("launch.unmarked_pane_cannot_adopt", orNA(board.MetadataFrom(s.Text, board.FieldWindow)))
-	}
-	return ""
-}
-
-// startUnfinishedError refuses an action while a start attempt has not ended. Its
-// next step names adoption only when adoption can work.
-func startUnfinishedError(s board.Snapshot, record board.ExecutionRecord, adoptKey, takeoverKey string) error {
-	if blocker := adoptionBlocker(s, record); blocker != "" {
-		return launchError(takeoverKey, s.Entry.TaskID, record.Status, blocker)
-	}
-	return launchError(adoptKey, s.Entry.TaskID, record.Status)
 }

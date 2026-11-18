@@ -1,7 +1,6 @@
 package launch
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -12,7 +11,6 @@ import (
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/liveness"
 )
 
 // lateDiscoveryFailure makes the session discovery of a launch fail. during runs
@@ -97,25 +95,6 @@ func TestLateFailureKeepsAnExecutorThatWorked(t *testing.T) {
 	if record.Failure == "" || record.Failure != unresolved.Reason || unresolved.Window != board.MetadataFrom(s.Text, board.FieldWindow) || unresolved.Window == "" {
 		t.Fatalf("record=%+v unresolved=%+v", record, unresolved)
 	}
-}
-
-func TestLateFailureWithoutEvidenceClosesAndRollsBack(t *testing.T) {
-	skipOnWindows(t)
-	root, _, _ := setupBoard(t)
-	task, _ := makeTodo(t, root, "late-clean")
-	lateDiscoveryFailure(t, func() {})
-	_, _, err := capture(t, func() error { return commandStart(root, "devin", "tmux", task) })
-	if err == nil || isUnresolved(err) {
-		t.Fatalf("err=%v", err)
-	}
-	if !containerClosed(root) {
-		t.Fatal("the failed launch kept its container")
-	}
-	s, err := board.ReadSnapshot(root, task)
-	if err != nil || s.Entry.State != "todo" {
-		t.Fatalf("snapshot %+v err=%v", s.Entry, err)
-	}
-	requireRecord(t, root, task, board.ExecutionRolledBack)
 }
 
 // The judgement must see the container still open. A judgement that runs after
@@ -304,47 +283,6 @@ func foregroundAgent(t *testing.T, bin string) {
 	})
 }
 
-// Without a container there is nothing to keep, but the rule stays: evidence
-// means no rollback, and the executor is not killed.
-func TestLateFailureWithoutAContainer(t *testing.T) {
-	skipOnWindows(t)
-	for name, evidence := range map[string]bool{"evidence": true, "clean": false} {
-		t.Run(name, func(t *testing.T) {
-			root, _, bin := setupBoard(t)
-			foregroundAgent(t, bin)
-			task, _ := makeTodo(t, root, "late-process")
-			lateDiscoveryFailure(t, func() {
-				if evidence {
-					executorWrite(t, root, task)
-				}
-			})
-			// capture would wait for the pipe the live agent inherits.
-			result, err := Start(root, "devin", "foreground", task)
-			s, readErr := board.ReadSnapshot(root, task)
-			if readErr != nil {
-				t.Fatal(readErr)
-			}
-			if !evidence {
-				if err == nil || isUnresolved(err) || s.Entry.State != "todo" {
-					t.Fatalf("state=%s err=%v", s.Entry.State, err)
-				}
-				requireRecord(t, root, task, board.ExecutionRolledBack)
-				<-result.Outcome.IdentityDone
-				return
-			}
-			unresolved := requireUnresolved(t, err)
-			defer endForeground(result)
-			if s.Entry.State != "working" || unresolved.Window != "foreground" || unresolved.hold == nil {
-				t.Fatalf("state=%s unresolved=%+v", s.Entry.State, unresolved)
-			}
-			if result.Outcome.Poll() != nil {
-				t.Fatal("the launch killed the executor")
-			}
-			requireRecord(t, root, task, board.ExecutionUnresolved)
-		})
-	}
-}
-
 // A discovery failure leaves the tmux pane without a session marker, so the output
 // names only the takeover, after stopping the old executor by hand.
 func TestUnresolvedOutputAndExitStatus(t *testing.T) {
@@ -385,50 +323,6 @@ func TestUnresolvedOutputAndExitStatus(t *testing.T) {
 	}
 }
 
-// The same rules hold for the launcher of a takeover, and it exits the same way.
-func TestTakeoverLateFailureEndsUnresolved(t *testing.T) {
-	skipOnWindows(t)
-	root, _, _ := setupBoard(t)
-	task, path := makeTodo(t, root, "takeover-late")
-	startThenReview(t, root, "claude", task, path)
-	lateDiscoveryFailure(t, func() { executorWrite(t, root, task) })
-	agent := "devin"
-	_, _, err := capture(t, func() error { return commandResume(root, &agent, "tmux", task, "take over", "", true, 61) })
-	requireUnresolved(t, err)
-	if containerClosed(root) {
-		t.Fatal("the takeover closed the container of a working executor")
-	}
-	record := requireRecord(t, root, task, board.ExecutionUnresolved)
-	if record.Kind != board.ExecutionTakeover {
-		t.Fatalf("record %+v", record)
-	}
-}
-
-func TestTakeoverDecisionRequirement(t *testing.T) {
-	skipOnWindows(t)
-	root, _, _ := setupBoard(t)
-	task, _ := makeTodo(t, root, "takeover-decision")
-	lateDiscoveryFailure(t, func() { executorWrite(t, root, task) })
-	_, _, err := capture(t, func() error { return commandStart(root, "devin", "tmux", task) })
-	requireUnresolved(t, err)
-	agent := "claude"
-	_, _, err = capture(t, func() error { return commandResume(root, &agent, "tmux", task, "take over", "", true, 61) })
-	if err == nil || !strings.Contains(err.Error(), "--decision") {
-		t.Fatalf("err=%v", err)
-	}
-	requireRecord(t, root, task, board.ExecutionUnresolved)
-	_, _, err = capture(t, func() error {
-		return commandResume(root, &agent, "tmux", task, "take over", "", true, 61, DispatchOptions{Decision: "user approved"})
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	record := requireRecord(t, root, task, board.ExecutionRunning)
-	if record.Kind != board.ExecutionTakeover {
-		t.Fatalf("record %+v", record)
-	}
-}
-
 func TestResumeRefusesMixedAdoptOptions(t *testing.T) {
 	setupBoard(t)
 	for _, args := range [][]string{
@@ -438,212 +332,11 @@ func TestResumeRefusesMixedAdoptOptions(t *testing.T) {
 		{"--adopt", "--decision", "user", "--launcher", "tmux", "task"},
 		{"--adopt", "--decision", "user", "--timeout", "90", "task"},
 		{"--adopt", "--decision", "user", "--kind", "sync", "task"},
-		{"--decision", "user", "--message", "go", "task"},
 	} {
 		code := 0
-		_, _, _ = capture(t, func() error { code = RunResume(args); return nil })
+		_, _, _ = capture(t, func() error { code = RunResumeRemote(args); return nil })
 		if code != 2 {
 			t.Errorf("%v: code=%d", args, code)
 		}
 	}
-}
-
-func stubAdoptLiveness(t *testing.T, status string) {
-	t.Helper()
-	previous := adoptLivenessFn
-	t.Cleanup(func() { adoptLivenessFn = previous })
-	adoptLivenessFn = func(board.Snapshot) liveness.Report { return liveness.Report{Status: status, Detail: "probe detail"} }
-}
-
-func TestAdoptKeepsTheExecutor(t *testing.T) {
-	skipOnWindows(t)
-	root, _, _ := setupBoard(t)
-	task, _ := makeTodo(t, root, "adopt-keep")
-	lateDiscoveryFailure(t, func() { executorWrite(t, root, task) })
-	_, _, err := capture(t, func() error { return commandStart(root, "devin", "tmux", task) })
-	requireUnresolved(t, err)
-	created, _ := os.ReadFile(filepath.Join(root, "tmux.log"))
-	for _, status := range []string{liveness.Unknown, liveness.Stopped, liveness.Drifted} {
-		stubAdoptLiveness(t, status)
-		_, _, err = capture(t, func() error { return commandAdopt(root, task, "user") })
-		if err == nil || !strings.Contains(err.Error(), status) {
-			t.Fatalf("%s: err=%v", status, err)
-		}
-		requireRecord(t, root, task, board.ExecutionUnresolved)
-	}
-	stubAdoptLiveness(t, liveness.Alive)
-	out, _, err := capture(t, func() error { return commandAdopt(root, task, "user") })
-	if err != nil || !strings.Contains(out, "adopted: "+task) {
-		t.Fatalf("out=%q err=%v", out, err)
-	}
-	requireRecord(t, root, task, board.ExecutionRunning)
-	if after, _ := os.ReadFile(filepath.Join(root, "tmux.log")); string(after) != string(created) {
-		t.Fatal("adoption started a new executor")
-	}
-	if _, _, err = capture(t, func() error { return commandAdopt(root, task, "user") }); err == nil {
-		t.Fatal("a running record was adopted")
-	}
-}
-
-// A launcher that died before it recorded a process identity leaves nothing to
-// prove the executor alive, so the real observation refuses.
-func TestAdoptRefusesAnExecutorWithoutProcessIdentity(t *testing.T) {
-	root, _, _ := setupBoard(t)
-	task, _ := makeTodo(t, root, "adopt-foreground")
-	s, err := board.ReadSnapshot(root, task)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = board.BeginTaskStart(s.Entry, root, board.TaskStartInput{Owner: "devin", Session: "devin", Window: "foreground"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err = capture(t, func() error { return commandAdopt(root, task, "user") }); err == nil || !strings.Contains(err.Error(), liveness.Unknown) {
-		t.Fatalf("err=%v", err)
-	}
-	requireRecord(t, root, task, board.ExecutionPending)
-}
-
-func TestSessionRepairWaitsForAnUnfinishedStart(t *testing.T) {
-	root, _, _ := setupBoard(t)
-	task, _ := makeTodo(t, root, "repair-unfinished")
-	s, err := board.ReadSnapshot(root, task)
-	if err != nil {
-		t.Fatal(err)
-	}
-	moved, err := board.BeginTaskStart(s.Entry, root, board.TaskStartInput{Owner: "codex", Session: "codex", Window: "tmux:$1:@1:%1"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	current, err := board.ReadSnapshot(root, task)
-	if err != nil {
-		t.Fatal(err)
-	}
-	refused := func() {
-		t.Helper()
-		_, err := RepairMissingSession(context.Background(), root, current, "")
-		if err == nil || !strings.Contains(err.Error(), "--adopt") || !strings.Contains(err.Error(), "--agent") {
-			t.Fatalf("err=%v", err)
-		}
-	}
-	refused()
-	if _, err = board.UnresolveExecution(root, moved, "", "late failure"); err != nil {
-		t.Fatal(err)
-	}
-	refused()
-}
-
-// groupedUnresolved runs the sequence of issue #22 on a member of a checkpointed
-// group, and leaves the member in unresolved with its executor kept.
-func groupedUnresolved(t *testing.T, slug string) (root, task string, c board.CoordinatorCheckpoint) {
-	t.Helper()
-	root, _, _ = setupBoard(t)
-	task, _ = makeTodo(t, root, slug)
-	s, err := board.ReadSnapshot(root, task)
-	if err != nil {
-		t.Fatal(err)
-	}
-	const group = "20261031-late-failure-group"
-	text := strings.Replace(s.Text, "- TASK_GROUP:", "- TASK_GROUP: "+group, 1)
-	if err = writeCardFixture(root, s.Entry, text); err != nil {
-		t.Fatal(err)
-	}
-	c, err = board.ClaimCoordinator(context.Background(), root, board.CoordinatorClaim{GroupID: group, Owner: "coordinator", Token: "one-session", Basis: "test", Members: []string{task}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	lateDiscoveryFailure(t, func() { executorWrite(t, root, task) })
-	_, _, err = capture(t, func() error { return commandStart(root, "devin", "tmux", task) })
-	requireUnresolved(t, err)
-	if c, err = ReconcileCoordinator(context.Background(), root, launchCoordinatorRequest(t, root, task, c, board.Dispatch{})); err != nil {
-		t.Fatalf("reconcile of an unresolved member: %v", err)
-	}
-	if !c.Members[task].AwaitingStart {
-		t.Fatalf("mirror %+v", c.Members[task])
-	}
-	return root, task, c
-}
-
-// finishMember takes a member with a running execution through review, wrap-up
-// and done, reconciling after each step a coordinator sees.
-func finishMember(t *testing.T, root, task string, c board.CoordinatorCheckpoint) {
-	t.Helper()
-	c, err := ReconcileCoordinator(context.Background(), root, launchCoordinatorRequest(t, root, task, c, board.Dispatch{}))
-	if err != nil {
-		t.Fatalf("reconcile after the exit: %v", err)
-	}
-	if c.Members[task].AwaitingStart {
-		t.Fatalf("mirror %+v", c.Members[task])
-	}
-	s, err := board.ReadSnapshot(root, task)
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := strings.Replace(s.Text, "- TASK_BRANCH:", "- TASK_BRANCH: late-failure", 1)
-	if err = board.UpdateDocument(root, task, board.UpdateOptions{Document: "spec.md", Text: text, ExpectedRevision: s.Revision}); err != nil {
-		t.Fatal(err)
-	}
-	if s, err = board.ReadSnapshot(root, task); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = board.MoveEntry(s.Entry, root, "review"); err != nil {
-		t.Fatal(err)
-	}
-	in := closedWrapUp(t, root, task)
-	d, err := PrepareBoundDispatch(root, in)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if c, err = ReconcileCoordinator(context.Background(), root, launchCoordinatorRequest(t, root, task, c, d)); err != nil {
-		t.Fatalf("reconcile of the wrap-up: %v", err)
-	}
-	if s, err = board.ReadSnapshot(root, task); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = board.MoveWithOptions(s.Entry, root, "working", board.MoveOptions{Authorization: d.Authorization}); err != nil {
-		t.Fatal(err)
-	}
-	if s, err = board.ReadSnapshot(root, task); err != nil {
-		t.Fatal(err)
-	}
-	text = strings.ReplaceAll(s.Text, "<FILL_IN>", "done")
-	text = strings.Replace(text, "## SUMMARY\n", "## SUMMARY\n\ndone\n", 1)
-	if err = board.UpdateDocument(root, task, board.UpdateOptions{Document: "spec.md", Text: text, ExpectedRevision: s.Revision, Authorization: d.Authorization}); err != nil {
-		t.Fatal(err)
-	}
-	if s, err = board.ReadSnapshot(root, task); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = board.MoveWithOptions(s.Entry, root, "done", board.MoveOptions{Authorization: d.Authorization, DeliveryCommit: in.Base, Result: "completed"}); err != nil {
-		t.Fatal(err)
-	}
-	if d, err = board.ReadDispatch(root, task, d.Input.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = ReconcileCoordinator(context.Background(), root, launchCoordinatorRequest(t, root, task, c, d)); err != nil {
-		t.Fatalf("reconcile of the done member: %v", err)
-	}
-}
-
-func TestGroupMemberLeavesUnresolvedByAdoption(t *testing.T) {
-	skipOnWindows(t)
-	root, task, c := groupedUnresolved(t, "group-adopt")
-	stubAdoptLiveness(t, liveness.Alive)
-	if _, _, err := capture(t, func() error { return commandAdopt(root, task, "user") }); err != nil {
-		t.Fatal(err)
-	}
-	finishMember(t, root, task, c)
-}
-
-func TestGroupMemberLeavesUnresolvedByTakeover(t *testing.T) {
-	skipOnWindows(t)
-	root, task, c := groupedUnresolved(t, "group-takeover")
-	agent := "claude"
-	_, _, err := capture(t, func() error {
-		return commandResume(root, &agent, "tmux", task, "take over", "", true, 61, DispatchOptions{Decision: "user approved"})
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	requireRecord(t, root, task, board.ExecutionRunning)
-	finishMember(t, root, task, c)
 }

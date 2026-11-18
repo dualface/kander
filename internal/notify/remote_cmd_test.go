@@ -62,7 +62,7 @@ func TestRemoteNotifyCommandQueuesWithoutLocalBoardOrTerminal(t *testing.T) {
 	if _, err := project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{ClientID: "holder", ExecutionID: "notify-holder", Owner: "claude"}); err != nil {
 		t.Fatal(err)
 	}
-	if code := RunNotify([]string{"--message", "queued remotely", card.TaskID}); code != 0 {
+	if code := RunNotifyRemote([]string{"--message", "queued remotely", card.TaskID}); code != 0 {
 		t.Fatalf("remote notify failed: %d", code)
 	}
 	requests, err := project.Requests(t.Context(), card.TaskID)

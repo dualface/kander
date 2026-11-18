@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 )
 
@@ -46,40 +45,5 @@ func TestDisabledGroupsDoNotClaimOrStart(t *testing.T) {
 				t.Fatalf("launcher was used: %v", err)
 			}
 		})
-	}
-}
-
-func TestDisabledGroupsDoNotResumeTakeoverOrRecover(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX Agent fakes")
-	}
-	root, _, _ := setupBoard(t)
-	disableRules(t)
-	id, todoPath := makeTodo(t, root, "disabled-resume")
-	startThenReview(t, root, "claude", id, todoPath)
-	loaded, err := board.LoadBoard(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	entry, err := board.Locate(loaded, id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := strings.Replace(mustRead(t, entry.Document), "- TASK_GROUP:", "- TASK_GROUP: 20260901-disabled-group", 1)
-	if err := os.WriteFile(entry.Document, []byte(text), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	before := mustRead(t, filepath.Join(root, "tmux.log"))
-	agent := "cursor"
-	for _, override := range []*string{nil, &agent} {
-		if err := commandResume(root, override, "", id, "继续", "", true, 61); err == nil || !strings.Contains(err.Error(), "20260901-disabled-group") {
-			t.Fatalf("resume/takeover should reject disabled group: %v", err)
-		}
-	}
-	if _, err := NotifyViaResume(root, entry, text, "继续", 61); err == nil || !strings.Contains(err.Error(), "20260901-disabled-group") {
-		t.Fatalf("notify recovery should reject disabled group: %v", err)
-	}
-	if mustRead(t, entry.Document) != text || mustRead(t, filepath.Join(root, "tmux.log")) != before {
-		t.Fatal("failed group checks changed card or launcher state")
 	}
 }

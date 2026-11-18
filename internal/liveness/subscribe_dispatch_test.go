@@ -215,7 +215,7 @@ func TestSubscriptionDispatchCorruptionFailsClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	events := make(runtimeEvents, 8)
-	err := SubscribeContext(context.Background(), root, opts, events)
+	err := subscribeContext(context.Background(), root, opts, events, nil)
 	if err == nil {
 		t.Fatal("missing dispatch read as no dispatch")
 	}

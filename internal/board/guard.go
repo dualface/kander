@@ -1,7 +1,6 @@
 package board
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -60,29 +59,4 @@ func GuardWrite(root, path string) (GuardVerdict, error) {
 		}
 	}
 	return GuardVerdict{Reason: t("board.guard_missing_direct_child", state)}, nil
-}
-
-// RunGuardWrite implements kander guard-write. Exit code 0 allows, 1 rejects, 2 is a usage error.
-func RunGuardWrite(args []string) int {
-	if len(args) != 1 || strings.HasPrefix(args[0], "-") {
-		return usageFail("guard-write", "board.guard_path_required")
-	}
-	root, err := BoardRoot()
-	if err != nil {
-		// When no board can be located (not a Git project and KANBAN_DIR unset) the host project's write is not blocked;
-		// other location errors (illegal path, unsafe entry) still fail instead of silently passing.
-		if IsBoardNotFound(err) {
-			return 0
-		}
-		return fail(err)
-	}
-	verdict, err := GuardWrite(root, args[0])
-	if err != nil {
-		return fail(err)
-	}
-	if verdict.Allowed {
-		return 0
-	}
-	fmt.Fprintln(os.Stderr, t("board.guard_rejected", args[0], verdict.Reason))
-	return 1
 }

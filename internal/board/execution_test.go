@@ -320,7 +320,7 @@ func TestUnknownRecordSchemasFailClosed(t *testing.T) {
 // packages that launch and notify may read those fields, never render them.
 func TestLaunchPackagesDoNotSpellExecutionFields(t *testing.T) {
 	forbidden := map[string]bool{"RenderField": true, "FieldLineRe": true, "WithResolvedRecord": true, "NewClaimMetadata": true}
-	for _, dir := range []string{"launch", "notify", "window"} {
+	for _, dir := range []string{"launch", "notify"} {
 		packages, err := parser.ParseDir(token.NewFileSet(), filepath.Join("..", dir), func(info os.FileInfo) bool { return !strings.HasSuffix(info.Name(), "_test.go") }, 0)
 		if err != nil {
 			t.Fatal(err)

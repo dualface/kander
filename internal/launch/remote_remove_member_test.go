@@ -17,31 +17,6 @@ import (
 	"github.com/dualface/kander/internal/server"
 )
 
-func TestRemoveMemberCommandRequiresAnAbsoluteRequest(t *testing.T) {
-	root, _, _, _ := launchCoordinatorFixture(t)
-	t.Chdir(filepath.Dir(root))
-	if status := RunCoordinator([]string{"remove-member", "request.json"}); status != 2 {
-		t.Fatal(status)
-	}
-}
-
-func TestRemoveMemberCommandRefusesAStartedMemberLocally(t *testing.T) {
-	root, task, _, c := launchCoordinatorFixture(t)
-	path := filepath.Join(t.TempDir(), "request.json")
-	request := board.CoordinatorRemoveMember{GroupID: c.GroupID, Member: task, ExpectedRevision: c.Revision, ExpectedEpoch: c.Authority.Epoch, Decision: "user-decision", Reason: "depends on another group"}
-	b, _ := json.Marshal(request)
-	if err := os.WriteFile(path, b, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if status := RunCoordinator([]string{"remove-member", path}); status == 0 {
-		t.Fatal("a started member left the group")
-	}
-	after, err := board.ReadCoordinatorCheckpoint(root, c.GroupID)
-	if err != nil || after.Revision != c.Revision || len(after.Members) != 1 {
-		t.Fatalf("%+v %v", after, err)
-	}
-}
-
 // The command takes the request file through the service with the coordinator
 // credential of the group, and prints the checkpoint.
 func TestRemoveMemberCommandThroughTheService(t *testing.T) {
@@ -109,5 +84,22 @@ func TestRemoveMemberCommandThroughTheService(t *testing.T) {
 	}
 	if _, err = os.Lstat(forbidden); !os.IsNotExist(err) {
 		t.Fatalf("the command used the local board: %v", err)
+	}
+}
+
+func TestRemoveMemberCommandRefusesAStartedMemberLocally(t *testing.T) {
+	root, task, _, c := launchCoordinatorFixture(t)
+	path := filepath.Join(t.TempDir(), "request.json")
+	request := board.CoordinatorRemoveMember{GroupID: c.GroupID, Member: task, ExpectedRevision: c.Revision, ExpectedEpoch: c.Authority.Epoch, Decision: "user-decision", Reason: "depends on another group"}
+	b, _ := json.Marshal(request)
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if status := RunCoordinatorRemote([]string{"remove-member", path}); status == 0 {
+		t.Fatal("a started member left the group")
+	}
+	after, err := board.ReadCoordinatorCheckpoint(root, c.GroupID)
+	if err != nil || after.Revision != c.Revision || len(after.Members) != 1 {
+		t.Fatalf("%+v %v", after, err)
 	}
 }

@@ -1,6 +1,7 @@
 package issue
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -32,7 +33,25 @@ func importTestBoard(t *testing.T) string {
 	if _, err := config.Save(cfg); err != nil {
 		t.Fatal(err)
 	}
+	useBoardAt(t, root)
 	return root
+}
+
+// useBoardAt rebinds the board entrances of the issue commands to the board
+// directory at root, so a command test runs without a server.
+func useBoardAt(t *testing.T, root string) {
+	t.Helper()
+	oldImport, oldTriage, oldResult := importCard, startTriage, openResultBoard
+	t.Cleanup(func() { importCard, startTriage, openResultBoard = oldImport, oldTriage, oldResult })
+	importCard = func(ctx context.Context, provider IssueProvider, repository Repository, number int, options ImportOptions) (ImportResult, error) {
+		return Import(ctx, provider, root, repository, number, options)
+	}
+	startTriage = func(ctx context.Context, provider IssueProvider, repository Repository, number int, options TriageOptions) (TriageOutcome, error) {
+		return StartTriage(ctx, provider, root, repository, number, options)
+	}
+	openResultBoard = func(ctx context.Context) (context.Context, string, func(), error) {
+		return ctx, root, func() {}, nil
+	}
 }
 
 func importTestRepository() Repository {

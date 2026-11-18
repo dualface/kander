@@ -10,7 +10,6 @@ import (
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/liveness"
 	"github.com/dualface/kander/internal/process"
 )
 
@@ -74,41 +73,6 @@ func TestPaneDeliveryExecutorWriteKeepsTheStart(t *testing.T) {
 		if !covered[name] {
 			t.Errorf("%s no longer delivers through a pane: review DE-16 for it", name)
 		}
-	}
-}
-
-// A takeover's session write-back goes through the entrance, so a new executor
-// that wrote first does not cost the takeover its session (DE-17).
-func TestTakeoverDiscoverySurvivesExecutorWrite(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("tmux fakes are POSIX")
-	}
-	root, _, _ := setupBoard(t)
-	taskID, path := makeTodo(t, root, "takeover-race")
-	startThenReview(t, root, "claude", taskID, path)
-	stubDiscovery(t, func(call int) []string {
-		if call == 1 {
-			return []string{"existing"}
-		}
-		if call == 2 {
-			executorWrite(t, root, taskID)
-		}
-		return []string{"existing", "devin-new-session"}
-	})
-	agent := "devin"
-	if _, _, err := capture(t, func() error { return commandResume(root, &agent, "tmux", taskID, "take over", "", true, 61) }); err != nil {
-		t.Fatal(err)
-	}
-	s, err := board.ReadSnapshot(root, taskID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := board.MetadataFrom(s.Text, board.FieldSession); !strings.Contains(got, "devin-new-session") || !strings.Contains(s.Text, "executor progress") {
-		t.Fatalf("session=%q", got)
-	}
-	record, _, err := board.CurrentExecution(root, taskID)
-	if err != nil || record.Kind != board.ExecutionTakeover || record.Status != board.ExecutionRunning {
-		t.Fatalf("record=%+v err=%v", record, err)
 	}
 }
 
@@ -199,132 +163,4 @@ var paneDiscoveryStubs = map[string]func(t *testing.T, root string) func(){
 			writeDroidSession(t, sessions, "race", "droid-race", droidHeader("droid-race", filepath.Dir(root)))
 		}
 	},
-}
-
-// A self-claimed card has no session. Resume refuses it before any dispatch binds,
-// and a takeover still replaces the claiming session.
-func TestSelfClaimedCardRefusesResumeBeforeBinding(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("tmux fakes are POSIX")
-	}
-	root, _, _ := setupBoard(t)
-	taskID, _ := makeTodo(t, root, "self-claimed")
-	s, err := board.ReadSnapshot(root, taskID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = board.MoveWithOptions(s.Entry, root, "working", board.MoveOptions{Owner: "claude"}); err != nil {
-		t.Fatal(err)
-	}
-	_, _, err = capture(t, func() error {
-		return commandResume(root, nil, "tmux", taskID, "continue", "", true, 61, DispatchOptions{Kind: "sync"})
-	})
-	if err == nil || !strings.Contains(err.Error(), "failure-recovery.md") {
-		t.Fatalf("err=%v", err)
-	}
-	after, err := board.ReadSnapshot(root, taskID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if board.MetadataFrom(after.Text, "DISPATCH_ID") != "" || board.MetadataFrom(after.Text, board.FieldSession) != "" {
-		t.Fatal("the refused resume bound a dispatch or wrote a session")
-	}
-	agent := "claude"
-	if _, _, err = capture(t, func() error { return commandResume(root, &agent, "tmux", taskID, "take over", "", true, 61) }); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// start, reclaim and resume --agent work in a row; the reclaim blocks a plain resume.
-func TestReclaimThenTakeover(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("tmux fakes are POSIX")
-	}
-	root, _, _ := setupBoard(t)
-	taskID, path := makeTodo(t, root, "reclaim-takeover")
-	startThenReview(t, root, "claude", taskID, path)
-	s, err := board.ReadSnapshot(root, taskID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = board.MoveWithOptions(s.Entry, root, "working", board.MoveOptions{Owner: "claude", Decision: "user"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err = capture(t, func() error { return commandResume(root, nil, "tmux", taskID, "continue", "", true, 61) }); err == nil {
-		t.Fatal("a reclaimed card accepted a plain resume")
-	}
-	agent := "claude"
-	if _, _, err = capture(t, func() error { return commandResume(root, &agent, "tmux", taskID, "take over", "", true, 61) }); err != nil {
-		t.Fatal(err)
-	}
-	record, _, err := board.CurrentExecution(root, taskID)
-	if err != nil || record.Kind != board.ExecutionTakeover || record.Status != board.ExecutionRunning {
-		t.Fatalf("record=%+v err=%v", record, err)
-	}
-}
-
-// The liveness proof names one WINDOW. A new WINDOW on the same record is an
-// address nobody probed, so the adoption refuses it.
-func TestAdoptRefusesAnIdentityChangedDuringTheProbe(t *testing.T) {
-	root, _, _ := setupBoard(t)
-	taskID, _ := makeTodo(t, root, "adopt-identity")
-	s, err := board.ReadSnapshot(root, taskID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	moved, err := board.BeginTaskStart(s.Entry, root, board.TaskStartInput{Owner: "claude", Session: "claude old", Window: "tmux:$1:@1:%1"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	previous := adoptLivenessFn
-	t.Cleanup(func() { adoptLivenessFn = previous })
-	adoptLivenessFn = func(board.Snapshot) liveness.Report {
-		if _, err := board.RecordExecutionWindow(root, moved, "tmux:$1:@2:%2", ""); err != nil {
-			t.Fatal(err)
-		}
-		return liveness.Report{Status: liveness.Alive}
-	}
-	if err = commandAdopt(root, taskID, "user"); err == nil {
-		t.Fatal("the adoption accepted an address the probe never saw")
-	}
-	record, _, err := board.CurrentExecution(root, taskID)
-	if err != nil || record.Status != board.ExecutionPending {
-		t.Fatalf("record=%+v err=%v", record, err)
-	}
-}
-
-// A takeover that lands after commandAdopt read the card must not be adopted on
-// the strength of the old executor's liveness.
-func TestAdoptRefusesARecordNewerThanItsSnapshot(t *testing.T) {
-	root, _, _ := setupBoard(t)
-	taskID, _ := makeTodo(t, root, "adopt-race")
-	s, err := board.ReadSnapshot(root, taskID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	moved, err := board.BeginTaskStart(s.Entry, root, board.TaskStartInput{Owner: "claude", Session: "claude old", Window: "foreground"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	previous := loadEffective
-	t.Cleanup(func() { loadEffective = previous })
-	loadEffective = func() (*config.Config, error) {
-		if _, err := board.BeginTakeover(root, moved, board.TakeoverInput{Owner: "claude", Session: "claude new", Decision: "user"}); err != nil {
-			t.Fatal(err)
-		}
-		return previous()
-	}
-	adoptLiveness := adoptLivenessFn
-	t.Cleanup(func() { adoptLivenessFn = adoptLiveness })
-	adoptLivenessFn = func(board.Snapshot) liveness.Report {
-		t.Fatal("the probe ran for a record the snapshot did not read")
-		return liveness.Report{}
-	}
-	if err = commandAdopt(root, taskID, "user"); err == nil {
-		t.Fatal("the adoption bound the successor record")
-	}
-	record, _, err := board.CurrentExecution(root, taskID)
-	if err != nil || record.Status != board.ExecutionPending || record.Kind != board.ExecutionTakeover {
-		t.Fatalf("record=%+v err=%v", record, err)
-	}
 }

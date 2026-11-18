@@ -91,7 +91,7 @@ func writeCard(t *testing.T, root, state, taskID, text string) string {
 func TestNewCardUsesCanonicalTokensOnly(t *testing.T) {
 	resetLang(t)
 	root := tempBoard(t)
-	capture(t, func() int { return RunNew([]string{"chore", "schema-tokens", "字段"}) })
+	capture(t, func() int { return newCard("chore", "schema-tokens", "字段", false) })
 	data, err := os.ReadFile(filepath.Join(root, "backlog", todayID("schema-tokens"), "spec.md"))
 	if err != nil {
 		t.Fatal(err)
@@ -157,7 +157,7 @@ func TestGatesAcceptLegacyAndMixedCards(t *testing.T) {
 			}
 
 			// The done gate reads RESULT and SUMMARY through the same aliases.
-			if code, _, err := capture(t, func() int { return RunMove([]string{taskID, "done"}) }); code == 0 {
+			if code, _, err := capture(t, func() int { return moveCard(taskID, "done") }); code == 0 {
 				t.Fatalf("done must require a result: %s", err)
 			}
 			data, err := os.ReadFile(path)
@@ -171,7 +171,7 @@ func TestGatesAcceptLegacyAndMixedCards(t *testing.T) {
 				t.Fatal(err)
 			}
 			exemptReviewFixture(t, root, taskID)
-			if code, _, err := capture(t, func() int { return RunMove([]string{taskID, "done"}) }); code != 0 {
+			if code, _, err := capture(t, func() int { return moveCard(taskID, "done") }); code != 0 {
 				t.Fatalf("done: %s", err)
 			}
 			done, err := os.ReadFile(filepath.Join(root, "done", taskID, "spec.md"))

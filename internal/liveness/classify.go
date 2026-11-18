@@ -310,13 +310,6 @@ func ClassifyTaskLookupContext(ctx context.Context, entry board.Entry, text stri
 	return classifyTask(ctx, entry, text, staleSearch{reverse: allowReverseLookup})
 }
 
-// ClassifyTaskResolving is ClassifyTaskContext for a caller that can also find the
-// session of a card that records none, once its recorded address is stale. resolve
-// shares the deadline of the classification.
-func ClassifyTaskResolving(ctx context.Context, entry board.Entry, text string, resolve ReferenceResolver) Report {
-	return classifyTask(ctx, entry, text, staleSearch{reverse: true, resolve: resolve})
-}
-
 func classifyTask(ctx context.Context, entry board.Entry, text string, search staleSearch) (out Report) {
 	ctx, cancel := probe.WithDefaultTimeout(ctx)
 	defer cancel()

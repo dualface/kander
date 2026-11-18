@@ -52,7 +52,7 @@ func runRuntimeSubscription(t *testing.T, root string, opts subscribeOptions, w 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	joined := make(chan struct{})
-	go func() { done <- SubscribeContext(ctx, root, opts, w); close(joined) }()
+	go func() { done <- subscribeContext(ctx, root, opts, w, nil); close(joined) }()
 	t.Cleanup(func() {
 		cancel()
 		select {
@@ -268,7 +268,7 @@ func TestSubscriptionOutputBounds(t *testing.T) {
 	t.Run("unsupported", func(t *testing.T) {
 		root, opts, _ := factsMember(t)
 		writer := &unsupportedWriter{}
-		if err := SubscribeContext(context.Background(), root, opts, writer); err == nil || writer.called {
+		if err := subscribeContext(context.Background(), root, opts, writer, nil); err == nil || writer.called {
 			t.Fatalf("unsupported writer invoked: %v", err)
 		}
 	})

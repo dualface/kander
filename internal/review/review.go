@@ -13,13 +13,32 @@ import (
 	"github.com/dualface/kander/internal/remote"
 )
 
+// openReviewStore returns the store of the board that holds the tasks of a
+// review run; the commits are the range the run reviews. The client binds it
+// to the server project of the checkout; tests bind it to a board directory.
+var openReviewStore = openServerReviewStore
+
+func openServerReviewStore(cfg *config.Config, cwd string, commits ...string) (reviewStore, error) {
+	if err := remote.RequireBinding(cfg); err != nil {
+		return nil, err
+	}
+	session, err := remote.Open(context.Background(), cfg, cwd)
+	if err != nil {
+		return nil, err
+	}
+	if session.Info.Remote != "" {
+		for _, commit := range commits {
+			if err := session.FetchCommit(context.Background(), cwd, commit); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return newRemoteReviewStore(session)
+}
+
 // Run is the entry point of the `kander review` subcommand. args excludes the program name and the subcommand name.
-func Run(args []string) int { return runReview(args, false) }
-
-// RunRemote is the service-only client review entrance.
-func RunRemote(args []string) int { return runReview(args, true) }
-
-func runReview(args []string, required bool) (exitCode int) {
+// Every board-backed form goes through the server.
+func Run(args []string) (exitCode int) {
 	if len(args) > 0 && args[0] == windowsJobBootstrap {
 		return windowsJobBootstrapMain(args[1:])
 	}
@@ -34,7 +53,7 @@ func runReview(args []string, required bool) (exitCode int) {
 		return 1
 	}
 	if dispositionCommand(args[0]) {
-		return runDispositionMode(args, required)
+		return runDispositionMode(args)
 	}
 	options, args, err := parseArchiveOptions(args)
 	if err != nil {
@@ -73,40 +92,13 @@ func runReview(args []string, required bool) (exitCode int) {
 			userError(loadErr.Error())
 			return 2
 		}
-		var store reviewStore
-		if required {
-			if err := remote.RequireBinding(cfg); err != nil {
-				userError(err.Error())
-				return 2
-			}
-		}
-		if remote.ServiceSelected(cfg, required) {
-			session, openErr := remote.Open(context.Background(), cfg, rest[0])
-			if openErr != nil {
-				userError(openErr.Error())
-				return 2
-			}
-			if session.Info.Remote != "" {
-				for _, commit := range []string{rest[1], rest[2]} {
-					if fetchErr := session.FetchCommit(context.Background(), rest[0], commit); fetchErr != nil {
-						userError(fetchErr.Error())
-						return 2
-					}
-				}
-			}
-			store, err = newRemoteReviewStore(session)
-			if err == nil {
-				archiveRoot = store.Root()
-				stores = []reviewStore{store}
-			}
-		} else {
-			archiveRoot, err = board.BoardRootAt(rest[0])
-			store = localReviewStore{root: archiveRoot}
-		}
+		store, err := openReviewStore(cfg, rest[0], rest[1], rest[2])
 		if err != nil {
 			userError(err.Error())
 			return 2
 		}
+		archiveRoot = store.Root()
+		stores = []reviewStore{store}
 		unlock, e := store.Lock(options.runID)
 		if e != nil {
 			userError(e.Error())

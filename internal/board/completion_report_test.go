@@ -1,8 +1,6 @@
 package board
 
 import (
-	"encoding/json"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -13,174 +11,94 @@ import (
 
 const reportTemplateHeading = "# Kanban Task Completion Report"
 
-func setReportingRule(t *testing.T, enabled bool) {
+// reportText renders the completion report for a card in state with the given
+// body and the configured rules.
+func reportText(t *testing.T, state, body string) string {
 	t.Helper()
 	cfg, err := config.Load(false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.Rules[config.RuleReporting] = enabled
-	if _, err := config.Save(cfg); err != nil {
-		t.Fatal(err)
-	}
+	var out strings.Builder
+	WriteCompletionReportSnapshot(&out, "20260101-report-task", state, body, "kanban/"+state+"/20260101-report-task", cfg)
+	return out.String()
 }
 
-// workingCard creates a small card in working/ that is ready for done.
-func workingCard(t *testing.T, root, slug, title string) string {
-	t.Helper()
-	id := todayID(slug)
-	if code, _, err := capture(t, func() int { return RunNew([]string{"feature", slug, title}) }); code != 0 {
-		t.Fatalf("new: %s", err)
-	}
-	makeReady(t, filepath.Join(root, "backlog", id, "spec.md"))
-	for _, state := range []string{"todo", "working"} {
-		if code, _, err := capture(t, func() int { return RunMove([]string{id, state}) }); code != 0 {
-			t.Fatalf("%s: %s", state, err)
-		}
-	}
-	complete(t, filepath.Join(root, "working", id, "spec.md"))
-	return id
-}
+const reportBody = "# 报告模板\n\n- TYPE: Feature\n- LANGUAGE: zh-CN\n- RESULT:\n"
 
-func TestMoveDonePrintsReportTemplateOnStderr(t *testing.T) {
+func TestCompletionReportCarriesTemplateTaskAndLanguage(t *testing.T) {
 	resetLang(t)
-	root := tempBoard(t)
-	id := workingCard(t, root, "report-done", "报告模板")
-	code, out, errText := capture(t, func() int { return RunMove([]string{id, "done", "--result", "completed"}) })
-	if code != 0 {
-		t.Fatalf("done: %s", errText)
-	}
-	donePath := filepath.Join(root, "done", id)
-	if out != donePath+"\n" {
-		t.Fatalf("stdout changed: %q", out)
-	}
+	tempBoard(t)
+	got := reportText(t, "done", reportBody)
 	for _, want := range []string{
 		config.Text("board.report_template_reminder"),
 		reportTemplateHeading,
-		"- Task: [" + id + " - 报告模板](" + donePath + ")",
+		"- Task: [20260101-report-task - 报告模板](kanban/done/20260101-report-task)",
 		"Final card state: done\n",
 		`Write the report in "zh-CN".`,
 	} {
-		if !strings.Contains(errText, want) {
-			t.Fatalf("stderr missing %q:\n%s", want, errText)
+		if !strings.Contains(got, want) {
+			t.Fatalf("report missing %q:\n%s", want, got)
 		}
 	}
 }
 
-func TestMoveArchivedAndTrashReportFinalState(t *testing.T) {
+func TestCompletionReportFinalState(t *testing.T) {
 	resetLang(t)
 	tempBoard(t)
-	archivedID := todayID("report-archived")
-	capture(t, func() int { return RunNew([]string{"research", "report-archived", "归档"}) })
-	code, _, errText := capture(t, func() int {
-		return RunMove([]string{archivedID, "archived", "--result", "cancelled", "--reason", "user cancelled", "--decision", "test decision"})
-	})
-	if code != 0 || !strings.Contains(errText, "Final card state: archived (cancelled)\n") {
-		t.Fatalf("archived: %d %s", code, errText)
+	archived := strings.Replace(reportBody, "- RESULT:\n", "- RESULT: cancelled\n", 1)
+	if got := reportText(t, "archived", archived); !strings.Contains(got, "Final card state: archived (cancelled)\n") {
+		t.Fatalf("archived: %s", got)
 	}
-	trashID := todayID("report-trash")
-	capture(t, func() int { return RunNew([]string{"research", "report-trash", "删除"}) })
-	code, _, errText = capture(t, func() int {
-		return RunMove([]string{trashID, "trash", "--result", "trashed", "--reason", "user deleted", "--decision", "test decision"})
-	})
-	if code != 0 || !strings.Contains(errText, "Final card state: trash\n") {
-		t.Fatalf("trash: %d %s", code, errText)
+	if got := reportText(t, "trash", reportBody); !strings.Contains(got, "Final card state: trash\n") {
+		t.Fatalf("trash: %s", got)
 	}
 }
 
-func TestMoveReportTemplateOnlyForTerminalStatesWithReporting(t *testing.T) {
+func TestCompletionReportOnlyForTerminalStatesWithReporting(t *testing.T) {
 	resetLang(t)
-	root := tempBoard(t)
-	id := todayID("report-gate")
-	capture(t, func() int { return RunNew([]string{"feature", "report-gate", "门控"}) })
-	spec := filepath.Join(root, "backlog", id, "spec.md")
-	makeReady(t, spec)
-	setMeta(t, spec, "- TASK_BRANCH:\n", "- TASK_BRANCH: report-gate\n")
-	for _, state := range []string{"todo", "backlog", "todo", "working", "review", "working"} {
-		code, _, errText := capture(t, func() int { return RunMove([]string{id, state}) })
-		if code != 0 || strings.Contains(errText, reportTemplateHeading) {
-			t.Fatalf("%s: %d %s", state, code, errText)
+	tempBoard(t)
+	for _, state := range []string{"backlog", "todo", "working", "review"} {
+		if got := reportText(t, state, reportBody); got != "" {
+			t.Fatalf("%s printed a report: %s", state, got)
 		}
 	}
-	complete(t, filepath.Join(root, "working", id, "spec.md"))
-	setReportingRule(t, false)
-	code, _, errText := capture(t, func() int { return RunMove([]string{id, "done"}) })
-	if code != 0 || errText != "" {
-		t.Fatalf("reporting off: %d %q", code, errText)
+	cfg, err := config.Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Rules[config.RuleReporting] = false
+	var out strings.Builder
+	WriteCompletionReportSnapshot(&out, "20260101-report-task", "done", reportBody, "kanban/done/20260101-report-task", cfg)
+	if out.Len() != 0 {
+		t.Fatalf("reporting off printed a report: %s", out.String())
 	}
 }
 
-func TestMoveReportTemplateUsesConfigLanguageWithoutCardLanguage(t *testing.T) {
+func TestCompletionReportUsesConfigLanguageWithoutCardLanguage(t *testing.T) {
 	resetLang(t)
-	root := tempBoard(t)
-	id := workingCard(t, root, "report-lang", "语言")
-	setMeta(t, filepath.Join(root, "working", id, "spec.md"), "- LANGUAGE: zh-CN\n", "")
+	tempBoard(t)
 	cfg, err := config.Load(false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	cfg.AgentLanguage = "ja"
-	if _, err := config.Save(cfg); err != nil {
-		t.Fatal(err)
-	}
-	_, _, errText := capture(t, func() int { return RunMove([]string{id, "done"}) })
-	if !strings.Contains(errText, `Write the report in "ja".`) {
-		t.Fatalf("language fallback: %s", errText)
+	var out strings.Builder
+	WriteCompletionReportSnapshot(&out, "20260101-report-task", "done", strings.Replace(reportBody, "- LANGUAGE: zh-CN\n", "", 1), "kanban/done/20260101-report-task", cfg)
+	if !strings.Contains(out.String(), `Write the report in "ja".`) {
+		t.Fatalf("language fallback: %s", out.String())
 	}
 }
 
-func TestMoveReportTemplateSkipsOnConfigFailure(t *testing.T) {
+func TestCompletionReportTitleIsSingleLine(t *testing.T) {
 	resetLang(t)
-	root := tempBoard(t)
-	id := workingCard(t, root, "report-noconfig", "无配置")
-	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "missing.json"))
-	code, out, errText := capture(t, func() int { return RunMove([]string{id, "done"}) })
-	if code != 0 || out != filepath.Join(root, "done", id)+"\n" {
-		t.Fatalf("move result changed: %d %q %s", code, out, errText)
-	}
-	if strings.Contains(errText, reportTemplateHeading) || !strings.Contains(errText, config.Text("board.report_template_unavailable", "")) {
-		t.Fatalf("config failure: %s", errText)
+	tempBoard(t)
+	body := strings.Replace(reportBody, "# 报告模板\n", "# 标题\x1b[31m\t红\r色\n", 1)
+	if got := reportText(t, "done", body); !strings.Contains(got, "- Task: [20260101-report-task - 标题 [31m 红 色](") {
+		t.Fatalf("title not single line: %q", got)
 	}
 }
 
-func TestMoveReportTemplateTitleIsSingleLine(t *testing.T) {
-	resetLang(t)
-	root := tempBoard(t)
-	id := workingCard(t, root, "report-title", "标题")
-	setMeta(t, filepath.Join(root, "working", id, "spec.md"), "# 标题\n", "# 标题\x1b[31m\t红\r色\n")
-	_, _, errText := capture(t, func() int { return RunMove([]string{id, "done"}) })
-	if !strings.Contains(errText, "- Task: ["+id+" - 标题 [31m 红 色](") {
-		t.Fatalf("title not single line: %q", errText)
-	}
-}
-
-func TestMoveDispatchDonePrintsTemplateOnlyWhenNotReplayed(t *testing.T) {
-	resetLang(t)
-	root := tempBoard(t)
-	s := dispatchCard(t, root, "report-wrap")
-	in := dispatchInput(s, "report-wrap-one")
-	bindWrapUpFixture(t, root, &in)
-	d := prepareTestDispatch(t, root, in)
-	if _, err := dispatchMove(t, root, d, "working"); err != nil {
-		t.Fatal(err)
-	}
-	args := []string{s.Entry.TaskID, "done", "--result", "completed", "--dispatch-id", d.Input.ID, "--execution-epoch", "1", "--delivery-commit", strings.Repeat("b", 40)}
-	for _, replay := range []bool{false, true} {
-		code, out, errText := capture(t, func() int { return RunMove(args) })
-		var receipt struct {
-			Replayed bool `json:"replayed"`
-		}
-		if code != 0 || json.Unmarshal([]byte(out), &receipt) != nil || receipt.Replayed != replay {
-			t.Fatalf("replay %v: %d %q %s", replay, code, out, errText)
-		}
-		if strings.Contains(errText, reportTemplateHeading) == replay {
-			t.Fatalf("replay %v template: %s", replay, errText)
-		}
-	}
-}
-
-// TestReportTemplateMatchesReleasedRules keeps the printed skeleton in step with the
-// template in rules/KANDER-REPORTING-RULES.md: same heading and the same field labels in order.
 func TestReportTemplateMatchesReleasedRules(t *testing.T) {
 	data, err := rules.File("KANDER-REPORTING-RULES.md")
 	if err != nil {

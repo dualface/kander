@@ -79,7 +79,7 @@ func TestRemoteDispatchCLIUsesHolderAuthorityAndProposesForForeignHolder(t *test
 		}
 	}
 	write()
-	code, out := captureStdout(t, func() int { return RunDispatch([]string{"prepare", path}) })
+	code, out := captureStdout(t, func() int { return RunDispatchRemote([]string{"prepare", path}) })
 	if code != 0 {
 		t.Fatalf("holder prepare: %d %s", code, out)
 	}
@@ -90,7 +90,7 @@ func TestRemoteDispatchCLIUsesHolderAuthorityAndProposesForForeignHolder(t *test
 	t.Setenv(remote.EnvClientHome, filepath.Join(t.TempDir(), "collaborator"))
 	input.ID = "proposed-sync"
 	write()
-	code, out = captureStdout(t, func() int { return RunDispatch([]string{"prepare", path}) })
+	code, out = captureStdout(t, func() int { return RunDispatchRemote([]string{"prepare", path}) })
 	if code != 0 {
 		t.Fatalf("foreign proposal: %d %s", code, out)
 	}
@@ -98,7 +98,7 @@ func TestRemoteDispatchCLIUsesHolderAuthorityAndProposesForForeignHolder(t *test
 	if err := json.Unmarshal([]byte(out), &request); err != nil || request.Status != api.RequestOpen || request.Dispatch == nil || request.CardRevision == 0 {
 		t.Fatalf("proposal: %s %v", out, err)
 	}
-	code, retryOut := captureStdout(t, func() int { return RunDispatch([]string{"prepare", path}) })
+	code, retryOut := captureStdout(t, func() int { return RunDispatchRemote([]string{"prepare", path}) })
 	var same api.CollabRequest
 	if err := json.Unmarshal(retryOut, &same); code != 0 || err != nil || same.ID != request.ID {
 		t.Fatalf("proposal replay: %d %s %v", code, retryOut, err)

@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 )
 
@@ -173,114 +172,5 @@ func TestPinnedCustomAgentWithUnderscoreIsAccepted(t *testing.T) {
 	}
 	if choice.record != "agent=my_agent(forced) model=org_model.v2(forced) effort=high(forced)" {
 		t.Fatalf("record=%q", choice.record)
-	}
-}
-
-func TestResumeAndNotifyApplyExecutionPins(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("tmux fakes are POSIX")
-	}
-	root, _, _ := setupBoard(t)
-	id, path := makeTodo(t, root, "pin-resume")
-	pinCard(t, path, "- EXEC_AGENT: claude\n- EXEC_MODEL: pinned-model\n")
-	if _, _, err := capture(t, func() error { return commandStart(root, "", "", id) }); err != nil {
-		t.Fatal(err)
-	}
-	working := workingSpec(root, path)
-	record := "- EXEC_RESOLVED: agent=claude(forced) model=pinned-model(forced)"
-	// Drop the record so each relaunch is seen rewriting it.
-	clearRecord := func() {
-		text := mustRead(t, working)
-		start := strings.Index(text, record)
-		end := start + strings.Index(text[start:], "\n") + 1
-		if err := os.WriteFile(working, []byte(text[:start]+text[end:]), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	clearRecord()
-	if _, _, err := capture(t, func() error { return commandResume(root, nil, "", id, "继续", "", true, 61) }); err != nil {
-		t.Fatal(err)
-	}
-	if cmd := lastCommand(t, root); !strings.Contains(cmd, "--model pinned-model") || !strings.Contains(cmd, "--resume") {
-		t.Fatalf("resume command=%s", cmd)
-	}
-	if !strings.Contains(mustRead(t, working), record) {
-		t.Fatalf("resume did not rewrite record: %s", mustRead(t, working))
-	}
-
-	clearRecord()
-	snapshot, err := board.ReadSnapshot(root, id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := NotifyViaResume(root, snapshot.Entry, mustRead(t, working), "继续", 61); err != nil {
-		t.Fatal(err)
-	}
-	if cmd := lastCommand(t, root); !strings.Contains(cmd, "--model pinned-model") {
-		t.Fatalf("notify command=%s", cmd)
-	}
-	if !strings.Contains(mustRead(t, working), record) {
-		t.Fatalf("notify recovery did not rewrite record: %s", mustRead(t, working))
-	}
-
-	before := mustRead(t, filepath.Join(root, "tmux.log"))
-	other := "codex"
-	if err := commandResume(root, &other, "", id, "继续", "", true, 61); err == nil || !strings.Contains(err.Error(), "--agent") {
-		t.Fatalf("takeover conflict err=%v", err)
-	}
-	same := "claude"
-	if _, _, err := capture(t, func() error { return commandResume(root, &same, "", id, "继续", "", true, 61) }); err != nil {
-		t.Fatalf("takeover with the pinned agent: %v", err)
-	}
-
-	// A contract change that pins another agent makes plain relaunches refuse.
-	text := strings.Replace(mustRead(t, working), "- EXEC_AGENT: claude\n", "- EXEC_AGENT: grok\n", 1)
-	if err := os.WriteFile(working, []byte(text), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	before = mustRead(t, filepath.Join(root, "tmux.log"))
-	if err := commandResume(root, nil, "", id, "继续", "", true, 61); err == nil || !strings.Contains(err.Error(), "grok") {
-		t.Fatalf("resume owner conflict err=%v", err)
-	}
-	loaded, _ := board.LoadBoard(root)
-	entry, _ := board.Locate(loaded, id)
-	if _, err := NotifyViaResume(root, entry, text, "继续", 61); err == nil || !strings.Contains(err.Error(), "grok") {
-		t.Fatalf("notify owner conflict err=%v", err)
-	}
-	if mustRead(t, working) != text || mustRead(t, filepath.Join(root, "tmux.log")) != before {
-		t.Fatal("rejected relaunch changed the card or reached the launcher")
-	}
-}
-
-func TestDurableRelaunchChecksPinsBeforeRecordingDispatch(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX fake agent")
-	}
-	root, _, _ := setupBoard(t)
-	task, path := makeTodo(t, root, "pin-durable")
-	pinCard(t, path, "- EXEC_AGENT: claude\n")
-	startThenReview(t, root, "claude", task, path)
-	before, err := board.ReadSnapshot(root, task)
-	if err != nil {
-		t.Fatal(err)
-	}
-	other := "codex"
-	err = commandResume(root, &other, "", task, "同步", "", true, 61, DispatchOptions{Kind: "sync", Base: strings.Repeat("a", 40)})
-	if err == nil || !strings.Contains(err.Error(), "--agent") {
-		t.Fatalf("durable takeover conflict err=%v", err)
-	}
-	after, err := board.ReadSnapshot(root, task)
-	if err != nil || after.Revision != before.Revision || after.Text != before.Text {
-		t.Fatalf("conflict changed the card: %v\n%s", err, after.Text)
-	}
-
-	cfg := envConfig("codex", "tmux", nil)
-	repinned := strings.Replace(before.Text, "- EXEC_AGENT: claude\n", "- EXEC_AGENT: grok\n", 1)
-	if err := CheckExecutionPins(cfg, repinned, before.Entry.Kind, nil); err == nil || !strings.Contains(err.Error(), "grok") {
-		t.Fatalf("owner conflict err=%v", err)
-	}
-	if err := CheckExecutionPins(cfg, before.Text, before.Entry.Kind, nil); err != nil {
-		t.Fatal(err)
 	}
 }

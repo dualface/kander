@@ -91,41 +91,6 @@ func TestReverseLookupOutcomes(t *testing.T) {
 	}
 }
 
-// The audit reproduced this path as stopped; failed lookup is not absence.
-func TestAuditReverseLookupErrorBecomesUnknown(t *testing.T) {
-	for _, channel := range []string{"herdr", "tmux"} {
-		t.Run(channel, func(t *testing.T) {
-			tempBoard(t)
-			installPOSIXFakes(t, true)
-			id, path := makeWorking(t, "audit-lookup-error", "反查错误")
-			window := "tmux:$1:@1:%1"
-			if channel == "herdr" {
-				window = "herdr:w1:t1:w1:p1"
-				script := "#!/bin/sh\nif [ \"$2\" = get ]; then\n echo '{\"error\":{\"code\":\"pane_not_found\"}}' >&2\nelse\n echo 'audit lookup failure' >&2\nfi\nexit 1\n"
-				if err := os.WriteFile(filepath.Join(os.Getenv("PATH"), "herdr"), []byte(script), 0o755); err != nil {
-					t.Fatal(err)
-				}
-			} else {
-				t.Setenv("KANBAN_TMUX_STALE_PANE", "%1")
-				t.Setenv("KANBAN_TMUX_LIST_PANES_FAIL", "1")
-			}
-			setLocation(t, path, "codex wanted", window)
-			before, err := os.ReadFile(path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			code, out, _ := capture(t, func() int { return RunCheck([]string{id}) })
-			if code != 0 || !strings.Contains(out, "状态=unknown") || !strings.Contains(out, "failure") || !strings.Contains(out, "反查:") {
-				t.Fatalf("code=%d output=%s", code, out)
-			}
-			after, err := os.ReadFile(path)
-			if err != nil || string(after) != string(before) {
-				t.Fatalf("check mutated card: %v", err)
-			}
-		})
-	}
-}
-
 func TestReverseLookupTimeoutIsUnknown(t *testing.T) {
 	for _, channel := range []string{"herdr", "tmux"} {
 		t.Run(channel, func(t *testing.T) {

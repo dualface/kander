@@ -1,13 +1,14 @@
 package launch
 
 import (
-	"github.com/dualface/kander/internal/process"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dualface/kander/internal/process"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
@@ -73,7 +74,7 @@ func TestStartOrchestratorLaunchesSessionWithoutBoardWrites(t *testing.T) {
 	}
 	t.Cleanup(func() { createTaskFile = oldCreate })
 
-	result, err := StartOrchestrator(OrchestrateRequest{
+	result, err := startOrchestratorLocal(OrchestrateRequest{
 		Root: root, References: []string{secondID, firstID},
 		Handover: "Run the second card first; both may run in parallel.", Agent: "claude", Launcher: "tmux",
 	})
@@ -131,7 +132,7 @@ func TestStartOrchestratorLaunchesSingleCard(t *testing.T) {
 				id, document = makeTodo(t, root, "orchestrate-single")
 			}
 			before := mustRead(t, document)
-			result, err := StartOrchestrator(OrchestrateRequest{
+			result, err := startOrchestratorLocal(OrchestrateRequest{
 				Root: root, References: []string{id}, Handover: "Start and monitor this card until it is done.",
 			})
 			if err != nil {
@@ -163,7 +164,7 @@ func TestStartOrchestratorUsesTheLargeAgentAndExpandsTaskGroups(t *testing.T) {
 		_, document := makeBacklog(t, root, slug, true)
 		replaceInFile(t, document, "- TASK_GROUP:", "- TASK_GROUP: "+group)
 	}
-	result, err := StartOrchestrator(OrchestrateRequest{
+	result, err := startOrchestratorLocal(OrchestrateRequest{
 		Root: root, References: []string{group}, Handover: "Orchestrate the group.",
 	})
 	if err != nil {
@@ -205,13 +206,13 @@ func TestStartOrchestratorRejectsInvalidTaskSets(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := StartOrchestrator(OrchestrateRequest{Root: root, References: tc.references, Handover: "plan"})
+			_, err := startOrchestratorLocal(OrchestrateRequest{Root: root, References: tc.references, Handover: "plan"})
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("err=%v want %q", err, tc.want)
 			}
 		})
 	}
-	if _, err := StartOrchestrator(OrchestrateRequest{Root: root, References: []string{readyID, otherID}}); err == nil {
+	if _, err := startOrchestratorLocal(OrchestrateRequest{Root: root, References: []string{readyID, otherID}}); err == nil {
 		t.Fatal("an empty handover must be rejected")
 	}
 	if _, err := os.Stat(filepath.Join(root, "tmux.log")); err == nil {
@@ -236,7 +237,7 @@ func TestStartOrchestratorFailureClosesTheContainerAndTaskFile(t *testing.T) {
 	t.Cleanup(func() { createTaskFile = oldCreate })
 	t.Setenv("KANBAN_TMUX_RESPAWN_FAIL", "1")
 
-	if _, err := StartOrchestrator(OrchestrateRequest{
+	if _, err := startOrchestratorLocal(OrchestrateRequest{
 		Root: root, References: []string{firstID, secondID}, Handover: "plan", Agent: "claude", Launcher: "tmux",
 	}); err == nil {
 		t.Fatal("expected the launch to fail")
@@ -274,14 +275,14 @@ func TestOrchestratorWindowNameIsBounded(t *testing.T) {
 
 func TestRunOrchestrateRequiresTasksAndHandover(t *testing.T) {
 	setupBoard(t)
-	if code := RunOrchestrate([]string{"--message", "plan"}); code != 2 {
+	if code := RunOrchestrateRemote([]string{"--message", "plan"}); code != 2 {
 		t.Fatalf("missing tasks: code=%d", code)
 	}
-	if code := RunOrchestrate([]string{"20260913-a-task", "20260913-b-task"}); code == 0 {
+	if code := RunOrchestrateRemote([]string{"20260913-a-task", "20260913-b-task"}); code == 0 {
 		t.Fatal("missing handover must fail")
 	}
 	out, _, err := capture(t, func() error {
-		if code := RunOrchestrate([]string{"--help"}); code != 0 {
+		if code := RunOrchestrateRemote([]string{"--help"}); code != 0 {
 			return launchError("help exit "+itoa(code), "help exit "+itoa(code))
 		}
 		return nil

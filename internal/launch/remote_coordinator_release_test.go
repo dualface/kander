@@ -97,7 +97,7 @@ func newReleaseFixture(t *testing.T) *releaseFixture {
 // standard error.
 func (f *releaseFixture) run(t *testing.T, args ...string) (int, []byte, string) {
 	t.Helper()
-	return captureBoth(t, func() int { return runServiceCoordinator(args, true) })
+	return captureBoth(t, func() int { return RunCoordinatorRemote(args) })
 }
 
 func captureBoth(t *testing.T, run func() int) (int, []byte, string) {
@@ -212,7 +212,7 @@ func TestCoordinatorArgumentRefusalPrecedesTheBindingCheck(t *testing.T) {
 	if _, err := config.Save(config.DefaultConfig()); err != nil {
 		t.Fatal(err)
 	}
-	run := cli.RemoteCommands["coordinator"]
+	run := cli.Commands["coordinator"]
 	status, _, diagnostics := captureBoth(t, func() int { return run([]string{"release", "/tmp/release.json"}) })
 	if status != 2 || !slices.Contains(strings.Split(diagnostics, "\n"), releaseSyntax) {
 		t.Fatalf("status %d: %q", status, diagnostics)

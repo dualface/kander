@@ -4,7 +4,6 @@ package review
 
 import (
 	"encoding/json"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -144,23 +143,5 @@ func TestBoundReviewPinningRequiresOneSettingPerRole(t *testing.T) {
 	}
 	if pinning, err := boundReviewPinning(root, []string{second}, "PMQA"); err != nil || pinning.any || pinning.scale != "" {
 		t.Fatalf("unpinned card pinning=%+v err=%v", pinning, err)
-	}
-}
-
-func TestPlanNoticeForPinnedNotApplicableRole(t *testing.T) {
-	_, root, args, _ := pinnedArchiveHarness(t, "- REVIEW_SECURITY_AGENT: codex\n")
-	plan := board.ReviewPlan{Batches: []board.ReviewPlanBatch{{BatchID: "b1", TaskIDs: []string{args[2]}, Requirements: map[string]string{"PMQA": "required", "Security": "N/A: skipped by review_stages"}}}}
-	read, write, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	old := os.Stderr
-	os.Stderr = write
-	notePinnedNotApplicable(root, plan)
-	os.Stderr = old
-	_ = write.Close()
-	out, _ := io.ReadAll(read)
-	if strings.Count(string(out), "\n") != 1 || !strings.Contains(string(out), args[2]) || !strings.Contains(string(out), "Security") {
-		t.Fatalf("notice=%q", out)
 	}
 }

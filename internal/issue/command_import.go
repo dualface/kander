@@ -3,9 +3,7 @@ package issue
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/dualface/kander/internal/remote"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 
@@ -25,13 +23,9 @@ type issueImportOptions struct {
 }
 
 // runImport implements `kander issue import NUMBER`. The command resolves the
-// board root and the repository before it touches the network, so a usage or
-// location error never costs an API call.
+// repository before it touches the network, so a usage or location error never
+// costs an API call.
 func runImport(factory func() IssueProvider, args []string, stdout, stderr io.Writer) int {
-	return runImportMode(factory, args, stdout, stderr, false)
-}
-
-func runImportMode(factory func() IssueProvider, args []string, stdout, stderr io.Writer, required bool) int {
 	var options issueImportOptions
 	positional := 0
 	for index := 0; index < len(args); index++ {
@@ -125,41 +119,8 @@ func runImportMode(factory func() IssueProvider, args []string, stdout, stderr i
 	}
 	ctx, cancel := commandContext()
 	defer cancel()
-	cfg, err := config.Load(true)
-	if err != nil {
-		fmt.Fprintln(stderr, formatError(err))
-		return 1
-	}
 	importOptions := ImportOptions{Type: taskType, Large: options.large, Language: language, Comments: options.comments}
-	var result ImportResult
-	if required {
-		if err := remote.RequireBinding(cfg); err != nil {
-			fmt.Fprintln(stderr, formatError(err))
-			return 1
-		}
-	}
-	if remote.ServiceSelected(cfg, required) {
-		cwd, cwdErr := os.Getwd()
-		if cwdErr != nil {
-			fmt.Fprintln(stderr, formatError(cwdErr))
-			return 1
-		}
-		session, openErr := remote.Open(ctx, cfg, cwd)
-		if openErr != nil {
-			fmt.Fprintln(stderr, formatError(openErr))
-			return 1
-		}
-		operationCtx, finishOperation := session.OperationContext(ctx)
-		defer finishOperation()
-		ctx = operationCtx
-		result, err = ImportRemote(ctx, session, provider, repository, options.number, importOptions)
-	} else {
-		var root string
-		root, err = board.BoardRoot()
-		if err == nil {
-			result, err = Import(ctx, provider, root, repository, options.number, importOptions)
-		}
-	}
+	result, err := importCard(ctx, provider, repository, options.number, importOptions)
 	if err != nil {
 		fmt.Fprintln(stderr, formatError(err))
 		return 1

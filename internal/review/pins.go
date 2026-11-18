@@ -1,7 +1,6 @@
 package review
 
 import (
-	"fmt"
 	"os"
 	"strings"
 
@@ -120,32 +119,4 @@ func pinnedReviewValue(configured, pinned, env, field, configSource string) (boa
 		return board.ResolvedItem{Value: configured, Source: board.PinSourceCLI}, nil
 	}
 	return board.ResolvedItem{Value: configured, Source: configSource}, nil
-}
-
-// notePinnedNotApplicable prints one stderr notice for every planned role that
-// is N/A while a card of its batch pins that role's reviewer: a pin never turns
-// a skipped or N/A role on. Cards that cannot be read are left to the plan's
-// own validation, so the notice never fails the command.
-func notePinnedNotApplicable(root string, plan board.ReviewPlan) {
-	cfg, err := config.Effective(nil)
-	if err != nil {
-		return
-	}
-	for _, batch := range plan.Batches {
-		for _, role := range board.PinRoles {
-			if !strings.HasPrefix(batch.Requirements[role], "N/A") {
-				continue
-			}
-			for _, id := range batch.TaskIDs {
-				snapshot, err := board.ReadSnapshot(root, id)
-				if err != nil {
-					continue
-				}
-				pins, err := board.CardPinsOf(cfg, snapshot.Text)
-				if err == nil && pins.Review[role].Forced() {
-					fmt.Fprintln(os.Stderr, config.Text("review.pin_role_not_applicable", id, role, batch.BatchID))
-				}
-			}
-		}
-	}
 }

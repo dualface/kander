@@ -520,40 +520,6 @@ func TestUsageJSON(t *testing.T) {
 	}
 }
 
-func TestHelpAndLegacyUnknownStayCompatible(t *testing.T) {
-	setupCheckLang(t)
-	code, out, errb := captureRun(t, []string{"--help"})
-	if code != 0 || !strings.Contains(out, "kander check delivery") {
-		t.Fatalf("help code=%d out=%s err=%s", code, out, errb)
-	}
-	t.Setenv(board.EnvBoardDir, filepath.Join(t.TempDir(), "missing-board"))
-	// Without a config the delegate stops at "config does not exist" before it
-	// ever reaches the board, so write one the runner can load.
-	// macOS puts TempDir under a /var symlink, which config.Save rejects.
-	configDir, symErr := filepath.EvalSymlinks(t.TempDir())
-	if symErr != nil {
-		t.Fatal(symErr)
-	}
-	t.Setenv(config.EnvConfig, filepath.Join(configDir, "config.json"))
-	cfg := config.DefaultConfig()
-	cfg.WelcomeComplete = true
-	if _, err := config.Save(cfg); err != nil {
-		t.Fatal(err)
-	}
-	t.Chdir(t.TempDir())
-	code, out, errb = captureRun(t, []string{"not-a-delivery-mode"})
-	if code == 0 {
-		t.Fatalf("legacy unknown should delegate, code=0 out=%s err=%s", out, errb)
-	}
-	combined := out + errb
-	if strings.Contains(combined, "kander check delivery") || strings.Contains(combined, `"check":"delivery"`) {
-		t.Fatalf("unknown mode must not use delivery usage: %q", combined)
-	}
-	if !strings.Contains(errb, "kander:") {
-		t.Fatalf("expected liveness/board error, got %q", errb)
-	}
-}
-
 func TestInvalidUTF8PathPOSIX(t *testing.T) {
 	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
 		t.Skip("NTFS and APFS both reject invalid UTF-8 names")

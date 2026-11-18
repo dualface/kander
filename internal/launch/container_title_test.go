@@ -6,8 +6,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/terminal"
 )
 
@@ -111,58 +109,6 @@ func TestStartPlacesContainerWithLabel(t *testing.T) {
 	}
 }
 
-// resume takeover and the notify recovery process name the tab by the kb-
-// label as well, and print the placement warning when the caller collects none.
-func TestResumeAndNotifyRecoveryPlaceContainerWithLabel(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("tmux fakes are POSIX")
-	}
-	root, _, _ := setupBoard(t)
-	freezeClock(t)
-	id, path := makeTodo(t, root, "tab-resume")
-	startThenReview(t, root, "claude", id, path)
-	probe := useTitleBackend(t, "tab not named")
-	cleanups := recordCleanup(t)
-
-	// A named agent with a decision makes this a takeover, not a plain resume.
-	agent := "claude"
-	_, stderr, err := capture(t, func() error {
-		return commandResume(root, &agent, "title-test", id, "go on", "", true, 61, DispatchOptions{Decision: "user approved"})
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantPlacement(t, probe, "kb-")
-	if len(*cleanups) != 1 {
-		t.Fatalf("takeover cleanups=%+v, want one", *cleanups)
-	}
-	if !strings.Contains(stderr, "tab not named") {
-		t.Fatalf("takeover warning missing from stderr: %q", stderr)
-	}
-
-	// The takeover above replaced the pane session marker the fake tmux keeps,
-	// so the recovery card starts after it.
-	recoveryID, recoveryPath := makeTodo(t, root, "tab-recovery")
-	startThenReview(t, root, "claude", recoveryID, recoveryPath)
-	probe = useTitleBackend(t, "tab not named")
-	loadEffective = func() (*config.Config, error) { return envConfig("claude", "title-test", nil), nil }
-	snapshot, err := board.ReadSnapshot(root, recoveryID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, stderr, err = capture(t, func() error {
-		_, err := NotifyViaResume(root, snapshot.Entry, snapshot.Text, "go on", 61)
-		return err
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantPlacement(t, probe, "kb-")
-	if !strings.Contains(stderr, "tab not named") {
-		t.Fatalf("recovery warning missing from stderr: %q", stderr)
-	}
-}
-
 // An orchestrator sets no display title either; its tab is named by the
 // orchestrate- label.
 func TestOrchestratorPlacesContainerWithLabel(t *testing.T) {
@@ -174,7 +120,7 @@ func TestOrchestratorPlacesContainerWithLabel(t *testing.T) {
 	first, _ := makeTodo(t, root, "tab-first")
 	second, _ := makeBacklog(t, root, "tab-second", true)
 	third, _ := makeBacklog(t, root, "tab-third", true)
-	result, err := StartOrchestrator(OrchestrateRequest{
+	result, err := startOrchestratorLocal(OrchestrateRequest{
 		Root: root, References: []string{second, first, third}, Handover: "Run them.", Agent: "claude", Launcher: "title-test",
 	})
 	if err != nil {

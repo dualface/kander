@@ -15,6 +15,14 @@ import (
 	"github.com/dualface/kander/internal/server"
 )
 
+func TestIntegrationCommandRequiresConfiguredService(t *testing.T) {
+	setupBoard(t)
+	cfg := envConfig("claude", "tmux", nil)
+	if code := runRemoteIntegration(context.Background(), cfg, []string{"integrate", filepath.Join(t.TempDir(), "input.json")}); code != 1 {
+		t.Fatalf("unconfigured integration code=%d", code)
+	}
+}
+
 func TestIntegrationCommandValidatesInputWithoutLocalBoard(t *testing.T) {
 	setupBoard(t)
 	cwd := t.TempDir()
@@ -47,7 +55,7 @@ func TestIntegrationCommandValidatesInputWithoutLocalBoard(t *testing.T) {
 			if err := os.WriteFile(path, test.data, 0600); err != nil {
 				t.Fatal(err)
 			}
-			code, out := captureStdout(t, func() int { return RunCoordinator([]string{"integrate", path}) })
+			code, out := captureStdout(t, func() int { return RunCoordinatorRemote([]string{"integrate", path}) })
 			if code != test.code || len(out) != 0 {
 				t.Fatalf("code=%d output=%s", code, out)
 			}
@@ -55,12 +63,5 @@ func TestIntegrationCommandValidatesInputWithoutLocalBoard(t *testing.T) {
 	}
 	if _, err := os.Lstat(forbidden); !os.IsNotExist(err) {
 		t.Fatalf("integration command touched local board: %v", err)
-	}
-}
-func TestIntegrationCommandRequiresConfiguredService(t *testing.T) {
-	setupBoard(t)
-	cfg := envConfig("claude", "tmux", nil)
-	if code := runRemoteIntegration(context.Background(), cfg, []string{"integrate", filepath.Join(t.TempDir(), "input.json")}); code != 1 {
-		t.Fatalf("unconfigured integration code=%d", code)
 	}
 }

@@ -2,7 +2,6 @@ package launch
 
 import (
 	"context"
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,26 +15,6 @@ import (
 )
 
 func stillRunning() bool { return true }
-
-// recordProcess publishes the identity of a foreground process, optionally with
-// another starter start time.
-func recordProcess(t *testing.T, root string, moved board.Entry, pid int, starterStart string) {
-	t.Helper()
-	agent, err := process.ObserveProcess(context.Background(), pid)
-	if err != nil {
-		t.Fatal(err)
-	}
-	identity, err := identityOf(context.Background(), LaunchPlan{Launcher: "foreground"}, pid, agent)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if starterStart != "" {
-		identity.KanderStart = starterStart
-	}
-	if _, err = board.RecordExecutionProcess(root, moved, identity); err != nil {
-		t.Fatal(err)
-	}
-}
 
 // startSleeper starts a real process whose kernel image is the started file.
 func startSleeper(t *testing.T) *exec.Cmd {
@@ -362,73 +341,6 @@ func TestConsoleIdentityHasNoStarter(t *testing.T) {
 	}
 }
 
-func TestAdoptAcceptsOnlyAProvenExecutor(t *testing.T) {
-	for status, accepted := range map[string]bool{
-		liveness.Alive:            true,
-		liveness.AliveOrphaned:    true,
-		liveness.Stopped:          false,
-		liveness.IdentityMismatch: false,
-		liveness.Unprobeable:      false,
-		liveness.Unknown:          false,
-	} {
-		t.Run(status, func(t *testing.T) {
-			root, _, _ := setupBoard(t)
-			task, _ := makeTodo(t, root, "adopt-status")
-			s, err := board.ReadSnapshot(root, task)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if _, err = board.BeginTaskStart(s.Entry, root, board.TaskStartInput{Owner: "devin", Session: "devin", Window: "foreground"}); err != nil {
-				t.Fatal(err)
-			}
-			oldLiveness := adoptLivenessFn
-			adoptLivenessFn = func(board.Snapshot) liveness.Report { return liveness.Report{Status: status} }
-			t.Cleanup(func() { adoptLivenessFn = oldLiveness })
-			_, _, err = capture(t, func() error { return commandAdopt(root, task, "user") })
-			if accepted != (err == nil) {
-				t.Fatalf("err=%v", err)
-			}
-			want := board.ExecutionPending
-			if accepted {
-				want = board.ExecutionRunning
-			}
-			requireRecord(t, root, task, want)
-		})
-	}
-}
-
-// The real observation adopts a foreground executor whose launcher is gone and
-// refuses it once it stopped.
-func TestAdoptUsesTheProcessIdentity(t *testing.T) {
-	skipOnWindows(t)
-	root, _, _ := setupBoard(t)
-	task, _ := makeTodo(t, root, "adopt-identity")
-	sleeper := startSleeper(t)
-	moved := beginDirect(t, root, task, "foreground")
-	recordProcess(t, root, moved, sleeper.Process.Pid, "")
-	_ = sleeper.Process.Kill()
-	_ = sleeper.Wait()
-	if _, _, err := capture(t, func() error { return commandAdopt(root, task, "user") }); err == nil || !strings.Contains(err.Error(), liveness.Stopped) {
-		t.Fatalf("err=%v", err)
-	}
-	requireRecord(t, root, task, board.ExecutionPending)
-}
-
-// A starter the identity no longer matches is a starter that has gone: the killed
-// launcher adoption exists for.
-func TestAdoptAcceptsAnOrphanedForegroundExecutor(t *testing.T) {
-	skipOnWindows(t)
-	root, _, _ := setupBoard(t)
-	task, _ := makeTodo(t, root, "adopt-orphan")
-	sleeper := startSleeper(t)
-	moved := beginDirect(t, root, task, "foreground")
-	recordProcess(t, root, moved, sleeper.Process.Pid, "another-start")
-	if _, _, err := capture(t, func() error { return commandAdopt(root, task, "user") }); err != nil {
-		t.Fatal(err)
-	}
-	requireRecord(t, root, task, board.ExecutionRunning)
-}
-
 func TestRefuseNativeResume(t *testing.T) {
 	pane, direct := LaunchPlan{Launcher: "tmux-session"}, LaunchPlan{Launcher: "foreground"}
 	for _, c := range []struct {
@@ -448,60 +360,5 @@ func TestRefuseNativeResume(t *testing.T) {
 				t.Fatalf("err=%v", err)
 			}
 		})
-	}
-}
-
-// Q5 has no exception: a card whose identity was never recorded is refused too.
-// Both recovery entrances stop before anything starts.
-func TestForegroundHasNoNativeResume(t *testing.T) {
-	skipOnWindows(t)
-	root, _, bin := setupBoard(t)
-	for name, recorded := range map[string]bool{"with identity": true, "without identity": false} {
-		t.Run(name, func(t *testing.T) {
-			task, result := startForeground(t, root, bin, "no-resume-"+strings.ReplaceAll(name, " ", "-"))
-			if recorded {
-				requireAccessTimes(t)
-				readTaskFile(t, task)
-				awaitIdentity(t, root, task, result)
-			}
-			s, err := board.ReadSnapshot(root, task)
-			if err != nil {
-				t.Fatal(err)
-			}
-			created := filepath.Join(root, "resumed")
-			script := "#!/bin/sh\n: > " + created + "\nexec sleep 30\n"
-			if err = os.WriteFile(filepath.Join(bin, "claude"), []byte(script), 0o755); err != nil {
-				t.Fatal(err)
-			}
-			if _, _, err = capture(t, func() error {
-				return commandResumeLegacy(root, nil, "foreground", task, "go on", "", true, 61, resumeBinding{})
-			}); err == nil || !strings.Contains(err.Error(), "--adopt") {
-				t.Fatalf("resume err=%v", err)
-			}
-			if _, err = NotifyViaResume(root, s.Entry, s.Text, "go on", 61); err == nil || !strings.Contains(err.Error(), "--adopt") {
-				t.Fatalf("notify err=%v", err)
-			}
-			if _, err = os.Stat(created); !os.IsNotExist(err) {
-				t.Fatalf("a second executor started: %v", err)
-			}
-		})
-	}
-}
-
-// A takeover is the exit: it passes the refusal and reaches its own entrance.
-func TestTakeoverOfAForegroundCardStaysAllowed(t *testing.T) {
-	skipOnWindows(t)
-	root, _, bin := setupBoard(t)
-	task, _ := startForeground(t, root, bin, "takeover-allowed")
-	reached := errors.New("takeover entrance reached")
-	previous := beginTakeoverFn
-	t.Cleanup(func() { beginTakeoverFn = previous })
-	beginTakeoverFn = func(string, board.Entry, board.TakeoverInput) (board.ExecutionResult, error) {
-		return board.ExecutionResult{}, reached
-	}
-	agent := "claude"
-	err := commandResumeLegacy(root, &agent, "foreground", task, "take over", "", true, 61, resumeBinding{Decision: "user"})
-	if !errors.Is(err, reached) {
-		t.Fatalf("err=%v", err)
 	}
 }

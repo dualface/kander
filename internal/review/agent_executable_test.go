@@ -1,12 +1,13 @@
 package review
 
 import (
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/process"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/process"
 )
 
 func TestReviewExecutableIgnoresExecutionDefinitions(t *testing.T) {

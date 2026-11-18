@@ -132,10 +132,9 @@ func TestAcceptedRecoveryPersistsDeadlineAndFencesWrites(t *testing.T) {
 	if err != nil || json.Unmarshal(raw, &archived) != nil || !reflect.DeepEqual(archived, d) {
 		t.Fatalf("lost retired execution: %s %v", raw, err)
 	}
-	code, out, stderr := capture(t, func() int { return RunDispatch([]string{"show", d.Input.TaskID, d.Input.ID}) })
-	var shown Dispatch
-	if code != 0 || json.Unmarshal([]byte(out), &shown) != nil || shown.State != DispatchCompleted || shown.Completed.DeliveryCommit != strings.Repeat("b", 40) || !shown.AcceptBefore().Equal(next.AcceptBefore()) || !shown.Input.ConfirmBy.Equal(d.Input.ConfirmBy) {
-		t.Fatalf("show lost deadlines/receipt: %s %s", out, stderr)
+	shown, err := ReadDispatch(root, d.Input.TaskID, d.Input.ID)
+	if err != nil || shown.State != DispatchCompleted || shown.Completed.DeliveryCommit != strings.Repeat("b", 40) || !shown.AcceptBefore().Equal(next.AcceptBefore()) || !shown.Input.ConfirmBy.Equal(d.Input.ConfirmBy) {
+		t.Fatalf("show lost deadlines/receipt: %+v %v", shown, err)
 	}
 	// The deadline is checked against the execution original on every read.
 	shown.Execution.ConfirmBy = shown.Execution.ConfirmBy.Add(time.Hour)

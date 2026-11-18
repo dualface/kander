@@ -3,39 +3,11 @@ package board
 import (
 	"fmt"
 	"io"
-	"path/filepath"
 	"strings"
 	"unicode"
 
 	"github.com/dualface/kander/internal/config"
 )
-
-// writeCompletionReportReminder prints the completion report template after a CLI move
-// into a terminal state while rules.reporting is enabled. It never changes the move result:
-// a failure to read the configuration or the moved card only produces a notice.
-func writeCompletionReportReminder(w io.Writer, moved Entry) {
-	if moved.State != "done" && moved.State != "archived" && moved.State != "trash" {
-		return
-	}
-	cfg, err := config.Load(false)
-	if err != nil {
-		fmt.Fprintln(w, t("board.report_template_unavailable", err.Error()))
-		return
-	}
-	if !cfg.Rules[config.RuleReporting] {
-		return
-	}
-	text, err := ReadDocument(moved)
-	if err != nil {
-		fmt.Fprintln(w, t("board.report_template_unavailable", err.Error()))
-		return
-	}
-	path, err := filepath.Abs(moved.Path)
-	if err != nil {
-		path = moved.Path
-	}
-	WriteCompletionReportSnapshot(w, moved.TaskID, moved.State, text, path, cfg)
-}
 
 // WriteCompletionReportSnapshot renders the same CLI reminder from an already
 // committed service snapshot. resource is a logical service location, not a

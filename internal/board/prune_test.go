@@ -251,10 +251,10 @@ func TestArchivePruneRefusesLinksAndResumes(t *testing.T) {
 		t.Fatal(err)
 	}
 	var pruned PruneReport
-	if code, _, stderr := capture(t, func() int { return RunInit(nil) }); code != 0 {
-		t.Fatalf("init: %s", stderr)
-	} else if !strings.Contains(stderr, "prune-link-run") {
-		t.Fatalf("init summary: %s", stderr)
+	if _, _, _, _, err := InitBoardWithOptions("", InitOptions{Pruned: &pruned}); err != nil {
+		t.Fatalf("init: %v", err)
+	} else if summary := strings.Join(PruneSummary(pruned), "\n"); !strings.Contains(summary, "prune-link-run") {
+		t.Fatalf("init summary: %s", summary)
 	}
 	requireExists(t, reviewPath(root, "runs", "prune-link-run"), false)
 	if intents := pruneIntents(t, root); len(intents) != 0 {
@@ -324,19 +324,20 @@ func TestConcurrentArchivesPruneSharedEvidenceOnce(t *testing.T) {
 	requirePrunedCheck(t, root, a, b)
 }
 
-func TestMoveCommandPrintsPruneSummary(t *testing.T) {
+func TestMoveReportsPruneSummary(t *testing.T) {
 	resetLang(t)
 	root := tempBoard(t)
 	id := pruneCard(t, root, "prune-cli", "")
 	pruneRun(t, root, "prune-cli-run", "prune-cli-batch", id)
-	code, out, stderr := capture(t, func() int {
-		return RunMove([]string{id, "archived", "--result", "cancelled", "--reason", "取消", "--decision", "取消决定"})
-	})
-	if code != 0 || !strings.Contains(out, filepath.Join("archived", id)) {
-		t.Fatalf("move: %d %s %s", code, out, stderr)
+	var pruned PruneReport
+	entry := transactionSnapshot(t, root, id).Entry
+	moved, err := MoveWithOptions(entry, root, "archived", MoveOptions{Result: "cancelled", Reason: "取消", Decision: "取消决定", Pruned: &pruned})
+	if err != nil || moved.State != "archived" {
+		t.Fatalf("move: %+v %v", moved, err)
 	}
-	if !strings.Contains(stderr, "prune-cli-run") || !strings.Contains(stderr, "prune-cli-batch") || !strings.Contains(stderr, " B") && !strings.Contains(stderr, "KiB") {
-		t.Fatalf("summary: %s", stderr)
+	summary := strings.Join(PruneSummary(pruned), "\n")
+	if !strings.Contains(summary, "prune-cli-run") || !strings.Contains(summary, "prune-cli-batch") || !strings.Contains(summary, " B") && !strings.Contains(summary, "KiB") {
+		t.Fatalf("summary: %s", summary)
 	}
 }
 

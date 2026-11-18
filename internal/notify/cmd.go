@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/cli"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/launch"
@@ -17,8 +16,7 @@ import (
 )
 
 func init() {
-	cli.Commands["notify"] = RunNotify
-	cli.RemoteCommands["notify"] = cli.RequireService(RunNotifyRemote)
+	cli.Commands["notify"] = cli.RequireService(RunNotifyRemote)
 }
 
 func fail(err error) int {
@@ -45,13 +43,8 @@ func takeValue(args []string, i int) (string, int, bool) {
 	return args[i+1], i + 1, true
 }
 
-// RunNotify implements kander notify.
-func RunNotify(args []string) int { return runServiceNotify(args, false) }
-
-// RunNotifyRemote is the mandatory REST entrance used by the client binary.
-func RunNotifyRemote(args []string) int { return runServiceNotify(args, true) }
-
-func runServiceNotify(args []string, required bool) int {
+// RunNotifyRemote implements kander notify against the server.
+func RunNotifyRemote(args []string) int {
 	for _, arg := range args {
 		if arg == "-h" || arg == "--help" {
 			usage(os.Stdout)
@@ -123,26 +116,14 @@ func runServiceNotify(args []string, required bool) int {
 	if err != nil {
 		return fail(err)
 	}
-	if required {
-		if err := remote.RequireBinding(cfg); err != nil {
-			return fail(err)
-		}
+	if err := remote.RequireBinding(cfg); err != nil {
+		return fail(err)
 	}
-	if remote.ServiceSelected(cfg, required) {
-		request, err := launch.NotifyRemote(positional[0], message, messageFile, pane, messageSet, timeout, dispatchOptions)
-		if err != nil {
-			return fail(err)
-		}
-		if err := json.NewEncoder(os.Stdout).Encode(request); err != nil {
-			return fail(err)
-		}
-		return 0
-	}
-	root, err := board.BoardRoot()
+	request, err := launch.NotifyRemote(positional[0], message, messageFile, pane, messageSet, timeout, dispatchOptions)
 	if err != nil {
 		return fail(err)
 	}
-	if err := commandNotify(root, positional[0], message, messageFile, pane, messageSet, timeout, dispatchOptions); err != nil {
+	if err := json.NewEncoder(os.Stdout).Encode(request); err != nil {
 		return fail(err)
 	}
 	return 0

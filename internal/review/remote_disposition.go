@@ -27,6 +27,9 @@ var remoteDispositionCommands = map[string]bool{"plan": true, "aggregate": true,
 // Git facts are verified here against the client's repository at cwd, exactly
 // as the v1 command does; the server revalidates the board structure.
 func runRemoteDisposition(cfg *config.Config, args []string) int {
+	if err := remote.RequireBinding(cfg); err != nil {
+		return dispositionFailure(err)
+	}
 	if len(args) < 3 || len(args) > 4 || (args[0] == "disposition" || args[0] == "confirm") != (len(args) == 4) {
 		return dispositionFailure(newGateMsg(2, config.CommandUsage("review")))
 	}

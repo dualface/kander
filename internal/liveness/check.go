@@ -1,14 +1,11 @@
 package liveness
 
 import (
-	"context"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 )
@@ -45,44 +42,6 @@ func formatReport(rep Report) string {
 	return strings.Join(fields, "\t")
 }
 
-func workingEntries(root string, taskIDs []string) ([]board.Entry, error) {
-	var scanned board.Board
-	var err error
-	if len(taskIDs) > 0 {
-		scanned, err = board.ScanTargets(root, taskIDs)
-	} else {
-		scanned, err = board.Scan(root)
-	}
-	if err != nil {
-		return nil, err
-	}
-	var working []board.Entry
-	for _, entry := range scanned.Entries {
-		if entry.State == "working" {
-			working = append(working, entry)
-		}
-	}
-	sort.Slice(working, func(i, j int) bool { return working[i].TaskID < working[j].TaskID })
-	return working, nil
-}
-
-func livenessLines(root string, taskIDs []string) ([]string, error) {
-	entries, err := workingEntries(root, taskIDs)
-	if err != nil {
-		return nil, err
-	}
-	inputs := make([]TaskInput, 0, len(entries))
-	for _, entry := range entries {
-		text, err := board.ReadDocument(entry)
-		inputs = append(inputs, TaskInput{Entry: entry, Text: text, ReadError: err})
-	}
-	var lines []string
-	for _, rep := range ClassifyTasksContext(context.Background(), inputs, BatchOptions{}) {
-		lines = append(lines, formatReport(rep))
-	}
-	return lines, nil
-}
-
 func takeFlag(args []string, name string) ([]string, bool) {
 	out := make([]string, 0, len(args))
 	found := false
@@ -100,13 +59,8 @@ func usageCheck(w *os.File) {
 	fmt.Fprintln(w, config.CommandUsage("check"))
 }
 
-// RunCheck implements kander check, reusing the board structural validation and appending a read-only liveness section.
-func RunCheck(args []string) int { return runServiceCheck(args, false) }
-
-// RunCheckRemote is the client service entrance.
-func RunCheckRemote(args []string) int { return runServiceCheck(args, true) }
-
-func runServiceCheck(args []string, required bool) int {
+// RunCheckRemote implements kander check against the server: the structural validation plus a read-only liveness section.
+func RunCheckRemote(args []string) int {
 	args, all := takeFlag(args, "--all")
 	var tasks []string
 	for _, arg := range args {
@@ -125,36 +79,9 @@ func runServiceCheck(args []string, required bool) int {
 	for _, warning := range config.AgentWarnings(cfg) {
 		fmt.Fprintln(os.Stderr, warning)
 	}
-	if required {
-		if err := remote.RequireBinding(cfg); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-	}
-	if remote.ServiceSelected(cfg, required) {
-		return runRemoteCheck(cfg, tasks, all)
-	}
-	root, err := board.BoardRoot()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "kander: %s\n", err)
+	if err := remote.RequireBinding(cfg); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	code, stdout, stderr, err := board.CheckBoard(root, tasks, all)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "kander: %s\n", err)
-		return 1
-	}
-	for _, line := range stderr {
-		fmt.Fprintln(os.Stderr, line)
-	}
-	lines, liveErr := livenessLines(root, tasks)
-	if liveErr != nil {
-		fmt.Fprintf(os.Stderr, "kander: %s\n", liveErr)
-		return 1
-	}
-	for _, line := range lines {
-		fmt.Println(line)
-	}
-	os.Stdout.WriteString(stdout)
-	return code
+	return runRemoteCheck(cfg, tasks, all)
 }

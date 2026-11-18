@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/probe"
 	"github.com/dualface/kander/internal/process"
 	"github.com/dualface/kander/internal/terminal"
 )
@@ -221,42 +220,6 @@ func trimNL(s string) string {
 	return s
 }
 
-func rollbackLaunch(root string, moved board.Entry, originalState string, failure *LaunchFailure, originalText *string) error {
-	var rollbackErrors []string
-	if originalText != nil {
-		if err := board.RollbackDocument(root, moved, *originalText, originalState); err != nil {
-			rollbackErrors = append(rollbackErrors, t("launch.failed_to_restore_document", err.Error()))
-		}
-	}
-	primary := failure.Err
-	if len(rollbackErrors) > 0 {
-		msg := t(
-			"launch.start_and_rollback_both_failed_task_remains_in", moved.State, primary.Error(),
-		)
-		extras := []string{}
-		if failure.CloseError != "" {
-			extras = append(extras, failure.CloseError)
-		}
-		extras = append(extras, rollbackErrors...)
-		return launchError(msg+joinSemi(extras), msg+joinSemi(extras))
-	}
-	if failure.CloseError != "" {
-		return launchError("launch.value", primary.Error(), failure.CloseError)
-	}
-	return primary
-}
-
-func joinSemi(items []string) string {
-	out := ""
-	for i, item := range items {
-		if i > 0 {
-			out += "; "
-		}
-		out += item
-	}
-	return out
-}
-
 func reportLaunch(verb string, entry board.Entry, agentName string, plan LaunchPlan, outcome LaunchOutcome) error {
 	if outcome.Replayed {
 		fmt.Println(t("remote.launch_already_confirmed", entry.TaskID))
@@ -319,83 +282,6 @@ func validateLivenessTimeout(timeout float64, command string) error {
 	return nil
 }
 
-func validateResumedAgent(plan LaunchPlan, outcome LaunchOutcome, session AgentSession, timeout float64) error {
-	return validateResumedAgentReceipt(plan, outcome, session, timeout, nil)
-}
-
-func validateResumedAgentReceipt(plan LaunchPlan, outcome LaunchOutcome, session AgentSession, timeout float64, receipt func() (bool, error)) error {
-	deadline := nowFn().Add(time.Duration(timeout * float64(time.Second)))
-	for {
-		if receipt != nil {
-			consumed, err := receipt()
-			if err != nil {
-				return err
-			}
-			if consumed {
-				return nil
-			}
-		}
-		if !plan.capabilities().Container {
-			if outcome.Poll != nil {
-				if code := outcome.Poll(); code != nil {
-					return launchError(
-						"launch.resumed_agent_exited_during_the_liveness_observation_period_exit", itoa(*code),
-					)
-				}
-			}
-			if !nowFn().Before(deadline) {
-				return nil
-			}
-			remaining := deadline.Sub(nowFn())
-			d := notifyPollInterval
-			if remaining < d {
-				d = remaining
-			}
-			sleepFn(d)
-			continue
-		}
-		remaining := deadline.Sub(nowFn())
-		if remaining <= 0 {
-			return launchError("launch.resumed_agent_liveness_check_timed_out")
-		}
-		ok := false
-		if plan.capabilities().AgentIdentity {
-			ctx, cancel := probe.TimeoutContext(remaining)
-			pane, err := plan.backend().PaneFacts(ctx, probeConn(plan), outcome.Pane)
-			verdict := terminal.SessionUncertain
-			if err == nil && !pane.Gone {
-				verdict, _ = terminal.MatchAgentSession(ctx, session.Agent, pane.AgentSessionKind, pane.AgentSession, session.Reference)
-			}
-			cancel()
-			if err == nil && !pane.Gone {
-				ref := pane.AgentSession
-				status := pane.AgentStatus
-				// An unresolved reported identity counts as unconfirmed, not as
-				// a mismatch: the loop keeps polling until the deadline.
-				if pane.MatchAgent(session.Agent) == terminal.AgentMatches &&
-					(session.Reference == "" || ref == "" || verdict == terminal.SessionMatches) &&
-					(status == "idle" || status == "working" || status == "blocked") {
-					ok = true
-				}
-			}
-		} else if processNotifyTarget(plan, outcome.Pane, session, remaining) == nil {
-			ok = true
-		}
-		if ok {
-			return nil
-		}
-		if !nowFn().Before(deadline) {
-			return launchError("launch.resumed_agent_liveness_check_timed_out")
-		}
-		remaining = deadline.Sub(nowFn())
-		d := notifyPollInterval
-		if remaining < d {
-			d = remaining
-		}
-		sleepFn(d)
-	}
-}
-
 func resumedAgentFailureOutput(plan LaunchPlan, outcome LaunchOutcome) string {
 	if !plan.capabilities().Container || outcome.Pane == "" {
 		return ""
@@ -440,8 +326,4 @@ func cleanupFailedResume(plan LaunchPlan, outcome LaunchOutcome) error {
 		)
 	}
 	return nil
-}
-
-func naCleanup() CleanupResult {
-	return CleanupResult{Cleaned: true, OldWindow: "N/A", Channel: "N/A", Container: "N/A"}
 }

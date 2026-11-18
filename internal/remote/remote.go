@@ -40,21 +40,14 @@ type bindingError struct{}
 
 func (bindingError) Error() string { return config.Text("remote.not_configured") }
 
-// Enabled reports whether cfg selects the server mode.
-func Enabled(cfg *config.Config) bool { return cfg != nil && cfg.Server.URL != "" }
-
-// RequireBinding validates the mandatory runtime service boundary. Storage
-// compatibility callers do not use this entrance.
+// RequireBinding validates the mandatory runtime service boundary: a client
+// without a project binding reaches no board command.
 func RequireBinding(cfg *config.Config) error {
 	if cfg == nil || cfg.Project.Name == "" {
 		return ErrNotConfigured
 	}
 	return nil
 }
-
-// ServiceSelected keeps optional storage callers local while mandatory binary
-// entrances use the effective URL even without an explicit server.url.
-func ServiceSelected(cfg *config.Config, required bool) bool { return required || Enabled(cfg) }
 
 // Session is one opened project on one server.
 type Session struct {

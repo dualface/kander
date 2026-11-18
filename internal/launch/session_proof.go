@@ -5,53 +5,11 @@ import (
 	"encoding/json"
 	"io"
 	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/process"
 )
-
-func proveOpenSession(ctx context.Context, files process.ProcessFiles, task, reference, cwd string) (sessionProof, error) {
-	root, err := filepath.Abs(codexSessionsRoot())
-	if err != nil || files.Identity == "" {
-		return sessionProof{}, repairError("launch.session_repair_binding_missing")
-	}
-	var proof sessionProof
-	seen := make(map[string]bool)
-	prefixes := codexPromptPrefixes(task)
-	for _, observed := range files.Files {
-		if err := ctx.Err(); err != nil {
-			return sessionProof{}, err
-		}
-		path := observed.Path
-		base := filepath.Base(path)
-		rel, err := filepath.Rel(root, path)
-		if err != nil || !filepath.IsAbs(path) || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) || !strings.HasPrefix(base, "rollout-") || !strings.HasSuffix(base, ".jsonl") || seen[path] {
-			continue
-		}
-		seen[path] = true
-		id, err := readOpenSession(ctx, root, observed, prefixes, cwd)
-		if err != nil {
-			return sessionProof{}, err
-		}
-		if id == "" {
-			continue
-		}
-		if proof.reference != "" {
-			return sessionProof{}, repairError("launch.session_repair_binding_ambiguous")
-		}
-		proof = sessionProof{reference: id, process: files.Identity, path: path, info: observed.Info}
-	}
-	if proof.reference == "" {
-		return sessionProof{}, repairError("launch.session_repair_binding_missing")
-	}
-	if reference != "" && proof.reference != reference {
-		return sessionProof{}, repairError("launch.session_repair_binding_mismatch")
-	}
-	return proof, nil
-}
 
 // rolloutSession is what one rollout file says about its session.
 type rolloutSession struct {
@@ -61,16 +19,6 @@ type rolloutSession struct {
 	created time.Time
 	// bound reports whether a user message begins with one of the task prompt prefixes.
 	bound bool
-}
-
-// readOpenSession returns the session id of an observed rollout bound to the
-// task prompt prefixes and launch directory, or "" when it is not bound.
-func readOpenSession(ctx context.Context, root string, observed process.OpenFile, prefixes []string, cwd string) (string, error) {
-	session, err := readRolloutSession(ctx, root, observed, prefixes, cwd)
-	if err != nil || !session.bound {
-		return "", err
-	}
-	return session.id, nil
 }
 
 // readRolloutSession reads at most 64 records / 1 MiB of an observed rollout.

@@ -214,7 +214,7 @@ func TestServerPromptOutlivesCallerDeadline(t *testing.T) {
 	}
 }
 
-func TestDefaultServerURLDoesNotEnableOptionalStorage(t *testing.T) {
+func TestDefaultServerURLOpensSession(t *testing.T) {
 	cfg, available, _, _ := serverGateFixture(t)
 	available.Store(true)
 	target := cfg.Server.URL
@@ -222,9 +222,6 @@ func TestDefaultServerURLDoesNotEnableOptionalStorage(t *testing.T) {
 	old := config.DefaultServerURL
 	config.DefaultServerURL = target
 	t.Cleanup(func() { config.DefaultServerURL = old })
-	if Enabled(cfg) || !ServiceSelected(cfg, true) {
-		t.Fatal("default URL changed optional storage selection")
-	}
 	if s, err := Open(t.Context(), cfg, t.TempDir()); err != nil || s.ServerURL != target {
 		t.Fatalf("default session=%+v %v", s, err)
 	}

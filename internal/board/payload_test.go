@@ -11,7 +11,7 @@ import (
 func TestBoardPayloadMatchesScanFieldsAndIgnoresInvalidWithoutWarning(t *testing.T) {
 	resetLang(t)
 	root := tempBoard(t)
-	if code := RunNew([]string{"feature", "web-payload", "中文看板"}); code != 0 {
+	if code := newCard("feature", "web-payload", "中文看板", false); code != 0 {
 		t.Fatalf("new code=%d", code)
 	}
 	taskID := todayID("web-payload")
@@ -51,7 +51,7 @@ func TestBoardPayloadMatchesScanFieldsAndIgnoresInvalidWithoutWarning(t *testing
 		t.Fatalf("time %q", task.Time)
 	}
 
-	_, _, stderr := capture(t, func() int { return RunList(nil) })
+	_, _, stderr := capture(t, func() int { return loadBoardCmd() })
 	if !strings.Contains(stderr, "kander check") {
 		t.Fatalf("LoadBoard should warn: %s", stderr)
 	}
@@ -60,7 +60,7 @@ func TestBoardPayloadMatchesScanFieldsAndIgnoresInvalidWithoutWarning(t *testing
 func TestTaskPayloadTaskGroupLegacyAndCurrent(t *testing.T) {
 	resetLang(t)
 	root := tempBoard(t)
-	capture(t, func() int { return RunNew([]string{"chore", "web-task-group", "分组"}) })
+	capture(t, func() int { return newCard("chore", "web-task-group", "分组", false) })
 	taskID := todayID("web-task-group")
 	path := filepath.Join(root, "backlog", taskID, "spec.md")
 
@@ -112,10 +112,10 @@ func TestTaskPayloadTaskGroupLegacyAndCurrent(t *testing.T) {
 func TestTaskPayloadUsesTargetedScan(t *testing.T) {
 	resetLang(t)
 	root := tempBoard(t)
-	if code := RunNew([]string{"feature", "target-card", "目标卡"}); code != 0 {
+	if code := newCard("feature", "target-card", "目标卡", false); code != 0 {
 		t.Fatalf("new target code=%d", code)
 	}
-	if code := RunNew([]string{"chore", "other-card", "无关卡"}); code != 0 {
+	if code := newCard("chore", "other-card", "无关卡", false); code != 0 {
 		t.Fatalf("new other code=%d", code)
 	}
 	targetID := todayID("target-card")
@@ -168,7 +168,7 @@ func TestTaskPayloadUsesTargetedScan(t *testing.T) {
 func TestTaskPayloadKeepsDuplicateAndSizeChecks(t *testing.T) {
 	resetLang(t)
 	root := tempBoard(t)
-	if code := RunNew([]string{"--large", "feature", "dup-size", "大卡"}); code != 0 {
+	if code := newCard("feature", "dup-size", "大卡", true); code != 0 {
 		t.Fatalf("new code=%d", code)
 	}
 	id := todayID("dup-size")

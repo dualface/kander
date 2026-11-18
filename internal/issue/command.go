@@ -28,14 +28,7 @@ func Command(factory func() IssueProvider) func(args []string) int {
 	}
 }
 
-// ServiceCommand binds the public client to REST without a storage fallback.
-func ServiceCommand(factory func() IssueProvider) func([]string) int {
-	return func(args []string) int { return runWithMode(factory, args, os.Stdout, os.Stderr, true) }
-}
 func runWith(factory func() IssueProvider, args []string, stdout, stderr io.Writer) int {
-	return runWithMode(factory, args, stdout, stderr, false)
-}
-func runWithMode(factory func() IssueProvider, args []string, stdout, stderr io.Writer, required bool) int {
 	if len(args) == 0 {
 		fmt.Fprintln(stderr, usageText())
 		return 2
@@ -51,11 +44,11 @@ func runWithMode(factory func() IssueProvider, args []string, stdout, stderr io.
 	case "show":
 		return runShow(factory, args[1:], stdout, stderr)
 	case "import":
-		return runImportMode(factory, args[1:], stdout, stderr, required)
+		return runImport(factory, args[1:], stdout, stderr)
 	case "result":
-		return runResultMode(factory, args[1:], stdout, stderr, required)
+		return runResult(factory, args[1:], stdout, stderr)
 	case "triage":
-		return runTriageMode(factory, args[1:], stdout, stderr, required)
+		return runTriage(factory, args[1:], stdout, stderr)
 	default:
 		fmt.Fprintln(stderr, config.Text("issue.error_unknown_argument", args[0]))
 		fmt.Fprintln(stderr, usageText())

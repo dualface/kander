@@ -1,7 +1,6 @@
 package board
 
 import (
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -35,9 +34,19 @@ func writeCardFile(t *testing.T, entry Entry, name, text string) string {
 	return path
 }
 
-func showDocument(t *testing.T, args ...string) (int, string, string) {
+// showDoc reads one document of a card of the current test board and reports
+// the result the way a command would: exit code, document text, error line.
+func showDoc(t *testing.T, path, id string) (int, string, string) {
 	t.Helper()
-	return capture(t, func() int { return RunShow(args) })
+	root, err := BoardRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, text, err := ReadDocumentSnapshot(root, id, path)
+	if err != nil {
+		return 1, "", "kander: " + err.Error() + "\n"
+	}
+	return 0, text, ""
 }
 
 func documentError(t *testing.T, root, id, name string) *Error {
@@ -48,76 +57,6 @@ func documentError(t *testing.T, root, id, name string) *Error {
 		t.Fatalf("read %q: err=%v, want a board error", name, err)
 	}
 	return e
-}
-
-func TestShowDocumentPrintsOriginalText(t *testing.T) {
-	root := tempBoard(t)
-	s := documentCard(t, root, "print-doc")
-	code, out, stderr := showDocument(t, "--document", "plan.md", s.Entry.TaskID)
-	if code != 0 || stderr != "" || out != planText {
-		t.Fatalf("code=%d out=%q stderr=%q", code, out, stderr)
-	}
-	code, out, stderr = showDocument(t, s.Entry.TaskID, "--document", "spec.md")
-	if code != 0 || stderr != "" || out != s.Text {
-		t.Fatalf("spec: code=%d stderr=%q equal=%v", code, stderr, out == s.Text)
-	}
-	_, jsonOut, _ := showDocument(t, "--json", s.Entry.TaskID)
-	var snapshot Snapshot
-	if err := json.Unmarshal([]byte(jsonOut), &snapshot); err != nil || snapshot.Text != out {
-		t.Fatalf("spec text differs from show --json: %v", err)
-	}
-}
-
-func TestShowDocumentJSONFields(t *testing.T) {
-	root := tempBoard(t)
-	s := documentCard(t, root, "json-doc")
-	code, out, stderr := showDocument(t, "--json", "--document", "plan.md", s.Entry.TaskID)
-	if code != 0 || stderr != "" || !strings.HasSuffix(out, "}\n") {
-		t.Fatalf("code=%d out=%q stderr=%q", code, out, stderr)
-	}
-	var doc map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(out), &doc); err != nil {
-		t.Fatal(err)
-	}
-	if len(doc) != 4 {
-		t.Fatalf("fields=%v, want path, text, revision, entry", doc)
-	}
-	var path, text string
-	var revision uint64
-	for name, target := range map[string]any{"path": &path, "text": &text, "revision": &revision} {
-		if err := json.Unmarshal(doc[name], target); err != nil {
-			t.Fatalf("%s: %v", name, err)
-		}
-	}
-	if path != "plan.md" || text != planText {
-		t.Fatalf("path=%q text=%q", path, text)
-	}
-	_, snapshotOut, _ := showDocument(t, "--json", s.Entry.TaskID)
-	var snapshot map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(snapshotOut), &snapshot); err != nil {
-		t.Fatal(err)
-	}
-	if string(doc["revision"]) != string(snapshot["revision"]) || revision == 0 {
-		t.Fatalf("revision %s differs from show --json %s", doc["revision"], snapshot["revision"])
-	}
-	if string(doc["entry"]) != string(snapshot["entry"]) {
-		t.Fatalf("entry %s differs from show --json %s", doc["entry"], snapshot["entry"])
-	}
-}
-
-func TestShowWithoutDocumentIsUnchanged(t *testing.T) {
-	root := tempBoard(t)
-	s := documentCard(t, root, "plain-show")
-	code, out, _ := showDocument(t, s.Entry.TaskID)
-	want := msg("board.show_location", s.Entry.State, s.Entry.Path) + "\n\n" + s.Text
-	if code != 0 || out != want {
-		t.Fatalf("code=%d out=%q", code, out)
-	}
-	code, out, _ = showDocument(t, "--json", s.Entry.TaskID)
-	var got Snapshot
-	if code != 0 || json.Unmarshal([]byte(out), &got) != nil || got.Text != s.Text || got.Revision != s.Revision || got.Entry.Path != s.Entry.Path {
-		t.Fatalf("json: code=%d out=%q", code, out)
-	}
 }
 
 // msg renders a message without being shadowed by the testing parameter t.
@@ -142,7 +81,7 @@ func TestShowDocumentRejectsInvalidPaths(t *testing.T) {
 			if e := documentError(t, root, s.Entry.TaskID, path); e.Code != "board.transaction_invalid" {
 				t.Fatalf("code=%q", e.Code)
 			}
-			code, out, stderr := showDocument(t, "--document", path, s.Entry.TaskID)
+			code, out, stderr := showDoc(t, path, s.Entry.TaskID)
 			if code == 0 || out != "" || !strings.Contains(stderr, msg("board.transaction_invalid", path)) {
 				t.Fatalf("code=%d out=%q stderr=%q", code, out, stderr)
 			}
@@ -166,7 +105,7 @@ func TestShowDocumentRefusesSymlinks(t *testing.T) {
 	}
 	for name, path := range map[string]string{"file": "link.md", "parent": "linkdir/secret.md"} {
 		t.Run(name, func(t *testing.T) {
-			code, out, stderr := showDocument(t, "--document", path, s.Entry.TaskID)
+			code, out, stderr := showDoc(t, path, s.Entry.TaskID)
 			if code == 0 || strings.Contains(out+stderr, secret) {
 				t.Fatalf("code=%d out=%q stderr=%q", code, out, stderr)
 			}
@@ -189,11 +128,11 @@ func TestShowDocumentMissingAndDirectoryTargets(t *testing.T) {
 	if e := documentError(t, root, s.Entry.TaskID, "no/such/dir.md"); e.Code != "board.document_not_found" {
 		t.Fatalf("missing parent: %+v", e)
 	}
-	code, out, stderr := showDocument(t, "--document", "absent.md", s.Entry.TaskID)
+	code, out, stderr := showDoc(t, "absent.md", s.Entry.TaskID)
 	if code == 0 || out != "" || !strings.Contains(stderr, msg("board.document_not_found", "absent.md")) {
 		t.Fatalf("missing: code=%d out=%q stderr=%q", code, out, stderr)
 	}
-	code, out, stderr = showDocument(t, "--document", "notes", s.Entry.TaskID)
+	code, out, stderr = showDoc(t, "notes", s.Entry.TaskID)
 	if code == 0 || out != "" || !strings.Contains(stderr, "notes") {
 		t.Fatalf("directory: code=%d out=%q stderr=%q", code, out, stderr)
 	}
@@ -207,7 +146,7 @@ func TestShowDocumentTranslatesMissingDocument(t *testing.T) {
 		t.Run(lang, func(t *testing.T) {
 			t.Setenv(config.EnvLang, lang)
 			config.ApplyLanguageArgument([]string{"kander", "--lang", lang})
-			code, _, stderr := showDocument(t, "--document", "nope.md", s.Entry.TaskID)
+			code, _, stderr := showDoc(t, "nope.md", s.Entry.TaskID)
 			if code == 0 || !strings.Contains(stderr, want) || strings.Contains(stderr, "board.document_not_found") {
 				t.Fatalf("code=%d stderr=%q, want %q", code, stderr, want)
 			}
@@ -222,7 +161,7 @@ func TestShowDocumentRejectsInvalidUTF8(t *testing.T) {
 	if e := documentError(t, root, s.Entry.TaskID, "binary.md"); e.Code != "board.task_document_is_not_valid_utf_8" {
 		t.Fatalf("code=%q", e.Code)
 	}
-	code, out, stderr := showDocument(t, "--document", "binary.md", s.Entry.TaskID)
+	code, out, stderr := showDoc(t, "binary.md", s.Entry.TaskID)
 	if code == 0 || out != "" || !strings.Contains(stderr, msg("board.task_document_is_not_valid_utf_8", "binary.md")) {
 		t.Fatalf("code=%d out=%q stderr=%q", code, out, stderr)
 	}
@@ -253,8 +192,8 @@ func TestShowDocumentIsReadOnly(t *testing.T) {
 	root := tempBoard(t)
 	s := documentCard(t, root, "read-only")
 	before := listCardFiles(t, root)
-	for _, args := range [][]string{{"--document", "plan.md"}, {"--json", "--document", "spec.md"}} {
-		if code, _, stderr := showDocument(t, append(args, s.Entry.TaskID)...); code != 0 {
+	for _, path := range []string{"plan.md", "spec.md"} {
+		if code, _, stderr := showDoc(t, path, s.Entry.TaskID); code != 0 {
 			t.Fatal(stderr)
 		}
 	}
@@ -276,7 +215,7 @@ func TestShowDocumentInEveryState(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			code, out, stderr := showDocument(t, "--document", "plan.md", s.Entry.TaskID)
+			code, out, stderr := showDoc(t, "plan.md", s.Entry.TaskID)
 			if code != 0 || out != planText {
 				t.Fatalf("code=%d out=%q stderr=%q", code, out, stderr)
 			}
@@ -290,7 +229,7 @@ func TestShowDocumentReadsManagedDirectoriesButUpdateRefusesThem(t *testing.T) {
 	writeCardFile(t, s.Entry, "reviews/run-1/report.md", "review report")
 	writeCardFile(t, s.Entry, "dispatches/d-1.json", `{"id":"d-1"}`)
 	for path, want := range map[string]string{"reviews/run-1/report.md": "review report", "dispatches/d-1.json": `{"id":"d-1"}`} {
-		code, out, stderr := showDocument(t, "--document", path, s.Entry.TaskID)
+		code, out, stderr := showDoc(t, path, s.Entry.TaskID)
 		if code != 0 || out != want {
 			t.Fatalf("%s: code=%d out=%q stderr=%q", path, code, out, stderr)
 		}
@@ -309,47 +248,17 @@ func TestShowDocumentOnLegacyFileCard(t *testing.T) {
 		t.Fatal(err)
 	}
 	legacyMigrationCard(t, root, "backlog", s.Entry.TaskID, false, s.Text)
-	code, out, stderr := showDocument(t, "--document", "spec.md", s.Entry.TaskID)
+	code, out, stderr := showDoc(t, "spec.md", s.Entry.TaskID)
 	if code != 0 || out != s.Text {
 		t.Fatalf("spec: code=%d stderr=%q", code, stderr)
 	}
 	if e := documentError(t, root, s.Entry.TaskID, "plan.md"); e.Code != "board.transaction_directory_required" {
 		t.Fatalf("code=%q", e.Code)
 	}
-	code, out, stderr = showDocument(t, "--document", "plan.md", s.Entry.TaskID)
+	code, out, stderr = showDoc(t, "plan.md", s.Entry.TaskID)
 	if code == 0 || out != "" || !strings.Contains(stderr, msg("board.transaction_directory_required")) {
 		t.Fatalf("plan: code=%d out=%q stderr=%q", code, out, stderr)
 	}
-}
-
-func TestShowDocumentUsageErrors(t *testing.T) {
-	root := tempBoard(t)
-	s := documentCard(t, root, "usage")
-	id := s.Entry.TaskID
-	for name, args := range map[string][]string{
-		"missing value":    {id, "--document"},
-		"duplicate":        {"--document", "plan.md", "--document", "plan.md", id},
-		"missing task id":  {"--document", "plan.md"},
-		"multiple task id": {"--document", "plan.md", id, id},
-	} {
-		t.Run(name, func(t *testing.T) {
-			if code, out, _ := showDocument(t, args...); code != 2 || out != "" {
-				t.Fatalf("code=%d out=%q", code, out)
-			}
-		})
-	}
-	t.Run("duplicate names the option", func(t *testing.T) {
-		_, _, stderr := showDocument(t, "--document", "a.md", "--document", "b.md", id)
-		if !strings.Contains(stderr, msg("board.option_given_twice", "--document")) {
-			t.Fatalf("stderr=%q", stderr)
-		}
-	})
-	t.Run("empty value is a path error", func(t *testing.T) {
-		code, out, stderr := showDocument(t, "--document", "", id)
-		if code != 1 || out != "" || !strings.Contains(stderr, msg("board.transaction_invalid", "")) {
-			t.Fatalf("code=%d out=%q stderr=%q", code, out, stderr)
-		}
-	})
 }
 
 func TestReadDocumentSnapshotAcceptsTaskFileName(t *testing.T) {

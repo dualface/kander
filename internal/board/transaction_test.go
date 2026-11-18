@@ -2,7 +2,6 @@ package board
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -429,30 +428,22 @@ func TestRecoveryPreservesConflictingCopies(t *testing.T) {
 		}
 	}
 }
-func TestShowJSONAndUpdateCommand(t *testing.T) {
+func TestSnapshotAndUpdateRevisionGuard(t *testing.T) {
 	root := tempBoard(t)
 	s := transactionCard(t, root, "json-update", false)
-	code, out, stderr := capture(t, func() int { return RunShow([]string{s.Entry.TaskID, "--json"}) })
-	if code != 0 {
-		t.Fatal(stderr)
-	}
-	var decoded Snapshot
-	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
+	read, err := ReadSnapshot(root, s.Entry.TaskID)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if decoded.Revision != s.Revision || decoded.Text != s.Text || decoded.Entry.Path != s.Entry.Path {
-		t.Fatal("inconsistent JSON snapshot")
+	if read.Revision != s.Revision || read.Text != s.Text || read.Entry.Path != s.Entry.Path {
+		t.Fatal("inconsistent snapshot")
 	}
-	input := filepath.Join(t.TempDir(), "input.md")
-	if err := os.WriteFile(input, []byte(readyText(s)), 0600); err != nil {
+	options := UpdateOptions{Document: "spec.md", Text: readyText(s), ExpectedRevision: s.Revision}
+	if err := UpdateDocument(root, s.Entry.TaskID, options); err != nil {
 		t.Fatal(err)
 	}
-	args := []string{s.Entry.TaskID, "--document", "spec.md", "--file", input, "--expect-revision", fmt.Sprint(s.Revision)}
-	if code, _, stderr = capture(t, func() int { return RunUpdate(args) }); code != 0 {
-		t.Fatal(stderr)
-	}
-	if code, _, _ = capture(t, func() int { return RunUpdate(args) }); code == 0 {
-		t.Fatal("stale command accepted")
+	if err := UpdateDocument(root, s.Entry.TaskID, options); err == nil {
+		t.Fatal("stale update accepted")
 	}
 }
 

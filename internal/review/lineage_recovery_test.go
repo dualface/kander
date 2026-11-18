@@ -114,7 +114,7 @@ func TestLineageFailuresRecoverThroughControlledCLI(t *testing.T) {
 			commandOK(t, "aggregate", h.repo, "batch")
 			for _, id := range ids {
 				commandOK(t, "progress", h.repo, id)
-				if board.RunMove([]string{id, "done", "--result", "completed"}) == 0 {
+				if moveCard(id, "done", board.MoveOptions{Result: "completed"}) == 0 {
 					t.Fatal("invalid report completed member")
 				}
 			}
@@ -151,7 +151,7 @@ func TestLineageFailuresRecoverThroughControlledCLI(t *testing.T) {
 			r.ResolvedFailures = map[string]string{"invalid": "replacement"}
 			commandOK(t, "close", h.repo, dispositionJSON(t, h, "close", r))
 			for _, id := range ids {
-				if board.RunMove([]string{id, "done", "--result", "completed"}) != 0 {
+				if moveCard(id, "done", board.MoveOptions{Result: "completed"}) != 0 {
 					t.Fatal("recovered member cannot finish")
 				}
 			}

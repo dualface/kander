@@ -1,7 +1,6 @@
 package launch
 
 import (
-	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -9,7 +8,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
@@ -297,174 +295,6 @@ func TestStartCursorCreateChatFailureDoesNotClaim(t *testing.T) {
 	}
 }
 
-func TestResumeClaudeAndGroupPrompt(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("tmux fakes are POSIX")
-	}
-	root, _, fakeBin := setupBoard(t)
-	taskID, path := makeTodo(t, root, "resume-claude")
-	_, _, err := capture(t, func() error { return commandStart(root, "claude", "", taskID) })
-	if err != nil {
-		t.Fatal(err)
-	}
-	cmd := lastCommand(t, root)
-	session := regexp.MustCompile(`--session-id ([0-9a-f-]{36})`).FindStringSubmatch(cmd)[1]
-	working := filepath.Join(root, "working", filepath.Base(filepath.Dir(path)), "spec.md")
-	setBranch(t, working)
-	loaded, _ := board.LoadBoard(root)
-	entry, _ := board.Locate(loaded, taskID)
-	if _, err := board.MoveEntry(entry, root, "review"); err != nil {
-		t.Fatal(err)
-	}
-	out, _, err := capture(t, func() error {
-		return commandResume(root, nil, "", taskID, "QA finding: 补齐空输入校验", "", true, 61)
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out, "已唤醒: "+taskID+"\t规模=小任务\tAgent=claude") {
-		t.Fatalf("stdout=%s", out)
-	}
-	// resume does not move the card: a review card stays put and the move is performed by the woken agent itself.
-	if _, err := os.Stat(filepath.Join(root, "review", filepath.Base(filepath.Dir(path)), "spec.md")); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(working); err == nil {
-		t.Fatal("resume must not move the card to working")
-	}
-	cmd = lastCommand(t, root)
-	if !strings.Contains(cmd, filepath.Join(fakeBin, "claude")) || !strings.Contains(cmd, "--resume "+session) || strings.Contains(cmd, "--session-id") {
-		t.Fatalf("command=%s", cmd)
-	}
-	if strings.Contains(cmd, "QA finding") {
-		t.Fatalf("message leaked onto argv: %s", cmd)
-	}
-	idx := strings.Index(cmd, "UTF-8 task file at ")
-	if idx < 0 {
-		t.Fatalf("no task file in %s", cmd)
-	}
-	rest := cmd[idx+len("UTF-8 task file at "):]
-	pathEnd := strings.IndexByte(rest, ';')
-	resumeFile := strings.TrimSpace(rest[:pathEnd])
-	resumeBody, _ := os.ReadFile(resumeFile)
-	if !strings.Contains(string(resumeBody), "QA finding: 补齐空输入校验") {
-		t.Fatalf("resume prompt=%s", resumeBody)
-	}
-
-	groupID, groupPath := makeTodo(t, root, "group-prompt")
-	loadEffective = func() (*config.Config, error) {
-		cfg := envConfig("claude", "tmux", nil)
-		cfg.Rules[config.RuleGit] = true
-		cfg.Rules[config.RuleTaskGroups] = true
-		return cfg, nil
-	}
-	data, _ := os.ReadFile(groupPath)
-	updated := strings.Replace(string(data), "- TASK_GROUP:\n", "- TASK_GROUP: 20260901-demo-group\n", 1)
-	_ = os.WriteFile(groupPath, []byte(updated), 0o644)
-	_, _, err = capture(t, func() error { return commandStart(root, "", "", groupID) })
-	if err != nil {
-		t.Fatal(err)
-	}
-	groupCmd := lastCommand(t, root)
-	idx = strings.Index(groupCmd, "UTF-8 task file at ")
-	if idx < 0 {
-		t.Fatalf("group cmd=%s", groupCmd)
-	}
-	rest = groupCmd[idx+len("UTF-8 task file at "):]
-	pathEnd = strings.IndexByte(rest, ';')
-	file := strings.TrimSpace(rest[:pathEnd])
-	body, _ := os.ReadFile(file)
-	if !strings.Contains(string(body), "this card is a task-group member") || !strings.Contains(string(body), "KANDER-KANBAN-RULES.md") {
-		t.Fatalf("group prompt=%s", body)
-	}
-	if strings.Contains(string(body), "Delivery Self-Check") || strings.Contains(string(body), "kander move "+groupID+" review") {
-		t.Fatalf("group prompt duplicated rules-file policy: %s", body)
-	}
-}
-
-func TestResumeRequiresMessageAndCodexRollout(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("tmux fakes are POSIX")
-	}
-	root, home, fakeBin := setupBoard(t)
-	taskID, path := makeTodo(t, root, "resume-codex")
-	_, _, err := capture(t, func() error { return commandStart(root, "", "", taskID) })
-	if err != nil {
-		t.Fatal(err)
-	}
-	working := filepath.Join(root, "working", filepath.Base(filepath.Dir(path)), "spec.md")
-	setBranch(t, working)
-	loaded, _ := board.LoadBoard(root)
-	entry, _ := board.Locate(loaded, taskID)
-	if _, err := board.MoveEntry(entry, root, "review"); err != nil {
-		t.Fatal(err)
-	}
-	_, _, err = capture(t, func() error {
-		return commandResume(root, nil, "", taskID, "", "", false, 61)
-	})
-	if err == nil || !strings.Contains(err.Error(), "--message") {
-		t.Fatalf("expected message error, got %v", err)
-	}
-	_, _, err = capture(t, func() error {
-		return commandResume(root, nil, "", taskID, "x", "y", true, 61)
-	})
-	if err == nil || !strings.Contains(err.Error(), "--message") {
-		t.Fatalf("expected xor error, got %v", err)
-	}
-	_, _, err = capture(t, func() error {
-		return commandResume(root, nil, "", taskID, "  ", "", true, 61)
-	})
-	if err == nil || !strings.Contains(err.Error(), "不得为空") {
-		t.Fatalf("expected empty, got %v", err)
-	}
-	_, _, err = capture(t, func() error {
-		return commandResume(root, nil, "", taskID, "x", "", true, 60)
-	})
-	if err == nil || !strings.Contains(err.Error(), "大于 60") {
-		t.Fatalf("expected timeout, got %v", err)
-	}
-
-	_ = os.RemoveAll(filepath.Join(home, ".codex", "sessions"))
-	day := filepath.Join(home, ".codex", "sessions", "2026", "09", "01")
-	if err := os.MkdirAll(day, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeRollout := func(name, id, prompt string) {
-		lines := []map[string]any{
-			{"timestamp": "t", "type": "session_meta", "payload": map[string]any{"id": id, "cwd": "/p"}},
-			{"timestamp": "t", "type": "response_item", "payload": map[string]any{"type": "message", "role": "user", "content": []any{map[string]any{"type": "input_text", "text": prompt}}}},
-		}
-		var b strings.Builder
-		for _, line := range lines {
-			raw, _ := json.Marshal(line)
-			b.Write(raw)
-			b.WriteByte('\n')
-		}
-		if err := os.WriteFile(filepath.Join(day, name), []byte(b.String()), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	writeRollout("rollout-other.jsonl", "aaaaaaaa-0000-0000-0000-000000000001", "执行 Kanban 任务 other.")
-	writeRollout("rollout-orch.jsonl", "cccccccc-0000-0000-0000-000000000003", "请用 kander start 启动 "+taskID+" 并跟踪")
-	target := filepath.Join(day, "rollout-target.jsonl")
-	writeRollout("rollout-target.jsonl", "bbbbbbbb-0000-0000-0000-000000000002",
-		"执行 Kanban 任务 "+taskID+"; full instructions are in the UTF-8 task file at /tmp/kander-task.md; read the complete file first and follow it exactly.")
-	_ = os.Chtimes(target, time.Unix(1_700_000_000, 0), time.Unix(1_700_000_000, 0))
-	_, _, err = capture(t, func() error {
-		return commandResume(root, nil, "", taskID, "PM finding", "", true, 61)
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	cmd := lastCommand(t, root)
-	if !strings.Contains(cmd, filepath.Join(fakeBin, "codex")+" resume") && !strings.Contains(cmd, "codex resume") {
-		t.Fatalf("command=%s", cmd)
-	}
-	if !strings.Contains(cmd, "bbbbbbbb-0000-0000-0000-000000000002") {
-		t.Fatalf("command=%s", cmd)
-	}
-}
-
 func TestStartFailureRestoresTodo(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("tmux fakes are POSIX")
@@ -577,43 +407,6 @@ func TestStartRemovesTaskFileWhenClaimFails(t *testing.T) {
 	}
 }
 
-func TestTakeoverHookReportsNA(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("tmux fakes are POSIX")
-	}
-	root, _, _ := setupBoard(t)
-	taskID, path := makeTodo(t, root, "takeover-na")
-	_, _, err := capture(t, func() error { return commandStart(root, "claude", "", taskID) })
-	if err != nil {
-		t.Fatal(err)
-	}
-	working := filepath.Join(root, "working", filepath.Base(filepath.Dir(path)), "spec.md")
-	setBranch(t, working)
-	loaded, _ := board.LoadBoard(root)
-	entry, _ := board.Locate(loaded, taskID)
-	if _, err := board.MoveEntry(entry, root, "review"); err != nil {
-		t.Fatal(err)
-	}
-	agent := "grok"
-	out, _, err := capture(t, func() error {
-		return commandResume(root, &agent, "", taskID, "继续", "", true, 61)
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out, "已接管") || !strings.Contains(out, "已清理原容器: N/A") {
-		t.Fatalf("stdout=%s", out)
-	}
-	// A takeover does not move the card: it stays in review and the metadata is rewritten in place.
-	text, _ := os.ReadFile(filepath.Join(root, "review", filepath.Base(filepath.Dir(path)), "spec.md"))
-	if !strings.Contains(string(text), "- OWNER: grok\n") {
-		t.Fatalf("card=%s", text)
-	}
-	if _, err := os.Stat(working); err == nil {
-		t.Fatal("takeover must not move the card to working")
-	}
-}
-
 func TestForegroundRejectsNonTTY(t *testing.T) {
 	root, _, _ := setupBoard(t)
 	stdinIsTTY, stdoutIsTTY, stderrIsTTY = func() bool { return false }, func() bool { return false }, func() bool { return false }
@@ -653,17 +446,6 @@ func TestHerdrStartWritesWindow(t *testing.T) {
 	text, _ := os.ReadFile(filepath.Join(root, "working", filepath.Base(filepath.Dir(path)), "spec.md"))
 	if !strings.Contains(string(text), "- WINDOW: herdr:w1:t9:w1:p9\n") {
 		t.Fatalf("card=%s", text)
-	}
-}
-
-func TestResumeWrongState(t *testing.T) {
-	root, _, _ := setupBoard(t)
-	taskID, _ := makeTodo(t, root, "resume-todo")
-	_, _, err := capture(t, func() error {
-		return commandResume(root, nil, "", taskID, "x", "", true, 61)
-	})
-	if err == nil || !strings.Contains(err.Error(), "todo") {
-		t.Fatalf("err=%v", err)
 	}
 }
 

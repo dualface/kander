@@ -233,38 +233,6 @@ func TestBatchUncollectedAndReadErrors(t *testing.T) {
 	}
 }
 
-func TestCheckCollectsBatchAndPreservesOutputOrder(t *testing.T) {
-	root := tempBoard(t)
-	installPOSIXFakes(t, true)
-	dir := t.TempDir()
-	t.Setenv("BATCH_EVENTS", filepath.Join(dir, "events"))
-	script := `#!/bin/sh
-printf 'start %s\n' "$3" >> "$BATCH_EVENTS"
-/bin/sleep 0.1
-printf 'end %s\n' "$3" >> "$BATCH_EVENTS"
-printf '{"result":{"pane":{"pane_id":"%s","agent":"codex","agent_status":"idle","agent_session":{"value":"wanted"}}}}\n' "$3"
-`
-	if err := os.WriteFile(filepath.Join(os.Getenv("PATH"), "herdr"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	var ids []string
-	for i := 0; i < 4; i++ {
-		id, path := makeWorking(t, "batch-check-"+strconv.Itoa(i), "批量采集")
-		setLocation(t, path, "codex wanted", "herdr:w1:t1:w1:p"+strconv.Itoa(i))
-		ids = append(ids, id)
-	}
-	lines, err := livenessLines(root, nil)
-	if err != nil || len(lines) != len(ids) {
-		t.Fatalf("lines=%v err=%v", lines, err)
-	}
-	for i, line := range lines {
-		if !strings.Contains(line, ids[i]) || !strings.Contains(line, "alive") || !strings.Contains(line, "idle") || !strings.Contains(line, "true") {
-			t.Fatalf("line %d=%s", i, line)
-		}
-	}
-	assertBatchPeakAndCleanup(t, dir, 4, 4)
-}
-
 func TestObservationRejectsNewIdentityAndKeepsRuntimeSeparate(t *testing.T) {
 	resetLang(t)
 	installPOSIXFakes(t, true)

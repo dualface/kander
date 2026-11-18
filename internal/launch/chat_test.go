@@ -1,13 +1,14 @@
 package launch
 
 import (
-	"github.com/dualface/kander/internal/process"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dualface/kander/internal/process"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"

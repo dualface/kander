@@ -5,18 +5,13 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"testing"
 )
 
 func endDispatchCommand(t *testing.T, d Dispatch, verb, decision string) {
 	t.Helper()
-	args := []string{verb, d.Input.TaskID, d.Input.ID, strconv.FormatUint(d.Revision, 10), "executor stopped"}
-	if decision != "" {
-		args = append(args, "--decision", decision)
-	}
-	if code := RunDispatch(args); code != 0 {
+	if code := endDispatchCmd(verb, d.Input.TaskID, d.Input.ID, d.Revision, "executor stopped", decision); code != 0 {
 		t.Fatalf("dispatch %s: %d", verb, code)
 	}
 }
@@ -27,14 +22,14 @@ func TestDispatchReleaseCommandsFenceOldAuthorization(t *testing.T) {
 			root := tempBoard(t)
 			s := dispatchCard(t, root, "release")
 			d := prepareTestDispatch(t, root, dispatchInput(s, "release-one"))
-			if RunMove([]string{s.Entry.TaskID, "working", "--owner", "claude", "--decision", "user-reclaim"}) == 0 {
+			if moveCardWith(s.Entry.TaskID, "working", MoveOptions{Owner: "claude", Decision: "user-reclaim"}) == 0 {
 				t.Fatal("active grant reclaimed")
 			}
 			before := transactionSnapshot(t, root, s.Entry.TaskID)
-			if RunDispatch([]string{verb, s.Entry.TaskID, d.Input.ID, "999", "reason", "--decision", "decision"}) == 0 {
+			if endDispatchCmd(verb, s.Entry.TaskID, d.Input.ID, 999, "reason", "decision") == 0 {
 				t.Fatal("stale termination accepted")
 			}
-			if RunDispatch([]string{verb, s.Entry.TaskID, d.Input.ID, "1", "reason", "--decision", " "}) == 0 {
+			if endDispatchCmd(verb, s.Entry.TaskID, d.Input.ID, 1, "reason", " ") == 0 {
 				t.Fatal("empty explicit decision accepted")
 			}
 			if got := transactionSnapshot(t, root, s.Entry.TaskID); got.Revision != before.Revision {
@@ -67,10 +62,10 @@ func TestDispatchReleaseCommandsFenceOldAuthorization(t *testing.T) {
 			if err := fixtureWrite(root, stale, strings.Replace(s.Text, "- WINDOW:", "- WINDOW: stale", 1)); err == nil {
 				t.Fatal("old epoch changed WINDOW")
 			}
-			if RunMove([]string{s.Entry.TaskID, "working", "--owner", "claude"}) == 0 {
+			if moveCardWith(s.Entry.TaskID, "working", MoveOptions{Owner: "claude"}) == 0 {
 				t.Fatal("released reclaim lacked decision")
 			}
-			if RunMove([]string{s.Entry.TaskID, "working", "--owner", "claude", "--decision", "user-reclaim"}) != 0 {
+			if moveCardWith(s.Entry.TaskID, "working", MoveOptions{Owner: "claude", Decision: "user-reclaim"}) != 0 {
 				t.Fatal("authorized reclaim failed")
 			}
 			current := transactionSnapshot(t, root, s.Entry.TaskID)
@@ -141,20 +136,20 @@ func TestLegacyTerminalReleasePreservesOriginalsAndRejectsNewBinding(t *testing.
 func TestDecisionOnlyAppliesToReclaim(t *testing.T) {
 	root := tempBoard(t)
 	s := coordinatorTodo(t, root, "ordinary-claim")
-	if RunMove([]string{s.Entry.TaskID, "working", "--owner", "codex", "--decision", "unused"}) == 0 {
+	if moveCardWith(s.Entry.TaskID, "working", MoveOptions{Owner: "codex", Decision: "unused"}) == 0 {
 		t.Fatal("ordinary claim accepted decision")
 	}
-	if RunMove([]string{s.Entry.TaskID, "working", "--owner", "codex"}) != 0 {
+	if moveCardWith(s.Entry.TaskID, "working", MoveOptions{Owner: "codex"}) != 0 {
 		t.Fatal("ordinary claim failed")
 	}
 	first := transactionSnapshot(t, root, s.Entry.TaskID)
 	if _, err := MoveEntry(first.Entry, root, "review"); err != nil {
 		t.Fatal(err)
 	}
-	if RunMove([]string{s.Entry.TaskID, "working", "--owner", "codex"}) == 0 {
+	if moveCardWith(s.Entry.TaskID, "working", MoveOptions{Owner: "codex"}) == 0 {
 		t.Fatal("never-bound reclaim skipped decision")
 	}
-	if RunMove([]string{s.Entry.TaskID, "working", "--owner", "codex", "--decision", "reclaim"}) != 0 {
+	if moveCardWith(s.Entry.TaskID, "working", MoveOptions{Owner: "codex", Decision: "reclaim"}) != 0 {
 		t.Fatal("never-bound reclaim failed")
 	}
 	second := transactionSnapshot(t, root, s.Entry.TaskID)
@@ -185,11 +180,11 @@ func TestCoordinatorAndReviewRecoverReleasedReclaim(t *testing.T) {
 					if err := RollbackDocument(root, entry, s.Text, "todo"); err != nil {
 						t.Fatal(err)
 					}
-					if RunMove([]string{s.Entry.TaskID, "working", "--owner", "codex"}) != 0 {
+					if moveCardWith(s.Entry.TaskID, "working", MoveOptions{Owner: "codex"}) != 0 {
 						t.Fatal("claim after rollback")
 					}
 				}
-			} else if RunMove([]string{s.Entry.TaskID, "working", "--owner", "codex"}) != 0 {
+			} else if moveCardWith(s.Entry.TaskID, "working", MoveOptions{Owner: "codex"}) != 0 {
 				t.Fatal("manual claim failed")
 			}
 			c = coordinatorReconcile(t, root, c)
@@ -208,7 +203,7 @@ func TestCoordinatorAndReviewRecoverReleasedReclaim(t *testing.T) {
 			if unbound.Members[s.Entry.TaskID].Dispatch != nil || len(unbound.Members[s.Entry.TaskID].ReleasedDispatches) != 1 {
 				t.Fatal("release not checkpointed")
 			}
-			if RunMove([]string{s.Entry.TaskID, "working", "--owner", "claude", "--decision", "reclaim-decision"}) != 0 {
+			if moveCardWith(s.Entry.TaskID, "working", MoveOptions{Owner: "claude", Decision: "reclaim-decision"}) != 0 {
 				t.Fatal("reclaim failed")
 			}
 			progress, err := ReviewTaskProgress(root, s.Entry.TaskID)
@@ -257,7 +252,7 @@ func TestCoordinatorRejectsMissingReleaseAndHandoffEvidence(t *testing.T) {
 		t.Run(damage, func(t *testing.T) {
 			root := tempBoard(t)
 			s := coordinatorTodo(t, root, "missing-evidence")
-			if RunMove([]string{s.Entry.TaskID, "working", "--owner", "codex"}) != 0 {
+			if moveCardWith(s.Entry.TaskID, "working", MoveOptions{Owner: "codex"}) != 0 {
 				t.Fatal("claim")
 			}
 			s = transactionSnapshot(t, root, s.Entry.TaskID)
@@ -281,7 +276,7 @@ func TestCoordinatorRejectsMissingReleaseAndHandoffEvidence(t *testing.T) {
 					c = coordinatorReconcile(t, root, c)
 				}
 				if damage == "handoff" || damage == "replay-handoff" {
-					if RunMove([]string{s.Entry.TaskID, "working", "--owner", "claude", "--decision", "reclaim"}) != 0 {
+					if moveCardWith(s.Entry.TaskID, "working", MoveOptions{Owner: "claude", Decision: "reclaim"}) != 0 {
 						t.Fatal("reclaim")
 					}
 					if damage == "replay-handoff" {
@@ -378,7 +373,7 @@ func TestTerminalReleaseRejectsWrongStateOrSupersededBinding(t *testing.T) {
 				prepareTestDispatch(t, root, dispatchInput(s, "new-active"))
 			}
 			before := transactionSnapshot(t, root, s.Entry.TaskID)
-			if RunDispatch([]string{verb, s.Entry.TaskID, d.Input.ID, strconv.FormatUint(d.Revision, 10), "release", "--decision", "user-decision"}) == 0 {
+			if endDispatchCmd(verb, s.Entry.TaskID, d.Input.ID, d.Revision, "release", "user-decision") == 0 {
 				t.Fatal("invalid terminal release accepted")
 			}
 			after := transactionSnapshot(t, root, s.Entry.TaskID)

@@ -151,7 +151,7 @@ func (d *remoteDismiss) saveGroupCredential(t *testing.T, change func(*remote.Cr
 func (d *remoteDismiss) run(t *testing.T) (code int, stdout, stderr string) {
 	t.Helper()
 	stdout, stderr, _ = capture(t, func() error {
-		code = RunDismiss([]string{d.task})
+		code = RunDismissRemote([]string{d.task})
 		return nil
 	})
 	return code, stdout, stderr

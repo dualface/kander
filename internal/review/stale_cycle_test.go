@@ -94,7 +94,7 @@ func TestOldRunCannotReachDoneThroughTheReviewCommand(t *testing.T) {
 	if code == 0 || !strings.Contains(stderr, id) || !strings.Contains(stderr, "PMQA") {
 		t.Fatalf("the run of the old cycle closed the batch: %d %s", code, stderr)
 	}
-	if board.RunMove([]string{id, "done", "--result", "completed"}) == 0 {
+	if moveCard(id, "done", board.MoveOptions{Result: "completed"}) == 0 {
 		t.Fatal("the run of the old cycle reached done")
 	}
 	var progress board.ReviewProgress
@@ -115,7 +115,7 @@ func TestOldRunCannotReachDoneThroughTheReviewCommand(t *testing.T) {
 	r.Roles["PMQA"] = board.ReviewRoleConclusion{RunID: "new-run", PassedAt: h.head, Basis: "the new cycle reviewed the delivery"}
 	r.SupersededRuns = map[string]board.ReviewSupersededRun{"old-run": {Replacement: "new-run", Basis: "parallel run of the old cycle"}}
 	commandOK(t, "close", h.repo, dispositionJSON(t, h, "close", r))
-	if board.RunMove([]string{id, "done", "--result", "completed"}) != 0 {
+	if moveCard(id, "done", board.MoveOptions{Result: "completed"}) != 0 {
 		t.Fatal("the real way out failed")
 	}
 }

@@ -4,38 +4,25 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/check"
 	"github.com/dualface/kander/internal/cli"
 	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/liveness"
 )
 
-// The production package graph must register check.Run. Rebinding to
-// board.RunCheck or liveness.RunCheck, or leaving it unimplemented, fails.
+// The production package graph must register check: the no-mode form goes
+// through the service and never touches a local board.
 
 func TestCheckCommandUsesLivenessInFullBinary(t *testing.T) {
 	t.Setenv(config.EnvLang, "cn")
 	t.Setenv(config.EnvLangCLI, "1")
 	config.ApplyLanguageArgument([]string{"kander", "--lang", "cn"})
 
-	got := cli.Commands["check"]
-	if got == nil {
+	if cli.Commands["check"] == nil {
 		t.Fatal("check is not registered")
-	}
-	if reflect.ValueOf(got).Pointer() != reflect.ValueOf(check.Run).Pointer() {
-		t.Fatal("full binary must bind check.Run")
-	}
-	if reflect.ValueOf(got).Pointer() == reflect.ValueOf(board.RunCheck).Pointer() {
-		t.Fatal("check bound to board.RunCheck")
-	}
-	if reflect.ValueOf(got).Pointer() == reflect.ValueOf(liveness.RunCheck).Pointer() {
-		t.Fatal("check bound to liveness.RunCheck; full binary must route through check.Run")
 	}
 
 	t.Chdir(t.TempDir())
@@ -112,15 +99,5 @@ func TestCheckCommandDeliveryBoardFree(t *testing.T) {
 	}
 	if !strings.Contains(string(outBytes), `"code":"not-repository"`) {
 		t.Fatalf("expected not-repository error, got %s", outBytes)
-	}
-}
-
-func TestListCommandUsesLivenessAgentStatusInFullBinary(t *testing.T) {
-	got := cli.Commands["list"]
-	if got == nil {
-		t.Fatal("list is not registered")
-	}
-	if reflect.ValueOf(got).Pointer() != reflect.ValueOf(liveness.RunList).Pointer() {
-		t.Fatal("full binary must bind liveness.RunList so --agent-status is available")
 	}
 }

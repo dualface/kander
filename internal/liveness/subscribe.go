@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/api"
-	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 )
@@ -188,7 +187,7 @@ func emitEvent(w io.Writer, payload groupEvent) error {
 }
 
 // Subscribe preserves the stop-channel API; a closed stop is a successful exit.
-// Writer requirements and resource ownership follow SubscribeContext.
+// Writer requirements and resource ownership follow subscribeContext.
 func Subscribe(root string, opts subscribeOptions, w io.Writer, stop <-chan struct{}) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	joined := make(chan struct{})
@@ -200,7 +199,7 @@ func Subscribe(root string, opts subscribeOptions, w io.Writer, stop <-chan stru
 		case <-ctx.Done():
 		}
 	}()
-	err := SubscribeContext(ctx, root, opts, w)
+	err := subscribeContext(ctx, root, opts, w, nil)
 	stopped := ctx.Err() != nil
 	cancel()
 	<-joined
@@ -210,12 +209,6 @@ func Subscribe(root string, opts subscribeOptions, w io.Writer, stop <-chan stru
 	return err
 }
 
-// SubscribeContext owns one probe batch and one bounded output worker. It joins
-// both before returning. Custom writers must implement ContextWriter; files,
-// bytes.Buffer, strings.Builder and io.Discard are adapted internally.
-func SubscribeContext(ctx context.Context, root string, opts subscribeOptions, w io.Writer) error {
-	return subscribeContext(ctx, root, opts, w, nil)
-}
 func subscribeContext(ctx context.Context, root string, opts subscribeOptions, w io.Writer, service *remote.Session) (result error) {
 
 	refresh, valid := subscriptionInterval(opts.Refresh)
@@ -403,13 +396,8 @@ func writeSubscriptionDiagnostic(w io.Writer, message string) error {
 	return errors.Join(err, cleanup())
 }
 
-// RunSubscribe implements kander subscribe.
-func RunSubscribe(args []string) int { return runServiceSubscribe(args, false) }
-
-// RunSubscribeRemote is the client service entrance.
-func RunSubscribeRemote(args []string) int { return runServiceSubscribe(args, true) }
-
-func runServiceSubscribe(args []string, required bool) int {
+// RunSubscribeRemote implements kander subscribe against the server.
+func RunSubscribeRemote(args []string) int {
 	opts, parseErr := parseSubscribeArgs(args)
 	if parseErr == "usage" {
 		if err := usageSubscribe(os.Stderr); err != nil {
@@ -443,43 +431,23 @@ func runServiceSubscribe(args []string, required bool) int {
 		_ = writeSubscriptionDiagnostic(os.Stderr, "kander: "+err.Error())
 		return 1
 	}
-	if required {
-		if err := remote.RequireBinding(cfg); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
+	if err := remote.RequireBinding(cfg); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
 	}
-	if remote.ServiceSelected(cfg, required) {
-		cwd, err := os.Getwd()
-		if err != nil {
-			_ = writeSubscriptionDiagnostic(os.Stderr, "kander: "+err.Error())
-			return 1
-		}
-		ctx, cancel := subscriptionSignalContext()
-		defer cancel()
-		service, err := remote.Open(ctx, cfg, cwd)
-		if err == nil {
-			err = subscribeContext(ctx, service.Location(""), opts, os.Stdout, service)
-		}
-		if err != nil && !errors.Is(err, context.Canceled) {
-			_ = writeSubscriptionDiagnostic(os.Stderr, "kander: "+err.Error())
-			return 1
-		}
-		return 0
-	}
-	root, err := board.BoardRoot()
+	cwd, err := os.Getwd()
 	if err != nil {
-		if outputErr := writeSubscriptionDiagnostic(os.Stderr, "kander: "+err.Error()); outputErr != nil {
-			return 1
-		}
+		_ = writeSubscriptionDiagnostic(os.Stderr, "kander: "+err.Error())
 		return 1
 	}
 	ctx, cancel := subscriptionSignalContext()
 	defer cancel()
-	if err := SubscribeContext(ctx, root, opts, os.Stdout); err != nil && err != context.Canceled {
-		if outputErr := writeSubscriptionDiagnostic(os.Stderr, "kander: "+err.Error()); outputErr != nil {
-			return 1
-		}
+	service, err := remote.Open(ctx, cfg, cwd)
+	if err == nil {
+		err = subscribeContext(ctx, service.Location(""), opts, os.Stdout, service)
+	}
+	if err != nil && !errors.Is(err, context.Canceled) {
+		_ = writeSubscriptionDiagnostic(os.Stderr, "kander: "+err.Error())
 		return 1
 	}
 	return 0

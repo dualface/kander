@@ -163,9 +163,6 @@ func TestLegacyReadOnlyAndSizeDiagnostics(t *testing.T) {
 	if _, err := MoveWithOptions(s.Entry, root, "trash", MoveOptions{Result: "trashed", Reason: "test", Decision: "test"}); err == nil || !strings.Contains(err.Error(), "kander server maintain --project NAME") {
 		t.Fatalf("legacy move %v", err)
 	}
-	if _, err := FormatList(mustScan(t, root), "", false); err != nil {
-		t.Fatal(err)
-	}
 	if code, _, _, err := CheckBoard(root, []string{fileID}, false); err != nil || code != 0 {
 		t.Fatalf("legacy read check %d %v", code, err)
 	}
@@ -484,9 +481,6 @@ func TestDisplaySnapshotRemainsReadableAcrossMigration(t *testing.T) {
 	if _, err := ReadDocument(scanned.Entries[id]); err == nil {
 		t.Fatal("stale mutation cursor accepted")
 	}
-	if list, err := FormatList(scanned, "", true); err != nil || !strings.Contains(list, "Original") || !strings.Contains(list, "small") {
-		t.Fatalf("display snapshot %s %v", list, err)
-	}
 	payload, err := TaskPayload(root, id)
 	if err != nil || payload.Kind != "small" || !strings.Contains(payload.Document, "SIZE: small") {
 		t.Fatalf("fresh payload %+v %v", payload, err)
@@ -496,19 +490,19 @@ func TestDisplaySnapshotRemainsReadableAcrossMigration(t *testing.T) {
 	}
 }
 
-func TestInitCommandMaintenanceAndMigrationCount(t *testing.T) {
+func TestInitMaintenanceAndMigrationCount(t *testing.T) {
 	resetLang(t)
 	root := tempBoard(t)
 	id := "20260907-init-maintenance-task"
 	legacyMigrationCard(t, root, "review", id, false, "# Legacy\n")
-	if code, _, message := capture(t, func() int { return RunInit(nil) }); code == 0 || !strings.Contains(message, "--maintenance") {
-		t.Fatalf("default init %d %s", code, message)
+	if _, _, _, _, err := InitBoardWithOptions("", InitOptions{}); err == nil || !strings.Contains(err.Error(), "--maintenance") {
+		t.Fatalf("default init %v", err)
 	}
-	if code, message, err := capture(t, func() int { return RunInit([]string{"--maintenance"}) }); code != 0 || !strings.Contains(message, "已迁移卡片：1") {
-		t.Fatalf("maintenance init %d %s %s", code, message, err)
+	if _, _, _, migrated, err := InitBoardWithOptions("", InitOptions{Maintenance: true}); err != nil || migrated != 1 {
+		t.Fatalf("maintenance init migrated=%d %v", migrated, err)
 	}
-	if code, message, err := capture(t, func() int { return RunInit(nil) }); code != 0 || !strings.Contains(message, "已迁移卡片：0") {
-		t.Fatalf("repeat init %d %s %s", code, message, err)
+	if _, _, _, migrated, err := InitBoardWithOptions("", InitOptions{}); err != nil || migrated != 0 {
+		t.Fatalf("repeat init migrated=%d %v", migrated, err)
 	}
 }
 

@@ -5,20 +5,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/launch"
 	"github.com/dualface/kander/internal/liveness"
 	"github.com/dualface/kander/internal/terminal"
 )
-
-func setSessionField(t *testing.T, path, session string) {
-	t.Helper()
-	setExecutionFields(t, path, session, "")
-}
 
 func writeNotifySessionFile(t *testing.T, id string) string {
 	t.Helper()
@@ -28,90 +20,6 @@ func writeNotifySessionFile(t *testing.T, id string) string {
 		t.Fatal(err)
 	}
 	return path
-}
-
-func herdrLogExists(root, name string) bool {
-	_, err := os.Stat(filepath.Join(root, "herdr.log."+name))
-	return err == nil
-}
-
-// A path-kind reported identity resolving to the card session is a proven
-// match: direct delivery works instead of degrading to a resume.
-func TestNotifyPathIdentityDeliversDirectly(t *testing.T) {
-	root, _ := setupBoard(t)
-	file := writeNotifySessionFile(t, "wanted")
-	t.Setenv("KANBAN_HERDR_AGENT", "pi")
-	t.Setenv("KANBAN_HERDR_SESSION_KIND", "path")
-	t.Setenv("KANBAN_HERDR_SESSION", file)
-	taskID, path := makeReview(t, root, "notify-path-deliver")
-	setSessionField(t, path, "pi wanted")
-	out, _, err := capture(t, func() error {
-		return commandNotify(root, taskID, "x", "", "", true, 61)
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out, "herdr-direct") {
-		t.Fatalf("out=%s", out)
-	}
-	if !herdrLogExists(root, "prompt") {
-		t.Fatal("no prompt was delivered")
-	}
-	if herdrLogExists(root, "run") {
-		t.Fatal("a fresh process must not be launched for a live session")
-	}
-}
-
-// An undecidable reported identity is never delivery proof and never resume
-// evidence: the command fails without delivering or recovering a process.
-func TestNotifyUncertainIdentityDoesNotDeliverOrResume(t *testing.T) {
-	root, _ := setupBoard(t)
-	missing := filepath.Join(t.TempDir(), "gone.jsonl")
-	t.Setenv("KANBAN_HERDR_AGENT", "pi")
-	t.Setenv("KANBAN_HERDR_SESSION_KIND", "path")
-	t.Setenv("KANBAN_HERDR_SESSION", missing)
-	taskID, path := makeReview(t, root, "notify-uncertain")
-	setSessionField(t, path, "pi wanted")
-	_, _, err := capture(t, func() error {
-		return commandNotify(root, taskID, "x", "", "", true, 61)
-	})
-	if err == nil {
-		t.Fatal("uncertain identity must fail")
-	}
-	var uncertain *UncertainError
-	if !errors.As(err, &uncertain) {
-		t.Fatalf("err=%v is not uncertain", err)
-	}
-	if herdrLogExists(root, "prompt") || herdrLogExists(root, "run") || herdrLogExists(root, "order") {
-		t.Fatal("uncertain identity must not deliver or recover a process")
-	}
-}
-
-// A stale address with an unfinished reverse lookup is equally undecidable:
-// the command reports the uncertain evidence and never reaches the resume
-// recovery that a decided stopped observation would take.
-func TestNotifyStaleIncompleteLookupDoesNotResume(t *testing.T) {
-	root, _ := setupBoard(t)
-	t.Setenv("KANBAN_HERDR_AGENT", "pi")
-	t.Setenv("KANBAN_HERDR_STALE_PANE", "w1:p9")
-	t.Setenv("KANBAN_HERDR_LIST_JSON", `{"result":{"panes":[{"pane_id":"w9:p9","tab_id":"w9:t9","agent":"pi","agent_status":"idle","agent_session":{"kind":"path","value":"/nonexistent/gone.jsonl"}}]}}`)
-	taskID, path := makeReview(t, root, "notify-stale-incomplete")
-	setSessionField(t, path, "pi wanted")
-	_, _, err := capture(t, func() error {
-		return commandNotify(root, taskID, "x", "", "", true, 61)
-	})
-	if err == nil {
-		t.Fatal("incomplete lookup must fail")
-	}
-	if !isUncertain(err) {
-		t.Fatalf("err=%v is not uncertain", err)
-	}
-	if strings.Contains(err.Error(), "恢复=") {
-		t.Fatalf("uncertain evidence reached recovery: %v", err)
-	}
-	if herdrLogExists(root, "order") || herdrLogExists(root, "prompt") || herdrLogExists(root, "run") {
-		t.Fatal("incomplete lookup must not deliver or recover")
-	}
 }
 
 // requireReady maps an uncertain probe to the non-recovery error.
@@ -189,39 +97,4 @@ func (b *factsBackend) Capabilities() terminal.Capabilities {
 
 func (b *factsBackend) PaneFacts(context.Context, terminal.Conn, string) (terminal.PaneFacts, error) {
 	return b.facts, nil
-}
-
-// A self-claimed card has no session to reach. The refusal comes before a dispatch
-// binds, and it names the recovery rule.
-func TestNotifyRefusesASelfClaimedCardBeforeBinding(t *testing.T) {
-	root, _ := setupBoard(t)
-	path, err := board.NewTask(root, "feature", "self-claimed", "任务", "en", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = os.WriteFile(filepath.Join(path, "spec.md"), []byte(strings.Replace(strings.Replace(cardTemplate("任务"), "- OWNER: claude\n", "- OWNER:\n", 1), "- STARTED_AT: 2026-09-04 11:00\n", "- STARTED_AT:\n", 1)), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	id := filepath.Base(path)
-	s, err := board.ReadSnapshot(root, id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	todo, err := board.MoveEntry(s.Entry, root, "todo")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = board.MoveWithOptions(todo, root, "working", board.MoveOptions{Owner: "claude"}); err != nil {
-		t.Fatal(err)
-	}
-	_, _, err = capture(t, func() error {
-		return commandNotify(root, id, "x", "", "", true, 61, launch.DispatchOptions{Kind: "sync", Base: strings.Repeat("a", 40)})
-	})
-	if err == nil || !strings.Contains(err.Error(), "failure-recovery.md") {
-		t.Fatalf("err=%v", err)
-	}
-	after, err := board.ReadSnapshot(root, id)
-	if err != nil || board.MetadataFrom(after.Text, "DISPATCH_ID") != "" {
-		t.Fatalf("the refused notify bound a dispatch: %v", err)
-	}
 }

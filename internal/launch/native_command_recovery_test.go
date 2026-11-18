@@ -18,6 +18,36 @@ import (
 	"github.com/dualface/kander/internal/remote"
 )
 
+func TestCompletedRemoteLaunchReceiptNeverRestoresReleasedAuthority(t *testing.T) {
+	skipOnWindows(t)
+	_, session, task, _, _ := remoteLifecycleFixture(t, "completed-launch-receipt")
+	first, err := StartRemote("claude", "tmux", task.TaskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, _, _ := session.Credential(task.TaskID)
+	log := os.Getenv("KANBAN_TMUX_LOG")
+	before, _ := os.ReadFile(log)
+	// A terminal transition ends authority; the completed private receipt remains.
+	if _, err := session.Project.Move(t.Context(), client.NewKey(), task.TaskID, api.Move{State: "trash", Result: "trashed", Reason: "test", Decision: "test"}, old.Claim()); err != nil {
+		t.Fatal(err)
+	}
+	if err := remote.RemoveCredential(session.Home, old); err != nil {
+		t.Fatal(err)
+	}
+	second, err := StartRemote("claude", "tmux", task.TaskID)
+	if err != nil || !second.Outcome.Replayed || second.executionID != old.ExecutionID || second.TaskID != first.TaskID {
+		t.Fatalf("receipt=%+v %v", second, err)
+	}
+	if _, found, err := session.Credential(task.TaskID); err != nil || found {
+		t.Fatalf("restored bearer: %v %v", found, err)
+	}
+	after, _ := os.ReadFile(log)
+	if !bytes.Equal(before, after) {
+		t.Fatal("completed receipt touched terminal")
+	}
+}
+
 func TestImplicitNativeResumeReopensFrozenHandoffAfterUnknownResponse(t *testing.T) {
 	skipOnWindows(t)
 	cfg, direct, task, _, _ := remoteLifecycleFixture(t, "implicit-native-handoff-recovery")
@@ -76,7 +106,7 @@ func TestImplicitNativeResumeReopensFrozenHandoffAfterUnknownResponse(t *testing
 	before, _ := os.ReadFile(log)
 	hide.Store(true)
 	args := []string{task.TaskID, "--message", "Continue once after a confirmed local stop"}
-	if code := RunResume(args); code == 0 {
+	if code := RunResumeRemote(args); code == 0 {
 		t.Fatal("hidden response reported success")
 	}
 	current, err := direct.Project.Show(t.Context(), task.TaskID)
@@ -88,7 +118,7 @@ func TestImplicitNativeResumeReopensFrozenHandoffAfterUnknownResponse(t *testing
 	// Reopening the command happens after the current generation has changed.
 	// It must reconcile the old frozen handoff, not queue a new proposal.
 	for range 2 {
-		if code := RunResume(args); code == 0 {
+		if code := RunResumeRemote(args); code == 0 {
 			t.Fatal("unlaunched recovery reported a new start")
 		}
 	}
@@ -106,36 +136,6 @@ func TestImplicitNativeResumeReopensFrozenHandoffAfterUnknownResponse(t *testing
 	}
 	if handoffs.Load() < 2 {
 		t.Fatal("did not replay the original service handoff")
-	}
-}
-
-func TestCompletedRemoteLaunchReceiptNeverRestoresReleasedAuthority(t *testing.T) {
-	skipOnWindows(t)
-	_, session, task, _, _ := remoteLifecycleFixture(t, "completed-launch-receipt")
-	first, err := StartRemote("claude", "tmux", task.TaskID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	old, _, _ := session.Credential(task.TaskID)
-	log := os.Getenv("KANBAN_TMUX_LOG")
-	before, _ := os.ReadFile(log)
-	// A terminal transition ends authority; the completed private receipt remains.
-	if _, err := session.Project.Move(t.Context(), client.NewKey(), task.TaskID, api.Move{State: "trash", Result: "trashed", Reason: "test", Decision: "test"}, old.Claim()); err != nil {
-		t.Fatal(err)
-	}
-	if err := remote.RemoveCredential(session.Home, old); err != nil {
-		t.Fatal(err)
-	}
-	second, err := StartRemote("claude", "tmux", task.TaskID)
-	if err != nil || !second.Outcome.Replayed || second.executionID != old.ExecutionID || second.TaskID != first.TaskID {
-		t.Fatalf("receipt=%+v %v", second, err)
-	}
-	if _, found, err := session.Credential(task.TaskID); err != nil || found {
-		t.Fatalf("restored bearer: %v %v", found, err)
-	}
-	after, _ := os.ReadFile(log)
-	if !bytes.Equal(before, after) {
-		t.Fatal("completed receipt touched terminal")
 	}
 }
 
@@ -157,7 +157,7 @@ func TestNativeOwnerContinuationSupersedesStoppedGenerationQueue(t *testing.T) {
 	}
 	t.Setenv("KANBAN_LAUNCH_CWD", filepath.Join(root, "worktrees", task.TaskID, "g2"))
 	args := []string{task.TaskID, "--message", "Explicit owner continuation"}
-	if code := RunResume(args); code != 0 {
+	if code := RunResumeRemote(args); code != 0 {
 		t.Fatalf("resume exit %d", code)
 	}
 	next, found, err := session.Credential(task.TaskID)
@@ -185,7 +185,7 @@ func TestNativeOwnerContinuationSupersedesStoppedGenerationQueue(t *testing.T) {
 	// The command's completed response can be reread without another handoff.
 	log := os.Getenv("KANBAN_TMUX_LOG")
 	before, _ := os.ReadFile(log)
-	if code := RunResume(args); code != 0 {
+	if code := RunResumeRemote(args); code != 0 {
 		t.Fatalf("completed retry exit %d", code)
 	}
 	after, _ := os.ReadFile(log)

@@ -66,11 +66,11 @@ func TestGroupReclaimRetainsPlanFailuresAndOriginalAuthorsThroughCLI(t *testing.
 		t.Fatal(err)
 	}
 	for _, id := range ids {
-		if board.RunMove([]string{id, "review"}) != 0 {
+		if moveCard(id, "review", board.MoveOptions{}) != 0 {
 			t.Fatal("move review failed")
 		}
 	}
-	if board.RunMove([]string{ids[0], "working", "--owner", "claude", "--decision", "user-reclaim"}) != 0 {
+	if moveCard(ids[0], "working", board.MoveOptions{Owner: "claude", Decision: "user-reclaim"}) != 0 {
 		t.Fatal("supported reclaim failed")
 	}
 	var progress board.ReviewProgress
@@ -82,7 +82,7 @@ func TestGroupReclaimRetainsPlanFailuresAndOriginalAuthorsThroughCLI(t *testing.
 		if progress.Status != "requirements-needed" || len(progress.RebindCycles) != 1 {
 			t.Fatalf("new cycle not recoverable: %+v", progress)
 		}
-		if board.RunMove([]string{id, "done", "--result", "completed"}) == 0 {
+		if moveCard(id, "done", board.MoveOptions{Result: "completed"}) == 0 {
 			t.Fatal("changed cycle completed before requirements rebind")
 		}
 	}
@@ -151,7 +151,7 @@ func TestGroupReclaimRetainsPlanFailuresAndOriginalAuthorsThroughCLI(t *testing.
 	r.SupersededRuns = map[string]board.ReviewSupersededRun{"pm": {Replacement: "pm-new-cycle", Basis: "parallel run of the old cycle"}}
 	commandOK(t, "close", h.repo, dispositionJSON(t, h, "close", r))
 	for _, id := range ids {
-		if board.RunMove([]string{id, "done", "--result", "completed"}) != 0 {
+		if moveCard(id, "done", board.MoveOptions{Result: "completed"}) != 0 {
 			t.Fatal("group member cannot finish recovered cycle")
 		}
 	}

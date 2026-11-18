@@ -339,38 +339,6 @@ func TestPaneDeliveryDurableBlockedClosesTab(t *testing.T) {
 	}
 }
 
-func TestPaneDeliveryResumeTakeover(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX fakes")
-	}
-	root, _, bin := setupBoard(t)
-	usePaneAgent(t, root, bin, "tmux")
-	t.Setenv("KANBAN_TMUX_PANE_OUTPUT", "TUI_READY")
-	id, path := makeTodo(t, root, "pane-takeover")
-	_, _, err := capture(t, func() error { return commandStart(root, "claude", "tmux", id) })
-	if err != nil {
-		t.Fatal(err)
-	}
-	working := filepath.Join(root, "working", filepath.Base(filepath.Dir(path)), "spec.md")
-	setBranch(t, working)
-	loaded, _ := board.LoadBoard(root)
-	entry, _ := board.Locate(loaded, id)
-	if _, err := board.MoveEntry(entry, root, "review"); err != nil {
-		t.Fatal(err)
-	}
-	agent := "panecli"
-	_, _, err = capture(t, func() error {
-		return commandResume(root, &agent, "tmux", id, "take over", "", true, 61)
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	sent, err := os.ReadFile(filepath.Join(root, "tmux.log.send-keys"))
-	if err != nil || !strings.Contains(string(sent), "-l") || !strings.Contains(string(sent), "Enter") {
-		t.Fatalf("send-keys=%s err=%v", sent, err)
-	}
-}
-
 func assertPaneStartRolledBack(t *testing.T, root, todoPath string, original []byte, herdrLog string) {
 	t.Helper()
 	if _, err := os.Stat(todoPath); err != nil {

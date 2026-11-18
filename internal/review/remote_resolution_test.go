@@ -105,6 +105,7 @@ func TestRemoteHistoricalResolutionVerifiesGitAndBindsOriginals(t *testing.T) {
 		t.Fatal(err)
 	}
 	forbidden := filepath.Join(t.TempDir(), "forbidden-board")
+	useServer(t)
 	t.Setenv(board.EnvBoardDir, forbidden)
 	t.Chdir(w.h.repo)
 	raw, err := project.ReviewAction(t.Context(), "resolution-facts", "resolution-facts", extension, nil)

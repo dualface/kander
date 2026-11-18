@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/cli"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/launch"
@@ -16,8 +15,7 @@ import (
 )
 
 func init() {
-	cli.Commands["dismiss"] = RunDismiss
-	cli.RemoteCommands["dismiss"] = cli.RequireService(RunDismissRemote)
+	cli.Commands["dismiss"] = cli.RequireService(RunDismissRemote)
 	launch.CleanupTakeover = Cleanup
 }
 
@@ -45,13 +43,8 @@ func takeValue(args []string, i int) (string, int, bool) {
 	return args[i+1], i + 1, true
 }
 
-// RunDismiss implements kander dismiss.
-func RunDismiss(args []string) int { return runServiceDismiss(args, false) }
-
-// RunDismissRemote is the mandatory REST entrance used by the client binary.
-func RunDismissRemote(args []string) int { return runServiceDismiss(args, true) }
-
-func runServiceDismiss(args []string, required bool) int {
+// RunDismissRemote implements kander dismiss against the server.
+func RunDismissRemote(args []string) int {
 	for _, arg := range args {
 		if arg == "-h" || arg == "--help" {
 			usage(os.Stdout)
@@ -93,22 +86,10 @@ func runServiceDismiss(args []string, required bool) int {
 	if err != nil {
 		return fail(err)
 	}
-	if required {
-		if err := remote.RequireBinding(cfg); err != nil {
-			return fail(err)
-		}
-	}
-	if remote.ServiceSelected(cfg, required) {
-		if err := commandRemoteDismiss(cfg, positional[0], timeout); err != nil {
-			return fail(err)
-		}
-		return 0
-	}
-	root, err := board.BoardRoot()
-	if err != nil {
+	if err := remote.RequireBinding(cfg); err != nil {
 		return fail(err)
 	}
-	if err := commandDismiss(root, positional[0], timeout); err != nil {
+	if err := commandRemoteDismiss(cfg, positional[0], timeout); err != nil {
 		return fail(err)
 	}
 	return 0

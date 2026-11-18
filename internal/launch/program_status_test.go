@@ -103,63 +103,11 @@ func TestHerdrCoreRefusesNonReportingAgentOnStart(t *testing.T) {
 	}
 }
 
-// startUnderTmux runs a card with plaincli in tmux, so a later recovery
-// entrance meets a working card whose agent has no declaration.
-func startUnderTmux(t *testing.T, root, slug string) (string, board.Snapshot) {
-	t.Helper()
-	taskID, _ := makeTodo(t, root, slug)
-	if _, _, err := capture(t, func() error { return commandStart(root, "plaincli", "tmux", taskID) }); err != nil {
-		t.Fatal(err)
-	}
-	snapshot, err := board.ReadSnapshot(root, taskID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return taskID, snapshot
-}
-
-func requireUnchanged(t *testing.T, root string, before board.Snapshot) {
-	t.Helper()
-	after, err := board.ReadSnapshot(root, before.Entry.TaskID)
-	if err != nil || after.Revision != before.Revision || after.Text != before.Text {
-		t.Fatalf("card changed by a refused launch: %v", err)
-	}
-}
-
-func TestHerdrCoreRefusesUndeclaredAgentOnResume(t *testing.T) {
-	root, _, hcLog, _ := programStatusFixture(t, "tmux")
-	taskID, before := startUnderTmux(t, root, "pstatus-resume")
-	noTaskFile(t)
-	_, _, err := capture(t, func() error { return commandResume(root, nil, "herdr-core", taskID, "go on", "", true, 61) })
-	requireRefusal(t, err, hcLog)
-	requireUnchanged(t, root, before)
-}
-
-func TestHerdrCoreRefusesUndeclaredAgentOnTakeover(t *testing.T) {
-	root, _, hcLog, _ := programStatusFixture(t, "tmux")
-	taskID, before := startUnderTmux(t, root, "pstatus-takeover")
-	noTaskFile(t)
-	agent := "plaincli"
-	_, _, err := capture(t, func() error { return commandResume(root, &agent, "herdr-core", taskID, "take over", "", true, 61) })
-	requireRefusal(t, err, hcLog)
-	requireUnchanged(t, root, before)
-}
-
-func TestHerdrCoreRefusesUndeclaredAgentOnNotifyRecovery(t *testing.T) {
-	root, _, hcLog, cfg := programStatusFixture(t, "tmux")
-	_, before := startUnderTmux(t, root, "pstatus-notify")
-	cfg.Launcher = "herdr-core"
-	noTaskFile(t)
-	_, err := NotifyViaResume(root, before.Entry, before.Text, "go on", 61)
-	requireRefusal(t, err, hcLog)
-	requireUnchanged(t, root, before)
-}
-
 func TestHerdrCoreRefusesUndeclaredAgentOnOrchestrate(t *testing.T) {
 	root, _, hcLog, _ := programStatusFixture(t, "herdr-core")
 	taskID, path := makeTodo(t, root, "pstatus-orchestrate")
 	noTaskFile(t)
-	_, err := StartOrchestrator(OrchestrateRequest{Root: root, References: []string{taskID}, Handover: "plan", Agent: "plaincli", Launcher: "herdr-core"})
+	_, err := startOrchestratorLocal(OrchestrateRequest{Root: root, References: []string{taskID}, Handover: "plan", Agent: "plaincli", Launcher: "herdr-core"})
 	requireRefusal(t, err, hcLog)
 	if _, statErr := os.Stat(path); statErr != nil {
 		t.Fatal("card left todo")
@@ -398,66 +346,4 @@ func TestHerdrCorePreviewStartRefusesBeforeBacklogMove(t *testing.T) {
 	if err != nil || snapshot.Entry.State != "backlog" {
 		t.Fatalf("card left backlog: %+v %v", snapshot.Entry, err)
 	}
-}
-
-// A durable dispatch resume refuses before it prepares the dispatch.
-func TestHerdrCoreRefusesUndeclaredAgentBeforeDispatch(t *testing.T) {
-	root, _, hcLog, _ := programStatusFixture(t, "tmux")
-	taskID, before := startUnderTmux(t, root, "pstatus-dispatch")
-	noTaskFile(t)
-	_, _, err := capture(t, func() error {
-		return commandResume(root, nil, "herdr-core", taskID, "sync", "", true, 61, DispatchOptions{Kind: "sync"})
-	})
-	requireRefusal(t, err, hcLog)
-	requireUnchanged(t, root, before)
-	if _, statErr := os.Stat(filepath.Join(before.Entry.Path, "dispatches")); !os.IsNotExist(statErr) {
-		t.Fatalf("dispatch evidence written before the refusal: %v", statErr)
-	}
-}
-
-// Notify recovery checks the configured launcher before it begins a dispatch
-// attempt; another launcher passes.
-func TestRecoveryPreflight(t *testing.T) {
-	root, _, hcLog, cfg := programStatusFixture(t, "tmux")
-	_, before := startUnderTmux(t, root, "pstatus-recovery")
-	if err := RecoveryPreflight(before.Text); err != nil {
-		t.Fatalf("tmux recovery refused: %v", err)
-	}
-	cfg.Launcher = "herdr-core"
-	requireRefusal(t, RecoveryPreflight(before.Text), hcLog)
-}
-
-// A same-ID retry of an accepted dispatch keeps returning its receipt after the
-// launcher changed to one that cannot run the card's agent: nothing launches.
-func TestHerdrCoreKeepsDispatchReceiptRetry(t *testing.T) {
-	root, task, d := resumeDispatchFixture(t)
-	writeFakeHC(t, filepath.Join(root, "fake-bin"), root)
-	s, err := board.ReadSnapshot(root, task)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = board.MoveWithOptions(s.Entry, root, "working", board.MoveOptions{Authorization: d.Authorization}); err != nil {
-		t.Fatal(err)
-	}
-	cfg := envConfig("claude", "herdr-core", nil)
-	cfg.Agents = map[string]config.AgentDefinition{"claude": {ProgramStatus: &config.ProgramStatus{Reports: false}}}
-	loadEffective = func() (*config.Config, error) { return cfg, nil }
-	out, _, err := capture(t, func() error {
-		return commandResume(root, nil, "", task, d.Input.Message, "", true, 61, DispatchOptions{ID: d.Input.ID})
-	})
-	if err != nil || !strings.Contains(out, `"state":"accepted"`) {
-		t.Fatalf("receipt retry: %s %v", out, err)
-	}
-	// A new dispatch for the same card is refused before it is prepared.
-	before, err := board.ReadSnapshot(root, task)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, _, err = capture(t, func() error {
-		return commandResume(root, nil, "", task, "again", "", true, 61, DispatchOptions{Kind: "sync", Base: strings.Repeat("a", 40)})
-	})
-	if err == nil || err.Error() != config.Text("program_status.agent_not_reporting", "herdr-core", "claude") {
-		t.Fatalf("new dispatch: %v", err)
-	}
-	requireUnchanged(t, root, before)
 }

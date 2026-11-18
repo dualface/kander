@@ -85,7 +85,7 @@ func TestSubscriptionPipeDeadlineAndFailure(t *testing.T) {
 			}
 			defer cancel()
 			started := time.Now()
-			err := SubscribeContext(ctx, root, opts, writer)
+			err := subscribeContext(ctx, root, opts, writer, nil)
 			if err == nil {
 				t.Fatal("output failure reported success")
 			}

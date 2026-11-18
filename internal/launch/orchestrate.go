@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -24,13 +23,14 @@ var orchestrateGroupRe = regexp.MustCompile(`^\d{8}-[a-z0-9]+(?:-[a-z0-9]+)*-gro
 // OrchestrateRequest names the plan a creating session hands to a separate
 // orchestrator session. References keep the confirmed plan order.
 type OrchestrateRequest struct {
-	requireService bool
-	Root           string
-	References     []string
-	Handover       string
-	Agent          string
-	Launcher       string
-	OperationID    string
+	// Root is the directory the session starts in; StartOrchestrator takes it
+	// from the server session of the working directory.
+	Root        string
+	References  []string
+	Handover    string
+	Agent       string
+	Launcher    string
+	OperationID string
 }
 
 // OrchestrateTask is one card the orchestrator session receives.
@@ -53,33 +53,29 @@ type OrchestrateResult struct {
 // writes no board state: the orchestrator picks and starts the cards itself
 // under the rules. A failed start closes the container it created and removes
 // its temporary task file.
-func StartOrchestrator(request OrchestrateRequest) (result OrchestrateResult, err error) {
-	var warnings board.WarningLog
-	defer func() { result.Warnings = append(warnings.Messages(), result.Warnings...) }()
-
-	if strings.TrimSpace(request.Handover) == "" {
-		return result, launchError("launch.message_must_not_be_empty", "orchestrate")
-	}
+func StartOrchestrator(request OrchestrateRequest) (OrchestrateResult, error) {
 	cfg, err := loadEffective()
 	if err != nil {
-		return result, err
+		return OrchestrateResult{}, err
 	}
-	if request.requireService {
-		if err := remote.RequireBinding(cfg); err != nil {
-			return result, err
-		}
+	if err := remote.RequireBinding(cfg); err != nil {
+		return OrchestrateResult{}, err
 	}
-	var loaded board.Board
-	var service *remote.Session
-	if remote.ServiceSelected(cfg, request.requireService) {
-		ctx, cancel := context.WithTimeout(context.Background(), remoteCall)
-		loaded, service, request.Root, err = remoteOrchestrateBoard(ctx, cfg)
-		cancel()
-	} else {
-		loaded, err = board.LoadBoardWithWarnings(request.Root, &warnings)
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), remoteCall)
+	loaded, service, root, err := remoteOrchestrateBoard(ctx, cfg)
+	cancel()
 	if err != nil {
-		return result, err
+		return OrchestrateResult{}, err
+	}
+	request.Root = root
+	return startOrchestrator(request, cfg, loaded, service)
+}
+
+// startOrchestrator validates the plan against the loaded board and starts the
+// session. service is the server session the board came from.
+func startOrchestrator(request OrchestrateRequest, cfg *config.Config, loaded board.Board, service *remote.Session) (result OrchestrateResult, err error) {
+	if strings.TrimSpace(request.Handover) == "" {
+		return result, launchError("launch.message_must_not_be_empty", "orchestrate")
 	}
 	var journal *remote.ActionJournal
 	if service != nil {
@@ -349,13 +345,8 @@ func orchestratorWindowName(firstTaskID string) string {
 	return strings.TrimRight(string(name), "-")
 }
 
-// RunOrchestrate implements kander orchestrate.
-func RunOrchestrate(args []string) int { return runServiceOrchestrate(args, false) }
-
-// RunOrchestrateRemote is the mandatory REST entrance used by the client binary.
-func RunOrchestrateRemote(args []string) int { return runServiceOrchestrate(args, true) }
-
-func runServiceOrchestrate(args []string, required bool) int {
+// RunOrchestrateRemote implements kander orchestrate against the server.
+func RunOrchestrateRemote(args []string) int {
 	for _, arg := range args {
 		if arg == "-h" || arg == "--help" {
 			fmt.Fprintln(os.Stdout, config.CommandUsage("orchestrate"))
@@ -416,26 +407,11 @@ func runServiceOrchestrate(args []string, required bool) int {
 	if err != nil {
 		return fail(err)
 	}
-	if required {
-		if err := remote.RequireBinding(cfg); err != nil {
-			return fail(err)
-		}
-	}
-	var root string
-	if remote.ServiceSelected(cfg, required) {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return fail(err)
-		}
-		root = filepath.Join(remote.ProjectDir(cwd), "task-context")
-	} else {
-		root, err = boardRootFn()
-		if err != nil {
-			return fail(err)
-		}
+	if err := remote.RequireBinding(cfg); err != nil {
+		return fail(err)
 	}
 	result, err := StartOrchestrator(OrchestrateRequest{
-		Root: root, requireService: required, OperationID: operationID, References: references, Handover: text, Agent: agent, Launcher: launcher,
+		OperationID: operationID, References: references, Handover: text, Agent: agent, Launcher: launcher,
 	})
 	for _, warning := range result.Warnings {
 		fmt.Fprint(os.Stderr, warning)

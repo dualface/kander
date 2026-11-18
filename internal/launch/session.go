@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -146,46 +145,6 @@ func sessionFrom(text string) (AgentSession, error) {
 	return *session, nil
 }
 
-func resolvedTaskSession(taskID, text string, configs ...*config.Config) (AgentSession, error) {
-	return resolveTaskIdentity(context.Background(), taskID, text, true, configs...)
-}
-
-func resolveTaskIdentity(ctx context.Context, taskID, text string, requireResume bool, configs ...*config.Config) (AgentSession, error) {
-	session, err := sessionFrom(text)
-	if err != nil {
-		return AgentSession{}, err
-	}
-	var cfg *config.Config
-	if len(configs) > 0 {
-		cfg = configs[0]
-	} else {
-		cfg, err = loadEffective()
-		if err != nil {
-			return AgentSession{}, err
-		}
-	}
-	if !config.HasAgent(cfg, session.Agent) {
-		return AgentSession{}, launchError("launch.unsupported_agent", session.Agent)
-	}
-	definition := config.AgentFor(cfg, session.Agent)
-	if requireResume && definition.Session.Mode == "none" {
-		return AgentSession{}, config.AgentResumeError(session.Agent)
-	}
-	if config.SessionResolvesEmptyReference(definition.Session) && session.Reference == "" {
-		id, err := runSessionResolveHook(ctx, definition.Session.Mode, taskID)
-		if err != nil {
-			return AgentSession{}, err
-		}
-		return AgentSession{Agent: session.Agent, Reference: id}, nil
-	}
-	if session.Reference == "" {
-		return AgentSession{}, launchError(
-			"launch.task_session_for_has_no_id", session.Agent,
-		)
-	}
-	return session, nil
-}
-
 func codexSessionsRoot() string {
 	home := strings.TrimSpace(os.Getenv("CODEX_HOME"))
 	if home == "" {
@@ -245,111 +204,6 @@ func startsWithAny(text string, prefixes []string) bool {
 	return false
 }
 
-func codexRolloutMentionsTask(path string, prefixes []string) string {
-	f, err := os.Open(path)
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-	dec := json.NewDecoder(f)
-	dec.UseNumber()
-	sessionID := ""
-	mentioned := false
-	for i := 0; i < 64; i++ {
-		var rec map[string]any
-		if err := dec.Decode(&rec); err != nil {
-			break
-		}
-		payload, _ := rec["payload"].(map[string]any)
-		if payload == nil {
-			continue
-		}
-		typ, _ := rec["type"].(string)
-		if typ == "session_meta" {
-			if id, ok := payload["id"].(string); ok {
-				sessionID = id
-			}
-		} else if typ == "response_item" {
-			if role, _ := payload["role"].(string); role == "user" {
-				content, _ := payload["content"].([]any)
-				for _, item := range content {
-					obj, _ := item.(map[string]any)
-					text, _ := obj["text"].(string)
-					if startsWithAny(text, prefixes) {
-						mentioned = true
-					}
-				}
-			}
-		} else if typ == "event_msg" {
-			if ptype, _ := payload["type"].(string); ptype == "user_message" {
-				msg, _ := payload["message"].(string)
-				if startsWithAny(msg, prefixes) {
-					mentioned = true
-				}
-			}
-		}
-		if sessionID != "" && mentioned {
-			return sessionID
-		}
-	}
-	return ""
-}
-
-type fileInfo struct {
-	path string
-	mod  time.Time
-}
-
-// codexSessionsForTask lists the sessions of every rollout whose user prompt
-// starts with this task's prompt, newest rollout first. A canceled ctx ends the scan
-// with its error, because a partial scan proves no session.
-func codexSessionsForTask(ctx context.Context, taskID string) ([]string, error) {
-	root, err := filepath.Abs(codexSessionsRoot())
-	if err != nil {
-		return nil, err
-	}
-	info, err := os.Stat(root)
-	if err != nil || !info.IsDir() {
-		return nil, launchError(
-			"launch.codex_sessions_directory_not_found_cannot_resume_with_context", root,
-		)
-	}
-	var files []fileInfo
-	_ = filepath.Walk(root, func(path string, fi os.FileInfo, err error) error {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if err != nil || fi.IsDir() {
-			return nil
-		}
-		base := filepath.Base(path)
-		if strings.HasPrefix(base, "rollout-") && strings.HasSuffix(base, ".jsonl") {
-			files = append(files, fileInfo{path: path, mod: fi.ModTime()})
-		}
-		return nil
-	})
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	slices.SortFunc(files, func(a, b fileInfo) int { return b.mod.Compare(a.mod) })
-	prefixes := codexPromptPrefixes(taskID)
-	var sessions []string
-	seen := map[string]struct{}{}
-	for _, f := range files {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		id := codexRolloutMentionsTask(f.path, prefixes)
-		if id != "" && sessionReferenceRe.MatchString(id) {
-			if _, ok := seen[id]; !ok {
-				seen[id] = struct{}{}
-				sessions = append(sessions, id)
-			}
-		}
-	}
-	return sessions, nil
-}
-
 func runSessionAllocateHook(mode string, program *process.AgentProgram) (string, error) {
 	name, ok := config.ParseSessionHook(mode)
 	if !ok {
@@ -358,19 +212,6 @@ func runSessionAllocateHook(mode string, program *process.AgentProgram) (string,
 	switch name {
 	case "cursor-create-chat":
 		return cursorCreateChat(program)
-	default:
-		return "", launchError("launch.unsupported_agent", name)
-	}
-}
-
-func runSessionResolveHook(ctx context.Context, mode, taskID string) (string, error) {
-	name, ok := config.ParseSessionHook(mode)
-	if !ok {
-		return "", launchError("launch.unsupported_agent", mode)
-	}
-	switch name {
-	case "codex-rollout":
-		return findCodexSession(ctx, taskID)
 	default:
 		return "", launchError("launch.unsupported_agent", name)
 	}
@@ -434,20 +275,6 @@ func sessionDiscoverSnapshot(session *config.AgentSessionDefinition, taskID stri
 		return droidSessionSnapshot(budget(sessionDiscoverWait))
 	}
 	return previous, nil
-}
-
-func findCodexSession(ctx context.Context, taskID string) (string, error) {
-	sessions, err := codexSessionsForTask(ctx, taskID)
-	if err != nil {
-		return "", err
-	}
-	if len(sessions) > 0 {
-		return sessions[0], nil
-	}
-	root := codexSessionsRoot()
-	return "", launchError(
-		"launch.no_codex_execution_session_started_for_was_found_under", root, taskID,
-	)
 }
 
 // enumerateAgentSessions runs the declared enumerate command directly (no

@@ -6,26 +6,12 @@ import (
 	"os"
 
 	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/liveness"
 )
 
-// Run is the kander check command. delivery and overlap are board-free Git
-// analyzers; every other form delegates to the existing liveness runner.
-func Run(args []string) int {
-	if len(args) == 0 {
-		return liveness.RunCheck(args)
-	}
-	if args[0] == "-h" || args[0] == "--help" {
-		fmt.Fprintln(os.Stdout, config.CommandUsage("check"))
-		return 0
-	}
-	switch args[0] {
-	case checkDelivery, checkOverlap:
-		return runMode(args[0], args[1:])
-	default:
-		return liveness.RunCheck(args)
-	}
-}
+// Run is the kander check command for the board-free Git analyzers; the caller
+// has already matched args[0] against checkDelivery or checkOverlap. Every other
+// form of check goes through the server.
+func Run(args []string) int { return runMode(args[0], args[1:]) }
 
 func runMode(mode string, args []string) int {
 	opt, parseErr := parseOptions(mode, args)

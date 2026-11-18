@@ -1,10 +1,7 @@
 package issue
 
 import (
-	"bytes"
 	"context"
-	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -12,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/config"
 )
 
 // multiProposal assesses the anchor's four criteria and one criterion per sibling.
@@ -244,151 +240,4 @@ func TestResultRefusesWithdrawnArchivedAnchor(t *testing.T) {
 			t.Fatalf("result %q: err = %v", result, err)
 		}
 	}
-}
-
-func setResultOnDone(t *testing.T, mode string) {
-	t.Helper()
-	cfg, err := config.Load(false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg.Issue.ResultOnDone = mode
-	if _, err := config.Save(cfg); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// handoffNotice runs the move observer around a fixture move and returns the notice.
-func handoffNotice(t *testing.T, root, id, from, to, result string) string {
-	t.Helper()
-	snapshot, err := board.ReadSnapshot(root, id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	notice := observeResultHandoff(root, snapshot.Entry, to)
-	moveFixture(t, root, id, from, to, result)
-	if notice == nil {
-		return ""
-	}
-	var out bytes.Buffer
-	notice(&out, board.Entry{})
-	return out.String()
-}
-
-func TestHandoffNoticeWhenLastCardCompletes(t *testing.T) {
-	for _, mode := range []string{config.IssueResultAuto, config.IssueResultAsk} {
-		t.Run(mode, func(t *testing.T) {
-			root, repo, id, _ := resultFixture(t)
-			key, _ := repo.IssueSourceKey(42)
-			setResultOnDone(t, mode)
-			sibling := siblingFixture(t, root, "sib-last", sourceLine(key, id), "working", "")
-			text := handoffNotice(t, root, sibling, "working", "done", "completed")
-			for _, want := range []string{key, id, "issue.result_on_done=" + mode, "kander issue result 42 --repo github.com/dualface/kander --card " + id + " --action inspect"} {
-				if !strings.Contains(text, want) {
-					t.Fatalf("notice missing %q:\n%s", want, text)
-				}
-			}
-		})
-	}
-}
-
-func TestHandoffNoticeWhenLastSiblingIsTrashed(t *testing.T) {
-	root, repo, id, _ := resultFixture(t)
-	key, _ := repo.IssueSourceKey(42)
-	sibling := siblingFixture(t, root, "sib-dropped", sourceLine(key, id), "todo", "")
-	if text := handoffNotice(t, root, sibling, "todo", "trash", "trashed"); !strings.Contains(text, "--card "+id) {
-		t.Fatalf("notice missing:\n%s", text)
-	}
-}
-
-func TestHandoffNoticeWhenLastCardArchivedCompleted(t *testing.T) {
-	root, repo, id, _ := resultFixture(t)
-	key, _ := repo.IssueSourceKey(42)
-	moveFixture(t, root, id, "done", "working", "")
-	if text := handoffNotice(t, root, id, "working", "archived", "completed"); !strings.Contains(text, "--card "+id) {
-		t.Fatalf("notice missing for %s:\n%s", key, text)
-	}
-}
-
-func TestHandoffNoticeSilentWhenOff(t *testing.T) {
-	root, repo, id, _ := resultFixture(t)
-	key, _ := repo.IssueSourceKey(42)
-	setResultOnDone(t, config.IssueResultOff)
-	sibling := siblingFixture(t, root, "sib-off", sourceLine(key, id), "working", "")
-	if text := handoffNotice(t, root, sibling, "working", "done", "completed"); text != "" {
-		t.Fatalf("notice printed with off:\n%s", text)
-	}
-}
-
-func TestHandoffNoticeSilentWhileStillPending(t *testing.T) {
-	root, repo, id, _ := resultFixture(t)
-	key, _ := repo.IssueSourceKey(42)
-	first := siblingFixture(t, root, "sib-first", sourceLine(key, id), "working", "")
-	siblingFixture(t, root, "sib-second", sourceLine(key, id), "working", "")
-	if text := handoffNotice(t, root, first, "working", "done", "completed"); text != "" {
-		t.Fatalf("notice printed while a sibling is pending:\n%s", text)
-	}
-}
-
-func TestHandoffNoticeSilentWhenAlreadyReady(t *testing.T) {
-	root, repo, id, _ := resultFixture(t)
-	key, _ := repo.IssueSourceKey(42)
-	// A done sibling archived as completed keeps an already ready work set ready.
-	sibling := siblingFixture(t, root, "sib-ready", sourceLine(key, id), "done", "completed")
-	if text := handoffNotice(t, root, sibling, "done", "archived", "completed"); text != "" {
-		t.Fatalf("notice printed for an already ready work set:\n%s", text)
-	}
-}
-
-func TestHandoffNoticeSilentForUnrelatedCard(t *testing.T) {
-	root, _, _, _ := resultFixture(t)
-	other := siblingFixture(t, root, "unrelated", "PREREQUISITES: N/A", "working", "")
-	if text := handoffNotice(t, root, other, "working", "done", "completed"); text != "" {
-		t.Fatalf("notice printed for an unrelated card:\n%s", text)
-	}
-}
-
-// The CLI path: the notice goes to stderr and the move output stays unchanged.
-func TestHandoffNoticeThroughCLIMove(t *testing.T) {
-	root, repo, id, _ := resultFixture(t)
-	key, _ := repo.IssueSourceKey(42)
-	sibling := siblingFixture(t, root, "sib-cli", sourceLine(key, id), "todo", "")
-	code, out, errText := captureMove(t, []string{sibling, "trash", "--result", "trashed", "--reason", "split no longer needed", "--decision", "test decision"})
-	if code != 0 {
-		t.Fatalf("move: %s", errText)
-	}
-	if out != filepath.Join(root, "trash", sibling)+"\n" {
-		t.Fatalf("stdout changed: %q", out)
-	}
-	if !strings.Contains(errText, "--card "+id+" --action inspect") {
-		t.Fatalf("stderr missing notice:\n%s", errText)
-	}
-}
-
-func captureMove(t *testing.T, args []string) (int, string, string) {
-	t.Helper()
-	oldOut, oldErr := os.Stdout, os.Stderr
-	outR, outW, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	errR, errW, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stdout, os.Stderr = outW, errW
-	code := board.RunMove(args)
-	os.Stdout, os.Stderr = oldOut, oldErr
-	outText, outErr := closeAndRead(outW, outR)
-	errText, errErr := closeAndRead(errW, errR)
-	if err := errors.Join(outErr, errErr); err != nil {
-		t.Fatal(err)
-	}
-	return code, outText, errText
-}
-
-func closeAndRead(w *os.File, r *os.File) (string, error) {
-	closeErr := w.Close()
-	data, readErr := io.ReadAll(r)
-	return string(data), errors.Join(closeErr, readErr, r.Close())
 }

@@ -2,11 +2,9 @@ package board
 
 import (
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
-	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -310,52 +308,6 @@ func UpdateDocument(root, id string, o UpdateOptions) error {
 // not a line ending, and stays.
 func lfLineEndings(text string) string {
 	return strings.ReplaceAll(text, "\r\n", "\n")
-}
-
-// RunUpdate implements the versioned UTF-8 body and attachment update entrance.
-func RunUpdate(args []string) int {
-	values := map[string]string{}
-	for _, name := range []string{"--document", "--file", "--expect-revision", "--contract-decision-file", "--dispatch-id", "--execution-epoch"} {
-		var err error
-		args, values[name], _, err = takeValueFlag(args, name)
-		if err != nil {
-			return usageFail("update", "board.option_requires_a_value", name)
-		}
-	}
-	if len(args) != 1 || values["--document"] == "" || values["--file"] == "" || values["--expect-revision"] == "" {
-		return usageFail("update", "board.task_id_required")
-	}
-	rev, err := strconv.ParseUint(values["--expect-revision"], 10, 64)
-	if err != nil {
-		return fail(kanbanError("board.transaction_invalid", "revision"))
-	}
-	data, err := os.ReadFile(values["--file"])
-	if err != nil {
-		return fail(err)
-	}
-	decision := ""
-	if path := values["--contract-decision-file"]; path != "" {
-		b, e := os.ReadFile(path)
-		if e != nil {
-			return fail(e)
-		}
-		decision = string(b)
-		if strings.TrimSpace(decision) == "" {
-			return fail(kanbanError("board.transaction_decision_required"))
-		}
-	}
-	root, err := requireRoot()
-	if err != nil {
-		return fail(err)
-	}
-	authorization, err := parseExecutionAuthorization(values)
-	if err != nil {
-		return fail(err)
-	}
-	if err = UpdateDocument(root, args[0], UpdateOptions{Document: values["--document"], Text: string(data), ExpectedRevision: rev, ContractDecision: decision, Authorization: authorization}); err != nil {
-		return fail(err)
-	}
-	return 0
 }
 
 // rejectCheckpointedRegroup keeps the member set a coordinator froze: a card can

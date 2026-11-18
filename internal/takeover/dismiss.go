@@ -2,17 +2,13 @@ package takeover
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/launch"
 	"github.com/dualface/kander/internal/liveness"
 	"github.com/dualface/kander/internal/notify"
 	"github.com/dualface/kander/internal/probe"
 	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/terminal"
-	"github.com/dualface/kander/internal/window"
 )
 
 func reverseLookupStale[T any](detail string, lookup func() (T, error)) (T, error) {
@@ -24,78 +20,6 @@ func reverseLookupStale[T any](detail string, lookup func() (T, error)) (T, erro
 		)
 	}
 	return value, nil
-}
-
-func commandDismiss(root, taskID string, timeout float64) error {
-	if _, err := config.Load(false); err != nil {
-		return err
-	}
-	loaded, err := board.LoadBoard(root)
-	if err != nil {
-		return err
-	}
-	entry, err := board.Locate(loaded, taskID)
-	if err != nil {
-		return err
-	}
-	if entry.State != "done" && entry.State != "archived" {
-		return takeoverError(
-			"takeover.only_tasks_in_done_or_archived_can_be_dismissed", entry.TaskID, entry.State,
-		)
-	}
-	if err := launch.ValidateTimeout(timeout, "dismiss"); err != nil {
-		return err
-	}
-	text, err := board.ReadDocument(entry)
-	if err != nil {
-		return err
-	}
-	if err := board.ValidateMutable(entry, text); err != nil {
-		return err
-	}
-	if err := launch.RequireSessionExecution(root, entry.TaskID); err != nil {
-		return err
-	}
-	windowValue := board.MetadataFrom(text, window.WindowField)
-	backend, address, parsed := terminal.ParseWindow(windowValue)
-	if windowValue != "" && !parsed {
-		return takeoverError(
-			"takeover.task_has_no_dismissible_terminal_container", windowValue,
-		)
-	}
-	session, err := launch.ResolvedSessionIdentity(entry.TaskID, text)
-	if err != nil {
-		return err
-	}
-	command, err := AgentExitCommand(session.Agent)
-	if err != nil {
-		return err
-	}
-	live := toLive(session)
-	var channel, container string
-	if !parsed {
-		agent, ok := agentBackend()
-		if !ok {
-			return takeoverError("takeover.task_has_no_dismissible_terminal_container", windowValue)
-		}
-		backend = agent
-	}
-	if backend.Capabilities().AgentIdentity {
-		channel, container, err = dismissAgentPane(backend, address, parsed, live, session, command, timeout)
-	} else {
-		channel, container, err = dismissProcessPane(backend, address, live, session, command, timeout)
-	}
-	if err != nil {
-		return err
-	}
-	fmt.Println(t(
-		"takeover.dismissed_channel_closed_container", entry.TaskID, channel, container,
-	))
-	return nil
-}
-
-func dismissAgentPane(backend terminal.Backend, address terminal.Address, parsed bool, live liveness.TaskSession, session launch.AgentSession, command string, timeout float64) (string, string, error) {
-	return dismissAgentPaneAt(backend, address, parsed, live, session, command, timeout, true)
 }
 
 func dismissAgentPaneAt(backend terminal.Backend, address terminal.Address, parsed bool, live liveness.TaskSession, session launch.AgentSession, command string, timeout float64, allowReverse bool) (string, string, error) {
@@ -153,10 +77,6 @@ func dismissAgentPaneAt(backend terminal.Backend, address terminal.Address, pars
 		}
 	}
 	return backend.Name(), tabID, nil
-}
-
-func dismissProcessPane(backend terminal.Backend, address terminal.Address, live liveness.TaskSession, session launch.AgentSession, command string, timeout float64) (string, string, error) {
-	return dismissProcessPaneAt(backend, address, live, session, command, timeout, true)
 }
 
 func dismissProcessPaneAt(backend terminal.Backend, address terminal.Address, live liveness.TaskSession, session launch.AgentSession, command string, timeout float64, allowReverse bool) (string, string, error) {

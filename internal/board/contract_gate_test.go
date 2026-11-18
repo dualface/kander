@@ -52,7 +52,7 @@ func TestTodoGateRequiresSelfReviewRecord(t *testing.T) {
 	resetLang(t)
 	root := tempBoard(t)
 	taskID := todayID("gate-self")
-	capture(t, func() int { return RunNew([]string{"chore", "gate-self", "自审门禁"}) })
+	capture(t, func() int { return newCard("chore", "gate-self", "自审门禁", false) })
 	path := filepath.Join(root, "backlog", taskID, "spec.md")
 	fillSections(t, path)
 
@@ -72,7 +72,7 @@ func TestTodoGateRequiresCardReviewForGroupAndLarge(t *testing.T) {
 	root := tempBoard(t)
 
 	groupID := todayID("gate-group")
-	capture(t, func() int { return RunNew([]string{"chore", "gate-group", "组员卡门禁"}) })
+	capture(t, func() int { return newCard("chore", "gate-group", "组员卡门禁", false) })
 	groupPath := filepath.Join(root, "backlog", groupID, "spec.md")
 	fillSections(t, groupPath)
 	setMeta(t, groupPath, "- TASK_GROUP:\n", "- TASK_GROUP: 20260906-demo-group\n")
@@ -86,7 +86,7 @@ func TestTodoGateRequiresCardReviewForGroupAndLarge(t *testing.T) {
 	}
 
 	largeID := todayID("gate-large")
-	capture(t, func() int { return RunNew([]string{"--large", "chore", "gate-large", "大卡门禁"}) })
+	capture(t, func() int { return newCard("chore", "gate-large", "大卡门禁", true) })
 	largeSpec := filepath.Join(root, "backlog", largeID, "spec.md")
 	fillSections(t, largeSpec)
 	appendDiscussion(t, largeSpec, "SELF_REVIEW: 通过")
@@ -103,7 +103,7 @@ func TestTodoGateRequiresAcceptanceCheckbox(t *testing.T) {
 	resetLang(t)
 	root := tempBoard(t)
 	taskID := todayID("gate-accept")
-	capture(t, func() int { return RunNew([]string{"chore", "gate-accept", "验收条目门禁"}) })
+	capture(t, func() int { return newCard("chore", "gate-accept", "验收条目门禁", false) })
 	path := filepath.Join(root, "backlog", taskID, "spec.md")
 	fillSections(t, path)
 	appendDiscussion(t, path, "SELF_REVIEW: 通过")
@@ -122,7 +122,7 @@ func TestTodoGateIgnoresEmptyCRLFGroupMetadata(t *testing.T) {
 	resetLang(t)
 	root := tempBoard(t)
 	taskID := todayID("gate-crlf")
-	capture(t, func() int { return RunNew([]string{"chore", "gate-crlf", "CRLF 门禁"}) })
+	capture(t, func() int { return newCard("chore", "gate-crlf", "CRLF 门禁", false) })
 	path := filepath.Join(root, "backlog", taskID, "spec.md")
 	fillSections(t, path)
 	appendDiscussion(t, path, "SELF_REVIEW: 通过")
@@ -142,7 +142,7 @@ func TestCheckFlagsContractDefectsForCommittedCards(t *testing.T) {
 	root := tempBoard(t)
 
 	// Backlog card with placeholders: not checked.
-	capture(t, func() int { return RunNew([]string{"chore", "draft-card", "草稿"}) })
+	capture(t, func() int { return newCard("chore", "draft-card", "草稿", false) })
 
 	// Working card that still has a placeholder marker and no acceptance item: report each contract defect.
 	badID := todayID("bad-working")

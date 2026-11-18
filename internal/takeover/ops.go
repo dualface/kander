@@ -54,12 +54,6 @@ func paneFacts(backend terminal.Backend, program, paneID string, timeout time.Du
 	return backend.PaneFacts(ctx, probeConn(program), paneID)
 }
 
-// agentBackend is the backend that locates a session without a recorded
-// address, because its panes report agent identity.
-func agentBackend() (terminal.Backend, bool) {
-	return terminal.AddressFreeBackend()
-}
-
 func notInPath(backend terminal.Backend) error {
 	return takeoverError("terminal.executable_not_in_path", backend.Executable())
 }

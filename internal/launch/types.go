@@ -217,14 +217,10 @@ var (
 	nowFn               = time.Now
 	recordWindowFn      = board.RecordExecutionWindow
 	startProcessFn      = startProcess
-	boardRootFn         = board.BoardRoot
 	loadBoardFn         = board.LoadBoard
 	locateFn            = board.Locate
 	readDocumentFn      = board.ReadDocument
 	beginStartFn        = board.BeginTaskStart
-	beginTakeoverFn     = board.BeginTakeover
 	confirmStartFn      = board.ConfirmTaskStart
 	readStandingFn      = board.ReadExecutionStanding
-	adoptExecutionFn    = board.AdoptExecution
-	findAdoptSessionsFn = findCodexAdoptSessions
 )

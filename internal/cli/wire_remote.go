@@ -10,22 +10,20 @@ import (
 	"github.com/dualface/kander/internal/worker"
 )
 
+// The client binary reaches the board only through the server, so these
+// entrances are the service ones; storage helpers remain available to the
+// server and package tests only.
 func init() {
 	Commands["worker"] = worker.Run
 	Commands["request"] = remote.RunRequest
-}
-
-// RemoteCommands are the mandatory service entrances of the client binary.
-// Storage helpers remain available to the server and package tests only.
-var RemoteCommands = map[string]Runner{
-	"init":        remote.RunInit,
-	"list":        remote.RunList,
-	"show":        remote.RunShow,
-	"new":         remote.RunNew,
-	"update":      remote.RunUpdate,
-	"move":        remote.RunMove,
-	"pick":        remote.RunPick,
-	"guard-write": remote.RunGuardWrite,
+	Commands["init"] = remote.RunInit
+	Commands["list"] = remote.RunList
+	Commands["show"] = remote.RunShow
+	Commands["new"] = remote.RunNew
+	Commands["update"] = remote.RunUpdate
+	Commands["move"] = remote.RunMove
+	Commands["pick"] = remote.RunPick
+	Commands["guard-write"] = remote.RunGuardWrite
 }
 
 // RequireService prevents a registered lifecycle runner from entering its

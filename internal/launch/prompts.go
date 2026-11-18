@@ -115,12 +115,6 @@ func rulesAndLanguage(paths config.InstallPaths, language string) (string, error
 	return rules + " " + directive, nil
 }
 
-// RuleLoadingWithLanguage appends the card language directive after the rule-loading instruction.
-// Used by start/resume/takeover task files and by notify direct delivery.
-func RuleLoadingWithLanguage(paths config.InstallPaths, cardText string) (string, error) {
-	return ruleLoadingWithLanguage(paths, cardText)
-}
-
 // ruleLoadingWithLanguage joins the preamble fragments: rule loading, language directive, the
 // reporting reminder while rules.reporting is enabled, and the SIZE sentence.
 func ruleLoadingWithLanguage(paths config.InstallPaths, cardText string) (string, error) {
@@ -273,10 +267,6 @@ func startAgentPrompt(taskID string, paths config.InstallPaths, taskGroup, cardT
 	})
 }
 
-func resumeAgentPrompt(taskID, message string, paths config.InstallPaths, state, cardText string) (string, error) {
-	return resumePrompt(taskID, message, paths, state, cardText)
-}
-
 func promptStatus(paths config.InstallPaths, taskID, state, cardText string) (string, error) {
 	if board.MetadataFrom(cardText, "DISPATCH_ID") != "" {
 		return render(paths, "dispatch-bound.md", nil)
@@ -321,14 +311,6 @@ func resumeData(taskID, message string, paths config.InstallPaths, state, cardTe
 		"Agents":        agents,
 		"PhaseSnippets": snippets,
 	}, nil
-}
-
-func resumePrompt(taskID, message string, paths config.InstallPaths, state, cardText string) (string, error) {
-	data, err := resumeData(taskID, message, paths, state, cardText, "resume")
-	if err != nil {
-		return "", err
-	}
-	return render(paths, "resume.md", data)
 }
 
 func takeoverAgentPrompt(taskID, message string, paths config.InstallPaths, previous, state, cardText string) (string, error) {

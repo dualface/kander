@@ -31,7 +31,7 @@ func TestMalformedReviewCanBeInterpretedThroughCLI(t *testing.T) {
 	if err = board.UpdateDocument(root, id, board.UpdateOptions{Document: "spec.md", ExpectedRevision: snapshot.Revision, Text: snapshot.Text + "\n## SUMMARY\n\nFixture delivery verified.\n"}); err != nil {
 		t.Fatal(err)
 	}
-	if board.RunMove([]string{id, "review"}) != 0 || board.RunMove([]string{id, "working", "--owner", "codex", "--decision", "user-reclaim"}) != 0 {
+	if moveCard(id, "review", board.MoveOptions{}) != 0 || moveCard(id, "working", board.MoveOptions{Owner: "codex", Decision: "user-reclaim"}) != 0 {
 		t.Fatal("claim fixture")
 	}
 	requirements := map[string]string{"PMQA": "required", "Security": "N/A: project"}
@@ -55,7 +55,7 @@ func TestMalformedReviewCanBeInterpretedThroughCLI(t *testing.T) {
 	if out := commandOK(t, "progress", h.repo, id); !strings.Contains(out, "interpretation:stable") {
 		t.Fatal(out)
 	}
-	if code := board.RunMove([]string{id, "done", "--result", "completed"}); code == 0 {
+	if code := moveCard(id, "done", board.MoveOptions{Result: "completed"}); code == 0 {
 		t.Fatal("pending batch completed")
 	}
 	m := board.ReviewInterpretation{RunID: "stable", ReportHash: run.Hashes["report.md"], Author: "receiver", Basis: "Complete report read: both arrays are empty and the explicit conclusion states no findings.", Complete: true, Findings: board.ReviewFindings{Findings: []board.ReviewFinding{}, NonBlocking: []board.ReviewFinding{}}, NoFindings: &board.ReviewReportQuote{StartLine: 2, EndLine: 3, Quote: "{\"FINDINGS\":[],\"NON_BLOCKING\":[]}\n```No findings in either section."}}
@@ -69,7 +69,7 @@ func TestMalformedReviewCanBeInterpretedThroughCLI(t *testing.T) {
 	}
 	r := board.ReviewCloseRequest{BatchID: "batch", ExpectedRevision: v.Batch.Revision, ViewHash: board.ReviewViewDigest(v), Author: "coordinator", Roles: map[string]board.ReviewRoleConclusion{"PMQA": {RunID: "stable", PassedAt: h.head, Basis: "verified original and interpretation"}}}
 	commandOK(t, "close", h.repo, dispositionJSON(t, h, "close", r))
-	if code := board.RunMove([]string{id, "done", "--result", "completed"}); code != 0 {
+	if code := moveCard(id, "done", board.MoveOptions{Result: "completed"}); code != 0 {
 		t.Fatal("interpreted batch cannot finish")
 	}
 	after, err := board.ReadReviewRun(root, "stable")

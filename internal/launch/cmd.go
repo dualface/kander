@@ -17,21 +17,16 @@ import (
 )
 
 func init() {
-	cli.Commands["start"] = RunStart
-	cli.RemoteCommands["start"] = RunStartRemote
-	cli.Commands["resume"] = RunResume
-	cli.RemoteCommands["resume"] = cli.RequireService(RunResumeRemote)
-	cli.Commands["dispatch"] = RunDispatch
-	cli.RemoteCommands["dispatch"] = cli.RequireService(RunDispatchRemote)
-	cli.Commands["coordinator"] = RunCoordinator
-	cli.RemoteCommands["coordinator"] = func(args []string) int {
+	cli.Commands["start"] = RunStartRemote
+	cli.Commands["resume"] = cli.RequireService(RunResumeRemote)
+	cli.Commands["dispatch"] = cli.RequireService(RunDispatchRemote)
+	cli.Commands["coordinator"] = func(args []string) int {
 		if _, status, refused := coordinatorArgs(args); refused {
 			return status
 		}
 		return cli.RequireService(RunCoordinatorRemote)(args)
 	}
-	cli.Commands["orchestrate"] = RunOrchestrate
-	cli.RemoteCommands["orchestrate"] = cli.RequireService(RunOrchestrateRemote)
+	cli.Commands["orchestrate"] = cli.RequireService(RunOrchestrateRemote)
 	// The issue command front end never imports this package; the takeover
 	// starter is wired here so every binary that can start agents also supports
 	// `kander issue triage` and the TUI's `s` confirmation.
@@ -103,43 +98,6 @@ func parseAgentLauncher(args []string) (rest []string, agent, launcher string, a
 	return rest, agent, launcher, agentSet, ""
 }
 
-// RunStart implements kander start.
-func RunStart(args []string) int {
-	for _, arg := range args {
-		if arg == "-h" || arg == "--help" {
-			usage(os.Stdout, "start")
-			return 0
-		}
-	}
-	rest, agent, launcher, _, message := parseAgentLauncher(args)
-	if message != "" {
-		usage(os.Stderr, "start")
-		fmt.Fprintln(os.Stderr, message)
-		return 2
-	}
-	var task string
-	for _, arg := range rest {
-		if strings.HasPrefix(arg, "-") {
-			return usageFail("start", "board.unknown_option", arg)
-		}
-		if task != "" {
-			return usageFail("start", "board.too_many_arguments")
-		}
-		task = arg
-	}
-	if _, err := config.Load(false); err != nil {
-		return fail(err)
-	}
-	root, err := boardRootFn()
-	if err != nil {
-		return fail(err)
-	}
-	if err := commandStart(root, agent, launcher, task); err != nil {
-		return exitLaunch(err)
-	}
-	return 0
-}
-
 // RunStartRemote implements kander start in server mode.
 func RunStartRemote(args []string) int {
 	rest, agent, launcher, _, message := parseAgentLauncher(args)
@@ -195,13 +153,8 @@ func RunStartRemote(args []string) int {
 	return 0
 }
 
-// RunResume implements kander resume.
-func RunResume(args []string) int { return runServiceResume(args, false) }
-
-// RunResumeRemote is the mandatory REST entrance used by the client binary.
-func RunResumeRemote(args []string) int { return runServiceResume(args, true) }
-
-func runServiceResume(args []string, required bool) int {
+// RunResumeRemote implements kander resume against the server.
+func RunResumeRemote(args []string) int {
 	for _, arg := range args {
 		if arg == "-h" || arg == "--help" {
 			usage(os.Stdout, "resume")
@@ -320,48 +273,24 @@ func runServiceResume(args []string, required bool) int {
 	if err != nil {
 		return fail(err)
 	}
-	if required {
-		if err := remote.RequireBinding(cfg); err != nil {
-			return fail(err)
-		}
+	if err := remote.RequireBinding(cfg); err != nil {
+		return fail(err)
 	}
 	if release {
-		if !remote.ServiceSelected(cfg, required) {
-			return fail(launchError("remote.release_requires_server"))
-		}
 		if err := commandRemoteRelease(cfg, positional[0], decision); err != nil {
 			return fail(err)
 		}
 		return 0
 	}
-	if remote.ServiceSelected(cfg, required) && adopt {
+	if adopt {
 		if err := commandRemoteAdopt(cfg, positional[0], decision); err != nil {
 			return fail(err)
 		}
 		return 0
 	}
-	if !remote.ServiceSelected(cfg, required) && !adopt && !agentSet && decision != "" {
-		return usageFail("resume", "launch.decision_needs_adopt_or_agent")
-	}
 	var agentPtr *string
 	if agentSet {
 		agentPtr = &agent
 	}
-	if remote.ServiceSelected(cfg, required) {
-		return runRemoteResume(cfg, agentPtr, launcher, positional[0], message, messageFile, messageSet, timeout, dispatchOptions)
-	}
-	root, err := boardRootFn()
-	if err != nil {
-		return fail(err)
-	}
-	if adopt {
-		if err := commandAdopt(root, positional[0], decision); err != nil {
-			return fail(err)
-		}
-		return 0
-	}
-	if err := commandResume(root, agentPtr, launcher, positional[0], message, messageFile, messageSet, timeout, dispatchOptions); err != nil {
-		return exitLaunch(err)
-	}
-	return 0
+	return runRemoteResume(cfg, agentPtr, launcher, positional[0], message, messageFile, messageSet, timeout, dispatchOptions)
 }

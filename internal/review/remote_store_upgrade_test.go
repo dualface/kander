@@ -30,6 +30,7 @@ import (
 // the same command again.
 func TestRemoteReviewRetriesAfterClientUpgrade(t *testing.T) {
 	t.Setenv(remote.EnvExecutionID, "")
+	useServer(t)
 	h := newCodexHarness(t)
 	t.Chdir(h.repo)
 	t.Setenv(board.EnvBoardDir, filepath.Join(h.root, "forbidden-board"))

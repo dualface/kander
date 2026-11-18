@@ -48,54 +48,6 @@ func TestHeadedTaskFileInstructionEndsAtFileProtocol(t *testing.T) {
 	}
 }
 
-func TestCardLaunchesCarryTheCardLanguageContract(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("tmux fakes are POSIX")
-	}
-	root, _, _ := setupBoard(t)
-	taskID, path := makeTodo(t, root, "reminder-card")
-	replaceInFile(t, path, "- LANGUAGE: en\n", "- LANGUAGE: ko\n")
-	if configuredAgentLanguage(t) == "ko" {
-		t.Fatal("the card language must differ from the configured one")
-	}
-	if _, _, err := capture(t, func() error { return commandStart(root, "claude", "", taskID) }); err != nil {
-		t.Fatal(err)
-	}
-	cmd := lastCommand(t, root)
-	assertTaskLanguage(t, cmd, taskFileFromCommand(t, cmd), "ko")
-
-	working := filepath.Join(root, "working", filepath.Base(filepath.Dir(path)), "spec.md")
-	setBranch(t, working)
-	loaded, _ := board.LoadBoard(root)
-	entry, _ := board.Locate(loaded, taskID)
-	if _, err := board.MoveEntry(entry, root, "review"); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := capture(t, func() error { return commandResume(root, nil, "", taskID, "继续", "", true, 61) }); err != nil {
-		t.Fatal(err)
-	}
-	cmd = lastCommand(t, root)
-	assertTaskLanguage(t, cmd, taskFileFromCommand(t, cmd), "ko")
-
-	reviewed := filepath.Join(root, "review", filepath.Base(filepath.Dir(path)), "spec.md")
-	snapshot, err := board.ReadSnapshot(root, taskID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := NotifyViaResume(root, snapshot.Entry, mustRead(t, reviewed), "继续", 61); err != nil {
-		t.Fatal(err)
-	}
-	cmd = lastCommand(t, root)
-	assertTaskLanguage(t, cmd, taskFileFromCommand(t, cmd), "ko")
-
-	agent := "grok"
-	if _, _, err := capture(t, func() error { return commandResume(root, &agent, "", taskID, "继续", "", true, 61) }); err != nil {
-		t.Fatal(err)
-	}
-	cmd = lastCommand(t, root)
-	assertTaskLanguage(t, cmd, taskFileFromCommand(t, cmd), "ko")
-}
-
 func TestInvalidCardLanguageDeliversNoReminder(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("tmux fakes are POSIX")
@@ -130,7 +82,7 @@ func TestStartOrchestratorCarriesConfiguredLanguageForMixedCards(t *testing.T) {
 	firstID, _ := makeTodo(t, root, "reminder-first")
 	secondID, secondPath := makeBacklog(t, root, "reminder-second", true)
 	replaceInFile(t, secondPath, "- LANGUAGE: en\n", "- LANGUAGE: ja\n")
-	if _, err := StartOrchestrator(OrchestrateRequest{Root: root, References: []string{firstID, secondID}, Handover: "plan", Agent: "claude", Launcher: "tmux"}); err != nil {
+	if _, err := startOrchestratorLocal(OrchestrateRequest{Root: root, References: []string{firstID, secondID}, Handover: "plan", Agent: "claude", Launcher: "tmux"}); err != nil {
 		t.Fatal(err)
 	}
 	cmd := lastCommand(t, root)

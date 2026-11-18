@@ -81,7 +81,7 @@ func TestRemoteNativeResumePreservesIndexWorktreeAndUntrackedFiles(t *testing.T)
 	old := markRemoteExecutorStopped(t, session, task.TaskID)
 	second := filepath.Join(root, "worktrees", task.TaskID, "g2")
 	t.Setenv("KANBAN_LAUNCH_CWD", second)
-	if code := RunResume([]string{task.TaskID, "--message", "Continue the preserved local edits"}); code != 0 {
+	if code := RunResumeRemote([]string{task.TaskID, "--message", "Continue the preserved local edits"}); code != 0 {
 		t.Fatalf("resume exit %d", code)
 	}
 	next, found, err := session.Credential(task.TaskID)
@@ -133,7 +133,7 @@ func TestRemoteResumeOfLiveAgentQueuesRequestWithoutLaunching(t *testing.T) {
 	}
 	log := os.Getenv("KANBAN_TMUX_LOG")
 	prior, _ := os.ReadFile(log)
-	if code := RunResume([]string{task.TaskID, "--message", "Read this collaborative update"}); code != 0 {
+	if code := RunResumeRemote([]string{task.TaskID, "--message", "Read this collaborative update"}); code != 0 {
 		t.Fatalf("resume exit %d", code)
 	}
 	after, _, _ := session.Credential(task.TaskID)
@@ -179,7 +179,7 @@ func TestRemoteReleaseAndFreshTakeoverAcrossIndependentClones(t *testing.T) {
 		t.Fatal(err)
 	}
 	old = markRemoteExecutorStopped(t, session, task.TaskID)
-	if code := RunResume([]string{task.TaskID, "--release", "--decision", "Release stopped executor for another host"}); code != 0 {
+	if code := RunResumeRemote([]string{task.TaskID, "--release", "--decision", "Release stopped executor for another host"}); code != 0 {
 		t.Fatalf("release exit %d", code)
 	}
 	lost, err := session.Project.Show(t.Context(), task.TaskID)
@@ -210,7 +210,7 @@ func TestRemoteReleaseAndFreshTakeoverAcrossIndependentClones(t *testing.T) {
 	}
 	nextWorktree := filepath.Join(secondRoot, "worktrees", task.TaskID, "g2")
 	t.Setenv("KANBAN_LAUNCH_CWD", nextWorktree)
-	if code := RunResume([]string{task.TaskID, "--agent", "claude", "--decision", "Explicit cross-host handoff", "--message", "Continue from the published source"}); code != 0 {
+	if code := RunResumeRemote([]string{task.TaskID, "--agent", "claude", "--decision", "Explicit cross-host handoff", "--message", "Continue from the published source"}); code != 0 {
 		t.Fatalf("takeover exit %d", code)
 	}
 	next, found, err := successor.Credential(task.TaskID)

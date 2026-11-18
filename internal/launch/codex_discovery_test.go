@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/process"
 )
 
 // codexScanFixture returns the sessions root and launch directory of a fresh board.
@@ -136,49 +135,6 @@ func TestCodexScanOpensNoOldRollout(t *testing.T) {
 	if scan.opened != 1 {
 		t.Fatalf("opened %d rollouts, want only the new one", scan.opened)
 	}
-}
-
-func TestCodexPromptPrefixesBuiltOncePerLookup(t *testing.T) {
-	_, cwd := codexScanFixture(t)
-	const task = "task-1"
-	for index := range 5 {
-		repairRollout(t, task, fmt.Sprintf("old-%d", index), fmt.Sprintf("old-%d", index), "")
-	}
-	calls := 0
-	original := currentInstallPaths
-	currentInstallPaths = func() (config.InstallPaths, error) {
-		calls++
-		return original()
-	}
-	t.Cleanup(func() { currentInstallPaths = original })
-	count := func(name string, run func()) {
-		t.Helper()
-		calls = 0
-		run()
-		if calls != 1 {
-			t.Fatalf("%s built the prompt prefixes %d times", name, calls)
-		}
-	}
-	count("discovery", func() {
-		freezeClock(t)
-		// Every poll until the deadline finds no candidate.
-		if _, err := discoverNewCodexSession(task, nowFn(), cwd, sessionDiscoverWait); err == nil {
-			t.Fatal("discovery without a new session succeeded")
-		}
-	})
-	count("lookup", func() {
-		if _, err := codexSessionsForTask(context.Background(), task); err != nil {
-			t.Fatal(err)
-		}
-	})
-	var files process.ProcessFiles
-	files.Identity = "pid"
-	for index := range 3 {
-		files.Files = append(files.Files, codexRolloutAt(t, task, fmt.Sprintf("open-%d", index), fmt.Sprintf("open-%d", index), "unrelated", time.Now()))
-	}
-	count("proof", func() {
-		_, _ = proveOpenSession(context.Background(), files, task, "", cwd)
-	})
 }
 
 func appendRolloutPrompt(t *testing.T, path, prompt string) {

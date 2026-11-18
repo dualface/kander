@@ -48,44 +48,6 @@ func TestCustomDialectArguments(t *testing.T) {
 	}
 }
 
-func TestAgentTemplatePrecedenceAndSessions(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fake agents are POSIX shell scripts")
-	}
-	_, _, bin := setupBoard(t)
-	cfg := envConfig("custom", "tmux", nil)
-	cfg.Agents = map[string]config.AgentDefinition{"custom": {Path: filepath.Join(bin, "claude"), Dialect: "claude", Args: &config.AgentArgs{Start: []string{"start", "--model", "{model}", "--id", "{session}"}, Resume: []string{"again", "{session}"}}, Session: &config.AgentSessionDefinition{Mode: "generated"}}}
-	program, err := requireAgentProgram("custom", cfg)
-	if err != nil || program.Path != filepath.Join(bin, "claude") {
-		t.Fatalf("%+v %v", program, err)
-	}
-	session, err := newAgentSession("custom", program, cfg)
-	if err != nil || len(session.Reference) != 36 {
-		t.Fatalf("%+v %v", session, err)
-	}
-	args, err := agentArguments("custom", nil, "small", session, false, cfg)
-	if err != nil || !reflect.DeepEqual(args, []string{"start", "--id", session.Reference}) {
-		t.Fatalf("%q %v", args, err)
-	}
-	args, err = agentArguments("custom", nil, "small", session, true, cfg)
-	if err != nil || !reflect.DeepEqual(args, []string{"again", session.Reference}) {
-		t.Fatalf("%q %v", args, err)
-	}
-	d := cfg.Agents["custom"]
-	d.Session.Mode = "none"
-	cfg.Agents["custom"] = d
-	if _, err := resolvedTaskSession("task", "- SESSION: custom id\n", cfg); err == nil || !strings.Contains(err.Error(), "none") {
-		t.Fatal(err)
-	}
-	args, err = agentArguments("custom", nil, "small", session, false, cfg)
-	if err != nil || !reflect.DeepEqual(args, []string{"start"}) {
-		t.Fatalf("%q %v", args, err)
-	}
-	if _, err := agentArguments("custom", nil, "small", session, true, cfg); err == nil {
-		t.Fatal("none resumed")
-	}
-}
-
 func TestAllocatedAgentSession(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fake agents are POSIX shell scripts")

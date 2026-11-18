@@ -5,10 +5,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/probe"
 	"github.com/dualface/kander/internal/process"
 	"github.com/dualface/kander/internal/terminal"
 )
@@ -54,48 +51,6 @@ func prepareLaunch(launcher, project, command string) (LaunchPlan, error) {
 	}
 	plan.Target = target
 	return plan, nil
-}
-
-// processNotifyTarget validates a resumed agent in a pane identified by its
-// foreground process and session marker.
-func processNotifyTarget(plan LaunchPlan, pane string, session AgentSession, timeout time.Duration) error {
-	ctx, cancel := probe.TimeoutContext(timeout)
-	defer cancel()
-	facts, err := plan.backend().PaneFacts(ctx, probeConn(plan), pane)
-	if err != nil {
-		return err
-	}
-	if facts.Gone {
-		return launchError("launch.tmux_pane_does_not_exist", pane, facts.GoneDetail)
-	}
-	if facts.Dead != "0" {
-		return launchError("launch.tmux_pane_is_dead", pane)
-	}
-	if facts.InMode != "0" {
-		return launchError("launch.tmux_pane_is_in_copy_mode", pane)
-	}
-	cfg, err := loadEffective()
-	if err != nil {
-		return err
-	}
-	if !config.HasAgent(cfg, session.Agent) {
-		return launchError("launch.unsupported_agent", session.Agent)
-	}
-	expected := config.AgentFor(cfg, session.Agent).ProcessName
-	if facts.Command != expected {
-		return launchError(
-			"launch.tmux_foreground_process_mismatch_expected_actual", expected, orNA(facts.Command),
-		)
-	}
-	if facts.SessionMarker == "" {
-		return launchError("launch.tmux_pane_has_no_session_marker", pane)
-	}
-	if facts.SessionMarker != session.Reference {
-		return launchError(
-			"launch.tmux_session_mismatch_task_pane", session.Reference, facts.SessionMarker,
-		)
-	}
-	return nil
 }
 
 func orNA(v string) string {

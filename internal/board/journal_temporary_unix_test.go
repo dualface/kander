@@ -3,8 +3,9 @@
 package board
 
 import (
-	"github.com/dualface/kander/internal/fs"
 	"testing"
+
+	"github.com/dualface/kander/internal/fs"
 )
 
 func holdJournalTemporary(t *testing.T, root string) func() {

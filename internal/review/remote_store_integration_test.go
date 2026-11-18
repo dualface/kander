@@ -30,6 +30,7 @@ func TestRemoteArchiveCLIUsesServiceWithoutLocalBoard(t *testing.T) {
 func remoteArchiveCLI(t *testing.T, interrupted bool) {
 	h := newCodexHarness(t)
 	t.Chdir(h.repo)
+	useServer(t)
 	t.Setenv(board.EnvBoardDir, filepath.Join(h.root, "forbidden-board"))
 	t.Setenv(remote.EnvClientHome, filepath.Join(h.root, "client"))
 	srv, err := server.Open(server.Options{DataDir: filepath.Join(h.root, "server"), Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})

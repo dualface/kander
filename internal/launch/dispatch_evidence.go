@@ -2,14 +2,10 @@ package launch
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
@@ -90,82 +86,6 @@ func verifyDispatchIntegration(ctx context.Context, g board.DispatchIntegration)
 	return nil
 }
 
-// PrepareBoundDispatch verifies Git before the board's pure structural producer.
-// No Git operation changes a branch, deletes a worktree or grants takeover.
-func PrepareBoundDispatch(root string, in board.DispatchInput) (board.Dispatch, error) {
-	if in.ID == "" {
-		id, err := board.NewDispatchID()
-		if err != nil {
-			return board.Dispatch{}, err
-		}
-		in.ID = id
-	}
-	if w := in.Evidence.WrapUp; w != nil {
-		// Do not mutate caller-owned evidence while resolving creation defaults.
-		copy := *w
-		in.Evidence.WrapUp = &copy
-		w = &copy
-		if w.Git.DispatchID == "" {
-			w.Git.DispatchID = in.ID
-		}
-		if w.Git.TaskID == "" {
-			w.Git.TaskID = in.TaskID
-		}
-		if w.Artifact == (board.ArtifactReference{}) {
-			w.Artifact = board.ArtifactReference{TaskID: in.TaskID, Path: "dispatches/" + in.ID + "/integration.json"}
-		}
-		previous, err := board.ReadDispatch(root, in.TaskID, in.ID)
-		if err == nil && previous.Input.Evidence.WrapUp != nil {
-			if w.Git.ReviewBase == "" {
-				w.Git.ReviewBase = previous.Input.Evidence.WrapUp.Git.ReviewBase
-			}
-			if w.Git.ReviewTarget == "" {
-				w.Git.ReviewTarget = previous.Input.Evidence.WrapUp.Git.ReviewTarget
-			}
-			if w.Git.VerifiedAt.IsZero() {
-				w.Git.VerifiedAt = previous.Input.Evidence.WrapUp.Git.VerifiedAt
-			}
-			return board.PrepareDispatch(root, in)
-		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return board.Dispatch{}, err
-		} else {
-			if w.Git.ReviewTarget == "" || w.Git.ReviewBase == "" {
-				reviewRange, e := board.DispatchReviewRange(root, in.TaskID)
-				if e != nil {
-					return board.Dispatch{}, e
-				}
-				if w.Git.ReviewTarget == "" {
-					w.Git.ReviewTarget = reviewRange.Descendant
-				}
-				if w.Git.ReviewBase == "" {
-					w.Git.ReviewBase = reviewRange.Ancestor
-				}
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			if err := verifyDispatchIntegration(ctx, w.Git); err != nil {
-				return board.Dispatch{}, err
-			}
-			w.Git.VerifiedAt = time.Now().UTC()
-		}
-	}
-	return board.PrepareDispatch(root, in)
-}
-
-// ValidateActionEvidence runs before observation, launch and transmission.
-func ValidateActionEvidence(ctx context.Context, root string, d board.Dispatch) error {
-	if d.WrapUpAuthority != nil {
-		return launchError("board.dispatch_evidence_invalid", "wrap-up-only grant cannot launch or deliver")
-	}
-	if err := board.ValidateDispatchEvidence(root, d.Input.TaskID, d.Input.ID); err != nil {
-		return err
-	}
-	if w := d.Input.Evidence.WrapUp; w != nil {
-		return verifyDispatchIntegration(ctx, w.Git)
-	}
-	return nil
-}
-
 type WrapUpRequest struct {
 	TaskID           string               `json:"task_id"`
 	DispatchID       string               `json:"dispatch_id"`
@@ -176,129 +96,14 @@ type WrapUpRequest struct {
 	ReclaimDecision  string               `json:"reclaim_decision,omitempty"`
 }
 
-// AuthorizeWrapUp never treats absent SESSION, nonzero transport or expiry as
-// exit. A prior authorized reclaim still needs a fresh stopped observation.
-func AuthorizeWrapUp(ctx context.Context, root string, r WrapUpRequest) (result board.Dispatch, err error) {
-	if r.DispatchID == "" || r.TaskID == "" || strings.TrimSpace(r.Author) == "" || strings.TrimSpace(r.Reason) == "" {
-		return result, launchError("board.dispatch_evidence_invalid", "wrap-up task, dispatch ID, author and reason required")
-	}
-	if r.Intent != nil {
-		if r.Intent.Kind != "wrap-up" || r.Intent.TaskID != r.TaskID || r.Intent.ID != r.DispatchID {
-			return result, launchError("board.dispatch_evidence_invalid", "wrap-up intent identity")
-		}
-		result, err = PrepareBoundDispatch(root, *r.Intent)
-		if err != nil {
-			return
-		}
-		if r.ExpectedRevision == 0 {
-			r.ExpectedRevision = result.Revision
-		}
-	}
-	err = board.WithDispatchDelivery(root, r.DispatchID, func() error {
-		d, e := board.ReadDispatch(root, r.TaskID, r.DispatchID)
-		if e != nil {
-			return e
-		}
-		// Reconcile before probing; no new epoch is issued for an existing grant.
-		if d.WrapUpAuthority != nil && d.WrapUpAuthority.Author == r.Author && d.WrapUpAuthority.Reason == r.Reason && d.WrapUpAuthority.Exit.Decision == r.ReclaimDecision {
-			result = d
-			return nil
-		}
-		if d.State == board.DispatchCompleted {
-			result = d
-			return nil
-		}
-		if d.Input.Kind != "wrap-up" || d.Revision != r.ExpectedRevision {
-			return launchError("board.dispatch_conflict", r.DispatchID)
-		}
-		if e = ValidateActionEvidence(ctx, root, d); e != nil {
-			return e
-		}
-		s, e := board.ReadExecutionSnapshot(root, r.TaskID, d.Authorization)
-		// An expired confirmation deadline does not prevent read-only reconciliation.
-		if e != nil {
-			s, e = board.ReadSnapshot(root, r.TaskID)
-			if e != nil {
-				return e
-			}
-		}
-		cfg, e := config.Load(false)
-		if e != nil {
-			return e
-		}
-		if e = cfg.Rules.CheckTaskGroup(board.TaskGroupFrom(s.Text)); e != nil {
-			return e
-		}
-		exit, e := observedDispatchExit(ctx, s, r.DispatchID)
-		if e != nil {
-			return e
-		}
-		if r.ReclaimDecision != "" {
-			exit.Outcome = "reclaimed"
-			exit.Decision = r.ReclaimDecision
-		}
-		result, e = board.AuthorizeDispatchWrapUp(root, r.TaskID, r.DispatchID, d.Revision, r.Author, r.Reason, exit)
-		return e
-	})
-	return
-}
-
-// RunDispatch adds the Git-aware and observation-aware producers to the single
-// public command. The board-only runner remains available for pure operations.
-func RunDispatch(args []string) int { return runServiceDispatch(args, false) }
-
-// RunDispatchRemote is the mandatory REST entrance used by the client binary.
-func RunDispatchRemote(args []string) int { return runServiceDispatch(args, true) }
-
-func runServiceDispatch(args []string, required bool) int {
+// RunDispatchRemote implements kander dispatch against the server.
+func RunDispatchRemote(args []string) int {
 	cfg, err := config.Load(false)
 	if err != nil {
 		return fail(err)
 	}
-	if required {
-		if err := remote.RequireBinding(cfg); err != nil {
-			return fail(err)
-		}
-	}
-	if remote.ServiceSelected(cfg, required) {
-		return runRemoteDispatch(args, cfg)
-	}
-	if len(args) != 2 || (args[0] != "prepare" && args[0] != "authorize-wrap-up") {
-		return board.RunDispatch(args)
-	}
-	if _, err := config.Load(false); err != nil {
+	if err := remote.RequireBinding(cfg); err != nil {
 		return fail(err)
 	}
-	root, err := board.BoardRoot()
-	if err != nil {
-		return fail(err)
-	}
-	data, err := os.ReadFile(args[1])
-	if err != nil {
-		return fail(err)
-	}
-	var d board.Dispatch
-	if args[0] == "prepare" {
-		var in board.DispatchInput
-		if err = board.DecodeReviewJSON(data, &in); err == nil {
-			d, err = PrepareBoundDispatch(root, in)
-		}
-	} else {
-		var r WrapUpRequest
-		if err = board.DecodeReviewJSON(data, &r); err == nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			d, err = AuthorizeWrapUp(ctx, root, r)
-		}
-	}
-	if err != nil {
-		return fail(err)
-	}
-	if err = json.NewEncoder(os.Stdout).Encode(d); err != nil {
-		return fail(err)
-	}
-	if d.WrapUpAuthority != nil && d.State == board.DispatchPrepared {
-		fmt.Fprintln(os.Stderr, t("launch.dispatch_wrap_up_only", d.WrapUpAuthority.Author, d.Input.ID, d.Authorization.Epoch))
-	}
-	return 0
+	return runRemoteDispatch(args, cfg)
 }

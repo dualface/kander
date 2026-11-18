@@ -20,6 +20,17 @@ import (
 	"github.com/dualface/kander/internal/server"
 )
 
+func TestTaskExecutorClearsInheritedCoordinatorAuthority(t *testing.T) {
+	source := process.ProcessInvocation{Argv: []string{"codex"}, Env: map[string]string{remote.EnvCoordinatorExecutionID: "parent-coordinator", remote.EnvExecutionID: "parent-task"}}
+	invocation := withExecutionIdentity(LaunchPlan{Launcher: "foreground"}, source, "child-task")
+	if invocation.Env[remote.EnvCoordinatorExecutionID] != "" || invocation.Env[remote.EnvExecutionID] != "child-task" {
+		t.Fatal("task executor inherited coordinator authority")
+	}
+	if source.Env[remote.EnvCoordinatorExecutionID] != "parent-coordinator" {
+		t.Fatal("child environment mutated the parent's invocation")
+	}
+}
+
 func TestRemoteOrchestratorUsesServiceCardsAndRetainsItsPrivateIdentity(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX terminal fake")
@@ -122,7 +133,7 @@ func TestRemoteOrchestratorUsesServiceCardsAndRetainsItsPrivateIdentity(t *testi
 	oldWorker := ensureRemoteWorker
 	ensureRemoteWorker = func(string) error { return nil }
 	t.Cleanup(func() { ensureRemoteWorker = oldWorker })
-	code, out := captureStdout(t, func() int { return RunCoordinator([]string{"claim", path}) })
+	code, out := captureStdout(t, func() int { return RunCoordinatorRemote([]string{"claim", path}) })
 	if code != 0 {
 		t.Fatalf("remote claim: %d %s", code, out)
 	}
@@ -141,15 +152,5 @@ func TestRemoteOrchestratorUsesServiceCardsAndRetainsItsPrivateIdentity(t *testi
 	}
 	if _, err := os.Lstat(forbidden); !os.IsNotExist(err) {
 		t.Fatalf("remote orchestration used a local board: %v", err)
-	}
-}
-func TestTaskExecutorClearsInheritedCoordinatorAuthority(t *testing.T) {
-	source := process.ProcessInvocation{Argv: []string{"codex"}, Env: map[string]string{remote.EnvCoordinatorExecutionID: "parent-coordinator", remote.EnvExecutionID: "parent-task"}}
-	invocation := withExecutionIdentity(LaunchPlan{Launcher: "foreground"}, source, "child-task")
-	if invocation.Env[remote.EnvCoordinatorExecutionID] != "" || invocation.Env[remote.EnvExecutionID] != "child-task" {
-		t.Fatal("task executor inherited coordinator authority")
-	}
-	if source.Env[remote.EnvCoordinatorExecutionID] != "parent-coordinator" {
-		t.Fatal("child environment mutated the parent's invocation")
 	}
 }

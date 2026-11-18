@@ -9,45 +9,15 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/liveness"
 	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/review"
 )
 
 func init() { board.SetWrapUpGitVerifier(verifyWrapUpCompletion) }
-
-// ReconcileCoordinator verifies actual Git relations while board validates
-// original review/dispatch records and commits only a fenced checkpoint.
-func ReconcileCoordinator(ctx context.Context, root string, r board.CoordinatorReconcile) (board.CoordinatorCheckpoint, error) {
-	return board.ReconcileCoordinator(ctx, root, r, func(ctx context.Context, facts board.CoordinatorGitFacts) error {
-		return verifyCoordinatorGitFacts(ctx, r.CWD, facts)
-	})
-}
-func verifyCoordinatorGitFacts(ctx context.Context, cwd string, facts board.CoordinatorGitFacts) error {
-	if d := facts.Delivery; d != nil {
-		if !filepath.IsAbs(cwd) || d.Branch == "main" || d.Branch == "develop" || strings.HasPrefix(d.Branch, "group/") {
-			return launchError("board.coordinator_conflict", "delivery CWD or task branch")
-		}
-		cmd := exec.CommandContext(ctx, "git", "-C", cwd, "check-ref-format", "refs/heads/"+d.Branch)
-		if err := cmd.Run(); err != nil {
-			return err
-		}
-		out, err := exec.CommandContext(ctx, "git", "-C", cwd, "rev-parse", "--verify", "refs/heads/"+d.Branch+"^{commit}").Output()
-		if err != nil {
-			return err
-		}
-		if strings.TrimSpace(string(out)) != d.Commit {
-			return launchError("board.coordinator_conflict", "task branch head differs from delivery")
-		}
-		return ctx.Err()
-	}
-	return verifyWrapUpGit(ctx, cwd, facts)
-}
 
 // verifyWrapUpGit proves the integration of a wrap-up and its closed batches. cwd
 // replaces the recorded worktree when it is set.
@@ -83,113 +53,6 @@ func verifyWrapUpCompletion(ctx context.Context, root string, facts board.Coordi
 		}
 	}
 	return launchError("launch.wrap_up_needs_checkout", facts.Integration.TaskID, facts.Integration.TargetCommit)
-}
-
-// recoverProbeBudget bounds the probe of a reset, session resolution included. A
-// hung terminal reads unknown at this limit, and the rest of the command deadline
-// stays for the board write.
-var recoverProbeBudget = liveness.DefaultBatchBudget
-
-// recoverLivenessFn searches a stale address, unlike adoption: a drifted WINDOW
-// must not read stopped, or a reset or a takeover would pass a running executor. A
-// card with no reference is resolved only for that search.
-var recoverLivenessFn = func(ctx context.Context, s board.Snapshot) liveness.Report {
-	ctx, cancel := context.WithTimeout(ctx, recoverProbeBudget)
-	defer cancel()
-	return liveness.ClassifyTaskResolving(ctx, s.Entry, s.Text, func(ctx context.Context) (string, error) {
-		session, err := resolveIdentityFn(ctx, s.Entry.TaskID, s.Text)
-		return session.Reference, err
-	})
-}
-
-// resolveIdentityFn is a var so tests can hold a resolution past its budget.
-var resolveIdentityFn = func(ctx context.Context, taskID, text string) (AgentSession, error) {
-	return resolveTaskIdentity(ctx, taskID, text, false)
-}
-
-// recoverRefusal names the executor a reset must not pass and the next step that
-// works for it. A review member takes no takeover without a dispatch, a takeover
-// cannot exit an executor it cannot prove, and several matches have no one address.
-func recoverRefusal(s board.Snapshot, report liveness.Report) error {
-	switch report.Status {
-	case liveness.Alive, liveness.AliveOrphaned, liveness.Drifted:
-	case liveness.Unknown:
-		if report.Evidence == nil {
-			return nil
-		}
-	default:
-		return nil
-	}
-	task, window := s.Entry.TaskID, board.MetadataFrom(s.Text, board.FieldWindow)
-	if e := report.Evidence; e != nil {
-		if e.Matches > 0 {
-			return launchError("launch.recover_executor_ambiguous", task, e.Matches, report.Detail)
-		}
-		if e.Window != "" {
-			window = e.Window
-		}
-	}
-	if report.NewWindow != "" {
-		window = report.NewWindow
-	}
-	if s.Entry.State == "review" || report.Status == liveness.Unknown {
-		return launchError("launch.recover_executor_stop", task, report.Status, report.Detail, window)
-	}
-	return launchError("launch.recover_executor_alive", task, report.Status, report.Detail, window)
-}
-
-// RecoverCoordinator refuses a reset beside a start that has not ended and beside
-// an executor the probe saw, at the recorded address or at a new one, then lets
-// board apply the request to the card it observed. A probe that failed proceeds:
-// the user decided, and recover is the last way out of a terminal that cannot be
-// probed.
-func RecoverCoordinator(ctx context.Context, root string, r board.CoordinatorRecover) (board.CoordinatorCheckpoint, error) {
-	s, err := board.ReadSnapshot(root, r.Member)
-	if err != nil {
-		return board.CoordinatorCheckpoint{}, err
-	}
-	if s.Entry.State == "working" || s.Entry.State == "review" {
-		record, exists, err := board.CurrentExecution(root, s.Entry.TaskID)
-		if err != nil {
-			return board.CoordinatorCheckpoint{}, err
-		}
-		if exists && record.Status == board.ExecutionPending {
-			// A takeover needs an unbound card, so a binding comes first in the way out.
-			id := board.MetadataFrom(s.Text, "DISPATCH_ID")
-			if blocker := adoptionBlocker(s, record); blocker != "" {
-				if id != "" {
-					return board.CoordinatorCheckpoint{}, launchError("launch.recover_start_pending_bound_takeover", s.Entry.TaskID, id, blocker)
-				}
-				return board.CoordinatorCheckpoint{}, launchError("launch.recover_start_pending_takeover", s.Entry.TaskID, blocker)
-			}
-			if id != "" {
-				return board.CoordinatorCheckpoint{}, launchError("launch.recover_start_pending_bound", s.Entry.TaskID, id)
-			}
-			return board.CoordinatorCheckpoint{}, launchError("board.recover_start_pending", s.Entry.TaskID)
-		}
-		report := recoverLivenessFn(ctx, s)
-		if err = recoverRefusal(s, report); err != nil {
-			if exists && record.StartUnfinished() && adoptableAfterProbe(s, record, report) {
-				return board.CoordinatorCheckpoint{}, launchError("launch.recover_start_unresolved_adopt", err.Error(), s.Entry.TaskID)
-			}
-			return board.CoordinatorCheckpoint{}, err
-		}
-	}
-	return board.RecoverCoordinator(ctx, root, r, s.Revision)
-}
-
-// adoptableAfterProbe says whether adoption can end the unfinished start of a
-// refused reset, from the probe already made and static facts: the card shows
-// the attempt's identity, and the recorded pane is alive or unmarked with a
-// session adoption can mark. It runs no discovery and writes nothing.
-func adoptableAfterProbe(s board.Snapshot, record board.ExecutionRecord, report liveness.Report) bool {
-	if board.StartIdentityChanged(s, record) {
-		return false
-	}
-	if unmarkedPane(report) {
-		return markerRepairable(board.MetadataFrom(s.Text, board.FieldSession))
-	}
-	return report.Status == liveness.Alive || report.Status == liveness.AliveOrphaned
 }
 
 // reconcileExitPartial is the exit status of a reconcile that blocked some
@@ -238,13 +101,6 @@ func coordinatorUsageFail() int {
 	return 2
 }
 
-// RunCoordinator runs checkpoint operations and explicitly requested, leased
-// Git integration. Subscription events remain read-only wakeups.
-func RunCoordinator(args []string) int { return runServiceCoordinator(args, false) }
-
-// RunCoordinatorRemote is the mandatory REST entrance used by the client binary.
-func RunCoordinatorRemote(args []string) int { return runServiceCoordinator(args, true) }
-
 // coordinatorArgs checks the shape of the arguments before any configuration is
 // read, and returns the arguments without the release confirmation. Release
 // ends the calling execution for good, so it takes an explicit confirmation.
@@ -268,7 +124,10 @@ func coordinatorArgs(args []string) (rest []string, status int, refused bool) {
 	return args, 0, false
 }
 
-func runServiceCoordinator(args []string, required bool) int {
+// RunCoordinatorRemote runs checkpoint operations and explicitly requested,
+// leased Git integration against the server. Subscription events remain
+// read-only wakeups.
+func RunCoordinatorRemote(args []string) int {
 	args, status, refused := coordinatorArgs(args)
 	if refused {
 		return status
@@ -277,10 +136,8 @@ func runServiceCoordinator(args []string, required bool) int {
 	if err != nil {
 		return fail(err)
 	}
-	if required {
-		if err := remote.RequireBinding(cfg); err != nil {
-			return fail(err)
-		}
+	if err := remote.RequireBinding(cfg); err != nil {
+		return fail(err)
 	}
 	if args[0] == "integrate" || args[0] == "integration-show" {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -290,62 +147,7 @@ func runServiceCoordinator(args []string, required bool) int {
 	if err = cfg.Rules.CheckTaskGroup("coordinator"); err != nil {
 		return fail(err)
 	}
-	if remote.ServiceSelected(cfg, required) {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		return runRemoteCoordinator(ctx, cfg, args)
-	}
-	root, err := board.BoardRoot()
-	if err != nil {
-		return fail(err)
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	var c board.CoordinatorCheckpoint
-	switch args[0] {
-	case "show":
-		c, err = board.ReadCoordinatorCheckpointContext(ctx, root, args[1])
-	case "claim", "reconcile", "recover", "remove-member":
-		if (args[0] == "recover" || args[0] == "remove-member") && !filepath.IsAbs(args[1]) {
-			return coordinatorUsageFail()
-		}
-		var data []byte
-		data, err = os.ReadFile(args[1])
-		if err != nil {
-			return fail(err)
-		}
-		switch args[0] {
-		case "claim":
-			var r board.CoordinatorClaim
-			if err = board.DecodeReviewJSON(data, &r); err == nil {
-				c, err = board.ClaimCoordinator(ctx, root, r)
-			}
-		case "reconcile":
-			var r board.CoordinatorReconcile
-			if err = board.DecodeReviewJSON(data, &r); err != nil {
-				return fail(err)
-			}
-			c, err = ReconcileCoordinator(ctx, root, r)
-			return finishReconcile(c, err)
-		case "remove-member":
-			var r board.CoordinatorRemoveMember
-			if err = board.DecodeReviewJSON(data, &r); err == nil {
-				c, err = board.RemoveCoordinatorMember(ctx, root, r)
-			}
-		default:
-			var r board.CoordinatorRecover
-			if err = board.DecodeReviewJSON(data, &r); err == nil {
-				c, err = RecoverCoordinator(ctx, root, r)
-			}
-		}
-	default:
-		return coordinatorUsageFail()
-	}
-	if err != nil {
-		return fail(err)
-	}
-	if err = json.NewEncoder(os.Stdout).Encode(c); err != nil {
-		return fail(err)
-	}
-	return 0
+	return runRemoteCoordinator(ctx, cfg, args)
 }

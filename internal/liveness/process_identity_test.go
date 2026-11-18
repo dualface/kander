@@ -353,21 +353,3 @@ func TestAProbeThatEndsEarlyIsNeverAlive(t *testing.T) {
 		t.Fatalf("report=%+v", got)
 	}
 }
-
-func TestCheckPrintsTheProcessResults(t *testing.T) {
-	requireIdentityPlatform(t)
-	root := tempBoard(t)
-	agent := startFakeAgent(t)
-	entry, _ := startedForeground(t, root, "identity-check", "foreground")
-	identity := foregroundIdentity(t, agent.Process.Pid)
-	identity.Executable = "other"
-	recordIdentity(t, root, entry, identity)
-	code, out, _ := capture(t, func() int { return RunCheck([]string{"--all"}) })
-	if code != 0 || !strings.Contains(out, "状态="+IdentityMismatch) || !strings.Contains(out, "人工核对") {
-		t.Fatalf("code=%d out=%s", code, out)
-	}
-	lines := formatReport(Report{TaskID: entry.TaskID, Status: AliveOrphaned, ObservedAt: time.Now()})
-	if !strings.Contains(lines, "--adopt") {
-		t.Fatal(lines)
-	}
-}

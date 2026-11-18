@@ -12,17 +12,11 @@ import (
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/remote"
 )
 
 // runResult exposes the controlled inspection, assessment and decision protocol.
 // No raw gh write command is part of the agent workflow.
 func runResult(factory func() IssueProvider, args []string, stdout, stderr io.Writer) int {
-	return runResultMode(factory, args, stdout, stderr, false)
-}
-
-func runResultMode(factory func() IssueProvider, args []string, stdout, stderr io.Writer, required bool) int {
 	values := map[string]string{"--action": "start"}
 	number := 0
 	for i := 0; i < len(args); i++ {
@@ -73,37 +67,8 @@ func runResultMode(factory func() IssueProvider, args []string, stdout, stderr i
 	}
 	ctx, cancel := commandContext()
 	defer cancel()
-	cfg, err := config.Load(false)
-	if err != nil {
-		fmt.Fprintln(stderr, formatTriageError(err))
-		return 1
-	}
-	root := ""
-	if required {
-		if err := remote.RequireBinding(cfg); err != nil {
-			fmt.Fprintln(stderr, formatError(err))
-			return 1
-		}
-	}
-	if remote.ServiceSelected(cfg, required) {
-		cwd, e := os.Getwd()
-		if e != nil {
-			err = e
-		} else {
-			session, e := remote.Open(ctx, cfg, cwd)
-			if e != nil {
-				err = e
-			} else {
-				operationCtx, finishOperation := session.OperationContext(ctx)
-				defer finishOperation()
-				ctx = operationCtx
-				root, err = session.LocalDataRoot()
-				ctx = WithRemoteResult(ctx, session, cwd)
-			}
-		}
-	} else {
-		root, err = board.BoardRoot()
-	}
+	ctx, root, finishOperation, err := openResultBoard(ctx)
+	defer finishOperation()
 	if err != nil {
 		fmt.Fprintln(stderr, formatTriageError(err))
 		return 1

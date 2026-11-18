@@ -1,7 +1,6 @@
 package board
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -255,38 +254,31 @@ func TestDispatchWrapUpTakeoverAndExpiry(t *testing.T) {
 	}
 }
 
-func TestDispatchCLIAndManagedArtifacts(t *testing.T) {
+func TestDispatchManagedArtifactsAndReplayedMove(t *testing.T) {
 	root := tempBoard(t)
 	s := dispatchCard(t, root, "cli")
-	in := dispatchInput(s, "")
-	path := filepath.Join(t.TempDir(), "intent.json")
-	b, _ := json.Marshal(in)
-	if err := os.WriteFile(path, b, 0600); err != nil {
-		t.Fatal(err)
-	}
-	code, out, stderr := capture(t, func() int { return RunDispatch([]string{"prepare", path}) })
-	if code != 0 {
-		t.Fatal(stderr)
-	}
-	var d Dispatch
-	if err := json.Unmarshal([]byte(out), &d); err != nil {
-		t.Fatal(err)
-	}
+	d := prepareTestDispatch(t, root, dispatchInput(s, ""))
 	if d.Input.ID == "" {
 		t.Fatal("missing generated ID")
 	}
-	args := []string{s.Entry.TaskID, "working", "--dispatch-id", d.Input.ID, "--execution-epoch", "1"}
-	code, out, stderr = capture(t, func() int { return RunMove(args) })
-	if code != 0 || !strings.Contains(out, `"replayed":false`) {
-		t.Fatalf("%s %s", out, stderr)
+	move := func() bool {
+		t.Helper()
+		replayed := false
+		entry := transactionSnapshot(t, root, s.Entry.TaskID).Entry
+		if _, err := MoveWithOptions(entry, root, "working", MoveOptions{Authorization: ExecutionAuthorization{DispatchID: d.Input.ID, Epoch: 1}, Replayed: &replayed}); err != nil {
+			t.Fatal(err)
+		}
+		return replayed
+	}
+	if move() {
+		t.Fatal("first move reported a replay")
 	}
 	fresh := transactionSnapshot(t, root, s.Entry.TaskID)
 	if err := UpdateDocument(root, s.Entry.TaskID, UpdateOptions{Document: dispatchPath(d.Input.ID, "state"), Text: "forged", ExpectedRevision: fresh.Revision, Authorization: d.Authorization}); err == nil {
 		t.Fatal("managed dispatch overwritten")
 	}
-	code, out, stderr = capture(t, func() int { return RunMove(args) })
-	if code != 0 || !strings.Contains(out, `"replayed":true`) {
-		t.Fatalf("%s %s", out, stderr)
+	if !move() {
+		t.Fatal("second move did not report a replay")
 	}
 }
 
