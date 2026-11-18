@@ -229,10 +229,14 @@ func TestWorkerDeliversRequestsOnce(t *testing.T) {
 // An observation slower than the renew interval must not use up the time the
 // same pass has for delivering requests.
 func TestWorkerDeliversAfterASlowObservation(t *testing.T) {
-	const renew = 100 * time.Millisecond
+	// The interval leaves the real HTTP calls a budget of a second; only the
+	// observation is slower than it.
+	const renew = time.Second
 	h := newHarnessRenewing(t, renew)
+	var observed atomic.Bool
 	h.loop.o.Observe = func(context.Context, remote.Credential) api.AgentObservation {
-		time.Sleep(3 * renew)
+		time.Sleep(renew + renew/2)
+		observed.Store(true)
 		return api.AgentObservation{Status: "alive"}
 	}
 	_, c := h.claimed("slow-observation", true)
@@ -240,9 +244,12 @@ func TestWorkerDeliversAfterASlowObservation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h.advance(time.Second)
+	h.advance(2 * renew)
 	if _, err := h.loop.pass(t.Context()); err != nil {
 		t.Fatal(err)
+	}
+	if !h.credential().RenewedAt.Equal(h.now()) || !observed.Load() {
+		t.Fatalf("the pass did not renew and observe: renewed=%v observed=%v", h.credential().RenewedAt, observed.Load())
 	}
 	if len(h.lines) != 1 || !strings.Contains(h.lines[0], r.ID) {
 		t.Fatalf("the request was not delivered after a slow observation: %q", h.lines)
