@@ -49,6 +49,20 @@ func (p *project) groupWrite(key, operation, group string, request any, h holder
 	}, func() (outcome, bool) { return outcome{}, false })
 }
 
+// memberUnclaimed refuses a removal of a member the service holds a claim record
+// for: the record outlives a release, and a card that was ever claimed has
+// started. It runs inside the transaction, under the project lock.
+func (p *project) memberUnclaimed(member string) board.TransactionExtension {
+	return board.TransactionExtension{Before: func(*board.Transaction) error {
+		if _, found, err := p.readClaim(member); err != nil {
+			return err
+		} else if found {
+			return apiError(api.CodeBoardRejected, member+" has a server claim record, so it has started and cannot leave the group; archive or trash it, or use kander coordinator recover for a blocked member")
+		}
+		return nil
+	}}
+}
+
 // changedMembersHold checks that h holds every card the transaction changed
 // that was in working or review before it.
 func (p *project) changedMembersHold(tx *board.Transaction, h holder) error {
@@ -139,6 +153,23 @@ func (s *Server) groupRoutes(mux *http.ServeMux) {
 				return apiError(api.CodeEvidenceIncomplete, "coordinator Git facts changed or lack a client verdict")
 			}, extension)
 		})
+	})
+	route("POST "+base+"/remove-member", func(p *project, r *http.Request) outcome {
+		var input board.CoordinatorRemoveMember
+		if err := decode(r, &input); err != nil {
+			return outcome{err: err}
+		}
+		if input.GroupID != r.PathValue("group") {
+			return outcome{err: apiError(api.CodeInvalidRequest, "removal group differs from its route")}
+		}
+		written := p.groupWrite(r.Header.Get(api.HeaderIdempotencyKey), "group-remove-member:"+input.GroupID, input.GroupID, input, holderOf(r), func(extension board.TransactionExtension) (board.CoordinatorCheckpoint, error) {
+			return board.RemoveCoordinatorMemberWithTransaction(r.Context(), p.board, input, extension, p.memberUnclaimed(input.Member))
+		})
+		if written.err == nil {
+			// The card left its group: subscribers of the card see the new group.
+			p.changed(input.Member, 0)
+		}
+		return written
 	})
 	route("POST "+base+"/recover", func(p *project, r *http.Request) outcome {
 		var input api.GroupRecover

@@ -107,6 +107,19 @@ func runRemoteCoordinator(ctx context.Context, cfg *config.Config, args []string
 		if err != nil {
 			return fail(err)
 		}
+	case "remove-member":
+		var request board.CoordinatorRemoveMember
+		if err := board.DecodeReviewJSON(data, &request); err != nil {
+			return fail(err)
+		}
+		proof, err := session.CoordinatorAuthority(request.GroupID, nil)
+		if err != nil {
+			return fail(err)
+		}
+		checkpoint, err = session.Project.CoordinatorAction(ctx, client.NewKey(), request.GroupID, "remove-member", request, proof)
+		if err != nil {
+			return fail(err)
+		}
 	case "release":
 		var request api.GroupRelease
 		if err := board.DecodeReviewJSON(data, &request); err != nil {

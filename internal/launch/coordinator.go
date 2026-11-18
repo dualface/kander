@@ -276,8 +276,8 @@ func runServiceCoordinator(args []string, required bool) int {
 	switch args[0] {
 	case "show":
 		c, err = board.ReadCoordinatorCheckpointContext(ctx, root, args[1])
-	case "claim", "reconcile", "recover":
-		if args[0] == "recover" && !filepath.IsAbs(args[1]) {
+	case "claim", "reconcile", "recover", "remove-member":
+		if (args[0] == "recover" || args[0] == "remove-member") && !filepath.IsAbs(args[1]) {
 			return coordinatorUsageFail()
 		}
 		var data []byte
@@ -298,6 +298,11 @@ func runServiceCoordinator(args []string, required bool) int {
 			}
 			c, err = ReconcileCoordinator(ctx, root, r)
 			return finishReconcile(c, err)
+		case "remove-member":
+			var r board.CoordinatorRemoveMember
+			if err = board.DecodeReviewJSON(data, &r); err == nil {
+				c, err = board.RemoveCoordinatorMember(ctx, root, r)
+			}
 		default:
 			var r board.CoordinatorRecover
 			if err = board.DecodeReviewJSON(data, &r); err == nil {
