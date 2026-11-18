@@ -10,6 +10,7 @@ import (
 	"github.com/dualface/kander/internal/liveness"
 	"github.com/dualface/kander/internal/notify"
 	"github.com/dualface/kander/internal/probe"
+	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/terminal"
 	"github.com/dualface/kander/internal/window"
 )
@@ -108,7 +109,7 @@ func dismissAgentPaneAt(backend terminal.Backend, address terminal.Address, pars
 		probeResult := notify.AgentNotifyProbe(backend, program, paneID, live, probe.DefaultCommandTimeout)
 		if probeResult.State == "stale" {
 			if !allowReverse {
-				return "", "", takeoverError("remote.local_execution_required")
+				return "", "", remote.LocalExecutionRefused(remote.RefusalPaneStale, paneID, probeResult.Detail)
 			}
 			discovered, err := reverseLookupStale(probeResult.Detail, func() (terminal.Address, error) {
 				return liveness.ReverseLookup(context.Background(), backend, program, live)
@@ -167,7 +168,7 @@ func dismissProcessPaneAt(backend terminal.Backend, address terminal.Address, li
 	probeResult := notify.ProcessNotifyProbe(backend, program, target.Pane, live, probe.DefaultCommandTimeout)
 	if probeResult.State == "stale" {
 		if !allowReverse {
-			return "", "", takeoverError("remote.local_execution_required")
+			return "", "", remote.LocalExecutionRefused(remote.RefusalPaneStale, target.Pane, probeResult.Detail)
 		}
 		location, err := reverseLookupStale(probeResult.Detail, func() (terminal.Address, error) {
 			return liveness.ReverseLookup(context.Background(), backend, program, live)

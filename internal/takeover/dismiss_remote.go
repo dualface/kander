@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/launch"
@@ -41,19 +42,23 @@ func commandRemoteDismiss(cfg *config.Config, task string, timeout float64) erro
 	if err := cfg.Rules.CheckTaskGroup(board.TaskGroupFrom(card.Text)); err != nil {
 		return err
 	}
-	local, err := service.Retained(card)
+	local, err := service.RetainedForDismiss(card)
 	if err != nil {
 		return err
 	}
-	if local.Session != board.MetadataFrom(card.Text, board.FieldSession) || local.Window != board.MetadataFrom(card.Text, board.FieldWindow) {
-		return takeoverError("remote.local_execution_required")
+	cardSession, cardWindow := board.MetadataFrom(card.Text, board.FieldSession), board.MetadataFrom(card.Text, board.FieldWindow)
+	if local.Session != cardSession || local.Window != cardWindow {
+		return remote.LocalExecutionRefused(remote.RefusalSceneMismatch, remote.RefusalValue(local.Session), remote.RefusalValue(local.Window), remote.RefusalValue(cardSession), remote.RefusalValue(cardWindow))
 	}
 	record, err := service.Project.ExecutionRecord(ctx, card.TaskID)
 	if err != nil {
 		return err
 	}
-	if record.SelfClaimed() || record.Owner != board.MetadataFrom(card.Text, board.FieldOwner) || record.Session != local.Session {
-		return takeoverError("remote.local_execution_required")
+	if record.SelfClaimed() {
+		return remote.LocalExecutionRefused(remote.RefusalSelfClaimed, card.TaskID, record.Kind)
+	}
+	if mismatch := recordMismatch(record, board.MetadataFrom(card.Text, board.FieldOwner), local.Session); mismatch != "" {
+		return remote.LocalExecutionRefused(remote.RefusalRecordMismatch, mismatch)
 	}
 	backend, address, parsed := terminal.ParseWindow(local.Window)
 	if !parsed || !backend.Capabilities().Container {
@@ -61,7 +66,7 @@ func commandRemoteDismiss(cfg *config.Config, task string, timeout float64) erro
 	}
 	agent, reference, _ := strings.Cut(local.Session, " ")
 	if agent == "" || reference == "" {
-		return takeoverError("remote.local_execution_required")
+		return remote.LocalExecutionRefused(remote.RefusalSessionInvalid, local.Session)
 	}
 	session := launch.AgentSession{Agent: agent, Reference: reference}
 	journal, fresh, err := service.BeginAction("dismiss", local)
@@ -83,7 +88,11 @@ func commandRemoteDismiss(cfg *config.Config, task string, timeout float64) erro
 	}
 	if pane.Gone {
 		journal.Value.Phase = "complete"
-		return journal.Save()
+		if err := journal.Save(); err != nil {
+			return err
+		}
+		fmt.Println(t("remote.execution_target_gone", card.TaskID, local.Window))
+		return nil
 	}
 	if !fresh && journal.Value.Phase != "prepared" {
 		return takeoverError("remote.launch_reconciliation_required", journal.Path)
@@ -99,8 +108,8 @@ func commandRemoteDismiss(cfg *config.Config, task string, timeout float64) erro
 	if err != nil {
 		return err
 	}
-	if current.Revision != card.Revision || current.State != card.State || current.Claim == nil || current.Claim.ExecutionID != local.ExecutionID || current.Claim.Generation != local.Generation {
-		return takeoverError("remote.local_execution_required")
+	if changed := taskChanges(card, current, local); changed != "" {
+		return remote.LocalExecutionRefused(remote.RefusalTaskChanged, card.TaskID, changed)
 	}
 	journal.Value.Phase = "exiting"
 	if err := journal.Save(); err != nil {
@@ -120,4 +129,40 @@ func commandRemoteDismiss(cfg *config.Config, task string, timeout float64) erro
 	}
 	fmt.Println(t("remote.execution_dismissed", card.TaskID))
 	return nil
+}
+
+// recordMismatch names each field in which the execution record differs from
+// the card or the retained execution, with both values; empty means they agree.
+func recordMismatch(record board.ExecutionRecord, owner, session string) string {
+	var fields []string
+	if record.Owner != owner {
+		fields = append(fields, fmt.Sprintf("OWNER record %q, card %q", record.Owner, owner))
+	}
+	if record.Session != session {
+		fields = append(fields, fmt.Sprintf("SESSION record %q, retained %q", record.Session, session))
+	}
+	return strings.Join(fields, "; ")
+}
+
+// taskChanges names what changed on the server between the first read of the
+// card and the read before the exit, with the values before and after; empty
+// means nothing changed.
+func taskChanges(before, after api.Task, local remote.RetainedExecution) string {
+	var changes []string
+	if after.Revision != before.Revision {
+		changes = append(changes, fmt.Sprintf("revision %d -> %d", before.Revision, after.Revision))
+	}
+	if after.State != before.State {
+		changes = append(changes, fmt.Sprintf("state %s -> %s", before.State, after.State))
+	}
+	if after.Claim == nil {
+		return strings.Join(append(changes, "claim removed"), "; ")
+	}
+	if after.Claim.ExecutionID != local.ExecutionID {
+		changes = append(changes, fmt.Sprintf("claim execution %s -> %s", local.ExecutionID, after.Claim.ExecutionID))
+	}
+	if after.Claim.Generation != local.Generation {
+		changes = append(changes, fmt.Sprintf("claim generation %d -> %d", local.Generation, after.Claim.Generation))
+	}
+	return strings.Join(changes, "; ")
 }
