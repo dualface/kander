@@ -52,10 +52,13 @@ type fileRenameInformationEx struct {
 	FileName       [1]uint16
 }
 
-// renameStats counts the system calls of renameOnce so that tests can tell which path a replacement took.
+// renameStats counts what renameHandle does so that tests can tell which path a replacement took. exCalls counts the
+// system calls that carry the Ex information class, classicFallbacks the replacements that fell back to the classic
+// call, and busyRetries the waits taken after a busy failure.
 var renameStats struct {
-	exAttempts       atomic.Int64
+	exCalls          atomic.Int64
 	classicFallbacks atomic.Int64
+	busyRetries      atomic.Int64
 }
 
 func closeHandle(h windows.Handle) {
@@ -546,6 +549,7 @@ func renameHandle(handle, targetParent windows.Handle, targetPath string, replac
 		if !retry {
 			return mapNTError("rename", targetPath, err)
 		}
+		renameStats.busyRetries.Add(1)
 		time.Sleep(wait)
 	}
 }
@@ -580,7 +584,6 @@ func isRenameExUnsupported(err error) bool {
 // the classic call on the same handle when the system does not support them. Nothing is cached between attempts.
 func renameOnce(handle, targetParent windows.Handle, name []uint16, replace bool) error {
 	if replace {
-		renameStats.exAttempts.Add(1)
 		err := setRenameInformationEx(handle, targetParent, name)
 		if !isRenameExUnsupported(err) {
 			return err
@@ -602,8 +605,7 @@ func setRenameInformation(handle, targetParent windows.Handle, name []uint16, re
 	info.RootDirectory = targetParent
 	info.FileNameLength = uint32(nameLen)
 	copy(unsafe.Slice(&info.FileName[0], len(name)), name)
-	var iosb windows.IO_STATUS_BLOCK
-	return windows.NtSetInformationFile(handle, &iosb, &buffer[0], uint32(bufferSize), windows.FileRenameInformation)
+	return ntSetRename(handle, windows.FileRenameInformation, buffer)
 }
 
 func setRenameInformationEx(handle, targetParent windows.Handle, name []uint16) error {
@@ -616,8 +618,17 @@ func setRenameInformationEx(handle, targetParent windows.Handle, name []uint16) 
 	info.RootDirectory = targetParent
 	info.FileNameLength = uint32(nameLen)
 	copy(unsafe.Slice(&info.FileName[0], len(name)), name)
+	return ntSetRename(handle, fileRenameInformationExClass, buffer)
+}
+
+// ntSetRename is the only place that hands a rename request to the system, so renameStats.exCalls counts the information
+// class that was actually passed.
+func ntSetRename(handle windows.Handle, class uint32, buffer []byte) error {
+	if class == fileRenameInformationExClass {
+		renameStats.exCalls.Add(1)
+	}
 	var iosb windows.IO_STATUS_BLOCK
-	return windows.NtSetInformationFile(handle, &iosb, &buffer[0], uint32(bufferSize), fileRenameInformationExClass)
+	return windows.NtSetInformationFile(handle, &iosb, &buffer[0], uint32(len(buffer)), class)
 }
 
 func openOrCreateFile(parent windows.Handle, name, path string, access uint32, private bool) (windows.Handle, error) {

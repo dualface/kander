@@ -62,17 +62,32 @@ func readTarget(t *testing.T, path string) string {
 func TestWindowsRenameRetriesUntilContenderCloses(t *testing.T) {
 	root, target := newRenameTarget(t)
 	contender := openContender(t, target, shareWithoutDelete)
-	var closed sync.WaitGroup
-	closed.Add(1)
+	retries := renameStats.busyRetries.Load()
+	// The contender is released only after the replacement was refused as busy once, so the success below can only come
+	// from a retry, however long the setup before the first rename takes.
+	done := make(chan struct{})
+	var released sync.WaitGroup
+	released.Add(1)
 	go func() {
-		defer closed.Done()
-		time.Sleep(200 * time.Millisecond)
+		defer released.Done()
+		for renameStats.busyRetries.Load() == retries {
+			select {
+			case <-done:
+				closeHandle(contender)
+				return
+			case <-time.After(time.Millisecond):
+			}
+		}
 		closeHandle(contender)
 	}()
 	err := WriteTextAtomic(root, target, "new", true)
-	closed.Wait()
+	close(done)
+	released.Wait()
 	if err != nil {
 		t.Fatal(err)
+	}
+	if renameStats.busyRetries.Load() <= retries {
+		t.Fatal("the replacement succeeded without a busy retry")
 	}
 	if got := readTarget(t, target); got != "new" {
 		t.Fatalf("got %q, want new content", got)
@@ -145,12 +160,12 @@ func TestWindowsRenameUsesExInformationClass(t *testing.T) {
 	}
 
 	root, target := newRenameTarget(t)
-	attempts := renameStats.exAttempts.Load()
+	calls := renameStats.exCalls.Load()
 	fallbacks := renameStats.classicFallbacks.Load()
 	if err := WriteTextAtomic(root, target, "new", true); err != nil {
 		t.Fatal(err)
 	}
-	if renameStats.exAttempts.Load() <= attempts {
+	if renameStats.exCalls.Load() <= calls {
 		t.Fatal("the replacement did not use the FileRenameInformationEx class")
 	}
 	// A volume without POSIX rename support legitimately falls back, so the fallback is only checked where it is declared.
