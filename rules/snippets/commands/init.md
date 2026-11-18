@@ -29,7 +29,7 @@ kander init [--server <URL>] [--project <name>] [project-path]
 
 ## Output
 
-- The service project binding, then the project's board path on the server host when the server reports one.
+- The service project binding, then the project's board path on the server host when the server reports one. With `--json`: `project_name`, `project_id`, `server_url`, and `board_path` (omitted when the server reports none).
 
 ## Rejections
 

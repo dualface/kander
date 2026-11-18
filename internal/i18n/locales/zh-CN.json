@@ -227,6 +227,7 @@
   "cli.error_flags_together": "这些选项必须一起给出: {{.V0}}",
   "cli.error_flag_needs": "选项 {{.V0}} 需要同时给出 {{.V1}}",
   "cli.error_flag_required": "必须给出选项 {{.V0}}",
+  "cli.error_json_unsupported": "--json 不适用于此命令",
   "cli.error_absolute_path": "{{.V0}} 必须是绝对路径",
   "remote.request_kind_invalid": "request 类型必须是 fix、sync、review 或 stop: {{.V0}}",
   "remote.integration_input_invalid": "integration 输入必须是不超过 64 KiB 的 UTF-8 文本",

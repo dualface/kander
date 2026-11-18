@@ -227,6 +227,7 @@
   "cli.error_flags_together": "これらのオプションは一緒に指定する必要があります: {{.V0}}",
   "cli.error_flag_needs": "オプション {{.V0}} には {{.V1}} が必要です",
   "cli.error_flag_required": "オプション {{.V0}} は必須です",
+  "cli.error_json_unsupported": "--json はこのコマンドには使えません",
   "cli.error_absolute_path": "{{.V0}} は絶対パスである必要があります",
   "remote.request_kind_invalid": "request の種類は fix、sync、review、stop のいずれかです: {{.V0}}",
   "remote.integration_input_invalid": "integration の入力は 64 KiB 以下の UTF-8 テキストである必要があります",

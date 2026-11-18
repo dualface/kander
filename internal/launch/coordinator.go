@@ -2,7 +2,6 @@ package launch
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -85,16 +84,17 @@ func finishReconcile(c board.CoordinatorCheckpoint, err error) int {
 	switch {
 	case errors.As(err, &blocked):
 		output.Result, status = reconcileFailed, 1
-		fmt.Fprintf(os.Stderr, "kander: %s\n", err)
+		if command.JSON() {
+			command.Notify("reconcile_blocked", err.Error())
+		} else {
+			fmt.Fprintf(os.Stderr, "kander: %s\n", err)
+		}
 	case err != nil:
 		return fail(err)
 	case len(c.BlockedMembers()) > 0:
 		output.Result, status = reconcilePartial, reconcileExitPartial
 	}
-	if err = json.NewEncoder(os.Stdout).Encode(output); err != nil {
-		return fail(err)
-	}
-	return status
+	return command.ObjectStatus(output, status)
 }
 
 // releaseSyntax is the confirmed form of the release command. It is not part of the localized

@@ -29,7 +29,7 @@ None.
 
 ## Output
 
-- Interactive prompts and a final summary.
+- Interactive prompts and a final summary. `--json` is refused with `interactive_required` and exit status 2 before anything is written.
 
 ## Rejections
 

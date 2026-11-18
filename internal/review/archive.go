@@ -1,7 +1,6 @@
 package review
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -147,7 +146,8 @@ func archiveInvocation(ctx *reviewContext, options archiveOptions, arguments []s
 	}
 	ctx.reportLanguage = run.ReportLanguage
 	ctx.archive = &archiveExecution{store: store, root: root, run: run, staging: staging, taskSnapshot: task}
-	fmt.Fprintln(os.Stderr, config.Text("review.archive_identity", run.RunID, run.BatchID))
+	recordRun(run)
+	command.Notify("review_archive_identity", config.Text("review.archive_identity", run.RunID, run.BatchID))
 	return fresh, nil
 }
 func readArchiveJSON(path string, value any) error {
@@ -267,14 +267,17 @@ func (a *archiveExecution) recover() int {
 	// Replay exactly the saved semantic report, or the raw partial output when no
 	// semantic report exists. This path never launches a reviewer.
 	if data, err := a.backend().Original(a.run.RunID, "report.md"); err == nil {
-		_, _ = os.Stdout.Write(data)
+		_, _ = reportStream().Write(data)
 	} else if data, err := a.backend().Original(a.run.RunID, "output.raw"); err == nil {
-		_, _ = os.Stdout.Write(data)
+		_, _ = reportStream().Write(data)
 	}
 	return a.publish()
 }
 func (a *archiveExecution) publish() int {
 	run, failures, err := a.backend().Publish(a.run.RunID)
+	if err == nil {
+		recordRun(run)
+	}
 	if err != nil {
 		userError(config.Text("review.archive_publish_failed", a.run.RunID, err.Error()))
 		return 2
@@ -285,7 +288,7 @@ func (a *archiveExecution) publish() int {
 		if err := failures[id]; err != nil {
 			userError(config.Text("review.archive_card_failed", id, err.Error()))
 		} else {
-			fmt.Fprintln(os.Stderr, config.Text("review.archive_card_published", id, run.RunID, run.ExecutionStatus))
+			command.Notify("review_card_published", config.Text("review.archive_card_published", id, run.RunID, run.ExecutionStatus))
 		}
 	}
 	if len(failures) > 0 {
@@ -301,7 +304,7 @@ func (a *archiveExecution) publish() int {
 		return 2
 	}
 	if pending {
-		fmt.Fprintln(os.Stderr, config.Text("review.interpretation_pending", run.RunID))
+		command.Notify("review_interpretation_pending", config.Text("review.interpretation_pending", run.RunID))
 	}
 	return run.ExitCode
 }

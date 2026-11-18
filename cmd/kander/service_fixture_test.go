@@ -18,6 +18,14 @@ import (
 
 func commandService(t *testing.T, cfg *config.Config) *remote.Session {
 	t.Helper()
+	session, _ := commandServiceWithServer(t, cfg)
+	return session
+}
+
+// commandServiceWithServer is commandService that also returns the HTTP server, for a test that
+// takes the service away while a command runs.
+func commandServiceWithServer(t *testing.T, cfg *config.Config) (*remote.Session, *httptest.Server) {
+	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	srv, err := server.Open(server.Options{DataDir: t.TempDir(), TTL: 20 * time.Second, RenewInterval: time.Second, Logger: logger})
 	if err != nil {
@@ -59,12 +67,12 @@ func commandService(t *testing.T, cfg *config.Config) *remote.Session {
 			t.Fatal(err)
 		}
 		if held {
-			return session
+			return session, httpServer
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatal("worker lock was not acquired")
-	return nil
+	return nil, nil
 }
 func currentCommandSession(t *testing.T) *remote.Session {
 	t.Helper()

@@ -81,7 +81,12 @@ func NewCommand() *cobra.Command {
 		Use:    "worker",
 		Hidden: true,
 		Args:   command.Args(0, 0),
-		RunE:   func(*cobra.Command, []string) error { return command.Exit(run()) },
+		RunE: func(*cobra.Command, []string) error {
+			if err := command.NoJSON(); err != nil {
+				return err
+			}
+			return command.Exit(run())
+		},
 	}
 	// The command has no contract file: its help and its usage are the one line below.
 	const description = "kander worker is a command Kander runs internally; it takes no arguments."

@@ -26,7 +26,7 @@ Read-only.
 
 ## Output
 
-`kander <version>` on standard output.
+`kander <version>` on standard output. With `--json`: `version`.
 
 ## Rejections
 

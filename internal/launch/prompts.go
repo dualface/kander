@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/process"
@@ -30,7 +31,7 @@ func rulesPath(paths config.InstallPaths, name string) string {
 // template that fails to parse or lacks a data key is an error the caller returns, never an
 // empty prompt.
 func render(paths config.InstallPaths, name string, data any) (string, error) {
-	return config.RenderRulesTemplate(paths, "templates/prompt/"+name, data, os.Stderr)
+	return config.RenderRulesTemplate(paths, "templates/prompt/"+name, data, command.NoticeWriter("rules_embedded_fallback"))
 }
 
 // fragments collects the rendered pieces of one prompt and keeps the first render error, so

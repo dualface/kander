@@ -31,7 +31,7 @@ kander new [--large] [--language <agent language>] <feature|bug|chore|research> 
 
 ## Output
 
-- The absolute path of the new card directory.
+- The location of the new card. With `--json`: `task_id`, `state` (`backlog`), `location`, and `revision`.
 
 ## Rejections
 

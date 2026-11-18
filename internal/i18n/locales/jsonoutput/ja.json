@@ -1,0 +1,6 @@
+{
+  "remote.interactive_select_task": "タスク ID なしの pick はターミナルでカードを尋ねます。タスク ID を指定してください",
+  "launch.interactive_launcher": "{{.V0}} ランチャーは現在のターミナルでエージェントを実行しますが、--json にはターミナルがありません。コンテナ付きのランチャーを使ってください",
+  "launch.interactive_select_task": "タスク ID なしの start はターミナルでカードを尋ねます。タスク ID を指定してください",
+  "install.interactive_wizard": "インストーラはターミナルで質問します"
+}

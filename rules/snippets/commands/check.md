@@ -10,16 +10,15 @@ Validates cards and probes executing agents (`check`), and analyzes a Git delive
 
 ```text
 kander check [--all] [task-id ...]
-kander check delivery --base <ref> [--commit <ref>] [--json]
-kander check overlap --source <ref> [--head <ref>] [--json]
+kander check delivery --base <ref> [--commit <ref>]
+kander check overlap --source <ref> [--head <ref>]
 ```
 
 ## Arguments
 
 - `check [--all] [task-id ...]`: validate the board or the named cards; `--all` includes `done/` and `archived/`.
-- `check delivery --base <ref> [--commit <ref>] [--json]`: `git diff --check` and line-count candidates of `base..commit`; `--commit` defaults to `HEAD`.
-- `check overlap --source <ref> [--head <ref>] [--json]`: paths changed on both sides of the merge base; `--head` defaults to `HEAD`.
-- `--json`: one schema-versioned object and a trailing newline on standard output.
+- `check delivery --base <ref> [--commit <ref>]`: `git diff --check` and line-count candidates of `base..commit`; `--commit` defaults to `HEAD`.
+- `check overlap --source <ref> [--head <ref>]`: paths changed on both sides of the merge base; `--head` defaults to `HEAD`.
 
 ## Preconditions
 
@@ -35,8 +34,8 @@ kander check overlap --source <ref> [--head <ref>] [--json]
 
 ## Output
 
-- `check`: diagnostics per card, the liveness section, and a summary line.
-- `delivery` and `overlap`: human-readable lines, or with `--json` one object (`status` `pass`, `fail`, `review-required`, or `error`; `delivery` lists `diff_check`, `added_over_limit`, `crossed_limit`; `overlap` lists `paths`). Recognized argument, Git, output-limit, and internal errors also use `status:error` JSON.
+- `check`: diagnostics per card, the liveness section, and a summary line. With `--json`: `exit_code` (integer, the exit status), `output` (string, the structural report), and `liveness` (array, one entry per `working` card: `task_id`, `agent`, `status`, `channel`, `container`, `detail`, `new_window`, `observed_at`, `runtime_state`, `observation_valid`). Diagnostics are `notices` with the code `check_diagnostic`. The exit status is the exit status of the analysis, not a failure.
+- `delivery` and `overlap`: human-readable lines. With `--json`, one schema-versioned object (`status` `pass`, `fail`, or `review-required`; `delivery` lists `diff_check`, `added_over_limit`, `crossed_limit`; `overlap` lists `paths`). A check that could not finish (an argument, Git, output-limit, or internal error) is the error object, with a `check_` code: `check_invalid_ref`, `check_not_ancestor`, `check_not_repository`, `check_git_unavailable`, `check_no_merge_base`, `check_output_limit`, `check_parse`, or `check_internal`.
 - Exit codes of `delivery` and `overlap`: 0 is a completed check with no action, 1 is a completed check with findings, 2 is a usage error, and 3 is an incomplete Git or execution error. Never record PASS after an incomplete check.
 
 ## Rejections

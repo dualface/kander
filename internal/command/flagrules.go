@@ -22,14 +22,6 @@ func Together(c *cobra.Command, names ...string) error {
 	return nil
 }
 
-// Needs reports an argument error when flag is given without the flag it depends on.
-func Needs(c *cobra.Command, flag, needed string) error {
-	if c.Flags().Changed(flag) && !c.Flags().Changed(needed) {
-		return Usage("cli.error_flag_needs", "--"+flag, "--"+needed)
-	}
-	return nil
-}
-
 // First returns the first non-nil error, so a PreRunE can chain several rules.
 func First(errs ...error) error {
 	for _, err := range errs {

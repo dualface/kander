@@ -3,12 +3,12 @@ package launch
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"time"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/process"
 	"github.com/dualface/kander/internal/terminal"
 )
@@ -30,7 +30,7 @@ var (
 func processRecorder(root string, entry board.Entry, plan LaunchPlan, taskFile string) func(pid int, running func() bool) <-chan struct{} {
 	warn := plan.warning
 	if warn == nil {
-		warn = func(message string) { fmt.Fprint(os.Stderr, message) }
+		warn = func(message string) { command.Notify("launch_warning", message) }
 	}
 	observed, watch := observeStartedFn, imageCanChange
 	read := taskFileRead(taskFile)

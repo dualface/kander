@@ -34,7 +34,7 @@ kander update <task-id> --document <relative-path> --file <UTF8-input> --expect-
 
 ## Output
 
-- The new revision.
+- The new revision. With `--json`: `task_id`, `document`, and `revision`.
 
 ## Rejections
 

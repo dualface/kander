@@ -1,11 +1,10 @@
 package liveness
 
 import (
-	"fmt"
-	"os"
 	"strings"
 	"time"
 
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 )
@@ -46,15 +45,13 @@ func formatReport(rep Report) string {
 func RunCheckRemote(tasks []string, all bool) int {
 	cfg, err := config.Load(false)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
+		return command.Fail(err)
 	}
 	for _, warning := range config.AgentWarnings(cfg) {
-		fmt.Fprintln(os.Stderr, warning)
+		command.Notify("agent_warning", warning)
 	}
 	if err := remote.RequireBinding(cfg); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
+		return command.Fail(err)
 	}
 	return runRemoteCheck(cfg, tasks, all)
 }

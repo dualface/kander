@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -386,10 +385,22 @@ func runOrchestrate(request OrchestrateRequest, handover string, handoverSet boo
 	request.Handover = text
 	result, err := StartOrchestrator(request)
 	for _, warning := range result.Warnings {
-		fmt.Fprint(os.Stderr, warning)
+		command.Notify("launch_warning", warning)
 	}
 	if err != nil {
 		return fail(err)
+	}
+	if command.JSON() {
+		tasks := make([]string, 0, len(result.Tasks))
+		for _, task := range result.Tasks {
+			tasks = append(tasks, task.TaskID)
+		}
+		return command.Result(struct {
+			Agent    string   `json:"agent"`
+			Launcher string   `json:"launcher"`
+			Address  string   `json:"address"`
+			Tasks    []string `json:"tasks"`
+		}{result.Agent, result.Launcher, result.Address, tasks})
 	}
 	if result.Address == "" {
 		fmt.Println(t("orchestrate.started_no_address", result.Agent, result.Launcher, strconv.Itoa(len(result.Tasks))))

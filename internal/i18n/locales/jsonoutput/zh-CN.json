@@ -1,0 +1,6 @@
+{
+  "remote.interactive_select_task": "不带任务 ID 的 pick 要在终端里询问选哪张卡；请给出任务 ID",
+  "launch.interactive_launcher": "{{.V0}} 启动方式在当前终端里运行 Agent，而 --json 没有终端；请换用带容器的启动方式",
+  "launch.interactive_select_task": "不带任务 ID 的 start 要在终端里询问选哪张卡；请给出任务 ID",
+  "install.interactive_wizard": "安装向导要在终端里提问"
+}

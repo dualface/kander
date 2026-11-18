@@ -44,7 +44,7 @@ kander notify [--pane HERDR-PANE-ID] [--timeout SECONDS] (--message TEXT | --mes
 
 ## Output
 
-- Delivery and confirmation results; a generated dispatch ID before any send when omitted; after recovery or takeover the new container address, which is also written back to `WINDOW`.
+- Delivery and confirmation results; a generated dispatch ID before any send when omitted; after recovery or takeover the new container address, which is also written back to `WINDOW`. The object is the collaboration request (`id`, `task_id`, `kind`, `message`, `status`, `target_generation`, `revision`, `created_at`, `updated_at`, and when present `note`, `dispatch`, `card_revision`), with and without `--json`.
 
 ## Rejections
 
@@ -58,7 +58,7 @@ kander notify [--pane HERDR-PANE-ID] [--timeout SECONDS] (--message TEXT | --mes
 
 With a configured server, notify queues a generation-bound collaboration request for the owning worker and prints its JSON state. A queued or accepted request is not a business dispatch receipt. Dispatch options freeze the typed intent and inspected card revision; reuse the ID to inspect/retry the same material, and use a new ID after changing it. Relative acceptance windows use the service clock and are bounded to 24 hours. A retry retains the original deadline.
 
-The worker reserves delivery only while that version and generation remain current. Stale or expired proposals are rejected without typing. Formal preparation by the holder verifies the original proposal and acknowledges it in the dispatch transaction. Inspect the full request with `kander request show <task-id> <request-id> --json`; do not act on a superseded request or one for another execution generation.
+The worker reserves delivery only while that version and generation remain current. Stale or expired proposals are rejected without typing. Formal preparation by the holder verifies the original proposal and acknowledges it in the dispatch transaction. Inspect the full request with `kander request show <task-id> <request-id>`; do not act on a superseded request or one for another execution generation.
 
 When a new proposal is a `fix` dispatch, the server checks its `evidence.fix` before it creates the request, with the check that `kander dispatch prepare` runs at the holder (`snippets/commands/dispatch.md`). A failed check creates no proposal: the command exits nonzero and prints every problem at once, one line each. A line that belongs to a finding starts with `<run_id>/<finding_id>`, names the field, and gives the provided and the expected value; every missing author original is one line with `finding.run_id`, `finding.finding_id`, `record_id`, `author` and `artifact.path`. The lines never carry the text, the evidence or the basis of a finding. Correct the evidence file and run `kander notify` again without `--dispatch-id`, or with a new dispatch ID: the refused ID keeps its stored refusal, so changed evidence under it is an `idempotency_mismatch`. The holder's `prepare` still checks again and refuses what changed after the creation.
 
@@ -69,10 +69,10 @@ Before transport the client saves a private operation receipt. A lost response i
 ```text
 kander request <task-id> fix|sync|review|stop <message...>
 kander request list <task-id>
-kander request show <task-id> <request-id> --json
+kander request show <task-id> <request-id>
 kander request answer <task-id> <request-id> accepted|done|rejected [note...]
 ```
 
-The free text of `<message...>` and `[note...]` is positional: a word that starts with `-` must come after `--`, as in `kander request <task-id> fix -- -dash message`. These v2 collaboration forms share this contract. They use the same service project and never select a local board. A request has a stable identity, revision, and target generation. Any client may propose work. Only the live holder answers with its private execution proof and the observed request revision. `show --json` reads the exact proposal for an executor's read-only reconciliation. A transport retry recovers the frozen request, and a changed message is a different logical proposal.
+The free text of `<message...>` and `[note...]` is positional: a word that starts with `-` must come after `--`, as in `kander request <task-id> fix -- -dash message`. These v2 collaboration forms share this contract. They use the same service project and never select a local board. A request has a stable identity, revision, and target generation. Any client may propose work. Only the live holder answers with its private execution proof and the observed request revision. `show` reads the exact proposal for an executor's read-only reconciliation, and always prints it as JSON. With `--json`, `request` and `request answer` print the request object of `notify`, `request list` prints `requests` (an array of those objects), and `request show` prints the request object. A transport retry recovers the frozen request, and a changed message is a different logical proposal.
 
 A worker that observes its agent stopped keeps renewing the lease but leaves proposals queued. It never delivers to that stopped scene or launches a replacement automatically. The holder must explicitly continue or release that execution. A handoff supersedes old-generation proposals; a successor needs a new explicit proposal. Request acceptance is transport acknowledgement, not formal dispatch business acceptance or proof of completion. A completing move that releases the claim settles the request of its dispatch as `done`; see `snippets/commands/dispatch.md` "Distributed wrap-up evidence".

@@ -26,7 +26,7 @@ kander guard-write <path>
 
 ## Output
 
-- Exit 0 to allow, non-zero with a reason to reject.
+- Exit 0 to allow, non-zero with a reason to reject. With `--json`, an allowed write is one object with `path` (absolute) and `allowed` (true); a rejected write is the error object.
 
 ## Rejections
 

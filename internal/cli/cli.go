@@ -54,6 +54,11 @@ func newVersionCommand() *cobra.Command {
 		Use:  "version",
 		Args: command.Args(0, 0),
 		RunE: func(*cobra.Command, []string) error {
+			if command.JSON() {
+				return command.Exit(command.Result(struct {
+					Version string `json:"version"`
+				}{version.String()}))
+			}
 			fmt.Fprintln(os.Stdout, "kander "+version.String())
 			return nil
 		},
@@ -66,6 +71,9 @@ func NewRoot() *cobra.Command {
 	root = command.NewRoot(func() string { return rootUsage(root) })
 	root.PersistentFlags().Var(languageValue{}, "lang", "")
 	root.RunE = func(*cobra.Command, []string) error {
+		if err := command.NoJSON(); err != nil {
+			return err
+		}
 		if DefaultRunner == nil {
 			return command.UsageText("")
 		}

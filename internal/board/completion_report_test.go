@@ -20,7 +20,7 @@ func reportText(t *testing.T, state, body string) string {
 		t.Fatal(err)
 	}
 	var out strings.Builder
-	WriteCompletionReportSnapshot(&out, "20260101-report-task", state, body, "kanban/"+state+"/20260101-report-task", cfg)
+	_, _ = out.WriteString(CompletionReportSnapshot("20260101-report-task", state, body, "kanban/"+state+"/20260101-report-task", cfg, &out))
 	return out.String()
 }
 
@@ -69,7 +69,7 @@ func TestCompletionReportOnlyForTerminalStatesWithReporting(t *testing.T) {
 	}
 	cfg.Rules[config.RuleReporting] = false
 	var out strings.Builder
-	WriteCompletionReportSnapshot(&out, "20260101-report-task", "done", reportBody, "kanban/done/20260101-report-task", cfg)
+	_, _ = out.WriteString(CompletionReportSnapshot("20260101-report-task", "done", reportBody, "kanban/done/20260101-report-task", cfg, &out))
 	if out.Len() != 0 {
 		t.Fatalf("reporting off printed a report: %s", out.String())
 	}
@@ -84,7 +84,7 @@ func TestCompletionReportUsesConfigLanguageWithoutCardLanguage(t *testing.T) {
 	}
 	cfg.AgentLanguage = "ja"
 	var out strings.Builder
-	WriteCompletionReportSnapshot(&out, "20260101-report-task", "done", strings.Replace(reportBody, "- LANGUAGE: zh-CN\n", "", 1), "kanban/done/20260101-report-task", cfg)
+	_, _ = out.WriteString(CompletionReportSnapshot("20260101-report-task", "done", strings.Replace(reportBody, "- LANGUAGE: zh-CN\n", "", 1), "kanban/done/20260101-report-task", cfg, &out))
 	if !strings.Contains(out.String(), `Write the report in "ja".`) {
 		t.Fatalf("language fallback: %s", out.String())
 	}

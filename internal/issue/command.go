@@ -2,7 +2,7 @@ package issue
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -76,7 +76,6 @@ func issueNumber(args []string) int {
 type repoOptions struct {
 	repository string
 	hasRepo    bool
-	json       bool
 }
 
 func newRepoCommand(factory func() IssueProvider, stdout, stderr io.Writer) *cobra.Command {
@@ -87,7 +86,6 @@ func newRepoCommand(factory func() IssueProvider, stdout, stderr io.Writer) *cob
 		return command.Exit(runRepo(factory, options, stdout, stderr))
 	}
 	addRepoFlag(c, &options.repository)
-	c.Flags().BoolVar(&options.json, "json", false, "")
 	return c
 }
 
@@ -96,12 +94,8 @@ func runRepo(factory func() IssueProvider, options repoOptions, stdout, stderr i
 	if code != 0 {
 		return code
 	}
-	if options.json {
-		if err := writeRepositoryJSON(stdout, repository); err != nil {
-			fmt.Fprintln(stderr, formatError(err))
-			return 1
-		}
-		return 0
+	if command.JSON() {
+		return command.Result(repositoryView(repository))
 	}
 	writeRepositoryText(stdout, repository)
 	return 0
@@ -119,14 +113,12 @@ func commandContext() (context.Context, context.CancelFunc) {
 func resolveRepository(provider IssueProvider, explicit string, hasRepo bool, stderr io.Writer) (Repository, int) {
 	directory, err := os.Getwd()
 	if err != nil {
-		fmt.Fprintln(stderr, formatError(err))
-		return Repository{}, 1
+		return Repository{}, fail(stderr, err, 1)
 	}
 	ctx, cancel := commandContext()
 	defer cancel()
 	if provider == nil {
-		fmt.Fprintln(stderr, config.Text("issue.error_cli_unavailable", "no repository provider is registered"))
-		return Repository{}, 1
+		return Repository{}, fail(stderr, errors.New(config.Text("issue.error_cli_unavailable", "no repository provider is registered")), 1)
 	}
 	value := explicit
 	if !hasRepo {
@@ -134,8 +126,7 @@ func resolveRepository(provider IssueProvider, explicit string, hasRepo bool, st
 	}
 	repository, err := provider.ResolveRepository(ctx, directory, value)
 	if err != nil {
-		fmt.Fprintln(stderr, formatError(err))
-		return Repository{}, 1
+		return Repository{}, fail(stderr, err, 1)
 	}
 	return repository, 0
 }
@@ -160,15 +151,6 @@ func repositoryView(repository Repository) repositoryJSON {
 	}
 }
 
-func writeRepositoryJSON(w io.Writer, repository Repository) error {
-	encoded, err := json.Marshal(repositoryView(repository))
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(w, "%s\n", encoded)
-	return err
-}
-
 func writeRepositoryText(w io.Writer, repository Repository) {
 	fmt.Fprintln(w, config.Text("issue.repo_identity", repository.Host, repository.Owner, repository.Name, repository.URL))
 	visibility := config.Text("issue.repo_visibility_public")
@@ -183,4 +165,42 @@ func writeRepositoryText(w io.Writer, repository Repository) {
 
 func formatError(err error) string {
 	return "kander issue: " + Message(err)
+}
+
+func init() { command.RegisterClassifier(classify) }
+
+// classify gives a structured issue failure its stable code, issue_ and the kind in snake case,
+// and its localized text.
+func classify(err error) (code, message string, ok bool) {
+	var structured *Error
+	if !errors.As(err, &structured) {
+		return "", "", false
+	}
+	return "issue_" + strings.ReplaceAll(string(structured.Kind), "-", "_"), Message(err), true
+}
+
+// fail reports err as the failure of an issue command: the error object with --json, otherwise
+// the text on stderr. It returns status.
+func fail(stderr io.Writer, err error, status int) int {
+	if command.JSON() {
+		return command.FailStatus(status, &command.Failure{Err: err, Status: status, Code: codeOf(err), Message: Message(err)})
+	}
+	fmt.Fprintln(stderr, formatError(err))
+	return status
+}
+
+// failTriage is fail for the commands that also report launch failures, whose text is already
+// localized: a failure that is not a structured issue failure keeps its own sanitized message.
+func failTriage(stderr io.Writer, err error, status int) int {
+	if command.JSON() {
+		return command.FailStatus(status, &command.Failure{Err: err, Status: status, Code: codeOf(err), Message: TriageError(err)})
+	}
+	fmt.Fprintln(stderr, formatTriageError(err))
+	return status
+}
+
+// codeOf is the stable code of err.
+func codeOf(err error) string {
+	code, _ := command.Describe(err)
+	return code
 }

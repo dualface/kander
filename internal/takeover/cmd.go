@@ -2,8 +2,6 @@ package takeover
 
 import (
 	"fmt"
-	"os"
-
 	"github.com/spf13/cobra"
 
 	"github.com/dualface/kander/internal/cli"
@@ -18,10 +16,7 @@ func init() {
 	launch.CleanupTakeover = Cleanup
 }
 
-func fail(err error) int {
-	fmt.Fprintf(os.Stderr, "kander: %s\n", err)
-	return 1
-}
+func fail(err error) int { return command.Fail(err) }
 
 // NewCommand builds kander dismiss, which exits an agent and closes its container against the
 // server.
@@ -48,4 +43,17 @@ func run(task string, timeout float64) int {
 		return fail(err)
 	}
 	return 0
+}
+
+// reportDismiss ends a dismiss that found nothing left to do or did it: the text line, or with
+// --json the result object. outcome is "dismissed" or "target_gone".
+func reportDismiss(text, task, outcome string) {
+	if command.JSON() {
+		_ = command.Result(struct {
+			TaskID  string `json:"task_id"`
+			Outcome string `json:"outcome"`
+		}{task, outcome})
+		return
+	}
+	fmt.Println(text)
 }

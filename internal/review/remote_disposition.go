@@ -12,6 +12,7 @@ import (
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 )
@@ -113,6 +114,9 @@ func runRemoteDisposition(cfg *config.Config, args []string) int {
 	}
 	if err := json.Unmarshal(out, typed); err != nil {
 		return dispositionFailure(err)
+	}
+	if command.JSON() {
+		return command.Result(typed)
 	}
 	data, err := json.MarshalIndent(typed, "", "  ")
 	if err != nil {

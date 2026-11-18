@@ -439,6 +439,10 @@ func TestRegisteredFlagsMatchContractSyntax(t *testing.T) {
 		leaves[leaf.path] = leaf
 	}
 	for path, flags := range contract {
+		// --json and --lang are global flags of the root; no Syntax line names them.
+		if flags["--json"] || flags["--lang"] {
+			t.Errorf("the contract Syntax of `kander %s` names a global flag", path)
+		}
 		leaf, ok := leaves[path]
 		if !ok {
 			t.Errorf("the contract names `kander %s`, which the command tree does not have", path)
@@ -450,6 +454,9 @@ func TestRegisteredFlagsMatchContractSyntax(t *testing.T) {
 				registered["--"+f.Name] = true
 			}
 		})
+		if global := leaf.InheritedFlags().Lookup("json"); global == nil {
+			t.Errorf("kander %s does not inherit the global --json", path)
+		}
 		if !maps.Equal(registered, flags) {
 			t.Errorf("kander %s: registered %v, contract %v", path, slices.Sorted(maps.Keys(registered)), slices.Sorted(maps.Keys(flags)))
 		}

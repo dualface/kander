@@ -2,9 +2,7 @@ package launch
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"os/signal"
@@ -13,6 +11,7 @@ import (
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 )
@@ -37,8 +36,8 @@ func runRemoteIntegration(ctx context.Context, cfg *config.Config, args []string
 		if err != nil {
 			return fail(err)
 		}
-		if err := json.NewEncoder(os.Stdout).Encode(value); err != nil {
-			return fail(err)
+		if code := command.Object(value); code != 0 {
+			return code
 		}
 		return 0
 	}
@@ -52,8 +51,7 @@ func runRemoteIntegration(ctx context.Context, cfg *config.Config, args []string
 		return fail(err)
 	}
 	if len(data) > 65536 || !utf8.Valid(data) {
-		fmt.Fprintln(os.Stderr, "kander: "+t("remote.integration_input_invalid"))
-		return 2
+		return command.FailStatus(2, command.Coded(command.CodeUsage, errors.New(t("remote.integration_input_invalid"))))
 	}
 	var options remote.IntegrationOptions
 	if err := board.DecodeReviewJSON(data, &options); err != nil {
@@ -69,8 +67,8 @@ func runRemoteIntegration(ctx context.Context, cfg *config.Config, args []string
 	if err != nil {
 		return fail(err)
 	}
-	if err := json.NewEncoder(os.Stdout).Encode(value); err != nil {
-		return fail(err)
+	if code := command.Object(value); code != 0 {
+		return code
 	}
 	return 0
 }

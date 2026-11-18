@@ -2,14 +2,13 @@ package launch
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 )
@@ -36,8 +35,8 @@ func runRemoteCoordinator(ctx context.Context, cfg *config.Config, args []string
 		if view.Checkpoint == nil {
 			return fail(errors.New(config.Text("remote.coordinator_checkpoint_missing")))
 		}
-		if err := json.NewEncoder(os.Stdout).Encode(view.Checkpoint); err != nil {
-			return fail(err)
+		if code := command.Object(view.Checkpoint); code != 0 {
+			return code
 		}
 		return 0
 	}
@@ -57,7 +56,7 @@ func runRemoteCoordinator(ctx context.Context, cfg *config.Config, args []string
 			return fail(err)
 		}
 		if err := ensureRemoteWorker(session.Home); err != nil {
-			fmt.Fprintln(os.Stderr, config.Text("remote.worker_start_failed", err.Error()))
+			command.Notify("worker_start_failed", config.Text("remote.worker_start_failed", err.Error()))
 		}
 		checkpoint = grant.Checkpoint
 	case "reconcile":
@@ -129,14 +128,14 @@ func runRemoteCoordinator(ctx context.Context, cfg *config.Config, args []string
 		if err != nil {
 			return fail(err)
 		}
-		if err := json.NewEncoder(os.Stdout).Encode(value); err != nil {
-			return fail(err)
+		if code := command.Object(value); code != 0 {
+			return code
 		}
-		fmt.Fprintln(os.Stderr, config.Text("remote.coordinator_release_final", value.Claim.ExecutionID, request.GroupID, value.Claim.Generation))
+		command.Notify("coordinator_release_final", config.Text("remote.coordinator_release_final", value.Claim.ExecutionID, request.GroupID, value.Claim.Generation))
 		return 0
 	}
-	if err := json.NewEncoder(os.Stdout).Encode(checkpoint); err != nil {
-		return fail(err)
+	if code := command.Object(checkpoint); code != 0 {
+		return code
 	}
 	return 0
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/liveness"
 	"github.com/dualface/kander/internal/process"
@@ -62,7 +63,9 @@ func commandRemoteAdopt(cfg *config.Config, task, decision string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(t("launch.adopted", task, orNA(credential.Window)))
+	if !command.JSON() {
+		fmt.Println(t("launch.adopted", task, orNA(credential.Window)))
+	}
 	return nil
 }
 

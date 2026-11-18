@@ -26,7 +26,7 @@ kander pick [task-id]
 
 ## Output
 
-- The new path of the card.
+- The location of the card. With `--json`: `task_id`, `state` (`todo`), `location`, and `revision`. Without a task ID the command asks which card to pick, so `--json` is refused with `interactive_required` and exit status 2.
 
 ## Rejections
 

@@ -14,6 +14,7 @@ import (
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/command/commandtest"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/process"
 	"github.com/dualface/kander/internal/remote"
@@ -136,6 +137,12 @@ func TestRemoteOrchestratorUsesServiceCardsAndRetainsItsPrivateIdentity(t *testi
 	code, out := captureStdout(t, func() int { return RunCoordinatorRemote([]string{"claim", path}) })
 	if code != 0 {
 		t.Fatalf("remote claim: %d %s", code, out)
+	}
+	// show prints the checkpoint as one object with --json, and nothing on stderr.
+	code, shown, diagnostics := commandtest.Capture(func() int { return RunCoordinatorRemote([]string{"show", group, "--json"}) })
+	var checkpoint board.CoordinatorCheckpoint
+	if err := json.Unmarshal([]byte(shown), &checkpoint); code != 0 || diagnostics != "" || err != nil || checkpoint.GroupID != group || strings.Count(shown, "\n") != 1 {
+		t.Fatalf("show --json: %d %q %q %v", code, shown, diagnostics, err)
 	}
 	all, err := remote.Credentials(home)
 	if err != nil || len(all) != 1 {

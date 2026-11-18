@@ -13,6 +13,7 @@ import (
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 )
@@ -44,13 +45,13 @@ func runRemoteDispatch(a dispatchArguments, cfg *config.Config) int {
 		if err != nil {
 			return fail(err)
 		}
-		if err := PrintDispatchResult(value); err != nil {
-			return fail(err)
+		if code := command.Object(value); code != 0 {
+			return code
 		}
 		return 0
 	}
 	var task string
-	var command api.DispatchCommand
+	var act api.DispatchCommand
 	action := a.action
 	switch action {
 	case "prepare":
@@ -69,21 +70,21 @@ func runRemoteDispatch(a dispatchArguments, cfg *config.Config) int {
 				return fail(err)
 			}
 		}
-		command.Input = &input
+		act.Input = &input
 	case "fail", "cancel":
-		task, command.DispatchID, command.Reason, command.Decision = args[0], args[1], args[3], a.decision
-		command.Revision, err = strconv.ParseUint(args[2], 10, 64)
+		task, act.DispatchID, act.Reason, act.Decision = args[0], args[1], args[3], a.decision
+		act.Revision, err = strconv.ParseUint(args[2], 10, 64)
 		if err != nil {
 			return fail(err)
 		}
-		command.State = board.DispatchFailed
+		act.State = board.DispatchFailed
 		if action == "cancel" {
-			command.State = board.DispatchCancelled
+			act.State = board.DispatchCancelled
 		}
 		action = "end"
 	case "settle":
-		task, command.DispatchID = args[0], args[1]
-		command.Revision, err = strconv.ParseUint(args[2], 10, 64)
+		task, act.DispatchID = args[0], args[1]
+		act.Revision, err = strconv.ParseUint(args[2], 10, 64)
 		if err != nil {
 			return fail(err)
 		}
@@ -100,8 +101,8 @@ func runRemoteDispatch(a dispatchArguments, cfg *config.Config) int {
 		if err != nil {
 			return fail(err)
 		}
-		if err := PrintDispatchResult(value); err != nil {
-			return fail(err)
+		if code := command.Object(value); code != 0 {
+			return code
 		}
 		return 0
 	}
@@ -109,9 +110,9 @@ func runRemoteDispatch(a dispatchArguments, cfg *config.Config) int {
 	if err != nil {
 		return fail(err)
 	}
-	command.CardRevision = current.Revision
+	act.CardRevision = current.Revision
 	if action == "prepare" {
-		if err := completeRemoteDispatchInput(ctx, session, cwd, command.Input); err != nil {
+		if err := completeRemoteDispatchInput(ctx, session, cwd, act.Input); err != nil {
 			return fail(err)
 		}
 	}
@@ -120,7 +121,7 @@ func runRemoteDispatch(a dispatchArguments, cfg *config.Config) int {
 		return fail(err)
 	}
 	if !found || current.Claim == nil || current.Claim.ClientID != session.Client.ClientID() || current.Claim.ExecutionID != credential.ExecutionID {
-		if command.Input == nil || current.Claim == nil {
+		if act.Input == nil || current.Claim == nil {
 			return fail(&api.Error{Code: api.CodeHeldByOther, Message: config.Text("remote.dispatch_holder_required")})
 		}
 		previous, err := session.Project.Requests(ctx, current.TaskID)
@@ -128,43 +129,43 @@ func runRemoteDispatch(a dispatchArguments, cfg *config.Config) int {
 			return fail(err)
 		}
 		for _, candidate := range previous {
-			if candidate.Dispatch == nil || candidate.Dispatch.ID != command.Input.ID {
+			if candidate.Dispatch == nil || candidate.Dispatch.ID != act.Input.ID {
 				continue
 			}
 			stored := *candidate.Dispatch
-			if candidate.AcceptWithin != 0 && command.Input.CreatedAt.IsZero() && command.Input.ConfirmBy.IsZero() {
+			if candidate.AcceptWithin != 0 && act.Input.CreatedAt.IsZero() && act.Input.ConfirmBy.IsZero() {
 				stored.CreatedAt, stored.ConfirmBy = time.Time{}, time.Time{}
 			}
 			left, _ := json.Marshal(stored)
-			right, _ := json.Marshal(command.Input)
+			right, _ := json.Marshal(act.Input)
 			if !bytes.Equal(left, right) {
 				return fail(&api.Error{Code: api.CodeIdempotencyMismatch, Message: config.Text("remote.dispatch_proposal_changed")})
 			}
-			if err := json.NewEncoder(os.Stdout).Encode(candidate); err != nil {
-				return fail(err)
+			if code := command.Object(candidate); code != 0 {
+				return code
 			}
 			return 0
 		}
 		kind := api.RequestSync
-		if command.Input.Kind == "fix" {
+		if act.Input.Kind == "fix" {
 			kind = api.RequestFix
 		}
-		request, err := session.Project.CreateRequest(ctx, client.NewKey(), current.TaskID, api.NewCollabRequest{Kind: kind, Message: command.Input.Message, Dispatch: command.Input, CardRevision: current.Revision, TargetGeneration: current.Claim.Generation})
+		request, err := session.Project.CreateRequest(ctx, client.NewKey(), current.TaskID, api.NewCollabRequest{Kind: kind, Message: act.Input.Message, Dispatch: act.Input, CardRevision: current.Revision, TargetGeneration: current.Claim.Generation})
 		if err != nil {
 			return fail(err)
 		}
 		// This is explicitly a proposal, never a fabricated prepared dispatch.
-		if err := json.NewEncoder(os.Stdout).Encode(request); err != nil {
-			return fail(err)
+		if code := command.Object(request); code != 0 {
+			return code
 		}
 		return 0
 	}
-	value, err := session.Project.DispatchAction(ctx, client.NewKey(), current.TaskID, action, command, *credential.Claim())
+	value, err := session.Project.DispatchAction(ctx, client.NewKey(), current.TaskID, action, act, *credential.Claim())
 	if err != nil {
 		return fail(err)
 	}
-	if err := PrintDispatchResult(value); err != nil {
-		return fail(err)
+	if code := command.Object(value); code != 0 {
+		return code
 	}
 	return 0
 }

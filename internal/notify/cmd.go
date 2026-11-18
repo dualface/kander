@@ -1,10 +1,6 @@
 package notify
 
 import (
-	"encoding/json"
-	"fmt"
-	"os"
-
 	"github.com/spf13/cobra"
 
 	"github.com/dualface/kander/internal/cli"
@@ -18,10 +14,7 @@ func init() {
 	cli.Register(NewCommand)
 }
 
-func fail(err error) int {
-	fmt.Fprintf(os.Stderr, "kander: %s\n", err)
-	return 1
-}
+func fail(err error) int { return command.Fail(err) }
 
 // NewCommand builds kander notify, which delivers a message to the executing agent of a card
 // against the server.
@@ -56,8 +49,5 @@ func run(task, message, messageFile, pane string, messageSet bool, timeout float
 	if err != nil {
 		return fail(err)
 	}
-	if err := json.NewEncoder(os.Stdout).Encode(request); err != nil {
-		return fail(err)
-	}
-	return 0
+	return command.Object(request)
 }

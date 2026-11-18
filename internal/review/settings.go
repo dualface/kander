@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/process"
 )
@@ -79,6 +80,10 @@ type reviewContext struct {
 }
 
 func userError(message string) {
+	if command.JSON() {
+		jsonRun.messages = append(jsonRun.messages, message)
+		return
+	}
 	fmt.Fprintln(os.Stderr, config.Text("review.error")+": "+message)
 }
 

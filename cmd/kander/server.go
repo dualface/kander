@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -28,12 +28,12 @@ var runForegroundServer = server.RunForeground
 // and the offline commands that hold the data directory lock, which internal/server owns.
 func newServerCommand() *cobra.Command {
 	var start servicectl.StartOptions
-	var foreground, jsonOut bool
-	startCommand := &cobra.Command{
+	var foreground bool
+	startCommand := command.Streaming(&cobra.Command{
 		Use:  "start",
 		Args: command.Args(0, 0),
 		RunE: func(*cobra.Command, []string) error { return command.Exit(runStart(start, foreground)) },
-	}
+	})
 	startFlags := startCommand.Flags()
 	startFlags.StringVar(&start.DataDir, "data", "", "")
 	startFlags.StringVar(&start.Listen, "listen", "", "")
@@ -43,9 +43,8 @@ func newServerCommand() *cobra.Command {
 	status := &cobra.Command{
 		Use:  "status",
 		Args: command.Args(0, 0),
-		RunE: func(*cobra.Command, []string) error { return command.Exit(runStatus(jsonOut)) },
+		RunE: func(*cobra.Command, []string) error { return command.Exit(runStatus()) },
 	}
-	status.Flags().BoolVar(&jsonOut, "json", false, "")
 	return command.Group("server",
 		startCommand,
 		&cobra.Command{Use: "stop", Args: command.Args(0, 0), RunE: func(*cobra.Command, []string) error { return command.Exit(runStop()) }},
@@ -66,33 +65,63 @@ func serverTarget() (string, error) {
 	return config.ServerURL(cfg), nil
 }
 
+// failServer reports a failure of a server command with its localized wrapper text.
 func failServer(err error) int {
+	if command.JSON() {
+		code, _ := command.Describe(err)
+		return command.Fail(&command.Failure{Code: code, Message: config.Text("server.command_failed", err), Err: err})
+	}
 	fmt.Fprintln(os.Stderr, config.Text("server.command_failed", err))
 	return 1
 }
 
+// failText reports a failure that has a text of its own and a stable code.
+func failText(code, text string) int {
+	if command.JSON() {
+		return command.Fail(command.Coded(code, errors.New(text)))
+	}
+	fmt.Fprintln(os.Stderr, text)
+	return 1
+}
+
 func printInfo(info api.ServerInfo) int {
+	if command.JSON() {
+		return command.Result(info)
+	}
 	fmt.Println(config.Text("server.info", info.URL, info.Version, info.PID, info.DataDir, info.LogPath, info.Projects, info.Listen, info.TTL.Std(), info.Renew.Std()))
 	return 0
+}
+
+// foregroundReady is the object kander server start --foreground --json writes once the server
+// can serve.
+type foregroundReady struct {
+	Listen  string `json:"listen"`
+	DataDir string `json:"data_dir"`
+	PID     int    `json:"pid"`
+	Version string `json:"version"`
 }
 
 func runStart(o servicectl.StartOptions, foreground bool) int {
 	target, err := serverTarget()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
+		return command.Fail(err)
 	}
 	if o.Listen == "" {
 		o.Listen = servicectl.ListenAddress(target)
 	}
 	if o.TTL <= 0 || o.Renew <= 0 || o.Renew >= o.TTL {
-		fmt.Fprintln(os.Stderr, config.Text("server.invalid_lease"))
-		return 2
+		return command.FailStatus(2, command.Coded(command.CodeUsage, errors.New(config.Text("server.invalid_lease"))))
 	}
 	if foreground {
 		dir, err := servicectl.DataDir(o.DataDir)
 		if err == nil {
-			err = runForegroundServer(context.Background(), server.Options{DataDir: dir, TTL: o.TTL, RenewInterval: o.Renew, Version: version.String(), Logger: slog.New(slog.NewJSONHandler(os.Stderr, nil))}, o.Listen)
+			options := server.Options{DataDir: dir, TTL: o.TTL, RenewInterval: o.Renew, Version: version.String(), Logger: slog.New(slog.NewJSONHandler(os.Stderr, nil))}
+			if command.JSON() {
+				options.Ready = func(listen string) {
+					command.Emit(foregroundReady{Listen: listen, DataDir: dir, PID: os.Getpid(), Version: version.String()})
+				}
+			}
+			err = runForegroundServer(context.Background(), options, o.Listen)
 		}
 		if err != nil {
 			return failServer(err)
@@ -108,28 +137,22 @@ func runStart(o servicectl.StartOptions, foreground bool) int {
 	return printInfo(info)
 }
 
-func runStatus(jsonOut bool) int {
+func runStatus() int {
 	target, err := serverTarget()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
+		return command.Fail(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	info, err := servicectl.Info(ctx, target)
 	if client.IsUnreachable(err) {
-		fmt.Fprintln(os.Stderr, config.Text("server.not_running", target))
-		return 1
+		return failText("server_not_running", config.Text("server.not_running", target))
 	}
 	if err != nil {
 		return failServer(err)
 	}
-	if jsonOut {
-		if err := json.NewEncoder(os.Stdout).Encode(info); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		return 0
+	if command.JSON() {
+		return command.Result(info)
 	}
 	return printInfo(info)
 }
@@ -137,14 +160,19 @@ func runStatus(jsonOut bool) int {
 func runStop() int {
 	target, err := serverTarget()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
+		return command.Fail(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	running, err := servicectl.Controller{}.Stop(ctx, target)
 	if err != nil {
 		return failServer(err)
+	}
+	if command.JSON() {
+		return command.Result(struct {
+			Stopped bool   `json:"stopped"`
+			Target  string `json:"target"`
+		}{running, target})
 	}
 	if running {
 		fmt.Println(config.Text("server.stopped"))
@@ -157,8 +185,7 @@ func runStop() int {
 func runRestart() int {
 	target, err := serverTarget()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
+		return command.Fail(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

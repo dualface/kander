@@ -1,7 +1,6 @@
 package board
 
 import (
-	"os"
 	"sync"
 )
 
@@ -29,7 +28,7 @@ func journalWarningLog(logs []*WarningLog) *WarningLog {
 func journalWarning(message string, logs ...*WarningLog) {
 	log := journalWarningLog(logs)
 	if log == nil {
-		_, _ = os.Stderr.WriteString(message + "\n")
+		Remark("board_warning", message+"\n")
 		return
 	}
 	log.mu.Lock()

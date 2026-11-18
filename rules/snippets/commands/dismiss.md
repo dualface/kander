@@ -27,7 +27,7 @@ kander dismiss [--timeout SECONDS] <task-id>
 
 ## Output
 
-- The result of the exit and close steps.
+- The result of the exit and close steps. With `--json`: `task_id` and `outcome`, `dismissed` or `target_gone` (the container was already gone).
 
 ## Rejections
 

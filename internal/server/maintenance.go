@@ -1,9 +1,9 @@
 package server
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -85,18 +85,21 @@ func NewMaintainCommand() *cobra.Command {
 func runMaintain(data, project string, maintenance bool) int {
 	dir, err := dataDir(data)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
+		return command.Fail(err)
 	}
-	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	// With --json the result or the error object says it all, so the log goes nowhere.
+	logOutput := io.Writer(os.Stderr)
+	if command.JSON() {
+		logOutput = io.Discard
+	}
+	logger := slog.New(slog.NewJSONHandler(logOutput, nil))
 	result, err := Maintain(Options{DataDir: dir, Logger: logger, Version: version.String()}, project, maintenance)
 	if err != nil {
 		logger.Error("offline maintenance failed", "project_name", project, "changed_tasks", result.ChangedTasks, "error", err)
+		if command.JSON() {
+			return command.Fail(err)
+		}
 		return 1
 	}
-	if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	return 0
+	return command.Object(result)
 }

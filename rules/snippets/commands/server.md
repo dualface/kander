@@ -10,10 +10,10 @@ Run and administer the shared board service from the single `kander` executable.
 kander server start [--data DIR] [--listen ADDR] [--ttl D] [--renew D] [--foreground]
 kander server stop
 kander server restart
-kander server status [--json]
+kander server status
 kander server import [--data DIR] --project NAME [--remote URL] [--from KANBAN_DIR]
 kander server maintain [--data DIR] --project NAME [--maintenance]
-kander server projects [--data DIR] [--json]
+kander server projects [--data DIR]
 ```
 
 ## Arguments
@@ -22,7 +22,7 @@ kander server projects [--data DIR] [--json]
 - `--data`: absolute or relative data directory. Default: `$XDG_DATA_HOME/kander-server` when XDG_DATA_HOME is absolute, otherwise `~/.local/share/kander-server`.
 - `--listen`: explicit TCP listen address. Default: the configured loopback server URL's address, otherwise `127.0.0.1:7878`.
 - `--ttl`, `--renew`: positive Go durations. Defaults: `90s`, `15s`. Renewal must be shorter than TTL.
-- `status`: read the server's actual URL, version, PID, data directory, log path, project count, and listen/lease settings. `--json` prints those fields as JSON.
+- `status`: read the server's actual URL, version, PID, data directory, log path, project count, and listen/lease settings.
 - `stop`: authenticate through a current-user private management key and gracefully shut down a loopback server. Wait up to 10 seconds. Already stopped is success.
 - `restart`: read the running server's data directory, listen address and lease settings, stop it, then start it with those settings.
 - `import`: explicitly import a paused v1 board into an empty service project. When no process holds the data directory lock, it imports offline under that lock. When a local server serves the data directory, that server performs the import and keeps serving. `--from` defaults to the board v1 commands locate: `KANBAN_DIR`, then the main worktree's `kanban/`, then an upward search.
@@ -40,6 +40,12 @@ Start creates a resident process unless `--foreground` is supplied. Stop uses HT
 ## Output
 
 Control commands report the service and its storage paths. Import prints the same structured result offline and online, including the absolute `source` it used. Offline commands retain structured maintenance results and registry listing. Status fails when the service is unreachable. A failed background start reports the log path and its last 20 lines and terminates only the child it launched.
+
+With `--json`:
+- `start`, `restart`, and `status`: one object, the server info: `url`, `version`, `pid`, `data_dir`, `log_path`, `projects`, `listen`, `ttl`, `renew`. A server that is not running makes `status` fail with the code `server_not_running`.
+- `start --foreground`: stdout stays empty until the server can serve, then one line holds `listen`, `data_dir`, `pid`, and `version`. The JSON log lines stay on stderr. A failure after that line leaves it in place and ends stderr with one error object.
+- `stop`: `stopped` (boolean, false when no server was running) and `target`.
+- `import`: the import result, with no progress output. `maintain`: the maintenance result. `projects`: `projects`, an array of `id`, `name`, `remote`, `created_at`, `board_path`.
 
 ## Rejections
 

@@ -58,11 +58,19 @@ func runGuardWrite(target string) error {
 				if err := session.checkExecution(ctx, credential); err != nil {
 					return fail(err)
 				}
-				return nil
+				return allowWrite(path)
 			}
 		}
 		// Board-free sessions have no task credential. This permits local code
 		// inspection only; every formal mutation still requires service authority.
+	}
+	return allowWrite(path)
+}
+
+// allowWrite ends a guard-write check that found nothing to refuse.
+func allowWrite(path string) error {
+	if command.JSON() {
+		return command.Exit(command.Result(guardResult{Path: path, Allowed: true}))
 	}
 	return nil
 }

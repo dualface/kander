@@ -3,10 +3,10 @@ package launch
 import (
 	"context"
 	"encoding/json"
-	"os"
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/remote"
 )
 
@@ -70,8 +70,8 @@ func runImplicitNativeResume(ctx context.Context, session *remote.Session, card 
 		if err != nil {
 			return fail(err)
 		}
-		if err := json.NewEncoder(os.Stdout).Encode(request); err != nil {
-			return fail(err)
+		if code := command.Object(request); code != 0 {
+			return code
 		}
 		return 0
 	}
@@ -80,8 +80,5 @@ func runImplicitNativeResume(ctx context.Context, session *remote.Session, card 
 }
 
 func reportNativeReceipt(task string) int {
-	if err := reportLaunch(t("launch.started"), board.Entry{TaskID: task}, "", LaunchPlan{}, LaunchOutcome{Replayed: true}); err != nil {
-		return exitLaunch(err)
-	}
-	return 0
+	return startedExit("resume", board.Entry{TaskID: task}, "", LaunchPlan{}, LaunchOutcome{Replayed: true}, nil)
 }

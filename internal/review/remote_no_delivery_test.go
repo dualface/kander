@@ -156,6 +156,17 @@ func TestRemoteNoDeliveryBatchClosesAfterHeadMovedOnAndWorktreeIsDirty(t *testin
 	if got := w.progress(t); got.Status != "closed" {
 		t.Fatalf("progress: %+v", got)
 	}
+	// With --json the command prints the same object on one line, and nothing on stderr.
+	code, out, stderr := captureRun(t, []string{"progress", w.h.repo, w.task, "--json"})
+	var printed board.ReviewProgress
+	if err := json.Unmarshal([]byte(out), &printed); code != 0 || stderr != "" || err != nil || printed.Status != "closed" || strings.Count(out, "\n") != 1 {
+		t.Fatalf("progress --json: %d %q %q %v", code, out, stderr, err)
+	}
+	// A refused request is the error object, with the status of the text form.
+	code, out, stderr = captureRun(t, []string{"progress", w.h.repo, "20260101-no-such-task", "--json"})
+	if code == 0 || out != "" || !strings.Contains(stderr, `{"error":{"code":`) || strings.Count(stderr, "\n") != 1 {
+		t.Fatalf("missing card --json: %d %q %q", code, out, stderr)
+	}
 }
 
 func TestRemoteNoDeliveryBatchRefusesATargetOutsideHeadHistory(t *testing.T) {

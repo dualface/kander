@@ -2,6 +2,7 @@ package review
 
 import (
 	"context"
+	"github.com/dualface/kander/internal/command"
 	"maps"
 	"path/filepath"
 	"slices"
@@ -24,7 +25,13 @@ func runDispositionMode(action string, args []string) int {
 	}
 	return runDisposition(cfg, append([]string{action}, args...))
 }
-func dispositionFailure(err error) int { userError(err.Error()); return 2 }
+func dispositionFailure(err error) int {
+	if command.JSON() {
+		return command.FailStatus(2, err)
+	}
+	userError(err.Error())
+	return 2
+}
 func validatePlanGit(p board.ReviewPlan) error {
 	for _, b := range p.Batches {
 		if !board.ReviewNeedsGit(b) {

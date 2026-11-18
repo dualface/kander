@@ -25,6 +25,10 @@ import (
 type Options struct {
 	Keep      bool
 	SkipFocus bool
+	// Step and Note, when set, receive every step result and every other report line instead
+	// of the text lines going to the output writer.
+	Step func(name, status, detail string)
+	Note func(line string)
 }
 
 type checker struct {
@@ -145,6 +149,14 @@ func Check(backend terminal.Backend, options Options, out io.Writer) (result err
 }
 
 func (c *checker) print(line string) {
+	if c.options.Note != nil {
+		c.options.Note(line)
+		return
+	}
+	c.write(line)
+}
+
+func (c *checker) write(line string) {
 	if c.writeErr != nil {
 		return
 	}
@@ -159,7 +171,11 @@ func (c *checker) status(name, skip string, err error) {
 	if err != nil {
 		state, detail = "fail", err.Error()
 	}
-	c.print(config.Text("terminal.test_step", state, name, detail))
+	if c.options.Step != nil {
+		c.options.Step(name, state, detail)
+		return
+	}
+	c.write(config.Text("terminal.test_step", state, name, detail))
 }
 
 func (c *checker) trace(ctx context.Context, program string, args []string) (probe.Result, error) {

@@ -68,6 +68,7 @@ kander resume --adopt --decision <reference> <task-id>
 - `resumed`, or for a takeover `cleaned up original container: ...` then `taken over: ...`. A generated dispatch ID is printed before any send when the request is durable and the ID was omitted.
 - `adopted: <task-id> window=<address>` for an adoption, preceded by `session-marker-written: <task-id> window=<address> session=<session>` when adoption wrote the missing marker.
 - `started-unresolved: ...` with exit status 3 for a takeover that failed late with executor evidence (`snippets/commands/start.md` "Late Failures"). `superseded: <task-id> ...` with exit status 0 for a takeover another execution overtook.
+- With `--json`: a message to a live executor is the collaboration request object of `notify`. A launch (takeover or continuation) is `action` (`resume`), `task_id`, `size`, `agent`, `launcher`, `address`, `replayed`, `superseded`, and `request` (the dispatch request queued for the new agent, when there is one); `launch_unresolved` and `interactive_required` are as for `start`. `--adopt` and `--release` are `action` (`adopt` or `release`) and `task_id`.
 
 ## Rejections
 

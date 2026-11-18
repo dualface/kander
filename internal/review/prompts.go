@@ -1,11 +1,11 @@
 package review
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 )
 
@@ -47,7 +47,7 @@ func renderReviewTemplate(name string, data any) (string, error) {
 	if err != nil {
 		paths = config.InstallPaths{}
 	}
-	out, err := config.RenderRulesTemplateSet(paths, reviewTemplatesDir, name, data, os.Stderr)
+	out, err := config.RenderRulesTemplateSet(paths, reviewTemplatesDir, name, data, command.NoticeWriter("rules_embedded_fallback"))
 	if err != nil {
 		return "", err
 	}

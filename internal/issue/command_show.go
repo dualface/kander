@@ -1,7 +1,6 @@
 package issue
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"strconv"
@@ -19,7 +18,6 @@ type showOptions struct {
 	hasRepo    bool
 	number     int
 	comments   bool
-	json       bool
 }
 
 func newShowCommand(factory func() IssueProvider, stdout, stderr io.Writer) *cobra.Command {
@@ -31,7 +29,6 @@ func newShowCommand(factory func() IssueProvider, stdout, stderr io.Writer) *cob
 	}
 	addRepoFlag(c, &options.repository)
 	c.Flags().BoolVar(&options.comments, "comments", false, "")
-	c.Flags().BoolVar(&options.json, "json", false, "")
 	return c
 }
 
@@ -46,15 +43,10 @@ func runShow(factory func() IssueProvider, options showOptions, stdout, stderr i
 	defer cancel()
 	snapshot, err := provider.GetIssue(ctx, repository, options.number, options.comments)
 	if err != nil {
-		fmt.Fprintln(stderr, formatError(err))
-		return 1
+		return fail(stderr, err, 1)
 	}
-	if options.json {
-		if err := writeIssueSnapshotJSON(stdout, snapshot); err != nil {
-			fmt.Fprintln(stderr, formatError(err))
-			return 1
-		}
-		return 0
+	if command.JSON() {
+		return command.Result(showView(snapshot))
 	}
 	writeIssueSnapshotText(stdout, snapshot)
 	return 0
@@ -124,7 +116,8 @@ type issueSnapshotJSON struct {
 	Comments       []issueCommentJSON `json:"comments,omitempty"`
 }
 
-func writeIssueSnapshotJSON(w io.Writer, snapshot IssueSnapshot) error {
+// showView is the result object of kander issue show.
+func showView(snapshot IssueSnapshot) issueShowJSON {
 	labels := snapshot.Labels
 	if labels == nil {
 		labels = []string{}
@@ -159,15 +152,7 @@ func writeIssueSnapshotJSON(w io.Writer, snapshot IssueSnapshot) error {
 		}
 		view.Comments = comments
 	}
-	encoded, err := json.Marshal(issueShowJSON{
-		Repository: repositoryView(snapshot.Repository),
-		Issue:      view,
-	})
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(w, "%s\n", encoded)
-	return err
+	return issueShowJSON{Repository: repositoryView(snapshot.Repository), Issue: view}
 }
 
 func orDash(value string) string {

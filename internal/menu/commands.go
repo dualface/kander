@@ -2,9 +2,7 @@ package menu
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -67,19 +65,19 @@ func NewDoctorCommand() *cobra.Command {
 
 // NewConfigCommand builds kander config.
 func NewConfigCommand() *cobra.Command {
-	var jsonOut bool
-	c := &cobra.Command{
+	return &cobra.Command{
 		Use:  "config",
 		Args: command.Args(0, 0),
-		RunE: func(*cobra.Command, []string) error { return command.Exit(runConfig(jsonOut)) },
+		RunE: func(*cobra.Command, []string) error { return command.Exit(runConfig()) },
 	}
-	c.Flags().BoolVar(&jsonOut, "json", false, "")
-	return c
 }
 
 // Doctor implements kander doctor.
 func Doctor() int {
 	prepareLanguage()
+	if command.JSON() {
+		return doctorJSON()
+	}
 	// printDoctorWithTools runs the version guard first, so an older binary
 	// stops before the herdr install prompt and every repair.
 	if printDoctorWithTools(CheckTerminalTools(), true, stdinStderrTTY()) {
@@ -88,28 +86,48 @@ func Doctor() int {
 	return 1
 }
 
-func runConfig(jsonOut bool) int {
+func runConfig() int {
 	prepareLanguage()
 	cfg, err := config.Load(false)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "kander:", err)
-		return 1
+		return command.Fail(err)
 	}
-	if jsonOut {
+	if command.JSON() {
 		for _, warning := range config.AgentWarnings(cfg) {
-			fmt.Fprintln(os.Stderr, warning)
+			command.Notify("agent_warning", warning)
 		}
-		payload, err := json.MarshalIndent(cfg, "", "  ")
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "kander:", err)
-			return 1
-		}
-		fmt.Println(string(payload))
-		return 0
+		return command.Result(cfg)
 	}
 	if err := printConfig(cfg); err != nil {
-		fmt.Fprintln(os.Stderr, "kander:", err)
-		return 1
+		return command.Fail(err)
 	}
 	return 0
+}
+
+// doctorLine is one report line of the result of kander doctor.
+type doctorLine struct {
+	Level   string `json:"level"`
+	Message string `json:"message"`
+}
+
+// doctorJSON is doctor with --json: the same checks and repairs, never a prompt, with the report
+// lines in the result. Whatever a person would have been asked about is left alone. An
+// unhealthy installation is the result with healthy false and exit status 1.
+func doctorJSON() int {
+	healthy := false
+	captured := CaptureReport(func() {
+		healthy = printDoctorWithTools(CheckTerminalTools(), true, false)
+	})
+	lines := make([]doctorLine, 0, len(captured))
+	for _, line := range captured {
+		lines = append(lines, doctorLine{Level: line.Level, Message: line.Text})
+	}
+	status := 0
+	if !healthy {
+		status = 1
+	}
+	return command.ResultStatus(struct {
+		Healthy bool         `json:"healthy"`
+		Lines   []doctorLine `json:"lines"`
+	}{healthy, lines}, status)
 }

@@ -62,6 +62,9 @@ func RunForeground(ctx context.Context, options Options, listen string) error {
 		}
 	}()
 	s.log.Info("listening", "address", s.listen, "version", options.Version)
+	if options.Ready != nil {
+		options.Ready(s.listen)
+	}
 	err = httpServer.Serve(listener)
 	stop()
 	<-finished
@@ -104,18 +107,28 @@ type importOptions struct{ data, name, remote, from string }
 // signals is one Ctrl+C.
 func importCommand(o importOptions, stdout, stderr io.Writer, tty bool, signals chan os.Signal) int {
 	data, name, remoteURL, from := &o.data, &o.name, &o.remote, &o.from
-	// The log lines share stderr with the status line, so they go through the reporter.
+	// The log lines share stderr with the status line, so they go through the reporter. With
+	// --json there is no progress and no log: the result or the error object says it all.
+	if command.JSON() {
+		stderr = io.Discard
+	}
 	report := newImportReporter(stderr, tty)
 	logger := slog.New(slog.NewJSONHandler(report, nil))
+	fail := func(err error) int {
+		if command.JSON() {
+			return command.Fail(err)
+		}
+		return 1
+	}
 	dir, err := dataDir(*data)
 	if err != nil {
 		logger.Error("data directory", "error", err)
-		return 1
+		return fail(err)
 	}
 	source, err := importSource(*from)
 	if err != nil {
 		logger.Error("source board", "error", err)
-		return 1
+		return fail(err)
 	}
 	interrupt := watchImportInterrupt(report, signals)
 	defer interrupt.stop()
@@ -129,10 +142,16 @@ func importCommand(o importOptions, stdout, stderr io.Writer, tty bool, signals 
 			} else {
 				report.Notice(config.Text("server.import_cancelled"))
 			}
+			if command.JSON() {
+				return command.FailStatus(130, command.Coded("cancelled", errors.New(config.Text("server.import_cancelled"))))
+			}
 			return 130
 		}
 		logger.Error("import failed", "error", err)
-		return 1
+		return fail(err)
+	}
+	if command.JSON() {
+		return command.Result(result)
 	}
 	out, _ := json.MarshalIndent(result, "", "  ")
 	fmt.Fprintln(stdout, string(out))

@@ -9,12 +9,13 @@ import (
 	"github.com/dualface/kander/internal/config"
 )
 
-// WriteCompletionReportSnapshot renders the same CLI reminder from an already
-// committed service snapshot. resource is a logical service location, not a
-// client filesystem path; this entry never reads local board storage.
-func WriteCompletionReportSnapshot(w io.Writer, taskID, state, text, resource string, cfg *config.Config) {
+// CompletionReportSnapshot renders the CLI reminder with the completion report template from an
+// already committed service snapshot, or "" when the state or the configuration asks for none.
+// resource is a logical service location, not a client filesystem path; this entry never reads
+// local board storage. Remarks about the template go to warn.
+func CompletionReportSnapshot(taskID, state, text, resource string, cfg *config.Config, warn io.Writer) string {
 	if state != "done" && state != "archived" && state != "trash" || cfg == nil || !cfg.Rules[config.RuleReporting] {
-		return
+		return ""
 	}
 	language := strings.TrimSpace(MetadataFrom(text, FieldLanguage))
 	if language == "" {
@@ -29,14 +30,12 @@ func WriteCompletionReportSnapshot(w io.Writer, taskID, state, text, resource st
 		"Title":      singleLine(TitleFrom(text)),
 		"Path":       resource,
 		"FinalState": finalCardState(state, MetadataFrom(text, FieldResult)),
-	}, w)
+	}, warn)
 	if err != nil {
-		fmt.Fprintln(w, t("board.report_template_unavailable", err.Error()))
-		return
+		fmt.Fprintln(warn, t("board.report_template_unavailable", err.Error()))
+		return ""
 	}
-	fmt.Fprintln(w, t("board.report_template_reminder"))
-	fmt.Fprint(w, report)
-	fmt.Fprintf(w, "Write the report in %q.\n", language)
+	return t("board.report_template_reminder") + "\n" + report + fmt.Sprintf("Write the report in %q.\n", language)
 }
 
 func finalCardState(state, result string) string {

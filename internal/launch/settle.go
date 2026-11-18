@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/issue"
 )
 
@@ -160,6 +161,9 @@ func exitLaunch(err error) int {
 	var unresolved *UnresolvedError
 	if !errors.As(err, &unresolved) {
 		return fail(err)
+	}
+	if command.JSON() {
+		return command.FailStatus(exitUnresolved, unresolvedFailure(unresolved))
 	}
 	fmt.Println(unresolved.Error())
 	header := "launch.unresolved_next_steps"

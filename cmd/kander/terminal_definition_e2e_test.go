@@ -16,6 +16,7 @@ import (
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/focus"
 	"github.com/dualface/kander/internal/install/installtest"
+	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/terminal"
 )
 
@@ -183,64 +184,8 @@ func cardField(t *testing.T, id, field string) string {
 // A third-party definition placed in the share directory runs the complete
 // lifecycle through the same Backend paths as the built-in launchers.
 func TestTerminalDefinitionLifecycle(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("the fake terminal is a POSIX shell script")
-	}
-	t.Setenv(config.EnvLang, "en")
-	t.Setenv(config.EnvLangCLI, "1")
-	config.ApplyLanguageArgument([]string{"kander", "--lang", "en"})
-	t.Chdir(t.TempDir())
-	t.Setenv("TMPDIR", t.TempDir())
-
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	installtest.IsolateAgentConfigEnv(t)
-	shareDir := filepath.Join(home, ".local", "share", "kander", terminal.DefinitionsDirName)
-	if err := os.MkdirAll(shareDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	definitionPath := filepath.Join(shareDir, "fakemux.json")
-	if err := os.WriteFile(definitionPath, []byte(fakeMuxDefinition), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	terminal.ReloadDefinitions()
-	t.Cleanup(terminal.ReloadDefinitions)
-
-	bin := t.TempDir()
-	state := t.TempDir()
-	if err := os.Mkdir(filepath.Join(state, "panes"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(bin, "fakemuxctl"), []byte(fakeMuxScript), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("FAKEMUX_STATE", state)
-	for _, name := range []string{"TMUX", "TMUX_PANE", "HERDR_ENV"} {
-		t.Setenv(name, "")
-	}
-
-	root := t.TempDir()
-	for _, name := range board.States {
-		if err := os.Mkdir(filepath.Join(root, name), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	t.Setenv(board.EnvBoardDir, root)
-	t.Setenv(config.EnvConfig, filepath.Join(home, "config.json"))
-	cfg := config.DefaultConfig()
-	cfg.WelcomeComplete = true
-	cfg.Language, cfg.AgentLanguage = "en", "en"
-	cfg.KanbanAgent = "claude"
-	cfg.KanbanAgents = map[string]string{"large": "claude", "small": "claude"}
-	cfg.Launcher = "fakemux"
-	service := commandService(t, cfg)
-	if _, err := config.Save(cfg); err != nil {
-		t.Fatal(err)
-	}
+	fixture := fakeMuxFixture(t)
+	service, cfg, state, definitionPath := fixture.service, fixture.cfg, fixture.state, fixture.definitionPath
 
 	// config --json accepts and prints the definition launcher; doctor lists
 	// the definition as loaded.
@@ -354,6 +299,80 @@ func TestTerminalDefinitionLifecycle(t *testing.T) {
 	if result := focus.Window(context.Background(), "fakemux:w9:p9"); result.Success || result.Message != config.Text("focus.unsupported") {
 		t.Fatalf("focus without a definition=%+v", result)
 	}
+}
+
+// fakeMux is a service project whose launcher is the fake multiplexer definition of this file.
+type fakeMux struct {
+	service        *remote.Session
+	cfg            *config.Config
+	state          string
+	definitionPath string
+}
+
+// fakeMuxFixture installs the fake terminal and its definition in an isolated home and binds a
+// service project that launches through it.
+func fakeMuxFixture(t *testing.T) fakeMux {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake terminal is a POSIX shell script")
+	}
+	t.Setenv(config.EnvLang, "en")
+	t.Setenv(config.EnvLangCLI, "1")
+	config.ApplyLanguageArgument([]string{"kander", "--lang", "en"})
+	t.Chdir(t.TempDir())
+	t.Setenv("TMPDIR", t.TempDir())
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	installtest.IsolateAgentConfigEnv(t)
+	shareDir := filepath.Join(home, ".local", "share", "kander", terminal.DefinitionsDirName)
+	if err := os.MkdirAll(shareDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	definitionPath := filepath.Join(shareDir, "fakemux.json")
+	if err := os.WriteFile(definitionPath, []byte(fakeMuxDefinition), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	terminal.ReloadDefinitions()
+	t.Cleanup(terminal.ReloadDefinitions)
+
+	bin := t.TempDir()
+	state := t.TempDir()
+	if err := os.Mkdir(filepath.Join(state, "panes"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bin, "fakemuxctl"), []byte(fakeMuxScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("FAKEMUX_STATE", state)
+	for _, name := range []string{"TMUX", "TMUX_PANE", "HERDR_ENV"} {
+		t.Setenv(name, "")
+	}
+
+	root := t.TempDir()
+	for _, name := range board.States {
+		if err := os.Mkdir(filepath.Join(root, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv(board.EnvBoardDir, root)
+	t.Setenv(config.EnvConfig, filepath.Join(home, "config.json"))
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	cfg.Language, cfg.AgentLanguage = "en", "en"
+	cfg.KanbanAgent = "claude"
+	cfg.KanbanAgents = map[string]string{"large": "claude", "small": "claude"}
+	cfg.Launcher = "fakemux"
+	service := commandService(t, cfg)
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	return fakeMux{service: service, cfg: cfg, state: state, definitionPath: definitionPath}
 }
 
 func readyCard(t *testing.T, slug string) string {

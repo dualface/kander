@@ -5,13 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 )
@@ -50,7 +50,7 @@ func runRemoteResume(cfg *config.Config, agent *string, launcher, task, message,
 	return runRemoteResumeLaunch(ctx, session, card, agent, launcher, text, timeout, options, nil)
 }
 
-func runRemoteResumeLaunch(ctx context.Context, session *remote.Session, card api.Task, agent *string, launcher, text string, timeout float64, options DispatchOptions, command *remote.ActionJournal) int {
+func runRemoteResumeLaunch(ctx context.Context, session *remote.Session, card api.Task, agent *string, launcher, text string, timeout float64, options DispatchOptions, journal *remote.ActionJournal) int {
 	var err error
 	if strings.TrimSpace(options.Decision) == "" {
 		return fail(launchError("remote.takeover_decision_required"))
@@ -94,44 +94,42 @@ func runRemoteResumeLaunch(ctx context.Context, session *remote.Session, card ap
 		digest := sha256.Sum256([]byte(card.TaskID + "\x00" + options.ID))
 		input.PendingRequest = api.CollaborationRequestID("dispatch-proposal-" + hex.EncodeToString(digest[:]))
 	}
-	if command != nil {
+	if journal != nil {
 		state := nativeResumeIntent{Input: input, Options: options, NewRound: newRound}
 		data, err := json.Marshal(state)
 		if err != nil {
 			return fail(err)
 		}
-		command.Value.Result, command.Value.Phase = data, "pending"
-		if err := command.Save(); err != nil {
+		journal.Value.Result, journal.Value.Phase = data, "pending"
+		if err := journal.Save(); err != nil {
 			return fail(err)
 		}
 	}
-	return executeRemoteResume(input, options, newRound, timeout, command)
+	return executeRemoteResume(input, options, newRound, timeout, journal)
 }
 
-func executeRemoteResume(input remoteLaunchInput, options DispatchOptions, newRound bool, timeout float64, command *remote.ActionJournal) int {
+func executeRemoteResume(input remoteLaunchInput, options DispatchOptions, newRound bool, timeout float64, journal *remote.ActionJournal) int {
 	result, err := launchRemote(input)
 	for _, warning := range result.Warnings {
-		fmt.Fprint(os.Stderr, warning)
+		command.Notify("launch_warning", warning)
 	}
 	if err != nil {
 		return exitLaunch(err)
 	}
 	if result.Superseded {
-		stepAside(result.TaskID, result.Plan, result.Outcome)
-		return 0
+		return supersededExit("resume", result.TaskID, result.Plan, result.Outcome)
 	}
+	var queued *api.CollabRequest
 	if newRound {
 		request, err := notifyRemoteForExecution(input.TaskID, input.Message, "", "", true, timeout, options, result.executionID)
 		if err != nil {
 			return exitLaunch(&UnresolvedError{TaskID: input.TaskID, Window: locationOf(result.Plan, result.Outcome), Reason: err.Error(), Command: "kander"})
 		}
-		if err := json.NewEncoder(os.Stdout).Encode(request); err != nil {
-			return fail(err)
-		}
+		queued = &request
 	}
-	if command != nil {
+	if journal != nil {
 		var state nativeResumeIntent
-		if err := json.Unmarshal(command.Value.Result, &state); err != nil {
+		if err := json.Unmarshal(journal.Value.Result, &state); err != nil {
 			return fail(err)
 		}
 		state.CompletedExecution = result.executionID
@@ -139,13 +137,10 @@ func executeRemoteResume(input remoteLaunchInput, options DispatchOptions, newRo
 		if err != nil {
 			return fail(err)
 		}
-		command.Value.Result, command.Value.Phase = data, "complete"
-		if err := command.Save(); err != nil {
+		journal.Value.Result, journal.Value.Phase = data, "complete"
+		if err := journal.Save(); err != nil {
 			return fail(err)
 		}
 	}
-	if err := reportLaunch(t("launch.started"), board.Entry{TaskID: result.TaskID, Kind: result.Size}, result.Agent, result.Plan, result.Outcome); err != nil {
-		return exitLaunch(err)
-	}
-	return 0
+	return startedExit("resume", board.Entry{TaskID: result.TaskID, Kind: result.Size}, result.Agent, result.Plan, result.Outcome, queued)
 }

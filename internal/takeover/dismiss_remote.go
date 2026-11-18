@@ -75,7 +75,7 @@ func commandRemoteDismiss(cfg *config.Config, task string, timeout float64) erro
 	}
 	defer journal.Close()
 	if !fresh && journal.Value.Phase == "complete" {
-		fmt.Println(t("remote.execution_dismissed", card.TaskID))
+		reportDismiss(t("remote.execution_dismissed", card.TaskID), card.TaskID, "dismissed")
 		return nil
 	}
 	program, err := lookPath(backend.Executable())
@@ -91,7 +91,7 @@ func commandRemoteDismiss(cfg *config.Config, task string, timeout float64) erro
 		if err := journal.Save(); err != nil {
 			return err
 		}
-		fmt.Println(t("remote.execution_target_gone", card.TaskID, local.Window))
+		reportDismiss(t("remote.execution_target_gone", card.TaskID, local.Window), card.TaskID, "target_gone")
 		return nil
 	}
 	if !fresh && journal.Value.Phase != "prepared" {
@@ -100,7 +100,7 @@ func commandRemoteDismiss(cfg *config.Config, task string, timeout float64) erro
 	if err := sameWorkerPane(ctx, backend, pane, session); err != nil {
 		return err
 	}
-	command, err := AgentExitCommand(agent)
+	exitCommand, err := AgentExitCommand(agent)
 	if err != nil {
 		return err
 	}
@@ -116,9 +116,9 @@ func commandRemoteDismiss(cfg *config.Config, task string, timeout float64) erro
 		return err
 	}
 	if backend.Capabilities().AgentIdentity {
-		_, _, err = dismissAgentPaneAt(backend, address, true, toLive(session), session, command, timeout, false)
+		_, _, err = dismissAgentPaneAt(backend, address, true, toLive(session), session, exitCommand, timeout, false)
 	} else {
-		_, _, err = dismissProcessPaneAt(backend, address, toLive(session), session, command, timeout, false)
+		_, _, err = dismissProcessPaneAt(backend, address, toLive(session), session, exitCommand, timeout, false)
 	}
 	if err != nil {
 		return err
@@ -127,7 +127,7 @@ func commandRemoteDismiss(cfg *config.Config, task string, timeout float64) erro
 	if err := journal.Save(); err != nil {
 		return err
 	}
-	fmt.Println(t("remote.execution_dismissed", card.TaskID))
+	reportDismiss(t("remote.execution_dismissed", card.TaskID), card.TaskID, "dismissed")
 	return nil
 }
 

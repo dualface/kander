@@ -15,6 +15,7 @@ import (
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/servicectl"
 	"github.com/dualface/kander/internal/version"
@@ -38,7 +39,7 @@ func SuspendServerQuestions() func() {
 func serverInteractive() bool {
 	_, execution := os.LookupEnv(EnvExecutionID)
 	_, coordinator := os.LookupEnv(EnvCoordinatorExecutionID)
-	return !serverQuestionsSuspended.Load() && !execution && !coordinator && serverTerminal()
+	return !command.JSON() && !serverQuestionsSuspended.Load() && !execution && !coordinator && serverTerminal()
 }
 
 // confirmServer defaults an actual empty line to yes. EOF never authorizes
@@ -68,7 +69,7 @@ func prepareServer(ctx context.Context, c *client.Client, cfg *config.Config) (b
 		if pathErr != nil {
 			return false, pathErr
 		}
-		unavailable := errors.New(config.Text("remote.server_not_running", target, dir))
+		unavailable := command.Coded(CodeUnreachable, errors.New(config.Text("remote.server_not_running", target, dir)))
 		if !serverInteractive() {
 			return false, unavailable
 		}
@@ -103,7 +104,7 @@ func prepareServer(ctx context.Context, c *client.Client, cfg *config.Config) (b
 		if incompatible {
 			return prompted, errors.New(config.Text("remote.server_restart_required", v.ServerVersion, version.String()))
 		}
-		fmt.Fprintln(stderr, config.Text("remote.server_version_warning", v.ServerVersion, version.String()))
+		remark("server_version_warning", config.Text("remote.server_version_warning", v.ServerVersion, version.String()))
 		return prompted, nil
 	}
 	prompted = true

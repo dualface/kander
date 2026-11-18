@@ -31,7 +31,7 @@ None.
 
 ## Output
 
-- One line per check, then the overall result.
+- One line per check, then the overall result. With `--json`: `healthy` (boolean) and `lines` (array of `level`, one of `ok`, `warn`, `info`, `note`, and `message`). `doctor --json` never asks a question: it repairs what needs no answer and reports what does. An unhealthy installation is the result with `healthy` false and exit status 1.
 
 ## Rejections
 

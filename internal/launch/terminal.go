@@ -38,6 +38,9 @@ func prepareLaunch(launcher, project, command string) (LaunchPlan, error) {
 		return LaunchPlan{}, err
 	}
 	plan := LaunchPlan{Launcher: resolved}
+	if err := refuseTerminalLauncher(plan); err != nil {
+		return LaunchPlan{}, err
+	}
 	target, err := plan.backend().Prepare(terminal.PrepareRequest{
 		Project:  project,
 		Command:  command,

@@ -22,12 +22,11 @@ import (
 //
 //	kander request <task-id> fix|sync|review|stop <message...>
 //	kander request list <task-id>
-//	kander request show <task-id> <request-id> --json
+//	kander request show <task-id> <request-id>
 //	kander request answer <task-id> <request-id> accepted|done|rejected [note...]
 //
 // Anyone may ask; only the live holder answers, with its execution credential.
 func NewRequestCommand() *cobra.Command {
-	var machine bool
 	send := &cobra.Command{
 		Use:  "request <task-id> fix|sync|review|stop <message...>",
 		Args: command.Args(3, -1),
@@ -48,8 +47,6 @@ func NewRequestCommand() *cobra.Command {
 		Args: command.Args(2, 2),
 		RunE: func(_ *cobra.Command, args []string) error { return runRequestShow(args[0], args[1]) },
 	}
-	show.PreRunE = func(*cobra.Command, []string) error { return command.Required(show, "json") }
-	show.Flags().BoolVar(&machine, "json", false, "")
 	answer := &cobra.Command{
 		Use:  "answer <task-id> <request-id> accepted|done|rejected [note...]",
 		Args: command.Args(3, -1),
@@ -86,7 +83,7 @@ func runRequestShow(task, id string) error {
 	}
 	for _, request := range requests {
 		if request.ID == id {
-			return encode(request)
+			return emit(request)
 		}
 	}
 	return fail(&api.Error{Code: api.CodeNotFound, Message: "request does not exist"})
@@ -101,6 +98,9 @@ func runRequestList(task string) error {
 	requests, err := s.Project.Requests(ctx, task)
 	if err != nil {
 		return fail(err)
+	}
+	if command.JSON() {
+		return command.Exit(command.Result(requestList{Requests: requests}))
 	}
 	w := tabwriter.NewWriter(stdout, 0, 2, 2, ' ', 0)
 	for _, r := range requests {
@@ -140,6 +140,9 @@ func runRequestAnswer(task, id, status, note string) error {
 	if err != nil {
 		return fail(err)
 	}
+	if command.JSON() {
+		return command.Exit(command.Result(r))
+	}
 	fmt.Fprintln(stdout, r.ID, r.Status)
 	return nil
 }
@@ -155,8 +158,7 @@ func runRequestSend(task, kind, message string) error {
 		if err != nil {
 			return fail(err)
 		}
-		fmt.Fprintln(stdout, recovered.ID, "g"+strconv.FormatUint(recovered.TargetGeneration, 10), recovered.Status)
-		return nil
+		return printRequest(recovered)
 	}
 	current, err := s.Project.Show(ctx, task)
 	if err != nil {
@@ -168,6 +170,15 @@ func runRequestSend(task, kind, message string) error {
 	r, err := s.SendRequest(ctx, client.NewKey(), current.TaskID, api.NewCollabRequest{Kind: kind, Message: message, TargetGeneration: current.Claim.Generation}, logical)
 	if err != nil {
 		return fail(err)
+	}
+	return printRequest(r)
+}
+
+// printRequest ends a command that queued a request: its id, target generation and status, or
+// with --json the request.
+func printRequest(r api.CollabRequest) error {
+	if command.JSON() {
+		return command.Exit(command.Result(r))
 	}
 	fmt.Fprintln(stdout, r.ID, "g"+strconv.FormatUint(r.TargetGeneration, 10), r.Status)
 	return nil

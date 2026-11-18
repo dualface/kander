@@ -9,14 +9,13 @@ Lists cards, optionally for one state. Used by card creators and the user; orche
 ## Syntax
 
 ```text
-kander list [--json [--agent-status]] [backlog|todo|working|review|done|archived|trash]
+kander list [--agent-status] [backlog|todo|working|review|done|archived|trash]
 ```
 
 ## Arguments
 
 - `state`: one of `backlog`, `todo`, `working`, `review`, `done`, `archived`, `trash`.
-- `--json`: print the board snapshot below instead of the table.
-- `--agent-status`: with `--json` only; observe the executing agent of every `working` or `review` card with a non-empty `WINDOW`.
+- `--agent-status`: with the global `--json` only; observe the executing agent of every `working` or `review` card with a non-empty `WINDOW`.
 
 ## Preconditions
 
@@ -29,7 +28,7 @@ kander list [--json [--agent-status]] [backlog|todo|working|review|done|archived
 ## Output
 
 - Without `--json`: one row per card: state, size, time, task ID, title.
-- With `--json`: one JSON object on stdout, `schema_version` 1:
+- With `--json`: one object, `schema_version` 1:
   - Top level: `schema_version` (integer), `change_token` (string), `generated_at` (string, RFC 3339, UTC), `root` (string, absolute board directory), `tasks` (array).
   - Each task: `task_id`, `title`, `state`, `size`, `type`, `task_group`, `owner`, `session`, `window`, `launcher`, `created_at`, `started_at`, `finished_at`, `result` (strings; a missing value is `""`, never an omitted key), `revision` (integer, the revision of `kander show --json`), `agent` (object or `null`).
   - `launcher` is the part of `window` before the first colon; `""` when `window` is empty.
@@ -41,4 +40,4 @@ kander list [--json [--agent-status]] [backlog|todo|working|review|done|archived
 ## Rejections
 
 - An unknown state, more than one state, or an unknown option is a usage error.
-- `--agent-status` without `--json` is a usage error.
+- `--agent-status` without the global `--json` is a usage error.

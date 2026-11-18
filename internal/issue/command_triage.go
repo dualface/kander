@@ -49,10 +49,15 @@ func runTriage(factory func() IssueProvider, options triageCommandOptions, stdou
 	triageOptions := TriageOptions{CardID: options.card, Agent: options.agent, Launcher: options.launcher}
 	outcome, err := startTriage(ctx, provider, repository, options.number, triageOptions)
 	if err != nil {
-		fmt.Fprintln(stderr, formatTriageError(err))
-		return 1
+		return failTriage(stderr, err, 1)
 	}
 	identity := triageIdentity(repository, options.number)
+	if command.JSON() {
+		for _, warning := range outcome.Warnings {
+			command.Notify("launch_warning", warning)
+		}
+		return command.Result(triageView{Agent: outcome.Agent, Launcher: outcome.Launcher, Issue: identity, Address: outcome.Address})
+	}
 	if outcome.Address == "" {
 		fmt.Fprintln(stdout, config.Text("issue.triage_started_no_address", outcome.Agent, outcome.Launcher, identity))
 	} else {
@@ -62,6 +67,14 @@ func runTriage(factory func() IssueProvider, options triageCommandOptions, stdou
 		fmt.Fprintln(stdout, warning)
 	}
 	return 0
+}
+
+// triageView is the result object of kander issue triage.
+type triageView struct {
+	Agent    string `json:"agent"`
+	Launcher string `json:"launcher"`
+	Issue    string `json:"issue"`
+	Address  string `json:"address"`
 }
 
 // triageIdentity renders the confirmed identity of one takeover target. It is

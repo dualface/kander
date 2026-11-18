@@ -65,18 +65,12 @@ func TestCheckCommandDeliveryBoardFree(t *testing.T) {
 	t.Setenv(board.EnvBoardDir, filepath.Join(t.TempDir(), "missing-board"))
 	t.Chdir(t.TempDir())
 
+	// An analysis that could not finish is the error object, never a result.
 	result := runKander(t, "check", "delivery", "--base", "HEAD", "--json")
-	outBytes, errBytes, code := result.stdout, result.stderr, result.code
-	if errBytes != "" {
-		t.Fatalf("json stderr=%q", errBytes)
+	if result.code != 3 || result.stdout != "" {
+		t.Fatalf("exit=%d stdout=%q stderr=%s", result.code, result.stdout, result.stderr)
 	}
-	if code != 3 {
-		t.Fatalf("exit=%d stdout=%s", code, outBytes)
-	}
-	if !strings.Contains(outBytes, `"check":"delivery"`) || !strings.Contains(outBytes, `"status":"error"`) {
-		t.Fatalf("expected delivery JSON error, got %s", outBytes)
-	}
-	if !strings.Contains(outBytes, `"code":"not-repository"`) {
-		t.Fatalf("expected not-repository error, got %s", outBytes)
+	if want := `{"error":{"code":"check_not_repository","message":"not a git repository"}}` + "\n"; result.stderr != want {
+		t.Fatalf("stderr=%q, want %q", result.stderr, want)
 	}
 }

@@ -2,8 +2,6 @@ package launch
 
 import (
 	"context"
-	"encoding/json"
-	"os"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
@@ -44,6 +42,3 @@ func DispatchObservation(ctx context.Context, s board.Snapshot) liveness.Report 
 	reports := liveness.ClassifyTasksContext(ctx, []liveness.TaskInput{{Entry: s.Entry, Text: s.Text}}, liveness.BatchOptions{})
 	return reports[0]
 }
-
-// PrintDispatchResult reports durable state, never terminal prompt echo.
-func PrintDispatchResult(d board.Dispatch) error { return json.NewEncoder(os.Stdout).Encode(d) }

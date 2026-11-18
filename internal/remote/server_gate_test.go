@@ -261,7 +261,8 @@ func TestListAfterStartupOrRestartQuestionRenewsOperationBudget(t *testing.T) {
 				serverPromptInput = deadlineServerAnswer{ctx: ctx}
 				return ctx, cancel
 			}
-			if code := commandtest.Run(NewListCommand(nil), "--json"); code != 0 || output.Len() == 0 {
+			// The question is asked only without --json.
+			if code := commandtest.Run(NewListCommand(nil)); code != 0 {
 				t.Fatalf("list after question exit=%d output=%q", code, output.String())
 			}
 			if !errors.Is(original.Err(), context.DeadlineExceeded) {

@@ -41,7 +41,7 @@ func TestDoctorAutoLauncherWithoutTerminalTools(t *testing.T) {
 		}
 	}
 	_, cfg, _ := h.run("config", "--json")
-	if !strings.Contains(cfg, `"launcher": "foreground"`) {
+	if !strings.Contains(cfg, `"launcher":"foreground"`) {
 		t.Fatalf("launcher was not repaired to foreground: %s", cfg)
 	}
 }

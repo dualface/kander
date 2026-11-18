@@ -36,6 +36,7 @@ kander uninstall [--yes]
 
 - The plan on standard output, the y/N prompt on standard error, then one line per change.
 - Exit 0 on success, 1 when cancelled or when a change failed, 2 for a usage error or a missing `--yes` without a terminal.
+- With `--json` and `--yes`: `mode` (`global` or `project`), `config_file`, `rules_dir`, and `items` (array of `action` (`edit`, `remove`, `keep`), `path`, and `reason`). `--json` without `--yes` is refused with `interactive_required` and exit status 2 before anything changes.
 
 ## Rejections
 

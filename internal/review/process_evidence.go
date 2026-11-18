@@ -2,11 +2,10 @@ package review
 
 import (
 	"encoding/json"
-	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/fs"
 )
@@ -93,7 +92,7 @@ func retainProcessEvidence(ctx reviewContext, evidence *processEvidence) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(os.Stderr, config.Text("review.process_evidence", string(data)))
+	command.Notify("review_process_evidence", config.Text("review.process_evidence", string(data)))
 	return stored
 }
 

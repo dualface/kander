@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -109,6 +110,26 @@ func TestRemoteDispatchCLIUsesHolderAuthorityAndProposesForForeignHolder(t *test
 	}
 	if code := commandtest.Run(remote.NewRequestCommand(), "show", card.TaskID, request.ID, "--json"); code != 0 {
 		t.Fatalf("request inspection failed: %d", code)
+	}
+
+	// With --json the forms print the same objects and nothing on stderr: the holder's show and
+	// the end of the prepared dispatch.
+	t.Setenv(remote.EnvClientHome, home)
+	run := func(args ...string) (int, string, string) {
+		return commandtest.Capture(func() int { return RunDispatchRemote(append(args, "--json")) })
+	}
+	code, shown, diagnostics := run("show", card.TaskID, "cli-sync")
+	var viewed board.Dispatch
+	if err := json.Unmarshal([]byte(shown), &viewed); code != 0 || diagnostics != "" || err != nil || viewed.State != board.DispatchPrepared || strings.Count(shown, "\n") != 1 {
+		t.Fatalf("show --json: %d %q %q %v", code, shown, diagnostics, err)
+	}
+	code, ended, diagnostics := run("fail", card.TaskID, "cli-sync", strconv.FormatUint(viewed.Revision, 10), "fixture failure")
+	var failed board.Dispatch
+	if err := json.Unmarshal([]byte(ended), &failed); code != 0 || diagnostics != "" || err != nil || failed.State != board.DispatchFailed {
+		t.Fatalf("fail --json: %d %q %q %v", code, ended, diagnostics, err)
+	}
+	if code, stdout, diagnostics := run("show", card.TaskID, "no-such-dispatch"); code != 1 || stdout != "" || !strings.Contains(diagnostics, `"error":{"code":`) {
+		t.Fatalf("show of a missing dispatch: %d %q %q", code, stdout, diagnostics)
 	}
 
 	if _, err := os.Stat(forbidden); !os.IsNotExist(err) {

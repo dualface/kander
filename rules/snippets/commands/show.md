@@ -9,13 +9,12 @@ Prints one card, or with `--document` one document of it. Every agent that edits
 ## Syntax
 
 ```text
-kander show [--json] [--document <relative-path>] <task-id>
+kander show [--document <relative-path>] <task-id>
 ```
 
 ## Arguments
 
 - `task-id`: the card.
-- `--json`: machine-readable output.
 - `--document <relative-path>`: print this document of the card instead of its body: `spec.md`, `plan.md`, `report.md`, an ordinary attachment, or a file below `reviews/` or `dispatches/`. The path follows the rules of `kander update --document`: relative and canonical, with no `.` or `..` segment, no backslash or colon, no segment that starts with `.` or ends with a space or a dot, and `spec.md` in lower case. Given at most once. An empty value is a path error, not a usage error.
 
 ## Preconditions
@@ -30,9 +29,10 @@ kander show [--json] [--document <relative-path>] <task-id>
 
 ## Output
 
-- `kander show` prints the current state and absolute path before the card body; `--json` returns the committed `text`, `revision`, `operation_id`, and `entry` location.
+- `kander show` prints the current state and absolute path before the card body.
 - With `--document`, `kander show` prints only the document text, byte for byte, without the state and path header. The text of `spec.md` equals the `text` of `kander show --json`.
-- With `--document` and `--json`, one JSON object and a newline with `path` (the requested relative path), `text`, `sha256` (the hex digest of `text`), and `expected_revision` (the card revision, the one `kander update --expect-revision` expects).
+- With `--json`: one object. Without `--document`: `task_id`, `state`, `revision` (the card revision `kander update --expect-revision` expects), `operation_id`, `text` (the body), `observed_at` (RFC 3339), and, when present, `claim` (the claim view), `move_receipt`, and `delivery`.
+- With `--json` and `--document`: `path` (the requested relative path), `text`, `sha256` (the hex digest of `text`), and `expected_revision` (the card revision).
 
 ## Rejections
 

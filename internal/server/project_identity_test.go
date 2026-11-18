@@ -254,8 +254,9 @@ func TestReadyLogNamesEveryProjectBoard(t *testing.T) {
 func runProjectsCommand(t *testing.T, args ...string) (int, string, string) {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
-	code := commandtest.Run(newProjectsCommand(&stdout, &stderr), args...)
-	return code, stdout.String(), stderr.String()
+	// With --json the command layer writes the result to the process stdout.
+	code, printed, reported := commandtest.Capture(func() int { return commandtest.Run(newProjectsCommand(&stdout, &stderr), args...) })
+	return code, stdout.String() + printed, stderr.String() + reported
 }
 
 func TestProjectsCommandListsWhileServingAndStopped(t *testing.T) {
@@ -311,7 +312,7 @@ func TestProjectsCommandListsWhileServingAndStopped(t *testing.T) {
 func TestProjectsCommandWithoutDataListsNothing(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "missing")
 	code, out, errOut := runProjectsCommand(t, "--data", dir, "--json")
-	if code != 0 || strings.TrimSpace(out) != "{\n  \"projects\": []\n}" {
+	if code != 0 || strings.TrimSpace(out) != `{"projects":[]}` {
 		t.Fatalf("exit %d: %q %q", code, out, errOut)
 	}
 	if _, err := os.Lstat(dir); !errors.Is(err, os.ErrNotExist) {

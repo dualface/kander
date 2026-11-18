@@ -2,7 +2,6 @@ package board
 
 import (
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -153,7 +152,7 @@ func partitionJournalWithCheckpoint(root string, records []OperationRecord, opti
 		return nil
 	})
 	if err == nil {
-		_, _ = os.Stderr.WriteString(t("board.journal_partitioned", itoa(count)) + "\n")
+		Remark("board_journal_partitioned", t("board.journal_partitioned", itoa(count))+"\n")
 	}
 	return err
 }

@@ -103,7 +103,7 @@ func validInterval(seconds float64) bool {
 
 // NewSubscribeCommand builds kander subscribe against the server.
 func NewSubscribeCommand() *cobra.Command {
-	return command.RequireProject(newSubscribeCommand(runSubscribe))
+	return command.Streaming(command.RequireProject(newSubscribeCommand(runSubscribe)))
 }
 
 // newSubscribeCommand parses the subscription and hands it to run.
@@ -358,27 +358,26 @@ func writeSubscriptionDiagnostic(w io.Writer, message string) error {
 	return errors.Join(err, cleanup())
 }
 
-// runSubscribe implements kander subscribe against the server.
+// runSubscribe implements kander subscribe against the server. Every failure is written by the
+// bounded diagnostic writer: as the error object with --json, otherwise as "kander: message".
 func runSubscribe(opts subscribeOptions) int {
+	fail := func(err error) int {
+		_ = writeSubscriptionDiagnostic(os.Stderr, command.ErrorLine(err))
+		return command.FailReported(err)
+	}
 	if _, err := config.Load(false); err != nil {
-		if outputErr := writeSubscriptionDiagnostic(os.Stderr, "kander: "+err.Error()); outputErr != nil {
-			return 1
-		}
-		return 1
+		return fail(err)
 	}
 	cfg, err := config.Effective(nil)
 	if err != nil {
-		_ = writeSubscriptionDiagnostic(os.Stderr, "kander: "+err.Error())
-		return 1
+		return fail(err)
 	}
 	if err := remote.RequireBinding(cfg); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
+		return fail(err)
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
-		_ = writeSubscriptionDiagnostic(os.Stderr, "kander: "+err.Error())
-		return 1
+		return fail(err)
 	}
 	ctx, cancel := subscriptionSignalContext()
 	defer cancel()
@@ -387,8 +386,7 @@ func runSubscribe(opts subscribeOptions) int {
 		err = subscribeContext(ctx, service.Location(""), opts, os.Stdout, service)
 	}
 	if err != nil && !errors.Is(err, context.Canceled) {
-		_ = writeSubscriptionDiagnostic(os.Stderr, "kander: "+err.Error())
-		return 1
+		return fail(err)
 	}
 	return 0
 }

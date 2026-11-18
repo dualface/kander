@@ -40,6 +40,7 @@ func openServerReviewStore(cfg *config.Config, cwd string, commits ...string) (r
 func runReview(options archiveOptions, args []string) (exitCode int) {
 	applyUmask()
 	config.BindEffectiveLanguage()
+	resetJSONRun()
 	// The command checked the arguments before the review started.
 	agent, rest, _ := splitAgentArgs(args)
 	archiveRoot := ""

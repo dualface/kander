@@ -2,7 +2,6 @@ package server
 
 import (
 	"cmp"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -27,42 +26,45 @@ func NewProjectsCommand() *cobra.Command { return newProjectsCommand(os.Stdout, 
 
 func newProjectsCommand(stdout, stderr io.Writer) *cobra.Command {
 	var data string
-	var jsonOut bool
 	c := &cobra.Command{
 		Use:  "projects",
 		Args: command.Args(0, 0),
 		RunE: func(*cobra.Command, []string) error {
-			return command.Exit(listProjects(data, jsonOut, stdout, stderr))
+			return command.Exit(listProjects(data, stdout, stderr))
 		},
 	}
 	c.Flags().StringVar(&data, "data", "", "")
-	c.Flags().BoolVar(&jsonOut, "json", false, "")
 	return c
 }
 
-func listProjects(data string, jsonOut bool, stdout, stderr io.Writer) int {
+// failProjects reports a failure of kander server projects: the error object with --json,
+// otherwise the text on stderr.
+func failProjects(stderr io.Writer, err error) int {
+	if command.JSON() {
+		return command.Fail(err)
+	}
+	fmt.Fprintln(stderr, "kander server:", err)
+	return 1
+}
+
+func listProjects(data string, stdout, stderr io.Writer) int {
 	dir, err := dataDir(data)
 	if err != nil {
-		fmt.Fprintln(stderr, "kander server:", err)
-		return 1
+		return failProjects(stderr, err)
 	}
 	var projects []api.Project
 	if _, err := os.Lstat(dir); err == nil {
 		if projects, err = readRegistry(dir); err != nil {
-			fmt.Fprintln(stderr, "kander server:", err)
-			return 1
+			return failProjects(stderr, err)
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
-		fmt.Fprintln(stderr, "kander server:", err)
-		return 1
+		return failProjects(stderr, err)
 	}
-	if jsonOut {
+	if command.JSON() {
 		if projects == nil {
 			projects = []api.Project{}
 		}
-		out, _ := json.MarshalIndent(projectList{Projects: projects}, "", "  ")
-		fmt.Fprintln(stdout, string(out))
-		return 0
+		return command.Result(projectList{Projects: projects})
 	}
 	for _, p := range projects {
 		fmt.Fprintf(stdout, "%s\n  id:      %s\n  remote:  %s\n  created: %s\n  board:   %s\n", p.Name, p.ID, cmp.Or(p.Remote, "-"), p.CreatedAt.Format(time.RFC3339), p.BoardPath)

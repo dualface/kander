@@ -3,7 +3,6 @@ package check
 import "strings"
 
 type options struct {
-	json   bool
 	base   string
 	commit string
 	source string

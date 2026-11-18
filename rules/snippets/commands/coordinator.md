@@ -61,7 +61,10 @@ kander coordinator remove-member <absolute-request.json>
 ## Output
 
 - `show`, `claim`, `recover`, and `remove-member`: one JSON object with the checkpoint, its revision, and the authority.
+- `release`: one JSON object `{claim}`, the group claim after the release (`execution_id`, `generation`, `status`, `owner`, `client_id`, `renewed_at`, `expires_at`). With `--json` the notice `coordinator_release_final` carries the execution ID, the group ID, and the generation. A `release` without `--end-execution`, or with the flag after the path, is a `usage` failure (exit 2) before any request; the message holds the consequences and the confirmed syntax.
+- `integrate`, `integration-show`: one JSON object, the public integration record (`id`, `status`, `phase`, `generation`, `request`, `observed_target`, `renewed_at`, `expires_at`); `integrate` prints it when the operation ended.
 - `reconcile`: the same object plus `result`. Exit 0 with `complete`: no member is blocked. Exit 3 with `partial`: the checkpoint is committed and some members are blocked. Exit 1 with `failed`: the checkpoint is committed and every member is blocked. Exit 1 with no JSON: the request was refused and the checkpoint is unchanged.
+- With and without `--json` the objects are the same. With `--json`, a `reconcile` that blocked every member also reports the blocking error as a notice with the code `reconcile_blocked`; its exit status stays 1 and `result` is `failed`.
 
 ## Rejections
 

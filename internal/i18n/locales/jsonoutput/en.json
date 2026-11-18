@@ -1,0 +1,6 @@
+{
+  "remote.interactive_select_task": "picking a card without a task ID asks which card in a terminal; give the task ID",
+  "launch.interactive_launcher": "the {{.V0}} launcher runs the agent in this terminal, and --json has no terminal; use a launcher with a container",
+  "launch.interactive_select_task": "starting without a task ID asks which card in a terminal; give the task ID",
+  "install.interactive_wizard": "the installer asks its questions in a terminal"
+}

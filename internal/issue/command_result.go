@@ -3,7 +3,6 @@ package issue
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"unicode/utf8"
@@ -68,16 +67,14 @@ func runResult(factory func() IssueProvider, options resultOptions, stdout, stde
 	}
 	writer, ok := provider.(ResultProvider)
 	if !ok {
-		fmt.Fprintln(stderr, formatTriageError(resultError("result provider unavailable")))
-		return 1
+		return failTriage(stderr, resultError("result provider unavailable"), 1)
 	}
 	ctx, cancel := commandContext()
 	defer cancel()
 	ctx, root, finishOperation, err := openResultBoard(ctx)
 	defer finishOperation()
 	if err != nil {
-		fmt.Fprintln(stderr, formatTriageError(err))
-		return 1
+		return failTriage(stderr, err, 1)
 	}
 	var out any
 	switch action {
@@ -112,12 +109,13 @@ func runResult(factory func() IssueProvider, options resultOptions, stdout, stde
 		}
 	}
 	if err != nil {
-		fmt.Fprintln(stderr, formatTriageError(err))
-		return 1
+		return failTriage(stderr, err, 1)
+	}
+	if command.JSON() {
+		return command.Result(out)
 	}
 	if err := json.NewEncoder(stdout).Encode(out); err != nil {
-		fmt.Fprintln(stderr, formatTriageError(err))
-		return 1
+		return failTriage(stderr, err, 1)
 	}
 	return 0
 }

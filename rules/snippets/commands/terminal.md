@@ -28,7 +28,7 @@ kander terminal test <name> [--keep] [--skip-focus]
 
 ## Output
 
-- Human-readable lines.
+- Human-readable lines. With `--json`: `list` is `definitions`, an array of `status` (`pass`, `fail`, `skip`), `source`, `name`, `path`, `detail`, `active`, and `invalid`; the exit status is 1 when a definition is invalid. `test` is `launcher`, `passed`, `error` (when a step failed), `steps` (array of `name`, `status` `pass`, `skip`, or `fail`, and `detail`), and `notes` (the other report lines); a failed run is the result with `passed` false and exit status 1. An unknown launcher is the error object.
 
 ## Rejections
 

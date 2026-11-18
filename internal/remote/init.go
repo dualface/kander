@@ -74,6 +74,9 @@ func runInit(args []string, url string, urlGiven bool, name string, nameGiven bo
 			return fail(err)
 		}
 	}
+	if command.JSON() {
+		return command.Exit(command.Result(bindResult{ProjectName: session.Info.Name, ProjectID: session.Info.ID, ServerURL: session.ServerURL, BoardPath: session.Info.BoardPath}))
+	}
 	fmt.Fprintln(stdout, config.Text("remote.project_bound", session.Info.Name, session.Info.ID, session.ServerURL))
 	if session.Info.BoardPath != "" {
 		fmt.Fprintln(stdout, config.Text("remote.project_board_path", session.Info.BoardPath))

@@ -1,11 +1,11 @@
 package launch
 
 import (
-	"fmt"
 	"os"
 	"time"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/probe"
 	"github.com/dualface/kander/internal/process"
@@ -94,7 +94,7 @@ func (p LaunchPlan) warn(message string) {
 		p.warning(message)
 		return
 	}
-	fmt.Fprint(os.Stderr, message)
+	command.Notify("launch_warning", message)
 }
 
 func (p LaunchPlan) judgeFailure() launchVerdict {

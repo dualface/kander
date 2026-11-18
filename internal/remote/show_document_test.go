@@ -61,8 +61,9 @@ func showDocumentFixture(t *testing.T) (run func(args ...string) (int, string, s
 		var out, errOut bytes.Buffer
 		stdout, stderr = &out, &errOut
 		// An argument error is reported on the process stderr, not on the command's own stream.
-		code, _, reported := commandtest.Capture(func() int { return commandtest.Run(NewShowCommand(), args...) })
-		return code, out.String(), errOut.String() + reported
+		// With --json the result is written by the command layer to the process stdout.
+		code, printed, reported := commandtest.Capture(func() int { return commandtest.Run(NewShowCommand(), args...) })
+		return code, out.String() + printed, errOut.String() + reported
 	}, &paths
 }
 

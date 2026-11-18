@@ -9,12 +9,11 @@ Prints the merged effective configuration of the current scope. Every agent runs
 ## Syntax
 
 ```text
-kander config [--json]
+kander config
 ```
 
 ## Arguments
 
-- `--json`: print the configuration as one JSON object instead of the summary.
 
 ## Preconditions
 
@@ -28,8 +27,7 @@ kander config [--json]
 
 - Without `--json`: the summary lines plus, when a project `.kander-config.json` exists, that file's absolute path.
 - Without `--json`, for a bound project: the server URL and project name in force, and the project's board path on the server host. The path comes from one read-only request to the bound server, bounded to 3 seconds; it prints as unavailable when the server cannot answer or the project is unbound or unregistered, and never changes the exit code.
-- With `--json`: no server request.
-- With `--json`: the merged effective configuration. Among other keys it holds `issue.result_on_done` (`auto`, `ask`, or `off`; `auto` when missing), the completion handoff mode of `KANDER-ISSUE-RULES.md` "Completion Handoff".
+- With `--json`: one object, the merged effective configuration, and no server request. Among other keys it holds `issue.result_on_done` (`auto`, `ask`, or `off`; `auto` when missing), the completion handoff mode of `KANDER-ISSUE-RULES.md` "Completion Handoff". Agent warnings are `notices` with the code `agent_warning`.
 
 ## Rejections
 

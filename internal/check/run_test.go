@@ -282,34 +282,15 @@ func TestDeliveryInvalidRefAndNotAncestor(t *testing.T) {
 	second := git(t, dir, "rev-parse", "HEAD")
 	t.Chdir(dir)
 	code, out, errb := captureRun(t, []string{"delivery", "--base", "--upload-pack=evil", "--json"})
-	if code != exitExec {
-		t.Fatalf("inject code=%d stderr=%s stdout=%s", code, errb, out)
-	}
-	if errb != "" {
-		t.Fatalf("json stderr=%q", errb)
-	}
-	var result DeliveryResult
-	mustDeliveryJSON(t, out, &result)
-	if result.Status != statusError || result.Error == nil || result.Error.Code != errCodeInvalidRef {
-		t.Fatalf("%+v", result)
-	}
+	requireCheckError(t, code, out, errb, exitExec, "check_invalid_ref")
 	absoluteRef := filepath.Join(dir, "private", "missing-ref")
 	code, out, errb = captureRun(t, []string{"delivery", "--base", absoluteRef, "--json"})
-	if code != exitExec || errb != "" {
-		t.Fatalf("absolute ref code=%d stderr=%s stdout=%s", code, errb, out)
-	}
-	mustDeliveryJSON(t, out, &result)
-	if result.Error == nil || result.Error.Code != errCodeInvalidRef || strings.Contains(out, absoluteRef) {
-		t.Fatalf("absolute ref leaked: %+v output=%s", result, out)
+	requireCheckError(t, code, out, errb, exitExec, "check_invalid_ref")
+	if strings.Contains(errb, absoluteRef) {
+		t.Fatalf("absolute ref leaked: %s", errb)
 	}
 	code, out, errb = captureRun(t, []string{"delivery", "--base", second, "--commit", first, "--json"})
-	if code != exitExec {
-		t.Fatalf("ancestor code=%d stderr=%s stdout=%s", code, errb, out)
-	}
-	mustDeliveryJSON(t, out, &result)
-	if result.Error == nil || result.Error.Code != errCodeNotAncestor {
-		t.Fatalf("%+v", result)
-	}
+	requireCheckError(t, code, out, errb, exitExec, "check_not_ancestor")
 }
 
 func TestDeliveryHumanEscapesControls(t *testing.T) {
@@ -497,17 +478,28 @@ func TestUsageJSON(t *testing.T) {
 	}
 	for _, args := range cases {
 		code, out, errb := captureRun(t, args)
-		if code != exitUsage {
-			t.Fatalf("%v code=%d stderr=%s stdout=%s", args, code, errb, out)
-		}
-		if errb != "" {
-			t.Fatalf("%v stderr=%q", args, errb)
-		}
-		var result DeliveryResult
-		mustDeliveryJSON(t, out, &result)
-		if result.Status != statusError || result.Error == nil || result.Error.Code != errCodeUsage {
-			t.Fatalf("%v %+v", args, result)
-		}
+		requireCheckError(t, code, out, errb, exitUsage, "usage")
+	}
+}
+
+// requireCheckError checks the failure of an analysis that could not finish with --json: the
+// exit status, nothing on stdout, and one error object with the code on stderr.
+func requireCheckError(t *testing.T, code int, out, errb string, status int, want string) {
+	t.Helper()
+	if code != status || out != "" {
+		t.Fatalf("code=%d (want %d) stdout=%q stderr=%s", code, status, out, errb)
+	}
+	var object struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if !strings.HasSuffix(errb, "\n") || strings.Count(errb, "\n") != 1 || json.Unmarshal([]byte(errb), &object) != nil {
+		t.Fatalf("stderr is not one error object: %q", errb)
+	}
+	if object.Error.Code != want || object.Error.Message == "" {
+		t.Fatalf("error=%+v, want code %q", object.Error, want)
 	}
 }
 
@@ -550,14 +542,7 @@ func TestNotRepositoryJSON(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	code, out, errb := captureRun(t, []string{"delivery", "--base", "HEAD", "--json"})
-	if code != exitExec {
-		t.Fatalf("code=%d stderr=%s stdout=%s", code, errb, out)
-	}
-	var result DeliveryResult
-	mustDeliveryJSON(t, out, &result)
-	if result.Error == nil || result.Error.Code != errCodeNotRepository {
-		t.Fatalf("%+v", result)
-	}
+	requireCheckError(t, code, out, errb, exitExec, "check_not_repository")
 }
 
 // Usage text comes from the English command contract in every locale.

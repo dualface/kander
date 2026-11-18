@@ -1,8 +1,8 @@
 package remote
 
 import (
+	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -38,30 +38,45 @@ func (out commandOutput) Write(data []byte) (int, error) {
 var stdout io.Writer = commandOutput{}
 var stderr io.Writer = commandOutput{diagnostic: true}
 
-// fail reports err and ends the command with exit status 1.
-func fail(err error) error {
-	fmt.Fprintf(stderr, "kander: %s\n", describe(err))
-	return command.Exit(1)
+// remark reports a note of the command that is not an error: a line on stderr, or with --json an
+// entry of the notices of the result.
+func remark(code, text string) {
+	if command.JSON() {
+		command.Notify(code, text)
+		return
+	}
+	fmt.Fprintln(stderr, text)
 }
 
-// describe renders a server error with the v1 localized text when the board
-// rejected the operation.
-func describe(err error) string {
+// fail reports err and ends the command with exit status 1.
+func fail(err error) error { return command.Exit(command.Fail(err)) }
+
+func init() { command.RegisterClassifier(classify) }
+
+// classify gives the failures of the service session their stable codes and texts: a board
+// rejection by its board code with the service text, another service error by its API code, an
+// unreachable service, and a checkout without a project binding.
+func classify(err error) (code, message string, ok bool) {
 	var e *api.Error
-	if errors.As(err, &e) {
+	switch {
+	case errors.As(err, &e):
 		if e.BoardCode != "" {
-			return e.Message
+			return e.BoardCode, e.Message, true
 		}
-		return config.Text("remote.error_"+e.Code) + ": " + e.Message
+		return e.Code, config.Text("remote.error_"+e.Code) + ": " + e.Message, true
+	case client.IsUnreachable(err):
+		return CodeUnreachable, config.Text("remote.unreachable", err.Error()), true
+	case errors.Is(err, ErrNotConfigured):
+		return CodeNotConfigured, config.Text("remote.not_configured"), true
 	}
-	if client.IsUnreachable(err) {
-		return config.Text("remote.unreachable", err.Error())
-	}
-	if errors.Is(err, ErrNotConfigured) {
-		return config.Text("remote.not_configured")
-	}
-	return err.Error()
+	return "", "", false
 }
+
+// Stable codes of the failures that have no API or board code.
+const (
+	CodeUnreachable   = "unreachable"
+	CodeNotConfigured = "not_configured"
+)
 
 func open(ctx context.Context) (*Session, *config.Config, error) {
 	cfg, err := config.Load(false)
@@ -84,7 +99,7 @@ func location(s *Session, task string) string {
 // NewListCommand builds kander list. observe supplies this host's terminal observer for
 // --agent-status; the board package cannot import it.
 func NewListCommand(observe board.AgentStatusFunc) *cobra.Command {
-	var machine, agentStatus bool
+	var agentStatus bool
 	c := &cobra.Command{
 		Use:     "list [state]",
 		Aliases: []string{"ls"},
@@ -94,18 +109,20 @@ func NewListCommand(observe board.AgentStatusFunc) *cobra.Command {
 			if len(args) == 1 {
 				state = args[0]
 			}
-			return runList(state, machine, agentStatus, observe)
+			return runList(state, agentStatus, observe)
 		},
 	}
 	c.PreRunE = func(*cobra.Command, []string) error {
-		return command.Needs(c, "agent-status", "json")
+		if agentStatus && !command.JSON() {
+			return command.Usage("cli.error_flag_needs", "--agent-status", "--json")
+		}
+		return nil
 	}
-	c.Flags().BoolVar(&machine, "json", false, "")
 	c.Flags().BoolVar(&agentStatus, "agent-status", false, "")
 	return c
 }
 
-func runList(state string, machine, agentStatus bool, observe board.AgentStatusFunc) error {
+func runList(state string, agentStatus bool, observe board.AgentStatusFunc) error {
 	ctx, cancel := commandContext()
 	defer cancel()
 	s, _, err := open(ctx)
@@ -119,7 +136,7 @@ func runList(state string, machine, agentStatus bool, observe board.AgentStatusF
 	if err != nil {
 		return fail(err)
 	}
-	if machine {
+	if command.JSON() {
 		if !agentStatus {
 			observe = nil
 		}
@@ -127,7 +144,7 @@ func runList(state string, machine, agentStatus bool, observe board.AgentStatusF
 		if err != nil {
 			return fail(err)
 		}
-		return encode(snapshot)
+		return command.Exit(command.Result(snapshot))
 	}
 	w := tabwriter.NewWriter(stdout, 0, 2, 2, ' ', 0)
 	for _, t := range list.Tasks {
@@ -148,30 +165,24 @@ func cmpOr(value, fallback string) string {
 	return value
 }
 
-func encode(value any) error {
-	if err := json.NewEncoder(stdout).Encode(value); err != nil {
-		return fail(err)
-	}
-	return nil
-}
+// emit writes the object a command always prints, whatever --json says.
+func emit(value any) error { return command.Exit(command.Object(value)) }
 
 // NewShowCommand builds kander show.
 func NewShowCommand() *cobra.Command {
-	var machine bool
 	var document string
 	c := &cobra.Command{
 		Use:  "show <task-id>",
 		Args: command.Args(1, 1),
 	}
 	c.RunE = func(_ *cobra.Command, args []string) error {
-		return runShow(args[0], document, c.Flags().Changed("document"), machine)
+		return runShow(args[0], document, c.Flags().Changed("document"))
 	}
-	c.Flags().BoolVar(&machine, "json", false, "")
 	command.Once(c.Flags(), &document, "document", "")
 	return c
 }
 
-func runShow(task, document string, withDocument, machine bool) error {
+func runShow(task, document string, withDocument bool) error {
 	ctx, cancel := commandContext()
 	defer cancel()
 	s, _, err := open(ctx)
@@ -186,8 +197,8 @@ func runShow(task, document string, withDocument, machine bool) error {
 		if err != nil {
 			return fail(err)
 		}
-		if machine {
-			return encode(d)
+		if command.JSON() {
+			return command.Exit(command.Result(d))
 		}
 		io.WriteString(stdout, d.Text)
 		return nil
@@ -196,8 +207,8 @@ func runShow(task, document string, withDocument, machine bool) error {
 	if err != nil {
 		return fail(err)
 	}
-	if machine {
-		return encode(t)
+	if command.JSON() {
+		return command.Exit(command.Result(t))
 	}
 	fmt.Fprintln(stdout, config.Text("board.show_location", t.State, location(s, t.TaskID)))
 	if t.Claim != nil {
@@ -247,8 +258,7 @@ func runNew(kind, slug, title string, large bool, language string, languageGiven
 	if err != nil {
 		return fail(err)
 	}
-	fmt.Fprintln(stdout, location(s, t.TaskID))
-	return nil
+	return printTask(s, t)
 }
 
 // claimFor returns the credential this process presents for task, or nil.
@@ -319,6 +329,9 @@ func runUpdate(task string, o updateOptions) error {
 	t, err := s.Project.PutDocument(ctx, client.NewKey(), task, api.Document{Path: o.document, Text: text, ExpectedRevision: o.revision, ContractDecision: decision, Authorization: authorization}, claim)
 	if err != nil {
 		return fail(err)
+	}
+	if command.JSON() {
+		return command.Exit(command.Result(updateResult{TaskID: t.TaskID, Document: o.document, Revision: t.Revision}))
 	}
 	fmt.Fprintln(stdout, t.Revision)
 	return nil
@@ -412,20 +425,31 @@ func runMove(task, state string, o moveOptions) error {
 		return fail(err)
 	}
 	replayed := t.MoveReceipt != nil && t.MoveReceipt.Replayed
+	var report string
 	if !replayed {
-		board.WriteCompletionReportSnapshot(stderr, t.TaskID, t.State, t.Text, location(s, t.TaskID), cfg)
+		report = board.CompletionReportSnapshot(t.TaskID, t.State, t.Text, location(s, t.TaskID), cfg, command.NoticeWriter("rules_embedded_fallback"))
+		if report != "" && !command.JSON() {
+			io.WriteString(stderr, report)
+			report = ""
+		}
 		for _, notice := range notices {
-			notice(stderr, t)
+			var text bytes.Buffer
+			notice(&text, t)
+			if text.Len() > 0 {
+				remark("issue_result_handoff", strings.TrimRight(text.String(), "\n"))
+			}
 		}
 	}
 	if authorization.DispatchID != "" {
 		if t.MoveReceipt == nil || t.MoveReceipt.Dispatch == nil {
 			return fail(&api.Error{Code: api.CodeEvidenceIncomplete, Message: config.Text("remote.dispatch_receipt_missing")})
 		}
-		return encode(t.MoveReceipt)
+		return emit(boundMoveResult{MoveReceipt: t.MoveReceipt, CompletionReport: report})
 	}
-	fmt.Fprintln(stdout, location(s, t.TaskID))
-	return nil
+	if command.JSON() {
+		return command.Exit(command.Result(moveResult{taskRef: newTaskRef(s, t), Replayed: replayed, CompletionReport: report}))
+	}
+	return printTask(s, t)
 }
 
 // reclaimRefusal refuses a takeover by the execution that already owns the
@@ -490,7 +514,10 @@ func claim(ctx context.Context, s *Session, task, owner, decision string) error 
 		return fail(err)
 	}
 	if err := EnsureWorker(s.Home); err != nil {
-		fmt.Fprintln(stderr, config.Text("remote.worker_start_failed", err.Error()))
+		remark("worker_start_failed", config.Text("remote.worker_start_failed", err.Error()))
+	}
+	if command.JSON() {
+		return command.Exit(command.Result(claimResult{taskRef: newTaskRef(s, grant.Task), Generation: grant.Claim.Generation, ExecutionID: execution}))
 	}
 	fmt.Fprintln(stdout, location(s, grant.Task.TaskID))
 	fmt.Fprintln(stderr, config.Text("remote.claimed", grant.Task.TaskID, grant.Claim.Generation, execution))
@@ -507,6 +534,9 @@ func NewPickCommand() *cobra.Command {
 }
 
 func runPick(args []string) error {
+	if len(args) == 0 && command.JSON() {
+		return command.Interactive(config.Text("remote.interactive_select_task"))
+	}
 	ctx, cancel := commandContext()
 	defer cancel()
 	session, _, err := open(ctx)
@@ -532,8 +562,7 @@ func runPick(args []string) error {
 	if err != nil {
 		return fail(err)
 	}
-	fmt.Fprintln(stdout, location(session, moved.TaskID))
-	return nil
+	return printTask(session, moved)
 }
 
 func executionAuthorization(id string, epoch uint64) (board.ExecutionAuthorization, error) {

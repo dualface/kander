@@ -2,6 +2,7 @@ package review
 
 import (
 	"fmt"
+	"github.com/dualface/kander/internal/command"
 	"reflect"
 	"strings"
 
@@ -55,10 +56,16 @@ func schemaRoot(command string) (reflect.Type, bool) {
 	}
 }
 
-func printEvidenceSchema(command string) int {
-	text, err := evidenceSchema(command)
+func printEvidenceSchema(name string) int {
+	text, err := evidenceSchema(name)
 	if err != nil {
 		return dispositionFailure(err)
+	}
+	if command.JSON() {
+		return command.Result(struct {
+			Command string `json:"command"`
+			Schema  string `json:"schema"`
+		}{name, text})
 	}
 	fmt.Print(text)
 	return 0

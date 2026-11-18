@@ -1,7 +1,6 @@
 package issue
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -21,7 +20,6 @@ type issueImportOptions struct {
 	taskType   string
 	large      bool
 	language   string
-	json       bool
 }
 
 func newImportCommand(factory func() IssueProvider, stdout, stderr io.Writer) *cobra.Command {
@@ -49,7 +47,6 @@ func newImportCommand(factory func() IssueProvider, stdout, stderr io.Writer) *c
 		}
 		return nil
 	})
-	c.Flags().BoolVar(&options.json, "json", false, "")
 	return c
 }
 
@@ -64,8 +61,7 @@ func runImport(factory func() IssueProvider, options issueImportOptions, stdout,
 	} else {
 		cfg, err := config.Load(false)
 		if err != nil {
-			fmt.Fprintln(stderr, formatError(err))
-			return 1
+			return fail(stderr, err, 1)
 		}
 		language = cfg.AgentLanguage
 	}
@@ -80,15 +76,10 @@ func runImport(factory func() IssueProvider, options issueImportOptions, stdout,
 	importOptions := ImportOptions{Type: taskType, Large: options.large, Language: language, Comments: options.comments}
 	result, err := importCard(ctx, provider, repository, options.number, importOptions)
 	if err != nil {
-		fmt.Fprintln(stderr, formatError(err))
-		return 1
+		return fail(stderr, err, 1)
 	}
-	if options.json {
-		if err := writeImportJSON(stdout, result); err != nil {
-			fmt.Fprintln(stderr, formatError(err))
-			return 1
-		}
-		return 0
+	if command.JSON() {
+		return command.Result(importView(result))
 	}
 	writeImportText(stdout, result)
 	return 0
@@ -128,8 +119,9 @@ type issueImportJSON struct {
 	CommentsLoaded bool   `json:"comments_loaded"`
 }
 
-func writeImportJSON(w io.Writer, result ImportResult) error {
-	encoded, err := json.Marshal(issueImportJSON{
+// importView is the result object of kander issue import.
+func importView(result ImportResult) issueImportJSON {
+	return issueImportJSON{
 		TaskID:         result.TaskID,
 		State:          result.State,
 		Path:           result.Path,
@@ -137,10 +129,5 @@ func writeImportJSON(w io.Writer, result ImportResult) error {
 		SourceKey:      result.SourceKey,
 		SourceURL:      result.SourceURL,
 		CommentsLoaded: result.CommentsLoaded,
-	})
-	if err != nil {
-		return err
 	}
-	_, err = fmt.Fprintf(w, "%s\n", encoded)
-	return err
 }

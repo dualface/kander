@@ -9,20 +9,20 @@ Reads GitHub issues and turns them into cards or triage sessions. Used by the us
 ## Syntax
 
 ```text
-kander issue repo [--repo HOST/OWNER/REPO] [--json]
-kander issue list [--repo HOST/OWNER/REPO] [--state open|closed|all] [--label NAME] [--search TEXT] [--limit N] [--json]
-kander issue show NUMBER [--repo HOST/OWNER/REPO] [--comments] [--json]
-kander issue import NUMBER [--repo HOST/OWNER/REPO] [--comments] [--type feature|bug|chore|research] [--large] [--language LANG] [--json]
+kander issue repo [--repo HOST/OWNER/REPO]
+kander issue list [--repo HOST/OWNER/REPO] [--state open|closed|all] [--label NAME] [--search TEXT] [--limit N]
+kander issue show NUMBER [--repo HOST/OWNER/REPO] [--comments]
+kander issue import NUMBER [--repo HOST/OWNER/REPO] [--comments] [--type feature|bug|chore|research] [--large] [--language LANG]
 kander issue triage NUMBER [--card TASK_ID] [--repo HOST/OWNER/REPO] [--agent NAME] [--launcher NAME]
 kander issue result NUMBER --card TASK_ID [--repo HOST/OWNER/REPO] [--agent NAME] [--launcher NAME] [--action start|inspect|apply|decide] [--file JSON]
 ```
 
 ## Arguments
 
-- `repo [--repo HOST/OWNER/REPO] [--json]`: show the resolved repository.
-- `list [--repo ...] [--state open|closed|all] [--label NAME] [--search TEXT] [--limit N] [--json]`: list issues.
-- `show NUMBER [--repo ...] [--comments] [--json]`: print one issue.
-- `import NUMBER [--repo ...] [--comments] [--type feature|bug|chore|research] [--large] [--language LANG] [--json]`: create a card from an issue.
+- `repo [--repo HOST/OWNER/REPO]`: show the resolved repository.
+- `list [--repo ...] [--state open|closed|all] [--label NAME] [--search TEXT] [--limit N]`: list issues.
+- `show NUMBER [--repo ...] [--comments]`: print one issue.
+- `import NUMBER [--repo ...] [--comments] [--type feature|bug|chore|research] [--large] [--language LANG]`: create a card from an issue.
 - `triage NUMBER [--card TASK_ID] [--repo ...] [--agent NAME] [--launcher NAME]`: start a triage session.
 - `result NUMBER --card TASK_ID [--repo ...] [--agent NAME] [--launcher NAME] [--action start|inspect|apply|decide] [--file JSON]`: reconcile the completed result of the issue's work set (the anchor card plus its `SOURCE_ISSUE` siblings, `KANDER-ISSUE-RULES.md` "Completed Result Reconciliation"). `--card` is always the anchor card.
 
@@ -37,7 +37,13 @@ kander issue result NUMBER --card TASK_ID [--repo HOST/OWNER/REPO] [--agent NAME
 
 ## Output
 
-- Human-readable lines, or with `--json` one object.
+Human-readable lines. With `--json`, one object:
+- `repo`: `host`, `owner`, `name`, `url`, `private` (boolean), `remote`.
+- `list`: `repository` (the `repo` object), `issues` (array of `number`, `title`, `state`, `url`, `labels`, `updated_at`), `limit`, `more` (boolean).
+- `show`: `repository` and `issue` (`number`, `title`, `state`, `body`, `author`, `url`, `labels`, `assignees`, `created_at`, `updated_at`, `fetched_at`, `comments_loaded`, and with comments `comments`, an array of `author`, `body`, `created_at`, `url`).
+- `import`: `task_id`, `state`, `path`, `existing` (boolean), `source_key`, `source_url`, `comments_loaded`.
+- `triage`: `agent`, `launcher`, `issue` (`OWNER/REPO#NUMBER`), `address` (the container address, empty without one). Launch warnings are `notices` with the code `launch_warning`.
+- `result`: the object of the action, with and without `--json`.
 
 ## Rejections
 

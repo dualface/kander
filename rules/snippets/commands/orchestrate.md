@@ -29,7 +29,7 @@ kander orchestrate [--agent <configured-agent>] [--launcher <launcher>] (--messa
 
 ## Output
 
-- On success the agent, launcher, and container address. With `foreground` the command returns only after the orchestrator exits.
+- On success the agent, launcher, and container address. With `foreground` the command returns only after the orchestrator exits. With `--json`: `agent`, `launcher`, `address` (empty without a container), and `tasks` (the task IDs); a `foreground` or `console` launcher is refused with `interactive_required` and exit status 2 before any container or agent exists. Launch warnings are notices with the code `launch_warning`.
 
 ## Rejections
 

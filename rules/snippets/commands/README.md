@@ -2,7 +2,7 @@
 
 Before running any `kander` command in this session, read `<rules root>/snippets/commands/README.md` once. Before the first use of a command, read its contract file.
 
-`--help` prints Syntax and contract path. The final block matches `KANDER-KANBAN-RULES.md` "Command Contract".
+`--help` prints Syntax and contract path. Global flags: `--lang`, `--json` (`docs/json-output.md`). The final block matches `KANDER-KANBAN-RULES.md` "Command Contract".
 
 First: `show`, `update`, `move`, `check`.
 
@@ -36,14 +36,14 @@ First: `show`, `update`, `move`, `check`.
 | `issue` | Manage GitHub issues | user, issue session | `snippets/commands/issue.md` |
 
 ```text
-kander config [--json]
+kander config
 kander server start [--data DIR] [--listen ADDR] [--ttl D] [--renew D] [--foreground]
 kander server stop
 kander server restart
-kander server status [--json]
+kander server status
 kander server import [--data DIR] --project NAME [--remote URL] [--from KANBAN_DIR]
 kander server maintain [--data DIR] --project NAME [--maintenance]
-kander server projects [--data DIR] [--json]
+kander server projects [--data DIR]
 kander doctor
 kander version
 kander install
@@ -51,8 +51,8 @@ kander uninstall [--yes]
 kander terminal list
 kander terminal test <name> [--keep] [--skip-focus]
 kander init [--server <URL>] [--project <name>] [project-path]
-kander list [--json [--agent-status]] [backlog|todo|working|review|done|archived|trash]
-kander show [--json] [--document <relative-path>] <task-id>
+kander list [--agent-status] [backlog|todo|working|review|done|archived|trash]
+kander show [--document <relative-path>] <task-id>
 kander new [--large] [--language <agent language>] <feature|bug|chore|research> <slug> <title...>
 kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--owner <agent> [--decision <reference>]] [--result <result>] [--reason <reason> --decision <reference>] [--duplicate-of <task-id>] [--expect-revision <revision>] [--dispatch-id <id> --execution-epoch <epoch>] [--delivery-commit <full-SHA>] [--disposition <card-relative-path>]
 kander pick [task-id]
@@ -69,8 +69,8 @@ kander dispatch fail|cancel <task-id> <dispatch-id> <dispatch-revision> <reason>
 kander dispatch settle <task-id> <dispatch-id> <dispatch-revision>
 kander dismiss [--timeout SECONDS] <task-id>
 kander check [--all] [task-id ...]
-kander check delivery --base <ref> [--commit <ref>] [--json]
-kander check overlap --source <ref> [--head <ref>] [--json]
+kander check delivery --base <ref> [--commit <ref>]
+kander check overlap --source <ref> [--head <ref>]
 kander guard-write <path>
 kander subscribe [--refresh SECONDS] [--heartbeat SECONDS] (<task-group> <task-id>... [--watch <task-id|task-group-id>]... | --watch <task-id|task-group-id> [--watch <task-id|task-group-id>]...)
 kander coordinator show <group-id>
@@ -90,10 +90,10 @@ kander review advance <absolute-CWD> <absolute-advance-request.json>
 kander review close <absolute-CWD> <absolute-close-request.json>
 kander review progress <absolute-CWD> <task-id>
 kander review <plan|extend-plan|assign|disposition|interpret|advance|close> --schema
-kander issue repo [--repo HOST/OWNER/REPO] [--json]
-kander issue list [--repo HOST/OWNER/REPO] [--state open|closed|all] [--label NAME] [--search TEXT] [--limit N] [--json]
-kander issue show NUMBER [--repo HOST/OWNER/REPO] [--comments] [--json]
-kander issue import NUMBER [--repo HOST/OWNER/REPO] [--comments] [--type feature|bug|chore|research] [--large] [--language LANG] [--json]
+kander issue repo [--repo HOST/OWNER/REPO]
+kander issue list [--repo HOST/OWNER/REPO] [--state open|closed|all] [--label NAME] [--search TEXT] [--limit N]
+kander issue show NUMBER [--repo HOST/OWNER/REPO] [--comments]
+kander issue import NUMBER [--repo HOST/OWNER/REPO] [--comments] [--type feature|bug|chore|research] [--large] [--language LANG]
 kander issue triage NUMBER [--card TASK_ID] [--repo HOST/OWNER/REPO] [--agent NAME] [--launcher NAME]
 kander issue result NUMBER --card TASK_ID [--repo HOST/OWNER/REPO] [--agent NAME] [--launcher NAME] [--action start|inspect|apply|decide] [--file JSON]
 ```

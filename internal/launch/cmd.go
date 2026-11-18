@@ -2,7 +2,6 @@ package launch
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"strings"
 
@@ -28,10 +27,7 @@ func init() {
 	issue.SetTriageStarter(StartTriage)
 }
 
-func fail(err error) int {
-	fmt.Fprintf(os.Stderr, "kander: %s\n", err)
-	return 1
-}
+func fail(err error) int { return command.Fail(err) }
 
 // AddAgentFlags registers --agent and --launcher, which name a configured execution agent and
 // a launcher.
@@ -129,6 +125,9 @@ func (o resumeOptions) validate(c *cobra.Command, task string) error {
 // runStart implements kander start in server mode.
 func runStart(agent, launcher string, rest []string) int {
 	var taskID string
+	if len(rest) == 0 && command.JSON() {
+		return command.FailStatus(2, command.Interactive(t("launch.interactive_select_task")))
+	}
 	if len(rest) == 0 {
 		cfg, err := config.Load(false)
 		if err != nil {
@@ -157,19 +156,15 @@ func runStart(agent, launcher string, rest []string) int {
 	}
 	result, err := StartRemote(agent, launcher, taskID)
 	for _, warning := range result.Warnings {
-		fmt.Fprint(os.Stderr, warning)
+		command.Notify("launch_warning", warning)
 	}
 	if err != nil {
 		return exitLaunch(err)
 	}
 	if result.Superseded {
-		stepAside(result.TaskID, result.Plan, result.Outcome)
-		return 0
+		return supersededExit("start", result.TaskID, result.Plan, result.Outcome)
 	}
-	if err := reportLaunch(t("launch.started"), board.Entry{TaskID: result.TaskID, Kind: result.Size}, result.Agent, result.Plan, result.Outcome); err != nil {
-		return exitLaunch(err)
-	}
-	return 0
+	return startedExit("start", board.Entry{TaskID: result.TaskID, Kind: result.Size}, result.Agent, result.Plan, result.Outcome, nil)
 }
 
 // runResume implements kander resume against the server.
@@ -187,17 +182,28 @@ func runResume(c *cobra.Command, task string, o resumeOptions) int {
 		if err := commandRemoteRelease(cfg, task, o.decision); err != nil {
 			return fail(err)
 		}
-		return 0
+		return resumeActionExit("release", task)
 	}
 	if o.adopt {
 		if err := commandRemoteAdopt(cfg, task, o.decision); err != nil {
 			return fail(err)
 		}
-		return 0
+		return resumeActionExit("adopt", task)
 	}
 	var agentPtr *string
 	if c.Flags().Changed("agent") {
 		agentPtr = &o.agent
 	}
 	return runRemoteResume(cfg, agentPtr, o.launcher, task, o.message, o.messageFile, c.Flags().Changed("message"), o.timeout, dispatchOptions)
+}
+
+// resumeActionExit ends a resume that only released or adopted the execution of a card.
+func resumeActionExit(action, task string) int {
+	if command.JSON() {
+		return command.Result(struct {
+			Action string `json:"action"`
+			TaskID string `json:"task_id"`
+		}{action, task})
+	}
+	return 0
 }

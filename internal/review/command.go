@@ -22,9 +22,10 @@ func newCommand(run func(options archiveOptions, args []string) int) *cobra.Comm
 		Args: command.Args(5, 8),
 	})
 	c.RunE = func(c *cobra.Command, args []string) error {
+		resetJSONRun()
 		if _, err := config.Load(false); err != nil {
 			userError(err.Error())
-			return command.Exit(1)
+			return command.Exit(reviewExit(1))
 		}
 		options, err := flags.options(c)
 		if err != nil {
@@ -34,12 +35,12 @@ func newCommand(run func(options archiveOptions, args []string) int) *cobra.Comm
 		var gate *gateError
 		if errors.As(err, &gate) {
 			userError(gate.message)
-			return command.Exit(gate.code)
+			return command.Exit(reviewExit(gate.code))
 		}
 		if err := command.Args(5, 7)(c, rest); err != nil {
 			return err
 		}
-		return command.Exit(run(options, args))
+		return command.Exit(reviewExit(run(options, args)))
 	}
 	flags.register(c)
 	c.AddCommand(

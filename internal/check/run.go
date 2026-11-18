@@ -2,8 +2,10 @@ package check
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -34,15 +36,11 @@ func newModeCommand(mode string) *cobra.Command {
 		Args: command.Args(0, 0),
 		RunE: func(*cobra.Command, []string) error {
 			if parseErr := opt.validate(mode); parseErr != nil {
-				if !opt.json {
-					return command.UsageText(escapeText(parseErr.Message))
-				}
-				return command.Exit(writeModeError(mode, parseErr, exitUsage))
+				return command.UsageText(escapeText(parseErr.Message))
 			}
 			return command.Exit(runMode(mode, opt))
 		},
 	}
-	c.Flags().BoolVar(&opt.json, "json", false, "")
 	if mode == checkDelivery {
 		command.Once(c.Flags(), &opt.base, "base", "")
 		command.Once(c.Flags(), &opt.commit, "commit", "")
@@ -60,35 +58,26 @@ func runMode(mode string, opt options) int {
 	switch mode {
 	case checkDelivery:
 		result, code := runDelivery(ctx, git, opt.base, opt.commit)
-		return writeDelivery(opt.json, result, code)
+		return writeDelivery(result, code)
 	default:
 		result, code := runOverlap(ctx, git, opt.source, opt.head)
-		return writeOverlap(opt.json, result, code)
+		return writeOverlap(result, code)
 	}
 }
 
-// writeModeError reports a usage error found after the flags were parsed as the JSON result
-// the caller asked for.
-func writeModeError(mode string, errInfo *CheckError, code int) int {
-	var payload any
-	if mode == checkDelivery {
-		payload = deliveryError(errInfo.Code, errInfo.Message)
-	} else {
-		payload = overlapError(errInfo.Code, errInfo.Message)
-	}
-	if writeErr := writeJSON(payload); writeErr != nil {
-		fmt.Fprintln(os.Stderr, "kander: "+t("check.internal"))
-		return exitExec
-	}
-	return code
+// failure is the error object of an analysis that could not finish: the analyzer's own error
+// code, in snake case, under a check_ prefix.
+func failure(info *CheckError) error {
+	code := "check_" + strings.ReplaceAll(info.Code, "-", "_")
+	return command.Coded(code, errors.New(info.Message))
 }
 
-func writeDelivery(jsonMode bool, result DeliveryResult, code int) int {
-	if jsonMode {
-		if writeErr := writeJSON(result); writeErr != nil {
-			return writeJSONOrFallback(deliveryError(errCodeInternal, t("check.internal")), checkDelivery)
+func writeDelivery(result DeliveryResult, code int) int {
+	if command.JSON() {
+		if result.Status == statusError {
+			return command.FailStatus(code, failure(result.Error))
 		}
-		return code
+		return command.ResultStatus(result, code)
 	}
 	text := humanDelivery(result)
 	if result.Status == statusError {
@@ -99,12 +88,12 @@ func writeDelivery(jsonMode bool, result DeliveryResult, code int) int {
 	return code
 }
 
-func writeOverlap(jsonMode bool, result OverlapResult, code int) int {
-	if jsonMode {
-		if writeErr := writeJSON(result); writeErr != nil {
-			return writeJSONOrFallback(overlapError(errCodeInternal, t("check.internal")), checkOverlap)
+func writeOverlap(result OverlapResult, code int) int {
+	if command.JSON() {
+		if result.Status == statusError {
+			return command.FailStatus(code, failure(result.Error))
 		}
-		return code
+		return command.ResultStatus(result, code)
 	}
 	text := humanOverlap(result)
 	if result.Status == statusError {

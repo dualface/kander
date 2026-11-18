@@ -73,12 +73,17 @@ func NewUninstallCommand() *cobra.Command {
 }
 
 func runUninstall(yes bool) int {
+	if command.JSON() && !yes {
+		return command.FailStatus(2, command.Interactive(config.Text("install.uninstall_requires_yes")))
+	}
 	paths, err := config.CurrentInstallPaths()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "kander:", err)
-		return 1
+		return command.Fail(err)
 	}
 	plan := PlanUninstall(paths)
+	if command.JSON() {
+		return uninstallJSON(plan)
+	}
 	printUninstallPlan(os.Stdout, plan)
 	if !yes {
 		if !uninstallTerminal() {
@@ -96,10 +101,35 @@ func runUninstall(yes bool) int {
 		}
 	}
 	if err := ApplyUninstall(plan, os.Stdout); err != nil {
-		fmt.Fprintln(os.Stderr, "kander:", err)
-		return 1
+		return command.Fail(err)
 	}
 	return 0
+}
+
+// uninstallItem is one planned path in the result of kander uninstall.
+type uninstallItem struct {
+	Action string `json:"action"`
+	Path   string `json:"path"`
+	Reason string `json:"reason,omitempty"`
+}
+
+// uninstallJSON applies the plan without a prompt, which --yes already answered, and returns
+// what changed.
+func uninstallJSON(plan UninstallPlan) int {
+	if err := ApplyUninstall(plan, io.Discard); err != nil {
+		return command.Fail(err)
+	}
+	actions := map[UninstallAction]string{UninstallEdit: "edit", UninstallRemove: "remove", UninstallKeep: "keep"}
+	items := make([]uninstallItem, 0, len(plan.Items))
+	for _, item := range plan.Items {
+		items = append(items, uninstallItem{Action: actions[item.Action], Path: item.Path, Reason: item.Reason})
+	}
+	return command.Result(struct {
+		Mode       string          `json:"mode"`
+		ConfigFile string          `json:"config_file"`
+		RulesDir   string          `json:"rules_dir"`
+		Items      []uninstallItem `json:"items"`
+	}{string(plan.Paths.Mode), plan.ConfigFile, plan.Paths.RulesDir, items})
 }
 
 func askUninstall() (bool, error) {

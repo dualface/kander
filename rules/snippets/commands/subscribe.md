@@ -57,7 +57,7 @@ A subscription is a background process plus a file. The loop, in order:
 
 ## Output
 
-- One JSON object per line on standard output, as described above. Standard error carries diagnostics only.
+- One JSON object per line on standard output, as described above. Standard error carries diagnostics only. With `--json` the lines are the same and every diagnostic on standard error is one JSON line: `{"notice":{"code":...,"message":...}}` for a remark, `{"error":{"code":...,"message":...}}` for a failure. A failure before the first line leaves standard output empty and writes one error object. A failure after output started keeps the lines already written and ends standard error with one error object; the exit status is the same as without `--json`.
 
 ## Rejections
 

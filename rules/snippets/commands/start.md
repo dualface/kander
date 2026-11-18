@@ -112,7 +112,7 @@ started-unresolved: <task-id> window=<address> reason=<reason>
 
 ## Output
 
-- The scale, the actual agent, the resolved launcher, and the container address; `tmux-session` also prints the session name, window id, and an attach hint.
+- The scale, the actual agent, the resolved launcher, and the container address; `tmux-session` also prints the session name, window id, and an attach hint. With `--json`: `action` (`start`), `task_id`, `size`, `agent`, `launcher`, `address` (the complete container address), `replayed` (a receipt of an earlier confirmed start), and `superseded` (a takeover overtook the start). A `foreground` or `console` launcher, and a missing task ID that needs the selection prompt, are refused with `interactive_required` and exit status 2 before the card is claimed. Launch warnings are notices with the code `launch_warning`. A late failure with executor evidence is the error object with the code `launch_unresolved` and exit status 3; its message holds the next steps.
 
 ## Rejections
 

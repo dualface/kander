@@ -43,6 +43,8 @@ type Options struct {
 	// Now overrides the clock in tests.
 	Now     func() time.Time
 	Version string
+	// Ready, when set, is called with the listen address once RunForeground can serve.
+	Ready func(listen string)
 }
 
 // Server is one opened data directory. Open takes its exclusive lock; Close

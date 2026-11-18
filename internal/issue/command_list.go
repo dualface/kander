@@ -1,7 +1,6 @@
 package issue
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"strconv"
@@ -21,7 +20,6 @@ type listOptions struct {
 	labels     []string
 	search     string
 	limit      int
-	json       bool
 }
 
 func newListCommand(factory func() IssueProvider, stdout, stderr io.Writer) *cobra.Command {
@@ -36,7 +34,6 @@ func newListCommand(factory func() IssueProvider, stdout, stderr io.Writer) *cob
 	c.Flags().StringArrayVar(&options.labels, "label", nil, "")
 	command.Checked(c.Flags(), &options.search, "search", "", nonBlank("search"))
 	c.Flags().IntVar(&options.limit, "limit", 0, "")
-	c.Flags().BoolVar(&options.json, "json", false, "")
 	return c
 }
 
@@ -49,8 +46,7 @@ func runList(factory func() IssueProvider, options listOptions, stdout, stderr i
 		Limit:  options.limit,
 	}).Normalize()
 	if err != nil {
-		fmt.Fprintln(stderr, formatError(err))
-		return 2
+		return fail(stderr, err, 2)
 	}
 	provider := factory()
 	repository, code := resolveRepository(provider, options.repository, options.hasRepo, stderr)
@@ -61,15 +57,15 @@ func runList(factory func() IssueProvider, options listOptions, stdout, stderr i
 	defer cancel()
 	page, err := provider.ListIssues(ctx, repository, query)
 	if err != nil {
-		fmt.Fprintln(stderr, formatError(err))
-		return 1
+		return fail(stderr, err, 1)
 	}
-	if options.json {
-		if err := writeIssuePageJSON(stdout, page); err != nil {
-			fmt.Fprintln(stderr, formatError(err))
-			return 1
-		}
-		return 0
+	if command.JSON() {
+		return command.Result(issuePageJSON{
+			Repository: repositoryView(page.Repository),
+			Issues:     summaryViews(page.Issues),
+			Limit:      page.Limit,
+			More:       page.More,
+		})
 	}
 	writeIssuePageText(stdout, page)
 	return 0
@@ -105,20 +101,6 @@ type issuePageJSON struct {
 	Issues     []issueSummaryJSON `json:"issues"`
 	Limit      int                `json:"limit"`
 	More       bool               `json:"more"`
-}
-
-func writeIssuePageJSON(w io.Writer, page IssuePage) error {
-	encoded, err := json.Marshal(issuePageJSON{
-		Repository: repositoryView(page.Repository),
-		Issues:     summaryViews(page.Issues),
-		Limit:      page.Limit,
-		More:       page.More,
-	})
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(w, "%s\n", encoded)
-	return err
 }
 
 func summaryViews(issues []IssueSummary) []issueSummaryJSON {

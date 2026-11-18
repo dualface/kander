@@ -8,6 +8,7 @@ import (
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 )
@@ -50,6 +51,8 @@ func commandRemoteRelease(cfg *config.Config, task, decision string) error {
 	if err := remote.RemoveCredential(session.Home, credential); err != nil {
 		return err
 	}
-	fmt.Println(t("remote.execution_released", task))
+	if !command.JSON() {
+		fmt.Println(t("remote.execution_released", task))
+	}
 	return nil
 }

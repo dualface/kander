@@ -2,6 +2,7 @@ package review
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -77,7 +78,11 @@ func reviewerArguments(ctx reviewContext, runtime, outputFile, promptFile string
 
 // syncStream only syncs regular files. On Windows, FlushFileBuffers on the write end of a pipe blocks until the read
 // end has drained everything, and it is meaningless on a console handle; os.File writes are unbuffered anyway, so no extra flush is needed.
-func syncStream(stream *os.File) {
+func syncStream(writer io.Writer) {
+	stream, ok := writer.(*os.File)
+	if !ok {
+		return
+	}
 	info, err := stream.Stat()
 	if err != nil || !info.Mode().IsRegular() {
 		return
@@ -85,7 +90,7 @@ func syncStream(stream *os.File) {
 	_ = stream.Sync()
 }
 
-func printFile(runtime, path string, stream *os.File) {
+func printFile(runtime, path string, stream io.Writer) {
 	data, err := fs.ReadRegularFile(runtime, path)
 	if err != nil {
 		return
@@ -107,30 +112,30 @@ func printErrorTail(runtime, path string) {
 	if len(lines) > 10 {
 		start = len(lines) - 10
 	}
-	fmt.Fprintln(os.Stderr, strings.Join(lines[start:], "\n"))
+	fmt.Fprintln(remarkStream(), strings.Join(lines[start:], "\n"))
 }
 
 func parseReviewOutput(ctx reviewContext, runtime, outputFile, stdoutFile string) error {
 	data, err := fs.ReadRegularFile(runtime, outputFile)
 	if err != nil || len(data) == 0 || ctx.archive != nil && !utf8.Valid(data) {
-		printFile(runtime, stdoutFile, os.Stdout)
+		printFile(runtime, stdoutFile, reportStream())
 		if ctx.archive != nil {
-			printFile(runtime, outputFile, os.Stdout)
+			printFile(runtime, outputFile, reportStream())
 		}
 		return incompleteReviewError(ctx.settings)
 	}
 	text, err := process.ParseReviewOutput(ctx.settings.output, string(data))
 	if err != nil || strings.TrimSpace(text) == "" {
-		printFile(runtime, outputFile, os.Stdout)
+		printFile(runtime, outputFile, reportStream())
 		return incompleteReviewError(ctx.settings)
 	}
 	if ctx.archive != nil {
 		ctx.archive.report = []byte(text)
-		_, _ = os.Stdout.Write(ctx.archive.report)
-		syncStream(os.Stdout)
+		_, _ = reportStream().Write(ctx.archive.report)
+		syncStream(reportStream())
 		return nil
 	}
-	fmt.Println(text)
+	fmt.Fprintln(reportStream(), text)
 	return nil
 }
 

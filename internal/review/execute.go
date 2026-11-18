@@ -2,6 +2,7 @@ package review
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	goruntime "runtime"
@@ -131,7 +132,7 @@ func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os
 			exitCode = 2
 		}
 		if ctx.archive != nil && exitCode != 0 && !outputPrinted {
-			printFile(outputRoot, outputFile, os.Stdout)
+			printFile(outputRoot, outputFile, reportStream())
 		}
 	}()
 
@@ -331,9 +332,9 @@ func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os
 	}
 	if timedOut || exitCode != 0 {
 		outputPrinted = true
-		printFile(outputRoot, errorFile, os.Stderr)
-		printFile(outputRoot, stdoutFile, os.Stdout)
-		printFile(outputRoot, outputFile, os.Stdout)
+		printFile(outputRoot, errorFile, remarkStream())
+		printFile(outputRoot, stdoutFile, reportStream())
+		printFile(outputRoot, outputFile, reportStream())
 		return exitCode
 	}
 	errorOutput, readErr := fs.ReadRegularFile(outputRoot, errorFile)
@@ -342,8 +343,8 @@ func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os
 		return exitCode
 	}
 	if len(errorOutput) > 0 {
-		_, _ = os.Stderr.Write(errorOutput)
-		syncStream(os.Stderr)
+		_, _ = remarkStream().Write(errorOutput)
+		syncStream(remarkStream())
 	}
 	outputPrinted = true
 	if err := parseReviewOutput(ctx, outputRoot, outputFile, stdoutFile); err != nil {
@@ -383,7 +384,7 @@ func monitorProcess(ctx reviewContext, runtime string, lp *launchedProcess, erro
 			msg := config.Text(
 				"review.review_is_still_running_after_s", ctx.settings.name, itoa(elapsed),
 			)
-			_, _ = os.Stderr.WriteString(msg + "\n")
+			_, _ = io.WriteString(remarkStream(), msg+"\n")
 			printErrorTail(runtime, errorFile)
 			nextCheck = nextCheck.Add(time.Duration(ctx.settings.checkInterval) * time.Second)
 		}

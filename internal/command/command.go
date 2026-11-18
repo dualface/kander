@@ -87,6 +87,7 @@ func NewRoot(rootUsage func() string) *cobra.Command {
 		Args:          unknownCommand,
 	}
 	root.CompletionOptions.DisableDefaultCmd = true
+	addJSONFlag(root)
 	root.SetFlagErrorFunc(flagError)
 	usage := func(c *cobra.Command) string {
 		if !c.HasParent() {
@@ -156,7 +157,12 @@ func ProjectRequired(c *cobra.Command) bool {
 
 // Execute runs root with args and returns the process exit code.
 func Execute(root *cobra.Command, args []string) int {
+	begin(args)
+	defer current.reset()
+	if target, _, err := root.Find(args); err == nil {
+		markStreaming(target)
+	}
 	root.SetArgs(args)
 	c, err := root.ExecuteC()
-	return Report(c, err)
+	return finish(c, err)
 }
