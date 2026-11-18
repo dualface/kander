@@ -10,13 +10,20 @@ import (
 	"github.com/dualface/kander/internal/config"
 )
 
-func unboundCheckout(t *testing.T) {
+func unboundCheckout(t *testing.T) { checkout(t, "") }
+
+// boundCheckout is a checkout bound to a project of a service that is not there: a command line
+// that is accepted ends in a connection failure, so a usage error is only the argument check.
+func boundCheckout(t *testing.T) { checkout(t, "demo") }
+
+func checkout(t *testing.T, project string) {
 	t.Helper()
 	t.Chdir(t.TempDir())
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
 	t.Setenv(board.EnvBoardDir, filepath.Join(t.TempDir(), "forbidden-board"))
 	cfg := config.DefaultConfig()
 	cfg.Server.URL = "http://127.0.0.1:1"
+	cfg.Project.Name = project
 	if _, err := config.Save(cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -63,6 +70,34 @@ func TestContractEnumerationsAndRequirementsAreArgumentErrors(t *testing.T) {
 		if result.code != 2 || json.Unmarshal([]byte(result.stderr), &body) != nil || body.Error.Code != "usage" {
 			t.Errorf("%v: exit=%d stderr=%s", args, result.code, result.stderr)
 		}
+	}
+}
+
+// An empty --message or --message-file, or a blank inline message, is refused with the arguments
+// of notify, resume and orchestrate: usage and exit 2 whether or not the checkout is bound,
+// where the command body would only reject it after the binding or the service.
+func TestEmptyMessageOptionsAreArgumentErrors(t *testing.T) {
+	for name, setup := range map[string]func(*testing.T){"unbound": unboundCheckout, "bound": boundCheckout} {
+		t.Run(name, func(t *testing.T) {
+			setup(t)
+			for _, command := range []string{"notify", "resume", "orchestrate"} {
+				for _, option := range [][]string{
+					{"--message-file="},
+					{"--message-file", ""},
+					{"--message="},
+					{"--message", "   "},
+				} {
+					args := append([]string{"--json", command, sampleTask}, option...)
+					result := runKander(t, args...)
+					var body struct {
+						Error struct{ Code string }
+					}
+					if result.code != 2 || json.Unmarshal([]byte(result.stderr), &body) != nil || body.Error.Code != "usage" {
+						t.Errorf("%v: exit=%d stderr=%s", args, result.code, result.stderr)
+					}
+				}
+			}
+		})
 	}
 }
 

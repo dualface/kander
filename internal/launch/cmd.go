@@ -57,11 +57,22 @@ func AddDispatchFlags(c *cobra.Command, o *DispatchOptions) {
 }
 
 // RequireMessage is the argument check of a command that takes its text from exactly one of
-// --message and --message-file: giving neither, or both, is an argument error. Reading the text
-// is left to the command body.
+// --message and --message-file: giving neither, or both, an empty file path, or an inline text
+// that is blank, is an argument error. Reading the file and judging its content is left to the
+// command body.
 func RequireMessage(c *cobra.Command, name string) error {
-	if c.Flags().Changed("message") == c.Flags().Changed("message-file") {
+	flags := c.Flags()
+	if flags.Changed("message") == flags.Changed("message-file") {
 		return command.Usage("launch.requires_exactly_one_of_message_or_message_file", name)
+	}
+	if flags.Changed("message") {
+		if text, _ := flags.GetString("message"); strings.TrimSpace(text) == "" {
+			return command.Usage("launch.message_must_not_be_empty", name)
+		}
+		return nil
+	}
+	if path, _ := flags.GetString("message-file"); path == "" {
+		return command.Usage("cli.error_invalid_value", "--message-file", "")
 	}
 	return nil
 }
