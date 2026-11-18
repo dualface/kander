@@ -85,7 +85,8 @@ func (s *Session) CoordinatorAuthority(group string, tasks []string) (client.Cla
 const maxLostReason = 200
 
 // refuseEndedCoordinator refuses a claim of a bound coordinator execution
-// whose own lease ended, before any request is sent. The service refuses the
+// whose own lease ended, after the group view was read and before a claim
+// request is sent. The service refuses the
 // same execution anyway, and a grant of a new generation could not be stored:
 // a released execution has a tombstone, and a credential never changes its
 // generation. Each ending gets its own text and next step.

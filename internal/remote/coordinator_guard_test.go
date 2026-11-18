@@ -119,8 +119,8 @@ func (f *guardFixture) first() api.GroupGrant {
 	return grant
 }
 
-// refused runs a claim that must end before any request is sent and returns the
-// text of the lease_invalid refusal.
+// refused runs a claim that must end after the group view was read and before
+// any claim request is sent, and returns the text of the lease_invalid refusal.
 func (f *guardFixture) refused(s *remote.Session, execution string, request board.CoordinatorClaim) string {
 	f.t.Helper()
 	_, err := f.acquire(s, execution, request)
