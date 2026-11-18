@@ -39,11 +39,23 @@ func bindProcess(t *testing.T, execution, coordinator string) {
 	}
 }
 
+// useLanguage selects the language config.Text renders in: en, cn or ja.
+func useLanguage(t *testing.T, lang string) {
+	t.Helper()
+	t.Setenv(config.EnvLang, lang)
+	t.Setenv(config.EnvLangCLI, "1")
+	config.ApplyLanguageArgument([]string{"kander", "--lang", lang})
+}
+
+// wantRefusal renders the whole refusal the way LocalExecutionRefused must,
+// from the catalog of lang alone.
+func wantRefusal(lang, condition string, args ...any) string {
+	return i18n.Text(lang, "remote.local_execution_refused", i18n.Text(lang, "remote.local_execution_required"), i18n.Text(lang, "remote.local_execution."+condition, args...))
+}
+
 func newDismissFixture(t *testing.T) dismissFixture {
 	t.Helper()
-	t.Setenv(config.EnvLang, "en")
-	t.Setenv(config.EnvLangCLI, "1")
-	config.ApplyLanguageArgument([]string{"kander", "--lang", "en"})
+	useLanguage(t, "en")
 	connection, err := client.New("http://example.invalid", "host-a")
 	if err != nil {
 		t.Fatal(err)
@@ -216,6 +228,13 @@ func TestRetainedForDismissRefusesAnInvalidGroupCredential(t *testing.T) {
 			if tc.absent != "" && strings.Contains(err.Error(), tc.absent) {
 				t.Fatalf("raw error leaked: %v", err)
 			}
+			if tc.name == "unreadable" {
+				// Nothing but the common sentence, the identities and the
+				// localized reason: no path and no file system error.
+				if want := wantRefusal("en", RefusalCoordinatorHolder, dismissGroup, dismissCoordinator, i18n.Text("en", "remote.local_execution.reason_unreadable")); err.Error() != want {
+					t.Fatalf("refusal %q, want %q", err, want)
+				}
+			}
 		})
 	}
 }
@@ -245,14 +264,22 @@ func TestRetainedRefusesClaimsThatAreNotThisHosts(t *testing.T) {
 	noClaim.Claim = nil
 	_, err := f.session.Retained(noClaim)
 	requireRefusal(t, err, dismissMember)
-	badTask := f.task
-	badTask.TaskID = "bad task"
-	_, err = f.session.Retained(badTask)
-	requireRefusal(t, err, "task ID", `"bad task"`)
-	badExecution := f.task
-	badExecution.Claim = &api.ClaimView{ClientID: "host-a", ExecutionID: "bad execution", Generation: 3}
-	_, err = f.session.Retained(badExecution)
-	requireRefusal(t, err, "claim execution ID", `"bad execution"`)
+	for _, lang := range []string{"en", "cn", "ja"} {
+		useLanguage(t, lang)
+		badTask := f.task
+		badTask.TaskID = "bad task"
+		_, err = f.session.Retained(badTask)
+		if want := wantRefusal(lang, RefusalInvalidIdentity, i18n.Text(lang, "remote.local_execution.label_task_id"), `"bad task"`); err == nil || err.Error() != want {
+			t.Fatalf("%s: refusal %v, want %q", lang, err, want)
+		}
+		badExecution := f.task
+		badExecution.Claim = &api.ClaimView{ClientID: "host-a", ExecutionID: "bad execution", Generation: 3}
+		_, err = f.session.Retained(badExecution)
+		if want := wantRefusal(lang, RefusalInvalidIdentity, i18n.Text(lang, "remote.local_execution.label_claim_execution_id"), `"bad execution"`); err == nil || err.Error() != want {
+			t.Fatalf("%s: refusal %v, want %q", lang, err, want)
+		}
+	}
+	useLanguage(t, "en")
 	foreign := f.task
 	foreign.Claim = &api.ClaimView{ClientID: "host-z", ExecutionID: dismissMemberExec, Generation: 3}
 	_, err = f.session.Retained(foreign)

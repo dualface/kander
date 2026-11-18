@@ -49,12 +49,18 @@ func bindDismissProcess(t *testing.T, execution, coordinator string) {
 
 func newRemoteDismiss(t *testing.T, slug string) *remoteDismiss {
 	t.Helper()
-	// Terminal definitions come from the share directories below HOME: a user
-	// definition named herdr would replace the fake terminal's launcher.
+	// A user terminal definition named herdr would replace the fake terminal.
+	// Only the embedded definitions take part, whatever the share directories
+	// of this machine or of the checkout hold.
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	saved := terminal.DefinitionDirs
+	terminal.DefinitionDirs = func() []terminal.DefinitionDir { return nil }
 	terminal.ReloadDefinitions()
-	t.Cleanup(terminal.ReloadDefinitions)
+	t.Cleanup(func() {
+		terminal.DefinitionDirs = saved
+		terminal.ReloadDefinitions()
+	})
 	root, _ := setupBoard(t)
 	task, path := makeDone(t, root, slug, "herdr:w1:t8:w1:p8")
 	text, err := os.ReadFile(path)
