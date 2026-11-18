@@ -5,6 +5,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/dualface/kander/internal/statemachine/reviewplan"
 )
@@ -42,8 +43,23 @@ func quoted(s string) string {
 	if s == "" {
 		return `""`
 	}
+	// A value the request names is echoed as the caller wrote it, so it is cut to
+	// a bounded single line: a long or multi-line value never fills the message.
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, s)
+	if runes := []rune(s); len(runes) > refusalValueLimit {
+		s = string(runes[:refusalValueLimit]) + "…"
+	}
 	return s
 }
+
+// refusalValueLimit bounds a request value written into a message; it is longer
+// than any commit, hash, or ID the board accepts.
+const refusalValueLimit = 96
 
 // refusalFact is one fact a kernel event carries and whether it was true.
 type refusalFact struct {
@@ -210,10 +226,17 @@ func advanceRefusal(a ReviewAdvance, b ReviewBatch) error {
 	if strings.TrimSpace(a.Reason) == "" {
 		parts = append(parts, t("board.refusal_reason_required"))
 	}
-	if len(parts) == 0 {
-		parts = append(parts, t("board.refusal_previous_target", quoted(a.PreviousTarget), b.BatchID, b.TargetCommit))
+	return reviewRefusal(advanceLabel(a.PreviousTarget != b.TargetCommit), t("board.refusal_next_advance", b.BatchID), parts...)
+}
+
+// advanceLabel is the label of a refused advance: only a previous_target that is
+// not the batch's target is a CAS refusal; the other conditions say what the
+// target or the reason lacks.
+func advanceLabel(cas bool) string {
+	if cas {
+		return "batch target CAS conflict"
 	}
-	return reviewRefusal("batch target CAS conflict", t("board.refusal_next_advance", b.BatchID), parts...)
+	return "batch target invalid"
 }
 
 // runAdvanceRefusal is the refusal of a run whose commit is not the batch target
@@ -234,7 +257,7 @@ func runAdvanceRefusal(b ReviewBatch, commit string, a *ReviewAdvance) error {
 			parts = append(parts, t("board.refusal_reason_required"))
 		}
 	}
-	return reviewRefusal("batch target CAS conflict", t("board.refusal_next_advance", b.BatchID), parts...)
+	return reviewRefusal(advanceLabel(a == nil || a.PreviousTarget != b.TargetCommit), t("board.refusal_next_advance", b.BatchID), parts...)
 }
 
 // cycleList writes the members of a cycle map as sorted id=cycle pairs.
@@ -276,22 +299,19 @@ func rebindRefusal(changed, requested map[string]string) error {
 	if len(parts) == 0 {
 		return kernelRefusal("cycle rebind CAS requires exactly all changed members", "rebind", nil, nil)
 	}
-	return reviewRefusal("cycle rebind CAS requires exactly all changed members", t("board.refusal_next_rebind"), parts...)
+	next := t("board.refusal_next_rebind")
+	if len(changed) == 0 {
+		next = t("board.refusal_next_rebind_none")
+	}
+	return reviewRefusal("cycle rebind CAS requires exactly all changed members", next, parts...)
 }
 
-// dispositionRefusal is the refusal of a disposition the kernel refused. refOnly
-// is whether the previous record is the only fact that fails: then the request
-// does not name the last record of its chain. Otherwise the finding is not
-// assigned to the task, or the kernel refused the status.
-func dispositionRefusal(d ReviewDisposition, last string, assigned, refOnly bool) error {
-	switch {
-	case refOnly:
-		return reviewRefusal("disposition predecessor CAS conflict", t("board.refusal_next_disposition"),
-			t("board.refusal_disposition_ref", d.RunID, d.FindingID, d.TaskID, quoted(d.PreviousRecordID), quoted(last)))
-	case !assigned:
-		return reviewRefusal("disposition refused", "", t("board.refusal_disposition_unassigned", d.FindingID, d.TaskID))
-	}
-	return reviewRefusal("disposition refused", "", t("board.refusal_disposition_status", d.Status, d.FindingID, d.TaskID))
+// dispositionRefusal is the refusal of a disposition whose previous record is not
+// the last record of its chain: the entrance has already checked the assignment
+// and the status, so the previous record is the only fact that can fail.
+func dispositionRefusal(d ReviewDisposition, last string) error {
+	return reviewRefusal("disposition predecessor CAS conflict", t("board.refusal_next_disposition"),
+		t("board.refusal_disposition_ref", d.RunID, d.FindingID, d.TaskID, quoted(d.PreviousRecordID), quoted(last)))
 }
 
 // memberStateRefusal is the refusal of a review over a member that is not in
@@ -393,9 +413,9 @@ func checkpointRevisionRefusal(c CoordinatorCheckpoint, r CoordinatorReconcile) 
 func staleTaskError(id string, expectedRevision, revision uint64, expectedState, state string) error {
 	var parts []string
 	if expectedRevision != revision {
-		parts = append(parts, t("board.refusal_task_revision", expectedRevision, revision))
+		parts = append(parts, t("board.refusal_task_revision", expectedRevision, revision, id))
 	}
-	if expectedState != "" && expectedState != state {
+	if expectedState != "" {
 		parts = append(parts, t("board.refusal_task_state", expectedState, state))
 	}
 	if len(parts) == 0 {
@@ -409,10 +429,10 @@ func staleTaskError(id string, expectedRevision, revision uint64, expectedState,
 func moveConflictError(entry Entry, s Snapshot, options MoveOptions) error {
 	var parts []string
 	if options.ExpectedRevision != nil && s.Revision != *options.ExpectedRevision {
-		parts = append(parts, t("board.refusal_task_revision", *options.ExpectedRevision, s.Revision))
+		parts = append(parts, t("board.refusal_task_revision", *options.ExpectedRevision, s.Revision, entry.TaskID))
 	}
 	if entry.Version != nil && s.Revision != entry.Version.revision && (options.ExpectedRevision == nil || entry.Version.revision != *options.ExpectedRevision) {
-		parts = append(parts, t("board.refusal_task_revision", entry.Version.revision, s.Revision))
+		parts = append(parts, t("board.refusal_task_revision", entry.Version.revision, s.Revision, entry.TaskID))
 	}
 	if s.Entry.State != entry.State {
 		parts = append(parts, t("board.refusal_task_state", entry.State, s.Entry.State))
@@ -446,4 +466,26 @@ func dispatchRefusalParts(d Dispatch, s Snapshot, expected uint64, cardRevision 
 // dispatchRefusal is the dispatch conflict of a request the kernel refused.
 func dispatchRefusal(id string, d Dispatch, s Snapshot, expected uint64, cardRevision ...uint64) error {
 	return dispatchError(id + ": " + strings.Join(dispatchRefusalParts(d, s, expected, cardRevision), "; "))
+}
+
+// wrapUpRefusal is the evidence refusal of a wrap-up grant the kernel refused at
+// its first check: a stale dispatch revision, no author or reason, or the
+// state of the dispatch when both hold.
+func wrapUpRefusal(d Dispatch, s Snapshot, expected uint64, named bool) error {
+	var parts []string
+	stale := d.Revision != expected
+	if stale {
+		parts = append(parts, t("board.refusal_dispatch_revision", expected, d.Revision))
+	}
+	if !named {
+		parts = append(parts, t("board.refusal_wrapup_named"))
+	}
+	if len(parts) == 0 {
+		parts = dispatchRefusalParts(d, s, expected, nil)
+	}
+	text := "wrap-up authority conflict: " + strings.Join(parts, "; ") + ". " + t("board.wrap_up_grant_hint")
+	if stale {
+		text += " " + t("board.refusal_next_dispatch", d.Input.TaskID, d.Input.ID)
+	}
+	return dispatchEvidenceError(text)
 }

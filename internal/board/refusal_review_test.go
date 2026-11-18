@@ -36,10 +36,10 @@ func TestAdvanceRefusals(t *testing.T) {
 	requireRefusal(t, err, "board.review_evidence_invalid", []string{"batch target CAS conflict", "previous_target is " + stale, "batch batch has target_commit " + registered}, "expected_revision")
 
 	err = advance(1, ReviewAdvance{PreviousTarget: registered, Target: registered, Reason: " "})
-	requireRefusal(t, err, "board.review_evidence_invalid", []string{"batch target CAS conflict", "target " + registered + " equals previous_target", "reason must not be empty"}, "but batch batch has target_commit")
+	requireRefusal(t, err, "board.review_evidence_invalid", []string{"batch target invalid", "target " + registered + " equals previous_target", "reason must not be empty"}, "but batch batch has target_commit", "CAS")
 
 	err = advance(1, ReviewAdvance{PreviousTarget: registered, Target: "abc", Reason: "member fix"})
-	requireRefusal(t, err, "board.review_evidence_invalid", []string{"target abc is not a full commit SHA"})
+	requireRefusal(t, err, "board.review_evidence_invalid", []string{"batch target invalid", "target abc is not a full commit SHA"}, "CAS")
 
 	err = AdvanceReviewBatch(root, ReviewBatchAdvance{BatchID: "missing-batch", ExpectedRevision: 1, Advance: ReviewAdvance{PreviousTarget: registered, Target: final, Reason: "member fix", Deliveries: map[string]string{final: id}}})
 	requireRefusal(t, err, "board.review_evidence_invalid", []string{"missing batch: missing-batch"}, "CAS")
@@ -75,7 +75,7 @@ func TestPlanExtensionRefusals(t *testing.T) {
 		id := gateCard(t, root, "extend-cas")
 		p := openPlan(t, root, []string{id})
 		err := ExtendReviewPlan(root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: 8, Seal: true, Author: "coordinator", Basis: "seal"})
-		requireRefusal(t, err, "board.review_evidence_invalid", []string{"plan extension CAS/sealed conflict", "expected_revision is 8", "plan " + p.PlanID + " is at revision 1", "kander review progress"}, "is sealed")
+		requireRefusal(t, err, "board.review_evidence_invalid", []string{"plan extension CAS/sealed conflict", "expected_revision is 8", "plan " + p.PlanID + " is at revision 1", "kander show --document reviews/plan.json"}, "is sealed")
 	})
 	t.Run("only the seal", func(t *testing.T) {
 		root := tempBoard(t)
@@ -101,7 +101,7 @@ func TestSyncTargetRefusal(t *testing.T) {
 	drifted, wrong := strings.Repeat("c", 40), strings.Repeat("d", 40)
 	driftBatchTarget(t, root, "batch", drifted)
 	err := ExtendReviewPlan(root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: 1, SyncTargets: map[string]string{"batch": wrong}, Author: "coordinator", Basis: "sync"})
-	requireRefusal(t, err, "board.review_evidence_invalid", []string{"sync target CAS requires the current batch target", "sync_targets names " + wrong + " for batch batch", "target_commit is " + drifted, "kander review aggregate"})
+	requireRefusal(t, err, "board.review_evidence_invalid", []string{"sync target CAS requires the current batch target", "sync_targets names " + wrong + " for batch batch", "target_commit is " + drifted, "batch_target with kander review progress"})
 }
 
 // R12: a resolution of an unplanned batch names a missing plan, and the revision
@@ -147,8 +147,15 @@ func TestDispositionPredecessorRefusal(t *testing.T) {
 	empty := f.recordOf("five", f.a, f.gate, "rejected")
 	requireRefusal(t, f.submit(t, empty), "board.review_evidence_invalid", []string{"ends at record two", "previous_record_id is \"\""})
 
-	// A refusal that the previous record does not explain is no predecessor conflict.
-	other := ReviewDisposition{RunID: "run-1", FindingID: "PM-01", TaskID: "task-z", Status: "rejected"}
-	requireRefusal(t, dispositionRefusal(other, "r1", false, false), "board.review_evidence_invalid", []string{"disposition refused", "finding PM-01 is not assigned to task task-z"}, "CAS")
-	requireRefusal(t, dispositionRefusal(other, "r1", true, false), "board.review_evidence_invalid", []string{"disposition refused", "refused status rejected of finding PM-01 for task task-z"}, "CAS")
+}
+
+// R10 through the entrance: a rebind request naming a member whose cycle did not
+// change is refused with the member and the matching next step.
+func TestRebindRequestRefusal(t *testing.T) {
+	english(t)
+	root := tempBoard(t)
+	id := gateCard(t, root, "rebind-refusal")
+	p := gatePlan(t, root, []string{id}, noReviewRequirements())
+	err := ExtendReviewPlan(root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: 1, RebindCycles: map[string]string{id: "stale-cycle"}, Author: "coordinator", Basis: "rebind"})
+	requireRefusal(t, err, "board.review_evidence_invalid", []string{"cycle rebind CAS requires exactly all changed members", "did not change: " + id, "no member's cycle changed"}, "kander review progress <CWD> <task-id> and write")
 }

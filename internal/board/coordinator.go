@@ -160,6 +160,23 @@ func blockReason(err error) string {
 	return err.Error()
 }
 
+// memberRevisionPrefix starts the refusal of a card below its mirror.
+func memberRevisionPrefix(id string) string {
+	return "member revision or execution cycle changed: " + id + ": "
+}
+
+// keepBlockReason keeps the reason a member was first blocked with while the same
+// card stays below its mirror. The text names the revision the card had, which
+// moves with every write to the card, and a changed text would raise the
+// checkpoint revision for a block that did not change.
+func keepBlockReason(old *CoordinatorBlock, fresh, id string) string {
+	prefix := memberRevisionPrefix(id)
+	if old != nil && strings.Contains(old.Reason, prefix) && strings.Contains(fresh, prefix) {
+		return old.Reason
+	}
+	return fresh
+}
+
 func checkpointIDs(c CoordinatorCheckpoint) []string {
 	ids := make([]string, 0, len(c.Members))
 	for id := range c.Members {
@@ -515,7 +532,7 @@ func reconcileCheckpoint(ctx context.Context, tx *Transaction, r CoordinatorReco
 			}
 			m = c.Members[id]
 			if newMirrorKernel(m).block().Blocked {
-				m.Blocked = &CoordinatorBlock{Reason: blockReason(e)}
+				m.Blocked = &CoordinatorBlock{Reason: keepBlockReason(c.Members[id].Blocked, blockReason(e), id)}
 			}
 		}
 		if m.Blocked != nil {

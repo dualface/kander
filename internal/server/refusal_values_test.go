@@ -54,7 +54,7 @@ func TestRequestConflictsNameTheirValues(t *testing.T) {
 		changed.Message = "Different proposed work"
 		_, err = h.holder.DispatchAction(t.Context(), "prepare", h.task, "prepare", api.DispatchCommand{Input: &changed, CardRevision: moved.Revision}, h.proof)
 		refusal(t, err, api.CodeRevisionConflict, http.StatusConflict, "",
-			"dispatch proposal names another card version", "the proposal has card_revision "+num(proposal.CardRevision), "this request has card_revision "+num(moved.Revision))
+			"dispatch proposal names another card version", "the proposal has card_revision "+num(proposal.CardRevision), "this request has card_revision "+num(moved.Revision), "kander request show "+h.task+" "+proposal.ID)
 	})
 
 	t.Run("a request that does not bind the inspected card", func(t *testing.T) {
@@ -64,7 +64,7 @@ func TestRequestConflictsNameTheirValues(t *testing.T) {
 		input := api.NewCollabRequest{Kind: api.RequestSync, Message: intent.Message, Dispatch: &intent, CardRevision: card + 4, TargetGeneration: gen, AcceptWithin: api.DurationOf(120 * time.Second)}
 		_, err := k.sender.CreateRequest(t.Context(), "moved", k.task, input)
 		refusal(t, err, api.CodeRevisionConflict, http.StatusConflict, "",
-			"dispatch request must bind the inspected card version", "the request has card_revision "+num(card+4), "the card is at revision "+num(card))
+			"dispatch request must bind the inspected card version", "the request has card_revision "+num(card+4), "the card is at revision "+num(card), "kander show --json "+k.task)
 
 		other := intent
 		other.TaskID = "20260101-other-task"
@@ -82,7 +82,7 @@ func TestRequestConflictsNameTheirValues(t *testing.T) {
 		request := k.create(t, "plain", api.NewCollabRequest{Kind: api.RequestFix, Message: "fix", TargetGeneration: k.grant.Claim.Generation})
 		_, err := k.answer("answer", request.ID, api.CollabAnswer{Status: api.RequestAccepted, ExpectedRevision: 9})
 		refusal(t, err, api.CodeRevisionConflict, http.StatusConflict, "",
-			"request revision changed", "expected_revision 9", "the request is at revision "+num(request.Revision))
+			"request revision changed", "expected_revision 9", "the request is at revision "+num(request.Revision), "kander request show "+k.task+" "+request.ID)
 	})
 }
 

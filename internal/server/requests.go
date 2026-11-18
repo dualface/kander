@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
@@ -219,7 +220,7 @@ func (p *project) answerRequest(key, id, requestID string, answer api.CollabAnsw
 		case leaseBad:
 			return request, apiError(api.CodeLeaseInvalid, "request targets another generation")
 		case expectedBad:
-			return request, apiError(api.CodeRevisionConflict, fmt.Sprintf("request revision changed: the answer has expected_revision %d, the request is at revision %d", answer.ExpectedRevision, request.Revision))
+			return request, apiError(api.CodeRevisionConflict, fmt.Sprintf("request revision changed: the answer has expected_revision %d, the request is at revision %d. Next step: read the request with kander request show %s %s --json, confirm that the answer still holds, and answer again", answer.ExpectedRevision, request.Revision, normalized, request.ID))
 		case firstAcceptance && !window:
 			return request, apiError(api.CodeEvidenceIncomplete, "dispatch proposal acceptance window has elapsed")
 		case firstAcceptance && card != request.CardRevision:
@@ -268,13 +269,29 @@ func sameRequestedDispatch(old api.CollabRequest, input api.NewCollabRequest) bo
 func bindRefusal(proposalTask, task string, named, current uint64) string {
 	var parts []string
 	if proposalTask != task {
-		parts = append(parts, fmt.Sprintf("the proposal names task %s, the request path names task %s", proposalTask, task))
+		parts = append(parts, fmt.Sprintf("the proposal names task %s, the request path names task %s", boundedValue(proposalTask), task))
 	}
 	if named != current {
 		parts = append(parts, fmt.Sprintf("the request has card_revision %d, the card is at revision %d", named, current))
 	}
-	if len(parts) == 0 {
-		return "dispatch request must bind the inspected card version"
+	text := "dispatch request must bind the inspected card version"
+	if len(parts) > 0 {
+		text += ": " + strings.Join(parts, "; ")
 	}
-	return "dispatch request must bind the inspected card version: " + strings.Join(parts, "; ")
+	return text + ". Next step: read the card with kander show --json " + task + " and propose again against its current revision"
+}
+
+// boundedValue cuts a value the caller wrote to one bounded line before the server
+// writes it back in a message.
+func boundedValue(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, s)
+	if runes := []rune(s); len(runes) > 96 {
+		s = string(runes[:96]) + "…"
+	}
+	return s
 }

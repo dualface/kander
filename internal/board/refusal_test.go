@@ -134,7 +134,7 @@ func TestRebindRefusal(t *testing.T) {
 	changed := map[string]string{"task-a": "cycle-2", "task-b": "cycle-3", "task-c": "cycle-4"}
 	requested := map[string]string{"task-a": "cycle-2", "task-c": "cycle-0", "task-d": "cycle-9"}
 	err := rebindRefusal(changed, requested)
-	requireRefusal(t, err, "board.review_evidence_invalid", []string{
+	requireRefusal(t, err, "board.review_evidence_invalid", []string{"copy rebind_cycles",
 		"cycle rebind CAS requires exactly all changed members",
 		"task-b=cycle-3",
 		"did not change: task-d",

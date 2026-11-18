@@ -70,7 +70,7 @@ func (p *project) proposalError(tx *board.Transaction, task string, command api.
 	case !event.Window:
 		return apiError(api.CodeEvidenceIncomplete, "dispatch proposal acceptance window has elapsed")
 	case match.CardRevision != command.CardRevision:
-		return apiError(api.CodeRevisionConflict, fmt.Sprintf("dispatch proposal names another card version: the proposal has card_revision %d, this request has card_revision %d", match.CardRevision, command.CardRevision))
+		return apiError(api.CodeRevisionConflict, fmt.Sprintf("dispatch proposal names another card version: the proposal has card_revision %d, this request has card_revision %d. Next step: read the request with kander request show %s %s --json and the card with kander show --json %s, then prepare again against the card version the proposal names", match.CardRevision, command.CardRevision, task, match.ID, task))
 	case state.Prev != event.Card:
 		if _, err := tx.Expect(task, "", match.CardRevision); err != nil {
 			return err

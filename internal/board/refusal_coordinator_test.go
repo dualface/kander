@@ -166,6 +166,18 @@ func TestMirrorRevisionRefusalIsStable(t *testing.T) {
 	if mirror <= card {
 		t.Fatalf("mirror %d card %d", mirror, card)
 	}
+	err = WithTransaction(root, LockScope{Tasks: ids, Groups: []string{taskStartGroup, reviewControlGroup, dispatchRegistry}, ReadOnly: true}, func(tx *Transaction) error {
+		s, e := tx.Snapshot(ids[0])
+		if e != nil {
+			return e
+		}
+		_, e = reconcileCoordinatorMember(context.Background(), tx, &coordinatorPass{}, ids[0], storedCheckpoint(t, root).Members[ids[0]], CoordinatorObservation{Revision: s.Revision})
+		requireRefusal(t, e, "board.coordinator_conflict", []string{"member revision or execution cycle changed: " + ids[0], "below the revision " + num(mirror)})
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	first, err := ReconcileCoordinator(context.Background(), root, coordinatorRequest(t, root, storedCheckpoint(t, root)), nil)
 	if err != nil {
 		t.Fatal(err)
@@ -185,5 +197,16 @@ func TestMirrorRevisionRefusalIsStable(t *testing.T) {
 	second, err := ReconcileCoordinator(context.Background(), root, coordinatorRequest(t, root, first), nil)
 	if err != nil || second.Revision != first.Revision || second.Members[ids[0]].Blocked.Reason != block.Reason {
 		t.Fatalf("the same block changed the checkpoint: %v %+v", err, second)
+	}
+	// The card is written again and stays below the mirror: the block keeps its
+	// first text, so the checkpoint is not rewritten for a block that did not change.
+	text := transactionSnapshot(t, root, ids[0])
+	updateSnapshot(t, root, text, text.Text+"\nA note that advances the card revision.\n")
+	if now := transactionRevision(t, root, ids[0]); now <= card || now >= mirror {
+		t.Fatalf("card %d mirror %d", now, mirror)
+	}
+	third, err := ReconcileCoordinator(context.Background(), root, coordinatorRequest(t, root, second), nil)
+	if err != nil || third.Revision != second.Revision || third.Members[ids[0]].Blocked.Reason != block.Reason {
+		t.Fatalf("a block that stays the same rewrote the checkpoint: %v %+v", err, third.Members[ids[0]].Blocked)
 	}
 }

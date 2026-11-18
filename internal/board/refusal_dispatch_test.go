@@ -71,10 +71,10 @@ func TestWrapUpGrantRefusalNamesValues(t *testing.T) {
 	root, d, exit := wrapUpGrantFixture(t, true)
 	task, id := d.Input.TaskID, d.Input.ID
 	_, err := AuthorizeDispatchWrapUp(root, task, id, d.Revision+4, "coordinator", "the owner left", exit)
-	requireRefusal(t, err, "board.dispatch_evidence_invalid", []string{"wrap-up authority conflict", "the request names dispatch revision " + num(d.Revision+4), "the dispatch is at revision " + num(d.Revision)}, "the dispatch is in state")
+	requireRefusal(t, err, "board.dispatch_evidence_invalid", []string{"wrap-up authority conflict", "the request names dispatch revision " + num(d.Revision+4), "the dispatch is at revision " + num(d.Revision), "kander dispatch show " + task + " " + id}, "the dispatch is in state")
 
 	_, err = AuthorizeDispatchWrapUp(root, task, id, d.Revision, " ", "the owner left", exit)
-	requireRefusal(t, err, "board.dispatch_evidence_invalid", []string{"wrap-up authority conflict", "the dispatch is in state"}, "the request names")
+	requireRefusal(t, err, "board.dispatch_evidence_invalid", []string{"wrap-up authority conflict", "author and reason must both be given"}, "the request names", "the dispatch is in state")
 }
 
 // R20 as a unit: the text of a refused request is built from the request and the
@@ -105,7 +105,7 @@ func TestStaleTaskRefusal(t *testing.T) {
 		_, e := tx.Expect(id, "", s.Revision+7)
 		return e
 	})
-	requireRefusal(t, err, "board.transaction_conflict", []string{id, "expected revision " + num(s.Revision+7), "current revision " + num(s.Revision), "re-read"}, "expected state")
+	requireRefusal(t, err, "board.transaction_conflict", []string{id, "expected revision " + num(s.Revision+7), "current revision " + num(s.Revision), "kander show --json " + id, "re-read"}, "expected state")
 
 	err = WithTransaction(root, LockScope{Tasks: []string{id}}, func(tx *Transaction) error {
 		_, e := tx.Expect(id, "review", s.Revision+7)
@@ -118,6 +118,12 @@ func TestStaleTaskRefusal(t *testing.T) {
 		return e
 	})
 	requireRefusal(t, err, "board.transaction_conflict", []string{"expected state review, current state working"}, "expected revision")
+
+	err = WithTransaction(root, LockScope{Tasks: []string{id}}, func(tx *Transaction) error {
+		_, e := tx.Expect(id, "working", s.Revision+7)
+		return e
+	})
+	requireRefusal(t, err, "board.transaction_conflict", []string{"expected revision " + num(s.Revision+7), "expected state working, current state working"})
 }
 
 // R14: kander move --expect-revision names the revision it expected.
