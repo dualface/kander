@@ -51,7 +51,7 @@ unreadable evidence or records as pending.
 
 `issue.result_on_done` (`auto`, `ask`, `off`; default `auto`, overridable in the
 project overlay and editable on the Options rules page) selects the handoff after
-the last card completes. `internal/board` exposes `RegisterMoveObserver`; the issue
+the last card completes. `internal/remote` exposes `RegisterMoveObserver`; the issue
 package registers an observer at init. It records whether the moved card's work set
 was ready before a CLI `kander move` into `done/`, `archived/` or `trash/`, and after
 a successful, non-replayed move prints a stderr notice when the set became ready and
