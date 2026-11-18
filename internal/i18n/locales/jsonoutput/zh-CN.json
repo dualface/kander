@@ -2,5 +2,11 @@
   "remote.interactive_select_task": "不带任务 ID 的 pick 要在终端里询问选哪张卡；请给出任务 ID",
   "launch.interactive_launcher": "{{.V0}} 启动方式在当前终端里运行 Agent，而 --json 没有终端；请换用带容器的启动方式",
   "launch.interactive_select_task": "不带任务 ID 的 start 要在终端里询问选哪张卡；请给出任务 ID",
-  "install.interactive_wizard": "安装向导要在终端里提问"
+  "install.interactive_wizard": "安装向导要在终端里提问",
+  "menu.doctor_confirm_modified_rules": "有 {{.V0}} 个规则文件被本地修改过，需要确认是否备份并替换",
+  "menu.doctor_confirm_agent_replacement": "{{.V0}} 指向不可用的 Agent {{.V1}}，需要选择替代项",
+  "menu.doctor_confirm_session_file": "Agent {{.V0}} 需要确认是否保存其会话文件",
+  "menu.doctor_confirm_herdr_install": "没有安装任何终端后端，需要确认是否安装 herdr",
+  "menu.doctor_confirm_brew_upgrade": "Homebrew 里的 kander 版本过旧，需要确认是否升级",
+  "menu.doctor_confirm_required": "doctor 有需要确认的修复，而 --json 没有终端可以提问（{{.V0}}；共 {{.V1}} 项）。没有做任何修复。请在终端里运行 kander doctor"
 }

@@ -111,12 +111,17 @@ type doctorLine struct {
 }
 
 // doctorJSON is doctor with --json: the same checks and repairs, never a prompt, with the report
-// lines in the result. Whatever a person would have been asked about is left alone. An
+// lines in the result. A run that an interactive doctor would have asked something in (a
+// repair that needs a confirmation) is refused as an interactive form before any repair. An
 // unhealthy installation is the result with healthy false and exit status 1.
 func doctorJSON() int {
+	tools := CheckTerminalTools()
+	if reasons := confirmationsOf(tools); len(reasons) > 0 {
+		return command.FailStatus(2, refuseDoctorConfirmations(reasons))
+	}
 	healthy := false
 	captured := CaptureReport(func() {
-		healthy = printDoctorWithTools(CheckTerminalTools(), true, false)
+		healthy = printDoctorWithTools(tools, true, false)
 	})
 	lines := make([]doctorLine, 0, len(captured))
 	for _, line := range captured {

@@ -2,5 +2,11 @@
   "remote.interactive_select_task": "タスク ID なしの pick はターミナルでカードを尋ねます。タスク ID を指定してください",
   "launch.interactive_launcher": "{{.V0}} ランチャーは現在のターミナルでエージェントを実行しますが、--json にはターミナルがありません。コンテナ付きのランチャーを使ってください",
   "launch.interactive_select_task": "タスク ID なしの start はターミナルでカードを尋ねます。タスク ID を指定してください",
-  "install.interactive_wizard": "インストーラはターミナルで質問します"
+  "install.interactive_wizard": "インストーラはターミナルで質問します",
+  "menu.doctor_confirm_modified_rules": "ローカルで変更されたルールファイルが {{.V0}} 件あり、バックアップして置き換えるか確認が必要です",
+  "menu.doctor_confirm_agent_replacement": "{{.V0}} が使えないエージェント {{.V1}} を指しており、代わりの選択が必要です",
+  "menu.doctor_confirm_session_file": "エージェント {{.V0}} のセッションファイルを保存するか確認が必要です",
+  "menu.doctor_confirm_herdr_install": "ターミナルバックエンドが無く、herdr をインストールするか確認が必要です",
+  "menu.doctor_confirm_brew_upgrade": "Homebrew の kander が古く、アップグレードするか確認が必要です",
+  "menu.doctor_confirm_required": "doctor に確認が必要な修復があり、--json には質問できるターミナルがありません（{{.V0}}、計 {{.V1}} 件）。何も修復していません。ターミナルで kander doctor を実行してください"
 }

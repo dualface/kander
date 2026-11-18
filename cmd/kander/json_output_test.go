@@ -431,6 +431,12 @@ func TestJSONInteractiveFormsAreRefusedWithoutEffects(t *testing.T) {
 func TestJSONDoctor(t *testing.T) {
 	fakeMuxFixture(t)
 	r := runKander(t, "doctor", "--json")
+	if r.code == 2 {
+		// This machine has something an interactive doctor would ask (an unusable agent to
+		// replace, a modified rule file): the run is refused, with nothing repaired.
+		requireFailure(t, r, "doctor needs a confirmation", "interactive_required", 2)
+		return
+	}
 	if r.code != 0 && r.code != 1 || r.stderr != "" {
 		t.Fatalf("doctor: exit=%d stderr=%s", r.code, r.stderr)
 	}
