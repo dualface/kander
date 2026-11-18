@@ -411,6 +411,14 @@ func TestJSONInteractiveFormsAreRefusedWithoutEffects(t *testing.T) {
 	if entries, _ := os.ReadDir(filepath.Join(fixture.state, "panes")); len(entries) != 0 {
 		t.Fatalf("a container was created: %v", entries)
 	}
+	// No receipt was written either, so the same request can be sent again without --json.
+	root, err := fixture.service.LocalDataRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entries, _ := os.ReadDir(filepath.Join(root, "launch-actions")); len(entries) != 0 {
+		t.Fatalf("a launch receipt was written before the refusal: %v", entries)
+	}
 	// uninstall with --yes needs no answer.
 	uninstalled := requireResult(t, runKander(t, "uninstall", "--json", "--yes"), "uninstall --yes", "mode", "config_file", "rules_dir", "items")
 	if uninstalled["mode"] != "global" {

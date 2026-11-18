@@ -79,6 +79,9 @@ func startOrchestrator(request OrchestrateRequest, cfg *config.Config, loaded bo
 	if strings.TrimSpace(request.Handover) == "" {
 		return result, launchError("launch.message_must_not_be_empty", "orchestrate")
 	}
+	if err := refuseConfiguredLauncher(cfg, request.Launcher); err != nil {
+		return result, err
+	}
 	var journal *remote.ActionJournal
 	if service != nil {
 		var fresh bool

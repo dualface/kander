@@ -65,6 +65,9 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 	if err != nil {
 		return result, err
 	}
+	if err := refuseConfiguredLauncher(cfg, launcherOverride); err != nil {
+		return result, err
+	}
 	begin := session.BeginAction
 	if input.Native {
 		begin = session.RetainAction

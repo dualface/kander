@@ -25,6 +25,7 @@ func init() {
 	// starter is wired here so every binary that can start agents also supports
 	// `kander issue triage` and the TUI's `s` confirmation.
 	issue.SetTriageStarter(StartTriage)
+	issue.SetLauncherGate(RefuseTerminalLauncher)
 }
 
 func fail(err error) int { return command.Fail(err) }

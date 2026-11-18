@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
+	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/command/commandtest"
 )
 
@@ -148,5 +151,50 @@ func TestResultCommandWithJSON(t *testing.T) {
 	}
 	if detail := jsonObject(t, stderr)["error"].(map[string]any); detail["code"] != "failed" || !strings.Contains(detail["message"].(string), "simulated terminal failure") {
 		t.Fatalf("start stderr=%s", stderr)
+	}
+}
+
+// A launcher that takes the terminal is refused with --json before the evidence, the result
+// snapshot, or a receipt is written, with the code and exit status of an interactive form, so the
+// same request can be repeated without --json. The error keeps its status through the issue
+// command's own error wrapper.
+func TestTerminalLauncherIsRefusedBeforeAnythingIsWrittenWithJSON(t *testing.T) {
+	root, repo, id, fake := resultFixture(t)
+	oldStarter, oldGate := triageStarter, launcherGate
+	t.Cleanup(func() { triageStarter, launcherGate = oldStarter, oldGate })
+	started := false
+	triageStarter = func(TriageLaunch) (TriageOutcome, error) {
+		started = true
+		return TriageOutcome{}, nil
+	}
+	launcherGate = func(launcher string) error {
+		if launcher != "foreground" {
+			return nil
+		}
+		return command.Interactive("the foreground launcher needs a terminal")
+	}
+	provider := &resultCommandProvider{stubResolver: &stubResolver{repository: repo}, resultFake: fake}
+	factory := func() IssueProvider { return provider }
+	for name, args := range map[string][]string{
+		"result": {"result", "42", "--card", id, "--repo", "github.com/dualface/kander", "--json", "--launcher", "foreground"},
+		"triage": {"triage", "42", "--card", id, "--repo", "github.com/dualface/kander", "--json", "--launcher", "foreground"},
+	} {
+		var out, diagnostics bytes.Buffer
+		code, stdout, stderr := commandtest.Capture(func() int { return commandtest.Run(newCommand(factory, &out, &diagnostics), args...) })
+		if code != 2 || stdout != "" {
+			t.Fatalf("%s: code=%d stdout=%q stderr=%q", name, code, stdout, stderr)
+		}
+		if detail := jsonObject(t, stderr)["error"].(map[string]any); detail["code"] != command.CodeInteractive {
+			t.Fatalf("%s: stderr=%s", name, stderr)
+		}
+	}
+	if started {
+		t.Fatal("a session was started")
+	}
+	if _, err := os.Stat(board.CacheRoot(root)); err == nil {
+		entries, _ := os.ReadDir(board.CacheRoot(root))
+		if len(entries) != 0 {
+			t.Fatalf("the refusal left cache entries: %v", entries)
+		}
 	}
 }

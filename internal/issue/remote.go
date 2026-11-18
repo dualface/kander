@@ -75,6 +75,9 @@ func StartRemoteTriage(ctx context.Context, session *remote.Session, provider Is
 	if triageStarter == nil {
 		return TriageOutcome{}, NewError(ErrorCLIUnavailable, "triage", "no takeover launcher is registered")
 	}
+	if err := gateLauncher(options.Launcher); err != nil {
+		return TriageOutcome{}, err
+	}
 	root, err := session.LocalDataRoot()
 	if err != nil {
 		return TriageOutcome{}, err

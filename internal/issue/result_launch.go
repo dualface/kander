@@ -19,6 +19,9 @@ func StartResult(ctx context.Context, provider ResultProvider, root string, repo
 	if triageStarter == nil {
 		return TriageOutcome{}, resultError("result session launcher unavailable")
 	}
+	if err := gateLauncher(options.Launcher); err != nil {
+		return TriageOutcome{}, err
+	}
 	inspection, err := InspectResult(ctx, provider, root, repository, number, options.CardID)
 	if err != nil {
 		return TriageOutcome{}, err

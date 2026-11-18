@@ -7,6 +7,7 @@ import (
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/command"
+	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/terminal"
 )
 
@@ -64,6 +65,37 @@ func refuseTerminalLauncher(plan LaunchPlan) error {
 		return nil
 	}
 	return command.Interactive(t("launch.interactive_launcher", plan.Launcher))
+}
+
+// RefuseTerminalLauncher is the early form of the launcher check of prepareLaunch for a command
+// that writes a receipt or evidence before it prepares the launch: with --json it refuses a
+// launcher that occupies the terminal (the requested one, else the configured one) before any
+// of that is written, so the operation can be retried without --json. A launcher it cannot
+// resolve is left to prepareLaunch, which reports it.
+func RefuseTerminalLauncher(requested string) error {
+	if !command.JSON() {
+		return nil
+	}
+	cfg, err := loadEffective()
+	if err != nil {
+		return nil
+	}
+	return refuseConfiguredLauncher(cfg, requested)
+}
+
+func refuseConfiguredLauncher(cfg *config.Config, requested string) error {
+	launcher := strings.TrimSpace(requested)
+	if launcher == "" {
+		launcher = cfg.Launcher
+	}
+	if !config.ValidLauncherName(launcher) {
+		return nil
+	}
+	resolved, err := resolveStartLauncher(launcher)
+	if err != nil {
+		return nil
+	}
+	return refuseTerminalLauncher(LaunchPlan{Launcher: resolved})
 }
 
 // unresolvedFailure is the error of a late launch failure that left an executor behind, with

@@ -87,6 +87,20 @@ func SetTriageStarter(starter TriageStarter) {
 	triageStarter = starter
 }
 
+// launcherGate refuses a launcher that cannot start a session in the running command form
+// before anything is written: the launch package registers it. It is a no-op while unset.
+var launcherGate func(launcher string) error
+
+// SetLauncherGate wires the early launcher check.
+func SetLauncherGate(gate func(launcher string) error) { launcherGate = gate }
+
+func gateLauncher(launcher string) error {
+	if launcherGate == nil {
+		return nil
+	}
+	return launcherGate(launcher)
+}
+
 // TriageDirectoryName returns the readable directory name of one issue's
 // evidence: <owner>-<repo>-<number> reduced to the task-ID alphabet, so the
 // name is safe on every platform and contains no remote text beyond the
@@ -156,6 +170,9 @@ func PrepareTriage(ctx context.Context, provider IssueProvider, root string, rep
 // starts a process, and it never reads or writes the board.
 func StartTriage(ctx context.Context, provider IssueProvider, root string, repository Repository, number int, options TriageOptions) (TriageOutcome, error) {
 	cardID := strings.TrimSpace(options.CardID)
+	if err := gateLauncher(options.Launcher); err != nil {
+		return TriageOutcome{}, err
+	}
 	if err := validateTriageCard(root, repository, number, cardID); err != nil {
 		return TriageOutcome{}, err
 	}

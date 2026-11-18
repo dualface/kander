@@ -20,6 +20,9 @@ type nativeResumeIntent struct {
 // The implicit decision must be durable before a handoff can change the current
 // generation. A new invocation reads this command record before agent probing.
 func runImplicitNativeResume(ctx context.Context, session *remote.Session, card api.Task, launcher, text string, timeout float64, options DispatchOptions) int {
+	if err := RefuseTerminalLauncher(launcher); err != nil {
+		return fail(err)
+	}
 	journal, _, err := session.RetainAction("native-resume-command", struct {
 		Task, Launcher, Message string
 		Options                 DispatchOptions
