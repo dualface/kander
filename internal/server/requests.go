@@ -15,6 +15,10 @@ import (
 	"github.com/dualface/kander/internal/statemachine/serverproposal"
 )
 
+// checkFixProposal is the evidence check of a new fix proposal. Only tests
+// replace it, to reach the outcomes real evidence cannot produce on a test board.
+var checkFixProposal = board.CheckDispatchFixProposal
+
 var requestKinds = []string{api.RequestFix, api.RequestSync, api.RequestReview, api.RequestStop}
 
 func requestID(key string) string { return api.CollaborationRequestID(key) }
@@ -56,9 +60,23 @@ func (p *project) requests(id string) ([]api.CollabRequest, error) {
 // requestWrite shares generation validation, the request state and the exact
 // operation receipt in one redo. It never advances the card's content version.
 func (p *project) requestWrite(key, operation, id string, payload any, produce func(*board.Transaction) (api.CollabRequest, error), status int) outcome {
+	return p.requestWriteScoped(key, operation, id, payload, nil, produce, status)
+}
+
+// requestWriteScoped is requestWrite for a producer that reads more of the board
+// than the request and its card. extend adds the groups and cards it needs; it
+// runs only when the operation is not a replay of a stored receipt.
+func (p *project) requestWriteScoped(key, operation, id string, payload any, extend func(board.LockScope) (board.LockScope, error), produce func(*board.Transaction) (api.CollabRequest, error), status int) outcome {
 	return p.idempotent(key, operation, payload, func() outcome {
 		var request api.CollabRequest
-		err := board.WithTransaction(p.board, board.LockScope{Groups: []string{serviceGroup}, Tasks: []string{id}}, func(tx *board.Transaction) error {
+		scope := board.LockScope{Groups: []string{serviceGroup}, Tasks: []string{id}}
+		if extend != nil {
+			var err error
+			if scope, err = extend(scope); err != nil {
+				return outcome{err: err}
+			}
+		}
+		err := board.WithTransaction(p.board, scope, func(tx *board.Transaction) error {
 			var err error
 			request, err = produce(tx)
 			if err != nil {
@@ -95,7 +113,7 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 		return outcome{err: err}
 	}
 	defer p.mu.Unlock()
-	return p.requestWrite(key, "request:"+id, normalized, input, func(tx *board.Transaction) (api.CollabRequest, error) {
+	return p.requestWriteScoped(key, "request:"+id, normalized, input, p.proposalScope(input), func(tx *board.Transaction) (api.CollabRequest, error) {
 		var request api.CollabRequest
 		task, err := tx.Snapshot(normalized)
 		if err != nil {
@@ -151,6 +169,13 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 				}
 				return old, nil
 			}
+			// The shell checks the evidence of a new fix proposal once the kernel
+			// accepted the creation and the slot; a refusal writes nothing.
+			if input.Dispatch.Kind == "fix" {
+				if err := checkFixProposal(tx, *input.Dispatch); err != nil {
+					return request, err
+				}
+			}
 		}
 		now := p.server.now()
 		dispatch := input.Dispatch
@@ -161,6 +186,25 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 		}
 		return api.CollabRequest{AcceptWithin: input.AcceptWithin, Dispatch: dispatch, CardRevision: input.CardRevision, Revision: 1, ID: requestID(key), TaskID: normalized, Kind: input.Kind, Message: input.Message, FromClient: input.FromClient, TargetGeneration: input.TargetGeneration, Status: api.RequestOpen, CreatedAt: now, UpdatedAt: now}, nil
 	}, http.StatusCreated)
+}
+
+// proposalScope widens the write scope of a new fix proposal to what the check
+// of its evidence reads. Any other request keeps the scope of the request.
+func (p *project) proposalScope(input api.NewCollabRequest) func(board.LockScope) (board.LockScope, error) {
+	if input.Dispatch == nil || input.Dispatch.Kind != "fix" || input.Dispatch.Evidence.Fix == nil {
+		return nil
+	}
+	return func(base board.LockScope) (board.LockScope, error) {
+		read, err := board.FixProposalScope(p.board, input.Dispatch.Evidence.Fix)
+		if err != nil {
+			return base, err
+		}
+		base.Groups = append(base.Groups, read.Groups...)
+		base.Tasks = append(base.Tasks, read.Tasks...)
+		slices.Sort(base.Tasks)
+		base.Tasks = slices.Compact(base.Tasks)
+		return base, nil
+	}
 }
 func (p *project) answerRequest(key, id, requestID string, answer api.CollabAnswer, h holder) outcome {
 	if !slices.Contains([]string{api.RequestAccepted, api.RequestDone, api.RequestRejected}, answer.Status) || !api.ValidIdentity(requestID) {
