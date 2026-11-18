@@ -248,16 +248,16 @@ func TestHelpJSONOfEveryCommandFollowsTheSchema(t *testing.T) {
 				t.Fatalf("exit=%d/%d\n%s\n%s", flagForm.code, commandForm.code, flagForm.stdout, commandForm.stdout)
 			}
 			object := decodeObject(t, flagForm.stdout)
+			withoutNotices(t, object)
 			checkObject(t, "help", object, map[string]string{
 				"schema_version": "number", "command": "string", "aliases": "array", "summary": "string", "description": "string",
 				"usage": "array", "arguments": "array", "examples": "array", "subcommands": "array", "global_flags": "array",
-				"contract": "string", "read_sentence": "string", "notices": "array",
+				"contract": "string", "read_sentence": "string",
 			})
 			checkItems(t, "arguments", object["arguments"], map[string]string{"names": "array", "text": "string"})
 			checkItems(t, "examples", object["examples"], map[string]string{"description": "string", "command": "string"})
 			checkItems(t, "subcommands", object["subcommands"], map[string]string{"name": "string", "usage": "array"})
 			checkItems(t, "global_flags", object["global_flags"], map[string]string{"name": "string", "text": "string"})
-			checkItems(t, "notices", object["notices"], map[string]string{"code": "string", "message": "string"})
 			contract, _ := rules.EmbeddedContract(contractOf(leaf.path))
 			if object["schema_version"] != float64(1) || object["command"] != contractOf(leaf.path) || object["summary"] != contract.Summary || len(object["usage"].([]any)) != len(contract.Usage) {
 				t.Errorf("content: %v", object)
@@ -296,7 +296,8 @@ func TestHelpJSONIndex(t *testing.T) {
 		t.Fatalf("exit=%d\n%s\n%s", first.code, first.stdout, second.stdout)
 	}
 	object := decodeObject(t, first.stdout)
-	checkObject(t, "index", object, map[string]string{"schema_version": "number", "commands": "array", "global_flags": "array", "notices": "array"})
+	withoutNotices(t, object)
+	checkObject(t, "index", object, map[string]string{"schema_version": "number", "commands": "array", "global_flags": "array"})
 	checkItems(t, "commands", object["commands"], map[string]string{"name": "string", "aliases": "array", "summary": "string", "contract": "string"})
 	var names []string
 	for _, item := range object["commands"].([]any) {
@@ -304,6 +305,16 @@ func TestHelpJSONIndex(t *testing.T) {
 	}
 	if !slices.Equal(names, rules.CommandOrder()) {
 		t.Fatalf("commands %v, want %v", names, rules.CommandOrder())
+	}
+}
+
+// withoutNotices checks the optional notices of a help object and removes them: they appear
+// only when the installed contract is missing or differs, which depends on the machine.
+func withoutNotices(t *testing.T, object map[string]any) {
+	t.Helper()
+	if notices, ok := object["notices"]; ok {
+		checkItems(t, "notices", notices, map[string]string{"code": "string", "message": "string"})
+		delete(object, "notices")
 	}
 }
 
@@ -323,7 +334,7 @@ func TestHelpNoticesAreFixedEnglish(t *testing.T) {
 	if cn.stdout != en.stdout {
 		t.Fatalf("notices follow --lang:\n%s\n%s", cn.stdout, en.stdout)
 	}
-	notices := decodeObject(t, en.stdout)["notices"].([]any)
+	notices, _ := decodeObject(t, en.stdout)["notices"].([]any)
 	if len(notices) != 1 || notices[0].(map[string]any)["code"] != "contract_missing" || !strings.Contains(notices[0].(map[string]any)["message"].(string), "kander doctor") {
 		t.Fatalf("a missing installed contract: %v", notices)
 	}
@@ -339,15 +350,15 @@ func TestHelpNoticesAreFixedEnglish(t *testing.T) {
 	if err := os.WriteFile(installed, append(slices.Clone(embedded), "\nlocal edit\n"...), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	notices = decodeObject(t, runKander(t, "help", "--json", "move").stdout)["notices"].([]any)
+	notices, _ = decodeObject(t, runKander(t, "help", "--json", "move").stdout)["notices"].([]any)
 	if len(notices) != 1 || notices[0].(map[string]any)["code"] != "contract_outdated" {
 		t.Fatalf("an outdated installed contract: %v", notices)
 	}
 	if err := os.WriteFile(installed, embedded, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if notices = decodeObject(t, runKander(t, "help", "--json", "move").stdout)["notices"].([]any); len(notices) != 0 {
-		t.Fatalf("a matching installed contract: %v", notices)
+	if object := decodeObject(t, runKander(t, "help", "--json", "move").stdout); object["notices"] != nil {
+		t.Fatalf("a matching installed contract: %v", object["notices"])
 	}
 }
 

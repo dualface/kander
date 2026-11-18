@@ -23,6 +23,7 @@ kander coordinator remove-member <absolute-request.json>
 - `reconcile <absolute-observations.json>`: group_id, expected_revision, the authority from the claim, a members object keyed by task ID (each with its card revision and, when bound, dispatch_id, epoch, base, and completed delivery_commit), and an optional absolute `cwd` for read-only Git verification.
 - `recover <absolute-request.json>`: group_id, member, expected_revision, expected_epoch, decision (the user decision reference), and reason. All six are required. The member's column selects the mode.
 - `remove-member <absolute-request.json>`: the same six fields. `member` is the card that leaves the group.
+- `release --end-execution <absolute-release.json>`: `group_id`, `reason`, and `decision`. `--end-execution` confirms that the release is final for this coordinator execution; it belongs to `release` only and comes before the path.
 
 ## Examples
 
@@ -42,8 +43,8 @@ kander coordinator recover /tmp/recover.json
 # Remove an unstarted member from the group
 kander coordinator remove-member /tmp/remove-member.json
 
-# Release the claim of a group
-kander coordinator release /tmp/release.json
+# End the coordinator execution of a group; the release is final
+kander coordinator release --end-execution /tmp/release.json
 
 # Integrate a reviewed commit into its target
 kander coordinator integrate /tmp/integration.json

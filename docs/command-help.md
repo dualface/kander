@@ -14,7 +14,7 @@ The help of every command is generated from its contract file, `rules/snippets/c
 | Contract | The path of the contract below the rules root of the current scope, or `<rules root>` when no installation resolves |
 
 - The help reads the contract copy embedded in the binary, so it always matches the command tree of that binary. The `Contract:` line names the installed copy, because an agent reads that file.
-- When the installed copy is missing, or differs from the embedded one, the help says to run `kander doctor`: on stderr in text mode, as a notice in `notices` with `--json`.
+- When the installed copy is missing, or differs from the embedded one, the help says to run `kander doctor`: on stderr in text mode, as an entry of `notices` with `--json`.
 - `request` is documented in `notify.md`. Its summary and description come from the `## Request command` section. The usage lines, examples, and argument entries of `notify` and `request` are separated by the first word of the line or of the entry name: lines that start with `kander notify` belong to `notify`, lines that start with `kander request` to `request`, and an argument entry belongs to a command when the first word of one of its names is a word of that command's usage lines.
 - A subcommand shows the help of its top-level command: `kander server start --help` prints the `server` help. The `subcommands` field of the JSON help groups the usage lines by subcommand.
 - `worker` is an internal command without a contract. `kander worker --help` prints one line that says so.
@@ -82,13 +82,12 @@ A command:
   "subcommands": [{"name": "start", "usage": ["kander server start ..."]}],
   "global_flags": [{"name": "--json", "text": "..."}],
   "contract": "<rules root>/snippets/commands/move.md",
-  "read_sentence": "...",
-  "notices": []
+  "read_sentence": "..."
 }
 ```
 
-- `command` is the top-level command that owns the contract, also for a subcommand. `aliases`, `usage`, `arguments`, `examples`, `subcommands`, `global_flags`, and `notices` are always arrays, empty when there is nothing to list.
-- A notice is `{"code": "...", "message": "..."}` with the fixed English message of help. The codes are `contract_missing` and `contract_outdated`.
+- `command` is the top-level command that owns the contract, also for a subcommand. `aliases`, `usage`, `arguments`, `examples`, `subcommands`, and `global_flags` are always arrays, empty when there is nothing to list.
+- Help follows the output convention of [Structured JSON output](json-output.md): the object is the result with no wrapper, `--json` is the global flag (`kander <command> --help --json` and `kander help --json <command>` print the same object), and a remark is a `notices` entry, an array of `{"code": "...", "message": "..."}` that is left out when there is none. The messages are fixed English; the codes are `contract_missing` and `contract_outdated`. A failure follows the same convention (`{"error": {...}}` on stderr), for example an unknown command.
 
 The index:
 
@@ -96,8 +95,7 @@ The index:
 {
   "schema_version": 1,
   "commands": [{"name": "list", "aliases": ["ls"], "summary": "...", "contract": "<path>"}],
-  "global_flags": [{"name": "--json", "text": "..."}],
-  "notices": []
+  "global_flags": [{"name": "--json", "text": "..."}]
 }
 ```
 

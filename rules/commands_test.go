@@ -289,6 +289,32 @@ func TestEveryContractHasExamples(t *testing.T) {
 	}
 }
 
+// The release of a coordinator is final, so its contract spells only the confirmed form, with
+// --end-execution before the path, in the syntax, the argument entries and an example.
+func TestCoordinatorReleaseSpellsTheConfirmedForm(t *testing.T) {
+	contract := parsedContracts(t)["coordinator"]
+	if !slices.Contains(contract.Usage, "kander coordinator release --end-execution <absolute-release.json>") {
+		t.Errorf("the confirmed release syntax is missing: %v", contract.Usage)
+	}
+	for _, line := range contract.Usage {
+		if strings.HasPrefix(line, "kander coordinator release ") && !strings.Contains(line, " --end-execution ") {
+			t.Errorf("release syntax without --end-execution: %q", line)
+		}
+	}
+	found := false
+	for _, example := range contract.Examples {
+		if strings.HasPrefix(example.Command, "kander coordinator release ") {
+			found = true
+			if !strings.HasPrefix(example.Command, "kander coordinator release --end-execution /") {
+				t.Errorf("release example without --end-execution before the path: %q", example.Command)
+			}
+		}
+	}
+	if !found {
+		t.Error("coordinator has no release example")
+	}
+}
+
 // request is described by its own section of the notify contract.
 func TestRequestHasItsOwnSection(t *testing.T) {
 	data, _ := File("snippets/commands/notify.md")

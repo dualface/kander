@@ -56,7 +56,6 @@ type commandHelp struct {
 	GlobalFlags   []flagHelp       `json:"global_flags"`
 	Contract      string           `json:"contract"`
 	ReadSentence  string           `json:"read_sentence"`
-	Notices       []Notice         `json:"notices"`
 }
 
 type indexEntry struct {
@@ -71,7 +70,6 @@ type indexHelp struct {
 	SchemaVersion int          `json:"schema_version"`
 	Commands      []indexEntry `json:"commands"`
 	GlobalFlags   []flagHelp   `json:"global_flags"`
-	Notices       []Notice     `json:"notices"`
 }
 
 // topLevel is the command below the root that owns the contract c is documented in:
@@ -83,14 +81,13 @@ func topLevel(c *cobra.Command) *cobra.Command {
 	return c
 }
 
-// buildCommandHelp reads the embedded contract of the top-level command c and compares the
-// installed copy with it.
+// buildCommandHelp reads the embedded contract of the top-level command c.
 func buildCommandHelp(c *cobra.Command) (commandHelp, error) {
 	contract, err := rules.EmbeddedContract(c.Name())
 	if err != nil {
 		return commandHelp{}, err
 	}
-	root, dir := config.ContractRoot()
+	root, _ := config.ContractRoot()
 	help := commandHelp{
 		SchemaVersion: helpSchemaVersion,
 		Command:       c.Name(),
@@ -104,7 +101,6 @@ func buildCommandHelp(c *cobra.Command) (commandHelp, error) {
 		GlobalFlags:   globalFlags,
 		Contract:      root + "/" + contract.File,
 		ReadSentence:  config.CommandReadSentence(root),
-		Notices:       contractNotices(dir, contract.File),
 	}
 	return help, nil
 }
@@ -141,29 +137,31 @@ func subcommands(command string, usage []string) []subcommandHelp {
 	return subs
 }
 
-// contractNotices tells when the installed contract the Contract line names is missing or
-// differs from the copy the binary carries. The text is fixed English like the rest of help.
-func contractNotices(rulesDir, file string) []Notice {
-	if rulesDir == "" {
-		return []Notice{}
+// notifyContract reports through the shared notice channel (stderr, or `notices` with --json)
+// when the installed contract the Contract line names is missing or differs from the copy the
+// binary carries. The text is fixed English like the rest of help.
+func notifyContract(file string) {
+	_, dir := config.ContractRoot()
+	if dir == "" {
+		return
 	}
-	installed, source, err := rules.Installed(rulesDir, file)
+	installed, source, err := rules.Installed(dir, file)
 	if err != nil {
-		return []Notice{}
+		return
 	}
 	if source == rules.SourceEmbedded {
-		return []Notice{{Code: "contract_missing", Message: fmt.Sprintf("The installed contract %s is missing; run `kander doctor` to install it.", file)}}
+		Notify("contract_missing", fmt.Sprintf("The installed contract %s is missing; run `kander doctor` to install it.", file))
+		return
 	}
 	if embedded, err := rules.File(file); err == nil && !bytes.Equal(installed, embedded) {
-		return []Notice{{Code: "contract_outdated", Message: fmt.Sprintf("The installed contract %s differs from the copy in this binary; run `kander doctor` to update it.", file)}}
+		Notify("contract_outdated", fmt.Sprintf("The installed contract %s differs from the copy in this binary; run `kander doctor` to update it.", file))
 	}
-	return []Notice{}
 }
 
 // buildIndex lists the visible top-level commands in the order of the command table.
 func buildIndex(root *cobra.Command) indexHelp {
 	shown, _ := config.ContractRoot()
-	index := indexHelp{SchemaVersion: helpSchemaVersion, Commands: []indexEntry{}, GlobalFlags: globalFlags, Notices: []Notice{}}
+	index := indexHelp{SchemaVersion: helpSchemaVersion, Commands: []indexEntry{}, GlobalFlags: globalFlags}
 	for _, name := range rules.CommandOrder() {
 		var c *cobra.Command
 		for _, child := range root.Commands() {
@@ -183,8 +181,12 @@ func buildIndex(root *cobra.Command) indexHelp {
 	return index
 }
 
-// printHelp answers a help request for c: the text, or with --json the object, on stdout.
+// printHelp answers a help request for c: the text, or with --json the object, on stdout. A
+// help request of a streaming command is not a stream: its notices join the object.
 func printHelp(c *cobra.Command) {
+	current.mu.Lock()
+	current.streaming = false
+	current.mu.Unlock()
 	if !c.HasParent() || c.Name() == "help" {
 		root := c
 		for root.HasParent() {
@@ -203,12 +205,10 @@ func printHelp(c *cobra.Command) {
 		fmt.Fprintln(c.OutOrStdout(), c.UseLine())
 		return
 	}
+	notifyContract(rules.ContractFile(topLevel(c).Name()))
 	if JSON() {
 		Result(help)
 		return
-	}
-	for _, notice := range help.Notices {
-		fmt.Fprintln(c.ErrOrStderr(), notice.Message)
 	}
 	fmt.Fprint(c.OutOrStdout(), commandText(help))
 }
