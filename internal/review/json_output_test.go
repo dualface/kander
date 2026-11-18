@@ -41,8 +41,7 @@ func TestReviewRunWithJSON(t *testing.T) {
 }
 
 func TestReviewSchemaWithJSON(t *testing.T) {
-	h := newCodexHarness(t)
-	_ = h
+	newCodexHarness(t)
 	code, stdout, stderr := captureRun(t, []string{"plan", "--schema", "--json"})
 	if code != 0 || stderr != "" {
 		t.Fatalf("code=%d stderr=%q", code, stderr)

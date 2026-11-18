@@ -166,7 +166,7 @@ func TestJSONFailuresHaveTheirStableCodes(t *testing.T) {
 
 // The commands that read or write a card, with and without a claim, print their result object.
 func TestJSONBoardCommands(t *testing.T) {
-	session, cfg := moveServiceFixture(t)
+	session, _ := moveServiceFixture(t)
 	t.Setenv(config.EnvLang, "en")
 
 	version := requireResult(t, runKander(t, "version", "--json"), "version", "version")
@@ -275,7 +275,6 @@ func TestJSONBoardCommands(t *testing.T) {
 	if picked["state"] != "todo" {
 		t.Fatalf("pick: %v", picked)
 	}
-	_ = cfg
 }
 
 // A bound move prints the same object with and without --json, plus the report field with it.
