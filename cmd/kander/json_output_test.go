@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -706,4 +707,56 @@ func TestJSONCheckAnalyzers(t *testing.T) {
 	}
 	// An analysis that could not finish is the error object.
 	requireFailure(t, runKander(t, "check", "delivery", "--json", "--base", "no-such-ref"), "unknown ref", "check_invalid_ref", 3)
+}
+
+// A foreground server whose configured port is taken fails after the data directory opened and
+// logged. With --json the log lines before the failure are remarks of the one error object:
+// stdout is empty and stderr is one line.
+func TestJSONServerForegroundPortConflictIsOneErrorObject(t *testing.T) {
+	serverCommandEnv(t)
+	original := runForegroundServer
+	runForegroundServer = server.RunForeground
+	defer func() { runForegroundServer = original }()
+	taken, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer taken.Close()
+	r := runServerJSON(t, "start", "--json", "--foreground", "--data", t.TempDir(), "--listen", taken.Addr().String())
+	if r.code != 1 || r.stdout != "" || strings.Count(r.stderr, "\n") != 1 {
+		t.Fatalf("exit=%d\nstdout=%q\nstderr=%q", r.code, r.stdout, r.stderr)
+	}
+	var object struct {
+		Error   map[string]any   `json:"error"`
+		Notices []map[string]any `json:"notices"`
+	}
+	if err := json.Unmarshal([]byte(r.stderr), &object); err != nil || object.Error["code"] == nil {
+		t.Fatalf("stderr=%q %v", r.stderr, err)
+	}
+	if len(object.Notices) == 0 || object.Notices[0]["code"] != "server_log" {
+		t.Fatalf("the log lines before the failure are not remarks of the error object: %s", r.stderr)
+	}
+}
+
+// A subscription that fails before its first snapshot is one error object on stderr and nothing
+// else; the remarks made before the first event (TestStreamingRemarksWaitForTheFirstEvent in
+// internal/command) belong to that object.
+func TestJSONSubscribeFailureBeforeTheFirstSnapshotIsOneErrorObject(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	t.Setenv(remote.EnvClientHome, filepath.Join(t.TempDir(), "client"))
+	cfg := config.DefaultConfig()
+	cfg.Language, cfg.AgentLanguage = "en", "en"
+	_, httpServer := commandServiceWithServer(t, cfg)
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	httpServer.Close()
+	r := runKander(t, "subscribe", "--json", "--watch", "20261118-sample-task")
+	if r.code != 1 || r.stdout != "" || strings.Count(r.stderr, "\n") != 1 {
+		t.Fatalf("exit=%d\nstdout=%q\nstderr=%q", r.code, r.stdout, r.stderr)
+	}
+	if object := jsonLine(t, r.stderr); object["error"] == nil || object["notice"] != nil {
+		t.Fatalf("stderr=%q", r.stderr)
+	}
 }

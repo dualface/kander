@@ -128,6 +128,7 @@ type session struct {
 	json        bool
 	provisional bool
 	streaming   bool
+	started     bool // a streaming command wrote its first stdout event
 	result      []byte
 	status      int
 	notices     []Notice
@@ -140,7 +141,7 @@ var current session
 func (s *session) reset() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.json, s.provisional, s.streaming = false, false, false
+	s.json, s.provisional, s.streaming, s.started = false, false, false, false
 	s.result, s.status, s.notices, s.failure, s.reported = nil, 0, nil, nil, false
 }
 
@@ -254,7 +255,26 @@ func Emit(v any) int {
 	if _, err := os.Stdout.Write(append(data, '\n')); err != nil {
 		return Fail(err)
 	}
+	StreamStarted()
 	return 0
+}
+
+// StreamStarted records that a streaming command wrote its first event to stdout. The remarks
+// made before that moment stayed with the command, so that a failure before the first event is
+// one error object that holds them; from now on they are lines of their own on stderr.
+func StreamStarted() {
+	current.mu.Lock()
+	if !current.json || !current.streaming || current.started {
+		current.mu.Unlock()
+		return
+	}
+	current.started = true
+	pending := current.notices
+	current.notices = nil
+	current.mu.Unlock()
+	for _, notice := range pending {
+		writeLine(os.Stderr, map[string]any{"notice": notice})
+	}
 }
 
 // Notify reports a remark of the running command. Without --json, text is written to stderr as
@@ -267,12 +287,12 @@ func Notify(code, text string) {
 	}
 	notice := Notice{Code: code, Message: strings.TrimRight(text, "\r\n")}
 	current.mu.Lock()
-	streaming := current.streaming
-	if !streaming {
+	line := current.streaming && current.started
+	if !line {
 		current.notices = append(current.notices, notice)
 	}
 	current.mu.Unlock()
-	if streaming {
+	if line {
 		writeLine(os.Stderr, map[string]any{"notice": notice})
 	}
 }
@@ -325,7 +345,13 @@ func ErrorLine(err error) string {
 	if !JSON() {
 		return "kander: " + message
 	}
-	data, _ := marshal(map[string]any{"error": Notice{Code: code, Message: message}})
+	object := map[string]any{"error": Notice{Code: code, Message: message}}
+	current.mu.Lock()
+	if len(current.notices) > 0 && current.streaming {
+		object["notices"] = current.notices
+	}
+	current.mu.Unlock()
+	data, _ := marshal(object)
 	return string(data)
 }
 
@@ -368,6 +394,11 @@ func finish(c *cobra.Command, err error) int {
 			if werr := writeResult(result, notices); werr != nil {
 				return writeFailed(werr)
 			}
+		} else {
+			// A stream that ended before its first event: its remarks are still lines.
+			for _, notice := range notices {
+				writeLine(os.Stderr, map[string]any{"notice": notice})
+			}
 		}
 		return status
 	}
@@ -400,7 +431,7 @@ func finish(c *cobra.Command, err error) int {
 	}
 	code, message := Describe(err)
 	object := map[string]any{"error": Notice{Code: code, Message: message}}
-	if len(notices) > 0 && !streaming {
+	if len(notices) > 0 {
 		object["notices"] = notices
 	}
 	data, _ := marshal(object)

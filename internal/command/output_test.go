@@ -133,11 +133,12 @@ func TestResultStatusKeepsTheResultOfAFinishedAnalysis(t *testing.T) {
 
 func TestStreamingCommandKeepsLinesAndEndsWithAnErrorObject(t *testing.T) {
 	c := command.Streaming(&cobra.Command{Use: "probe", RunE: func(*cobra.Command, []string) error {
+		command.Emit(map[string]string{"event": "first"})
 		command.Notify("note", "remark")
 		return command.Exit(command.Fail(errors.New("later failure")))
 	}})
 	code, stdout, stderr := run(c, "--json")
-	if code != 1 || stdout != "" {
+	if code != 1 || strings.Count(stdout, "\n") != 1 {
 		t.Fatalf("code=%d stdout=%q", code, stdout)
 	}
 	lines := strings.Split(strings.TrimSpace(stderr), "\n")
@@ -234,4 +235,63 @@ func TestResultWriteFailureIsAFailure(t *testing.T) {
 	if code != 1 || !strings.Contains(stderr, `"error"`) {
 		t.Fatalf("code=%d stderr=%q", code, stderr)
 	}
+}
+
+// A streaming command keeps its remarks with the command until its first event reaches stdout:
+// a failure before it is one error object that holds them; afterwards each remark is a line.
+func TestStreamingRemarksWaitForTheFirstEvent(t *testing.T) {
+	probe := func(run func() error) *cobra.Command {
+		return command.Streaming(&cobra.Command{Use: "probe", RunE: func(*cobra.Command, []string) error { return run() }})
+	}
+	t.Run("failure before the first event", func(t *testing.T) {
+		c := probe(func() error {
+			command.Notify("early", "first remark")
+			command.Notify("early", "second remark")
+			return errors.New("boom")
+		})
+		code, stdout, stderr := run(c, "--json")
+		if code != 1 || stdout != "" || strings.Count(stderr, "\n") != 1 {
+			t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
+		}
+		var object struct {
+			Error   command.Notice   `json:"error"`
+			Notices []command.Notice `json:"notices"`
+		}
+		if err := json.Unmarshal([]byte(stderr), &object); err != nil || object.Error.Message != "boom" || len(object.Notices) != 2 || object.Notices[0].Message != "first remark" {
+			t.Fatalf("stderr=%q %v", stderr, err)
+		}
+	})
+	t.Run("failure after the first event", func(t *testing.T) {
+		c := probe(func() error {
+			command.Notify("early", "before")
+			if code := command.Emit(map[string]string{"event": "snapshot"}); code != 0 {
+				return command.Exit(code)
+			}
+			command.Notify("late", "after")
+			return errors.New("boom")
+		})
+		code, stdout, stderr := run(c, "--json")
+		lines := strings.Split(strings.TrimSuffix(stderr, "\n"), "\n")
+		if code != 1 || strings.Count(stdout, "\n") != 1 || len(lines) != 3 {
+			t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
+		}
+		for i, want := range []string{`"notice"`, `"notice"`, `"error"`} {
+			if !strings.Contains(lines[i], want) {
+				t.Fatalf("line %d %q lacks %s", i, lines[i], want)
+			}
+		}
+		if strings.Contains(lines[2], `"notices"`) {
+			t.Fatalf("the error object repeats a remark that was already written: %q", lines[2])
+		}
+	})
+	t.Run("end before the first event", func(t *testing.T) {
+		c := probe(func() error {
+			command.Notify("early", "only remark")
+			return nil
+		})
+		code, stdout, stderr := run(c, "--json")
+		if code != 0 || stdout != "" || !strings.Contains(stderr, `{"notice":`) || strings.Count(stderr, "\n") != 1 {
+			t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
+		}
+	})
 }

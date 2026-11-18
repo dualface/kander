@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -101,6 +103,22 @@ type foregroundReady struct {
 	Version string `json:"version"`
 }
 
+// serverLog is the log writer of the foreground server. Before the server can serve, with --json,
+// every line is a remark of the command (the notice server_log), so that a failure before the
+// first line of stdout is one error object that holds them; afterwards, and without --json, the
+// lines go to stderr as they are.
+type serverLog struct{ served atomic.Bool }
+
+func (l *serverLog) ready() { l.served.Store(true) }
+
+func (l *serverLog) Write(p []byte) (int, error) {
+	if l.served.Load() {
+		return os.Stderr.Write(p)
+	}
+	command.Notify("server_log", strings.TrimRight(string(p), "\r\n"))
+	return len(p), nil
+}
+
 func runStart(o servicectl.StartOptions, foreground bool) int {
 	target, err := serverTarget()
 	if err != nil {
@@ -115,11 +133,15 @@ func runStart(o servicectl.StartOptions, foreground bool) int {
 	if foreground {
 		dir, err := servicectl.DataDir(o.DataDir)
 		if err == nil {
-			options := server.Options{DataDir: dir, TTL: o.TTL, RenewInterval: o.Renew, Version: version.String(), Logger: slog.New(slog.NewJSONHandler(os.Stderr, nil))}
+			logs := &serverLog{}
+			options := server.Options{DataDir: dir, TTL: o.TTL, RenewInterval: o.Renew, Version: version.String(), Logger: slog.New(slog.NewJSONHandler(logs, nil))}
 			if command.JSON() {
 				options.Ready = func(listen string) {
 					command.Emit(foregroundReady{Listen: listen, DataDir: dir, PID: os.Getpid(), Version: version.String()})
+					logs.ready()
 				}
+			} else {
+				logs.ready()
 			}
 			err = runForegroundServer(context.Background(), options, o.Listen)
 		}

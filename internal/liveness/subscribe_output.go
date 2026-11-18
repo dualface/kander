@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/dualface/kander/internal/command"
 )
 
 const (
@@ -84,6 +86,7 @@ func newSubscriptionOutput(ctx context.Context, writer ContextWriter) *subscript
 				out.err = fmt.Errorf("%s: %w", t("liveness.subscription_output_failed"), err)
 				return
 			}
+			command.StreamStarted()
 		}
 	}()
 	return out
