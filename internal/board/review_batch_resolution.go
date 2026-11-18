@@ -120,12 +120,12 @@ func resolutionEntry(tx *Transaction, x ReviewPlanExtension, git func(ReviewPlan
 		return p, facts, err
 	}
 	if !ok {
-		return p, facts, reviewError("plan extension CAS/sealed conflict")
+		return p, facts, reviewError("missing plan: " + x.PlanID)
 	}
 	f := reviewplan.Resolve{Cas: p.Revision == x.ExpectedRevision}
 	var refusal error
 	if !f.Cas {
-		refusal = reviewError("plan extension CAS/sealed conflict")
+		refusal = planRevisionRefusal("plan extension CAS/sealed conflict", p, x.ExpectedRevision)
 	}
 	if refusal == nil {
 		// The cycle may be stale: review progress cannot name rebind_cycles while

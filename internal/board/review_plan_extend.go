@@ -53,7 +53,7 @@ func ExtendReviewPlanWithTransaction(root string, x ReviewPlanExtension, extensi
 			return e
 		}
 		if !ok {
-			return reviewError("missing plan")
+			return reviewError("missing plan: " + x.PlanID)
 		}
 		return nil
 	})
@@ -66,7 +66,7 @@ func ExtendReviewPlanWithTransaction(root string, x ReviewPlanExtension, extensi
 			return err
 		}
 		if !ok {
-			return reviewError("plan extension CAS/sealed conflict")
+			return reviewError("missing plan: " + x.PlanID)
 		}
 		pk, err := projectPlan(tx, p, kernelBound(p))
 		if err != nil {
@@ -79,8 +79,10 @@ func ExtendReviewPlanWithTransaction(root string, x ReviewPlanExtension, extensi
 			}
 		}
 		otherOp := len(x.RebindCycles) > 0 || len(x.SyncTargets) > 0 || len(x.RetargetBatches) > 0 || len(x.DropBatches) > 0 || x.ReleaseObligation != nil
-		if !pk.step(reviewplan.Admit{Cas: p.Revision == x.ExpectedRevision, OtherOp: otherOp, BatchOnly: x.Batch != nil && !x.Seal, Owed: cycleBatch}) {
-			return reviewError("plan extension CAS/sealed conflict")
+		admit := reviewplan.Admit{Cas: p.Revision == x.ExpectedRevision, OtherOp: otherOp, BatchOnly: x.Batch != nil && !x.Seal, Owed: cycleBatch}
+		admitState := pk.state
+		if !pk.step(admit) {
+			return admitRefusal(p, admitState, x, admit)
 		}
 		if err = verifyPlanCopiesFor(tx, p, len(x.RebindCycles) == 0 && len(x.SyncTargets) == 0); err != nil {
 			return err
@@ -149,8 +151,10 @@ func ExtendReviewPlanWithTransaction(root string, x ReviewPlanExtension, extensi
 			if e != nil {
 				return e
 			}
-			if !pk.step(reviewplan.Seal{Cas: true, AllAssigned: assigned, NoDropOwed: noDropOwed}) {
-				return firstError(refusal, reviewError("plan extension CAS/sealed conflict"))
+			seal := reviewplan.Seal{Cas: true, AllAssigned: assigned, NoDropOwed: noDropOwed}
+			sealState := pk.state
+			if !pk.step(seal) {
+				return firstError(refusal, sealRefusal(p.PlanID, sealState, seal))
 			}
 			p.Sealed = pk.state.Sealed
 		}
@@ -208,7 +212,7 @@ func extensionShape(x ReviewPlanExtension) error {
 // sets where a batch reviewing its new cycle starts.
 func rebindPlanCycles(tx *Transaction, pk *planKernel, p *ReviewPlan, changed, requested map[string]string) error {
 	if !pk.step(reviewplan.Rebind{Cas: true, Exact: maps.Equal(changed, requested), MembersActive: true}) {
-		return reviewError("cycle rebind CAS requires exactly all changed members")
+		return rebindRefusal(changed, requested)
 	}
 	kernels := make([]*memberKernel, 0, len(changed))
 	for _, id := range slices.Sorted(maps.Keys(changed)) {
@@ -286,7 +290,7 @@ func syncPlanTargets(tx *Transaction, pk *planKernel, p ReviewPlan, x ReviewPlan
 		case !found || b.PlanID != p.PlanID || b.BatchID != batchID:
 			refusal = reviewError("sync target batch missing")
 		case b.TargetCommit != expected:
-			refusal = reviewError("sync target CAS requires the current batch target")
+			refusal = reviewRefusal("sync target CAS requires the current batch target", t("board.refusal_next_sync", batchID), t("board.refusal_sync_target", batchID, quoted(expected), b.TargetCommit))
 		case index < 0:
 			refusal = reviewError("unplanned batch")
 		case p.Batches[index].TargetCommit == b.TargetCommit:
@@ -405,8 +409,10 @@ func appendPlanBatch(tx *Transaction, pk *planKernel, p *ReviewPlan, b ReviewPla
 			}
 		}
 	}
-	if !pk.step(reviewplan.Append{Seal: seal, Owed: owed, Cas: true, Binding: binding, MembersActive: membersActive, PreviousClosed: previousClosed, Requirements: requirements, AllAssigned: assigned, NoDropOwed: noDropOwed}) {
-		return firstError(refusal, reviewError("plan extension CAS/sealed conflict"))
+	appendEvent := reviewplan.Append{Seal: seal, Owed: owed, Cas: true, Binding: binding, MembersActive: membersActive, PreviousClosed: previousClosed, Requirements: requirements, AllAssigned: assigned, NoDropOwed: noDropOwed}
+	appendState := pk.state
+	if !pk.step(appendEvent) {
+		return firstError(refusal, appendRefusal(p.PlanID, appendState, pk.params, appendEvent))
 	}
 	p.Sealed = pk.state.Sealed
 	return tx.PutGroup(reviewControlGroup, reviewBatchName(b.BatchID), reviewJSON(actual))
