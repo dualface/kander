@@ -345,3 +345,49 @@ func TestCoordinatorWithStaleMemberCredentialAsksCurrentHolder(t *testing.T) {
 		t.Fatalf("current holder was not asked: %+v", requests)
 	}
 }
+
+// Executions on one client home share the replay records of published
+// operations, and each still takes its own route.
+func TestSharedClientHomeKeepsEachExecutionsRoute(t *testing.T) {
+	const group = "20261118-single-group"
+	f := newSingleMember(t, group, "")
+	coordinator := &remote.Session{Client: f.coordinate.Client, Project: f.coordinate.Project, Info: f.coordinate.Info, ServerURL: f.url, Home: f.holder.Home}
+	as := func(execution, coordinating string) {
+		t.Setenv(remote.EnvExecutionID, execution)
+		t.Setenv(remote.EnvCoordinatorExecutionID, coordinating)
+	}
+	as("coordinator-execution", "coordinator-execution")
+	request := board.CoordinatorClaim{GroupID: group, Owner: "coordinator", Token: "label", Basis: "shared home fixture", Members: f.ids}
+	if _, err := coordinator.AcquireCoordinator(t.Context(), request, ""); err != nil {
+		t.Fatal(err)
+	}
+	_, err := coordinator.AggregateReview(t.Context(), singleBatch)
+	id := pendingPublicationID(t, err)
+	as(f.grant.Claim.ExecutionID, "")
+	if _, err := f.holder.ConfirmReviewPublication(t.Context(), id, f.ids[0]); err != nil {
+		t.Fatal(err)
+	}
+	as("coordinator-execution", "coordinator-execution")
+	if _, err := coordinator.AggregateReview(t.Context(), singleBatch); err != nil {
+		t.Fatal(err)
+	}
+
+	f.log.take()
+	as(f.grant.Claim.ExecutionID, "")
+	if _, err := f.holder.AggregateReview(t.Context(), singleBatch); err != nil {
+		t.Fatalf("holder did not take its direct route: %v", err)
+	}
+	for _, record := range f.log.take() {
+		if strings.HasSuffix(record.Path, "/aggregate") && (record.Claims == "" || record.Publication != "") {
+			t.Fatalf("holder replayed the coordinator's publication: %+v", record)
+		}
+	}
+	as("stranger-execution", "")
+	_, err = coordinator.AggregateReview(t.Context(), singleBatch)
+	if !api.IsCode(err, api.CodeHeldByOther) {
+		t.Fatalf("a process that is neither holder nor coordinator got: %v", err)
+	}
+	if writes := f.log.take(); len(writes) != 0 {
+		t.Fatalf("refused command wrote: %+v", writes)
+	}
+}

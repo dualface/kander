@@ -70,12 +70,30 @@ func (s *Session) reviewAuthority(ctx context.Context, operation, replay string,
 	if err != nil {
 		return nil, false, err
 	}
+	var members []api.PublicationMember
+	var shown map[string]api.Task
+	read := len(tasks) <= 1
+	if read {
+		// The replay records are shared by every execution of this client
+		// home, so an operation on one card is routed for this execution first.
+		// A saved result then never replaces the holder's direct proof, and
+		// never answers a process that is neither holder nor coordinator.
+		if members, shown, err = s.liveReviewMembers(ctx, tasks); err != nil {
+			return nil, false, err
+		}
+		if len(members) == 1 {
+			if proof, joint, err := s.singleMemberAuthority(operation, tasks, members, shown); err != nil || !joint {
+				return proof, false, err
+			}
+		}
+	}
 	if proof, found, err := s.completedReviewPublication(ctx, operation, replay, raw); err != nil || found {
 		return proof, found, err
 	}
-	members, shown, err := s.liveReviewMembers(ctx, tasks)
-	if err != nil {
-		return nil, false, err
+	if !read {
+		if members, shown, err = s.liveReviewMembers(ctx, tasks); err != nil {
+			return nil, false, err
+		}
 	}
 	if len(members) <= 1 {
 		proof, joint, err := s.singleMemberAuthority(operation, tasks, members, shown)
@@ -158,9 +176,9 @@ func (s *Session) liveReviewMembers(ctx context.Context, tasks []string) ([]api.
 
 // singleMemberAuthority chooses the proof for a review write with at most one
 // live member. The holder of the member's current generation proves it
-// directly. A group coordinator process holds no member credential, so it
-// prepares a joint publication with that one member and waits for the holder;
-// joint reports that choice. Any other process without a credential for the
+// directly. A group coordinator process holds no credential of that
+// generation, so it prepares a joint publication with that one member and
+// waits for the holder; joint reports that choice. Any other process without a credential for the
 // member is refused here with the holder named, because the server refuses
 // every unproven write to a claimed card. A credential of an older generation
 // held by any other process is sent as it is, and the server answers with the
