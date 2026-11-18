@@ -2,7 +2,6 @@ package board
 
 import (
 	"fmt"
-	"reflect"
 	"slices"
 	"strings"
 )
@@ -43,11 +42,11 @@ func dispatchEvidenceError(detail string) error {
 func dispatchEvidenceScope(root string, in DispatchInput) (LockScope, error) {
 	scope := LockScope{Tasks: []string{in.TaskID}, Groups: []string{dispatchRegistry, reviewControlGroup, taskStartGroup}}
 	if in.Evidence.Fix != nil {
-		b, err := ReadReviewBatch(root, in.Evidence.Fix.BatchID)
+		members, err := fixBatchMembers(root, in.Evidence.Fix.BatchID)
 		if err != nil {
 			return scope, err
 		}
-		scope.Tasks = append(scope.Tasks, b.TaskIDs...)
+		scope.Tasks = append(scope.Tasks, members...)
 	}
 	if in.Evidence.WrapUp != nil {
 		review, err := reviewGateScope(root, in.TaskID, false)
@@ -118,80 +117,15 @@ func validateDispatchFix(tx *Transaction, in DispatchInput, initial bool, histor
 		return dispatchEvidenceError("fix binding required")
 	}
 	completed := len(historical) > 0 && historical[0]
-	var batch ReviewBatch
-	ok, err := readReviewJSON(tx, reviewBatchName(binding.BatchID), &batch)
+	stamped, problems, err := collectDispatchFix(tx, in, initial, completed)
 	if err != nil {
 		return err
 	}
-	if !ok || batch.BatchID != binding.BatchID || !completed && batch.TargetCommit != in.Base || !containsID(batch.TaskIDs, in.TaskID) || len(binding.Findings) == 0 {
-		return dispatchEvidenceError("batch, target or membership")
-	}
-	targets, err := reviewBatchTargets(batch)
-	if err != nil {
-		return err
-	}
-	runs, err := batchRuns(tx, batch)
-	if err != nil {
-		return err
-	}
-	expectedAuthors := map[string]DispatchAuthorReference{}
-	seen := map[string]bool{}
-	stamped := make([]DispatchFindingReference, len(binding.Findings))
-	copy(stamped, binding.Findings)
-	for i, ref := range stamped {
-		if seen[ref.key()] {
-			return dispatchEvidenceError("duplicate finding")
-		}
-		seen[ref.key()] = true
-		readRun := reviewRunForMutation
-		if completed {
-			readRun = reviewRunForConsumption
-		}
-		run, err := readRun(tx, ref.RunID)
-		if err != nil {
-			return err
-		}
-		// A batch advanced before this round leaves the run behind the base; the
-		// recorded chain still ties the two together, also on historical replay.
-		commitAt := slices.Index(targets, run.Commit)
-		if run.BatchID != binding.BatchID || commitAt < 0 || !slices.Contains(targets[commitAt:], in.Base) || run.PreviousRunID != ref.PreviousRunID || !containsID(run.TaskIDs, in.TaskID) {
-			return dispatchEvidenceError("run, predecessor or task binding")
-		}
-		for _, other := range runs {
-			if !completed && other.PreviousRunID == run.RunID {
-				return dispatchEvidenceError("superseded review round")
-			}
-		}
-		section, err := collectDispatchAuthors(tx, run, ref.FindingID, in.TaskID, expectedAuthors, map[string]bool{})
-		if err != nil {
-			return err
-		}
-		if ref.Section != "" && ref.Section != section {
-			return dispatchEvidenceError("finding section mismatch")
-		}
-		if initial {
-			stamped[i].Section = section
-		}
+	if len(problems) > 0 {
+		return dispatchProblemsError(problems, "")
 	}
 	if initial {
 		binding.Findings = stamped
-	}
-	supplied := map[string]bool{}
-	for _, ref := range binding.Authors {
-		key := ref.Finding.key() + "/" + ref.RecordID
-		if supplied[key] || !validReference(ref.Artifact) {
-			return dispatchEvidenceError("author reference")
-		}
-		supplied[key] = true
-		expected, ok := expectedAuthors[key]
-		if !ok || !reflect.DeepEqual(ref, expected) {
-			return dispatchEvidenceError("author identity, artifact or lineage")
-		}
-	}
-	// Later author revisions must not rewrite a dispatch's original binding.
-	// On creation, every existing original on this finding lineage is included.
-	if initial && len(supplied) != len(expectedAuthors) {
-		return dispatchEvidenceError("existing author originals must be referenced")
 	}
 	return nil
 }
@@ -210,32 +144,50 @@ func findingSection(findings ReviewFindings, id string) (ReviewFinding, string, 
 	return ReviewFinding{}, "", false
 }
 
-func collectDispatchAuthors(tx *Transaction, run ReviewRun, findingID, task string, refs map[string]DispatchAuthorReference, seen map[string]bool) (string, error) {
+// collectDispatchAuthors gathers the author originals of one finding and its
+// lineage. A failure of the evidence returns as the problem line of the first
+// lineage step that fails, since the later steps depend on it. origin is the
+// finding as the evidence names it; a lineage step names itself next to it.
+func collectDispatchAuthors(tx *Transaction, run ReviewRun, findingID, task, origin string, refs map[string]DispatchAuthorReference, seen map[string]bool) (section, problem string, err error) {
 	key := run.RunID + "/" + findingID
+	label := origin
+	if key != origin {
+		label = t("board.dispatch_problem_lineage_label", origin, key)
+	}
+	fail := func(e error) (string, string, error) {
+		if line, ok := evidenceProblem(e); ok {
+			return "", label + ": " + line, nil
+		}
+		return "", "", e
+	}
 	if seen[key] {
-		return "", dispatchEvidenceError("finding lineage cycle")
+		return "", t("board.dispatch_problem_lineage_cycle", label), nil
 	}
 	seen[key] = true
-	if err := verifyPublishedReview(tx, run); err != nil {
-		return "", err
+	if err = verifyPublishedReview(tx, run); err != nil {
+		return fail(err)
 	}
 	findings, err := runFindings(tx, run)
 	if err != nil {
-		return "", err
+		return fail(err)
 	}
 	if err = validateFindingLineage(tx, run, findings); err != nil {
-		return "", err
+		return fail(err)
 	}
 	item, section, ok := findingSection(findings, findingID)
 	if !ok {
-		return "", dispatchEvidenceError("missing finding")
+		return "", t("board.dispatch_problem_finding_missing", label), nil
 	}
 	ledger, err := readDispositionLedger(tx, run, false)
 	if err != nil {
-		return "", err
+		return fail(err)
 	}
-	if !containsID(ledger.Assignment.Items[findingID], task) {
-		return "", dispatchEvidenceError("finding not assigned to task")
+	if assigned := ledger.Assignment.Items[findingID]; !containsID(assigned, task) {
+		who := t("board.dispatch_problem_nobody")
+		if len(assigned) > 0 {
+			who = strings.Join(assigned, ", ")
+		}
+		return "", t("board.dispatch_problem_finding_unassigned", label, task, who), nil
 	}
 	for _, record := range ledger.Records {
 		if record.TaskID != task || record.FindingID != findingID {
@@ -247,16 +199,19 @@ func collectDispatchAuthors(tx *Transaction, run ReviewRun, findingID, task stri
 		var previous ReviewRun
 		ok, e := readReviewJSON(tx, reviewRunName(item.Lineage.RunID), &previous)
 		if e != nil {
-			return "", e
+			return fail(e)
 		}
-		if !ok || previous.BatchID != run.BatchID || previous.Role != run.Role || !slices.Equal(previous.TaskIDs, run.TaskIDs) {
-			return "", dispatchEvidenceError("foreign predecessor")
+		if !ok {
+			return "", t("board.dispatch_problem_lineage_run_missing", label, item.Lineage.key()), nil
 		}
-		if _, e = collectDispatchAuthors(tx, previous, item.Lineage.FindingID, task, refs, seen); e != nil {
-			return "", e
+		if previous.BatchID != run.BatchID || previous.Role != run.Role || !slices.Equal(previous.TaskIDs, run.TaskIDs) {
+			return "", t("board.dispatch_problem_lineage_foreign", label, item.Lineage.key()), nil
+		}
+		if _, problem, e = collectDispatchAuthors(tx, previous, item.Lineage.FindingID, task, origin, refs, seen); e != nil || problem != "" {
+			return "", problem, e
 		}
 	}
-	return section, nil
+	return section, "", nil
 }
 
 // ValidateDispatchEvidence re-resolves every producer original before transport.

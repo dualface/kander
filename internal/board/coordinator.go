@@ -474,8 +474,15 @@ type CoordinatorBlockedError struct {
 	Reason string
 }
 
+// Error shows the first line of the reason. A reason of several lines, such as
+// the problem list of dispatch evidence, is complete only in the checkpoint.
 func (e *CoordinatorBlockedError) Error() string {
-	return t("board.coordinator_all_blocked", e.Group, e.Reason)
+	first, _, more := strings.Cut(e.Reason, "\n")
+	text := t("board.coordinator_all_blocked", e.Group, first)
+	if more {
+		text += " " + t("board.coordinator_blocked_more", e.Group)
+	}
+	return text
 }
 
 // coordinatorRequestFailure reports an error that says nothing about the member
