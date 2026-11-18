@@ -9,13 +9,12 @@ Lists cards, optionally for one state. Used by card creators and the user; orche
 ## Syntax
 
 ```text
-kander list [--mobile|--json [--agent-status]] [backlog|todo|working|review|done|archived|trash]
+kander list [--json [--agent-status]] [backlog|todo|working|review|done|archived|trash]
 ```
 
 ## Arguments
 
 - `state`: one of `backlog`, `todo`, `working`, `review`, `done`, `archived`, `trash`.
-- `--mobile`: narrow layout.
 - `--json`: print the board snapshot below instead of the table.
 - `--agent-status`: with `--json` only; observe the executing agent of every `working` or `review` card with a non-empty `WINDOW`.
 
@@ -42,4 +41,4 @@ kander list [--mobile|--json [--agent-status]] [backlog|todo|working|review|done
 ## Rejections
 
 - An unknown state, more than one state, or an unknown option is a usage error.
-- `--mobile` with `--json`, and `--agent-status` without `--json`, are usage errors.
+- `--agent-status` without `--json` is a usage error.

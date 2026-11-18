@@ -84,7 +84,7 @@ func location(s *Session, task string) string {
 // NewListCommand builds kander list. observe supplies this host's terminal observer for
 // --agent-status; the board package cannot import it.
 func NewListCommand(observe board.AgentStatusFunc) *cobra.Command {
-	var machine, mobile, agentStatus bool
+	var machine, agentStatus bool
 	c := &cobra.Command{
 		Use:     "list [state]",
 		Aliases: []string{"ls"},
@@ -98,10 +98,9 @@ func NewListCommand(observe board.AgentStatusFunc) *cobra.Command {
 		},
 	}
 	c.PreRunE = func(*cobra.Command, []string) error {
-		return command.First(command.Exclusive(c, "mobile", "json"), command.Needs(c, "agent-status", "json"))
+		return command.Needs(c, "agent-status", "json")
 	}
 	c.Flags().BoolVar(&machine, "json", false, "")
-	c.Flags().BoolVar(&mobile, "mobile", false, "")
 	c.Flags().BoolVar(&agentStatus, "agent-status", false, "")
 	return c
 }

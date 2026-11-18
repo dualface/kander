@@ -325,7 +325,6 @@ func TestArgumentErrorsAreLocalizedAndShowTheSyntax(t *testing.T) {
 func TestContractUsageErrorsExitTwo(t *testing.T) {
 	for _, args := range [][]string{
 		{"show", sampleTask, "--document", "a.md", "--document", "b.md"},
-		{"list", "--mobile", "--json"},
 		{"list", "--agent-status"},
 		{"move", sampleTask, "done", "--dispatch-id", "d1"},
 		{"update", sampleTask, "--document", "spec.md"},
@@ -346,6 +345,7 @@ func TestRemovedAndRetiredForms(t *testing.T) {
 		code int
 	}{
 		{[]string{"init", "--maintenance"}, 2},
+		{[]string{"list", "--mobile"}, 2},
 		{[]string{"server", "start", "-data", "x"}, 2},
 		{[]string{"completion"}, 2},
 		{[]string{"completion", "bash"}, 2},

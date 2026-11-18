@@ -6,20 +6,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Exclusive reports an argument error when more than one of the named flags is given.
-func Exclusive(c *cobra.Command, names ...string) error {
-	var given []string
-	for _, name := range names {
-		if c.Flags().Changed(name) {
-			given = append(given, "--"+name)
-		}
-	}
-	if len(given) > 1 {
-		return Usage("cli.error_flags_exclusive", strings.Join(given, ", "))
-	}
-	return nil
-}
-
 // Together reports an argument error when only some of the named flags are given.
 func Together(c *cobra.Command, names ...string) error {
 	var given int

@@ -5,13 +5,13 @@
 ## Command
 
 ```text
-kander list [--mobile|--json [--agent-status]] [backlog|todo|working|review|done|archived|trash]
+kander list [--json [--agent-status]] [backlog|todo|working|review|done|archived|trash]
 ```
 
 - `--json` prints one JSON object on stdout and exits 0. Without `--json` the table output is unchanged.
 - `--agent-status` (only with `--json`) fills the agent objects. Without it the command runs no terminal probe at all.
 - A state argument limits the snapshot to the cards of that state.
-- `--mobile` with `--json`, `--agent-status` without `--json`, an unknown state, or an unknown option is a usage error (exit 2).
+- `--agent-status` without `--json`, an unknown state, or an unknown option is a usage error (exit 2).
 - Board read failures exit 1 with the same messages as the table form; journal and invalid-entry advisories go to stderr as before, never into the JSON.
 
 ## Schema version 1
