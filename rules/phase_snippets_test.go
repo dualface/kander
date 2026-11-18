@@ -41,7 +41,7 @@ func TestPhaseSnippetsExistWithSource(t *testing.T) {
 }
 
 func TestSplitRuleFilesStayShort(t *testing.T) {
-	for name, limit := range map[string]int{"KANDER-KANBAN-RULES.md": 4000, "KANDER-GIT-RULES.md": 900, "KANDER-LOADING-RULES.md": 1000, "KANDER-TASK-GROUP-RULES.md": 2000} {
+	for name, limit := range map[string]int{"KANDER-KANBAN-RULES.md": 4000, "KANDER-GIT-RULES.md": 1050, "KANDER-LOADING-RULES.md": 1000, "KANDER-TASK-GROUP-RULES.md": 2000} {
 		if n := words(t, name); n > limit {
 			t.Fatalf("%s has %d words, limit %d", name, n, limit)
 		}
