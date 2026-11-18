@@ -285,13 +285,16 @@ func TestRenewalConcurrencyIsLimited(t *testing.T) {
 		mu.Lock()
 		held := inflight
 		mu.Unlock()
-		if held != renewConcurrency {
-			t.Fatalf("%d renewals in flight with %d due, want %d", held, due, renewConcurrency)
+		// The cap is written out here, not read from the constant: a change of
+		// the constant must fail this test.
+		const want = 8
+		if held != want {
+			t.Fatalf("%d renewals in flight with %d due, want %d", held, due, want)
 		}
 		close(release)
 		<-done
-		if peak != renewConcurrency || finished != due {
-			t.Fatalf("peak %d (want %d), finished %d (want %d)", peak, renewConcurrency, finished, due)
+		if peak != want || finished != due {
+			t.Fatalf("peak %d (want %d), finished %d (want %d)", peak, want, finished, due)
 		}
 	})
 }

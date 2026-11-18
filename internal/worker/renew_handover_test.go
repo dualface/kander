@@ -200,15 +200,16 @@ func TestLostMarkDuringTheProbeIsStoppedBeforeTheHandover(t *testing.T) {
 }
 
 // A lease marked lost while the handover stops another agent is stopped before
-// the lock is released, not left for the new worker or the next round.
+// the lock is released, not left for the new worker or the next round. The
+// renewals run until no mark is left, so a third lease is still renewed while
+// the stops go on.
 func TestLostMarkDuringAStopIsStoppedBeforeTheLockIsReleased(t *testing.T) {
-	var holdB atomic.Bool
-	releaseB := make(chan struct{})
-	var firstB sync.Once
+	var holdFirstB sync.Once
+	gateB := newHookGate(t)
 	h := newHarnessWrapped(t, 0, func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if resource, ok := isRenewal(r); ok && holdB.Load() && strings.Contains(resource, "b-second") {
-				firstB.Do(func() { <-releaseB })
+			if resource, ok := isRenewal(r); ok && strings.Contains(resource, "b-second") {
+				holdFirstB.Do(gateB.hold)
 			}
 			next.ServeHTTP(w, r)
 		})
@@ -216,11 +217,16 @@ func TestLostMarkDuringAStopIsStoppedBeforeTheLockIsReleased(t *testing.T) {
 	r := newHandoverRig(t, h)
 	_, a := r.claimedAs("a-first", "exec-a")
 	_, b := r.claimedAs("b-second", "exec-b")
-	holdB.Store(true)
-	stopA := newHookGate(t)
+	_, c := r.claimedAs("c-third", "exec-c")
+	stopA, stopB := newHookGate(t), newHookGate(t)
+	var stops atomic.Int32
 	hook := func(int) {
 		// The first stop is the one of a: b is marked while it is in progress.
-		stopA.hold()
+		if stops.Add(1) == 1 {
+			stopA.hold()
+		} else {
+			stopB.hold()
+		}
 	}
 	r.onStop.Store(&hook)
 	r.probe = func() error {
@@ -237,7 +243,7 @@ func TestLostMarkDuringAStopIsStoppedBeforeTheLockIsReleased(t *testing.T) {
 	stopA.waitEntered(t)
 	// The renewal of b has been held at the server since the probe; it gets the
 	// answer now, while the stop of a is in progress.
-	close(releaseB)
+	gateB.let()
 	waitFor(t, "the renewal loop to mark b lost", func() bool {
 		r.w.mu.Lock()
 		defer r.w.mu.Unlock()
@@ -245,6 +251,12 @@ func TestLostMarkDuringAStopIsStoppedBeforeTheLockIsReleased(t *testing.T) {
 		return marked
 	})
 	stopA.let()
+	stopB.waitEntered(t)
+	// The stop of b is in progress and the renewals have not been paused: the
+	// third lease is renewed meanwhile.
+	r.advance(16 * time.Second)
+	waitFor(t, "the renewal of the third lease during the stop of b", func() bool { return r.credentialOf(c).RenewedAt.Equal(r.now()) })
+	stopB.let()
 	wait()
 	if stoppedAtSpawn != 2 {
 		t.Fatalf("both agents must be stopped before the successor starts: %d stopped", stoppedAtSpawn)

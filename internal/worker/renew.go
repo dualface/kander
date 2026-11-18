@@ -112,7 +112,9 @@ func (w *loop) renewRound(ctx context.Context) {
 }
 
 // renewBounded calls renew for every credential, at most renewConcurrency at a
-// time, and returns when the calls are done. Once ctx ends it starts no more.
+// time, and returns when the calls are done. It stops dispatching when it sees
+// that ctx ended; a call may still start with an ended context when a slot was
+// free at the same moment, so renew checks the context itself.
 func renewBounded(ctx context.Context, due []remote.Credential, renew func(context.Context, remote.Credential)) {
 	var wg sync.WaitGroup
 	slots := make(chan struct{}, renewConcurrency)

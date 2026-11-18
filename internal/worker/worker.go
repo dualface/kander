@@ -324,14 +324,16 @@ func (w *loop) forgetAbsent(credentials []remote.Credential) {
 // since the last check. The work loop runs it before every work step, so a
 // lost lease waits for at most the step in progress. The credentials it stops
 // are added to stopped, which keeps the copy of the credential that was read at
-// the start of the round from being served again.
-func (w *loop) stopMarked(ctx context.Context, stopped map[credentialKey]struct{}) {
+// the start of the round from being served again. It reports whether it had
+// marks to work on and read the credentials; a failed read leaves the marks for
+// the next check and reports false.
+func (w *loop) stopMarked(ctx context.Context, stopped map[credentialKey]struct{}) bool {
 	w.mu.Lock()
 	marks := w.lostMarks
 	w.lostMarks = map[credentialKey]struct{}{}
 	w.mu.Unlock()
 	if len(marks) == 0 {
-		return
+		return false
 	}
 	credentials, err := w.credentials()
 	if err != nil {
@@ -341,7 +343,7 @@ func (w *loop) stopMarked(ctx context.Context, stopped map[credentialKey]struct{
 			w.lostMarks[key] = struct{}{}
 		}
 		w.mu.Unlock()
-		return
+		return false
 	}
 	for _, c := range credentials {
 		key := keyOf(c)
@@ -352,6 +354,14 @@ func (w *loop) stopMarked(ctx context.Context, stopped map[credentialKey]struct{
 		w.stopLost(ctx, w.o.Logger, c)
 		stopped[key] = struct{}{}
 	}
+	return true
+}
+
+// marked reports whether a lease is marked lost and not stopped yet.
+func (w *loop) marked() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return len(w.lostMarks) > 0
 }
 
 // warnSlow logs a round that took longer than the shortest renewal interval of

@@ -217,12 +217,7 @@ func (w *loop) tryHandover(ctx context.Context, h *handover, lock *workerLock) (
 		h.fail(w.o, current)
 		return handoverNone, nil
 	}
-	// Leases lost while the probe ran are stopped before the renewals pause. A
-	// lease marked lost during those stops is stopped once the renewal loop has
-	// exited, while this worker still holds the lock and nothing marks any more.
-	w.stopMarked(ctx, map[credentialKey]struct{}{})
-	w.stopRenewals()
-	w.stopMarked(ctx, map[credentialKey]struct{}{})
+	w.settleLostMarks(ctx)
 	lock.release()
 	next, err := w.o.Spawn(w.o.Home, h.executable)
 	if err == nil {
@@ -242,6 +237,28 @@ func (w *loop) tryHandover(ctx context.Context, h *handover, lock *workerLock) (
 	}
 	w.startRenewals(ctx)
 	return handoverNone, nil
+}
+
+// settleLostMarks stops the agents of the leases marked lost before the
+// renewals pause for a handover, so that no stop attempt delays a renewal while
+// they are paused. The stops run while the renewal loop runs, until no mark is
+// left. Then the loop is stopped, and a mark that came in that last moment sends
+// the worker around again with the renewals running. A renewal loop that has
+// exited marks nothing more. After a few rounds the renewals stay stopped and a
+// remaining mark is left to the next worker, which stops a lost credential at
+// its first round.
+func (w *loop) settleLostMarks(ctx context.Context) {
+	stopped := map[credentialKey]struct{}{}
+	for range 3 {
+		for w.stopMarked(ctx, stopped) {
+		}
+		w.stopRenewals()
+		if !w.marked() {
+			return
+		}
+		w.startRenewals(ctx)
+	}
+	w.stopRenewals()
 }
 
 // confirm waits until another process holds worker.lock. A started process
