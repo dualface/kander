@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -228,6 +229,10 @@ func finishReconcile(c board.CoordinatorCheckpoint, err error) int {
 	return status
 }
 
+// releaseSyntax is the confirmed form of the release command. It is not part
+// of the localized text, so a translation cannot change the syntax.
+const releaseSyntax = "kander coordinator release --end-execution <absolute-release.json>"
+
 func coordinatorUsageFail() int {
 	fmt.Fprintln(os.Stderr, config.CommandUsage("coordinator"))
 	return 2
@@ -241,7 +246,20 @@ func RunCoordinator(args []string) int { return runServiceCoordinator(args, fals
 func RunCoordinatorRemote(args []string) int { return runServiceCoordinator(args, true) }
 
 func runServiceCoordinator(args []string, required bool) int {
-	if len(args) != 2 {
+	// Release ends the calling execution for good, so it takes an explicit
+	// confirmation. Without it nothing runs: no configuration is read and no
+	// request is sent, and the message spells the new syntax for a coordinator
+	// that still reads an older copy of the rules.
+	confirmed := false
+	if len(args) == 3 && args[0] == "release" && args[1] == "--end-execution" {
+		confirmed, args = true, []string{args[0], args[2]}
+	}
+	if len(args) == 2 && args[0] == "release" && !confirmed && args[1] != "--end-execution" {
+		fmt.Fprintln(os.Stderr, config.Text("remote.coordinator_release_needs_end_execution"))
+		fmt.Fprintln(os.Stderr, releaseSyntax)
+		return 2
+	}
+	if len(args) != 2 || slices.Contains(args, "--end-execution") {
 		return coordinatorUsageFail()
 	}
 	cfg, err := config.Load(false)
