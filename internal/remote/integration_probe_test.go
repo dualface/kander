@@ -8,6 +8,19 @@ import (
 	"testing"
 )
 
+// isolateGitConfig keeps a test of this package away from the developer's own
+// user-level and system-level Git configuration, such as commit signing and
+// global hooks. The tests of package remote_test use isolateGlobalGit.
+func isolateGitConfig(t *testing.T) {
+	t.Helper()
+	empty := filepath.Join(t.TempDir(), "gitconfig")
+	if err := os.WriteFile(empty, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", empty)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+}
+
 func probeGit(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	cmd := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir}, args...)...)
@@ -20,6 +33,7 @@ func probeGit(t *testing.T, dir string, args ...string) string {
 }
 
 func TestRemoteServesAsksTheRemoteThroughTheClonesOwnOrigin(t *testing.T) {
+	isolateGitConfig(t)
 	root := t.TempDir()
 	probeGit(t, root, "init", "-q", "--bare", "common.git")
 	probeGit(t, root, "clone", "-q", "common.git", "work")
@@ -41,6 +55,7 @@ func TestRemoteServesAsksTheRemoteThroughTheClonesOwnOrigin(t *testing.T) {
 }
 
 func TestRemoteServesFallsBackWhenNegotiationIsUnavailable(t *testing.T) {
+	isolateGitConfig(t)
 	// Negotiation needs protocol version 2; version 0 must still prove the remote.
 	t.Setenv("GIT_CONFIG_COUNT", "1")
 	t.Setenv("GIT_CONFIG_KEY_0", "protocol.version")

@@ -18,18 +18,6 @@ import (
 	"github.com/dualface/kander/internal/remote"
 )
 
-// isolateGit keeps the tests away from the developer's own Git configuration
-// and identity: the work tree of the first clone is then the only place that
-// can give an identity.
-func (f *integrationFixture) isolateGit() {
-	f.t.Helper()
-	isolateGlobalGit(f.t)
-	for _, name := range []string{"GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL", "EMAIL"} {
-		f.t.Setenv(name, "")
-		_ = os.Unsetenv(name)
-	}
-}
-
 // mergeIdentity isolates Git and gives the first clone the identity the merge
 // commits of the client carry.
 func (f *integrationFixture) mergeIdentity() {

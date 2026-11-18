@@ -30,6 +30,18 @@ type integrationFixture struct {
 	intercept    func(http.ResponseWriter, *http.Request, http.Handler) bool
 }
 
+// isolateGit keeps the tests away from the developer's own Git configuration
+// and identity: the work tree of the first clone is then the only place that
+// can give an identity.
+func (f *integrationFixture) isolateGit() {
+	f.t.Helper()
+	isolateGlobalGit(f.t)
+	for _, name := range []string{"GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL", "EMAIL"} {
+		f.t.Setenv(name, "")
+		_ = os.Unsetenv(name)
+	}
+}
+
 func newIntegrationFixture(t *testing.T) *integrationFixture {
 	f := newIntegrationGitFixture(t)
 	f.reviewedTask()
@@ -39,6 +51,10 @@ func newIntegrationGitFixture(t *testing.T) *integrationFixture {
 	t.Helper()
 	t.Setenv(remote.EnvExecutionID, "")
 	f := &integrationFixture{t: t, root: t.TempDir()}
+	// The tests must not read the developer's user-level or system-level Git
+	// configuration (commit signing, global hooks, default branch name), so
+	// this runs before the first Git command of the fixture.
+	f.isolateGit()
 	f.bare, f.first, f.second = filepath.Join(f.root, "common.git"), filepath.Join(f.root, "first"), filepath.Join(f.root, "second")
 	deliveryGit(t, f.root, "init", "--bare", f.bare)
 	deliveryGit(t, f.root, "clone", f.bare, f.first)

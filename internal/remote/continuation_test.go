@@ -30,6 +30,7 @@ func continuationTestGit(t *testing.T, dir string, args ...string) string {
 }
 
 func TestContinuationReconcilesExactSnapshotAndRefusesPartialReplay(t *testing.T) {
+	isolateGitConfig(t)
 	source := t.TempDir()
 	continuationTestGit(t, source, "init")
 	if err := os.WriteFile(filepath.Join(source, "tracked.txt"), []byte("base\n"), 0o600); err != nil {
