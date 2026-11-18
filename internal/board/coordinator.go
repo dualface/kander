@@ -272,7 +272,7 @@ func ClaimCoordinatorWithTransaction(ctx context.Context, root string, r Coordin
 		g := newGroupKernel(c, exists, len(ids))
 		next, ok := g.step(g.claim(r, same, exists && c.Authority.Token == r.Token, true, true))
 		if !ok {
-			return coordinatorError("claim CAS or reused token")
+			return claimRefusal(c, exists, r)
 		}
 		if same {
 			return nil
@@ -482,12 +482,12 @@ func reconcileCheckpoint(ctx context.Context, tx *Transaction, r CoordinatorReco
 	}
 	g := newGroupKernel(c, exists, len(c.Members))
 	if g.refuseAuthority(c, r) {
-		return c, false, coordinatorError("stale coordinator authority")
+		return c, false, authorityRefusal(c, exists, r)
 	}
 	// A lost response may retry the same request, but evidence is still
 	// revalidated before returning its existing result.
 	if g.refuseRevision(c, r) {
-		return c, false, coordinatorError("checkpoint CAS")
+		return c, false, checkpointRevisionRefusal(c, r)
 	}
 	if !slices.Equal(ids, checkpointIDs(c)) {
 		return c, false, coordinatorError("unknown or missing member")
