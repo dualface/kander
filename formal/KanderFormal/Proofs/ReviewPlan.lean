@@ -208,6 +208,51 @@ theorem sealed_admit {p : Params} {s s' : State} {cas otherOp batchOnly owed : V
     exact .inr ⟨by simpa using h1', by simpa using h2'⟩
   · exact .inl (by simpa using hu')
 
+/-! ## Member addition (`add_members`) -/
+
+theorem find_addMembers : M.findEvent "addMembers" = some addMembersEvent := rfl
+
+/-- An accepted member addition had every fact: the plan CAS, started, free,
+group, language, and no run in an unplanned batch. -/
+theorem addMembers_facts {p : Params} {s s' : State} {v1 v2 v3 v4 v5 v6 : Val}
+    (h : step M p s ⟨"addMembers", [v1, v2, v3, v4, v5, v6]⟩ = some s') :
+    v1 = boolV true ∧ v2 = boolV true ∧ v3 = boolV true ∧ v4 = boolV true ∧ v5 = boolV true ∧ v6 = boolV true := by
+  obtain ⟨args, hb, hg⟩ := accepted_args find_addMembers h
+  have hf := allArgs_true (eval_and_true (eval_and_true hg).2).2
+  rw [bind_pairs hb] at hf
+  simp [addMembersEvent, addMembersFacts, boolArgs, lookup] at hf
+  simp_all
+
+/-- A sealed plan refuses a member addition. -/
+theorem sealed_addMembers {p : Params} {s : State} {vs : List Val} (hs : lookup "sealed" s = some (boolV true)) :
+    step M p s ⟨"addMembers", vs⟩ = none := by
+  cases h : step M p s ⟨"addMembers", vs⟩ with
+  | none => rfl
+  | some s' =>
+    obtain ⟨args, -, hg⟩ := accepted_args find_addMembers h
+    obtain ⟨-, g⟩ := eval_and_true hg
+    obtain ⟨g, -⟩ := eval_and_true g
+    rw [eval_sealed hs] at g
+    simp [boolV] at g
+
+/-- When any fact of a member addition does not hold, the event is refused and the
+state stays as it was. -/
+theorem addMembers_refused {p : Params} {s : State} {e : Event}
+    (h : e.name = "addMembers" ∧ e.args.length = 6 ∧ boolV false ∈ e.args) :
+    step M p s e = none ∧ run M p s e = (s, false) := by
+  have hn : step M p s e = none := by
+    cases hs : step M p s e with
+    | none => rfl
+    | some s' =>
+      exfalso
+      obtain ⟨n, as⟩ := e
+      obtain ⟨rfl, hl, hf⟩ := h
+      match as, hl with
+      | [v1, v2, v3, v4, v5, v6], _ =>
+        obtain ⟨h1, h2, h3, h4, h5, h6⟩ := addMembers_facts hs
+        simp [h1, h2, h3, h4, h5, h6, boolV] at hf
+  exact ⟨hn, by simp [run, hn]⟩
+
 /-! ## Theorem 6: invariant -/
 
 /-- A state without a plan is the initial state: no batch, closure, or seal
@@ -216,18 +261,18 @@ def Inv (p : Params) (s : State) : Prop :=
   M.StateConforms p s ∧ (lookup "planned" s = some (boolV false) → s = initial M p)
 
 theorem events_cases {ev : EventDecl} (h : ev ∈ M.events) :
-    ev = createEvent ∨ ev = extendEvent ∨ ev ∈ [admitEvent, appendEvent, sealEvent, rebindEvent, syncEvent, retargetEvent, dropEvent,
-      releaseEvent, resolveEvent, runEvent, advanceEvent, aggregateEvent, closeEvent] := by
+    ev = createEvent ∨ ev = extendEvent ∨ ev ∈ [admitEvent, appendEvent, sealEvent, rebindEvent, syncEvent, retargetEvent, addMembersEvent,
+      dropEvent, releaseEvent, resolveEvent, runEvent, advanceEvent, aggregateEvent, closeEvent] := by
   simpa [M, reviewPlanMachine] using h
 
 theorem planned_guard {ev : EventDecl}
-    (h : ev ∈ [admitEvent, appendEvent, sealEvent, rebindEvent, syncEvent, retargetEvent, dropEvent, releaseEvent, resolveEvent,
-      runEvent, advanceEvent, aggregateEvent, closeEvent]) :
+    (h : ev ∈ [admitEvent, appendEvent, sealEvent, rebindEvent, syncEvent, retargetEvent, addMembersEvent, dropEvent, releaseEvent,
+      resolveEvent, runEvent, advanceEvent, aggregateEvent, closeEvent]) :
     ∃ g, ev.guard = .and (f "planned") g ∧ ∀ x, ("planned", x) ∉ ev.assigns := by
   simp only [List.mem_cons, List.not_mem_nil, or_false] at h
-  rcases h with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
-    exact ⟨_, rfl, by simp [admitEvent, appendEvent, sealEvent, rebindEvent, syncEvent, retargetEvent, dropEvent, releaseEvent,
-      resolveEvent, runEvent, advanceEvent, aggregateEvent, closeEvent]⟩
+  rcases h with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+    exact ⟨_, rfl, by simp [admitEvent, appendEvent, sealEvent, rebindEvent, syncEvent, retargetEvent, addMembersEvent, dropEvent,
+      releaseEvent, resolveEvent, runEvent, advanceEvent, aggregateEvent, closeEvent]⟩
 
 theorem lookup_names {s : State} {f : String} (hn : s.map Prod.fst = M.fields.map FieldDecl.name)
     (hf : f ∈ M.fields.map FieldDecl.name) : ∃ v, lookup f s = some v :=
