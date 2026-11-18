@@ -13,7 +13,7 @@ import (
 
 // Run executes c under a fresh root with args and returns the process exit code.
 func Run(c *cobra.Command, args ...string) int {
-	root := command.NewRoot(func() string { return "kander" })
+	root := command.NewRoot()
 	root.AddCommand(c)
 	return command.Execute(root, append([]string{c.Name()}, args...))
 }

@@ -6,23 +6,23 @@ func TestCatalogTextFollowsLanguageChanges(t *testing.T) {
 	setupHome(t)
 	t.Cleanup(resetLanguageState)
 	t.Setenv(EnvLang, "en_US.UTF-8")
-	if got := Text("cli.commands"); got != "commands:" {
+	if got := Text("cli.error_lang_must_be_cn_or_en"); got != "--lang must be cn, en, or ja" {
 		t.Fatalf("environment: %q", got)
 	}
 	BindConfigLanguage(&Config{Language: "cn"})
-	if got := Text("cli.commands"); got != "子命令:" {
+	if got := Text("cli.error_lang_must_be_cn_or_en"); got != "--lang 只接受 cn、en 或 ja" {
 		t.Fatalf("config: %q", got)
 	}
 	ApplyLanguageArgument([]string{"--lang", "en"})
-	if got := Text("cli.commands"); got != "commands:" {
+	if got := Text("cli.error_lang_must_be_cn_or_en"); got != "--lang must be cn, en, or ja" {
 		t.Fatalf("CLI: %q", got)
 	}
 	ApplyLanguageArgument(nil)
-	if got := Text("cli.commands"); got != "子命令:" {
+	if got := Text("cli.error_lang_must_be_cn_or_en"); got != "--lang 只接受 cn、en 或 ja" {
 		t.Fatalf("cleared CLI: %q", got)
 	}
 	BindConfigLanguage(&Config{Language: "en"})
-	if got := Text("cli.commands"); got != "commands:" {
+	if got := Text("cli.error_lang_must_be_cn_or_en"); got != "--lang must be cn, en, or ja" {
 		t.Fatalf("changed config: %q", got)
 	}
 }

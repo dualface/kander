@@ -1,10 +1,7 @@
 package config
 
 import (
-	"io"
-	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/dualface/kander/internal/process"
 	"github.com/dualface/kander/rules"
@@ -16,60 +13,20 @@ const commandContractsDir = rules.SnippetsDir + "/commands"
 // rulesRootPlaceholder stands in for the rules root when no installation can be resolved.
 const rulesRootPlaceholder = "<rules root>"
 
-// CommandReadSentence is the conditional read sentence every rule file, prompt, and usage
+// CommandReadSentence is the conditional read sentence every rule file, prompt, and help
 // output repeats verbatim, with rulesRoot in place of the rules root.
 func CommandReadSentence(rulesRoot string) string {
 	return "Before running any `kander` command in this session, read `" + rulesRoot + "/" + commandContractsDir +
 		"/README.md` once. Before the first use of a command, read its contract file."
 }
 
-// CommandUsage returns the usage text of command: the syntax lines of its contract file, the
-// contract path, and the conditional read sentence. The contract is read from the current
-// scope's rules root, falling back to the embedded copy.
-func CommandUsage(command string) string {
-	rulesDir := ""
-	if paths, err := CurrentInstallPaths(); err == nil {
-		rulesDir = paths.RulesDir
+// ContractRoot returns the rules root of the current scope as an agent addresses it, and the
+// directory it names on disk. Without a resolvable installation the root is a placeholder and
+// the directory is empty.
+func ContractRoot() (shown, dir string) {
+	paths, err := CurrentInstallPaths()
+	if err != nil || paths.RulesDir == "" {
+		return rulesRootPlaceholder, ""
 	}
-	return commandUsage(rulesDir, command, os.Stderr)
+	return process.AgentPath(filepath.Clean(paths.RulesDir)), paths.RulesDir
 }
-
-// commandUsage renders the usage text. When the installed contract is missing and the
-// embedded copy stands in, the Contract line still names the installed path the agent will
-// look for, so the embedded-fallback hint goes to warn to make the gap visible.
-func commandUsage(rulesDir, command string, warn io.Writer) string {
-	contract := command
-	// Collaboration request forms share the notify contract; the historical
-	// indexed command table stays stable while the v2 forms are supplemental.
-	if command == "request" {
-		contract = "notify"
-	}
-	name := commandContractsDir + "/" + contract + ".md"
-	root := rulesRootPlaceholder
-	if rulesDir != "" {
-		root = process.AgentPath(filepath.Clean(rulesDir))
-	} else {
-		warn = nil
-	}
-	var lines []string
-	if data, source, err := rules.Installed(rulesDir, name); err == nil {
-		warnEmbeddedFallback(warn, name, source)
-		lines = contractSyntaxLines(string(data))
-	}
-	if command == "request" {
-		filtered := lines[:0]
-		for _, line := range lines {
-			if strings.HasPrefix(line, "kander request ") {
-				filtered = append(filtered, line)
-			}
-		}
-		lines = filtered
-	}
-	if len(lines) == 0 {
-		lines = []string{"kander " + command}
-	}
-	return strings.Join(lines, "\n") + "\nContract: " + root + "/" + name + "\n" + CommandReadSentence(root)
-}
-
-// contractSyntaxLines includes the base contract and additional command forms.
-func contractSyntaxLines(contract string) []string { return rules.CommandSyntaxLines(contract) }

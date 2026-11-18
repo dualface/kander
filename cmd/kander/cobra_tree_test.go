@@ -390,34 +390,7 @@ func contractPaths(t *testing.T) map[string]map[string]bool {
 			if !strings.HasPrefix(line, "kander ") {
 				continue
 			}
-			words := strings.Fields(strings.TrimPrefix(line, "kander "))
-			prefixes := [][]string{{}}
-			for _, word := range words {
-				if strings.HasPrefix(word, "-") || strings.HasPrefix(word, "[") || strings.HasPrefix(word, "(") {
-					break
-				}
-				choices := []string{word}
-				switch {
-				case strings.HasPrefix(word, "<") && strings.Contains(word, "|"):
-					choices = strings.Split(strings.Trim(word, "<>"), "|")
-				case strings.HasPrefix(word, "<"), word == strings.ToUpper(word) && strings.ToLower(word) != word:
-					choices = nil
-				case strings.Contains(word, "|"):
-					choices = strings.Split(word, "|")
-				}
-				if choices == nil {
-					break
-				}
-				var next [][]string
-				for _, prefix := range prefixes {
-					for _, choice := range choices {
-						next = append(next, append(slices.Clone(prefix), choice))
-					}
-				}
-				prefixes = next
-			}
-			for _, prefix := range prefixes {
-				path := strings.Join(prefix, " ")
+			for _, path := range rules.SyntaxPaths(line) {
 				if paths[path] == nil {
 					paths[path] = map[string]bool{}
 				}
@@ -459,6 +432,11 @@ func TestRegisteredFlagsMatchContractSyntax(t *testing.T) {
 		}
 		if !maps.Equal(registered, flags) {
 			t.Errorf("kander %s: registered %v, contract %v", path, slices.Sorted(maps.Keys(registered)), slices.Sorted(maps.Keys(flags)))
+		}
+	}
+	for path, leaf := range leaves {
+		if _, ok := contract[path]; !ok && !leaf.Hidden {
+			t.Errorf("no contract Syntax line names `kander %s`", path)
 		}
 	}
 }

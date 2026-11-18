@@ -66,20 +66,10 @@ func Report(c *cobra.Command, err error) int {
 	}
 }
 
-// ContractName is the name of the top-level command that owns the contract file c is
-// documented in: `server start` is documented by `server`.
-func ContractName(c *cobra.Command) string {
-	for c.HasParent() && c.Parent().HasParent() {
-		c = c.Parent()
-	}
-	return c.Name()
-}
-
 // NewRoot returns a command root with the parsing semantics every kander command shares:
 // GNU-style flags through pflag, no cobra output of its own (the caller reports errors), no
-// shell completion, localized flag and argument errors, and help that prints the usage text.
-// rootUsage is the text of the root itself; every other command prints its contract usage.
-func NewRoot(rootUsage func() string) *cobra.Command {
+// shell completion, localized flag and argument errors, and the English help of help.go.
+func NewRoot() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "kander",
 		SilenceUsage:  true,
@@ -89,19 +79,11 @@ func NewRoot(rootUsage func() string) *cobra.Command {
 	root.CompletionOptions.DisableDefaultCmd = true
 	addJSONFlag(root)
 	root.SetFlagErrorFunc(flagError)
-	usage := func(c *cobra.Command) string {
-		if !c.HasParent() {
-			return rootUsage()
-		}
-		return config.CommandUsage(ContractName(c))
-	}
 	root.SetUsageFunc(func(c *cobra.Command) error {
-		_, err := fmt.Fprint(c.ErrOrStderr(), usage(c))
+		_, err := fmt.Fprint(c.ErrOrStderr(), usageText(c))
 		return err
 	})
-	root.SetHelpFunc(func(c *cobra.Command, _ []string) {
-		fmt.Fprintln(c.OutOrStdout(), usage(c))
-	})
+	root.SetHelpFunc(func(c *cobra.Command, _ []string) { printHelp(c) })
 	root.SetHelpCommand(helpCommand(root))
 	return root
 }

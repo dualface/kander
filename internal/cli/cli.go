@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"slices"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -67,8 +66,7 @@ func newVersionCommand() *cobra.Command {
 
 // NewRoot builds the command tree of every registered command.
 func NewRoot() *cobra.Command {
-	var root *cobra.Command
-	root = command.NewRoot(func() string { return rootUsage(root) })
+	root := command.NewRoot()
 	root.PersistentFlags().Var(languageValue{}, "lang", "")
 	root.RunE = func(*cobra.Command, []string) error {
 		if err := command.NoJSON(); err != nil {
@@ -107,25 +105,6 @@ func (languageValue) Set(raw string) error {
 		return command.Usage("cli.error_lang_must_be_cn_or_en")
 	}
 	return nil
-}
-
-// rootUsage is the top-level usage text; the command list comes from the tree.
-func rootUsage(root *cobra.Command) string {
-	var b strings.Builder
-	fmt.Fprintln(&b, config.Text("cli.usage"))
-	fmt.Fprintln(&b, config.Text("cli.commands"))
-	for _, c := range root.Commands() {
-		if c.Hidden || c.Name() == "help" {
-			continue
-		}
-		label := c.Name()
-		if len(c.Aliases) > 0 {
-			label += " / " + strings.Join(c.Aliases, " / ")
-		}
-		fmt.Fprintf(&b, "  %s\n", label)
-	}
-	b.WriteString(config.Text("cli.global_options"))
-	return b.String()
 }
 
 // Run executes os.Args-shaped arguments and returns the process exit code.

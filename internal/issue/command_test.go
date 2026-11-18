@@ -271,12 +271,14 @@ func TestFormatErrorMessagesAndHints(t *testing.T) {
 
 func TestIssueHelpDoesNotResolve(t *testing.T) {
 	stub := &stubResolver{}
+	// A stale or missing installed contract adds the hint to run kander doctor on stderr.
+	onlyHint := func(stderr string) bool { return stderr == "" || strings.Contains(stderr, "kander doctor") }
 	code, stdout, stderr := runIssue(t, stub, "--help")
-	if code != 0 || stderr != "" || !strings.Contains(stdout, "kander issue") {
+	if code != 0 || !onlyHint(stderr) || !strings.Contains(stdout, "kander issue") {
 		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	code, stdout, stderr = runIssue(t, stub, "repo", "--help")
-	if code != 0 || stderr != "" || !strings.Contains(stdout, "issue repo") {
+	if code != 0 || !onlyHint(stderr) || !strings.Contains(stdout, "issue repo") {
 		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	if stub.calls != 0 {

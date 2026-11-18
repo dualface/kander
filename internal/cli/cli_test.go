@@ -74,14 +74,19 @@ func TestHelpListsAllCommandsAndLang(t *testing.T) {
 	}
 }
 
-func TestHelpEnglish(t *testing.T) {
+// The help of the tree is English whatever --lang says.
+func TestHelpIgnoresLang(t *testing.T) {
 	resetLang(t)
-	code, out, err := captureRun(t, []string{"kander", "--lang", "en", "--help"})
-	if code != 0 {
-		t.Fatalf("code=%d err=%s", code, err)
+	var outputs []string
+	for _, language := range []string{"cn", "en", "ja"} {
+		code, out, err := captureRun(t, []string{"kander", "--lang", language, "--help"})
+		if code != 0 || err != "" || !strings.HasPrefix(out, "Kander: kanban orchestration for coding agents.\n") {
+			t.Fatalf("--lang %s: code=%d stdout=%q stderr=%q", language, code, out, err)
+		}
+		outputs = append(outputs, out)
 	}
-	if !strings.Contains(out, "usage: kander") {
-		t.Fatalf("expected english help: %s", out)
+	if outputs[0] != outputs[1] || outputs[1] != outputs[2] {
+		t.Fatal("the top-level help differs between languages")
 	}
 }
 
@@ -142,7 +147,7 @@ func TestInstallRejectsNonInteractiveFlags(t *testing.T) {
 		}
 	}
 	code, out, err := captureRun(t, []string{"kander", "install", "--help"})
-	if code != 0 || !strings.Contains(out, "kander install") || err != "" {
+	if code != 0 || !strings.Contains(out, "kander install") || !onlyFallbackHint(err) {
 		t.Fatalf("help code=%d out=%q err=%q", code, out, err)
 	}
 }
@@ -168,7 +173,7 @@ func TestUninstallCommandRegistered(t *testing.T) {
 		t.Fatalf("code=%d out=%q err=%q", code, out, diagnostic)
 	}
 	code, out, _ = captureRun(t, []string{"kander", "--lang", "en", "help"})
-	if code != 0 || !strings.Contains(out, "  uninstall\n") {
+	if code != 0 || !strings.Contains(out, "  uninstall ") {
 		t.Fatalf("help does not list uninstall: code=%d out=%q", code, out)
 	}
 }
