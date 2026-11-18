@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"slices"
@@ -13,6 +14,10 @@ import (
 	"github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/statemachine/serverproposal"
 )
+
+// checkFixProposal is the evidence check of a new fix proposal. Only tests
+// replace it, to reach the outcomes real evidence cannot produce on a test board.
+var checkFixProposal = board.CheckDispatchFixProposal
 
 var requestKinds = []string{api.RequestFix, api.RequestSync, api.RequestReview, api.RequestStop}
 
@@ -55,9 +60,20 @@ func (p *project) requests(id string) ([]api.CollabRequest, error) {
 // requestWrite shares generation validation, the request state and the exact
 // operation receipt in one redo. It never advances the card's content version.
 func (p *project) requestWrite(key, operation, id string, payload any, produce func(*board.Transaction) (api.CollabRequest, error), status int) outcome {
+	return p.requestWriteScoped(key, operation, id, payload, nil, produce, status)
+}
+
+// requestWriteScoped is requestWrite for a producer that reads more of the board
+// than the request and its card. extend adds the groups and cards it needs; it
+// runs only when the operation is not a replay of a stored receipt.
+func (p *project) requestWriteScoped(key, operation, id string, payload any, extend func(board.LockScope) board.LockScope, produce func(*board.Transaction) (api.CollabRequest, error), status int) outcome {
 	return p.idempotent(key, operation, payload, func() outcome {
 		var request api.CollabRequest
-		err := board.WithTransaction(p.board, board.LockScope{Groups: []string{serviceGroup}, Tasks: []string{id}}, func(tx *board.Transaction) error {
+		scope := board.LockScope{Groups: []string{serviceGroup}, Tasks: []string{id}}
+		if extend != nil {
+			scope = extend(scope)
+		}
+		err := board.WithTransaction(p.board, scope, func(tx *board.Transaction) error {
 			var err error
 			request, err = produce(tx)
 			if err != nil {
@@ -94,7 +110,7 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 		return outcome{err: err}
 	}
 	defer p.mu.Unlock()
-	return p.requestWrite(key, "request:"+id, normalized, input, func(tx *board.Transaction) (api.CollabRequest, error) {
+	return p.requestWriteScoped(key, "request:"+id, normalized, input, p.proposalScope(input), func(tx *board.Transaction) (api.CollabRequest, error) {
 		var request api.CollabRequest
 		task, err := tx.Snapshot(normalized)
 		if err != nil {
@@ -106,7 +122,7 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 				return request, apiError(api.CodeInvalidRequest, "dispatch proposal message differs from its visible request")
 			}
 			if !newRequestKernel(frame, nil).accepts(frame.bindEvent(input.Dispatch.TaskID == normalized, input.CardRevision)) {
-				return request, apiError(api.CodeRevisionConflict, "dispatch request must bind the inspected card version")
+				return request, apiError(api.CodeRevisionConflict, bindRefusal(input.Dispatch.TaskID, normalized, input.CardRevision, task.Revision))
 			}
 			raw, err := json.Marshal(input.Dispatch)
 			if err != nil || len(raw) > 512<<10 {
@@ -150,6 +166,13 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 				}
 				return old, nil
 			}
+			// The shell checks the evidence of a new fix proposal once the kernel
+			// accepted the creation and the slot; a refusal writes nothing.
+			if input.Dispatch.Kind == "fix" {
+				if err := checkFixProposal(tx, *input.Dispatch); err != nil {
+					return request, err
+				}
+			}
 		}
 		now := p.server.now()
 		dispatch := input.Dispatch
@@ -160,6 +183,22 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 		}
 		return api.CollabRequest{AcceptWithin: input.AcceptWithin, Dispatch: dispatch, CardRevision: input.CardRevision, Revision: 1, ID: requestID(key), TaskID: normalized, Kind: input.Kind, Message: input.Message, FromClient: input.FromClient, TargetGeneration: input.TargetGeneration, Status: api.RequestOpen, CreatedAt: now, UpdatedAt: now}, nil
 	}, http.StatusCreated)
+}
+
+// proposalScope widens the write scope of a new fix proposal to what the check
+// of its evidence reads. Any other request keeps the scope of the request.
+func (p *project) proposalScope(input api.NewCollabRequest) func(board.LockScope) board.LockScope {
+	if input.Dispatch == nil || input.Dispatch.Kind != "fix" || input.Dispatch.Evidence.Fix == nil {
+		return nil
+	}
+	return func(base board.LockScope) board.LockScope {
+		read := board.FixProposalScope(p.board, input.Dispatch.Evidence.Fix)
+		base.Groups = append(base.Groups, read.Groups...)
+		base.Tasks = append(base.Tasks, read.Tasks...)
+		slices.Sort(base.Tasks)
+		base.Tasks = slices.Compact(base.Tasks)
+		return base
+	}
 }
 func (p *project) answerRequest(key, id, requestID string, answer api.CollabAnswer, h holder) outcome {
 	if !slices.Contains([]string{api.RequestAccepted, api.RequestDone, api.RequestRejected}, answer.Status) || !api.ValidIdentity(requestID) {
@@ -218,7 +257,7 @@ func (p *project) answerRequest(key, id, requestID string, answer api.CollabAnsw
 		case leaseBad:
 			return request, apiError(api.CodeLeaseInvalid, "request targets another generation")
 		case expectedBad:
-			return request, apiError(api.CodeRevisionConflict, "request revision changed")
+			return request, apiError(api.CodeRevisionConflict, fmt.Sprintf("request revision changed: the answer has expected_revision %d, the request is at revision %d. Next step: read the request with kander request show %s %s --json, confirm that the answer still holds, and answer again", answer.ExpectedRevision, request.Revision, normalized, request.ID))
 		case firstAcceptance && !window:
 			return request, apiError(api.CodeEvidenceIncomplete, "dispatch proposal acceptance window has elapsed")
 		case firstAcceptance && card != request.CardRevision:
@@ -259,4 +298,22 @@ func sameRequestedDispatch(old api.CollabRequest, input api.NewCollabRequest) bo
 	left, _ := json.Marshal(stored)
 	right, _ := json.Marshal(input.Dispatch)
 	return string(left) == string(right)
+}
+
+// bindRefusal is the text of a dispatch request that does not bind the card
+// version it inspected: its proposal names another task than the request path, or
+// its card_revision is not the card's current revision.
+func bindRefusal(proposalTask, task string, named, current uint64) string {
+	var parts []string
+	if proposalTask != task {
+		parts = append(parts, fmt.Sprintf("the proposal names task %s, the request path names task %s", board.RefusalTaskID(proposalTask), task))
+	}
+	if named != current {
+		parts = append(parts, fmt.Sprintf("the request has card_revision %d, the card is at revision %d", named, current))
+	}
+	text := "dispatch request must bind the inspected card version"
+	if len(parts) > 0 {
+		text += ": " + strings.Join(parts, "; ")
+	}
+	return text + ". Next step: read the card with kander show --json " + task + " and propose again against its current revision"
 }

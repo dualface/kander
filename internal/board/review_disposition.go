@@ -453,7 +453,7 @@ func appendDisposition(tx *Transaction, run ReviewRun, d *ReviewDisposition) (le
 		if dup == reviewdisposition.DupConflict {
 			return ledger, false, reviewError("immutable author record")
 		}
-		return ledger, false, reviewError("disposition predecessor CAS conflict")
+		return ledger, false, dispositionRefusal(*d, last)
 	}
 	if dup == reviewdisposition.DupSame {
 		return ledger, false, nil

@@ -334,7 +334,7 @@ func TestDispatchFixBindsNonBlockingFindings(t *testing.T) {
 	t.Run("missing versus unassigned errors", func(t *testing.T) {
 		root, in, _, nb, _ := nonBlockingFixFixture(t, false)
 		in.Evidence.Fix.Findings[0].FindingID = "PM-404"
-		if _, err := PrepareDispatch(root, in); err == nil || !strings.Contains(err.Error(), "missing finding") {
+		if _, err := PrepareDispatch(root, in); err == nil || !strings.Contains(err.Error(), "PM-404") {
 			t.Fatalf("missing: %v", err)
 		}
 		in.Evidence.Fix.Findings[0].FindingID = nb.ID
@@ -354,7 +354,7 @@ func TestDispatchFixBindsNonBlockingFindings(t *testing.T) {
 		bad := dispatchInput(s, "fix-ua")
 		bad.Kind, bad.Base = "fix", run2.Commit
 		bad.Evidence.Fix = &DispatchFixBinding{BatchID: run2.BatchID, Findings: []DispatchFindingReference{{FindingRef: FindingRef{run2.RunID, "PM-UA"}}}}
-		if _, err := PrepareDispatch(root2, bad); err == nil || !strings.Contains(err.Error(), "finding not assigned to task") {
+		if _, err := PrepareDispatch(root2, bad); err == nil || !strings.Contains(err.Error(), run2.RunID+"/PM-UA") || !strings.Contains(err.Error(), other) {
 			t.Fatalf("unassigned: %v", err)
 		}
 	})

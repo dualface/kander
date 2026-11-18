@@ -192,13 +192,19 @@ func (c *groupLease) holderError() error {
 }
 
 // claimError is the answer to a group claim the kernel refused, in the order
-// the server has always checked. activeMessage words the refusal of a takeover
-// over a valid lease.
+// the server has always checked. The same execution is refused in three ways
+// that share one code and differ in the diagnostic: another client sent the
+// identity, its lease was released, or it was lost. activeMessage words the
+// refusal of a takeover over a valid lease.
 func (c *groupLease) claimError(sameExec, sameClient bool, input api.GroupClaim, activeMessage string) error {
 	valid := c.kernel.valid()
 	switch {
-	case sameExec && !(sameClient && c.record.Status == api.ClaimActive):
-		return apiError(api.CodeLeaseInvalid, "a lost coordinator execution cannot reuse its identity")
+	case sameExec && !sameClient:
+		return apiError(api.CodeLeaseInvalid, "coordinator execution "+input.ExecutionID+" belongs to another client")
+	case sameExec && c.record.Status == api.ClaimReleased:
+		return apiError(api.CodeLeaseInvalid, "coordinator execution "+input.ExecutionID+" released its lease at generation "+strconv.FormatUint(c.record.Generation, 10)+"; a released execution cannot claim the group again")
+	case sameExec && c.record.Status != api.ClaimActive:
+		return apiError(api.CodeLeaseInvalid, "coordinator execution "+input.ExecutionID+" lost its lease at generation "+strconv.FormatUint(c.record.Generation, 10)+"; a lost execution cannot claim the group again")
 	case sameExec:
 		return c.holderError()
 	case valid:

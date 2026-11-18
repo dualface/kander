@@ -94,7 +94,7 @@ func AdvanceReviewBatchWithTransaction(root string, x ReviewBatchAdvance, extens
 			return e
 		}
 		if !ok {
-			return reviewError("missing batch")
+			return reviewError("missing batch: " + x.BatchID)
 		}
 		scopeIDs = b.TaskIDs
 		if b.PlanID == "" {
@@ -121,7 +121,7 @@ func AdvanceReviewBatchWithTransaction(root string, x ReviewBatchAdvance, extens
 			return err
 		}
 		if !ok {
-			return reviewError("batch revision CAS conflict")
+			return reviewError("missing batch: " + x.BatchID)
 		}
 		k, at, err := batchKernel(tx, b)
 		if err != nil {
@@ -132,13 +132,13 @@ func AdvanceReviewBatchWithTransaction(root string, x ReviewBatchAdvance, extens
 		var refusal error
 		switch {
 		case !f.Revision:
-			refusal = reviewError("batch revision CAS conflict")
+			refusal = batchRevisionRefusal("batch revision CAS conflict", b, x.ExpectedRevision)
 		case k.state.Closed[at]:
 			refusal = reviewError("batch already closed")
 		}
 		if refusal == nil {
 			if f.Target = a.PreviousTarget == b.TargetCommit && a.Target != a.PreviousTarget && validCommit(a.Target) && strings.TrimSpace(a.Reason) != ""; !f.Target {
-				refusal = reviewError("batch target CAS conflict")
+				refusal = advanceRefusal(a, b)
 			}
 		}
 		for _, check := range []struct {

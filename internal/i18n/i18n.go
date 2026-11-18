@@ -52,6 +52,8 @@ var catalogFiles = []string{
 	"locales/rulesinjection/en.json", "locales/rulesinjection/zh-CN.json", "locales/rulesinjection/ja.json",
 	"locales/server/en.json", "locales/server/zh-CN.json", "locales/server/ja.json",
 	"locales/document/en.json", "locales/document/zh-CN.json", "locales/document/ja.json",
+	"locales/refusal/en.json", "locales/refusal/zh-CN.json", "locales/refusal/ja.json",
+	"locales/dispatchevidence/en.json", "locales/dispatchevidence/zh-CN.json", "locales/dispatchevidence/ja.json",
 }
 
 var localizers = loadLocalizers()

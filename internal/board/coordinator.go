@@ -160,6 +160,23 @@ func blockReason(err error) string {
 	return err.Error()
 }
 
+// memberRevisionPrefix starts the refusal of a card below its mirror.
+func memberRevisionPrefix(id string) string {
+	return "member revision or execution cycle changed: " + id + ": "
+}
+
+// keepBlockReason keeps the reason a member was first blocked with while the same
+// card stays below its mirror. The text names the revision the card had, which
+// moves with every write to the card, and a changed text would raise the
+// checkpoint revision for a block that did not change.
+func keepBlockReason(old *CoordinatorBlock, fresh, id string) string {
+	prefix := memberRevisionPrefix(id)
+	if old != nil && strings.Contains(old.Reason, prefix) && strings.Contains(fresh, prefix) {
+		return old.Reason
+	}
+	return fresh
+}
+
 func checkpointIDs(c CoordinatorCheckpoint) []string {
 	ids := make([]string, 0, len(c.Members))
 	for id := range c.Members {
@@ -272,7 +289,7 @@ func ClaimCoordinatorWithTransaction(ctx context.Context, root string, r Coordin
 		g := newGroupKernel(c, exists, len(ids))
 		next, ok := g.step(g.claim(r, same, exists && c.Authority.Token == r.Token, true, true))
 		if !ok {
-			return coordinatorError("claim CAS or reused token")
+			return claimRefusal(c, exists, r)
 		}
 		if same {
 			return nil
@@ -457,8 +474,15 @@ type CoordinatorBlockedError struct {
 	Reason string
 }
 
+// Error shows the first line of the reason. A reason of several lines, such as
+// the problem list of dispatch evidence, is complete only in the checkpoint.
 func (e *CoordinatorBlockedError) Error() string {
-	return t("board.coordinator_all_blocked", e.Group, e.Reason)
+	first, _, more := strings.Cut(e.Reason, "\n")
+	text := t("board.coordinator_all_blocked", e.Group, first)
+	if more {
+		text += " " + t("board.coordinator_blocked_more", e.Group)
+	}
+	return text
 }
 
 // coordinatorRequestFailure reports an error that says nothing about the member
@@ -482,12 +506,12 @@ func reconcileCheckpoint(ctx context.Context, tx *Transaction, r CoordinatorReco
 	}
 	g := newGroupKernel(c, exists, len(c.Members))
 	if g.refuseAuthority(c, r) {
-		return c, false, coordinatorError("stale coordinator authority")
+		return c, false, authorityRefusal(c, exists, r)
 	}
 	// A lost response may retry the same request, but evidence is still
 	// revalidated before returning its existing result.
 	if g.refuseRevision(c, r) {
-		return c, false, coordinatorError("checkpoint CAS")
+		return c, false, checkpointRevisionRefusal(c, r)
 	}
 	if !slices.Equal(ids, checkpointIDs(c)) {
 		return c, false, coordinatorError("unknown or missing member")
@@ -515,7 +539,7 @@ func reconcileCheckpoint(ctx context.Context, tx *Transaction, r CoordinatorReco
 			}
 			m = c.Members[id]
 			if newMirrorKernel(m).block().Blocked {
-				m.Blocked = &CoordinatorBlock{Reason: blockReason(e)}
+				m.Blocked = &CoordinatorBlock{Reason: keepBlockReason(c.Members[id].Blocked, blockReason(e), id)}
 			}
 		}
 		if m.Blocked != nil {

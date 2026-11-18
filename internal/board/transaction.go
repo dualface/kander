@@ -233,7 +233,7 @@ func (tx *Transaction) Expect(id, state string, expected uint64) (Snapshot, erro
 		return s, err
 	}
 	if s.Revision != expected || (state != "" && state != s.Entry.State) {
-		return Snapshot{}, kanbanError("board.transaction_conflict", id)
+		return Snapshot{}, staleTaskError(id, expected, s.Revision, state, s.Entry.State)
 	}
 	return s, nil
 }

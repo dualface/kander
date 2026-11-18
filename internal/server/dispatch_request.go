@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
@@ -69,7 +70,7 @@ func (p *project) proposalError(tx *board.Transaction, task string, command api.
 	case !event.Window:
 		return apiError(api.CodeEvidenceIncomplete, "dispatch proposal acceptance window has elapsed")
 	case match.CardRevision != command.CardRevision:
-		return apiError(api.CodeRevisionConflict, "dispatch proposal names another card version")
+		return apiError(api.CodeRevisionConflict, fmt.Sprintf("dispatch proposal names another card version: the proposal has card_revision %d, this request has card_revision %d. Next step: read the request with kander request show %s %s --json and the card with kander show --json %s. When the proposal still names the current card revision, prepare again at that revision; when the card moved on, the proposal is out of date, so ask the sender to propose again from the current card revision with a new dispatch ID", match.CardRevision, command.CardRevision, task, match.ID, task))
 	case state.Prev != event.Card:
 		if _, err := tx.Expect(task, "", match.CardRevision); err != nil {
 			return err

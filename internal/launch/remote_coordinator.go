@@ -136,6 +136,7 @@ func runRemoteCoordinator(ctx context.Context, cfg *config.Config, args []string
 		if err := json.NewEncoder(os.Stdout).Encode(value); err != nil {
 			return fail(err)
 		}
+		fmt.Fprintln(os.Stderr, config.Text("remote.coordinator_release_final", value.Claim.ExecutionID, request.GroupID, value.Claim.Generation))
 		return 0
 	default:
 		return coordinatorUsageFail()

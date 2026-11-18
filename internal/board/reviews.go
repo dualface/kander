@@ -176,7 +176,7 @@ func reviewCards(tx *Transaction, ids []string, fallback, frozen string) (string
 			return "", kanbanError("board.migration_required", id)
 		}
 		if s.Entry.State != "working" && s.Entry.State != "review" {
-			return "", reviewError(id + ": working/review")
+			return "", memberStateRefusal(id, s.Entry.State, TaskGroupFrom(s.Text))
 		}
 		g := TaskGroupFrom(s.Text)
 		if i == 0 {
@@ -344,7 +344,7 @@ func PrepareReviewRunWithTransaction(root string, input ReviewInput, requirement
 			}
 			if batch.TargetCommit != input.Commit {
 				if advance == nil || advance.PreviousTarget != batch.TargetCommit || advance.Target != input.Commit || strings.TrimSpace(advance.Reason) == "" {
-					return reviewError("batch target CAS conflict")
+					return runAdvanceRefusal(batch, input.Commit, advance)
 				}
 				if e = requireNoSuccessorBatch(tx, batch); e != nil {
 					return e

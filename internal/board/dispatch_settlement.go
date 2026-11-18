@@ -35,7 +35,7 @@ func SettleDispatchWithTransaction(root, task, id string, expected uint64, exten
 		round, epoch := v.pair(d.Authorization)
 		settle := dispatchkernel.Settle{AuthRound: round, AuthEpoch: epoch, Cas: d.Revision == expected, Col: kernelDispatchCol(s.Entry.State), Cycle: true}
 		if !v.allows(v.state, settle) {
-			return dispatchError(id)
+			return dispatchRefusal(id, d, s, expected)
 		}
 		cycleErr := requireDispatchCycle(d, s)
 		settle.Cycle = cycleErr == nil

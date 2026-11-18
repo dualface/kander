@@ -125,7 +125,7 @@ func RecoverCoordinatorWithTransaction(ctx context.Context, root string, r Coord
 		}
 		g := newGroupKernel(c, true, len(c.Members))
 		if _, ok := g.probe().step(g.recoverEvent(r, c, true, true, true, true)); !ok {
-			return coordinatorError("recover CAS")
+			return recoverCASError(c, r)
 		}
 		old, ok := c.Members[id]
 		if !ok {
@@ -160,7 +160,7 @@ func RecoverCoordinatorWithTransaction(ctx context.Context, root string, r Coord
 		}
 		next, ok := g.step(g.recoverEvent(r, c, true, true, true, true))
 		if !ok {
-			return coordinatorError("recover CAS")
+			return recoverCASError(c, r)
 		}
 		c.Members[id] = m
 		c.Recoveries = append(c.Recoveries, record)

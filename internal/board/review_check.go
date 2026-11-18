@@ -343,7 +343,10 @@ func verifyPublishedReview(tx *Transaction, run ReviewRun) error {
 	if err != nil {
 		return err
 	}
-	for _, ancestor := range ancestors {
+	// The first failure is the one reported: walk the chain in a fixed order so
+	// one board state names one run.
+	for _, id := range slices.Sorted(maps.Keys(ancestors)) {
+		ancestor := ancestors[id]
 		if !allPublished(ancestor) {
 			return reviewError(ancestor.RunID + ": incomplete publication")
 		}

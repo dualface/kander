@@ -14,7 +14,7 @@ reconcile never runs Git while it holds a board, group, task, or journal lock, s
 2. Verify Git. With every lock released, it verifies the collected facts in member order and keeps each verdict. A cancelled context stops the command.
 3. Re-check and commit. Under the exclusive scope it runs the same reconciliation again, gives each member the verdict of step 2, then publishes the checkpoint and any new wrap-up evidence.
 
-When the board changed between steps 1 and 3, step 3 fails and keeps the checkpoint: a changed member revision returns `board.transaction_conflict`; a checkpoint advanced by a different request returns `board.coordinator_conflict` ("checkpoint CAS"); a Git fact that differs from the verified one behind an unchanged member revision returns `board.coordinator_conflict`. When the same request was committed in between, step 3 follows the replay path and returns that committed checkpoint. Git refs are not protected by board locks, before or after this change.
+When the board changed between steps 1 and 3, step 3 fails and keeps the checkpoint: a changed member revision returns `board.transaction_conflict`; a checkpoint advanced by a different request returns `board.coordinator_conflict` ("checkpoint CAS: " followed by the revision of the request, the revision of the checkpoint, and the hash of the request next to `last_request_hash`); a Git fact that differs from the verified one behind an unchanged member revision returns `board.coordinator_conflict`. When the same request was committed in between, step 3 follows the replay path and returns that committed checkpoint. Git refs are not protected by board locks, before or after this change.
 
 The coordinator authority contains `owner`, `token`, and `epoch`. A new session uses a unique token and the existing orchestration authorization basis, and CASes the current checkpoint revision/epoch; only one contender succeeds. An old epoch cannot write the checkpoint even if it holds the latest task revision. Retrying with identical claim JSON does not increment the epoch. This authority covers only the checkpoint; it is not a task takeover, integration, notification, or wrap-up-on-behalf authorization.
 
@@ -144,7 +144,7 @@ These fail the whole request and keep the checkpoint, because they say nothing a
 
 - a stale card revision (`board.transaction_conflict`) and an unfinished transaction;
 - a cancelled or expired context;
-- stale coordinator authority, a checkpoint CAS failure, a wrong member set, and board membership integrity;
+- stale coordinator authority (the message names the field that differs: owner and epoch with both values, the token only as different), a missing checkpoint (`checkpoint missing`), a checkpoint CAS failure (both revisions), a wrong member set, and board membership integrity;
 - Git facts that changed between the verification and the commit.
 
 `coordinator reconcile` reports `result` with the checkpoint: `complete` (exit 0), `partial` (exit 3), or `failed` (exit 1, every member blocked). A refused request prints no JSON and exits 1. `board.CoordinatorBlockedError` is the Go form of `failed`, returned beside the committed checkpoint.

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -228,6 +229,10 @@ func finishReconcile(c board.CoordinatorCheckpoint, err error) int {
 	return status
 }
 
+// releaseSyntax is the confirmed form of the release command. It is not part
+// of the localized text, so a translation cannot change the syntax.
+const releaseSyntax = "kander coordinator release --end-execution <absolute-release.json>"
+
 func coordinatorUsageFail() int {
 	fmt.Fprintln(os.Stderr, config.CommandUsage("coordinator"))
 	return 2
@@ -240,9 +245,33 @@ func RunCoordinator(args []string) int { return runServiceCoordinator(args, fals
 // RunCoordinatorRemote is the mandatory REST entrance used by the client binary.
 func RunCoordinatorRemote(args []string) int { return runServiceCoordinator(args, true) }
 
+// coordinatorArgs checks the shape of the arguments before any configuration is
+// read, and returns the arguments without the release confirmation. Release
+// ends the calling execution for good, so it takes an explicit confirmation.
+// Without it nothing runs and no request is sent, and the message spells the
+// new syntax for a coordinator that still reads an older copy of the rules.
+// The binding check of the public entrance runs this first, so a refusal is
+// not hidden behind a configuration error.
+func coordinatorArgs(args []string) (rest []string, status int, refused bool) {
+	confirmed := false
+	if len(args) == 3 && args[0] == "release" && args[1] == "--end-execution" {
+		confirmed, args = true, []string{args[0], args[2]}
+	}
+	if len(args) == 2 && args[0] == "release" && !confirmed && args[1] != "--end-execution" {
+		fmt.Fprintln(os.Stderr, config.Text("remote.coordinator_release_needs_end_execution"))
+		fmt.Fprintln(os.Stderr, releaseSyntax)
+		return nil, 2, true
+	}
+	if len(args) != 2 || slices.Contains(args, "--end-execution") {
+		return nil, coordinatorUsageFail(), true
+	}
+	return args, 0, false
+}
+
 func runServiceCoordinator(args []string, required bool) int {
-	if len(args) != 2 {
-		return coordinatorUsageFail()
+	args, status, refused := coordinatorArgs(args)
+	if refused {
+		return status
 	}
 	cfg, err := config.Load(false)
 	if err != nil {

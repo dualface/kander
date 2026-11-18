@@ -154,13 +154,8 @@ func RemoveCoordinatorMemberWithTransaction(ctx context.Context, root string, r 
 // removeCASError names what the refused request got wrong: the revision, the
 // epoch, or the room below the revision ceiling.
 func removeCASError(c CoordinatorCheckpoint, r CoordinatorRemoveMember) error {
-	switch {
-	case r.ExpectedRevision != c.Revision:
-		return kanbanError("board.remove_member_stale_revision", r.GroupID, r.ExpectedRevision, c.Revision)
-	case r.ExpectedEpoch != c.Authority.Epoch:
-		return kanbanError("board.remove_member_stale_epoch", r.GroupID, r.ExpectedEpoch, c.Authority.Epoch)
-	}
-	return kanbanError("board.remove_member_revision_limit", r.GroupID)
+	key, args := groupCASKey(r.GroupID, r.ExpectedRevision, r.ExpectedEpoch, c)
+	return kanbanError(key, args...)
 }
 
 // collectRemoveFacts reads the facts of a removal in the order the refusals are

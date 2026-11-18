@@ -20,7 +20,7 @@ func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, pass *coor
 	}
 	k := newMirrorKernel(old)
 	if k.refuseRevision(s.Revision) {
-		return m, coordinatorError("member revision or execution cycle changed: " + id)
+		return m, coordinatorError(memberRevisionPrefix(id) + t("board.refusal_member_revision", s.Revision, old.Revision))
 	}
 	if _, ok := k.acceptConfirmed(s, old); ok {
 		// A recovery accepted this finished execution as it is. Nothing is left to

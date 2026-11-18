@@ -49,6 +49,7 @@
   "launch.process_identity_not_recorded": "警告: {{.V0}}: プロセス ID 情報を記録できなかったため、kander check は unknown を報告します: {{.V1}}\n",
   "launch.native_resume_unsupported": "{{.V0}} は {{.V1}} で動作しており、ネイティブ再開に対応していません。次の手順: kander check {{.V0}} で executor を確認し、未完了の起動は kander resume {{.V0}} --adopt --decision <参照> で終えるか、kander resume {{.V0}} --agent <agent> --message <メッセージ> で executor を置き換えてください。",
   "board.coordinator_all_blocked": "グループ {{.V0}}: reconcile はどのメンバーも受け入れませんでした。最初の理由: {{.V1}}",
+  "board.coordinator_blocked_more": "完全な理由は、この reconcile が stdout に出力したチェックポイント JSON にあります。後から kander coordinator show {{.V0}} でも確認できます。",
   "board.recover_request_invalid": "recover リクエストには group_id、member、expected_revision、expected_epoch、decision、reason が必要です。",
   "board.recover_not_blocked": "{{.V0}} はこの checkpoint でブロックされていないため、復旧するものはありません。メンバーが失敗したら先に kander coordinator reconcile を実行してください。",
   "board.recover_state": "{{.V0}} は {{.V1}} にあります。復旧できるのは working、review、done、archived、trash のメンバーです。backlog、todo のメンバーには復旧する実行がありません。",

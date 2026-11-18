@@ -347,8 +347,8 @@ func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdg
 	if _, err := ReviewMechanicalClaims(v, r); err != nil {
 		return nil, nil, err
 	}
-	if r.BatchID != b.BatchID || r.ExpectedRevision != b.Revision || r.ViewHash != ReviewViewDigest(v) || strings.TrimSpace(r.Author) == "" {
-		return nil, nil, reviewError("close target/revision/view CAS")
+	if err := closeRequestRefusal(v, r); err != nil {
+		return nil, nil, err
 	}
 	if err := validateRequirements(b.Requirements); err != nil {
 		return nil, nil, err
@@ -596,7 +596,7 @@ func CloseReviewBatchWithTransaction(root string, r ReviewCloseRequest, evidence
 			hold(&f.Current, requireCurrentConclusions(tx, b, r))
 		}
 		if !pk.step(f) {
-			return firstError(refusal, reviewError("batch close refused"))
+			return firstError(refusal, closeRefusal(p.PlanID, b.BatchID, f.At, f, pk.state))
 		}
 		c = ReviewClosure{Schema: 1, PlanID: p.PlanID, BatchID: b.BatchID, TargetCommit: b.TargetCommit, Request: r, Git: evidence, RoleStatuses: statuses, View: v, ClosedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 		if e = closeMemberKernels(tx, p, at, c); e != nil {

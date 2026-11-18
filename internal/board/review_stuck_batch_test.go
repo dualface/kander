@@ -249,7 +249,7 @@ func TestFixDispatchStillRejectsForeignRuns(t *testing.T) {
 		stray := publishRun(t, root, prepared.RunID)
 		assignGate(t, root, stray, map[string][]string{f.ID: {in.TaskID}})
 		in.Evidence.Fix.Findings[0].RunID = stray.RunID
-		if _, err := PrepareDispatch(root, in); err == nil || !strings.Contains(err.Error(), "run, predecessor or task binding") {
+		if _, err := PrepareDispatch(root, in); err == nil || !strings.Contains(err.Error(), stray.RunID+"/"+f.ID) {
 			t.Fatalf("run of another batch: %v", err)
 		}
 	})
@@ -259,7 +259,7 @@ func TestFixDispatchStillRejectsForeignRuns(t *testing.T) {
 		input.Commit = in.Base
 		input.PreviousRunID, input.ReviewedCommit = run.RunID, run.Commit
 		gateRun(t, root, input, emptyFindings())
-		if _, err := PrepareDispatch(root, in); err == nil || !strings.Contains(err.Error(), "superseded review round") {
+		if _, err := PrepareDispatch(root, in); err == nil || !strings.Contains(err.Error(), run.RunID+"/PM-01") || !strings.Contains(err.Error(), "successor") {
 			t.Fatalf("superseded run: %v", err)
 		}
 	})

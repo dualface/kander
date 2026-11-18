@@ -71,7 +71,7 @@ func EndDispatchWithTransaction(root, task, id string, expected uint64, state Di
 			matching = d.State == DispatchFailed
 		}
 		if !v.allows(v.state, end(true, true, matching)) {
-			return dispatchError(id)
+			return dispatchRefusal(id, d, s, expected)
 		}
 		cycleErr := requireDispatchCycle(d, s)
 		if !v.allows(v.state, end(cycleErr == nil, true, matching)) {
@@ -84,7 +84,7 @@ func EndDispatchWithTransaction(root, task, id string, expected uint64, state Di
 			if d.State == DispatchAccepted {
 				return kanbanError("board.dispatch_end_decision_required", id)
 			}
-			return dispatchError(id)
+			return dispatchRefusal(id, d, s, expected)
 		}
 		terminal := DispatchTermination{Authorization: d.Authorization, State: d.State, Revision: d.Revision, Reason: d.Reason}
 		d.Revision++

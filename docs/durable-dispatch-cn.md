@@ -109,6 +109,8 @@ kander dispatch show <task-id> <id>
 
 - **血统完整性**：系统自动校验 `findings` 必须来自指定批次且已显式分配给本卡片。
 - **幂等性保障**：使用相同 `dispatch_id` 重试将继承原有绑定；在同一 ID 下篡改绑定将直接触发冲突拒绝。
+- **创建时校验**：不持有任务的客户端用 `kander notify --kind fix`（或 `kander dispatch prepare`）发出提案。服务端创建新的 fix 提案时，在写入任何内容之前对证据校验一次。证据不通过的提案不会产生请求，命令一次列出证据的全部问题并失败，每条一行，发送方一轮即可改正。顺序固定：先批次，再按给定顺序的每条 finding，再按给定顺序的作者引用，最后是缺失的作者原件，按 finding 的 run、finding、record 排序。属于某条 finding 的行以 `<run_id>/<finding_id>` 开头，写明字段名、提供值和应为值。每条缺失的作者原件占一行，写出 `finding.run_id`、`finding.finding_id`、`record_id`、`author` 和 `artifact.path`，其中包括 lineage 上前几轮的原件。有 finding 失败时不比较作者原件，并用一行说明。这些行只含标识符、提交、任务 ID、作者名和卡内相对路径，不含 finding 的正文、证据或依据。拒绝的码是 `board.dispatch_evidence_invalid`（`board_rejected`，HTTP 422）。最后一行是下一步：经 `kander notify` 发出的，改正证据文件后重新运行，省略 `--dispatch-id` 或换一个新的 dispatch ID（被拒的 ID 留有完成的拒绝回执，同 ID 下换证据会得到 `idempotency_mismatch`）；经非持有者的 `kander dispatch prepare` 发出的，改正意图文件，更新或删去其中的 `created_at` 和 `confirm_by` 后重新运行，可以沿用同一个 dispatch ID，因为这次拒绝没有创建任何东西。已有提案的 dispatch ID 返回原提案，不再校验。
+- **预备时校验**：持有者的 `dispatch prepare` 用同一份问题列表再校验一次，不带下一步。提案创建之后发生的变化，例如出现后继 run、批次推进、working 卡追加处置，在这里被拒绝。创建时的校验不保证之后的校验通过。
 
 ---
 
