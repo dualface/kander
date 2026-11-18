@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.4.4 — 2026-11-18
 
 - herdr-core launcher: a new terminal's tab now opens last in the calling terminal's Herdr App space instead of right after the active tab. The `place_container` hook moves the tab to the end of the space's `tabs` in the same versioned `herdr-app` layout write that names it, and a version conflict redoes both changes on the reread document; a failure to move is a launch warning like a failure to name. Herdr App may still reorder tabs on its own later; Kander does not counter that.
 - Fix: a line such as `- 结果: 测试通过`, `- RESULT: x` or `- OWNER: x` in the body of a card is now ordinary text. Metadata fields are read and written only in the card header (the text before the first `## ` line), so such a line no longer makes `kander update` fail with `board.transaction_managed`, no longer changes `kander list --json`, the completion report, the coordinator `RESULT` check or the issue work set, and no longer makes `start`, `move`, takeover or the `WINDOW` write-back fail with a non-unique field.
