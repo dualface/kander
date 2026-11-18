@@ -488,14 +488,19 @@ func TestFixProposalShowsOnlyOneLinePerProblem(t *testing.T) {
 	in.Evidence.Fix.Findings[0].FindingID = "PM-01\nforged: line"
 	in.Evidence.Fix.Findings[1].RunID = "bad\x1b[31mrun"
 	in.Evidence.Fix.Authors = []DispatchAuthorReference{{Finding: FindingRef{run.RunID, "PM-01\nx"}, RecordID: "r\ny", Artifact: ArtifactReference{in.TaskID, "reviews/a.json"}}}
-	text := wantLines(t, checkProposal(t, root, in), "3 problem(s):", `"pm-problems/PM-01\nforged: line"`)
+	in.Base = "base\nforged: line"
+	text := wantLines(t, checkProposal(t, root, in), "5 problem(s):", `"pm-problems/PM-01\nforged: line"`)
 	if strings.Contains(text, "\nforged") || strings.Contains(text, "\x1b") {
 		t.Fatalf("a control character reached the list:\n%q", text)
 	}
+	// The header, one line for each problem and the next step: nothing more.
+	if lines := strings.Count(text, "\n"); lines != 5+1 {
+		t.Fatalf("%d line breaks for 5 problems:\n%q", lines, text)
+	}
 }
 
-// A reference whose artifact is no valid card path is reported with it, and its
-// author is still compared with the original.
+// A reference whose artifact is no valid card path is reported with it, and
+// every field of it is still compared with the original.
 func TestFixProposalComparesTheAuthorOfABadArtifact(t *testing.T) {
 	root, in, run, items := twoFindingFixture(t)
 	s := transactionSnapshot(t, root, in.TaskID)
@@ -515,14 +520,12 @@ func TestFixProposalComparesTheAuthorOfABadArtifact(t *testing.T) {
 	good := DispatchAuthorReference{Finding: FindingRef{run.RunID, "PM-02"}, RecordID: records[1].RecordID, Author: "codex", Artifact: ArtifactReference{in.TaskID, dispositionPath(records[1])}}
 	// The same key twice: the second entry is checked like the first.
 	in.Evidence.Fix.Authors = []DispatchAuthorReference{bad, good, good}
-	text := wantLines(t, checkProposal(t, root, in),
+	wantLines(t, checkProposal(t, root, in),
 		"has an invalid artifact",
 		`author: provided "coordinator", expected "codex"`,
+		`artifact.path: provided "../escape", expected "`+dispositionPath(records[0])+`"`,
 		"reference "+run.RunID+"/PM-02/"+records[1].RecordID+" is listed more than once",
 	)
-	if strings.Contains(text, "artifact.path: provided") {
-		t.Fatalf("an artifact already reported invalid was compared again:\n%s", text)
-	}
 }
 
 // The first failure reported for a chain of runs does not depend on the order
@@ -591,4 +594,26 @@ func TestPreparedFixDispatchIsRefusedOnceItsBatchIsGone(t *testing.T) {
 	}
 	_, err := PrepareDispatch(root, in)
 	wantLines(t, err, "1 problem(s):", `batch_id "`+run.BatchID+`": no such review batch`)
+}
+
+// A batch record whose own batch_id is not the name it is stored under is for
+// the check of a new dispatch; a dispatch already prepared is still replayed.
+func TestPreparedFixDispatchIsReplayedOnARenamedBatchRecord(t *testing.T) {
+	root, in, run, _ := fixBindingFixture(t)
+	prepareTestDispatch(t, root, in)
+	path := control(root, "groups", reviewControlGroup, "batches", run.BatchID+".json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(path, []byte(strings.Replace(string(raw), `"batch_id": "`+run.BatchID+`"`, `"batch_id": "renamed"`, 1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = PrepareDispatch(root, in); err != nil {
+		t.Fatalf("replay of a prepared dispatch: %v", err)
+	}
+	in.ID = "fix-new"
+	if _, err = PrepareDispatch(root, in); err == nil {
+		t.Fatal("a new dispatch was prepared on a renamed batch record")
+	}
 }

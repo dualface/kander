@@ -42,13 +42,14 @@ func dispatchEvidenceError(detail string) error {
 func dispatchEvidenceScope(root string, in DispatchInput) (LockScope, error) {
 	scope := LockScope{Tasks: []string{in.TaskID}, Groups: []string{dispatchRegistry, reviewControlGroup, taskStartGroup}}
 	if in.Evidence.Fix != nil {
-		batch, problem, err := readFixBatchOutside(root, in.Evidence.Fix.BatchID)
+		batch, readable, problem, err := readFixBatchOutside(root, in.Evidence.Fix.BatchID)
 		if err != nil {
 			return scope, err
 		}
-		// A batch the check cannot go on with refuses the evidence here, as it
-		// always did, so a dispatch already prepared cannot be replayed on it.
-		if problem != "" {
+		// A batch that is missing or cannot be parsed refuses the evidence here, as
+		// it always did, so a dispatch already prepared cannot be replayed on it.
+		// A record under another batch_id is for the check of a new dispatch.
+		if !readable {
 			return scope, dispatchProblemsError([]string{problem}, "")
 		}
 		scope.Tasks = append(scope.Tasks, batch.TaskIDs...)
