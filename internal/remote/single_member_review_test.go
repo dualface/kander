@@ -391,3 +391,39 @@ func TestSharedClientHomeKeepsEachExecutionsRoute(t *testing.T) {
 		t.Fatalf("refused command wrote: %+v", writes)
 	}
 }
+
+// A retry of a published one-card operation still returns the saved result
+// after the holder stopped and released its claim.
+func TestPublishedSingleMemberOperationReplaysAfterHolderReleased(t *testing.T) {
+	f := newSingleMember(t, "20261118-single-group", "20261118-single-group")
+	_, err := f.coordinate.AggregateReview(t.Context(), singleBatch)
+	f.awaitHolder(err)
+	first, err := f.coordinate.AggregateReview(t.Context(), singleBatch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	own, found, err := f.holder.Credential(f.ids[0])
+	if err != nil || !found {
+		t.Fatalf("holder credential: %v", err)
+	}
+	state, err := f.holder.Project.ExecutionState(t.Context(), f.ids[0], *own.Claim())
+	if err != nil {
+		t.Fatal(err)
+	}
+	stopped := api.AgentObservation{Status: "stopped", Reason: "fixture agent exited"}
+	update := api.ExecutionUpdate{Action: api.ExecutionRelease, ExpectedRevision: state.Task.Revision, ObservationTicket: state.ObservationTicket, Presence: &stopped, Decision: "fixture release"}
+	if _, err := f.holder.Project.Execution(t.Context(), client.NewKey(), f.ids[0], update, *own.Claim()); err != nil {
+		t.Fatal(err)
+	}
+	if task, err := f.holder.Project.Show(t.Context(), f.ids[0]); err != nil || task.State != "working" || api.ClaimStands(task.Claim.Status) {
+		t.Fatalf("fixture did not leave a working card with a lost claim: %+v %v", task, err)
+	}
+	before := f.revision()
+	again, err := f.coordinate.AggregateReview(t.Context(), singleBatch)
+	if err != nil || digest(t, again) != digest(t, first) {
+		t.Fatalf("saved result was not replayed: %v", err)
+	}
+	if f.revision() != before {
+		t.Fatal("replay changed the card")
+	}
+}

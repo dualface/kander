@@ -72,19 +72,26 @@ func (s *Session) reviewAuthority(ctx context.Context, operation, replay string,
 	}
 	var members []api.PublicationMember
 	var shown map[string]api.Task
-	read := len(tasks) <= 1
+	read, routed := len(tasks) <= 1, false
 	if read {
 		// The replay records are shared by every execution of this client
 		// home, so an operation on one card is routed for this execution first.
 		// A saved result then never replaces the holder's direct proof, and
 		// never answers a process that is neither holder nor coordinator.
-		if members, shown, err = s.liveReviewMembers(ctx, tasks); err != nil {
+		members, shown, err = s.liveReviewMembers(ctx, tasks)
+		switch {
+		case api.IsCode(err, api.CodeLeaseInvalid):
+			// A released claim cannot take part in a new write, but the saved
+			// result of a published operation still answers a retry.
+			read = false
+		case err != nil:
 			return nil, false, err
-		}
-		if len(members) == 1 {
-			if proof, joint, err := s.singleMemberAuthority(operation, tasks, members, shown); err != nil || !joint {
+		case len(members) == 1:
+			proof, joint, err := s.singleMemberAuthority(operation, tasks, members, shown)
+			if err != nil || !joint {
 				return proof, false, err
 			}
+			routed = true
 		}
 	}
 	if proof, found, err := s.completedReviewPublication(ctx, operation, replay, raw); err != nil || found {
@@ -95,7 +102,7 @@ func (s *Session) reviewAuthority(ctx context.Context, operation, replay string,
 			return nil, false, err
 		}
 	}
-	if len(members) <= 1 {
+	if len(members) <= 1 && !routed {
 		proof, joint, err := s.singleMemberAuthority(operation, tasks, members, shown)
 		if err != nil || !joint {
 			return proof, false, err
