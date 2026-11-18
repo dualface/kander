@@ -5,10 +5,12 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"slices"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
@@ -108,6 +110,63 @@ func Run(arguments []string) int {
 	if len(args) > 0 {
 		args = args[1:]
 	}
-	config.ApplyLanguageArgument(args)
-	return command.Execute(NewRoot(), args)
+	root := NewRoot()
+	config.ApplyLanguageArgument(languageArguments(root, args))
+	return command.Execute(root, args)
+}
+
+// languageArguments is the --lang selection of args as a synthetic argument list for
+// config.ApplyLanguageArgument, empty when args select none. The selection is read with the flag
+// definitions of the command the arguments name, so a word that is the value of another flag
+// (`notify TASK --message --lang=ja`) is not mistaken for the global option. A command that takes
+// its arguments verbatim selects nothing.
+func languageArguments(root *cobra.Command, args []string) []string {
+	target, _, err := root.Find(args)
+	if err != nil || target.DisableFlagParsing {
+		target = root
+	}
+	var selected string
+	var flags pflag.FlagSet
+	flags.Init("lang", pflag.ContinueOnError)
+	flags.SetInterspersed(true)
+	flags.SetOutput(io.Discard)
+	flags.ParseErrorsAllowlist.UnknownFlags = true
+	add := func(f *pflag.Flag) {
+		if flags.Lookup(f.Name) != nil {
+			return
+		}
+		flags.AddFlag(&pflag.Flag{
+			Name:        f.Name,
+			Shorthand:   f.Shorthand,
+			NoOptDefVal: f.NoOptDefVal,
+			Value:       &scanValue{kind: f.Value.Type(), selected: &selected, record: f.Name == "lang"},
+		})
+	}
+	target.LocalFlags().VisitAll(add)
+	target.InheritedFlags().VisitAll(add)
+	// cobra adds the help flag only when it runs the command.
+	if flags.Lookup("help") == nil {
+		flags.BoolP("help", "h", false, "")
+	}
+	_ = flags.Parse(args)
+	if selected == "" {
+		return nil
+	}
+	return []string{"kander", "--lang", selected}
+}
+
+// scanValue is a flag value that only notes what was given.
+type scanValue struct {
+	kind     string
+	selected *string
+	record   bool
+}
+
+func (v *scanValue) String() string { return "" }
+func (v *scanValue) Type() string   { return v.kind }
+func (v *scanValue) Set(raw string) error {
+	if v.record {
+		*v.selected = raw
+	}
+	return nil
 }
