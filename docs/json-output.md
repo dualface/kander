@@ -77,7 +77,7 @@ A form that needs an answer in a terminal, or hands the terminal to an agent, is
 | `uninstall` without `--yes` | It asks for a confirmation (with `--yes` the result lists the items) |
 | `pick` and `start` without a task ID | They ask which card |
 | `start`, `resume` (a takeover or a continuation), `orchestrate`, `issue triage`, `issue result --action start` with the `foreground` or `console` launcher | The agent takes the terminal, or a console window, of the person who ran the command |
-| `doctor` when a repair needs a confirmation | A modified rule file to back up and replace, an unusable agent to replace, an agent session file to store, the herdr install, or the Homebrew upgrade. The check is read-only and runs before any repair; with nothing to ask, `doctor --json` repairs and reports as usual |
+| `doctor` when a repair needs a confirmation | A modified rule file to back up and replace, an unusable agent to replace, an agent session file to store, the herdr install, the Homebrew upgrade, or the kander executable to keep when several are on PATH. The version guard (a running binary older than one on PATH) comes before the check and is reported as the result. The check is read-only and runs before any repair; with nothing to ask, `doctor --json` repairs and reports as usual |
 
 The question a command asks before it starts the local service is not asked with `--json`: the command fails with `unreachable`.
 

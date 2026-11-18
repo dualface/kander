@@ -9,5 +9,6 @@
   "menu.doctor_confirm_herdr_install": "ターミナルバックエンドが無く、herdr をインストールするか確認が必要です",
   "menu.doctor_confirm_brew_upgrade": "Homebrew の kander が古く、アップグレードするか確認が必要です",
   "menu.doctor_confirm_required": "doctor に確認が必要な修復があり、--json には質問できるターミナルがありません（{{.V0}}、計 {{.V1}} 件）。何も修復していません。ターミナルで kander doctor を実行してください",
-  "review.json_prepared_not_published": "実行 {{.V0}}（バッチ {{.V1}}）は準備されましたが、証拠はカードに公開されませんでした"
+  "review.json_prepared_not_published": "実行 {{.V0}}（バッチ {{.V1}}）は準備されましたが、証拠はカードに公開されませんでした",
+  "menu.doctor_confirm_path_cleanup": "PATH 上に kander の実行ファイルが {{.V0}} 個あり、対話式の doctor はどれを残すか尋ねます"
 }

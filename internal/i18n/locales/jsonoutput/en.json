@@ -9,5 +9,6 @@
   "menu.doctor_confirm_herdr_install": "no terminal backend is installed and the herdr install needs a decision",
   "menu.doctor_confirm_brew_upgrade": "an outdated Homebrew kander needs an upgrade decision",
   "menu.doctor_confirm_required": "doctor has a repair that needs a confirmation, and --json has no terminal to ask in ({{.V0}}; {{.V1}} in all). Nothing was repaired. Run kander doctor in a terminal",
-  "review.json_prepared_not_published": "run {{.V0}} of batch {{.V1}} was prepared but its evidence was not published to the cards"
+  "review.json_prepared_not_published": "run {{.V0}} of batch {{.V1}} was prepared but its evidence was not published to the cards",
+  "menu.doctor_confirm_path_cleanup": "{{.V0}} kander executables are on PATH, and an interactive doctor asks which one to keep"
 }

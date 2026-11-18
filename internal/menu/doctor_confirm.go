@@ -4,7 +4,6 @@ import (
 	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/install"
-	"github.com/dualface/kander/internal/version"
 )
 
 // confirmationsOf is the seam of doctorJSON: tests replace it to leave the probing of the
@@ -16,7 +15,7 @@ var confirmationsOf = doctorConfirmations
 // files, the replacement of an unusable agent, the storing of a session file, the herdr install,
 // and the upgrade of an outdated Homebrew copy. With --json none of these can be answered, so a
 // non-empty list refuses the whole run before any repair.
-func doctorConfirmations(tools TerminalTools) []string {
+func doctorConfirmations(tools TerminalTools, binaries []install.PathKanderBinary) []string {
 	var reasons []string
 	if paths, err := currentPaths(); err == nil {
 		if report, err := install.InspectRules(paths); err == nil && len(report.Modified) > 0 {
@@ -40,29 +39,13 @@ func doctorConfirmations(tools TerminalTools) []string {
 	if tools.NeedsHerdrInstall() {
 		reasons = append(reasons, config.Text("menu.doctor_confirm_herdr_install"))
 	}
-	if brewKanderOutdated(pathKanderBinaries()) {
+	if brewKanderOutdated(binaries) {
 		reasons = append(reasons, config.Text("menu.doctor_confirm_brew_upgrade"))
 	}
+	if pathCleanupOffered(binaries) {
+		reasons = append(reasons, config.Text("menu.doctor_confirm_path_cleanup", len(binaries)))
+	}
 	return reasons
-}
-
-// brewKanderOutdated is the condition under which reportPathKanders offers the Homebrew upgrade.
-func brewKanderOutdated(binaries []install.PathKanderBinary) bool {
-	if len(binaries) <= 1 {
-		return false
-	}
-	latest := 0
-	for i := range binaries {
-		if version.Compare(binaries[i].Version, binaries[latest].Version) > 0 {
-			latest = i
-		}
-	}
-	for i, bin := range binaries {
-		if bin.Brew && i != latest && version.Compare(bin.Version, binaries[latest].Version) < 0 {
-			return true
-		}
-	}
-	return false
 }
 
 // refuseDoctorConfirmations is the error of a doctor run that has something to ask: the

@@ -116,12 +116,17 @@ type doctorLine struct {
 // unhealthy installation is the result with healthy false and exit status 1.
 func doctorJSON() int {
 	tools := CheckTerminalTools()
-	if reasons := confirmationsOf(tools); len(reasons) > 0 {
-		return command.FailStatus(2, refuseDoctorConfirmations(reasons))
+	binaries := pathKanderBinaries()
+	// The version guard comes first: a running binary older than one on PATH stops doctor with
+	// its own diagnostic, which the person needs more than a refusal to repair.
+	if !runningKanderIsOutdated(binaries) {
+		if reasons := confirmationsOf(tools, binaries); len(reasons) > 0 {
+			return command.FailStatus(2, refuseDoctorConfirmations(reasons))
+		}
 	}
 	healthy := false
 	captured := CaptureReport(func() {
-		healthy = printDoctorWithTools(tools, true, false)
+		healthy = printDoctorWithBinaries(tools, true, false, binaries)
 	})
 	lines := make([]doctorLine, 0, len(captured))
 	for _, line := range captured {

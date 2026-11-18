@@ -26,6 +26,59 @@ func execBrewUpgrade() error {
 	return cmd.Run()
 }
 
+// runningKanderIsOutdated reports whether any kander on PATH reports a strictly newer version
+// than the running binary: the condition of the version guard below.
+func runningKanderIsOutdated(binaries []install.PathKanderBinary) bool {
+	running := version.String()
+	if !version.Valid(running) {
+		return false
+	}
+	for _, bin := range binaries {
+		if version.Compare(bin.Version, running) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// brewKanderOutdated is the condition under which reportPathKanders offers the Homebrew upgrade.
+func brewKanderOutdated(binaries []install.PathKanderBinary) bool {
+	if len(binaries) <= 1 {
+		return false
+	}
+	latest := latestKander(binaries)
+	for i, bin := range binaries {
+		if bin.Brew && i != latest && version.Compare(bin.Version, binaries[latest].Version) < 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// pathCleanupOffered is the condition under which reportPathKanders asks which executable to
+// keep: several executables on PATH, at least one of them not managed by Homebrew.
+func pathCleanupOffered(binaries []install.PathKanderBinary) bool {
+	if len(binaries) <= 1 {
+		return false
+	}
+	for _, bin := range binaries {
+		if !bin.Brew {
+			return true
+		}
+	}
+	return false
+}
+
+func latestKander(binaries []install.PathKanderBinary) int {
+	latest := 0
+	for i := range binaries {
+		if version.Compare(binaries[i].Version, binaries[latest].Version) > 0 {
+			latest = i
+		}
+	}
+	return latest
+}
+
 // reportOutdatedRunningKander is doctor's first check: when any kander on PATH
 // reports a strictly newer version than the running binary, doctor stops before
 // any check, prompt, or repair, because repairing would write this older
@@ -60,12 +113,7 @@ func reportPathKanders(interactive bool, binaries []install.PathKanderBinary) bo
 		return true
 	}
 	hint(config.Text("menu.found_kander_executables_on_path", fmt.Sprint(len(binaries))))
-	latest := 0
-	for i := range binaries {
-		if version.Compare(binaries[i].Version, binaries[latest].Version) > 0 {
-			latest = i
-		}
-	}
+	latest := latestKander(binaries)
 	brewOutdated := false
 	nonBrewCount := 0
 	for i, bin := range binaries {
