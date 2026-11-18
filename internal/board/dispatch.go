@@ -408,7 +408,7 @@ func BeginDispatchAttemptWithTransaction(root, task, id string, expected uint64,
 		cas := (len(cardRevision) == 0 || s.Revision == cardRevision[0]) && d.Revision == expected
 		next, ok := v.next(attempt(cas, true, dispatchBefore(d)))
 		if !ok {
-			return dispatchError(id)
+			return dispatchRefusal(id, d, s, expected, cardRevision...)
 		}
 		d.State = dispatchStates[next.Phase]
 		d.Revision++
@@ -443,7 +443,7 @@ func ReauthorizeDispatchWithTransaction(root, task, id string, expected uint64, 
 		// The first check holds the grant too: a wrap-up grant is never upgraded to
 		// full execution, and it returns the same error as the other refusals.
 		if !v.allows(v.state, reauthorize(true, true, true)) {
-			return dispatchError(id)
+			return dispatchRefusal(id, d, s, expected)
 		}
 		cycleErr := requireDispatchCycle(d, s)
 		if !v.allows(v.state, reauthorize(cycleErr == nil, true, true)) {
@@ -456,7 +456,7 @@ func ReauthorizeDispatchWithTransaction(root, task, id string, expected uint64, 
 			if d.State == DispatchAccepted {
 				return dispatchEvidenceError("fresh confirmed exit required")
 			}
-			return dispatchError(id)
+			return dispatchRefusal(id, d, s, expected)
 		}
 		if d.State == DispatchAccepted {
 			execution.Exit = &stopped[0]

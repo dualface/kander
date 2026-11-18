@@ -147,7 +147,7 @@ func AuthorizeDispatchWrapUpWithTransaction(root, task, id string, expected uint
 			Named: strings.TrimSpace(author) != "" && strings.TrimSpace(reason) != "", Cycle: true,
 			Outcome: dispatchkernel.ExitStopped, Decided: true, Fresh: true, Evidence: true}
 		if !v.allows(v.state, authorize) {
-			return dispatchEvidenceError("wrap-up authority conflict: " + t("board.wrap_up_grant_hint"))
+			return dispatchEvidenceError("wrap-up authority conflict: " + strings.Join(dispatchRefusalParts(d, s, expected, nil), "; ") + ". " + t("board.wrap_up_grant_hint"))
 		}
 		if e = refuseBlockedWrapUp(tx, d.Input); e != nil {
 			return e

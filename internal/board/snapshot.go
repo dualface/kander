@@ -178,7 +178,7 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 			return e
 		}
 		if s.Entry.State != entry.State || s.Entry.Path != entry.Path || (entry.Version != nil && s.Revision != entry.Version.revision) || (options.ExpectedRevision != nil && s.Revision != *options.ExpectedRevision) {
-			return kanbanError("board.transaction_conflict", entry.TaskID)
+			return moveConflictError(entry, s, options)
 		}
 		// Report the final state before dispatch staging can fail with a less
 		// specific error.
