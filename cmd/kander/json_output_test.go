@@ -616,7 +616,8 @@ func TestJSONSubscribeFailures(t *testing.T) {
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
-		time.Sleep(1500 * time.Millisecond)
+		// Long enough for the first snapshot on a loaded machine.
+		time.Sleep(4 * time.Second)
 		httpServer.CloseClientConnections()
 		httpServer.Close()
 	}()
@@ -626,6 +627,9 @@ func TestJSONSubscribeFailures(t *testing.T) {
 		t.Fatalf("exit=%d\nstdout=%s\nstderr=%s", result.code, result.stdout, result.stderr)
 	}
 	events := jsonStreamLines(t, result.stdout)
+	if len(events) < 2 {
+		t.Fatalf("stdout=%q", result.stdout)
+	}
 	if terminal := events[len(events)-1]["event"]; events[0]["event"] != "snapshot" || terminal != "read-error" && terminal != "membership-unknown" {
 		t.Fatalf("events=%v", events)
 	}
