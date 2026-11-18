@@ -39,4 +39,4 @@ Distributed mode is the v2 client mode, where `server.url` is configured and the
 6. When something fails after the move into `review/`, keep the card in `review/`, record the pending items, and report.
 
 - This path applies only to a card whose review plan closed on a Git target `C`. A card whose review plan is the explicit N/A plan (base and target `N/A`) has no `C`: it never moves into `review/`, because a published delivery would need an integration that plan cannot provide. It completes from `working/` as in the local flow.
-- When the code must change after the move into `review/`, run `kander move <task-id> working` in the same session, without `--owner`: the claim and the execution stay. Make the change, handle review as `KANDER-REVIEW-RULES.md` requires, and repeat from step 2.
+- To leave `review/` (for example to publish a new delivery after a takeover), run `kander move <task-id> working` in the same session, without `--owner`: the claim and the execution stay. This never reopens the review: a closed batch cannot advance and a sealed plan takes no further batch, so a code change that needs review belongs to a new card with its own plan.

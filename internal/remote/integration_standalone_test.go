@@ -85,16 +85,24 @@ func TestIntegrationOfAStandaloneCardInWorkingNamesTheMoveIntoReview(t *testing.
 	}
 }
 
-func TestDeliveryRequiredRefusalHasTheSamePlaceholdersInEveryLanguage(t *testing.T) {
+func TestDeliveryRefusalsHaveTheSamePlaceholdersInEveryLanguage(t *testing.T) {
+	const sha = "0123456789abcdef"
 	for _, lang := range []string{"en", "ja", "cn"} {
-		text := i18n.Text(lang, "remote.integration_delivery_required", "member-card", "working", "0123456789abcdef")
-		for _, want := range []string{"member-card", "working/", "kander move member-card review --delivery-commit 0123456789abcdef", "review/"} {
-			if !strings.Contains(text, want) {
-				t.Errorf("%s text %q lacks %q", lang, text, want)
+		for _, text := range []struct {
+			text  string
+			wants []string
+		}{
+			{i18n.Text(lang, "remote.integration_delivery_required", "member-card", "working", sha), []string{"member-card", "working/", "kander move member-card review --delivery-commit " + sha, "review/"}},
+			{i18n.Text(lang, "remote.integration_delivery_stale", "member-card", sha), []string{"member-card", "kander move member-card working", "kander move member-card review --delivery-commit " + sha, "review/"}},
+		} {
+			for _, want := range text.wants {
+				if !strings.Contains(text.text, want) {
+					t.Errorf("%s text %q lacks %q", lang, text.text, want)
+				}
 			}
-		}
-		if strings.Contains(text, "{{") || strings.Contains(text, "%!") {
-			t.Errorf("%s text keeps an unfilled placeholder: %q", lang, text)
+			if strings.Contains(text.text, "{{") || strings.Contains(text.text, "%!") {
+				t.Errorf("%s text keeps an unfilled placeholder: %q", lang, text.text)
+			}
 		}
 	}
 }

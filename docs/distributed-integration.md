@@ -25,7 +25,7 @@ Prerequisites:
 - The review plan is sealed with every batch closed, and its last batch has a Git target `C`, a complete SHA. The agent verifies the integration authorization and every gate before it moves the card.
 - `TASK_BRANCH` is filled in; the move into `review/` requires it.
 - The move runs on the host that holds the card's execution credential. The client publishes the delivery from the worktree recorded in that credential (the current directory when none is recorded) and refuses the move on another host with `remote.delivery_holder_required`.
-- The task branch is not rebased after the plan closed. A rebased commit has another SHA than `C`, and `done` compares the receipt with the closed target. Only a client-reported conflict (or a missing Git identity or an old Git) calls for a merge and `via_commit`, as above.
+- The task branch is not rebased after the plan closed. A rebased commit has another SHA than `C`, and `done` compares the receipt with the closed target. Only a client-reported conflict calls for a merge and `via_commit`, as above.
 
 Steps:
 
@@ -33,7 +33,7 @@ Steps:
 2. `kander coordinator integrate` with purpose `deliver`, `task_id`, and `commit` equal to `C`. The client requires the card in `review/` with a standing claim and a non-baseline delivery of the current generation and execution. A card in `working/` fails with `remote.integration_delivery_required`, which names the card, its state, and the move command with the requested commit. The service repeats the checks and refuses a member whose review is not closed with the board reason, prefixed by `member <task-id>: `, and a commit that differs from the closed review target with a message that names the member, the closed target, and the requested commit.
 3. After the final receipt exists, `kander move <task-id> done --result completed` runs from `review/`. A failure after the move into `review/` leaves the card in `review/` with the pending items recorded.
 
-A plain `kander move <task-id> working`, with no `--owner` and no dispatch binding, returns the card from `review/` to `working/` for the same holder; the claim generation and the execution stay. A later `move review --delivery-commit` publishes the next delivery.
+A plain `kander move <task-id> working`, with no `--owner` and no dispatch binding, returns the card from `review/` to `working/` for the same holder; the claim generation and the execution stay. A later `move review --delivery-commit` publishes the next delivery. The return does not reopen the review: a closed batch cannot advance and a sealed plan takes no further batch, so a code change that needs review belongs to a new card with its own plan.
 
 A card whose review plan is the explicit N/A plan has no `C`. It never moves into `review/`: a published delivery makes completion require an integration, which that plan cannot provide. It completes from `working/`.
 

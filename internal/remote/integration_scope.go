@@ -120,6 +120,9 @@ func (s *Session) integrationMembers(ctx context.Context, options IntegrationOpt
 		contributes := selected[id] || options.Purpose == "deliver" && slices.Contains(remaining, id)
 		if contributes {
 			if task.State != "review" || task.Claim == nil || !api.ClaimStands(task.Claim.Status) || task.Delivery == nil || task.Delivery.Purpose == "baseline" || task.Delivery.Generation != task.Claim.Generation || task.Delivery.ExecutionID != task.Claim.ExecutionID {
+				if task.State == "review" {
+					return nil, integrationFailure("remote.integration_delivery_stale", task.TaskID, options.Commit)
+				}
 				return nil, integrationFailure("remote.integration_delivery_required", task.TaskID, task.State, options.Commit)
 			}
 			member.DeliveryCommit = task.Delivery.Commit
