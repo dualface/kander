@@ -32,6 +32,7 @@ type CoordinatorCheckpoint struct {
 	MemberVersion   string                       `json:"member_version"`
 	Members         map[string]CoordinatorMember `json:"members"`
 	Recoveries      []CoordinatorRecovery        `json:"recoveries,omitempty"`
+	Removals        []CoordinatorRemoval         `json:"removals,omitempty"`
 }
 
 type CoordinatorMember struct {
@@ -136,10 +137,10 @@ type CoordinatorDelivery struct {
 	Commit string
 }
 
-// checkpointSchema 3 adds blocked members and recovery records; schema 2 added
-// the chain positions of a mirror. Older checkpoints stay readable and upgrade on
-// the first reconcile that publishes.
-const checkpointSchema = 3
+// checkpointSchema 4 adds member removal records; schema 3 added blocked members
+// and recovery records; schema 2 added the chain positions of a mirror. Older
+// checkpoints stay readable and upgrade on the first write that publishes.
+const checkpointSchema = 4
 
 func coordinatorError(detail string) error { return kanbanError("board.coordinator_conflict", detail) }
 func coordinatorHash(v any) string         { b, _ := json.Marshal(v); return messageHash(string(b)) }
@@ -495,6 +496,9 @@ func reconcileCheckpoint(ctx context.Context, tx *Transaction, r CoordinatorReco
 		return c, false, err
 	}
 	if err := verifyCoordinatorRecoveries(tx, c); err != nil {
+		return c, false, err
+	}
+	if err := verifyCoordinatorRemovals(tx, c); err != nil {
 		return c, false, err
 	}
 	members := map[string]CoordinatorMember{}

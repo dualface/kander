@@ -15,6 +15,9 @@ func ReconcileCoordinator(ctx context.Context, root string, r CoordinatorReconci
 func RecoverCoordinator(ctx context.Context, root string, r CoordinatorRecover, observed uint64) (CoordinatorCheckpoint, error) {
 	return RecoverCoordinatorWithTransaction(ctx, root, r, observed)
 }
+func RemoveCoordinatorMember(ctx context.Context, root string, r CoordinatorRemoveMember) (CoordinatorCheckpoint, error) {
+	return RemoveCoordinatorMemberWithTransaction(ctx, root, r)
+}
 
 func LookupCoordinatorCheckpoint(ctx context.Context, root, group string) (checkpoint CoordinatorCheckpoint, found bool, err error) {
 	err = WithTransactionContext(ctx, root, LockScope{Groups: []string{group}, ReadOnly: true}, func(tx *Transaction) error {

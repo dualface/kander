@@ -15,7 +15,7 @@ import (
 //   - internal/statemachine/coordinator: one instance per group. It holds whether
 //     the checkpoint exists, its revision, the authority epoch, whether it holds
 //     a last request, and how many members are blocked. It decides claim,
-//     reconcile, and recover, and answers the wrap-up refusal.
+//     reconcile, recover, and removal of a member, and answers the wrap-up refusal.
 //   - internal/statemachine/coordmember: one instance per member mirror. It holds
 //     the column, the card revision, the chain position, the dispatch position,
 //     and the blocked and confirmed flags. It decides which new mirror a member
@@ -154,6 +154,13 @@ func (g *groupKernel) refuseRequest(c CoordinatorCheckpoint, r CoordinatorReconc
 func (g *groupKernel) recoverEvent(r CoordinatorRecover, c CoordinatorCheckpoint, known, memberBlocked, expect, memberOk bool) coordinator.Recover {
 	return coordinator.Recover{ExpRev: g.revArg(r.ExpectedRevision), ExpEpoch: g.epochArg(r.ExpectedEpoch), Room: g.rev != math.MaxUint64,
 		Known: known, MemberBlocked: memberBlocked, Expect: expect, MemberOk: memberOk}
+}
+
+// removeMember builds the kernel event of a removal from the facts the shell found.
+func (g *groupKernel) removeMember(r CoordinatorRemoveMember, f removeFacts) coordinator.RemoveMember {
+	return coordinator.RemoveMember{ExpRev: g.revArg(r.ExpectedRevision), ExpEpoch: g.epochArg(r.ExpectedEpoch), Room: g.rev != math.MaxUint64,
+		Known: f.known, Unstarted: f.unstarted, Membership: f.membership, Remaining: f.remaining, NoDependents: f.noDependents,
+		BlockedAfter: uint64(f.blockedAfter)}
 }
 
 // wrapUpBlocked is `refuseBlockedWrapUp`: a checkpoint with a blocked member.

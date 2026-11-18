@@ -178,15 +178,9 @@ func validSpecUpdate(id, old, next, state, decision string) (string, error) {
 		return "", kanbanError("board.archived_final", id)
 	}
 	if updated.Decisions > k.Decisions {
-		record := struct {
-			At            string `json:"at"`
-			Decision      string `json:"decision"`
-			Before, After map[string]string
-		}{nowStamp(), decision, before, after}
-		b, _ := json.MarshalIndent(record, "", "  ")
 		// Store the authoritative authorization and diff in the operation's staged
 		// body; this section is protected on subsequent agent updates.
-		next = appendRecordSection(next, "CONTRACT_DECISIONS", "```json\n"+string(b)+"\n```")
+		next = appendRecordSection(next, "CONTRACT_DECISIONS", contractDecisionRecord(decision, before, after))
 	}
 	return next, nil
 }
