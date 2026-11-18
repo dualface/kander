@@ -68,7 +68,7 @@ func (s *Session) PrepareWorktree(ctx context.Context, dir, base string, credent
 	if err != nil {
 		return result, err
 	}
-	result = ExecutionWorktree{Path: filepath.Join(root, "worktrees", credential.TaskID, fmt.Sprintf("g%d", credential.Generation)), Branch: fmt.Sprintf("kander/%s/%s/g%d", s.Info.ID, credential.TaskID, credential.Generation), Base: base, ExecutionID: credential.ExecutionID, Generation: credential.Generation, Phase: "prepared"}
+	result = ExecutionWorktree{Path: filepath.Join(root, "worktrees", credential.TaskID, fmt.Sprintf("g%d", credential.Generation)), Branch: api.ExecutionBranch(s.Info.ID, credential.TaskID, credential.Generation), Base: base, ExecutionID: credential.ExecutionID, Generation: credential.Generation, Phase: "prepared"}
 	intentPath := filepath.Join(root, "worktree-intents", credential.TaskID, fmt.Sprintf("g%d.json", credential.Generation))
 	if err := fs.EnsurePrivateDirectory(s.Home, filepath.Dir(intentPath), true); err != nil {
 		return result, err
@@ -85,6 +85,11 @@ func (s *Session) PrepareWorktree(ctx context.Context, dir, base string, credent
 			var old ExecutionWorktree
 			if err := json.Unmarshal(previous, &old); err != nil {
 				return worktreeFailure()
+			}
+			// A retry keeps the name its intent recorded, which is the legacy
+			// name when the first attempt predates the task branch namespace.
+			if old.Branch != result.Branch && api.KnownExecutionBranch(old.Branch, s.Info.ID, credential.TaskID, credential.Generation) {
+				result.Branch = old.Branch
 			}
 			if old.Path != result.Path || old.Branch != result.Branch || old.Base != base || old.ExecutionID != credential.ExecutionID || old.Generation != credential.Generation {
 				return worktreeFailure()

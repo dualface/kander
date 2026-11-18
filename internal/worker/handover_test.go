@@ -130,8 +130,12 @@ type rig struct {
 	delivered  []string
 }
 
-func newRig(t *testing.T) *rig {
-	r := &rig{harness: newHarness(t), sink: &logSink{}, timeout: 2 * time.Second}
+func newRig(t *testing.T) *rig { return newRigOn(t, newHarness(t)) }
+
+// newRigOn builds a rig on a harness the test prepared, for example one with a
+// wrapped server.
+func newRigOn(t *testing.T, h *harness) *rig {
+	r := &rig{harness: h, sink: &logSink{}, timeout: 2 * time.Second}
 	r.exe = filepath.Join(t.TempDir(), "kander")
 	r.writeExecutable("v1")
 	r.probe = func() error { return nil }

@@ -195,8 +195,7 @@ func (p *project) execution(key, id string, u api.ExecutionUpdate, h holder) out
 				}{claim.Generation, claim.ExecutionID, claim.ClientID, u.Decision, u.ExpectedRevision, p.server.now()})
 			}, extension)
 		case api.ExecutionWorkspace:
-			expected := "kander/" + p.info.ID + "/" + id + "/g" + strconv.FormatUint(claim.Generation, 10)
-			if p.info.Remote == "" || u.ExpectedRevision == 0 || u.Branch != expected {
+			if p.info.Remote == "" || u.ExpectedRevision == 0 || !api.KnownExecutionBranch(u.Branch, p.info.ID, id, claim.Generation) {
 				return outcome{err: apiError(api.CodeEvidenceIncomplete, "workspace must name the current generation branch and inspected card revision")}
 			}
 			_, err = board.RecordExecutionBranchWithTransaction(p.board, entry, u.Branch, extension)

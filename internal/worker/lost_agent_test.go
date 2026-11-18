@@ -89,7 +89,7 @@ func TestWorkerDoesNotRepeatAnUncertainRequestDelivery(t *testing.T) {
 	}
 	for range 2 {
 		h.advance(16 * time.Second)
-		if _, err := h.loop.pass(t.Context()); err != nil {
+		if _, err := h.pass(t.Context()); err != nil {
 			t.Fatal(err)
 		}
 	}

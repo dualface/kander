@@ -21,7 +21,7 @@ func TestAgentExitIsReportedWithoutTreatingWorkerPresenceAsAgentLife(t *testing.
 		return api.AgentObservation{Status: status, Reason: "verified test process facts"}
 	}
 	h.advance(16 * time.Second)
-	if live, err := h.loop.pass(t.Context()); err != nil || live != 1 {
+	if live, err := h.pass(t.Context()); err != nil || live != 1 {
 		t.Fatalf("alive observation: %d %v", live, err)
 	}
 	alive, err := project.Show(t.Context(), credential.TaskID)
@@ -30,7 +30,7 @@ func TestAgentExitIsReportedWithoutTreatingWorkerPresenceAsAgentLife(t *testing.
 	}
 	status = "stopped"
 	h.advance(16 * time.Second)
-	if live, err := h.loop.pass(t.Context()); err != nil || live != 1 {
+	if live, err := h.pass(t.Context()); err != nil || live != 1 {
 		t.Fatalf("stopped observation ended the worker lease: %d %v", live, err)
 	}
 	stopped, err := project.Show(t.Context(), credential.TaskID)
@@ -44,7 +44,7 @@ func TestAgentExitIsReportedWithoutTreatingWorkerPresenceAsAgentLife(t *testing.
 	}
 	for range 7 {
 		h.advance(16 * time.Second)
-		if live, err := h.loop.pass(t.Context()); err != nil || live != 1 {
+		if live, err := h.pass(t.Context()); err != nil || live != 1 {
 			t.Fatalf("stopped task lost renewal: %d %v", live, err)
 		}
 	}

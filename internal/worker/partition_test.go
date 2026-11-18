@@ -30,10 +30,19 @@ func (h *harness) partition() (heal func()) {
 }
 
 // groupClaimed claims a group lease for host-a and stores its credential.
-func (h *harness) groupClaimed() remote.Credential {
+func (h *harness) groupClaimed() remote.Credential { return h.groupClaimedAs("partition-coordinator") }
+
+// groupClaimedAs is groupClaimed with the execution ID of the coordinator.
+func (h *harness) groupClaimedAs(execution string) remote.Credential {
+	c, _ := h.groupClaimedFor("20261117-partition-group", execution)
+	return c
+}
+
+// groupClaimedFor claims the named group and returns the claim request, which
+// a successor needs to take the lease over.
+func (h *harness) groupClaimedFor(group, execution string) (remote.Credential, api.GroupClaim) {
 	t := h.t
 	project := h.project("host-a")
-	group := "20261117-partition-group"
 	task, err := project.NewTask(t.Context(), "", api.NewTask{Type: "chore", Slug: "partition-group", Title: "Partition group fixture", Language: "en"})
 	if err != nil {
 		t.Fatal(err)
@@ -47,7 +56,7 @@ func (h *harness) groupClaimed() remote.Credential {
 	if _, err = project.Move(t.Context(), "", task.TaskID, api.Move{State: "todo"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	request := api.GroupClaim{ExecutionID: "partition-coordinator", Request: board.CoordinatorClaim{GroupID: group, Owner: "coordinator", Token: "public-label", Basis: "partition fixture", Members: []string{task.TaskID}}}
+	request := api.GroupClaim{ExecutionID: execution, Request: board.CoordinatorClaim{GroupID: group, Owner: "coordinator", Token: "public-label", Basis: "partition fixture", Members: []string{task.TaskID}}}
 	grant, err := project.ClaimGroup(t.Context(), "", group, request, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -56,7 +65,7 @@ func (h *harness) groupClaimed() remote.Credential {
 	if err := remote.WriteCredential(h.home, c); err != nil {
 		t.Fatal(err)
 	}
-	return c
+	return c, request
 }
 
 // An outage longer than the lease TTL ends nothing: the credential stays live,
@@ -77,7 +86,7 @@ func TestWorkerKeepsEveryLeaseThroughAPartition(t *testing.T) {
 			heal := h.partition()
 			for _, wait := range []time.Duration{91 * time.Second, 30 * time.Second} {
 				h.advance(wait)
-				if live, _ := h.loop.pass(t.Context()); live != 1 {
+				if live, _ := h.pass(t.Context()); live != 1 {
 					t.Fatal("a partition ended the credential")
 				}
 			}
@@ -86,7 +95,7 @@ func TestWorkerKeepsEveryLeaseThroughAPartition(t *testing.T) {
 			}
 			heal()
 			h.advance(16 * time.Second)
-			if live, err := h.loop.pass(t.Context()); err != nil || live != 1 {
+			if live, err := h.pass(t.Context()); err != nil || live != 1 {
 				t.Fatalf("renewal after the partition: %d %v", live, err)
 			}
 			if got := h.credential(); got.Lost || got.Generation != c.Generation || !got.RenewedAt.Equal(h.now()) || len(h.stopped) != 0 {
@@ -105,7 +114,7 @@ func TestWorkerRetriesWhenItCannotCreateAClient(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.advance(16 * time.Second)
-	if live, _ := h.loop.pass(t.Context()); live != 2 {
+	if live, _ := h.pass(t.Context()); live != 2 {
 		t.Fatalf("a client that cannot be built ended a credential: %d", live)
 	}
 	for _, got := range mustCredentials(t, h.home) {
@@ -138,7 +147,7 @@ func TestWorkerKeepsTheAgentWhenARefusalProvesNothing(t *testing.T) {
 				t.Fatal(err)
 			}
 			h.advance(16 * time.Second)
-			if live, _ := h.loop.pass(t.Context()); live != 2 {
+			if live, _ := h.pass(t.Context()); live != 2 {
 				t.Fatalf("a refusal that proves nothing ended a credential: %d", live)
 			}
 			for _, got := range mustCredentials(t, h.home) {

@@ -181,6 +181,9 @@ func TestRemoteStartCreatesExecutionWorktreeAndPublishesItsActualHead(t *testing
 	if err != nil || !found || credential.Worktree != worktree || credential.Branch == "" || credential.BaseCommit != head {
 		t.Fatalf("managed workspace: %+v %v", credential, err)
 	}
+	if want := api.ExecutionBranch(session.Info.ID, card.TaskID, credential.Generation); credential.Branch != want {
+		t.Fatalf("task branch = %q, want %q", credential.Branch, want)
+	}
 	if result.Outcome.Container == "" {
 		t.Fatal("missing launched container")
 	}
@@ -198,6 +201,9 @@ func TestRemoteStartCreatesExecutionWorktreeAndPublishesItsActualHead(t *testing
 	lifecycleGit(t, worktree, "add", "implemented.txt")
 	lifecycleGit(t, worktree, "commit", "-m", "Implement execution work")
 	implemented := lifecycleGit(t, worktree, "rev-parse", "HEAD")
+	// The baseline is already published below refs/heads/kander/<project>/<task>/g1/,
+	// so the task branch must not live at a path that is a prefix of it.
+	lifecycleGit(t, worktree, "push", "origin", credential.Branch)
 	// The invoking view still runs in the main checkout. The shared MoveTask
 	// boundary must publish this execution's worktree HEAD, not that checkout.
 	moved, err := session.MoveTask(t.Context(), card.TaskID, api.Move{State: "review"})

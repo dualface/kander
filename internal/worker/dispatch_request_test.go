@@ -26,7 +26,7 @@ func TestWorkerRejectsStaleDispatchBeforeAnyPaneEffect(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.advance(16 * time.Second)
-	if _, err := h.loop.pass(t.Context()); err != nil {
+	if _, err := h.pass(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if len(h.lines) != 0 {
@@ -56,7 +56,7 @@ func TestWorkerNeverRoutesToAChangedServerPane(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.advance(16 * time.Second)
-	if _, err := h.loop.pass(t.Context()); err != nil {
+	if _, err := h.pass(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if len(h.lines) != 0 {

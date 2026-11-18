@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"slices"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unicode"
@@ -99,7 +100,8 @@ func Run(args []string) int {
 // ErrRunning reports that another worker holds the lock.
 var ErrRunning = errors.New("another worker is running")
 
-// Serve runs the renewal loop until ctx ends or the worker is idle.
+// Serve runs the renewal loop and the work loop until ctx ends or the worker
+// is idle.
 func Serve(ctx context.Context, o Options) error {
 	if o.Tick <= 0 {
 		o.Tick = time.Second
@@ -125,17 +127,21 @@ func Serve(ctx context.Context, o Options) error {
 		return err
 	}
 	defer lock.release()
-	w := &loop{o: o, clients: map[string]*client.Client{}}
+	w := newLoop(o)
 	self, err := newHandover(o)
 	if err != nil {
 		o.Logger.Warn("the executable of this worker cannot be identified; handover to a replaced binary is off", "error", err)
 	}
 	o.Logger.Info("worker started", "version", version.String(), "pid", os.Getpid(), "executable", self.path())
+	// Registered after the lock release, so it runs first: only the worker that
+	// holds worker.lock acts on credentials.
+	w.startRenewals(ctx)
+	defer w.stopRenewals()
 	idleSince := o.Now()
 	ticker := time.NewTicker(o.Tick)
 	defer ticker.Stop()
 	for {
-		live, err := w.pass(ctx)
+		live, err := w.workRound(ctx)
 		if err != nil {
 			o.Logger.Error("worker pass failed", "error", err)
 		}
@@ -159,19 +165,51 @@ func Serve(ctx context.Context, o Options) error {
 	}
 }
 
+// loop holds the state of the two loops of one worker: the renewal loop in
+// renew.go and the work loop below. The work loop observes, reports, delivers
+// and stops agents, one credential after the other; it never renews, so no
+// slow terminal can delay a renewal.
 type loop struct {
-	o       Options
+	o Options
+	// scan lists the credentials; tests replace it.
+	scan func(home string) ([]remote.Credential, error)
+
+	// mu guards every field below. It is held for map reads and writes only,
+	// never across a call to the server or the file system.
+	mu      sync.Mutex
 	clients map[string]*client.Client
-	// disconnected holds, per execution, the first and the latest renewal
+	// disconnected holds, per credential, the first and the latest renewal
 	// attempt that reached no decision of the server since the last confirmed
 	// renewal: retries are paced by the renewal interval and logged.
-	disconnected map[string]outage
+	disconnected map[credentialKey]outage
+	// owed holds the credentials whose renewal was confirmed and whose work has
+	// not run since. A credential gets one work step per confirmed renewal, so
+	// nothing is observed, reported or delivered for a lease the server did not
+	// confirm.
+	owed map[credentialKey]struct{}
+	// lostMarks holds the credentials the renewal loop marked lost and the work
+	// loop has not stopped yet.
+	lostMarks map[credentialKey]struct{}
+	renewing  *renewals
 }
 
 type outage struct{ since, last time.Time }
 
+func newLoop(o Options) *loop {
+	return &loop{
+		o:            o,
+		scan:         remote.Credentials,
+		clients:      map[string]*client.Client{},
+		disconnected: map[credentialKey]outage{},
+		owed:         map[credentialKey]struct{}{},
+		lostMarks:    map[credentialKey]struct{}{},
+	}
+}
+
 func (w *loop) client(c remote.Credential) (*client.Client, error) {
 	key := c.ServerURL + "\x00" + c.ClientID
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	if existing, ok := w.clients[key]; ok {
 		return existing, nil
 	}
@@ -184,192 +222,225 @@ func (w *loop) client(c remote.Credential) (*client.Client, error) {
 	return cl, nil
 }
 
-// pass renews every due credential once and returns the number still live.
-func (w *loop) pass(ctx context.Context) (int, error) {
-	credentials, err := remote.Credentials(w.o.Home)
+// credentials lists the credentials of the client home. The renewal loop can
+// remove a released credential while the other loop is scanning, which fails
+// the scan once; one retry reads the directory again.
+func (w *loop) credentials() ([]remote.Credential, error) {
+	all, err := w.scan(w.o.Home)
+	if err == nil {
+		return all, nil
+	}
+	w.o.Logger.Debug("credential scan retried", "error", err)
+	return w.scan(w.o.Home)
+}
+
+// workRound serves every credential once and returns the number still live. It
+// replaces the earlier serial pass: the renewals it used to make are the job of
+// the renewal loop.
+func (w *loop) workRound(ctx context.Context) (int, error) {
+	started := w.o.Now()
+	credentials, err := w.credentials()
 	if err != nil {
 		return 0, err
 	}
+	for i := range credentials {
+		w.refreshGroupContext(&credentials[i])
+	}
+	w.forgetAbsent(credentials)
+	stopped := map[credentialKey]struct{}{}
 	live := 0
 	for _, c := range credentials {
-		if c.ResourceKind == "group" {
-			if err := remote.RefreshExecutionContext(w.o.Home, &c); err != nil {
-				w.o.Logger.Error("group execution context could not be read", "group", c.TaskID, "error", err)
-			} else if err := remote.WriteCredential(w.o.Home, c); err != nil {
-				w.o.Logger.Error("group execution context could not be saved", "group", c.TaskID, "error", err)
-			}
+		w.stopMarked(ctx, stopped)
+		key := keyOf(c)
+		if _, done := stopped[key]; done {
+			continue
 		}
-
 		if c.Lost {
 			w.stopLost(ctx, w.o.Logger, c)
 			continue
 		}
-		if w.step(ctx, c) {
+		if !w.takeOwed(key) || w.work(ctx, c) {
 			live++
 		}
 	}
+	// A lease lost during the last work step is stopped in this round, not the
+	// next one, which may be a handover away.
+	w.stopMarked(ctx, stopped)
+	w.warnSlow("work round exceeded the renewal interval", started, credentials)
 	return live, nil
 }
 
-// step handles one credential and reports whether it is still live.
-func (w *loop) step(ctx context.Context, c remote.Credential) bool {
-	now := w.o.Now()
-	interval := c.RenewInterval.Std()
-	if interval <= 0 {
-		interval = 15 * time.Second
+// refreshGroupContext completes a group credential with the facts of the
+// execution that coordinates the group: the agent of a task that also
+// coordinates its own group is recorded on the task credential only.
+func (w *loop) refreshGroupContext(c *remote.Credential) {
+	if c.ResourceKind != "group" {
+		return
 	}
-	if now.Sub(c.RenewedAt) < interval {
-		return true
+	if err := remote.RefreshExecutionContext(w.o.Home, c); err != nil {
+		w.o.Logger.Error("group execution context could not be read", "group", c.TaskID, "error", err)
+	} else if err := remote.WriteCredential(w.o.Home, *c); err != nil && !errors.Is(err, remote.ErrCredentialReleased) {
+		w.o.Logger.Error("group execution context could not be saved", "group", c.TaskID, "error", err)
 	}
-	if o, known := w.disconnected[c.ExecutionID]; known && now.Sub(o.last) < interval {
-		return true
+}
+
+// takeOwed reports whether the credential has a work step owed and clears it,
+// so a work step that fails halfway is not repeated before the next confirmed
+// renewal.
+func (w *loop) takeOwed(key credentialKey) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	_, owed := w.owed[key]
+	delete(w.owed, key)
+	return owed
+}
+
+// forgetAbsent drops the bookkeeping of credentials that no longer exist.
+func (w *loop) forgetAbsent(credentials []remote.Credential) {
+	present := make(map[credentialKey]struct{}, len(credentials))
+	for _, c := range credentials {
+		present[keyOf(c)] = struct{}{}
 	}
-	log := w.o.Logger.With("project", c.ProjectID, "task", c.TaskID, "generation", c.Generation, "execution", c.ExecutionID)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for key := range w.owed {
+		if _, ok := present[key]; !ok {
+			delete(w.owed, key)
+		}
+	}
+	for key := range w.lostMarks {
+		if _, ok := present[key]; !ok {
+			delete(w.lostMarks, key)
+		}
+	}
+	for key := range w.disconnected {
+		if _, ok := present[key]; !ok {
+			delete(w.disconnected, key)
+		}
+	}
+}
+
+// stopMarked stops the agents of the credentials the renewal loop marked lost
+// since the last check. The work loop runs it before every work step, so a
+// lost lease waits for at most the step in progress. The credentials it stops
+// are added to stopped, which keeps the copy of the credential that was read at
+// the start of the round from being served again. It reports whether it had
+// marks to work on and read the credentials; a failed read leaves the marks for
+// the next check and reports false.
+func (w *loop) stopMarked(ctx context.Context, stopped map[credentialKey]struct{}) bool {
+	w.mu.Lock()
+	marks := w.lostMarks
+	w.lostMarks = map[credentialKey]struct{}{}
+	w.mu.Unlock()
+	if len(marks) == 0 {
+		return false
+	}
+	credentials, err := w.credentials()
+	if err != nil {
+		w.o.Logger.Error("lost credentials could not be read; their agents are stopped later", "error", err)
+		w.mu.Lock()
+		for key := range marks {
+			w.lostMarks[key] = struct{}{}
+		}
+		w.mu.Unlock()
+		return false
+	}
+	for _, c := range credentials {
+		key := keyOf(c)
+		if _, marked := marks[key]; !marked || !c.Lost {
+			continue
+		}
+		w.refreshGroupContext(&c)
+		w.stopLost(ctx, w.o.Logger, c)
+		stopped[key] = struct{}{}
+	}
+	return true
+}
+
+// marked reports whether a lease is marked lost and not stopped yet.
+func (w *loop) marked() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return len(w.lostMarks) > 0
+}
+
+// warnSlow logs a round that took longer than the shortest renewal interval of
+// its credentials: a lease can lapse once a round takes longer than the TTL.
+func (w *loop) warnSlow(msg string, started time.Time, credentials []remote.Credential) {
+	interval := 15 * time.Second
+	for i, c := range credentials {
+		if i == 0 || renewInterval(c) < interval {
+			interval = renewInterval(c)
+		}
+	}
+	if duration := w.o.Now().Sub(started); duration > interval {
+		w.o.Logger.Warn(msg, "duration", duration, "interval", interval, "credentials", len(credentials))
+	}
+}
+
+// work is the half of a credential's step that follows a confirmed renewal: it
+// observes the agent, reports the observation and delivers requests. It
+// reports whether the credential is still live.
+func (w *loop) work(ctx context.Context, c remote.Credential) bool {
+	log := w.credentialLog(c)
 	cl, err := w.client(c)
 	if err != nil {
-		w.retry(log, c, now, err)
+		log.Warn("worker client unavailable", "error", err)
 		return true
 	}
-	callCtx, cancel := context.WithTimeout(ctx, min(interval, 10*time.Second))
-	defer cancel()
-	project := cl.Project(c.ProjectID)
 	if c.ResourceKind == "integration" {
-		_, err = project.RenewIntegration(callCtx, c.TaskID, *c.Claim())
-	} else if c.ResourceKind == "group" {
-		_, err = project.RenewGroup(callCtx, c.TaskID, *c.Claim())
-	} else {
-		_, err = project.Renew(callCtx, c.TaskID, *c.Claim())
+		return w.integrationWork(ctx, log, c)
 	}
-	switch {
-	case err == nil:
-		w.reconnected(log, c, now)
-		c.RenewedAt = now
-		if c.ResourceKind == "integration" {
-			return w.integrationRenewed(ctx, log, c)
-		}
-		observeStart := time.Now()
-		observeCtx, stopObservation := context.WithTimeout(ctx, 2*time.Second)
-		observation := w.observe(observeCtx, c)
-		stopObservation()
-		if observation.Status != "unknown" {
-			reportCtx, stopReport := context.WithTimeout(ctx, 5*time.Second)
-			var reportErr error
-			if c.ResourceKind == "group" {
-				_, reportErr = project.ObserveGroup(reportCtx, client.NewKey(), c.TaskID, observation, *c.Claim())
-			} else {
-				_, reportErr = project.ObserveAgent(reportCtx, client.NewKey(), c.TaskID, observation, *c.Claim())
-			}
-			stopReport()
-			if reportErr != nil {
-				log.Warn("agent observation report failed", "error", reportErr)
-			}
-			if c.ResourceKind == "group" && observation.Status == "stopped" {
-				w.lose(log, c, "agent stopped: "+observation.Reason)
-				return false
-			}
-		}
-		if c.ResourceKind != "group" && observation.Status != "stopped" {
-			// The observation and its report have their own bounds, so their
-			// time is added back: a slow terminal cannot starve delivery, and
-			// the renewal and delivery calls together keep the callCtx budget.
-			deadline, _ := callCtx.Deadline()
-			deliverCtx, stopDeliver := context.WithDeadline(ctx, deadline.Add(time.Since(observeStart)))
-			w.deliver(deliverCtx, log, project, &c)
-			stopDeliver()
-		}
-		if err := remote.WriteCredential(w.o.Home, c); err != nil {
-			log.Error("credential write failed", "error", err)
-		}
-		return true
-	case api.IsCode(err, api.CodeTakenOver):
-		// A newer generation took the lease over: this execution may never
-		// write again.
-		w.lose(log, c, err.Error())
-		return false
-	case api.IsCode(err, api.CodeLeaseInvalid) || api.IsCode(err, api.CodeHeldByOther) || api.IsCode(err, api.CodeNotFound) || c.ResourceKind == "integration" && api.IsCode(err, api.CodeRevisionConflict):
-		// A released claim is a normal end; a lost or replaced one ends this
-		// execution. Only the server's own view decides: a lease refusal while
-		// the view still shows this generation active or lapsed proves
-		// nothing. An integration revision conflict is decisive by itself: the
-		// members its claim froze changed under an unchanged lease.
-		var claim *api.ClaimView
-		var lookupErr error
-		if c.ResourceKind == "integration" {
-			var value api.Integration
-			if value, lookupErr = project.Integration(callCtx, c.TaskID); lookupErr == nil {
-				claim = &api.ClaimView{Generation: value.Generation, Status: value.Status}
-			}
-		} else if c.ResourceKind == "group" {
-			var value api.GroupView
-			if value, lookupErr = project.Group(callCtx, c.TaskID); lookupErr == nil {
-				claim = value.Claim
-			}
+	project := cl.Project(c.ProjectID)
+	observeCtx, stopObservation := context.WithTimeout(ctx, 2*time.Second)
+	observation := w.observe(observeCtx, c)
+	stopObservation()
+	if observation.Status != "unknown" {
+		reportCtx, stopReport := context.WithTimeout(ctx, 5*time.Second)
+		var reportErr error
+		if c.ResourceKind == "group" {
+			_, reportErr = project.ObserveGroup(reportCtx, client.NewKey(), c.TaskID, observation, *c.Claim())
 		} else {
-			var value api.Task
-			if value, lookupErr = project.Show(callCtx, c.TaskID); lookupErr == nil {
-				claim = value.Claim
-			}
+			_, reportErr = project.ObserveAgent(reportCtx, client.NewKey(), c.TaskID, observation, *c.Claim())
 		}
-		switch {
-		case lookupErr != nil && !api.IsCode(lookupErr, api.CodeNotFound):
-			// The refusal cannot be read against the server's view yet.
-			w.retry(log, c, now, errors.Join(err, lookupErr))
-			return true
-		case claim != nil && claim.Generation == c.Generation && claim.Status == api.ClaimReleased:
-			log.Info("claim released; credential removed")
-			if err := remote.RemoveCredential(w.o.Home, c); err != nil {
-				log.Error("credential removal failed", "error", err)
-			}
+		stopReport()
+		if reportErr != nil {
+			log.Warn("agent observation report failed", "error", reportErr)
+		}
+		if c.ResourceKind == "group" && observation.Status == "stopped" {
+			w.lose(log, c, "agent stopped: "+observation.Reason)
 			return false
-		case claim != nil && claim.Generation == c.Generation && api.ClaimStands(claim.Status) && !api.IsCode(err, api.CodeRevisionConflict):
-			log.Error("renewal refused while the server still shows this generation; retrying", "error", err, "status", claim.Status)
-			return true
 		}
-		w.lose(log, c, err.Error())
-		return false
-	default:
-		// The server is unreachable or failing. Only the server decides the
-		// lease: a lapsed lease is renewed when the server is back, and only a
-		// takeover ends this execution, so the agent keeps working.
-		w.retry(log, c, now, err)
-		return true
 	}
-}
-
-// retry records a renewal that did not reach a decision of the server; the
-// next attempt waits one renewal interval. It never marks the credential lost
-// or stops the agent.
-func (w *loop) retry(log *slog.Logger, c remote.Credential, now time.Time, err error) {
-	if w.disconnected == nil {
-		w.disconnected = map[string]outage{}
+	if c.ResourceKind != "group" && observation.Status != "stopped" {
+		// A delivery has a budget of its own, started after the report: the
+		// renewal runs in another loop, so a slow delivery cannot cost a lease.
+		deliverCtx, stopDeliver := context.WithTimeout(ctx, min(renewInterval(c), 10*time.Second))
+		w.deliver(deliverCtx, log, project, &c)
+		stopDeliver()
 	}
-	o, known := w.disconnected[c.ExecutionID]
-	if !known {
-		o.since = now
+	if err := remote.WriteCredential(w.o.Home, c); errors.Is(err, remote.ErrCredentialReleased) {
+		// The renewal loop removed the credential while this step ran.
+		log.Debug("claim released during the work step")
+	} else if err != nil {
+		log.Error("credential write failed", "error", err)
 	}
-	o.last = now
-	w.disconnected[c.ExecutionID] = o
-	log.Warn("renewal failed; retrying", "error", err, "disconnected_since", o.since)
-}
-
-// reconnected logs the first confirmed renewal after failed ones.
-func (w *loop) reconnected(log *slog.Logger, c remote.Credential, now time.Time) {
-	if o, known := w.disconnected[c.ExecutionID]; known {
-		delete(w.disconnected, c.ExecutionID)
-		log.Info("renewal confirmed again", "disconnected_for", now.Sub(o.since))
-	}
+	return true
 }
 
 // lose marks the credential lost and stops the managed agent. The worktree,
-// branch, and uncommitted changes are left untouched for manual handling.
+// branch, and uncommitted changes are left untouched for manual handling. Only
+// the work loop calls it: the renewal loop marks a lease lost and leaves the
+// stop to the work loop.
 func (w *loop) lose(log *slog.Logger, c remote.Credential, reason string) {
-	c.Lost, c.LostReason = true, reason
-	log.Warn("lease lost", "reason", reason)
-	if err := remote.WriteCredential(w.o.Home, c); err != nil {
-		log.Error("credential write failed; agent stop is deferred", "error", err)
+	if !w.markLost(log, c, reason) {
 		return
 	}
+	c.Lost, c.LostReason = true, reason
 	w.stopLost(context.Background(), log, c)
+	w.mu.Lock()
+	delete(w.lostMarks, keyOf(c))
+	w.mu.Unlock()
 }
 
 // deliver hands the open requests of this generation to the agent once each.

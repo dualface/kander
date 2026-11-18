@@ -23,12 +23,7 @@ import (
 // can give an identity.
 func (f *integrationFixture) isolateGit() {
 	f.t.Helper()
-	empty := filepath.Join(f.root, "empty-gitconfig")
-	if err := os.WriteFile(empty, nil, 0600); err != nil {
-		f.t.Fatal(err)
-	}
-	f.t.Setenv("GIT_CONFIG_GLOBAL", empty)
-	f.t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	isolateGlobalGit(f.t)
 	for _, name := range []string{"GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL", "EMAIL"} {
 		f.t.Setenv(name, "")
 		_ = os.Unsetenv(name)

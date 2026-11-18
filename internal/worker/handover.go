@@ -19,8 +19,9 @@ const (
 	// probeTimeout bounds the `version` probe of a replaced binary.
 	probeTimeout = 10 * time.Second
 	// confirmTimeout bounds the wait for a started worker to take the lock.
-	// Probe and confirmation together stay far below the default lease TTL of
-	// 90 s, because the lock is not renewed while a handover is in flight.
+	// Renewals pause between the stop of the renewal loop and the confirmation,
+	// not during the probe; confirmation alone stays far below the default
+	// lease TTL of 90 s.
 	confirmTimeout = 10 * time.Second
 	// confirmPoll is the interval of the lock check. It is longer than the
 	// time WorkerHeld holds the lock, so polling never starves the new worker.
@@ -200,8 +201,11 @@ const (
 )
 
 // tryHandover hands the work to the replaced binary once. The order is fixed:
-// probe, release the lock, start, confirm. A failure after the release takes
-// the lock back so no lease lapses while the old code keeps running.
+// probe, stop the renewal loop, release the lock, start, confirm. Renewals
+// continue during the probe and stop before the lock is released, so only the
+// worker that holds worker.lock acts on credentials. A failure after the
+// release takes the lock back and resumes the renewals, so no lease lapses
+// while the old code keeps running.
 func (w *loop) tryHandover(ctx context.Context, h *handover, lock *workerLock) (handoverResult, error) {
 	current, ok := h.due(w.o)
 	if !ok {
@@ -211,6 +215,10 @@ func (w *loop) tryHandover(ctx context.Context, h *handover, lock *workerLock) (
 	if err := w.o.Probe(ctx, h.executable); err != nil {
 		log.Warn("replaced worker binary is not usable; handover skipped", "error", err)
 		h.fail(w.o, current)
+		return handoverNone, nil
+	}
+	if !w.settleLostMarks(ctx) {
+		log.Warn("a lost lease could not be stopped yet; handover postponed")
 		return handoverNone, nil
 	}
 	lock.release()
@@ -230,7 +238,31 @@ func (w *loop) tryHandover(ctx context.Context, h *handover, lock *workerLock) (
 	} else if err != nil {
 		return handoverNone, err
 	}
+	w.startRenewals(ctx)
 	return handoverNone, nil
+}
+
+// settleLostMarks stops the agents of the leases marked lost before the
+// renewals pause for a handover, so that no stop attempt delays a renewal while
+// they are paused. The stops run while the renewal loop runs, until no mark is
+// left. Then the loop is stopped, and a mark that came in that last moment sends
+// the worker around again with the renewals running: a renewal loop that has
+// exited marks nothing more. It reports whether the handover can go on, with
+// the renewals stopped. After a few rounds with a mark still left, for example
+// because the credentials cannot be read, it reports false and the renewals
+// run: the handover waits for the next tick.
+func (w *loop) settleLostMarks(ctx context.Context) bool {
+	stopped := map[credentialKey]struct{}{}
+	for range 3 {
+		for w.stopMarked(ctx, stopped) {
+		}
+		w.stopRenewals()
+		if !w.marked() {
+			return true
+		}
+		w.startRenewals(ctx)
+	}
+	return false
 }
 
 // confirm waits until another process holds worker.lock. A started process
