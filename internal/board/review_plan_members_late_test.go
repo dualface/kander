@@ -123,3 +123,71 @@ func TestAddMembersCaptureSeesEachFile(t *testing.T) {
 		})
 	}
 }
+
+// A member added while its start is unconfirmed cannot be rolled back: the
+// addition publishes a plan copy into the card, so the launcher's revision is
+// stale, and no other caller owns the rollback. The plan stays consistent with the
+// card in working, which cannot reach the state "member rolled back to todo". The
+// start finishes through unresolve and adopt, and the plan seals with no rebind.
+func TestAddMembersThenStartRollback(t *testing.T) {
+	w := newMembersWorld(t, "members-rollback", false)
+	late := todoGroupCard(t, w.root, "members-rollback-c")
+	id := late.Entry.TaskID
+	w.candidate = id
+	moved := beginStart(t, w.root, late)
+	if err := w.extend(ReviewPlanExtension{AddMembers: []string{id}}); err != nil {
+		t.Fatalf("a member with an unconfirmed start was refused: %v", err)
+	}
+	w.refresh(t)
+	if cycle := planCycle(transactionSnapshot(t, w.root, id)); w.plan.Cycles[id] != cycle {
+		t.Fatalf("cycle %q, want %q", w.plan.Cycles[id], cycle)
+	}
+
+	err := RollbackDocument(w.root, moved, late.Text, "todo")
+	if err == nil || !strings.Contains(err.Error(), "expected revision") || !strings.Contains(err.Error(), "current revision") {
+		t.Fatalf("rollback with the launcher entry: %v", err)
+	}
+	err = RollbackDocument(w.root, bound(t, w.root, id).Entry, late.Text, "todo")
+	if err == nil || !strings.Contains(err.Error(), "start rollback binding") {
+		t.Fatalf("rollback with a rebound entry: %v", err)
+	}
+	s := transactionSnapshot(t, w.root, id)
+	if pointer, ok := w.planOf(t, id); s.Entry.State != "working" || !ok || pointer != w.plan.PlanID || planCycle(s) != w.plan.Cycles[id] {
+		t.Fatalf("after the refused rollback: state %s, pointer %q %v, cycle %q, plan %q", s.Entry.State, pointer, ok, planCycle(s), w.plan.Cycles[id])
+	}
+	err = w.extend(ReviewPlanExtension{Seal: true})
+	if err == nil || !strings.Contains(err.Error(), "every member assigned") || strings.Contains(err.Error(), "terminal") {
+		t.Fatalf("seal before the member has a batch: %v", err)
+	}
+	if problems := CheckReviewGate(w.root, []string{w.first, id}); len(problems) != 0 {
+		t.Fatalf("%v", problems)
+	}
+	if code, out, errs, err := CheckBoard(w.root, []string{w.first, id}, false); err != nil || code != 0 {
+		t.Fatalf("check: %d %s %v %v", code, out, errs, err)
+	}
+
+	if _, err = UnresolveExecution(w.root, moved, "tmux:s:w:p", "late step failed"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = AdoptExecution(w.root, bound(t, w.root, id), "user:adopt"); err != nil {
+		t.Fatal(err)
+	}
+	if kinds := chainKinds(ledgerOf(t, w.root, id)); !slices.Equal(kinds, []string{TransitionStart, TransitionUnresolve, TransitionAdopt}) {
+		t.Fatalf("chain %v", kinds)
+	}
+	if planCycle(transactionSnapshot(t, w.root, id)) != w.plan.Cycles[id] {
+		t.Fatal("the adoption changed the execution cycle")
+	}
+	batch := ReviewPlanBatch{BatchID: "second", PreviousBatchID: "first", TaskIDs: []string{id}, Base: sha("b"), TargetCommit: sha("c"), Requirements: archiveRequirements()}
+	if err = w.extend(ReviewPlanExtension{Batch: &batch}); err != nil {
+		t.Fatal(err)
+	}
+	w.refresh(t)
+	closeOwedBatch(t, w.root, batch)
+	if err = w.extend(ReviewPlanExtension{Seal: true}); err != nil {
+		t.Fatal(err)
+	}
+	if problems := CheckReviewGate(w.root, []string{w.first, id}); len(problems) != 0 {
+		t.Fatalf("%v", problems)
+	}
+}
