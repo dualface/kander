@@ -155,6 +155,32 @@ func valueFlags(c *cobra.Command) []*pflag.Flag {
 	return flags
 }
 
+// requiredArguments are the flags a complete command line of leaf needs, without the flag
+// named skip: the checks that run before the command body refuse a line that lacks one.
+func requiredArguments(leaf leafCommand, skip string) []string {
+	var out []string
+	flags := requiredFlags[leaf.path]
+	for i := 0; i+1 < len(flags); i += 2 {
+		if flags[i] != "--"+skip && flags[i] != "--"+replacedBy[skip] {
+			out = append(out, flags[i], flags[i+1])
+		}
+	}
+	if companion := companionFlags[skip]; len(companion) > 0 && leaf.Flags().Lookup(strings.TrimPrefix(companion[0], "--")) != nil {
+		out = append(out, companion...)
+	}
+	return out
+}
+
+// replacedBy names the flag a required flag gives way to when the other form is the one tested:
+// the text of a message comes from --message or from --message-file, never both.
+var replacedBy = map[string]string{"message-file": "message"}
+
+// companionFlags are the flags that a flag under test needs next to it.
+var companionFlags = map[string][]string{
+	"dispatch-id":     {"--execution-epoch", "2"},
+	"execution-epoch": {"--dispatch-id", "d1"},
+}
+
 func sampleArguments(t *testing.T, leaf leafCommand) []string {
 	t.Helper()
 	positionals, ok := samplePositionals[leaf.path]
@@ -171,26 +197,16 @@ type invocation struct {
 	flags map[string]string
 }
 
-// runStubbed runs args against a fresh tree whose commands only record themselves: parsing and
-// argument validation are the real ones, the work and the pre-run rules are not.
+// runStubbed runs args against a fresh tree whose commands only record themselves: the parsing,
+// the argument validation and the checks before the command body are the real ones, and the
+// body and the project gate are not.
 func runStubbed(t *testing.T, args ...string) (code int, got *invocation, stderr string) {
 	t.Helper()
 	root := cli.NewRoot()
-	var walk func(c *cobra.Command)
-	walk = func(c *cobra.Command) {
-		c.PersistentPreRunE, c.PreRunE = nil, nil
-		if c.Runnable() && !groups[c.Name()] && c.Name() != "help" && !c.DisableFlagParsing {
-			c.RunE = func(c *cobra.Command, args []string) error {
-				got = &invocation{path: c.CommandPath(), args: slices.Clone(args), flags: map[string]string{}}
-				c.Flags().Visit(func(f *pflag.Flag) { got.flags[f.Name] = f.Value.String() })
-				return nil
-			}
-		}
-		for _, child := range c.Commands() {
-			walk(child)
-		}
-	}
-	walk(root)
+	commandtest.Stub(root, func(c *cobra.Command, args []string) {
+		got = &invocation{path: c.CommandPath(), args: slices.Clone(args), flags: map[string]string{}}
+		c.Flags().Visit(func(f *pflag.Flag) { got.flags[f.Name] = f.Value.String() })
+	})
 	code, _, stderr = commandtest.Capture(func() int { return command.Execute(root, args) })
 	return code, got, stderr
 }
@@ -222,7 +238,7 @@ func TestValueFlagsAcceptSpaceAndEqualsForms(t *testing.T) {
 				t.Fatalf("%s: no sample value for --%s", leaf.path, f.Name)
 			}
 			t.Run(leaf.path+"/"+f.Name, func(t *testing.T) {
-				base := append(strings.Fields(leaf.path), sampleArguments(t, leaf)...)
+				base := append(append(strings.Fields(leaf.path), sampleArguments(t, leaf)...), requiredArguments(leaf, f.Name)...)
 				spaced, spacedGot, spacedErr := runStubbed(t, append(slices.Clone(base), "--"+f.Name, value)...)
 				joined, joinedGot, joinedErr := runStubbed(t, append(slices.Clone(base), "--"+f.Name+"="+value)...)
 				if spaced != 0 || joined != 0 {
@@ -247,8 +263,9 @@ func TestFlagsMayFollowPositionalArguments(t *testing.T) {
 		t.Run(leaf.path, func(t *testing.T) {
 			f := flags[0]
 			path := strings.Fields(leaf.path)
-			before := append(append(slices.Clone(path), "--"+f.Name, sampleValues[f.Name]), positionals...)
-			after := append(append(slices.Clone(path), positionals...), "--"+f.Name, sampleValues[f.Name])
+			required := requiredArguments(leaf, f.Name)
+			before := append(append(append(slices.Clone(path), required...), "--"+f.Name, sampleValues[f.Name]), positionals...)
+			after := append(append(append(slices.Clone(path), positionals...), required...), "--"+f.Name, sampleValues[f.Name])
 			a, aGot, aErr := runStubbed(t, before...)
 			b, bGot, bErr := runStubbed(t, after...)
 			if a != 0 || b != 0 {
@@ -271,7 +288,7 @@ func TestWordsAfterDoubleDashArePositional(t *testing.T) {
 		t.Run(leaf.path, func(t *testing.T) {
 			dashed := slices.Clone(positionals)
 			dashed[len(dashed)-1] = "-dash-word"
-			code, got, stderr := runStubbed(t, append(append(strings.Fields(leaf.path), "--"), dashed...)...)
+			code, got, stderr := runStubbed(t, append(append(append(strings.Fields(leaf.path), requiredArguments(leaf, "")...), "--"), dashed...)...)
 			if code == 0 {
 				if got == nil || !slices.Equal(got.args, dashed) {
 					t.Fatalf("arguments=%+v", got)
@@ -289,7 +306,7 @@ func TestWordsAfterDoubleDashArePositional(t *testing.T) {
 func TestUnknownFlagIsAnArgumentError(t *testing.T) {
 	for _, leaf := range commandLeaves(cli.NewRoot()) {
 		t.Run(leaf.path, func(t *testing.T) {
-			args := append(append(strings.Fields(leaf.path), sampleArguments(t, leaf)...), "--no-such-flag")
+			args := append(append(append(strings.Fields(leaf.path), sampleArguments(t, leaf)...), requiredArguments(leaf, "")...), "--no-such-flag")
 			code, _, stderr := runStubbed(t, args...)
 			if code != 2 || !strings.Contains(stderr, "--no-such-flag") {
 				t.Fatalf("exit=%d stderr=%s", code, stderr)
@@ -442,95 +459,10 @@ func TestRegisteredFlagsMatchContractSyntax(t *testing.T) {
 	}
 }
 
-// promptCommand finds the command lines in a prompt: an occurrence of "kander <command>" or of
-// the {{.Command}} placeholder of a template, up to the end of the sentence or clause.
-var promptCommand = regexp.MustCompile("(?:kander|\\{\\{\\.Command\\}\\}) ([a-z][a-z-]*(?: [^ \\n`]*[^ \\n`.,;:)])*?)(?: (?:to|then|with|and|in|for) |[.,;:)`](?: |$)|\\n|$)")
-
-// promptProse are the mentions of the command name in a prompt that are not command lines.
-var promptProse = map[string]bool{"move prints it prefilled": true}
-
-// promptValues are the values the placeholders of a prompt template stand for.
-var promptValues = map[string]string{
-	"Command": "kander", "TaskID": sampleTask, "CardID": sampleTask, "Number": "42", "Host": "github.com",
-	"Owner": "owner", "Repo": "repo", "DispatchID": "dispatch-1", "Epoch": "2",
-}
-
-var promptPlaceholder = regexp.MustCompile(`\{\{\.([A-Za-z]+)\}\}`)
-
-// generatedCommandLines are the command lines a prompt text names, with the placeholders of a
-// template filled in. A line that names only a command is returned as it is.
-func generatedCommandLines(t *testing.T, source, text string) []string {
-	t.Helper()
-	var lines []string
-	for _, match := range promptCommand.FindAllStringSubmatch(text, -1) {
-		line := match[1]
-		if promptProse[line] {
-			continue
-		}
-		line = promptPlaceholder.ReplaceAllStringFunc(line, func(placeholder string) string {
-			name := promptPlaceholder.FindStringSubmatch(placeholder)[1]
-			value, ok := promptValues[name]
-			if !ok {
-				t.Errorf("%s: no sample value for %s", source, placeholder)
-			}
-			return value
-		})
-		// A template names the actions of `issue result` in the sentence that follows the line.
-		if strings.HasPrefix(line, "issue result ") {
-			for _, action := range regexp.MustCompile(`--action ([a-z]+)`).FindAllStringSubmatch(text, -1) {
-				lines = append(lines, line+" --action "+action[1])
-			}
-			continue
-		}
-		lines = append(lines, line)
-	}
-	return lines
-}
-
-// Every command line the prompts of Kander tell an agent to run parses without an argument
-// error: the lines are read from the rendered prompts and from the templates themselves, so a
-// changed prompt is tested as it is. The command lines Kander starts itself are the arguments
-// the code builds.
+// The command lines Kander starts itself are the arguments the code builds, so they are taken
+// from the functions that build them. The command lines of the prompts are tested next to the
+// renderers that produce them, in internal/launch.
 func TestGeneratedCommandLinesParse(t *testing.T) {
-	var sources []string
-	for _, pattern := range []string{
-		filepath.Join("..", "..", "internal", "launch", "testdata", "prompts", "*.golden"),
-		filepath.Join("..", "..", "rules", "templates", "prompt", "*.md"),
-	} {
-		files, err := filepath.Glob(pattern)
-		if err != nil || len(files) == 0 {
-			t.Fatalf("prompt sources %s: %v %v", pattern, files, err)
-		}
-		sources = append(sources, files...)
-	}
-	root := cli.NewRoot()
-	seen := map[string]bool{}
-	for _, file := range sources {
-		data, err := os.ReadFile(file)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, line := range generatedCommandLines(t, filepath.Base(file), string(data)) {
-			words := strings.Fields(line)
-			target, rest, err := root.Find(words)
-			if err != nil || target == root {
-				t.Errorf("%s: kander %s names no command", filepath.Base(file), line)
-				continue
-			}
-			seen[target.CommandPath()] = true
-			if len(rest) == 0 {
-				// The prompt only names the command, as in "controlled `kander update` commands".
-				continue
-			}
-			t.Run(filepath.Base(file)+"/"+line, func(t *testing.T) { assertParses(t, words) })
-		}
-	}
-	// The prompts name at least the commands every card session runs.
-	for _, name := range []string{"kander config", "kander show", "kander move", "kander issue result", "kander update"} {
-		if !seen[name] {
-			t.Errorf("no prompt names %q any more", name)
-		}
-	}
 	dir := t.TempDir()
 	for name, args := range map[string][]string{
 		"server start":  servicectl.ServerStartArguments(dir, servicectl.StartOptions{Listen: "127.0.0.1:7878", TTL: 90e9, Renew: 30e9}),

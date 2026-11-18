@@ -18,6 +18,27 @@ func Run(c *cobra.Command, args ...string) int {
 	return command.Execute(root, append([]string{c.Name()}, args...))
 }
 
+// Stub replaces what every command of the tree does when it runs with a call of record, and
+// keeps the rest as it is: the parsing, the argument validation (Args) and the checks that run
+// before the command body (PreRunE). A command line that the real command refuses is refused,
+// and one it accepts reaches record with the arguments the command saw. Groups, help, and a
+// command that takes its arguments verbatim keep their own bodies.
+func Stub(root *cobra.Command, record func(c *cobra.Command, args []string)) {
+	var walk func(c *cobra.Command)
+	walk = func(c *cobra.Command) {
+		if c.Runnable() && c.Annotations[command.GroupAnnotation] != "true" && c.Name() != "help" && !c.DisableFlagParsing {
+			c.RunE = func(c *cobra.Command, args []string) error {
+				record(c, args)
+				return nil
+			}
+		}
+		for _, child := range c.Commands() {
+			walk(child)
+		}
+	}
+	walk(root)
+}
+
 // Capture runs f with the process stdout and stderr redirected and returns what f returned and
 // wrote. Commands that print through os.Stdout and os.Stderr, and the error report of Run, are
 // observed this way.

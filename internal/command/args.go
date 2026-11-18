@@ -35,13 +35,17 @@ func unknownCommand(c *cobra.Command, args []string) error {
 	return Usage("cli.error_unknown_command", name)
 }
 
+// GroupAnnotation marks a command that only groups subcommands: bare, it is a usage error.
+const GroupAnnotation = "kander/group"
+
 // Group returns a command that only groups subcommands: an unknown or missing subcommand is an
 // argument error.
 func Group(use string, subcommands ...*cobra.Command) *cobra.Command {
 	group := &cobra.Command{
-		Use:  use,
-		Args: unknownCommand,
-		RunE: func(*cobra.Command, []string) error { return Usage("cli.error_subcommand_required") },
+		Use:         use,
+		Annotations: map[string]string{GroupAnnotation: "true"},
+		Args:        unknownCommand,
+		RunE:        func(*cobra.Command, []string) error { return Usage("cli.error_subcommand_required") },
 	}
 	group.AddCommand(subcommands...)
 	return group
