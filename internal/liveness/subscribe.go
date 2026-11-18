@@ -358,6 +358,13 @@ func writeSubscriptionDiagnostic(w io.Writer, message string) error {
 	return errors.Join(err, cleanup())
 }
 
+// bindStreamNotices makes the remarks of the stream use the bounded diagnostic writer, and
+// returns the function that undoes it. While the subscription writes to a shared stdout and
+// stderr, the descriptor is non-blocking, and a plain stderr write would fail with EAGAIN.
+func bindStreamNotices() (restore func()) {
+	return command.SetStreamLineWriter(func(line string) error { return writeSubscriptionDiagnostic(os.Stderr, line) })
+}
+
 // runSubscribe implements kander subscribe against the server. Every failure is written by the
 // bounded diagnostic writer: as the error object with --json, otherwise as "kander: message".
 func runSubscribe(opts subscribeOptions) int {
@@ -379,6 +386,9 @@ func runSubscribe(opts subscribeOptions) int {
 	if err != nil {
 		return fail(err)
 	}
+	// The remarks of the stream go through the bounded writer too: stdout and stderr may be
+	// one full, non-blocking pipe.
+	defer bindStreamNotices()()
 	ctx, cancel := subscriptionSignalContext()
 	defer cancel()
 	service, err := remote.Open(ctx, cfg, cwd)

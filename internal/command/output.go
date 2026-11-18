@@ -273,8 +273,41 @@ func StreamStarted() {
 	current.notices = nil
 	current.mu.Unlock()
 	for _, notice := range pending {
-		writeLine(os.Stderr, map[string]any{"notice": notice})
+		streamNotice(notice)
 	}
+}
+
+// streamLineWriter writes one line of a stream to stderr. A command whose stderr can be the
+// full, non-blocking pipe it shares with stdout replaces it with a bounded writer, so a remark
+// is not lost to a would-block error.
+var streamLineWriter = func(line string) error {
+	_, err := os.Stderr.WriteString(line + "\n")
+	return err
+}
+
+// SetStreamLineWriter replaces the writer of the notice lines of a streaming command, and
+// returns the function that puts the previous one back.
+func SetStreamLineWriter(w func(line string) error) (restore func()) {
+	current.mu.Lock()
+	previous := streamLineWriter
+	streamLineWriter = w
+	current.mu.Unlock()
+	return func() {
+		current.mu.Lock()
+		streamLineWriter = previous
+		current.mu.Unlock()
+	}
+}
+
+func streamNotice(notice Notice) {
+	data, err := marshal(map[string]any{"notice": notice})
+	if err != nil {
+		return
+	}
+	current.mu.Lock()
+	write := streamLineWriter
+	current.mu.Unlock()
+	_ = write(string(data))
 }
 
 // Notify reports a remark of the running command. Without --json, text is written to stderr as
@@ -293,7 +326,7 @@ func Notify(code, text string) {
 	}
 	current.mu.Unlock()
 	if line {
-		writeLine(os.Stderr, map[string]any{"notice": notice})
+		streamNotice(notice)
 	}
 }
 
@@ -367,14 +400,6 @@ func FailReported(err error) int {
 	return 1
 }
 
-func writeLine(w io.Writer, v any) {
-	data, err := marshal(v)
-	if err != nil {
-		return
-	}
-	_, _ = w.Write(append(data, '\n'))
-}
-
 // finish ends the run of c and returns the process exit code. Without --json it prints what the
 // error of the command needs; with --json it writes the result object to stdout, or the error
 // object to stderr.
@@ -397,7 +422,7 @@ func finish(c *cobra.Command, err error) int {
 		} else {
 			// A stream that ended before its first event: its remarks are still lines.
 			for _, notice := range notices {
-				writeLine(os.Stderr, map[string]any{"notice": notice})
+				streamNotice(notice)
 			}
 		}
 		return status
