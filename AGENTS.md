@@ -136,8 +136,10 @@ The Runner registry contains: `doctor` `config` `version` `server` `install` `un
 Shared by POSIX and Windows (Windows-specific tests skip on non-Windows):
 
 ```sh
-go test ./...
+go test -timeout 30m ./...
 ```
+
+`-timeout 30m` replaces Go's default 10 minutes per package: `internal/board` runs the state model search ([Composite state model test](docs/model-test.md)), which takes about 5 to 9 minutes on a CI runner and longer on a loaded machine. The Release workflow and the local gate of `scripts/release.sh` use the same value.
 
 For a single package:
 
@@ -158,7 +160,7 @@ The formal toolchain check needs elan (Lean from `formal/lean-toolchain`) and ne
 scripts/formal-check.sh
 ```
 
-The only Python in the repository is the read-only stats tool in `scripts/production-stats/` (standard library only, outside `go test`). Run `go test ./...` at the module root before committing; no coverage threshold is set currently. Tests must isolate themselves in temporary directories and never rewrite the user's real board or `$HOME` configuration.
+The only Python in the repository is the read-only stats tool in `scripts/production-stats/` (standard library only, outside `go test`). Run `go test -timeout 30m ./...` at the module root before committing; no coverage threshold is set currently. Tests must isolate themselves in temporary directories and never rewrite the user's real board or `$HOME` configuration.
 
 ## Windows Handles / Reparse / DACL
 
@@ -174,6 +176,7 @@ Go runtime writes of configuration, board migration, the review runtime, Git exc
 
 - Update `CHANGELOG.md` before every release. Before pushing a `vX.Y.Z` tag, the top of `CHANGELOG.md` must hold a `## vX.Y.Z — YYYY-MM-DD` section that covers every user-visible change since the previous tag, and that entry must be committed on `develop` and fast-forwarded into `main` before `scripts/release.sh` runs. Never tag first and backfill the changelog afterwards.
 - Release order: commit to `develop` and push, fast-forward `main` to the same commit and push, then run `git checkout main && ./scripts/release.sh --skip-tap vX.Y.Z && git checkout develop`. `--skip-tap` leaves the Homebrew formula to the release workflow, so the script and the workflow never push the tap at the same time.
+- The local gate of `scripts/release.sh` runs `go vet ./...` and `go test -timeout 30m ./...` before the tag exists, in the same kind of environment as the Release workflow's runner: `HOME` and `XDG_CONFIG_HOME` point at new empty temporary directories and `KANDER_CONFIG` is unset, while `GOCACHE`, `GOMODCACHE`, and `GOENV` keep the caller's values. A test that reads the user's configuration therefore fails before the tag, not in the workflow after it. `--no-test` skips the gate.
 - A release is not done until `dualface/homebrew-tap` `Formula/kander.rb` is at the same version, and the release report must state the tap sync result. The release workflow step "Sync Homebrew tap" pushes the formula with the repository secret `HOMEBREW_TAP_TOKEN` (a fine-grained PAT with Contents read/write on `dualface/homebrew-tap` only). Check it after every tag:
 
   ```bash
