@@ -42,6 +42,32 @@ func (f *integrationFixture) isolateGit() {
 	}
 }
 
+// shortTempDir returns a temporary directory whose path does not depend on the
+// test name. t.TempDir embeds the name (up to 64 bytes), and the execution
+// worktree below Session.Home already has a 64-character project namespace and
+// a task ID in its path. Git for Windows refuses to check out into a worktree
+// when GIT_DIR, the worktree path plus "/.git", is longer than PATH_MAX - 40
+// (220), so the worktrees of the longest test names failed on Windows.
+func shortTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "kh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		// Windows can hold a directory briefly after the last handle closes.
+		var err error
+		for range 20 {
+			if err = os.RemoveAll(dir); err == nil {
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		t.Logf("remove %s: %v", dir, err)
+	})
+	return dir
+}
+
 func newIntegrationFixture(t *testing.T) *integrationFixture {
 	f := newIntegrationGitFixture(t)
 	f.reviewedTask()
@@ -90,8 +116,9 @@ func newIntegrationGitFixture(t *testing.T) *integrationFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.a = &remote.Session{Client: ca, Project: ca.Project(info.ID), Info: info, ServerURL: hs.URL, Home: filepath.Join(f.root, "home-a"), WorkerStarter: func(string) error { return nil }}
-	f.b = &remote.Session{Client: cb, Project: cb.Project(info.ID), Info: info, ServerURL: hs.URL, Home: filepath.Join(f.root, "home-b"), WorkerStarter: func(string) error { return nil }}
+	homes := shortTempDir(t)
+	f.a = &remote.Session{Client: ca, Project: ca.Project(info.ID), Info: info, ServerURL: hs.URL, Home: filepath.Join(homes, "a"), WorkerStarter: func(string) error { return nil }}
+	f.b = &remote.Session{Client: cb, Project: cb.Project(info.ID), Info: info, ServerURL: hs.URL, Home: filepath.Join(homes, "b"), WorkerStarter: func(string) error { return nil }}
 	for _, s := range []*remote.Session{f.a, f.b} {
 		if err := os.MkdirAll(s.Home, 0700); err != nil {
 			t.Fatal(err)
