@@ -51,6 +51,7 @@
   "remote.execution_cannot_reclaim": "已失效的执行不能重新领取新代次。请从新的执行会话显式接管。",
   "remote.git_interrupted": "Git 传输失败或中断；重试前请检查本地与远端事实",
   "remote.git_unverified": "Git 传输无法确认所需提交或远端引用",
+  "remote.git_diagnostic": "{{.V0}}；Git 输出: {{.V1}}",
   "remote.git_remote_mismatch": "本地 origin 与项目登记的远端不一致",
   "remote.git_push_remote_mismatch": "origin 的推送和获取地址必须指向同一项目远端",
   "remote.git_ref_conflict": "交付引用已指向其他提交",

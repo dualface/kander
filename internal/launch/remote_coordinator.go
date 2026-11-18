@@ -80,11 +80,7 @@ func runRemoteCoordinator(ctx context.Context, cfg *config.Config, args []string
 		}
 		input := api.GroupReconcile{Request: request}
 		for _, fact := range facts {
-			check := api.CoordinatorGitCheck{Facts: fact}
-			if err := verifyRemoteCoordinatorGitFacts(ctx, session, localCWD, fact); err != nil {
-				check.Error = err.Error()
-			}
-			input.Checks = append(input.Checks, check)
+			input.Checks = append(input.Checks, coordinatorGitCheck(fact, verifyRemoteCoordinatorGitFacts(ctx, session, localCWD, fact)))
 		}
 		proof, err := session.CoordinatorAuthority(request.GroupID, nil)
 		if err != nil {

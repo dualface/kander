@@ -31,3 +31,14 @@ func verifyRemoteCoordinatorGitFacts(ctx context.Context, s *remote.Session, cwd
 	}
 	return s.VerifyWrapUpIntegration(ctx, cwd, facts.Integration)
 }
+
+// coordinatorGitCheck is the verdict sent to the server for one fact. The text
+// is the server text: it carries no Git diagnostic, which stays on this
+// machine, and the server compares verdict texts of equal facts byte for byte.
+func coordinatorGitCheck(facts board.CoordinatorGitFacts, err error) api.CoordinatorGitCheck {
+	check := api.CoordinatorGitCheck{Facts: facts}
+	if err != nil {
+		check.Error = remote.ServerText(err)
+	}
+	return check
+}

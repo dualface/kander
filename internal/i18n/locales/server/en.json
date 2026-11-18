@@ -51,6 +51,7 @@
   "remote.execution_cannot_reclaim": "An expired execution cannot acquire a new generation. Start an explicit takeover from a new execution session.",
   "remote.git_interrupted": "Git transport failed or was interrupted; inspect local and remote facts before retrying",
   "remote.git_unverified": "Git transport could not verify the requested commit or remote reference",
+  "remote.git_diagnostic": "{{.V0}}; Git reported: {{.V1}}",
   "remote.git_remote_mismatch": "local origin does not match the registered project remote",
   "remote.git_push_remote_mismatch": "origin push and fetch URLs must identify the same project remote",
   "remote.git_ref_conflict": "delivery reference already contains another commit",
