@@ -50,6 +50,9 @@ func (p *WorkerProcess) Exited() bool {
 	}
 }
 
+// WorkerArguments is the command line, after the executable, that starts the worker.
+func WorkerArguments() []string { return []string{"worker"} }
+
 // StartWorker starts `<executable> worker` detached for home. The worker is
 // independent of this process; a second worker exits on the lock.
 func StartWorker(home, executable string) (*WorkerProcess, error) {
@@ -58,7 +61,7 @@ func StartWorker(home, executable string) (*WorkerProcess, error) {
 		return nil, err
 	}
 	defer log.Close()
-	cmd := exec.Command(executable, "worker")
+	cmd := exec.Command(executable, WorkerArguments()...)
 	cmd.Env = append(os.Environ(), EnvClientHome+"="+home)
 	cmd.Stdout, cmd.Stderr = log.File, log.File
 	process.Detach(cmd)

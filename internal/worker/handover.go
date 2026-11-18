@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/probe"
 	"github.com/dualface/kander/internal/remote"
@@ -141,7 +142,7 @@ func fileIdentity(path string) (os.FileInfo, error) {
 func probeExecutable(ctx context.Context, executable string, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	res, err := probe.CaptureContext(ctx, executable, []string{"version"})
+	res, err := probe.CaptureContext(ctx, executable, command.VersionArguments())
 	if err != nil {
 		return err
 	}

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/fs"
 )
 
@@ -86,7 +87,7 @@ func isBrewManaged(resolved string) bool {
 func probeKanderVersion(path string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, path, "version").Output()
+	out, err := exec.CommandContext(ctx, path, command.VersionArguments()...).Output()
 	if err != nil {
 		return ""
 	}

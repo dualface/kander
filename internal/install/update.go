@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/version"
 )
 
@@ -381,13 +382,13 @@ func readLimited(reader io.Reader, limit int64) ([]byte, error) {
 }
 
 func validateUpdateBinary(ctx context.Context, binary string) (string, error) {
-	return validateComponentVersion(ctx, binary, "version", "kander")
+	return validateComponentVersion(ctx, binary, command.VersionArguments(), "kander")
 }
 
-func validateComponentVersion(ctx context.Context, binary, argument, prefix string) (string, error) {
+func validateComponentVersion(ctx context.Context, binary string, arguments []string, prefix string) (string, error) {
 	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	output, err := exec.CommandContext(probeCtx, binary, argument).Output()
+	output, err := exec.CommandContext(probeCtx, binary, arguments...).Output()
 	if err != nil {
 		return "", fmt.Errorf("validate update binary: %w", err)
 	}

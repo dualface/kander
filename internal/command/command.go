@@ -169,6 +169,10 @@ func GateProject(root *cobra.Command, check func() int) {
 	walk(root)
 }
 
+// VersionArguments is the command line, after the executable, that makes a kander binary report
+// its version: what the update and the worker handover probe a candidate with.
+func VersionArguments() []string { return []string{"version"} }
+
 // Execute runs root with args and returns the process exit code.
 func Execute(root *cobra.Command, args []string) int {
 	begin(args)

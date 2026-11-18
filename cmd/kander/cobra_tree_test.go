@@ -17,6 +17,7 @@ import (
 	"github.com/dualface/kander/internal/cli"
 	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/command/commandtest"
+	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/servicectl"
 	"github.com/dualface/kander/rules"
 )
@@ -441,59 +442,108 @@ func TestRegisteredFlagsMatchContractSyntax(t *testing.T) {
 	}
 }
 
-// Every command line a prompt of Kander tells an agent to run, and every command line Kander
-// starts itself, parses without an argument error. Free text that starts with a dash follows --.
+// promptCommand finds the command lines in a prompt: an occurrence of "kander <command>" or of
+// the {{.Command}} placeholder of a template, up to the end of the sentence or clause.
+var promptCommand = regexp.MustCompile("(?:kander|\\{\\{\\.Command\\}\\}) ([a-z][a-z-]*(?: [^ \\n`]*[^ \\n`.,;:)])*?)(?: (?:to|then|with|and|in|for) |[.,;:)`](?: |$)|\\n|$)")
+
+// promptProse are the mentions of the command name in a prompt that are not command lines.
+var promptProse = map[string]bool{"move prints it prefilled": true}
+
+// promptValues are the values the placeholders of a prompt template stand for.
+var promptValues = map[string]string{
+	"Command": "kander", "TaskID": sampleTask, "CardID": sampleTask, "Number": "42", "Host": "github.com",
+	"Owner": "owner", "Repo": "repo", "DispatchID": "dispatch-1", "Epoch": "2",
+}
+
+var promptPlaceholder = regexp.MustCompile(`\{\{\.([A-Za-z]+)\}\}`)
+
+// generatedCommandLines are the command lines a prompt text names, with the placeholders of a
+// template filled in. A line that names only a command is returned as it is.
+func generatedCommandLines(t *testing.T, source, text string) []string {
+	t.Helper()
+	var lines []string
+	for _, match := range promptCommand.FindAllStringSubmatch(text, -1) {
+		line := match[1]
+		if promptProse[line] {
+			continue
+		}
+		line = promptPlaceholder.ReplaceAllStringFunc(line, func(placeholder string) string {
+			name := promptPlaceholder.FindStringSubmatch(placeholder)[1]
+			value, ok := promptValues[name]
+			if !ok {
+				t.Errorf("%s: no sample value for %s", source, placeholder)
+			}
+			return value
+		})
+		// A template names the actions of `issue result` in the sentence that follows the line.
+		if strings.HasPrefix(line, "issue result ") {
+			for _, action := range regexp.MustCompile(`--action ([a-z]+)`).FindAllStringSubmatch(text, -1) {
+				lines = append(lines, line+" --action "+action[1])
+			}
+			continue
+		}
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+// Every command line the prompts of Kander tell an agent to run parses without an argument
+// error: the lines are read from the rendered prompts and from the templates themselves, so a
+// changed prompt is tested as it is. The command lines Kander starts itself are the arguments
+// the code builds.
 func TestGeneratedCommandLinesParse(t *testing.T) {
-	prompts, err := filepath.Glob(filepath.Join("..", "..", "internal", "launch", "testdata", "prompts", "*.golden"))
-	if err != nil || len(prompts) == 0 {
-		t.Fatalf("prompt samples: %v %v", prompts, err)
+	var sources []string
+	for _, pattern := range []string{
+		filepath.Join("..", "..", "internal", "launch", "testdata", "prompts", "*.golden"),
+		filepath.Join("..", "..", "rules", "templates", "prompt", "*.md"),
+	} {
+		files, err := filepath.Glob(pattern)
+		if err != nil || len(files) == 0 {
+			t.Fatalf("prompt sources %s: %v %v", pattern, files, err)
+		}
+		sources = append(sources, files...)
 	}
-	var promptText strings.Builder
-	for _, file := range prompts {
+	root := cli.NewRoot()
+	seen := map[string]bool{}
+	for _, file := range sources {
 		data, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatal(err)
 		}
-		promptText.Write(data)
-	}
-	templateFiles, err := filepath.Glob(filepath.Join("..", "..", "rules", "templates", "prompt", "*.md"))
-	if err != nil || len(templateFiles) == 0 {
-		t.Fatalf("prompt templates: %v %v", templateFiles, err)
-	}
-	var templateText strings.Builder
-	for _, file := range templateFiles {
-		data, err := os.ReadFile(file)
-		if err != nil {
-			t.Fatal(err)
+		for _, line := range generatedCommandLines(t, filepath.Base(file), string(data)) {
+			words := strings.Fields(line)
+			target, rest, err := root.Find(words)
+			if err != nil || target == root {
+				t.Errorf("%s: kander %s names no command", filepath.Base(file), line)
+				continue
+			}
+			seen[target.CommandPath()] = true
+			if len(rest) == 0 {
+				// The prompt only names the command, as in "controlled `kander update` commands".
+				continue
+			}
+			t.Run(filepath.Base(file)+"/"+line, func(t *testing.T) { assertParses(t, words) })
 		}
-		templateText.Write(data)
 	}
-	// Each command line the prompts name, with the sample values of the rendered prompts.
-	for _, line := range []string{
-		"kander config --json",
-		"kander show " + "20260101-golden-task",
-		"kander move 20260101-golden-task working --dispatch-id dispatch-1 --execution-epoch 2",
-		"kander move 20260101-golden-task working",
-		"kander check",
+	// The prompts name at least the commands every card session runs.
+	for _, name := range []string{"kander config", "kander show", "kander move", "kander issue result", "kander update"} {
+		if !seen[name] {
+			t.Errorf("no prompt names %q any more", name)
+		}
+	}
+	dir := t.TempDir()
+	for name, args := range map[string][]string{
+		"server start":  servicectl.ServerStartArguments(dir, servicectl.StartOptions{Listen: "127.0.0.1:7878", TTL: 90e9, Renew: 30e9}),
+		"worker":        remote.WorkerArguments(),
+		"version probe": command.VersionArguments(),
 	} {
-		if !strings.Contains(promptText.String(), line) {
-			t.Errorf("the prompt samples no longer contain %q", line)
-		}
-		assertParses(t, strings.Fields(strings.TrimPrefix(line, "kander ")))
+		t.Run(name, func(t *testing.T) { assertParses(t, args) })
 	}
-	for template, line := range map[string]string{
-		"{{.Command}} issue result {{.Number}} --repo {{.Host}}/{{.Owner}}/{{.Repo}} --card {{.CardID}} with --action inspect": "issue result 42 --repo github.com/owner/repo --card " + sampleTask + " --action inspect",
-		"{{.Command}} issue import {{.Number}}": "issue import 42",
-		"{{.Command}} show --json {{.CardID}}":  "show --json " + sampleTask,
-		"{{.Command}} update":                   "update " + sampleTask + " --document spec.md --file input.md --expect-revision 3",
-	} {
-		if !strings.Contains(templateText.String(), template) {
-			t.Errorf("the prompt templates no longer contain %q", template)
-		}
-		assertParses(t, strings.Fields(line))
-	}
+}
+
+// Free text that starts with a dash parses when it follows --, or is the value of a flag.
+func TestFreeTextThatStartsWithADashParses(t *testing.T) {
 	for _, line := range []string{
-		"issue result 42 --repo github.com/owner/repo --card " + sampleTask + " --action inspect",
 		"notify --message -leading --dispatch-id dispatch-1 --kind fix --base abc --evidence-file e.json " + sampleTask,
 		"resume --agent claude --timeout 61 --message -leading --decision -x " + sampleTask,
 		"orchestrate --message -leading " + sampleTask,
@@ -503,14 +553,6 @@ func TestGeneratedCommandLinesParse(t *testing.T) {
 		"dispatch fail " + sampleTask + " d1 3 -- -leading-reason",
 	} {
 		assertParses(t, strings.Fields(line))
-	}
-	dir := t.TempDir()
-	for _, args := range [][]string{
-		servicectl.ServerStartArguments(dir, servicectl.StartOptions{Listen: "127.0.0.1:7878", TTL: 90e9, Renew: 30e9}),
-		{"worker"},
-		{"version"},
-	} {
-		assertParses(t, args)
 	}
 }
 
