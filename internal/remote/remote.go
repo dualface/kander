@@ -378,16 +378,32 @@ func (s *Session) credentialFor(task, execution string) (Credential, bool, error
 	}
 	var c Credential
 	if err := json.Unmarshal(data, &c); err != nil {
-		return Credential{}, false, errors.New("execution credential of " + task + " is damaged")
+		return Credential{}, false, &credentialFault{kind: faultDamaged, message: "execution credential of " + task + " is damaged"}
 	}
 	if indexedGeneration != 0 && c.Generation != indexedGeneration {
 		return Credential{}, false, errors.New(config.Text("remote.credential_head_damaged"))
 	}
 	if c.ProjectID != s.Info.ID || c.TaskID != task || c.ExecutionID != execution || s.ServerURL != "" && c.ServerURL != s.ServerURL || s.Client != nil && c.ClientID != s.Client.ClientID() {
-		return Credential{}, false, errors.New("execution credential identity does not match its private location")
+		return Credential{}, false, &credentialFault{kind: faultIdentity, message: "execution credential identity does not match its private location"}
 	}
 	return c, true, nil
 }
+
+type credentialFaultKind int
+
+const (
+	faultDamaged credentialFaultKind = iota + 1
+	faultIdentity
+)
+
+// credentialFault classifies a credential file that exists but cannot be
+// trusted, so callers can tell the cases apart without matching the text.
+type credentialFault struct {
+	kind    credentialFaultKind
+	message string
+}
+
+func (e *credentialFault) Error() string { return e.message }
 
 // NewExecutionID returns a fresh execution identity.
 func NewExecutionID() string {

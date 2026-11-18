@@ -2,12 +2,10 @@ package remote
 
 import (
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 
 	"github.com/dualface/kander/internal/api"
-	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/fs"
 )
 
@@ -52,14 +50,48 @@ func retainExecution(home string, c Credential, replace bool) error {
 // Retained resolves only this host's exact public execution. A process bound
 // to a predecessor cannot use it to clean up a successor's terminal.
 func (s *Session) Retained(task api.Task) (RetainedExecution, error) {
+	return s.retained(task, false)
+}
+
+// RetainedForDismiss is Retained for kander dismiss alone. It also accepts a
+// coordinator process (KANDER_EXECUTION_ID equal to
+// KANDER_COORDINATOR_EXECUTION_ID) that holds the valid group credential of
+// the group the member card belongs to. Every other check is unchanged, and
+// SceneIsLocal keeps calling Retained.
+func (s *Session) RetainedForDismiss(task api.Task) (RetainedExecution, error) {
+	return s.retained(task, true)
+}
+
+func (s *Session) retained(task api.Task, dismiss bool) (RetainedExecution, error) {
 	var value RetainedExecution
-	if task.Claim == nil || task.Claim.ClientID != s.Client.ClientID() || !api.ValidIdentity(task.TaskID) || !api.ValidIdentity(task.Claim.ExecutionID) {
-		return value, errors.New(config.Text("remote.local_execution_required"))
+	switch {
+	case task.Claim == nil:
+		return value, LocalExecutionRefused(RefusalNoClaim, task.TaskID)
+	case !api.ValidIdentity(task.TaskID):
+		return value, LocalExecutionRefused(RefusalInvalidIdentity, "task ID", quoted(task.TaskID))
+	case !api.ValidIdentity(task.Claim.ExecutionID):
+		return value, LocalExecutionRefused(RefusalInvalidIdentity, "claim execution ID", quoted(task.Claim.ExecutionID))
+	case task.Claim.ClientID != s.Client.ClientID():
+		return value, LocalExecutionRefused(RefusalForeignClient, task.Claim.ClientID, s.Client.ClientID())
 	}
-	if bound := os.Getenv(EnvExecutionID); bound != "" && bound != task.Claim.ExecutionID {
-		return value, errors.New(config.Text("remote.local_execution_required"))
+	bound := os.Getenv(EnvExecutionID)
+	byCoordinator := bound != "" && bound != task.Claim.ExecutionID
+	var credential Credential
+	var found bool
+	var err error
+	if byCoordinator {
+		if !dismiss {
+			return value, LocalExecutionRefused(RefusalBoundExecution, bound, task.Claim.ExecutionID, RefusalValue(os.Getenv(EnvCoordinatorExecutionID)))
+		}
+		if err := s.allowCoordinator(task.TaskID, task.Text, task.Claim.ExecutionID, bound); err != nil {
+			return value, err
+		}
+		// The member's credential lives under the claim's execution ID, not
+		// under the coordinator's: the process-bound lookup cannot find it.
+		credential, found, err = s.credentialFor(task.TaskID, task.Claim.ExecutionID)
+	} else {
+		credential, found, err = s.Credential(task.TaskID)
 	}
-	credential, found, err := s.Credential(task.TaskID)
 	if err != nil {
 		return value, err
 	}
@@ -72,7 +104,7 @@ func (s *Session) Retained(task api.Task) (RetainedExecution, error) {
 		return value, err
 	}
 	if json.Unmarshal(data, &value) != nil || value.ServerURL != s.ServerURL || value.ClientID != s.Client.ClientID() || value.ProjectID != s.Info.ID || value.TaskID != task.TaskID || value.ExecutionID != task.Claim.ExecutionID || value.Generation != task.Claim.Generation {
-		return RetainedExecution{}, errors.New(config.Text("remote.local_execution_required"))
+		return RetainedExecution{}, LocalExecutionRefused(RefusalRetainedMismatch, path, task.Claim.ExecutionID, task.Claim.Generation)
 	}
 	return value, nil
 }
