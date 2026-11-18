@@ -2,6 +2,8 @@ package server
 
 import (
 	"cmp"
+	"errors"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -60,6 +62,30 @@ func normalizedIntegrationEdges(edges []api.IntegrationEdge) []api.IntegrationEd
 	return slices.Compact(value)
 }
 
+// nameMember prefixes a member review refusal with the member it belongs to.
+// The board error keeps its code, so the API code and board_code stay the same;
+// the board never returns an api.Error, and any other error passes unchanged.
+func nameMember(id string, err error) error {
+	var b *board.Error
+	if !errors.As(err, &b) {
+		return err
+	}
+	named := *b
+	named.Message = "member " + id + ": " + b.Message
+	return &named
+}
+
+// closedTargetMismatch states both commits the refusal compares, plus the
+// review status in the rare case it is not closed.
+func closedTargetMismatch(id string, progress board.ReviewProgress, requested string) string {
+	target := cmp.Or(progress.PlanTarget, "none")
+	message := fmt.Sprintf("integration requires the closed review target %s of member %s; the request names %s", target, id, requested)
+	if progress.Status != "closed" {
+		message += fmt.Sprintf(" (review status %s)", progress.Status)
+	}
+	return message
+}
+
 func (p *project) integrationFacts(tx *board.Transaction, input api.IntegrationRequest, exactVersions bool) error {
 	ids, err := integrationIDs(input)
 	if err != nil {
@@ -100,13 +126,13 @@ func (p *project) integrationFacts(tx *board.Transaction, input api.IntegrationR
 		if input.Purpose == "deliver" {
 			progress, err := board.IntegrationReview(tx, member.TaskID)
 			if err != nil {
-				return err
+				return nameMember(member.TaskID, err)
 			}
 			if progress.Status == "excluded" {
 				continue
 			}
 			if progress.Status != "closed" || progress.PlanTarget != input.Commit {
-				return apiError(api.CodeEvidenceIncomplete, "integration requires the current closed review target for every remaining member")
+				return apiError(api.CodeEvidenceIncomplete, closedTargetMismatch(member.TaskID, progress, input.Commit))
 			}
 			if member.DeliveryCommit == "" {
 				return apiError(api.CodeEvidenceIncomplete, "a remaining member has no frozen delivery")

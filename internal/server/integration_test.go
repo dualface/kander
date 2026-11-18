@@ -22,6 +22,13 @@ func integrationTask(t *testing.T, f *fixture, p *client.Project, host, slug str
 // delivery and the closed review target differ after a target-side merge.
 func integrationTaskAt(t *testing.T, f *fixture, p *client.Project, host, slug, delivery, target string) (api.IntegrationMember, api.ClaimGrant) {
 	t.Helper()
+	return integrationTaskPlan(t, f, p, host, slug, delivery, target, true)
+}
+
+// integrationTaskPlan closes the review batch and seals the plan only when
+// sealed is set; an unsealed plan keeps the card out of the completion gate.
+func integrationTaskPlan(t *testing.T, f *fixture, p *client.Project, host, slug, delivery, target string, sealed bool) (api.IntegrationMember, api.ClaimGrant) {
+	t.Helper()
 	task := todoTask(t, p, slug)
 	text := strings.Replace(task.Text, "- TASK_BRANCH:", "- TASK_BRANCH: task/"+slug, 1)
 	task, err := p.PutDocument(t.Context(), "", task.TaskID, api.Document{Path: "spec.md", Text: text, ExpectedRevision: task.Revision}, nil)
@@ -41,7 +48,7 @@ func integrationTaskAt(t *testing.T, f *fixture, p *client.Project, host, slug, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan := board.ReviewPlan{Schema: 1, PlanID: "integration-plan-" + slug, Sealed: true, Author: "coordinator", Basis: "integration fixture", CWD: "project:" + p.ID(), ReportLanguage: "en", TaskIDs: []string{task.TaskID}, Batches: []board.ReviewPlanBatch{{BatchID: "integration-batch-" + slug, TaskIDs: []string{task.TaskID}, Base: base, TargetCommit: target, Requirements: map[string]string{"PMQA": "N/A: lease fixture", "Security": "N/A: repository policy"}}}}
+	plan := board.ReviewPlan{Schema: 1, PlanID: "integration-plan-" + slug, Sealed: sealed, Author: "coordinator", Basis: "integration fixture", CWD: "project:" + p.ID(), ReportLanguage: "en", TaskIDs: []string{task.TaskID}, Batches: []board.ReviewPlanBatch{{BatchID: "integration-batch-" + slug, TaskIDs: []string{task.TaskID}, Base: base, TargetCommit: target, Requirements: map[string]string{"PMQA": "N/A: lease fixture", "Security": "N/A: repository policy"}}}}
 	if _, err := p.ReviewPlan(t.Context(), "", plan, &own); err != nil {
 		t.Fatal(err)
 	}

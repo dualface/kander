@@ -21,7 +21,7 @@ kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--owner
 - `--duplicate-of <task-id>`: the replacement card for `--result duplicate`.
 - `--expect-revision <revision>`: compare-and-swap on the card revision.
 - `--dispatch-id <id> --execution-epoch <epoch>`: the durable dispatch grant from the dispatch prompt (`snippets/commands/dispatch.md`).
-- `--delivery-commit <full-SHA>`: the final delivery commit of a bound completion.
+- `--delivery-commit <full-SHA>`: the final delivery commit of a bound completion. In distributed mode it is also the delivery commit that a move into `review/` publishes; for a single card it is the closed review target `C`.
 - `--disposition <card-relative-path>`: the disposition artifact of a bound completion.
 
 ## Preconditions
