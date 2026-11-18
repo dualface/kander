@@ -313,7 +313,7 @@ func TestArgumentErrorsAreLocalizedAndShowTheSyntax(t *testing.T) {
 			t.Run(test.name+"/"+language, func(t *testing.T) {
 				result := runCLI(t, append([]string{"--lang", language}, test.args...)...)
 				code, stderr := result.code, result.stderr
-				if code != 2 || !strings.Contains(stderr, want) || !strings.Contains(stderr, "kander show [--json] [--document <relative-path>] <task-id>") {
+				if code != 2 || !strings.Contains(stderr, want) || !strings.Contains(stderr, "kander show [--document <relative-path>] <task-id>") {
 					t.Fatalf("exit=%d stderr=%s", code, stderr)
 				}
 			})
