@@ -13,6 +13,18 @@ import (
 	"github.com/dualface/kander/internal/remote"
 )
 
+// isolateGlobalGit keeps these tests away from the developer's own Git
+// configuration, such as commit signing and global hooks.
+func isolateGlobalGit(t *testing.T) {
+	t.Helper()
+	empty := filepath.Join(t.TempDir(), "gitconfig")
+	if err := os.WriteFile(empty, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", empty)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+}
+
 // publishedBaseline claims the fixture task and publishes the baseline of its
 // generation, the state in which the task branch used to be unpushable.
 func (f *integrationFixture) publishedBaseline() api.Task {
@@ -30,6 +42,7 @@ func (f *integrationFixture) remoteRefs(pattern string) string {
 }
 
 func TestExecutionBranchPushesAfterBaselineAndDelivery(t *testing.T) {
+	isolateGlobalGit(t)
 	f := newIntegrationGitFixture(t)
 	task := f.publishedBaseline()
 	worktree, err := f.a.PrepareWorktree(t.Context(), f.first, f.base, f.credential)
@@ -42,8 +55,10 @@ func TestExecutionBranchPushesAfterBaselineAndDelivery(t *testing.T) {
 	commitFile(t, worktree.Path, "first.txt", "first\n", "First work")
 	deliveryGit(t, worktree.Path, "push", "origin", worktree.Branch)
 	delivered := commitFile(t, worktree.Path, "second.txt", "second\n", "Second work")
-	if _, err := f.a.PublishCommit(t.Context(), worktree.Path, task.TaskID, delivered, f.credential); err != nil {
-		t.Fatal(err)
+	// The managed worktree is published through the same boundary as `kander move`.
+	moved, err := f.a.MoveTask(t.Context(), task.TaskID, api.Move{State: "review", DeliveryCommit: delivered})
+	if err != nil || moved.State != "review" || moved.Delivery == nil || moved.Delivery.Commit != delivered {
+		t.Fatalf("delivery move: %+v %v", moved, err)
 	}
 	commitFile(t, worktree.Path, "third.txt", "third\n", "Work after the delivery")
 	deliveryGit(t, worktree.Path, "push", "origin", worktree.Branch)
@@ -58,6 +73,7 @@ func TestExecutionBranchPushesAfterBaselineAndDelivery(t *testing.T) {
 }
 
 func TestExecutionBranchOfASuccessorGenerationPushesBesideThePredecessor(t *testing.T) {
+	isolateGlobalGit(t)
 	f := newIntegrationGitFixture(t)
 	task := f.publishedBaseline()
 	first, err := f.a.PrepareWorktree(t.Context(), f.first, f.base, f.credential)
@@ -113,6 +129,7 @@ func TestPrepareWorktreeRetryKeepsTheNameItsIntentRecorded(t *testing.T) {
 		"unknown name": {func(*integrationFixture, api.Task) string { return "kander-task/other/task/g1" }, false},
 	} {
 		t.Run(name, func(t *testing.T) {
+			isolateGlobalGit(t)
 			f := newIntegrationGitFixture(t)
 			task := f.publishedBaseline()
 			root, err := f.a.LocalDataRoot()
@@ -154,6 +171,7 @@ func TestPrepareWorktreeRetryKeepsTheNameItsIntentRecorded(t *testing.T) {
 }
 
 func TestLegacyTaskBranchPushesToTheTaskNamespaceWithAnExplicitRefspec(t *testing.T) {
+	isolateGlobalGit(t)
 	f := newIntegrationGitFixture(t)
 	task := f.publishedBaseline()
 	legacy := api.LegacyExecutionBranch(f.a.Info.ID, task.TaskID, f.credential.Generation)
@@ -171,23 +189,35 @@ func TestLegacyTaskBranchPushesToTheTaskNamespaceWithAnExplicitRefspec(t *testin
 }
 
 func TestIntegrationOfACardRecordingALegacyTaskBranch(t *testing.T) {
+	isolateGlobalGit(t)
 	f := newIntegrationGitFixture(t)
 	f.legacyBranch = true
-	f.reviewedTask()
-	if want := api.LegacyExecutionBranch(f.a.Info.ID, f.task.TaskID, f.credential.Generation); !strings.Contains(f.task.Text, "- TASK_BRANCH: "+want+"\n") {
+	task := f.publishedBaseline()
+	if want := api.LegacyExecutionBranch(f.a.Info.ID, task.TaskID, f.credential.Generation); !strings.Contains(task.Text, "- TASK_BRANCH: "+want+"\n") {
 		t.Fatalf("card does not record %q", want)
 	}
-	if f.task.State != "review" {
-		t.Fatalf("card is in %q, want review", f.task.State)
+	// The card keeps its legacy name while the delivery is made from the managed worktree.
+	worktree, err := f.a.PrepareWorktree(t.Context(), f.first, f.base, f.credential)
+	if err != nil {
+		t.Fatal(err)
 	}
+	deliveryGit(t, worktree.Path, "merge", "--ff-only", f.commit)
+	moved, err := f.a.MoveTask(t.Context(), task.TaskID, api.Move{State: "review", DeliveryCommit: f.commit})
+	if err != nil || moved.State != "review" {
+		t.Fatalf("delivery move: %+v %v", moved, err)
+	}
+	f.closeReviewPlan(moved)
 	result, err := f.a.Integrate(t.Context(), f.first, f.options("legacy-task-branch"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.complete(result)
+	if result.Request.Commit != f.commit || f.targetHead() != f.commit {
+		t.Fatalf("receipt: %+v, target %s", result, f.targetHead())
+	}
 }
 
 func TestIntegrationViaCommitPushedOnTheTaskBranchName(t *testing.T) {
+	isolateGlobalGit(t)
 	f := newIntegrationFixture(t)
 	foreign := f.advanceTarget("other.txt")
 	deliveryGit(t, f.first, "fetch", "-q", "origin")
