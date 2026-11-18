@@ -174,6 +174,48 @@ kander review progress <绝对工作目录> <task-id>
 
 ---
 
+### 无交付批次
+
+没有交付提交的卡（验证卡、调研卡）没有需要保护的已评审补丁。同时满足以下三条的批次是**无交付批次**：`base` 和 `target_commit` 是同一个完整 SHA，没有角色是 `required`，并且它不是非 Git 的 `N/A` 批次。建计划时两个值都取计划 CWD 的 `HEAD`，所有角色都写 `N/A: <原因和规则依据>`。
+
+有交付的批次保持严格的关闭检查：计划 CWD 的 `HEAD` 等于目标，工作区干净。无交付批次改用以下检查：
+
+- 目标是计划 CWD 里 `HEAD` 或它的祖先（`git merge-base --is-ancestor <target> HEAD`）。这项检查在关闭的其他 Git 检查前后各做一次。目标不在历史里时失败，错误给出目标和观察到的 `HEAD`，不写任何记录。
+- 工作区可以有未提交改动，`HEAD` 也可以已经前进，例如其他卡集成进了计划 CWD 所在的分支。
+- 新批次是无交付批次时，`review plan` 和带 `batch` 的 `review extend-plan` 做同样的祖先检查，所以取自其他分支的目标在建计划时就失败。
+
+关闭记录写明观察到的事实。`git.head` 仍等于批次目标，`git.observed_head` 是关闭时计划 CWD 的 `HEAD`，`git.no_delivery` 为 `true`。这两个新字段在其他关闭记录里都省略，所以此前写入的关闭记录重新编码后字节不变。board、`kander check` 和 `move done` 只接受无交付批次上带标记、且 `observed_head` 是完整 SHA 的记录；有交付批次的关闭记录带这两个字段会让门禁失败。不带标记的关闭记录对任何批次仍然有效。本改动之前的 Kander 版本读不了带新字段的关闭记录。
+
+### 改正未运行批次的目标
+
+写错的 `base` 或 `target_commit` 以前无法修复：`drop_batches` 必须保留一个批次，`sync_targets` 只能把批次目标抄进计划，计划也不能建两次。`retarget_batches` 同时改正一个没有 run、没有 advance、没有关闭记录的已规划批次的这两个值。封存的计划也接受，计划保持封存；批次已经 aggregate 也接受。
+
+```json
+{
+  "plan_id": "implementation-cycle",
+  "expected_revision": 2,
+  "author": "coordinator",
+  "basis": "目标写成了被测提交的前一个提交",
+  "retarget_batches": {
+    "batch-one": {
+      "previous_base": "<当前 base sha>",
+      "previous_target": "<当前 target sha>",
+      "base": "<新 base sha>",
+      "target": "<新 target sha>"
+    }
+  }
+}
+```
+
+- `previous_base` 和 `previous_target` 是比较并交换的值，必须等于批次记录和计划里的当前值。新值必须与当前值不同。四个值都是完整 SHA；非 Git 的 `N/A` 批次不能改正。
+- 在计划 CWD 里，`base` 是 `target` 的祖先。新批次若是无交付批次，目标还必须是 `HEAD` 或它的祖先。
+- 批次链保持连续：后一批次的 `base` 等于前一批次的 `target`，有已规划后继的批次保持原 `target`。先用 `drop_batches` 移除后继，或者只改 `base`。
+- 一个事务更新计划、计划在各卡上的副本和批次记录。计划 revision 和批次 revision 各加一，`plan-history/<plan>/<revision>.json` 保存旧计划和带作者与依据的请求。
+- 批次已 aggregate 但未关闭时，同一事务重写聚合视图及其卡上副本。批次 revision 变了，旧的 `view_hash` 不能再关闭它：重新运行 `review aggregate`，再用新的哈希 `review close`。所以最小 N/A 序列在 close 时才发现目标写错，也能恢复。
+- 此操作与其他 `extend-plan` 操作互斥。批次已有 run、advance 或关闭记录时失败，不写任何记录。
+
+---
+
 ### 计划外批次的处理
 
 成员在计划外批次中有 run 时，`kander check`、`kander review progress`、`kander move <id> done` 都报 `unplanned execution batch: <batch-id>`。当前版本在批次产生前就拒绝这样的 run，但旧版本留下的 run 仍在看板上。这种批次不能加入批次链，因为后继批次的 base 必须等于前驱批次关闭时的目标。改用 `extend-plan` 的 `resolve_batch` 接受它。
@@ -399,6 +441,8 @@ kander review close <工作目录> <关闭请求.json>
   "opinions": []
 }
 ```
+
+有交付的批次只在目标恰为 `HEAD` 且工作区干净时关闭。无交付批次在 `HEAD` 仍包含目标时即可关闭，工作区可以有未提交改动，详见[无交付批次](#无交付批次)。
 
 ---
 

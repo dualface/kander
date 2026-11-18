@@ -155,5 +155,10 @@
   "review.schema.plan.drop_obligations.item.batch_id": "削除されたバッチ。",
   "review.schema.plan.drop_obligations.item.from_batch": "この義務を解除できる最初のバッチの位置。",
   "review.schema.plan.drop_obligations.item.roles": "削除されたバッチが要求したロール。",
-  "review.schema.plan.drop_obligations.item.task_ids": "これらのロールが未完了のメンバー。"
+  "review.schema.plan.drop_obligations.item.task_ids": "これらのロールが未完了のメンバー。",
+  "review.schema.extend-plan.retarget_batches": "一度も実行されていない計画済みバッチ（run、前進、クローズなし）の base と target を修正します。バッチ ID から下のエントリへのマップです。封印済みの計画でも、バッチを aggregate した後でも受け付けます。バッチ記録と計画の revision がそれぞれ 1 上がり、集約ビューは書き直され、以前の view_hash ではバッチを閉じられなくなります。他の操作とは排他です。CWD は計画のワークツリーです。",
+  "review.schema.extend-plan.retarget_batches.key.previous_base": "各エントリで必須。バッチの現在の base。比較して交換するために使います。",
+  "review.schema.extend-plan.retarget_batches.key.previous_target": "各エントリで必須。バッチの現在のターゲット commit。比較して交換するために使います。",
+  "review.schema.extend-plan.retarget_batches.key.base": "各エントリで必須。新しい base。完全な commit SHA で、新しい target の祖先です。後続のバッチは直前のバッチの target を使います。",
+  "review.schema.extend-plan.retarget_batches.key.target": "各エントリで必須。新しいターゲット commit（完全な commit SHA）。計画済みの後続バッチがあるバッチは target を変えません。配信なしバッチの target は、計画 CWD の HEAD またはその祖先でなければなりません。"
 }

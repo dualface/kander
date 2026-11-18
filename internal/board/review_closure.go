@@ -73,6 +73,12 @@ type ReviewGitEvidence struct {
 	Head          string                `json:"head"`
 	VerifiedAt    string                `json:"verified_at"`
 	Edges         []ReviewGitEdge       `json:"edges"`
+	// NoDelivery marks the closure of a batch with no delivery commit, and
+	// ObservedHead is the HEAD of the plan CWD when it closed: Head stays the batch
+	// target, which needs to be only an ancestor of that HEAD. omitempty keeps
+	// closures written before the fields byte-identical on re-encode.
+	NoDelivery   bool   `json:"no_delivery,omitempty"`
+	ObservedHead string `json:"observed_head,omitempty"`
 }
 type ReviewClosure struct {
 	Schema       int                `json:"schema"`
@@ -536,6 +542,9 @@ func CloseReviewBatch(root string, r ReviewCloseRequest, evidence ReviewGitEvide
 		if noGitReviewBatch(b.Base, b.TargetCommit, b.Requirements) != (strings.TrimSpace(evidence.NotApplicable) != "") {
 			return reviewError("Git N/A evidence binding")
 		}
+		if e = verifyNoDeliveryEvidence(b, evidence); e != nil {
+			return e
+		}
 		if e = verifyMechanicalEvidence(v, r, evidence); e != nil {
 			return e
 		}
@@ -578,6 +587,26 @@ func CloseReviewBatch(root string, r ReviewCloseRequest, evidence ReviewGitEvide
 	})
 	return
 }
+
+// verifyNoDeliveryEvidence binds the no-delivery marker to a batch with no
+// delivery commit. A closure without the marker is valid for every batch, so
+// closures written before the marker keep their meaning.
+func verifyNoDeliveryEvidence(b ReviewBatch, g ReviewGitEvidence) error {
+	if !g.NoDelivery {
+		if g.ObservedHead != "" {
+			return reviewError(t("board.review_no_delivery_marker"))
+		}
+		return nil
+	}
+	if !ReviewNoDelivery(ReviewPlanBatch{Base: b.Base, TargetCommit: b.TargetCommit, Requirements: b.Requirements}) {
+		return reviewError(t("board.review_no_delivery_batch", b.BatchID))
+	}
+	if !validCommit(g.ObservedHead) {
+		return reviewError(t("board.review_no_delivery_marker"))
+	}
+	return nil
+}
+
 func verifyClosureCopies(tx *Transaction, c ReviewClosure) error {
 	// A member that left after the closure keeps its copies, and one that left
 	// before it never took them. Neither is damage.
@@ -619,6 +648,9 @@ func verifyClosureIntegrity(tx *Transaction, c ReviewClosure) error {
 	}
 	if noGitReviewBatch(b.Base, b.TargetCommit, b.Requirements) != (strings.TrimSpace(c.Git.NotApplicable) != "") {
 		return reviewError("Git N/A evidence binding")
+	}
+	if err = verifyNoDeliveryEvidence(b, c.Git); err != nil {
+		return err
 	}
 	if !SameReviewCWD(c.Git.CWD, p.CWD) {
 		return reviewError("closed Git CWD mismatch")

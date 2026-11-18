@@ -155,5 +155,10 @@
   "review.schema.plan.drop_obligations.item.batch_id": "被删除的批次。",
   "review.schema.plan.drop_obligations.item.from_batch": "能解除这项义务的第一个批次的位置。",
   "review.schema.plan.drop_obligations.item.roles": "被删除批次要求的角色。",
-  "review.schema.plan.drop_obligations.item.task_ids": "仍欠这些角色的成员。"
+  "review.schema.plan.drop_obligations.item.task_ids": "仍欠这些角色的成员。",
+  "review.schema.extend-plan.retarget_batches": "改正从未运行过的已规划批次的 base 和 target：没有 run、推进或关闭记录。键为批次 ID，值为下面的条目。封存的计划也接受，批次已 aggregate 也接受：批次记录和计划的 revision 各加一，聚合视图重写，旧的 view_hash 不能再关闭该批次。与其他操作互斥。CWD 必须是计划的工作树。",
+  "review.schema.extend-plan.retarget_batches.key.previous_base": "每个条目必填。批次当前的 base，用作比较并交换。",
+  "review.schema.extend-plan.retarget_batches.key.previous_target": "每个条目必填。批次当前的目标 commit，用作比较并交换。",
+  "review.schema.extend-plan.retarget_batches.key.base": "每个条目必填。新的 base，完整 commit SHA，且是新 target 的祖先。后续批次必须取它前一批次的 target。",
+  "review.schema.extend-plan.retarget_batches.key.target": "每个条目必填。新的目标 commit，完整 commit SHA。有已规划后继批次的批次保持原 target。无交付批次的 target 必须是计划 CWD 的 HEAD 或其祖先。"
 }

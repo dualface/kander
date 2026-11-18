@@ -174,6 +174,48 @@ For multi-step delivery:
 
 ---
 
+### Batches With No Delivery Commit
+
+A card with no delivery commit (a verification or research card) has no reviewed patch to protect. Its batch is a **no-delivery batch** when all three hold: `base` and `target_commit` are one full SHA, no role is `required`, and the batch is not the non-Git `N/A` batch. Both values are the `HEAD` of the plan CWD when the plan is made, and every role is `N/A: <reason and rule basis>`.
+
+A batch with a delivery keeps the strict closure checks: `HEAD` of the plan CWD equals the target, and the worktree is clean. A no-delivery batch closes under these checks instead:
+
+- The target is `HEAD` or one of its ancestors in the plan CWD (`git merge-base --is-ancestor <target> HEAD`). The check runs before and after the other Git checks of the close. A target outside the history fails with the target and the observed `HEAD`, and nothing is written.
+- The worktree may be dirty, and `HEAD` may have moved on, for example because other cards were integrated into the branch of the plan CWD.
+- `review plan` and `review extend-plan` with a `batch` run the same ancestor check when the new batch is a no-delivery batch, so a target taken from another branch fails when the plan is made.
+
+The closure records what it saw. `git.head` still equals the batch target, `git.observed_head` is the `HEAD` of the plan CWD at close, and `git.no_delivery` is `true`. Both new fields are omitted from every other closure, so closures written before them re-encode byte for byte. Board, `kander check`, and `move done` accept the marker only on a no-delivery batch and only with a full-SHA `observed_head`; the same fields on the closure of a batch with a delivery fail the gate. A closure without the marker stays valid for any batch. Kander versions before this change cannot read a closure that carries the new fields.
+
+### Correcting the Target of an Unrun Batch
+
+A wrong `base` or `target_commit` normally cannot be repaired: `drop_batches` must leave a batch, `sync_targets` only copies the batch target into the plan, and a plan cannot be created twice. `retarget_batches` changes both values of a planned batch that has no run, no advance, and no closure. It works on a sealed plan, which stays sealed, and on a batch that was already aggregated.
+
+```json
+{
+  "plan_id": "implementation-cycle",
+  "expected_revision": 2,
+  "author": "coordinator",
+  "basis": "the target was the commit before the tested one",
+  "retarget_batches": {
+    "batch-one": {
+      "previous_base": "<current-base-sha>",
+      "previous_target": "<current-target-sha>",
+      "base": "<new-base-sha>",
+      "target": "<new-target-sha>"
+    }
+  }
+}
+```
+
+- `previous_base` and `previous_target` are the compare-and-swap: both must equal the batch record and the plan now. The new values must differ from them. All four values are full SHAs; a non-Git `N/A` batch cannot be retargeted.
+- `base` is an ancestor of `target` in the plan CWD. A new no-delivery batch also needs a target that is `HEAD` or an ancestor of it.
+- The chain stays intact: the `base` of a later batch equals the `target` of the batch before it, and a batch with a planned successor keeps its `target`. Drop the successors with `drop_batches` first, or change only `base`.
+- One transaction updates the plan, every card copy of it, and the batch record. The plan revision and the batch revision each rise by one, and `plan-history/<plan>/<revision>.json` keeps the previous plan and the request with its author and basis.
+- When the batch was aggregated and not closed, the same transaction rewrites the aggregate view and its card copies. The batch revision changes, so the old `view_hash` no longer closes the batch: run `review aggregate` again, then `review close` with the new hash. The minimal N/A sequence therefore recovers from a wrong target found only at close.
+- The operation is mutually exclusive with every other `extend-plan` operation. A batch with a run, an advance, or a closure fails and nothing is written.
+
+---
+
 ### Unplanned Batch Resolution
 
 A run in a batch outside the plan of a member fails `kander check`, `kander review progress`, and `kander move <id> done` with `unplanned execution batch: <batch-id>`. Current binaries refuse such a run before the batch exists, but a run from an older binary stays on the board. The batch cannot join the chain, because a successor's base must equal the closed target of its predecessor. `extend-plan` with `resolve_batch` accepts it instead.
@@ -434,6 +476,8 @@ kander review close <CWD> <close-request.json>
   "opinions": []
 }
 ```
+
+A batch with a delivery closes only at its exact target `HEAD` on a clean worktree. A batch with no delivery commit closes at any `HEAD` that still holds its target, with a dirty worktree; see [Batches With No Delivery Commit](#batches-with-no-delivery-commit).
 
 ### 5. Parallel Duplicate Runs and Retired Root Runs
 

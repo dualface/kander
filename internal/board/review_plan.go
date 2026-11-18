@@ -417,3 +417,19 @@ func validReviewTargets(base, target string, requirements map[string]string) boo
 func ReviewNeedsGit(b ReviewPlanBatch) bool {
 	return !noGitReviewBatch(b.Base, b.TargetCommit, b.Requirements)
 }
+
+// ReviewNoDelivery reports a batch with no delivery commit: one full SHA as both
+// base and target, and no role that needs a run. Review has nothing to cover, so
+// closing it needs only a target that the plan CWD still holds, not a HEAD that
+// equals it. The explicit non-Git N/A batch is no such batch.
+func ReviewNoDelivery(b ReviewPlanBatch) bool {
+	if !validCommit(b.Base) || b.Base != b.TargetCommit || validateRequirements(b.Requirements) != nil {
+		return false
+	}
+	for _, value := range b.Requirements {
+		if value == "required" {
+			return false
+		}
+	}
+	return true
+}

@@ -155,5 +155,10 @@
   "review.schema.plan.drop_obligations.item.batch_id": "The dropped batch.",
   "review.schema.plan.drop_obligations.item.from_batch": "Position of the first batch that can discharge this obligation.",
   "review.schema.plan.drop_obligations.item.roles": "The roles the dropped batch required.",
-  "review.schema.plan.drop_obligations.item.task_ids": "The members that still owe these roles."
+  "review.schema.plan.drop_obligations.item.task_ids": "The members that still owe these roles.",
+  "review.schema.extend-plan.retarget_batches": "Corrects the base and target of planned batches that never ran: no run, advance or closure. Map of batch ID to the entry below. Works on a sealed plan, also after the batch was aggregated: the batch revision and the plan revision each rise by one, the aggregate view is rewritten, and an earlier view_hash no longer closes the batch. Mutually exclusive with every other operation. The CWD must be the plan's worktree.",
+  "review.schema.extend-plan.retarget_batches.key.previous_base": "Required on each entry. The current base of the batch, as compare-and-swap.",
+  "review.schema.extend-plan.retarget_batches.key.previous_target": "Required on each entry. The current target commit of the batch, as compare-and-swap.",
+  "review.schema.extend-plan.retarget_batches.key.base": "Required on each entry. The new base, a full commit SHA and an ancestor of the new target. A later batch needs the target of the batch before it.",
+  "review.schema.extend-plan.retarget_batches.key.target": "Required on each entry. The new target commit, a full commit SHA. A batch with a planned successor keeps its target. A batch with no delivery needs a target that is HEAD or an ancestor of HEAD in the plan CWD."
 }

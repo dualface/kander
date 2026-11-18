@@ -11,8 +11,9 @@ import (
 
 // ReviewPlanExtension appends one batch after the prior closure, seals the
 // cycle, rebinds execution cycles, syncs a drifted plan target to the runtime
-// batch, drops trailing batches no run has reached, releases an obligation on a user
-// decision, or resolves an unplanned batch (ResolveReviewBatch). Existing
+// batch, drops trailing batches no run has reached, corrects the base and target
+// of a batch no run has reached, releases an obligation on a user decision, or
+// resolves an unplanned batch (ResolveReviewBatch). Existing
 // requirements, members and evidence are never replaced. A sealed plan takes a batch
 // only for a rebound cycle that has none, or for a recovery that still owes a review.
 type ReviewPlanExtension struct {
@@ -28,13 +29,16 @@ type ReviewPlanExtension struct {
 	Seal              bool                          `json:"seal"`
 	Author            string                        `json:"author"`
 	Basis             string                        `json:"basis"`
+
+	// RetargetBatches corrects the base and target of batches no run has reached.
+	RetargetBatches map[string]ReviewBatchRetarget `json:"retarget_batches,omitempty"`
 }
 
 func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 	if x.ResolveBatch != nil {
 		return reviewError("resolve_batch needs the Git evidence of ResolveReviewBatch")
 	}
-	if !ValidReviewID(x.PlanID) || strings.TrimSpace(x.Author) == "" || strings.TrimSpace(x.Basis) == "" || x.Batch == nil && !x.Seal && len(x.RebindCycles) == 0 && len(x.SyncTargets) == 0 && len(x.DropBatches) == 0 && x.ReleaseObligation == nil {
+	if !ValidReviewID(x.PlanID) || strings.TrimSpace(x.Author) == "" || strings.TrimSpace(x.Basis) == "" || x.Batch == nil && !x.Seal && len(x.RebindCycles) == 0 && len(x.SyncTargets) == 0 && len(x.RetargetBatches) == 0 && len(x.DropBatches) == 0 && x.ReleaseObligation == nil {
 		return reviewError("plan extension provenance")
 	}
 	// A decision of only white space is no decision, also in plan-history.
@@ -50,6 +54,9 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 		exclusiveOps++
 	}
 	if x.Batch != nil || x.Seal {
+		exclusiveOps++
+	}
+	if len(x.RetargetBatches) > 0 {
 		exclusiveOps++
 	}
 	if len(x.DropBatches) > 0 {
@@ -86,7 +93,7 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 				return err
 			}
 		}
-		if !ok || p.Sealed && len(x.RebindCycles) == 0 && len(x.SyncTargets) == 0 && len(x.DropBatches) == 0 && x.ReleaseObligation == nil && !cycleBatch || p.Revision != x.ExpectedRevision {
+		if !ok || p.Sealed && len(x.RebindCycles) == 0 && len(x.SyncTargets) == 0 && len(x.RetargetBatches) == 0 && len(x.DropBatches) == 0 && x.ReleaseObligation == nil && !cycleBatch || p.Revision != x.ExpectedRevision {
 			return reviewError("plan extension CAS/sealed conflict")
 		}
 		if err = verifyPlanCopiesFor(tx, p, len(x.RebindCycles) == 0 && len(x.SyncTargets) == 0); err != nil {
@@ -132,6 +139,11 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 					}
 					p.CycleBatchFrom[id] = start
 				}
+			}
+		}
+		if len(x.RetargetBatches) > 0 {
+			if err = retargetPlanBatches(tx, &p, x.RetargetBatches); err != nil {
+				return err
 			}
 		}
 		if len(x.DropBatches) > 0 {
