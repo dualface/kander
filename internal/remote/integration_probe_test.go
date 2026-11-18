@@ -8,16 +8,22 @@ import (
 	"testing"
 )
 
-// isolateGitConfig keeps a test of this package away from the developer's own
-// user-level and system-level Git configuration, such as commit signing and
-// global hooks. The tests of package remote_test use isolateGlobalGit.
+// isolateGitConfig keeps a test away from the developer's own user-level and
+// system-level Git configuration, such as commit signing, global hooks and
+// the default ignore file. The empty ignore file replaces the default one,
+// which Git looks up below XDG_CONFIG_HOME or HOME. Package remote_test
+// reaches it through IsolateGitConfig.
 func isolateGitConfig(t *testing.T) {
 	t.Helper()
-	empty := filepath.Join(t.TempDir(), "gitconfig")
-	if err := os.WriteFile(empty, nil, 0o600); err != nil {
+	dir := t.TempDir()
+	ignore, config := filepath.Join(dir, "ignore"), filepath.Join(dir, "gitconfig")
+	if err := os.WriteFile(ignore, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("GIT_CONFIG_GLOBAL", empty)
+	if err := os.WriteFile(config, []byte("[core]\n\texcludesFile = "+filepath.ToSlash(ignore)+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", config)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 }
 

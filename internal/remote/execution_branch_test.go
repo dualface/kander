@@ -17,12 +17,7 @@ import (
 // configuration, such as commit signing and global hooks.
 func isolateGlobalGit(t *testing.T) {
 	t.Helper()
-	empty := filepath.Join(t.TempDir(), "gitconfig")
-	if err := os.WriteFile(empty, nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("GIT_CONFIG_GLOBAL", empty)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	remote.IsolateGitConfig(t)
 }
 
 // publishedBaseline claims the fixture task and publishes the baseline of its
