@@ -83,6 +83,22 @@ func newIntegrationGitFixture(t *testing.T) *integrationFixture {
 }
 func (f *integrationFixture) reviewedTask() {
 	t, s := f.t, f.a
+	task := f.claimedTask()
+	if _, err := s.PublishCommit(t.Context(), f.first, task.TaskID, f.commit, f.credential); err != nil {
+		t.Fatal(err)
+	}
+	own := f.credential.Claim()
+	task, err := s.Project.Move(t.Context(), "", task.TaskID, api.Move{State: "review", DeliveryCommit: f.commit}, own)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.closeReviewPlan(task)
+}
+
+// claimedTask leaves a standalone card in working with its task branch filled
+// and the execution credential of host-a saved.
+func (f *integrationFixture) claimedTask() api.Task {
+	t, s := f.t, f.a
 	task, err := s.Project.NewTask(t.Context(), "", api.NewTask{Type: "feature", Slug: "integration-delivery", Title: "Integrate a reviewed delivery", Language: "en"})
 	if err != nil {
 		t.Fatal(err)
@@ -107,14 +123,14 @@ func (f *integrationFixture) reviewedTask() {
 	if err := s.SaveCredential(f.credential); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.PublishCommit(t.Context(), f.first, task.TaskID, f.commit, f.credential); err != nil {
-		t.Fatal(err)
-	}
+	return task
+}
+
+// closeReviewPlan seals a one-batch plan targeting the fixture commit and
+// closes it, whichever state the card is in.
+func (f *integrationFixture) closeReviewPlan(task api.Task) {
+	t, s := f.t, f.a
 	own := f.credential.Claim()
-	task, err = s.Project.Move(t.Context(), "", task.TaskID, api.Move{State: "review", DeliveryCommit: f.commit}, own)
-	if err != nil {
-		t.Fatal(err)
-	}
 	plan := board.ReviewPlan{Schema: 1, PlanID: "integration-plan", Sealed: true, Author: "coordinator", Basis: "Git integration fixture", CWD: "project:" + s.Info.ID, ReportLanguage: "en", TaskIDs: []string{task.TaskID}, Batches: []board.ReviewPlanBatch{{BatchID: "integration-batch", TaskIDs: []string{task.TaskID}, Base: f.base, TargetCommit: f.commit, Requirements: map[string]string{"PMQA": "N/A: Git integration fixture", "Security": "N/A: repository policy"}}}}
 	if _, err := s.Project.ReviewPlan(t.Context(), "", plan, own); err != nil {
 		t.Fatal(err)
