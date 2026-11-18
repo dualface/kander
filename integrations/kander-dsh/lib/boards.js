@@ -48,6 +48,21 @@ const isExecutable = async (path) => {
 }
 
 /**
+ * The message of the error object `kander --json` writes to stderr on failure, or the text
+ * itself when stderr holds no such object.
+ */
+export function errorMessage(stderr) {
+  const text = stderr.trim()
+  try {
+    const message = JSON.parse(text)?.error?.message
+    if (typeof message === 'string' && message !== '') return message
+  } catch {
+    // Not an error object: a launch failure of a command run without --json.
+  }
+  return text
+}
+
+/**
  * Runs a command without a shell; resolves {code, stdout, stderr}. A missing
  * executable or a timeout resolves with code null and the error in stderr.
  */
@@ -144,7 +159,7 @@ export class Boards {
     const kander = await this.executable(directory)
     const result = await run(kander, ['list', '--json', '--agent-status'], { cwd: directory, timeout: LIST_TIMEOUT_MS, env: this.envOf(directory), execFile: this.execFile })
     if (result.code !== 0) {
-      throw new BoardError('kander-failed', result.stderr.trim() || `kander list exited with ${result.code}`, { kander, stderr: result.stderr, stdout: result.stdout })
+      throw new BoardError('kander-failed', errorMessage(result.stderr) || `kander list exited with ${result.code}`, { kander, stderr: result.stderr, stdout: result.stdout })
     }
     let snapshot
     try {

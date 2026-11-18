@@ -31,7 +31,7 @@ function fakeKander(directory, name = 'kander') {
   writeFileSync(path, `#!/bin/sh
 printf '%s|%s|%s\\n' "$PWD" "$*" "$KANBAN_DIR" >> "${directory}/calls"
 case "$FAKE_MODE" in
-  fail) echo "kander: boom" >&2; exit 1 ;;
+  fail) case "$*" in *--json*) echo '{"error":{"code":"failed","message":"boom"}}' >&2 ;; *) echo "kander: boom" >&2 ;; esac; exit 1 ;;
   garbage) echo "not json" ;;
   slow) sleep 0.3; echo started ;;
   *) echo '{"schema_version":1,"change_token":"t","tasks":[]}' ;;
@@ -140,7 +140,7 @@ describe('kander commands', () => {
 
   test('a failed or unreadable list is an error with the kander output', async () => {
     const failed = setup('fail')
-    await assert.rejects(failed.boards.list(failed.root), (error) => error.code === 'kander-failed' && error.details.stderr.includes('kander: boom'))
+    await assert.rejects(failed.boards.list(failed.root), (error) => error.code === 'kander-failed' && error.message === 'boom' && error.details.stderr.includes('"code":"failed"'))
     const garbage = setup('garbage')
     await assert.rejects(garbage.boards.list(garbage.root), { code: 'bad-output' })
   })
