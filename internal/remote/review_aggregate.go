@@ -31,7 +31,7 @@ func (s *Session) AggregateReview(ctx context.Context, batch string) (json.RawMe
 	}
 	viewHash := board.ReviewViewDigest(current)
 	operation := "review-aggregate:" + batch
-	proof, reused, err := s.reviewAuthority(ctx, operation, operation+"@view:"+viewHash, batch, current.Batch.TaskIDs)
+	proof, reused, err := s.reviewAuthority(ctx, operation, operation+"@view:"+viewHash, batch, current.Batch.TaskIDs, "")
 	if err != nil {
 		return nil, err
 	}

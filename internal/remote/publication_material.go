@@ -18,6 +18,19 @@ import (
 // after a client rechecks identical immutable Git facts. The first actual
 // verified payload stays frozen, and card revisions/generations stay in the key.
 func verificationIdentity(operation string, raw json.RawMessage) (json.RawMessage, error) {
+	return materialIdentity(operation, raw, false)
+}
+
+// replayIdentity is the material a replay record is keyed and compared by. A
+// prepare also ignores the version of the client binary that wrote it: the
+// version is a provenance record, so the same run prepared again by an upgraded
+// binary finds the publication the first binary completed. Frozen material and
+// publication IDs keep the version, so a new run never reuses another's.
+func replayIdentity(operation string, raw json.RawMessage) (json.RawMessage, error) {
+	return materialIdentity(operation, raw, operation == "review-prepare")
+}
+
+func materialIdentity(operation string, raw json.RawMessage, dropVersion bool) (json.RawMessage, error) {
 	var value any
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
@@ -35,8 +48,23 @@ func verificationIdentity(operation string, raw json.RawMessage) (json.RawMessag
 		if nested, ok := object[field].(map[string]any); ok {
 			delete(nested, "verified_at")
 		}
+		if dropVersion {
+			delete(object, "version")
+		}
 	}
 	return json.Marshal(value)
+}
+
+// withVersion returns a prepare payload as the client of that version wrote it.
+func withVersion(raw json.RawMessage, version string) (json.RawMessage, error) {
+	var object map[string]any
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if err := decoder.Decode(&object); err != nil {
+		return nil, err
+	}
+	object["version"] = version
+	return json.Marshal(object)
 }
 
 func (s *Session) freezePublicationMaterial(operation string, raw json.RawMessage, members []api.PublicationMember) (json.RawMessage, error) {

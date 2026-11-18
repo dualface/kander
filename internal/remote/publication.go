@@ -57,15 +57,25 @@ func (e *ConfirmationPending) Unwrap() error { return e.Cause }
 // and asks other holders to confirm the exact prepared material. Pending
 // confirmations are durable and do not publish any card evidence.
 func (s *Session) ReviewAuthority(ctx context.Context, operation string, payload any, tasks []string) (*client.Claim, error) {
-	proof, _, err := s.reviewAuthority(ctx, operation, operation, payload, tasks)
+	proof, _, err := s.reviewAuthority(ctx, operation, operation, payload, tasks, "")
+	return proof, err
+}
+
+// PrepareReviewAuthority is ReviewAuthority for the prepare of a review run.
+// recorded is the version of the existing run, or empty for a new one: the
+// client binary that prepared the run may have been replaced since, and its
+// completed joint publication is still found by that version.
+func (s *Session) PrepareReviewAuthority(ctx context.Context, request api.ReviewPrepare, tasks []string, recorded string) (*client.Claim, error) {
+	proof, _, err := s.reviewAuthority(ctx, "review-prepare", "review-prepare", request, tasks, recorded)
 	return proof, err
 }
 
 // reviewAuthority looks prior publications up by replay, which equals
 // operation except for operations whose material does not identify their
 // result. The second result reports that the proof names an already published
-// publication, whose saved result the server returns unchanged.
-func (s *Session) reviewAuthority(ctx context.Context, operation, replay string, payload any, tasks []string) (*client.Claim, bool, error) {
+// publication, whose saved result the server returns unchanged. recorded is
+// the version of an existing prepared run, and empty for every other call.
+func (s *Session) reviewAuthority(ctx context.Context, operation, replay string, payload any, tasks []string, recorded string) (*client.Claim, bool, error) {
 	raw, err := s.publicationPayload(operation, payload)
 	if err != nil {
 		return nil, false, err
@@ -94,7 +104,7 @@ func (s *Session) reviewAuthority(ctx context.Context, operation, replay string,
 			}
 		}
 	}
-	saved, publication, err := s.completedReviewPublication(ctx, operation, replay, raw)
+	saved, publication, err := s.completedReviewPublication(ctx, operation, replay, raw, recorded)
 	if err != nil {
 		return nil, false, err
 	}

@@ -112,7 +112,15 @@ func (s *remoteReviewStore) Prepare(input board.ReviewInput, requirements map[st
 		}
 		ids = plan.TaskIDs
 	}
-	proof, err := s.session.ReviewAuthority(context.Background(), "review-prepare", request, ids)
+	// The run may exist from a client of another version, which keyed its joint
+	// publication by that version.
+	var recorded string
+	if existing, found, err := s.Lookup(input.RunID); err != nil {
+		return board.ReviewRun{}, false, err
+	} else if found {
+		recorded = existing.KanderVersion
+	}
+	proof, err := s.session.PrepareReviewAuthority(context.Background(), request, ids, recorded)
 	if err != nil {
 		return board.ReviewRun{}, false, awaitingRun(input.RunID, err)
 	}

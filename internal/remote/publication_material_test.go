@@ -21,7 +21,15 @@ import (
 
 func publicationSessions(t *testing.T) (*remote.Session, *remote.Session, []string) {
 	t.Helper()
-	srv, err := server.Open(server.Options{DataDir: filepath.Join(t.TempDir(), "server"), Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	a, b, ids, _ := publicationSessionsAt(t)
+	return a, b, ids
+}
+
+// publicationSessionsAt also returns the data directory of the server.
+func publicationSessionsAt(t *testing.T) (*remote.Session, *remote.Session, []string, string) {
+	t.Helper()
+	dataDir := filepath.Join(t.TempDir(), "server")
+	srv, err := server.Open(server.Options{DataDir: dataDir, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +72,7 @@ func publicationSessions(t *testing.T) (*remote.Session, *remote.Session, []stri
 		}
 		ids = append(ids, task.TaskID)
 	}
-	return sessions[0], sessions[1], ids
+	return sessions[0], sessions[1], ids, dataDir
 }
 
 func pendingPublicationID(t *testing.T, err error) string {
