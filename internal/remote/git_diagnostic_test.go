@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -58,15 +56,13 @@ func TestGitCommandErrorStartsWithThePlainTextAndCarriesTheDiagnostic(t *testing
 func TestGitCommandErrorWithoutStderrIsTheOriginalText(t *testing.T) {
 	useLanguage(t, "en")
 	dir := t.TempDir()
-	for name, body := range map[string]string{"a": "one\n", "b": "two\n"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
-			t.Fatal(err)
-		}
+	if _, err := gitCommand(context.Background(), dir, "init", "-q"); err != nil {
+		t.Skipf("git init: %v", err)
 	}
-	// A quiet diff of different files exits 1 and writes nothing.
-	_, err := gitCommand(context.Background(), dir, "diff", "--no-index", "--quiet", "a", "b")
+	// Probing for an object that is not there exits 1 and writes nothing.
+	_, err := gitCommand(context.Background(), dir, "cat-file", "-e", strings.Repeat("1", 40))
 	if err == nil {
-		t.Fatal("a differing quiet diff succeeded")
+		t.Fatal("cat-file of a missing object succeeded")
 	}
 	if want := config.Text("remote.git_unverified"); err.Error() != want {
 		t.Fatalf("error text = %q, want %q", err.Error(), want)

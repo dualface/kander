@@ -43,9 +43,11 @@ func TestCoordinatorGitCheckCarriesNoGitDiagnostic(t *testing.T) {
 		t.Fatal("FetchCommit succeeded without a remote")
 	}
 	plain := config.Text("remote.git_unverified")
-	_, diagnostic, found := strings.Cut(gitErr.Error(), "Git reported: ")
-	if !found || diagnostic == "" || !strings.HasPrefix(gitErr.Error(), plain) {
-		t.Fatalf("local error %q lacks a diagnostic after %q", gitErr, plain)
+	// The language of the catalog is process-wide state another test may have
+	// fixed, so the diagnostic is identified by Git's own wording.
+	const diagnostic = "No such remote 'origin'"
+	if !strings.HasPrefix(gitErr.Error(), plain) || !strings.Contains(gitErr.Error(), diagnostic) {
+		t.Fatalf("local error %q lacks the diagnostic %q after %q", gitErr, diagnostic, plain)
 	}
 
 	other := errors.New("recovery required")
