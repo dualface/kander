@@ -29,6 +29,7 @@ kander review <plan|extend-plan|assign|disposition|interpret|advance|close> --sc
 - Evidence subcommands: the words `plan`, `extend-plan`, `assign`, `disposition`, `interpret`, `map-legacy`, `aggregate`, `advance`, `close`, and `progress` select an evidence subcommand; each takes an absolute CWD and a JSON file or an ID as shown in Syntax. `--schema` prints the JSON schema of a subcommand's input.
 - `batch` is not a subcommand (no documented caller): batches are named in the plan by `plan` and `extend-plan`, advanced by `advance`, and closed by `close`.
 - `extend-plan` with `resolve_batch` accepts an unplanned batch that already ran, on the evidence of one closed planned batch (`snippets/review-evidence-gate.md` "Review Evidence Completion Gate").
+- `extend-plan` with `add_members` adds started cards of the plan's task group as plan members while the plan is not sealed, refuses the whole request when one card fails (the error names the card and the condition), and needs the confirmation of the holder of each started new member in distributed mode; it is exclusive with every other operation (`snippets/orchestrate-review.md` "extend-plan").
 
 ## Preconditions
 

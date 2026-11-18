@@ -218,6 +218,27 @@ A wrong `base` or `target_commit` normally cannot be repaired: `drop_batches` mu
 - When the batch was aggregated and not closed, the same transaction rewrites the aggregate view and its card copies. The batch revision changes, so the old `view_hash` no longer closes the batch: run `review aggregate` again, then `review close` with the new hash. The minimal N/A sequence therefore recovers from a wrong target found only at close.
 - The operation is mutually exclusive with every other `extend-plan` operation. A batch with a run, an advance, or a closure fails and nothing is written.
 
+### Adding a Started Member to an Unsealed Plan
+
+A group plan can be created once the members that are ready for review have started; it does not wait for the last member of the group. `add_members` adds a group member that starts later, while the plan is not sealed. It changes the plan members (`task_ids` of the plan) only. It never changes which cards belong to the group, and a group with a coordinator checkpoint still takes no new group member. A card that depends on work outside the group does not join this way: it moves to a later group or leaves with `coordinator remove-member`, so the anchor rule stays as it is.
+
+```json
+{
+  "plan_id": "implementation-cycle",
+  "expected_revision": 2,
+  "author": "coordinator",
+  "basis": "the third member started",
+  "add_members": ["20261118-third-member-task"]
+}
+```
+
+- Every new member must be in `working/` or `review/`, carry the same non-empty `TASK_GROUP` as the plan members (a plan whose members share no group, such as the plan of one independent card, takes none), belong to no plan, have no member exclusion, have no run in a batch outside the plan, and report in the plan's `report_language`.
+- The plan must not be sealed, and `expected_revision` must equal the plan revision. The list must not be empty and must hold valid task IDs. The operation is exclusive with every other `extend-plan` operation, including `resolve_batch`.
+- One request is one decision: when a single card fails, nothing is written and the error names the card and the condition that does not hold.
+- One transaction records the cards in `task_ids`, the current execution cycle of each new member (in the plan and in `tracked-cycles/<id>.json`), and the plan pointer `task-plans/<id>.json`, and rewrites the plan copy of every member. The plan revision rises by one, and `plan-history/<plan>/<revision>.json` keeps the previous plan and the request.
+- A new member is in none of the existing batches, so no batch is owed for it. Append a batch that names it with `batch` once its predecessor closed, as for any member; `seal` is refused until every member, the new ones included, is in a batch.
+- In server mode the request runs on the server. The holder of every started new member confirms the same publication with `kander review confirm`, as the holder of every started plan member does. Upgrade the server before the clients: an older server rejects the unknown field `add_members`.
+
 ---
 
 ### Unplanned Batch Resolution
