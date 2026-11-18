@@ -110,7 +110,7 @@
   "review.schema.plan.schema": "Plan schema version. A new plan must use 1.",
   "review.schema.plan.sealed": "When true, every plan member must appear in a batch. False leaves the plan open for extend-plan.",
   "review.schema.plan.task_ids": "Member task IDs. The command sorts them and removes duplicates. Every batch task ID must be in this list.",
-  "review.schema.extend-plan.resolve_batch": "Accepts one batch outside the plan that already has runs, because one closed planned batch covers it. The plan keeps its batches and its seal. Mutually exclusive with every other operation. The Git checks of the new base and target run in the repository at CWD. A changed cycle is rebound after this call.",
+  "review.schema.extend-plan.resolve_batch": "Accepts one batch outside the plan that already has runs, because one closed planned batch covers it. The plan keeps its batches and its seal. Mutually exclusive with every other operation. The CWD must be the plan's worktree. A changed cycle is rebound after this call.",
   "review.schema.extend-plan.resolve_batch.batch_id": "Required with resolve_batch. The unplanned batch.",
   "review.schema.extend-plan.resolve_batch.covering_batch_id": "Required with resolve_batch. One closed batch of this plan. Its base is the base of the unplanned batch or an ancestor, and its target is the target of the unplanned batch or a descendant. It holds every required role and every remaining plan member of the unplanned batch.",
   "review.schema.extend-plan.resolve_batch.findings": "One entry for every finding of every run of the unplanned batch, and nothing else.",
