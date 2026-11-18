@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
 	"github.com/dualface/kander/internal/config"
 )
@@ -43,6 +44,15 @@ func (s *Session) publicationPayload(operation string, value any) (json.RawMessa
 	return json.Marshal(normalized)
 }
 
+// ConfirmationPending is the evidence_incomplete answer of a review write whose
+// joint publication still lacks holder confirmations. A caller that owns a
+// retry identity, such as a review run, tells it apart from other
+// evidence_incomplete answers by this type and adds that identity.
+type ConfirmationPending struct{ Cause *api.Error }
+
+func (e *ConfirmationPending) Error() string { return e.Cause.Error() }
+func (e *ConfirmationPending) Unwrap() error { return e.Cause }
+
 // ReviewAuthority prepares a joint operation, confirms locally owned members,
 // and asks other holders to confirm the exact prepared material. Pending
 // confirmations are durable and do not publish any card evidence.
@@ -63,31 +73,15 @@ func (s *Session) reviewAuthority(ctx context.Context, operation, replay string,
 	if proof, found, err := s.completedReviewPublication(ctx, operation, replay, raw); err != nil || found {
 		return proof, found, err
 	}
-	if len(tasks) <= 1 {
-		proof, err := s.ClaimsFor(tasks)
-		return proof, false, err
-	}
-	members := make([]api.PublicationMember, 0, len(tasks))
-	for _, id := range slices.Sorted(slices.Values(tasks)) {
-		task, err := s.Project.Show(ctx, id)
-		if err != nil {
-			return nil, false, err
-		}
-		if task.State != "working" && task.State != "review" {
-			continue
-		}
-		if task.Claim == nil || !api.ClaimStands(task.Claim.Status) {
-			return nil, false, &api.Error{Code: api.CodeLeaseInvalid, Message: "review member has no live execution: " + id}
-		}
-		members = append(members, api.PublicationMember{TaskID: id, Revision: task.Revision, Generation: task.Claim.Generation})
+	members, shown, err := s.liveReviewMembers(ctx, tasks)
+	if err != nil {
+		return nil, false, err
 	}
 	if len(members) <= 1 {
-		ids := make([]string, len(members))
-		for i, member := range members {
-			ids[i] = member.TaskID
+		proof, joint, err := s.singleMemberAuthority(operation, tasks, members, shown)
+		if err != nil || !joint {
+			return proof, false, err
 		}
-		proof, err := s.ClaimsFor(ids)
-		return proof, false, err
 	}
 	raw, err = s.freezePublicationMaterial(operation, raw, members)
 	if err != nil {
@@ -134,9 +128,85 @@ func (s *Session) reviewAuthority(ctx context.Context, operation, replay string,
 		}
 	}
 	if len(pending) > 0 {
-		return nil, false, &api.Error{Code: api.CodeEvidenceIncomplete, Message: "publication " + id + " awaits holder confirmation for " + strings.Join(pending, ", ")}
+		return nil, false, &ConfirmationPending{Cause: &api.Error{Code: api.CodeEvidenceIncomplete, Message: config.Text("remote.review_confirmation_pending", id, strings.Join(pending, ", "))}}
 	}
 	return &client.Claim{PublicationID: id, PublicationPayload: raw}, false, nil
+}
+
+// liveReviewMembers reads each task once and returns the version of every
+// working or review card, in task ID order, with the card as it was read. A
+// live card whose claim no longer stands cannot take part in any review write.
+func (s *Session) liveReviewMembers(ctx context.Context, tasks []string) ([]api.PublicationMember, map[string]api.Task, error) {
+	members := make([]api.PublicationMember, 0, len(tasks))
+	shown := make(map[string]api.Task, len(tasks))
+	for _, id := range slices.Sorted(slices.Values(tasks)) {
+		task, err := s.Project.Show(ctx, id)
+		if err != nil {
+			return nil, nil, err
+		}
+		if task.State != "working" && task.State != "review" {
+			continue
+		}
+		if task.Claim == nil || !api.ClaimStands(task.Claim.Status) {
+			return nil, nil, &api.Error{Code: api.CodeLeaseInvalid, Message: "review member has no live execution: " + id}
+		}
+		members = append(members, api.PublicationMember{TaskID: id, Revision: task.Revision, Generation: task.Claim.Generation})
+		shown[id] = task
+	}
+	return members, shown, nil
+}
+
+// singleMemberAuthority chooses the proof for a review write with at most one
+// live member. The holder of the member's current generation proves it
+// directly. A group coordinator process holds no member credential, so it
+// prepares a joint publication with that one member and waits for the holder;
+// joint reports that choice. Any other process without a credential for the
+// member is refused here with the holder named, because the server refuses
+// every unproven write to a claimed card. A credential of an older generation
+// is sent as it is, and the server answers with the takeover.
+//
+// The choice only selects the flow. The server still requires the holder's
+// confirmation of the exact material before it publishes, so a process that
+// claims to be a coordinator gains no authority.
+func (s *Session) singleMemberAuthority(operation string, tasks []string, members []api.PublicationMember, shown map[string]api.Task) (proof *client.Claim, joint bool, err error) {
+	ids := tasks
+	if len(tasks) > 1 {
+		ids = make([]string, len(members))
+		for i, member := range members {
+			ids[i] = member.TaskID
+		}
+	}
+	proof, err = s.ClaimsFor(ids)
+	if err != nil || len(members) == 0 {
+		return proof, false, err
+	}
+	member := members[0]
+	if proof != nil && proof.Members[member.TaskID].Generation != 0 {
+		return proof, false, nil
+	}
+	// The holder alone submits its own disposition of the findings.
+	if operation != "review-disposition" {
+		coordinator, err := s.coordinatesTask(shown[member.TaskID])
+		if err != nil || coordinator {
+			return nil, coordinator, err
+		}
+	}
+	claim := shown[member.TaskID].Claim
+	return nil, false, &api.Error{Code: api.CodeHeldByOther, Message: config.Text("remote.review_member_held_by_other", member.TaskID, claim.ExecutionID, claim.Owner, claim.Generation)}
+}
+
+// coordinatesTask reports whether this process holds the coordinator
+// credential of the group the card belongs to.
+func (s *Session) coordinatesTask(task api.Task) (bool, error) {
+	group := board.TaskGroupFrom(task.Text)
+	if group == "" {
+		return false, nil
+	}
+	credential, found, err := s.CoordinatorCredential(group)
+	if err != nil {
+		return false, err
+	}
+	return found && !credential.Lost && credential.ResourceKind == "group", nil
 }
 
 // ConfirmReviewPublication confirms only the credential available to this

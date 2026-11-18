@@ -17,7 +17,10 @@ import (
 )
 
 // remoteDispositionCommands are the evidence commands available in server
-// mode. Every claimed card supplies its own execution proof.
+// mode. The holder of a claimed card proves its own execution; a group
+// coordinator process without that credential asks the holder to confirm a
+// joint publication instead, except for disposition, which only the holder
+// submits.
 var remoteDispositionCommands = map[string]bool{"plan": true, "aggregate": true, "close": true, "progress": true, "extend-plan": true, "advance": true, "assign": true, "disposition": true, "interpret": true, "map-legacy": true, "confirm": true}
 
 // runRemoteDisposition runs one evidence command against the server project.
