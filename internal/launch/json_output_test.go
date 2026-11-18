@@ -58,3 +58,63 @@ func TestReconcileOutcomeWithJSON(t *testing.T) {
 		t.Fatalf("refused: status=%d stdout=%q stderr=%q", status, stdout, stderr)
 	}
 }
+
+// Every launch form (start, resume, orchestrate, issue triage and result, chat) prepares its
+// launcher through prepareLaunch, so a launcher that takes the terminal is refused there with
+// --json, before a container or an agent exists.
+func TestPrepareLaunchRefusesTerminalLaunchersWithJSON(t *testing.T) {
+	for _, launcher := range []string{"foreground", "console"} {
+		status, stdout, stderr := runJSON(func() int {
+			plan, err := prepareLaunch(launcher, t.TempDir(), "start")
+			if err == nil {
+				t.Errorf("%s: no refusal, plan=%+v", launcher, plan)
+				return 0
+			}
+			return command.FailStatus(2, err)
+		})
+		if status != 2 || stdout != "" {
+			t.Fatalf("%s: status=%d stdout=%q stderr=%q", launcher, status, stdout, stderr)
+		}
+		var object struct {
+			Error command.Notice `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(stderr), &object); err != nil || object.Error.Code != command.CodeInteractive || !strings.Contains(object.Error.Message, launcher) {
+			t.Fatalf("%s: stderr=%q %v", launcher, stderr, err)
+		}
+	}
+}
+
+// A confirmed release prints the claim object with --json and carries the closing remark as the
+// notice coordinator_release_final; standard error stays empty.
+func TestReleaseResultWithJSON(t *testing.T) {
+	f := newReleaseFixture(t)
+	status, stdout, stderr := commandtest.Capture(func() int { return RunCoordinatorRemote([]string{"--json", "release", "--end-execution", f.path}) })
+	if status != 0 || stderr != "" {
+		t.Fatalf("status %d\nstdout=%s\nstderr=%s", status, stdout, stderr)
+	}
+	var object struct {
+		Claim   map[string]any   `json:"claim"`
+		Notices []command.Notice `json:"notices"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &object); err != nil || object.Claim["status"] != "released" {
+		t.Fatalf("result %s: %v", stdout, err)
+	}
+	if len(object.Notices) != 1 || object.Notices[0].Code != "coordinator_release_final" || !strings.Contains(object.Notices[0].Message, f.group) {
+		t.Fatalf("notices %+v", object.Notices)
+	}
+}
+
+// An unconfirmed or misplaced --end-execution is a usage error object before any request.
+func TestReleaseArgumentErrorsWithJSON(t *testing.T) {
+	f := newReleaseFixture(t)
+	f.requests.Store(0)
+	for _, args := range [][]string{{"release", f.path}, {"release", f.path, "--end-execution"}, {"claim", "--end-execution", f.path}} {
+		status, stdout, stderr := commandtest.Capture(func() int { return RunCoordinatorRemote(append([]string{"--json"}, args...)) })
+		if status != 2 || stdout != "" || !strings.Contains(stderr, `"code":"usage"`) {
+			t.Fatalf("%v: status %d\nstdout=%s\nstderr=%s", args, status, stdout, stderr)
+		}
+	}
+	if n := f.requests.Load(); n != 0 {
+		t.Fatalf("the commands sent %d requests", n)
+	}
+}
