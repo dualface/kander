@@ -4,8 +4,10 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -17,14 +19,18 @@ import (
 )
 
 type harness struct {
-	t       *testing.T
-	at      atomic.Int64
-	srv     *server.Server
-	http    *httptest.Server
-	home    string
+	t    *testing.T
+	at   atomic.Int64
+	srv  *server.Server
+	http *httptest.Server
+	home string
+	loop *loop
+	// mu guards stopped and lines, which the work loop writes while a Serve
+	// level test reads them. Tests that drive a pass read the fields directly
+	// after it returns; the others use stoppedPIDs and deliveredLines.
+	mu      sync.Mutex
 	stopped []int
 	lines   []string
-	loop    *loop
 }
 
 func (h *harness) now() time.Time          { return time.Unix(0, h.at.Load()) }
@@ -35,23 +41,63 @@ func newHarness(t *testing.T) *harness { return newHarnessRenewing(t, 0) }
 // newHarnessRenewing grants leases with the given renew interval; zero keeps
 // the server default.
 func newHarnessRenewing(t *testing.T, renew time.Duration) *harness {
+	return newHarnessWrapped(t, renew, nil)
+}
+
+// newHarnessWrapped is newHarnessRenewing with a wrapper around the server
+// handler. The wrapper is installed before the test server starts: assigning
+// the handler of a running server is a data race.
+func newHarnessWrapped(t *testing.T, renew time.Duration, wrap func(http.Handler) http.Handler) *harness {
 	h := &harness{t: t, home: t.TempDir()}
 	h.at.Store(time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC).UnixNano())
 	s, err := server.Open(server.Options{DataDir: t.TempDir(), Now: h.now, RenewInterval: renew, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if err != nil {
 		t.Fatal(err)
 	}
-	h.srv, h.http = s, httptest.NewServer(s.Handler())
+	handler := s.Handler()
+	if wrap != nil {
+		handler = wrap(handler)
+	}
+	h.srv, h.http = s, httptest.NewServer(handler)
 	t.Cleanup(func() { h.http.Close(); h.srv.Close() })
-	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h.loop = &loop{o: Options{Home: h.home, Logger: quiet, Now: h.now, Stop: func(pid int) error {
+	h.loop = newLoop(h.workerOptions())
+	return h
+}
+
+// workerOptions are the options of the harness worker: a quiet logger, the
+// fake clock, and hooks that record what the worker did.
+func (h *harness) workerOptions() Options {
+	return Options{Home: h.home, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Now: h.now, Stop: func(pid int) error {
+		h.mu.Lock()
+		defer h.mu.Unlock()
 		h.stopped = append(h.stopped, pid)
 		return nil
 	}, Deliver: func(window, session, text string) error {
+		h.mu.Lock()
+		defer h.mu.Unlock()
 		h.lines = append(h.lines, text)
 		return nil
-	}}, clients: map[string]*client.Client{}}
-	return h
+	}}
+}
+
+// pass is one tick of the worker with the loops run in turn: the renewals
+// first, then the work they owe. A test drives it where it needs to step both
+// loops without a clock or a goroutine.
+func (h *harness) pass(ctx context.Context) (int, error) {
+	h.loop.renewRound(ctx)
+	return h.loop.workRound(ctx)
+}
+
+func (h *harness) stoppedPIDs() []int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]int(nil), h.stopped...)
+}
+
+func (h *harness) deliveredLines() []string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]string(nil), h.lines...)
 }
 
 func (h *harness) project(id string) *client.Project {
@@ -70,6 +116,11 @@ func (h *harness) project(id string) *client.Project {
 // claimed creates a todo task, claims it for host-a, and stores the
 // credential the worker renews.
 func (h *harness) claimed(slug string, routing ...bool) (*client.Project, remote.Credential) {
+	return h.claimedAs(slug, "exec-a", routing...)
+}
+
+// claimedAs is claimed with the execution ID of the claim.
+func (h *harness) claimedAs(slug, execution string, routing ...bool) (*client.Project, remote.Credential) {
 	ctx := h.t.Context()
 	p := h.project("host-a")
 	task, err := p.NewTask(ctx, "", api.NewTask{Type: "feature", Slug: slug, Title: slug, Language: "en"})
@@ -84,7 +135,7 @@ func (h *harness) claimed(slug string, routing ...bool) (*client.Project, remote
 	if _, err = p.Move(ctx, "", task.TaskID, api.Move{State: "todo"}, nil); err != nil {
 		h.t.Fatal(err)
 	}
-	input := api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-a", Owner: "claude"}
+	input := api.ClaimRequest{ClientID: "host-a", ExecutionID: execution, Owner: "claude"}
 	if len(routing) != 0 && routing[0] {
 		input.Start = &api.StartInput{Window: "tmux:$1:@1:%1", Session: "claude local-session"}
 	}
@@ -93,7 +144,7 @@ func (h *harness) claimed(slug string, routing ...bool) (*client.Project, remote
 		h.t.Fatal(err)
 	}
 	c := remote.Credential{
-		ServerURL: h.http.URL, ClientID: "host-a", ProjectID: p.ID(), TaskID: task.TaskID, ExecutionID: "exec-a",
+		ServerURL: h.http.URL, ClientID: "host-a", ProjectID: p.ID(), TaskID: task.TaskID, ExecutionID: execution,
 		Generation: g.Claim.Generation, Token: g.Token, RenewInterval: g.RenewInterval, TTL: g.TTL, RenewedAt: g.Claim.RenewedAt, AgentPID: 4242,
 	}
 	if input.Start != nil {
@@ -121,7 +172,7 @@ func TestWorkerRenewsBeyondTheTTL(t *testing.T) {
 	p, c := h.claimed("renew")
 	for range 10 {
 		h.advance(16 * time.Second)
-		if live, err := h.loop.pass(t.Context()); err != nil || live != 1 {
+		if live, err := h.pass(t.Context()); err != nil || live != 1 {
 			t.Fatalf("pass: live=%d err=%v", live, err)
 		}
 	}
@@ -142,14 +193,14 @@ func TestWorkerStopsTheAgentWhenTakenOver(t *testing.T) {
 	if _, err := b.Takeover(t.Context(), "", c.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "exec-b", Owner: "codex", Decision: "user", ExpectedGeneration: 1}); err != nil {
 		t.Fatal(err)
 	}
-	if live, _ := h.loop.pass(t.Context()); live != 0 {
+	if live, _ := h.pass(t.Context()); live != 0 {
 		t.Fatalf("a taken-over credential is not live")
 	}
 	got := h.credential()
 	if !got.Lost || len(h.stopped) != 1 || h.stopped[0] != 4242 {
 		t.Fatalf("the managed agent must be stopped and the credential kept as lost: %+v %v", got, h.stopped)
 	}
-	if live, _ := h.loop.pass(t.Context()); live != 0 || len(h.stopped) != 1 {
+	if live, _ := h.pass(t.Context()); live != 0 || len(h.stopped) != 1 {
 		t.Fatal("a lost credential is never renewed or stopped again")
 	}
 }
@@ -161,7 +212,7 @@ func TestWorkerRemovesReleasedClaims(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.advance(16 * time.Second)
-	if live, _ := h.loop.pass(t.Context()); live != 0 {
+	if live, _ := h.pass(t.Context()); live != 0 {
 		t.Fatal("a released claim is not live")
 	}
 	if all, _ := remote.Credentials(h.home); len(all) != 0 || len(h.stopped) != 0 {
@@ -210,7 +261,7 @@ func TestWorkerDeliversRequestsOnce(t *testing.T) {
 	}
 	for range 2 {
 		h.advance(16 * time.Second)
-		if _, err := h.loop.pass(t.Context()); err != nil {
+		if _, err := h.pass(t.Context()); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -245,7 +296,7 @@ func TestWorkerDeliversAfterASlowObservation(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.advance(2 * renew)
-	if _, err := h.loop.pass(t.Context()); err != nil {
+	if _, err := h.pass(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if !h.credential().RenewedAt.Equal(h.now()) || !observed.Load() {

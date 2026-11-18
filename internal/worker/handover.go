@@ -19,8 +19,9 @@ const (
 	// probeTimeout bounds the `version` probe of a replaced binary.
 	probeTimeout = 10 * time.Second
 	// confirmTimeout bounds the wait for a started worker to take the lock.
-	// Probe and confirmation together stay far below the default lease TTL of
-	// 90 s, because the lock is not renewed while a handover is in flight.
+	// Renewals pause between the stop of the renewal loop and the confirmation,
+	// not during the probe; confirmation alone stays far below the default
+	// lease TTL of 90 s.
 	confirmTimeout = 10 * time.Second
 	// confirmPoll is the interval of the lock check. It is longer than the
 	// time WorkerHeld holds the lock, so polling never starves the new worker.
@@ -200,8 +201,11 @@ const (
 )
 
 // tryHandover hands the work to the replaced binary once. The order is fixed:
-// probe, release the lock, start, confirm. A failure after the release takes
-// the lock back so no lease lapses while the old code keeps running.
+// probe, stop the renewal loop, release the lock, start, confirm. Renewals
+// continue during the probe and stop before the lock is released, so only the
+// worker that holds worker.lock acts on credentials. A failure after the
+// release takes the lock back and resumes the renewals, so no lease lapses
+// while the old code keeps running.
 func (w *loop) tryHandover(ctx context.Context, h *handover, lock *workerLock) (handoverResult, error) {
 	current, ok := h.due(w.o)
 	if !ok {
@@ -213,6 +217,7 @@ func (w *loop) tryHandover(ctx context.Context, h *handover, lock *workerLock) (
 		h.fail(w.o, current)
 		return handoverNone, nil
 	}
+	w.stopRenewals()
 	lock.release()
 	next, err := w.o.Spawn(w.o.Home, h.executable)
 	if err == nil {
@@ -230,6 +235,7 @@ func (w *loop) tryHandover(ctx context.Context, h *handover, lock *workerLock) (
 	} else if err != nil {
 		return handoverNone, err
 	}
+	w.startRenewals(ctx)
 	return handoverNone, nil
 }
 
