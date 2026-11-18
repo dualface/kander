@@ -171,8 +171,9 @@ func TestSubscriptionDispatchDeadlineSurvivesOtherEvents(t *testing.T) {
 	opts.Watch = []string{external}
 	opts.Refresh, opts.Heartbeat = .005, 3600
 	// BeginDispatchAttempt checks the deadline against the real clock, so the real
-	// margin must outlast a slow runner. The subscription reads time only through
-	// nowFn, which is anchored to ConfirmBy below and ignores the margin.
+	// margin must outlast a slow runner. The subscription schedules and judges the
+	// dispatch deadline only through nowFn, which is anchored to ConfirmBy below
+	// and ignores the margin.
 	dispatch := prepareSubscriptionDispatch(t, root, id, "sync", time.Minute)
 	if _, err := board.BeginDispatchAttempt(root, id, dispatch.Input.ID, dispatch.Revision); err != nil {
 		t.Fatal(err)
