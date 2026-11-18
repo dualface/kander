@@ -37,9 +37,9 @@ contribute to coverage reported by `-cover`.
 | default | `go test ./...` | explore 3, exit 2 | explore 2, exit 2, focused |
 | full | `KANDER_MODEL_DEPTH=full` | explore 4, exit 3 | explore 3, exit 3, focused |
 
-`platform-checks.yml` runs the default mode on Linux, macOS and Windows and the full mode in the `model-full` job on Linux. The test logs one line per scenario as soon as that scenario ends, with its `states`, `expanded` and `seconds`. The default-mode step runs with `-v`, so the CI log shows these lines at once, also in a run that times out.
+`platform-checks.yml` runs the model tests once, in full mode, in the `model-full` job on Linux; `-run TestModel` there covers the search and the small searches of `model_meta_test.go`. The search walks abstract states and has no platform branch, so the `test` jobs on Linux, macOS and Windows do not run it; the platform-specific file, lock and process behavior is covered by their other steps. The default mode still runs under `go test ./...`. The test logs one line per scenario as soon as that scenario ends, with its `states`, `expanded` and `seconds`. The `model-full` step runs with `-v`, so the CI log shows these lines at once, also in a run that times out.
 
-Without a memory directory the search is much slower. The four passing `platform-checks` runs after commit 9c4341e (41285615796, 41394355819, 41394364238 and 41399684333) measured these model step times:
+Without a memory directory the search is much slower. When the default mode still ran on every platform, the four passing `platform-checks` runs after commit 9c4341e (41285615796, 41394355819, 41394364238 and 41399684333) measured these model step times:
 
 | Job | Mode | Minutes |
 | --- | --- | --- |
@@ -48,9 +48,9 @@ Without a memory directory the search is much slower. The four passing `platform
 | `test (windows-latest)` | default | 61.5 to 83.7 |
 | `model-full` (Linux) | full | 12.8 to 27.6 |
 
-Windows takes 10 to 16 times as long as Linux in the same run, and one commit can vary widely: on commit 66c6b4b, Windows took 61.5 minutes in run 41399684333 and reached the earlier 90-minute limit in run 41399815626. Run 41363725793 also reached that limit. The default-mode step now allows 150 minutes and the `test` job 180, and the later steps of the job run after a model failure. The full mode comes close to its 30-minute limit.
+Windows takes 10 to 16 times as long as Linux in the same run, and one commit can vary widely: on commit 66c6b4b, Windows took 61.5 minutes in run 41399684333 and reached the earlier 90-minute limit in run 41399815626. Run 41363725793 also reached that limit. These times are why the default mode no longer runs on macOS and Windows. The full mode comes close to its 30-minute limit.
 
-The model steps set `TMPDIR`, `TMP` and `TEMP` to the runner temp directory, because `tempBoard` refuses the symlinked default temp path of macOS. On Linux the search runs in `/dev/shm` when that mount has at least 1 GiB free, because board writes sync every file. The full mode peaks near 310 MiB there. The search keeps few copies on disk: it drops a copy as soon as its state is known and expands at most 64 states between merges.
+`tempBoard` refuses the symlinked default temp path of macOS, so a local run there needs `TMPDIR` to name a real directory. On Linux the search runs in `/dev/shm` when that mount has at least 1 GiB free, because board writes sync every file. The full mode peaks near 310 MiB there. The search keeps few copies on disk: it drops a copy as soon as its state is known and expands at most 64 states between merges.
 
 ## Reading a failure
 
