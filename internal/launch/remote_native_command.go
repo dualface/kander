@@ -20,8 +20,10 @@ type nativeResumeIntent struct {
 // The implicit decision must be durable before a handoff can change the current
 // generation. A new invocation reads this command record before agent probing.
 func runImplicitNativeResume(ctx context.Context, session *remote.Session, card api.Task, launcher, text string, timeout float64, options DispatchOptions) int {
-	if err := RefuseTerminalLauncher(launcher); err != nil {
-		return fail(err)
+	if command.JSON() && nativeResumeLaunches(ctx, session, card) {
+		if err := RefuseTerminalLauncher(launcher); err != nil {
+			return fail(err)
+		}
 	}
 	journal, _, err := session.RetainAction("native-resume-command", struct {
 		Task, Launcher, Message string
@@ -80,6 +82,20 @@ func runImplicitNativeResume(ctx context.Context, session *remote.Session, card 
 	}
 	options.Decision = "native-resume:" + journal.Value.ExecutionID
 	return runRemoteResumeLaunch(ctx, session, card, nil, launcher, text, timeout, options, journal)
+}
+
+// nativeResumeLaunches reports, without writing anything, whether an implicit resume of card
+// continues the stopped executor of this host (it launches an agent) instead of delivering its
+// message to a live one. It is the condition under which runImplicitNativeResume launches.
+func nativeResumeLaunches(ctx context.Context, session *remote.Session, card api.Task) bool {
+	credential, found, err := session.Credential(card.TaskID)
+	if err != nil || !found || credential.Lost || card.Claim == nil || !api.ClaimStands(card.Claim.Status) ||
+		card.Claim.ClientID != session.Client.ClientID() || card.Claim.ExecutionID != credential.ExecutionID ||
+		observeLocalExecution(ctx, credential).Status != "stopped" {
+		return false
+	}
+	record, err := session.Project.ExecutionRecord(ctx, card.TaskID)
+	return err == nil && !record.StartUnfinished()
 }
 
 func reportNativeReceipt(task string) int {

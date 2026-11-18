@@ -11,6 +11,7 @@ import (
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/command/commandtest"
+	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/process"
 	"github.com/dualface/kander/internal/remote"
 )
@@ -152,6 +153,65 @@ func TestRemoteResumeOfLiveAgentQueuesRequestWithoutLaunching(t *testing.T) {
 	}
 	if _, err := os.Stat(forbidden); !os.IsNotExist(err) {
 		t.Fatalf("local board was used: %v", err)
+	}
+}
+
+// A message to a live executor starts nothing, so a default launcher that takes the terminal does
+// not refuse it with --json: the request is queued and the terminal is not called.
+func TestRemoteResumeOfLiveAgentWithJSONIgnoresATerminalDefaultLauncher(t *testing.T) {
+	skipOnWindows(t)
+	session, task, _ := remoteGitFixture(t, "resume-live-json")
+	root, err := session.LocalDataRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("KANBAN_LAUNCH_CWD", filepath.Join(root, "worktrees", task.TaskID, "g1"))
+	if _, err := StartRemote("claude", "tmux", task.TaskID); err != nil {
+		t.Fatal(err)
+	}
+	before, _, _ := session.Credential(task.TaskID)
+	facts, err := process.ObserveProcess(t.Context(), os.Getpid())
+	if err != nil {
+		t.Fatal(err)
+	}
+	boot, err := process.BootIdentity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	before.AgentPID, before.AgentStart, before.BootID = facts.PID, facts.Start, boot
+	if err := remote.WriteCredential(session.Home, before); err != nil {
+		t.Fatal(err)
+	}
+	// The default launcher of the configuration takes the terminal.
+	loaded := loadEffective
+	t.Cleanup(func() { loadEffective = loaded })
+	loadEffective = func() (*config.Config, error) {
+		cfg, err := loaded()
+		if err != nil {
+			return nil, err
+		}
+		terminal := *cfg
+		terminal.Launcher = "foreground"
+		return &terminal, nil
+	}
+	if effective, err := loadEffective(); err != nil || effective.Launcher != "foreground" {
+		t.Fatalf("the default launcher is %q (%v)", effective.Launcher, err)
+	}
+	log := os.Getenv("KANBAN_TMUX_LOG")
+	prior, _ := os.ReadFile(log)
+	code, stdout, stderr := commandtest.Capture(func() int {
+		return RunResumeRemote([]string{"--json", task.TaskID, "--message", "Read this update with --json"})
+	})
+	if code != 0 || stderr != "" || !strings.Contains(stdout, "request") && !strings.Contains(stdout, "status") {
+		t.Fatalf("resume: code=%d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+	actual, _ := os.ReadFile(log)
+	if !bytes.Equal(prior, actual) {
+		t.Fatal("requesting client invoked the terminal")
+	}
+	requests, err := session.Project.Requests(t.Context(), task.TaskID)
+	if err != nil || len(requests) != 1 || !strings.Contains(requests[0].Message, "with --json") {
+		t.Fatalf("requests: %+v %v", requests, err)
 	}
 }
 
