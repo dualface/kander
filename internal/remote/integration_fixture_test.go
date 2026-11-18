@@ -25,7 +25,9 @@ type integrationFixture struct {
 	a, b                                    *remote.Session
 	task                                    api.Task
 	credential                              remote.Credential
-	intercept                               func(http.ResponseWriter, *http.Request, http.Handler) bool
+	// legacyBranch makes the card record the task branch name of earlier releases.
+	legacyBranch bool
+	intercept    func(http.ResponseWriter, *http.Request, http.Handler) bool
 }
 
 func newIntegrationFixture(t *testing.T) *integrationFixture {
@@ -105,7 +107,11 @@ func (f *integrationFixture) claimedTask() api.Task {
 	}
 	text := strings.ReplaceAll(task.Text, "<FILL_IN>", "filled")
 	text = strings.ReplaceAll(text, "- [ ]", "- [x]")
-	text = strings.Replace(text, "- TASK_BRANCH:", "- TASK_BRANCH: task/integration-delivery", 1)
+	branch := "task/integration-delivery"
+	if f.legacyBranch {
+		branch = api.LegacyExecutionBranch(s.Info.ID, task.TaskID, 1)
+	}
+	text = strings.Replace(text, "- TASK_BRANCH:", "- TASK_BRANCH: "+branch, 1)
 	text = strings.Replace(text, "## DISCUSSION\n", "## DISCUSSION\n\nSELF_REVIEW: PASS\n", 1)
 	task, err = s.Project.PutDocument(t.Context(), "", task.TaskID, api.Document{Path: "spec.md", Text: text, ExpectedRevision: task.Revision}, nil)
 	if err != nil {
