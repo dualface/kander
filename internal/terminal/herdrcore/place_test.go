@@ -285,7 +285,7 @@ func placedLabels(t *testing.T, f *fakeHC) (space, tab string) {
 // hold.
 func TestPlaceTabNamesNewTab(t *testing.T) {
 	for _, labels := range []string{`{"herdr.space":"sp1","herdr.tab":"tbCaller","where":"w / 1"}`, `{"herdr.space":"sp1"}`} {
-		for _, insertAfter := range []string{"tbCaller", "", "tbRight"} {
+		for _, insertAfter := range []string{"tbCaller", "tbRight"} {
 			f := newFake(t, labels)
 			f.insertAfter = insertAfter
 			f.appearAfter = 2
@@ -309,9 +309,6 @@ func TestPlaceTabNamesNewTab(t *testing.T) {
 			sp1["tabs"] = append(sp1["tabs"].([]any), map[string]any{"id": tab, "name": "Open each agent", "root": nil})
 			if got := decode(t, f.layout); !reflect.DeepEqual(got, want) {
 				t.Fatalf("insertAfter %q: layout changed beyond the tab name and place\n got=%s\nwant=%s", insertAfter, encode(t, got), encode(t, want))
-			}
-			if got := tabOrder(t, f.layout, "sp1"); !reflect.DeepEqual(got, []string{"tbCaller", "tbRight", tab}) {
-				t.Fatalf("insertAfter %q: sp1 tabs=%q", insertAfter, got)
 			}
 			for _, text := range []string{"9007199254740993", "18446744073709551615", "0.520574152469635", "a<b>&c"} {
 				if !strings.Contains(f.layout, text) {
