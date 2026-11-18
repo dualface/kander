@@ -22,6 +22,8 @@ type handoverRig struct {
 	opened *renewals
 	clock  *heldClock
 	onStop atomic.Pointer[func(pid int)]
+	// failScans makes every scan of the credentials of the worker fail.
+	failScans atomic.Bool
 }
 
 // heldClock is the clock of the worker in a handoverRig. It follows the clock
@@ -72,6 +74,12 @@ func newHandoverRig(t *testing.T, h *harness) *handoverRig {
 		return record(pid)
 	}
 	w := newLoop(o)
+	w.scan = func(home string) ([]remote.Credential, error) {
+		if hr.failScans.Load() {
+			return nil, errors.New("credentials cannot be read in this test")
+		}
+		return remote.Credentials(home)
+	}
 	lock := &workerLock{home: r.home}
 	if err := lock.acquire(t.Context()); err != nil {
 		t.Fatal(err)
@@ -169,14 +177,6 @@ func (r *handoverRig) takeOverWhileHeld(cs ...remote.Credential) {
 	r.clock.resume()
 }
 
-// markedLost reports whether the renewal loop has marked a lease lost that the
-// work loop has not stopped yet.
-func (r *handoverRig) markedLost() bool {
-	r.w.mu.Lock()
-	defer r.w.mu.Unlock()
-	return len(r.w.lostMarks) > 0
-}
-
 // A lease lost while the probe of a replaced binary runs is stopped before the
 // renewals pause for the handover.
 func TestLostMarkDuringTheProbeIsStoppedBeforeTheHandover(t *testing.T) {
@@ -185,7 +185,7 @@ func TestLostMarkDuringTheProbeIsStoppedBeforeTheHandover(t *testing.T) {
 	_, c := r.claimed("probe-lost")
 	r.probe = func() error {
 		r.takeOverWhileHeld(c)
-		waitFor(t, "the renewal loop to mark the lease lost", r.markedLost)
+		waitFor(t, "the renewal loop to mark the lease lost", r.w.marked)
 		return nil
 	}
 	var stoppedAtSpawn int
@@ -206,6 +206,9 @@ func TestLostMarkDuringTheProbeIsStoppedBeforeTheHandover(t *testing.T) {
 func TestLostMarkDuringAStopIsStoppedBeforeTheLockIsReleased(t *testing.T) {
 	var holdFirstB sync.Once
 	gateB := newHookGate(t)
+	// The server waits for a held request when it closes, before the cleanup of
+	// the gate runs.
+	defer gateB.let()
 	h := newHarnessWrapped(t, 0, func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if resource, ok := isRenewal(r); ok && strings.Contains(resource, "b-second") {
@@ -231,7 +234,7 @@ func TestLostMarkDuringAStopIsStoppedBeforeTheLockIsReleased(t *testing.T) {
 	r.onStop.Store(&hook)
 	r.probe = func() error {
 		r.takeOverWhileHeld(a, b)
-		waitFor(t, "the renewal loop to mark a lost", r.markedLost)
+		waitFor(t, "the renewal loop to mark a lost", r.w.marked)
 		return nil
 	}
 	var stoppedAtSpawn int
@@ -260,5 +263,39 @@ func TestLostMarkDuringAStopIsStoppedBeforeTheLockIsReleased(t *testing.T) {
 	wait()
 	if stoppedAtSpawn != 2 {
 		t.Fatalf("both agents must be stopped before the successor starts: %d stopped", stoppedAtSpawn)
+	}
+}
+
+// A lease that is marked lost and cannot be stopped yet postpones the handover:
+// the worker keeps the lock and the renewals, and hands over at a later tick.
+func TestHandoverWaitsForALostLeaseItCannotStopYet(t *testing.T) {
+	h := newHarness(t)
+	r := newHandoverRig(t, h)
+	_, c := r.claimed("unreadable")
+	var spawns atomic.Int32
+	r.spawn = func(string, string) (Successor, error) {
+		spawns.Add(1)
+		return nil, errors.New("no successor in this test")
+	}
+	r.probe = func() error {
+		r.takeOverWhileHeld(c)
+		waitFor(t, "the renewal loop to mark the lease lost", r.w.marked)
+		r.failScans.Store(true)
+		return nil
+	}
+	if got := r.handover(t); got != handoverNone || spawns.Load() != 0 {
+		t.Fatalf("the handover must wait while a lost lease cannot be stopped: result %v, %d starts", got, spawns.Load())
+	}
+	r.w.mu.Lock()
+	renewing := r.w.renewing != nil
+	r.w.mu.Unlock()
+	if !renewing || len(r.stoppedPIDs()) != 0 {
+		t.Fatalf("the renewals must run and nothing is stopped yet: renewing=%v stopped=%v", renewing, r.stoppedPIDs())
+	}
+	r.failScans.Store(false)
+	r.probe = func() error { return nil }
+	r.handover(t)
+	if spawns.Load() != 1 || len(r.stoppedPIDs()) != 1 {
+		t.Fatalf("with the credentials readable the agent is stopped and the successor started: %d starts, stopped %v", spawns.Load(), r.stoppedPIDs())
 	}
 }
