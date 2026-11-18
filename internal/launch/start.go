@@ -132,7 +132,6 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 		plan.processRecord = processRecorder(root, moved, plan, taskFile)
 	}
 	name := windowName(entry, original)
-	plan.Target.Title = taskTabTitle(original)
 	var launchStart time.Time
 	paneCB := (func() (AgentSession, error))(nil)
 	if discoverSession {

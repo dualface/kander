@@ -311,7 +311,6 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 		}
 		return err
 	}
-	plan.Target.Title = taskTabTitle(text)
 	outcome, err := launchAgent(plan, root, windowName(entry, text), inv, loc, paneCB, &session, durable)
 	if err != nil {
 		failure := asLaunchFailure(err)

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- herdr-core launcher: every tab Kander opens is now named by its window label, so all launches share one format: `kb-<card title>` for a task agent (start, resume takeover, notify recovery), `orchestrate-<first task ID>` for an orchestrator, and the existing `chat-` and `issue-` labels. A task agent tab no longer shows the whole card title, and an orchestrator tab no longer shows `<first reference> +N`. Terminal definitions still receive `{title}`, which now always equals `{label}` for Kander's own launches.
+
 ## v1.4.4 — 2026-11-18
 
 - herdr-core launcher: a new terminal's tab now opens last in the calling terminal's Herdr App space instead of right after the active tab. The `place_container` hook moves the tab to the end of the space's `tabs` in the same versioned `herdr-app` layout write that names it, and a version conflict redoes both changes on the reread document; a failure to move is a launch warning like a failure to name. Herdr App may still reorder tabs on its own later; Kander does not counter that.
