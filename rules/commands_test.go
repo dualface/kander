@@ -192,7 +192,7 @@ var parserFunctions = map[string][]string{
 	"resume":      {"internal/launch/cmd.go:runServiceResume", "internal/launch/dispatch.go:ParseDispatchOptions"},
 	"notify":      {"internal/notify/cmd.go:runServiceNotify", "internal/launch/dispatch.go:ParseDispatchOptions", "internal/remote/request_cmd.go:RunRequest"},
 	"orchestrate": {"internal/launch/orchestrate.go:runServiceOrchestrate", "internal/launch/cmd.go:parseAgentLauncher"},
-	"coordinator": {"internal/launch/coordinator.go:runServiceCoordinator"},
+	"coordinator": {"internal/launch/coordinator.go:coordinatorArgs", "internal/launch/coordinator.go:runServiceCoordinator"},
 	"dismiss":     {"internal/takeover/cmd.go:runServiceDismiss"},
 	"review":      {"internal/review/archive.go:parseArchiveOptions", "internal/review/disposition.go:runDispositionMode"},
 	"issue":       {"internal/issue/command.go:runRepo", "internal/issue/command_list.go:runList", "internal/issue/command_show.go:runShow", "internal/issue/command_import.go:runImportMode", "internal/issue/command_triage.go:runTriageMode", "internal/issue/command_result.go:runResultMode"},

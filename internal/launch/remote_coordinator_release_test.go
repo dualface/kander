@@ -16,6 +16,7 @@ import (
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/cli"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/server"
@@ -96,13 +97,18 @@ func newReleaseFixture(t *testing.T) *releaseFixture {
 // standard error.
 func (f *releaseFixture) run(t *testing.T, args ...string) (int, []byte, string) {
 	t.Helper()
+	return captureBoth(t, func() int { return runServiceCoordinator(args, true) })
+}
+
+func captureBoth(t *testing.T, run func() int) (int, []byte, string) {
+	t.Helper()
 	savedErr := os.Stderr
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
 	os.Stderr = w
-	status, out := captureStdout(t, func() int { return runServiceCoordinator(args, true) })
+	status, out := captureStdout(t, run)
 	os.Stderr = savedErr
 	w.Close()
 	var diagnostics bytes.Buffer
@@ -192,5 +198,30 @@ func TestEndExecutionBelongsToReleaseOnly(t *testing.T) {
 	}
 	if status := f.lease(t).Status; status != api.ClaimActive {
 		t.Fatalf("the lease is %s", status)
+	}
+}
+
+// The public entrance checks the project binding before it runs the command.
+// The refusal of a malformed or unconfirmed command comes first, so a
+// coordinator that has no project binding still learns the new syntax.
+func TestCoordinatorArgumentRefusalPrecedesTheBindingCheck(t *testing.T) {
+	t.Setenv(config.EnvLang, "en")
+	t.Setenv(config.EnvLangCLI, "1")
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	t.Chdir(t.TempDir())
+	if _, err := config.Save(config.DefaultConfig()); err != nil {
+		t.Fatal(err)
+	}
+	run := cli.RemoteCommands["coordinator"]
+	status, _, diagnostics := captureBoth(t, func() int { return run([]string{"release", "/tmp/release.json"}) })
+	if status != 2 || !slices.Contains(strings.Split(diagnostics, "\n"), releaseSyntax) {
+		t.Fatalf("status %d: %q", status, diagnostics)
+	}
+	if status, _, _ = captureBoth(t, func() int { return run([]string{"claim", "--end-execution", "/tmp/claim.json"}) }); status != 2 {
+		t.Fatalf("status %d", status)
+	}
+	// A well-formed command still needs the binding.
+	if status, _, diagnostics = captureBoth(t, func() int { return run([]string{"release", "--end-execution", "/tmp/release.json"}) }); status != 1 || !strings.Contains(diagnostics, config.Text("remote.not_configured")) {
+		t.Fatalf("status %d: %q", status, diagnostics)
 	}
 }

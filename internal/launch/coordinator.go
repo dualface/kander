@@ -245,11 +245,14 @@ func RunCoordinator(args []string) int { return runServiceCoordinator(args, fals
 // RunCoordinatorRemote is the mandatory REST entrance used by the client binary.
 func RunCoordinatorRemote(args []string) int { return runServiceCoordinator(args, true) }
 
-func runServiceCoordinator(args []string, required bool) int {
-	// Release ends the calling execution for good, so it takes an explicit
-	// confirmation. Without it nothing runs: no configuration is read and no
-	// request is sent, and the message spells the new syntax for a coordinator
-	// that still reads an older copy of the rules.
+// coordinatorArgs checks the shape of the arguments before any configuration is
+// read, and returns the arguments without the release confirmation. Release
+// ends the calling execution for good, so it takes an explicit confirmation.
+// Without it nothing runs and no request is sent, and the message spells the
+// new syntax for a coordinator that still reads an older copy of the rules.
+// The binding check of the public entrance runs this first, so a refusal is
+// not hidden behind a configuration error.
+func coordinatorArgs(args []string) (rest []string, status int, refused bool) {
 	confirmed := false
 	if len(args) == 3 && args[0] == "release" && args[1] == "--end-execution" {
 		confirmed, args = true, []string{args[0], args[2]}
@@ -257,10 +260,18 @@ func runServiceCoordinator(args []string, required bool) int {
 	if len(args) == 2 && args[0] == "release" && !confirmed && args[1] != "--end-execution" {
 		fmt.Fprintln(os.Stderr, config.Text("remote.coordinator_release_needs_end_execution"))
 		fmt.Fprintln(os.Stderr, releaseSyntax)
-		return 2
+		return nil, 2, true
 	}
 	if len(args) != 2 || slices.Contains(args, "--end-execution") {
-		return coordinatorUsageFail()
+		return nil, coordinatorUsageFail(), true
+	}
+	return args, 0, false
+}
+
+func runServiceCoordinator(args []string, required bool) int {
+	args, status, refused := coordinatorArgs(args)
+	if refused {
+		return status
 	}
 	cfg, err := config.Load(false)
 	if err != nil {
