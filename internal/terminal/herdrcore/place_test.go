@@ -19,7 +19,8 @@ import (
 const layoutBefore = `{
   "spaces": [
     {"folder": "/a", "id": "sp1", "name": "", "pinned": 9007199254740993, "tabs": [
-      {"id": "tbCaller", "name": "", "root": {"children": [{"size": {"weight": 0.520574152469635}, "content": {"terminal": "t1"}}], "type": "row"}}
+      {"id": "tbCaller", "name": "", "root": {"children": [{"size": {"weight": 0.520574152469635}, "content": {"terminal": "t1"}}], "type": "row"}},
+      {"id": "tbRight", "name": "right", "root": null}
     ]},
     {"folder": "/b", "id": "sp2", "name": "second", "tabs": [
       {"id": "tbOther", "name": "kept", "root": null}
@@ -38,7 +39,9 @@ type fakeHC struct {
 	docErr      bool
 	appearAfter int
 	neverAppear bool
-	conflicts   int // doc.set calls answered with a conflict before one is accepted
+	conflicts   int    // doc.set calls answered with a conflict before one is accepted
+	insertAfter string // tab Herdr App inserts the new one after; empty appends
+	lateTab     string // tab Herdr App appends to the space while a conflict is answered
 	blockInput  bool
 
 	layout   string
@@ -128,6 +131,10 @@ func (f *fakeHC) conn() terminal.Conn {
 				}
 				if f.conflicts > 0 {
 					f.conflicts--
+					if f.lateTab != "" {
+						f.appendTab(f.pendingS, f.lateTab)
+						f.lateTab = ""
+					}
 					f.version++
 					return fail("conflict"), nil
 				}
@@ -144,19 +151,42 @@ func (f *fakeHC) conn() terminal.Conn {
 	}
 }
 
-// addTab plays Herdr App creating the placed tab in its space.
+// addTab plays Herdr App creating the placed tab in its space: after
+// insertAfter when that is set, at the end otherwise.
 func (f *fakeHC) addTab() {
 	doc := decode(f.t, f.layout)
 	spaces := doc["spaces"].([]any)
 	for _, entry := range spaces {
 		space := entry.(map[string]any)
-		if space["id"] == f.pendingS {
-			space["tabs"] = append(space["tabs"].([]any), map[string]any{"id": f.pending, "name": "", "root": nil})
+		if space["id"] != f.pendingS {
+			continue
 		}
+		tabs := space["tabs"].([]any)
+		added := map[string]any{"id": f.pending, "name": "", "root": nil}
+		at := len(tabs)
+		for i, tab := range tabs {
+			if tab.(map[string]any)["id"] == f.insertAfter {
+				at = i + 1
+			}
+		}
+		space["tabs"] = append(tabs[:at:at], append([]any{added}, tabs[at:]...)...)
 	}
 	f.layout = encode(f.t, doc)
 	f.version++
 	f.pending = ""
+}
+
+// appendTab plays Herdr App appending an unrelated tab to a space.
+func (f *fakeHC) appendTab(spaceID, id string) {
+	doc := decode(f.t, f.layout)
+	for _, entry := range doc["spaces"].([]any) {
+		space := entry.(map[string]any)
+		if space["id"] == spaceID {
+			space["tabs"] = append(space["tabs"].([]any), map[string]any{"id": id, "name": "late", "root": nil})
+		}
+	}
+	f.layout = encode(f.t, doc)
+	f.version++
 }
 
 func decode(t *testing.T, text string) map[string]any {
@@ -192,6 +222,23 @@ func tabName(t *testing.T, layout, tab string) any {
 		}
 	}
 	t.Fatalf("tab %q not in %s", tab, layout)
+	return nil
+}
+
+// tabOrder is the IDs of the tabs of a space in the stored layout, in order.
+func tabOrder(t *testing.T, layout, spaceID string) []string {
+	t.Helper()
+	for _, space := range decode(t, layout)["spaces"].([]any) {
+		if space.(map[string]any)["id"] != spaceID {
+			continue
+		}
+		var ids []string
+		for _, entry := range space.(map[string]any)["tabs"].([]any) {
+			ids = append(ids, entry.(map[string]any)["id"].(string))
+		}
+		return ids
+	}
+	t.Fatalf("space %q not in %s", spaceID, layout)
 	return nil
 }
 
@@ -232,33 +279,44 @@ func placedLabels(t *testing.T, f *fakeHC) (space, tab string) {
 }
 
 // The new terminal gets the caller's space and a new random tab, whatever tab
-// the caller sits in, and Herdr App's tab is named; nothing else in the layout
-// document changes, including numbers float64 cannot hold.
+// the caller sits in, and Herdr App's tab is named and ends up last in the
+// space, wherever Herdr App inserted it; nothing else in the layout document
+// changes, including the order of the other tabs and numbers float64 cannot
+// hold.
 func TestPlaceTabNamesNewTab(t *testing.T) {
 	for _, labels := range []string{`{"herdr.space":"sp1","herdr.tab":"tbCaller","where":"w / 1"}`, `{"herdr.space":"sp1"}`} {
-		f := newFake(t, labels)
-		f.appearAfter = 2
-		if result := place(f, callerEnv, "Open each agent", "kb-x"); result.Status != terminal.HookOK {
-			t.Fatalf("labels %s: %+v", labels, result)
-		}
-		space, tab := placedLabels(t, f)
-		if space != "sp1" || !regexp.MustCompile(`^[A-Za-z0-9_-]+$`).MatchString(tab) || tab == "tbCaller" {
-			t.Fatalf("space=%q tab=%q", space, tab)
-		}
-		for _, arg := range f.labels[0] {
-			if strings.HasPrefix(arg, "where=") {
-				t.Fatalf("where copied: %q", f.labels[0])
+		for _, insertAfter := range []string{"tbCaller", "", "tbRight"} {
+			f := newFake(t, labels)
+			f.insertAfter = insertAfter
+			f.appearAfter = 2
+			if result := place(f, callerEnv, "Open each agent", "kb-x"); result.Status != terminal.HookOK {
+				t.Fatalf("labels %s insertAfter %q: %+v", labels, insertAfter, result)
 			}
-		}
-		want := decode(t, layoutBefore)
-		sp1 := want["spaces"].([]any)[0].(map[string]any)
-		sp1["tabs"] = append(sp1["tabs"].([]any), map[string]any{"id": tab, "name": "Open each agent", "root": nil})
-		if got := decode(t, f.layout); !reflect.DeepEqual(got, want) {
-			t.Fatalf("layout changed beyond the tab name\n got=%s\nwant=%s", encode(t, got), encode(t, want))
-		}
-		for _, text := range []string{"9007199254740993", "18446744073709551615", "0.520574152469635", "a<b>&c"} {
-			if !strings.Contains(f.layout, text) {
-				t.Fatalf("layout lost %q: %s", text, f.layout)
+			if f.sets != 1 {
+				t.Fatalf("insertAfter %q: sets=%d, want the rename and the move in one write", insertAfter, f.sets)
+			}
+			space, tab := placedLabels(t, f)
+			if space != "sp1" || !regexp.MustCompile(`^[A-Za-z0-9_-]+$`).MatchString(tab) || tab == "tbCaller" {
+				t.Fatalf("space=%q tab=%q", space, tab)
+			}
+			for _, arg := range f.labels[0] {
+				if strings.HasPrefix(arg, "where=") {
+					t.Fatalf("where copied: %q", f.labels[0])
+				}
+			}
+			want := decode(t, layoutBefore)
+			sp1 := want["spaces"].([]any)[0].(map[string]any)
+			sp1["tabs"] = append(sp1["tabs"].([]any), map[string]any{"id": tab, "name": "Open each agent", "root": nil})
+			if got := decode(t, f.layout); !reflect.DeepEqual(got, want) {
+				t.Fatalf("insertAfter %q: layout changed beyond the tab name and place\n got=%s\nwant=%s", insertAfter, encode(t, got), encode(t, want))
+			}
+			if got := tabOrder(t, f.layout, "sp1"); !reflect.DeepEqual(got, []string{"tbCaller", "tbRight", tab}) {
+				t.Fatalf("insertAfter %q: sp1 tabs=%q", insertAfter, got)
+			}
+			for _, text := range []string{"9007199254740993", "18446744073709551615", "0.520574152469635", "a<b>&c"} {
+				if !strings.Contains(f.layout, text) {
+					t.Fatalf("layout lost %q: %s", text, f.layout)
+				}
 			}
 		}
 	}
@@ -317,8 +375,23 @@ func TestPlaceTabDegrades(t *testing.T) {
 }
 
 // A version conflict rereads the document and tries again, a bounded number of
-// times; the tab name is the only difference that gets written.
+// times; the tab's name and place are the only differences that get written.
 func TestPlaceTabRetriesConflicts(t *testing.T) {
+	f0 := newFake(t, `{"herdr.space":"sp1"}`)
+	f0.insertAfter = "tbCaller"
+	f0.conflicts = 1
+	f0.lateTab = "tbLate"
+	if result := place(f0, callerEnv, "name", "l"); result.Status != terminal.HookOK {
+		t.Fatalf("%+v", result)
+	}
+	_, tab0 := placedLabels(t, f0)
+	if got := tabOrder(t, f0.layout, "sp1"); !reflect.DeepEqual(got, []string{"tbCaller", "tbRight", "tbLate", tab0}) {
+		t.Fatalf("a tab Herdr App appended during the conflict: sp1 tabs=%q", got)
+	}
+	if tabName(t, f0.layout, tab0) != "name" || tabName(t, f0.layout, "tbLate") != "late" {
+		t.Fatalf("names wrong: %s", f0.layout)
+	}
+
 	f := newFake(t, `{"herdr.space":"sp1"}`)
 	f.conflicts = 1
 	if result := place(f, callerEnv, "name", "l"); result.Status != terminal.HookOK {
@@ -390,9 +463,9 @@ func TestPlaceTabWithoutAnyTitle(t *testing.T) {
 	}
 }
 
-func TestSetTabNameIgnoresMalformedDocuments(t *testing.T) {
+func TestPlaceTabLastIgnoresMalformedDocuments(t *testing.T) {
 	for _, doc := range []any{nil, "x", []any{}, map[string]any{"spaces": "x"}, map[string]any{"spaces": []any{1, map[string]any{"id": "sp", "tabs": []any{nil}}}}} {
-		if setTabName(doc, "sp", "tb", "n") {
+		if placeTabLast(doc, "sp", "tb", "n") {
 			t.Fatalf("named a tab in %v", doc)
 		}
 	}
