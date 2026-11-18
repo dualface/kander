@@ -1,11 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/dualface/kander/internal/install/installtest"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -15,8 +12,10 @@ import (
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/cli"
+	"github.com/dualface/kander/internal/command/commandtest"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/focus"
+	"github.com/dualface/kander/internal/install/installtest"
 	"github.com/dualface/kander/internal/terminal"
 )
 
@@ -148,30 +147,20 @@ type commandResult struct {
 	stderr string
 }
 
-// runKander runs one command of the full binary with captured output.
+// runKander runs one command of the full binary, in English, with captured output.
 func runKander(t *testing.T, args ...string) commandResult {
 	t.Helper()
-	oldOut, oldErr := os.Stdout, os.Stderr
-	outR, outW, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	errR, errW, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	var stdout, stderr bytes.Buffer
-	done := make(chan struct{}, 2)
-	go func() { _, _ = io.Copy(&stdout, outR); done <- struct{}{} }()
-	go func() { _, _ = io.Copy(&stderr, errR); done <- struct{}{} }()
-	os.Stdout, os.Stderr = outW, errW
-	code := cli.Run(append([]string{"kander", "--lang", "en"}, args...))
-	os.Stdout, os.Stderr = oldOut, oldErr
-	_ = outW.Close()
-	_ = errW.Close()
-	<-done
-	<-done
-	return commandResult{code: code, stdout: stdout.String(), stderr: stderr.String()}
+	return runCLI(t, append([]string{"--lang", "en"}, args...)...)
+}
+
+// runCLI runs the full binary with exactly args and captured output. The language the arguments
+// select is a process-wide setting, so it is cleared when the test ends: a later test must not
+// start with the --lang marker of this one.
+func runCLI(t *testing.T, args ...string) commandResult {
+	t.Helper()
+	t.Cleanup(func() { config.ApplyLanguageArgument(nil) })
+	code, stdout, stderr := commandtest.Capture(func() int { return cli.Run(append([]string{"kander"}, args...)) })
+	return commandResult{code: code, stdout: stdout, stderr: stderr}
 }
 
 func (r commandResult) require(t *testing.T, what string) commandResult {

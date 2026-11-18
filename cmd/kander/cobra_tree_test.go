@@ -310,7 +310,8 @@ func TestArgumentErrorsAreLocalizedAndShowTheSyntax(t *testing.T) {
 	} {
 		for language, want := range map[string]string{"cn": test.cn, "en": test.en} {
 			t.Run(test.name+"/"+language, func(t *testing.T) {
-				code, _, stderr := commandtest.Capture(func() int { return cli.Run(append([]string{"kander", "--lang", language}, test.args...)) })
+				result := runCLI(t, append([]string{"--lang", language}, test.args...)...)
+				code, stderr := result.code, result.stderr
 				if code != 2 || !strings.Contains(stderr, want) || !strings.Contains(stderr, "kander show [--json] [--document <relative-path>] <task-id>") {
 					t.Fatalf("exit=%d stderr=%s", code, stderr)
 				}
@@ -332,8 +333,8 @@ func TestContractUsageErrorsExitTwo(t *testing.T) {
 		{"coordinator", "recover", "relative.json"},
 		{"subscribe", "20261118-sample-group"},
 	} {
-		if code, _, stderr := commandtest.Capture(func() int { return cli.Run(append([]string{"kander", "--lang", "en"}, args...)) }); code != 2 {
-			t.Errorf("%v: exit=%d stderr=%s", args, code, stderr)
+		if result := runKander(t, args...); result.code != 2 {
+			t.Errorf("%v: exit=%d stderr=%s", args, result.code, result.stderr)
 		}
 	}
 }
@@ -354,13 +355,13 @@ func TestRemovedAndRetiredForms(t *testing.T) {
 		{[]string{"dispatch"}, 2},
 		{[]string{"dispatch", "nosuch"}, 2},
 	} {
-		if code, _, stderr := commandtest.Capture(func() int { return cli.Run(append([]string{"kander", "--lang", "en"}, test.args...)) }); code != test.code {
-			t.Errorf("%v: exit=%d stderr=%s", test.args, code, stderr)
+		if result := runKander(t, test.args...); result.code != test.code {
+			t.Errorf("%v: exit=%d stderr=%s", test.args, result.code, result.stderr)
 		}
 	}
-	code, stdout, _ := commandtest.Capture(func() int { return cli.Run([]string{"kander", "worker", "--help"}) })
-	if code != 0 || strings.Count(strings.TrimSpace(stdout), "\n") != 0 || !strings.Contains(stdout, "internally") {
-		t.Fatalf("worker --help: exit=%d stdout=%q", code, stdout)
+	help := runCLI(t, "worker", "--help")
+	if help.code != 0 || strings.Count(strings.TrimSpace(help.stdout), "\n") != 0 || !strings.Contains(help.stdout, "internally") {
+		t.Fatalf("worker --help: exit=%d stdout=%q", help.code, help.stdout)
 	}
 }
 
