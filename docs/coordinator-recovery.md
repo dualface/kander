@@ -25,6 +25,7 @@ kander coordinator show 20260908-example-group
 kander coordinator claim /absolute/claim.json
 kander coordinator reconcile /absolute/observations.json
 kander coordinator recover /absolute/request.json
+kander coordinator remove-member /absolute/request.json
 ```
 
 First-claim example:
@@ -41,7 +42,7 @@ First-claim example:
 }
 ```
 
-A recovering session runs show first, fills in the actual revision/epoch, and switches to a new token. Do not preempt another active coordinator by claiming repeatedly. The member set is fixed; unknown, missing, or newly added in-group members are all explicitly refused, and the actual contract change must be handled first. New members of external dependency groups continue to be handled by subscription's dynamic-expansion protocol and do not masquerade as members of this group.
+A recovering session runs show first, fills in the actual revision/epoch, and switches to a new token. Do not preempt another active coordinator by claiming repeatedly. The member set is fixed; unknown, missing, or newly added in-group members are all explicitly refused, and the actual contract change must be handled first. The one change a checkpoint takes is `remove-member` (see "Removing an Unstarted Member"): the member set then shrinks, and a claim names the remaining members. New members of external dependency groups continue to be handled by subscription's dynamic-expansion protocol and do not masquerade as members of this group.
 
 reconcile uses the authority returned by show; the member keys must be complete, and each revision comes from the latest `show --json`. The SHAs, revisions, and IDs below are illustrative only and cannot serve as real evidence:
 
@@ -150,7 +151,7 @@ These fail the whole request and keep the checkpoint, because they say nothing a
 
 `PrepareDispatch`, `BeginDispatchAttempt` and `AuthorizeDispatchWrapUp` refuse a wrap-up while any member of its group is blocked, so `dispatch prepare`, `notify --kind wrap-up` and `dispatch authorize-wrap-up` all stop there, also on a same-ID retry. An accepted wrap-up that already runs can still complete. A block does not stop other kinds of dispatch.
 
-Checkpoint schema 3 adds `blocked`, `confirmed` and `recoveries`. Schema 1 and 2 stay readable and upgrade on the first write.
+Checkpoint schema 3 adds `blocked`, `confirmed` and `recoveries`. Schema 4 adds `removals` (see "Removing an Unstarted Member"), omitted while empty. Schema 1, 2 and 3 stay readable and upgrade on the first write. A binary from before schema 4 cannot read a checkpoint of schema 4: rolling back after a group used `remove-member` leaves that group unreadable, so finish or set aside every such group first.
 
 ## Audited Recovery
 
@@ -210,6 +211,38 @@ A confirmation writes no card, no ledger, and no review evidence, and needs neit
 
 Each recovery writes the immutable `groups/<group-id>/recoveries/<recovery-id>.json` and adds the same object to `recoveries` in the checkpoint. The record binds the checkpoint revision and the coordinator epoch, and holds the decision, the reason, the blocked reason, and the cycles. Reconcile requires each listed entry to equal its record, and each `confirmed` to name a listed confirmation. `kander update` cannot reach the checkpoint directory, and archive cleanup removes it with the group.
 
+## Removing an Unstarted Member
+
+A checkpoint fixes the member set: a claim cannot change it, `reconcile` checks every card whose `TASK_GROUP` is the group (archived and trashed cards included), and `kander update` refuses to change `TASK_GROUP` of a group that has a checkpoint. A card that has not started and must leave (it depends on work outside the group, for example) would hold the whole group up. `kander coordinator remove-member <absolute-request.json>` takes it out, on the user's decision, as an audited operation like `recover`.
+
+```json
+{
+  "group_id": "20260908-example-group",
+  "member": "20260908-late-task",
+  "expected_revision": 5,
+  "expected_epoch": 1,
+  "decision": "user decision reference",
+  "reason": "the card depends on work outside the group"
+}
+```
+
+All six fields are required; `decision` and `reason` cannot be blank. The request runs under the exclusive board lock with a CAS on the checkpoint revision and the coordinator epoch, so a repeated request fails on the revision. In a distributed project it is one group write: the service checks the standing group lease before and after the producer, as for `reconcile`, refuses a member the service holds a claim record for, and answers a retry under the same idempotency key with the first result.
+
+The member must be unstarted: in `backlog/` or `todo/`; `STARTED_AT` empty; the mirror still `awaiting_start` with no recorded dispatch or review; no execution record or start attempt in its ledger; no dispatch binding or round; no review run (`REVIEWS`), review plan, or member exclusion. At least one other member must stay, and no remaining member may list the card as a card ID in `PREREQUISITES`: such an edge would hold the group up for a card outside it. Group references in `PREREQUISITES` never name the group the card is in, so only direct card IDs are read. The removed card's own `PREREQUISITES` may name remaining members; it keeps that line and waits for them as a standalone card. Every other member of the group is untouched, and a blocked one stays blocked.
+
+One transaction does the rest:
+
+| Write | Content |
+| --- | --- |
+| Checkpoint | The member is deleted, `member_version` is recomputed, `revision` rises by one, `epoch` and `authority` stay, `last_request_hash` is cleared, `schema` is 4, and the removal is appended to `removals`. |
+| `claim_hash` | Set to the hash of the removal record, which no claim request can hash to. The claim made before the removal, replayed byte for byte, therefore is not a replay of the new member set; a new claim with the remaining members goes through the revision and epoch CAS. |
+| Card | `TASK_GROUP` is emptied, and a group an older card wrote into `DISCUSSION` is removed too, so `TaskGroupFrom` reads empty. A `CONTRACT_DECISIONS` entry records the decision reference and the frozen fields before and after, the way an update with `--contract-decision-file` does; the card lifecycle kernel accepts the contract change on that decision. `kander update` cannot rewrite the section. |
+| `groups/<group-id>/removals/<removal-id>.json` | Immutable: the task, the decision reference, the reason, the checkpoint revision and coordinator epoch it was decided on, and `from_task_group`. `show` lists the same object under `removals`. |
+
+Reconcile requires each listed removal to equal its record and the removed card to be out of the member set. Because the card no longer belongs to the group, the membership scan of claim and reconcile no longer counts it, and the card can be picked and started, or grouped again into a group that has no checkpoint with an update that carries a decision. A group with a checkpoint takes no new member, and a started member leaves only through archiving, trashing, or `recover`.
+
+The decision is made by the generated kernel `internal/statemachine/coordinator` (event `removeMember`, proved in `formal/KanderFormal/Machines/Coordinator.lean`): the shell reads the facts above and passes them as Boolean arguments, with the number of blocked members that remain. A refusal answers the first failing fact in a fixed order: the CAS, the checkpoint, the member, its group on the board, whether it started, the last member, the dependents.
+
 ## Released Bindings and Authorized Cycle Handoffs
 
 A checkpoint may still name an old dispatch after `dispatch fail|cancel` or `dispatch settle`
@@ -248,6 +281,6 @@ grant the coordinator independent authority to terminate or reclaim an executor.
 
 ## Decision Kernels
 
-The accept and refuse decisions described above are made by three generated kernels, proved in Lean 4 (`docs/formal-verification.md`, "Coordinator Checkpoints and Wrap-Up Witnesses (M12)"): `internal/statemachine/coordinator` decides a claim, a reconcile of the checkpoint, and a recovery, and answers the wrap-up refusal; `internal/statemachine/coordmember` decides which new mirror a member accepts, when it keeps its last mirror and blocks, and what a reset or a confirmation does to it; `internal/statemachine/wrapupwitness` decides when the Git witness of a wrap-up is written.
+The accept and refuse decisions described above are made by three generated kernels, proved in Lean 4 (`docs/formal-verification.md`, "Coordinator Checkpoints and Wrap-Up Witnesses (M12)"): `internal/statemachine/coordinator` decides a claim, a reconcile of the checkpoint, a recovery, and the removal of an unstarted member, and answers the wrap-up refusal; `internal/statemachine/coordmember` decides which new mirror a member accepts, when it keeps its last mirror and blocks, and what a reset or a confirmation does to it; `internal/statemachine/wrapupwitness` decides when the Git witness of a wrap-up is written.
 
 What the kernels take from the shell is a result, never a check: the comparison of the owner, token, and hashes, the board membership and the recovery records, the walk of the execution chain and the dispatch rounds with the verification of their originals (only the chain end, the dispatch position, and the verdict "the chain carries no handoff to the mirror's cycle" reach the kernel), the card lifecycle and ledger checks of a reset, Git, and the liveness probe before a recovery. The order of the checks, the error codes, and the exit codes of `kander coordinator reconcile` (`complete` 0, `partial` 3, `failed` 1, a refused request 1 with no JSON) are unchanged. A reconcile that leaves every member blocked is committed before `CoordinatorBlockedError` is returned.

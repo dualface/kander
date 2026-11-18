@@ -4,7 +4,7 @@ Source: moved from `KANDER-KANBAN-RULES.md` "Command Contract" (syntax) and `KAN
 
 ## Purpose and users
 
-Durable group checkpoints for the orchestrator: `claim` fences one coordinator, `reconcile` records every observation, `show` reads the committed checkpoint. `recover` is the audited last resort for a blocked member; it runs only on an explicit user decision. The JSON shapes and the recovery protocol are in `snippets/coordinator-checkpoints.md` "Coordinator Checkpoints" and `snippets/orchestrate-start.md` "Durable Coordinator Recovery".
+Durable group checkpoints for the orchestrator: `claim` fences one coordinator, `reconcile` records every observation, `show` reads the committed checkpoint. `recover` is the audited last resort for a blocked member; it runs only on an explicit user decision. `remove-member` takes one unstarted member out of the group on an explicit user decision. The JSON shapes and the recovery protocol are in `snippets/coordinator-checkpoints.md` "Coordinator Checkpoints" and `snippets/orchestrate-start.md` "Durable Coordinator Recovery".
 
 ## Syntax
 
@@ -13,6 +13,7 @@ kander coordinator show <group-id>
 kander coordinator claim <absolute-claim.json>
 kander coordinator reconcile <absolute-observations.json>
 kander coordinator recover <absolute-request.json>
+kander coordinator remove-member <absolute-request.json>
 ```
 
 ## Arguments
@@ -21,12 +22,15 @@ kander coordinator recover <absolute-request.json>
 - `claim <absolute-claim.json>`: group_id, expected_revision, expected_epoch, owner, unique token, basis, and the complete member list.
 - `reconcile <absolute-observations.json>`: group_id, expected_revision, the authority from the claim, a members object keyed by task ID (each with its card revision and, when bound, dispatch_id, epoch, base, and completed delivery_commit), and an optional absolute `cwd` for read-only Git verification.
 - `recover <absolute-request.json>`: group_id, member, expected_revision, expected_epoch, decision (the user decision reference), and reason. All six are required. The member's column selects the mode.
+- `remove-member <absolute-request.json>`: the same six fields. `member` is the card that leaves the group.
 
 ## Preconditions
 
 - A located board; the complete member set; a successful claim before any reconcile. A first unbound delivery needs the card in `review/`, its `TASK_BRANCH` recorded as the bare branch name, and the absolute `cwd` of a repository where that branch head equals the delivery commit.
 
 - `recover` needs the member blocked in the checkpoint, and the current checkpoint revision and coordinator epoch. Run it only on a user decision: the orchestrator never recovers on its own, and Kander records the decision reference without verifying it.
+
+- `remove-member` needs the current checkpoint revision and coordinator epoch, and, in a distributed project, the current private coordinator lease of the group. Run it only on a user decision, as for `recover`. The member must be unstarted: in `backlog/` or `todo/`, with no `STARTED_AT`, a checkpoint mirror still awaiting its start, no execution record or start attempt, no service claim record, no dispatch binding, no review run or plan, and no member exclusion. It also needs at least one other member to stay, and no remaining member may list it as a card ID in `PREREQUISITES` (that would hold the whole group for a card outside it). Its own `PREREQUISITES` may name members that stay: the card keeps that line and, as a standalone card, waits for them as for any other dependency.
 
 ## Effects
 
@@ -52,10 +56,11 @@ kander coordinator recover <absolute-request.json>
 - A session with no reference and no way to resolve one (`session.mode=none`) has nothing to search by, so a drifted `WINDOW` then reads `stopped`.
 - `recover` on a `done/`, `archived/`, or `trash/` member is a confirmation: it writes only the audit record and rebinds the mirror. It changes no card, execution cycle, or review evidence. Reconcile then accepts that member as it is for this cycle.
 - Each recovery writes an immutable record that binds the checkpoint revision and the coordinator epoch. `kander update` cannot reach it, and `show` lists it under `recoveries`.
+- `remove-member` is one transaction. The checkpoint drops the member and its revision rises by one; the coordinator epoch and the authority stay. The card's `TASK_GROUP` becomes empty (a group written into `DISCUSSION` by an older card is removed too), and a `CONTRACT_DECISIONS` entry records the decision reference, the old group, and the new empty value, which `kander update` cannot rewrite. An immutable record binds the checkpoint revision and the epoch, and `show` lists it under `removals`. The card is an ordinary standalone card afterwards: it can be picked and started, or grouped into a group that has no checkpoint with `kander update --contract-decision-file`. Later claims and reconciles name only the remaining members. A claim that names the removed card is refused, and so is an earlier claim request replayed byte for byte. Only an unstarted member can leave; a started one is archived, trashed, or recovered. Adding a member to a group that has a checkpoint is not supported.
 
 ## Output
 
-- `show`, `claim`, and `recover`: one JSON object with the checkpoint, its revision, and the authority.
+- `show`, `claim`, `recover`, and `remove-member`: one JSON object with the checkpoint, its revision, and the authority.
 - `reconcile`: the same object plus `result`. Exit 0 with `complete`: no member is blocked. Exit 3 with `partial`: the checkpoint is committed and some members are blocked. Exit 1 with `failed`: the checkpoint is committed and every member is blocked. Exit 1 with no JSON: the request was refused and the checkpoint is unchanged.
 
 ## Rejections
@@ -67,7 +72,8 @@ kander coordinator recover <absolute-request.json>
   - `alive`, `alive-orphaned`, or `drifted` in `working/`: the error names the address. Use `kander resume --agent <agent>`, or stop the executor at that address and run `recover` again.
   - `alive`, `alive-orphaned`, or `drifted` in `review/`, and `unknown` with evidence at one address: the error names the address. Stop the executor at that address and run `recover` again. A `review/` member takes `resume --agent` only while its start attempt has not ended, and a takeover cannot exit an executor it cannot prove.
   - 2 or more matches: the error names the count. Stop the executors that match this session and run `recover` again.
-- A wrong argument count, a relative `recover` path, or an unknown subcommand is a usage error.
+- `remove-member` refuses a missing field or a blank `decision` or `reason`, a stale revision or epoch, a card that is not in the checkpoint or whose `TASK_GROUP` is another group, a started member (the error names the reason), the last remaining member (archive the card instead), and a card a remaining member lists in `PREREQUISITES` (the error lists those members). In a distributed project it also refuses a caller without a standing group lease (none, released, lost, or taken over) and a card with a service claim record. A repeated request fails on the revision; the same request with the same idempotency key returns the first answer. A refusal writes nothing.
+- A wrong argument count, a relative `recover` or `remove-member` path, or an unknown subcommand is a usage error.
 
 ## Distributed project
 
@@ -77,7 +83,7 @@ The background worker renews the group lease independently of the UI and reports
 
 After a member lease is lapsed, lost or released, an explicit user decision may instead reset the blocked member under the current private coordinator lease. The service rechecks the exact task revision and old generation in the transaction. It records a new released audit generation, preserves the predecessor scene and an honest unknown observation, and supersedes old-generation requests. This recovery does not assign or start an executor. Continue with a fresh `resume --agent <agent> --decision <reference>` and satisfy the existing review-cycle requirements. Pending starts and dispatch bindings still block reset.
 
-The client freezes recovery input, private proof and operation key before transport. A retry reconciles that exact request, including after a lost response or an expired coordinator lease. A completed receipt replays read-only; it cannot authorize a new recovery.
+The client freezes recovery input, private proof and operation key before transport. A retry reconciles that exact request, including after a lost response or an expired coordinator lease. A completed receipt replays read-only; it cannot authorize a new recovery. `remove-member` is one group write under the same lease check as `reconcile`; the client sends it with a fresh idempotency key, and the service answers a retry of that key with the first result.
 
 To release a distributed coordinator explicitly, use `kander coordinator release <absolute-release.json>` with `group_id`, `reason`, and `decision`. This ends the private lease; the public checkpoint and its audit history remain readable.
 
