@@ -9,7 +9,7 @@ Every command except the bare `kander` and the internal `worker` accepts the glo
 - **Notices.** A command that prints a remark on standard error without `--json` puts it in the result object as `notices`, an array of `{"code":"...","message":"..."}` (the field is left out when there is no remark). A failure that came with remarks carries them as `notices` beside `error`. `move` puts the completion report template in the field `completion_report` instead.
 - **One shape.** The forms that always print JSON (`dispatch`, `coordinator`, `notify`, bound `move`, `request show`, `subscribe`) print the same object with and without `--json`; only the place of the notices differs.
 - **A finished analysis is a result.** A command whose contract ties an exit status to a completed analysis writes the result object to standard output and exits with that status. Standard error stays empty. These are `check` (exit 1 for findings), `check delivery` and `check overlap` (exit 1), `coordinator reconcile` (exit 1 or 3), `doctor` (exit 1 for an unhealthy installation), `terminal list` and `terminal test` (exit 1), and a `review` run that published evidence (the exit status of the run). A check that could not finish is a failure.
-- **Not in scope.** The bare `kander` (the board) and `worker` reject `--json` as an argument error. Help is out of scope here: `--help` and `kander help` are described with the help output.
+- **Not in scope.** The bare `kander` (the board) and `worker` reject `--json` as an argument error. Help is out of scope here: `--help` and `kander help` are described in [Command help](command-help.md).
 
 ## Error codes
 

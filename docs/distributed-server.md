@@ -351,4 +351,4 @@ A move's exact dispatch result and replay flag are captured inside its board tra
 
 For a non-replayed CLI terminal move, the reporting switch prints the completion template on stderr using the committed service snapshot and logical resource location. The Issue module compares central work-set readiness before and after that move, honors `issue.result_on_done`, and prints the explicit result handoff when the last member completes or is withdrawn. Advice failures never change a successful move. The TUI invokes no CLI advice hooks.
 
-`kander request --help` uses the supplemental collaboration forms in the notify contract. Root help lists `notify` and `request` as separate commands; the installed historical command index remains the user's manually maintained file.
+`kander request --help` uses the supplemental collaboration forms in the notify contract. Root help lists `notify` and `request` as separate commands, and `kander request --help` prints the summary, arguments, and examples of the `## Request command` section and the request lines of that contract; the installed historical command index remains the user's manually maintained file.
