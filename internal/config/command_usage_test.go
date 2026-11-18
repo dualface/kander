@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -26,6 +27,20 @@ func TestCommandUsageReadsInstalledContract(t *testing.T) {
 	want := "kander probe --a\nkander probe sub --b\nContract: " + root + "/snippets/commands/probe.md\n" + CommandReadSentence(root)
 	if got != want {
 		t.Fatalf("usage:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// The usage of a coordinator spells the confirmed release syntax. It is read
+// from the embedded contract only: an installed copy of the rules stays old
+// until it is refreshed, so it cannot decide this check.
+func TestCommandUsageNamesTheConfirmedReleaseSyntax(t *testing.T) {
+	got := commandUsage("", "coordinator", nil)
+	lines := strings.Split(got, "\n")
+	if !slices.Contains(lines, "kander coordinator release --end-execution <absolute-release.json>") {
+		t.Fatalf("the confirmed release syntax is missing:\n%s", got)
+	}
+	if slices.Contains(lines, "kander coordinator release <absolute-release.json>") {
+		t.Fatalf("the unconfirmed release syntax is still listed:\n%s", got)
 	}
 }
 
