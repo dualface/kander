@@ -66,15 +66,12 @@ func (p *project) requestWrite(key, operation, id string, payload any, produce f
 // requestWriteScoped is requestWrite for a producer that reads more of the board
 // than the request and its card. extend adds the groups and cards it needs; it
 // runs only when the operation is not a replay of a stored receipt.
-func (p *project) requestWriteScoped(key, operation, id string, payload any, extend func(board.LockScope) (board.LockScope, error), produce func(*board.Transaction) (api.CollabRequest, error), status int) outcome {
+func (p *project) requestWriteScoped(key, operation, id string, payload any, extend func(board.LockScope) board.LockScope, produce func(*board.Transaction) (api.CollabRequest, error), status int) outcome {
 	return p.idempotent(key, operation, payload, func() outcome {
 		var request api.CollabRequest
 		scope := board.LockScope{Groups: []string{serviceGroup}, Tasks: []string{id}}
 		if extend != nil {
-			var err error
-			if scope, err = extend(scope); err != nil {
-				return outcome{err: err}
-			}
+			scope = extend(scope)
 		}
 		err := board.WithTransaction(p.board, scope, func(tx *board.Transaction) error {
 			var err error
@@ -190,20 +187,17 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 
 // proposalScope widens the write scope of a new fix proposal to what the check
 // of its evidence reads. Any other request keeps the scope of the request.
-func (p *project) proposalScope(input api.NewCollabRequest) func(board.LockScope) (board.LockScope, error) {
+func (p *project) proposalScope(input api.NewCollabRequest) func(board.LockScope) board.LockScope {
 	if input.Dispatch == nil || input.Dispatch.Kind != "fix" || input.Dispatch.Evidence.Fix == nil {
 		return nil
 	}
-	return func(base board.LockScope) (board.LockScope, error) {
-		read, err := board.FixProposalScope(p.board, input.Dispatch.Evidence.Fix)
-		if err != nil {
-			return base, err
-		}
+	return func(base board.LockScope) board.LockScope {
+		read := board.FixProposalScope(p.board, input.Dispatch.Evidence.Fix)
 		base.Groups = append(base.Groups, read.Groups...)
 		base.Tasks = append(base.Tasks, read.Tasks...)
 		slices.Sort(base.Tasks)
 		base.Tasks = slices.Compact(base.Tasks)
-		return base, nil
+		return base
 	}
 }
 func (p *project) answerRequest(key, id, requestID string, answer api.CollabAnswer, h holder) outcome {

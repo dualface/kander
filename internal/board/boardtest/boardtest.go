@@ -62,3 +62,34 @@ func ReviewedFinding(t testing.TB, root, task string) Reviewed {
 	}
 	return r
 }
+
+// Successor adds an incremental PMQA run after the run of prev, on the same
+// commit, with one finding that continues the finding of prev, and assigns it
+// to the card. The first round of prev then has a later round.
+func Successor(t testing.TB, root, task string, prev Reviewed) Reviewed {
+	t.Helper()
+	next := Reviewed{BatchID: prev.BatchID, RunID: "next-" + prev.RunID, FindingID: "PM-02", Commit: prev.Commit}
+	input := board.ReviewInput{RunID: next.RunID, BatchID: next.BatchID, PreviousRunID: prev.RunID, ReviewedCommit: prev.Commit, TaskIDs: []string{task}, Role: "PMQA", Reviewer: "codex", Model: "model", Effort: "high", CWD: "/repo", Base: strings.Repeat("a", 40), Commit: next.Commit, ReportLanguage: "en"}
+	originals := map[string][]byte{"task-context.md": []byte("task\n"), "review-context.md": []byte("context\n")}
+	run, _, err := board.PrepareReviewRun(root, input, nil, nil, originals, "test")
+	if err != nil {
+		t.Fatalf("prepare successor: %v", err)
+	}
+	run.LaunchStatus, run.ExecutionStatus = "started", "ok"
+	findings := board.ReviewFindings{Findings: []board.ReviewFinding{{ID: next.FindingID, Tier: "medium", Text: "still open", Evidence: "file.go:2", Lineage: &board.FindingRef{RunID: prev.RunID, FindingID: prev.FindingID}}}, NonBlocking: []board.ReviewFinding{}}
+	data, err := json.MarshalIndent(findings, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run, err = board.FinalizeReviewRun(root, run, []byte("```kander-findings\n"+string(data)+"\n```\n")); err != nil {
+		t.Fatalf("finalize successor: %v", err)
+	}
+	if _, failures, err := board.PublishReviewRun(root, run.RunID); err != nil || len(failures) > 0 {
+		t.Fatalf("publish successor: %v %v", err, failures)
+	}
+	assignment := board.ReviewAssignment{RunID: next.RunID, BatchID: next.BatchID, Author: "coordinator", Basis: "assigned by scope", Items: map[string][]string{next.FindingID: {task}}}
+	if err = board.AssignReviewFindings(root, assignment); err != nil {
+		t.Fatalf("assign successor: %v", err)
+	}
+	return next
+}

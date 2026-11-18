@@ -4,7 +4,9 @@ import (
 	"cmp"
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
+	"unicode"
 )
 
 // evidenceProblem tells a failure of the evidence itself from any other error.
@@ -17,6 +19,16 @@ func evidenceProblem(err error) (string, bool) {
 		return err.Error(), true
 	}
 	return "", false
+}
+
+// plain makes an identifier of the evidence safe to show in one line of the
+// list: a control character would split the line or reach the terminal of the
+// reader, so such an identifier is shown quoted.
+func plain(s string) string {
+	if strings.ContainsFunc(s, func(r rune) bool { return unicode.IsControl(r) || r == '\u2028' || r == '\u2029' }) {
+		return strconv.Quote(s)
+	}
+	return s
 }
 
 // dispatchProblemsError lists every problem of one fix binding, one per line.
@@ -38,41 +50,42 @@ func dispatchProblemsError(problems []string, next string) error {
 // at once. The binding is not stamped. The caller holds the scope of
 // FixProposalScope. The prepare of the holder runs the same check again.
 func CheckDispatchFixProposal(tx *Transaction, in DispatchInput) error {
+	next := t("board.dispatch_problem_next_step")
 	if in.Evidence.Fix == nil || in.Evidence.WrapUp != nil {
-		return dispatchEvidenceError("fix binding required")
+		return dispatchProblemsError([]string{t("board.dispatch_problem_fix_binding")}, next)
 	}
 	_, problems, err := collectDispatchFix(tx, in, true, false)
 	if err != nil {
 		return err
 	}
 	if len(problems) > 0 {
-		return dispatchProblemsError(problems, t("board.dispatch_problem_next_step"))
+		return dispatchProblemsError(problems, next)
 	}
 	return nil
 }
 
-// fixBatchMembers lists the member cards of the batch a fix binding names. A
-// batch that does not exist or cannot be read contributes no members: the
-// check inside the transaction reports it as a problem.
-func fixBatchMembers(root, batchID string) ([]string, error) {
-	batch, err := ReadReviewBatch(root, batchID)
-	if err != nil {
-		if _, ok := evidenceProblem(err); ok {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return batch.TaskIDs, nil
+// readFixBatchOutside reads the batch a fix binding names before any
+// transaction holds the cards of its members. It returns the problem line of a
+// batch the check cannot go on with, and an error for a failure of the store.
+func readFixBatchOutside(root, batchID string) (batch ReviewBatch, problem string, err error) {
+	err = WithTransaction(root, reviewScope(nil, true), func(tx *Transaction) (e error) {
+		batch, problem, e = readFixBatch(tx, batchID)
+		return e
+	})
+	return batch, problem, err
 }
 
 // FixProposalScope is the lock scope CheckDispatchFixProposal reads under: the
 // review control group and the member cards of the batch. The caller adds its
-// own groups and cards.
-func FixProposalScope(root string, fix *DispatchFixBinding) (LockScope, error) {
+// own groups and cards. A batch that cannot be read adds no member: the check
+// inside the transaction reads it again and reports the problem or the failure
+// at its place in the order of the checks of the creation.
+func FixProposalScope(root string, fix *DispatchFixBinding) LockScope {
 	scope := LockScope{Groups: []string{reviewControlGroup}}
-	members, err := fixBatchMembers(root, fix.BatchID)
-	scope.Tasks = slices.Clone(members)
-	return scope, err
+	if batch, problem, err := readFixBatchOutside(root, fix.BatchID); problem == "" && err == nil {
+		scope.Tasks = slices.Clone(batch.TaskIDs)
+	}
+	return scope
 }
 
 // collectDispatchFix checks a fix binding and returns every problem it finds,
@@ -120,7 +133,7 @@ func collectDispatchFix(tx *Transaction, in DispatchInput, initial, completed bo
 	if completed {
 		readRun = reviewRunForConsumption
 	}
-	check := fixRunCheck{in: in, targets: targets, runs: runs, completed: completed, baseOff: !completed && batch.TargetCommit != in.Base}
+	check := fixRunCheck{in: in, targets: targets, runs: runs, completed: completed}
 	expectedAuthors := map[string]DispatchAuthorReference{}
 	seen := map[string]bool{}
 	stamped = slices.Clone(binding.Findings)
@@ -129,18 +142,28 @@ func collectDispatchFix(tx *Transaction, in DispatchInput, initial, completed bo
 		before := len(problems)
 		label := ref.key()
 		if seen[label] {
-			problems = append(problems, t("board.dispatch_problem_finding_duplicate", label))
+			problems = append(problems, t("board.dispatch_problem_finding_duplicate", plain(label)))
 			failed++
 			continue
 		}
 		seen[label] = true
+		// The run of another batch has members this transaction does not hold, so
+		// its batch is read from the record alone, before the originals are.
+		if line, err := check.earlyProblem(tx, ref); err != nil || line != "" {
+			if err != nil {
+				return nil, nil, err
+			}
+			problems = append(problems, line)
+			failed++
+			continue
+		}
 		run, err := readRun(tx, ref.RunID)
 		if err != nil {
 			line, ok := evidenceProblem(err)
 			if !ok {
 				return nil, nil, err
 			}
-			problems = append(problems, label+": "+line)
+			problems = append(problems, plain(label)+": "+line)
 			failed++
 			continue
 		}
@@ -152,7 +175,7 @@ func collectDispatchFix(tx *Transaction, in DispatchInput, initial, completed bo
 		case problem != "":
 			problems = append(problems, problem)
 		case ref.Section != "" && ref.Section != section:
-			problems = append(problems, t("board.dispatch_problem_section_mismatch", label, ref.Section, section))
+			problems = append(problems, t("board.dispatch_problem_section_mismatch", plain(label), ref.Section, section))
 		default:
 			stamped[i].Section = section
 		}
@@ -192,25 +215,41 @@ type fixRunCheck struct {
 	targets   []string
 	runs      []ReviewRun
 	completed bool
-	// baseOff is set when the base is not the target of the batch; the batch
-	// problem says so once, and no finding repeats it.
-	baseOff bool
+}
+
+// earlyProblem finds what makes the run a finding names unfit to be read like
+// the others: an identifier that is no run ID, or a run of another batch, whose
+// members this transaction does not hold. A run that does not exist or cannot be
+// read is for the check of the run itself.
+func (c fixRunCheck) earlyProblem(tx *Transaction, ref DispatchFindingReference) (string, error) {
+	if !ValidReviewID(ref.RunID) {
+		return plain(ref.key()) + ": " + reviewError("run_id").Error(), nil
+	}
+	var run ReviewRun
+	found, err := readReviewJSON(tx, reviewRunName(ref.RunID), &run)
+	if err != nil {
+		if _, ok := evidenceProblem(err); ok {
+			return "", nil
+		}
+		return "", err
+	}
+	batchID := c.in.Evidence.Fix.BatchID
+	if found && run.BatchID != batchID {
+		return t("board.dispatch_problem_run_other_batch", plain(ref.key()), run.BatchID, batchID), nil
+	}
+	return "", nil
 }
 
 // problems checks one finding's run against the batch chain, the predecessor
 // and the task.
 func (c fixRunCheck) problems(run ReviewRun, ref DispatchFindingReference) (problems []string) {
-	label := ref.key()
-	batchID := c.in.Evidence.Fix.BatchID
-	if run.BatchID != batchID {
-		problems = append(problems, t("board.dispatch_problem_run_other_batch", label, run.BatchID, batchID))
-	}
+	label := plain(ref.key())
 	// A batch advanced before this round leaves the run behind the base; the
 	// recorded chain still ties the two together, also on historical replay.
 	if len(c.targets) > 0 {
 		if commitAt := slices.Index(c.targets, run.Commit); commitAt < 0 {
 			problems = append(problems, t("board.dispatch_problem_run_off_chain", label, run.Commit, strings.Join(c.targets, ", ")))
-		} else if !c.baseOff && !slices.Contains(c.targets[commitAt:], c.in.Base) {
+		} else if !slices.Contains(c.targets[commitAt:], c.in.Base) {
 			problems = append(problems, t("board.dispatch_problem_base_before_run", label, c.in.Base, run.Commit))
 		}
 	}
@@ -242,30 +281,35 @@ func authorProblems(authors []DispatchAuthorReference, expected map[string]Dispa
 	mentioned := map[string]bool{}
 	for _, ref := range authors {
 		key := ref.Finding.key() + "/" + ref.RecordID
+		shown := plain(key)
 		if mentioned[key] {
-			problems = append(problems, t("board.dispatch_problem_author_duplicate", key))
-			continue
+			problems = append(problems, t("board.dispatch_problem_author_duplicate", shown))
 		}
 		mentioned[key] = true
-		if !validReference(ref.Artifact) {
-			problems = append(problems, t("board.dispatch_problem_author_artifact_invalid", key, ref.Artifact.TaskID, ref.Artifact.Path))
-			continue
+		artifactOK := validReference(ref.Artifact)
+		if !artifactOK {
+			problems = append(problems, t("board.dispatch_problem_author_artifact_invalid", shown, ref.Artifact.TaskID, ref.Artifact.Path))
 		}
 		if failed > 0 {
 			continue
 		}
 		want, ok := expected[key]
 		if !ok {
-			problems = append(problems, t("board.dispatch_problem_author_not_in_lineage", key))
+			problems = append(problems, t("board.dispatch_problem_author_not_in_lineage", shown))
 			continue
 		}
-		for _, field := range []struct{ name, got, want string }{
-			{"author", ref.Author, want.Author},
-			{"artifact.task_id", ref.Artifact.TaskID, want.Artifact.TaskID},
-			{"artifact.path", ref.Artifact.Path, want.Artifact.Path},
+		// An artifact that is no valid reference has said so; only its author is
+		// still compared.
+		for _, field := range []struct {
+			name, got, want string
+			artifact        bool
+		}{
+			{"author", ref.Author, want.Author, false},
+			{"artifact.task_id", ref.Artifact.TaskID, want.Artifact.TaskID, true},
+			{"artifact.path", ref.Artifact.Path, want.Artifact.Path, true},
 		} {
-			if field.got != field.want {
-				problems = append(problems, t("board.dispatch_problem_author_field", key, field.name, field.got, field.want))
+			if field.got != field.want && (artifactOK || !field.artifact) {
+				problems = append(problems, t("board.dispatch_problem_author_field", shown, field.name, field.got, field.want))
 			}
 		}
 	}

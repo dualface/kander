@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -60,11 +61,18 @@ func twoFindingFixture(t *testing.T) (string, DispatchInput, ReviewRun, []Review
 // write transaction on the scope FixProposalScope names, plus the task card.
 func checkProposal(t *testing.T, root string, in DispatchInput) error {
 	t.Helper()
-	scope, err := FixProposalScope(root, in.Evidence.Fix)
-	if err != nil {
-		t.Fatal(err)
-	}
+	scope := FixProposalScope(root, in.Evidence.Fix)
 	scope.Tasks = append(scope.Tasks, in.TaskID)
+	return WithTransaction(root, scope, func(tx *Transaction) error { return CheckDispatchFixProposal(tx, in) })
+}
+
+// checkProposal0 is checkProposal for evidence that may lack a fix binding.
+func checkProposal0(t *testing.T, root string, in DispatchInput) error {
+	t.Helper()
+	scope := LockScope{Groups: []string{reviewControlGroup}, Tasks: []string{in.TaskID}}
+	if in.Evidence.Fix != nil {
+		return checkProposal(t, root, in)
+	}
 	return WithTransaction(root, scope, func(tx *Transaction) error { return CheckDispatchFixProposal(tx, in) })
 }
 
@@ -148,7 +156,6 @@ func TestFixRunProblemsNameBothValues(t *testing.T) {
 	targets := []string{strings.Repeat("a", 40), strings.Repeat("b", 40)}
 	text := strings.Join(fixRunCheck{in: in, targets: targets}.problems(run, ref), "\n")
 	for _, want := range []string{
-		`r2/PM-01: the run belongs to batch "other-batch", but the evidence names batch "batch"`,
 		"r2/PM-01: run commit " + run.Commit + " is not on the advance chain of the batch",
 		strings.Repeat("a", 40) + ", " + strings.Repeat("b", 40),
 		`r2/PM-01: previous_run_id: provided "", the run record holds "r1"`,
@@ -188,9 +195,10 @@ func TestFixProposalListsEveryProblemInAFixedOrder(t *testing.T) {
 		{Finding: FindingRef{run.RunID, "PM-01"}, RecordID: "b", Author: "x", Artifact: ArtifactReference{TaskID: in.TaskID, Path: "reviews/x.json"}},
 		{Finding: FindingRef{run.RunID, "PM-01"}, RecordID: "b", Author: "x", Artifact: ArtifactReference{TaskID: in.TaskID, Path: "reviews/x.json"}},
 	}
-	text := wantLines(t, checkProposal(t, root, in), "7 problem(s):")
+	text := wantLines(t, checkProposal(t, root, in), "8 problem(s):")
 	order := []string{
 		"base: provided",
+		"pm-problems/PM-01: base " + strings.Repeat("c", 40) + " is not at or after run commit",
 		"previous_run_id: provided",
 		"missing/PM-02: ",
 		"pm-problems/PM-01: listed more than once",
@@ -343,11 +351,14 @@ func TestFixProposalSeparatesEvidenceFailuresFromErrors(t *testing.T) {
 	if err = os.Mkdir(path, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	var e *Error
-	if _, err = FixProposalScope(root, in.Evidence.Fix); err == nil || errors.As(err, &e) {
-		t.Fatalf("the scope hid a failure of the store: %v", err)
+	// The scope never fails and holds no member of a batch it cannot read; the
+	// check reads the batch again and returns the failure of the store itself.
+	scope := FixProposalScope(root, in.Evidence.Fix)
+	if len(scope.Tasks) != 0 || !slices.Equal(scope.Groups, []string{reviewControlGroup}) {
+		t.Fatalf("scope of an unreadable batch: %+v", scope)
 	}
-	scope := LockScope{Groups: []string{reviewControlGroup}, Tasks: []string{in.TaskID}}
+	scope.Tasks = []string{in.TaskID}
+	var e *Error
 	err = WithTransaction(root, scope, func(tx *Transaction) error { return CheckDispatchFixProposal(tx, in) })
 	if err == nil || errors.As(err, &e) && e.Code == "board.dispatch_evidence_invalid" {
 		t.Fatalf("a failure of the store was reported as a problem of the evidence: %v", err)
@@ -447,4 +458,137 @@ func TestCoordinatorHistoryCheckListsProblemsWithoutANextStep(t *testing.T) {
 	if err != nil || second.Revision != first.Revision {
 		t.Fatalf("a repeated block raised the checkpoint revision: %d -> %d %v", first.Revision, second.Revision, err)
 	}
+}
+
+// A finding that names a run of another batch is refused with both batch IDs,
+// although the members of that batch are not held by the check; the other
+// problems of the evidence are still listed.
+func TestFixProposalNamesTheBatchOfAForeignRun(t *testing.T) {
+	root, in, _, _ := twoFindingFixture(t)
+	other := gateCard(t, root, "foreign-member")
+	plan := ReviewPlan{Schema: 1, Sealed: true, PlanID: "plan-foreign", Author: "coordinator", Basis: "fixture", CWD: "/repo", ReportLanguage: "en", TaskIDs: []string{other},
+		Batches: []ReviewPlanBatch{{BatchID: "foreign-batch", TaskIDs: []string{other}, Base: strings.Repeat("a", 40), TargetCommit: strings.Repeat("b", 40), Requirements: archiveRequirements()}}}
+	if err := CreateReviewPlan(root, plan); err != nil {
+		t.Fatal(err)
+	}
+	input := archiveInput([]string{other}, "pm-foreign", "PMQA")
+	input.BatchID = "foreign-batch"
+	findings := emptyFindings()
+	findings.Findings = []ReviewFinding{{ID: "PM-01", Tier: "medium", Text: "x", Evidence: "y"}}
+	foreign := gateRun(t, root, input, findings)
+	in.Evidence.Fix.Findings[1].PreviousRunID = "earlier"
+	in.Evidence.Fix.Findings[0] = DispatchFindingReference{FindingRef: FindingRef{foreign.RunID, "PM-01"}}
+	wantLines(t, checkProposal(t, root, in), "3 problem(s):",
+		`pm-foreign/PM-01: the run belongs to batch "foreign-batch", but the evidence names batch "`+in.Evidence.Fix.BatchID+`"`,
+		"pm-problems/PM-02: previous_run_id: provided \"earlier\"")
+}
+
+func TestFixProposalShowsOnlyOneLinePerProblem(t *testing.T) {
+	root, in, run, _ := twoFindingFixture(t)
+	in.Evidence.Fix.Findings[0].FindingID = "PM-01\nforged: line"
+	in.Evidence.Fix.Findings[1].RunID = "bad\x1b[31mrun"
+	in.Evidence.Fix.Authors = []DispatchAuthorReference{{Finding: FindingRef{run.RunID, "PM-01\nx"}, RecordID: "r\ny", Artifact: ArtifactReference{in.TaskID, "reviews/a.json"}}}
+	text := wantLines(t, checkProposal(t, root, in), "3 problem(s):", `"pm-problems/PM-01\nforged: line"`)
+	if strings.Contains(text, "\nforged") || strings.Contains(text, "\x1b") {
+		t.Fatalf("a control character reached the list:\n%q", text)
+	}
+}
+
+// A reference whose artifact is no valid card path is reported with it, and its
+// author is still compared with the original.
+func TestFixProposalComparesTheAuthorOfABadArtifact(t *testing.T) {
+	root, in, run, items := twoFindingFixture(t)
+	s := transactionSnapshot(t, root, in.TaskID)
+	if _, err := MoveEntry(s.Entry, root, "working"); err != nil {
+		t.Fatal(err)
+	}
+	var records []ReviewDisposition
+	for _, f := range items {
+		s = transactionSnapshot(t, root, in.TaskID)
+		d := ReviewDisposition{RecordID: "author-" + strings.ToLower(f.ID), RunID: run.RunID, FindingID: f.ID, BatchID: run.BatchID, TaskID: in.TaskID, Author: "codex", ReportHash: run.Hashes["report.md"], Original: f.Text, Status: "confirmed", Basis: "checked"}
+		if err := SubmitReviewDisposition(root, d, s.Revision); err != nil {
+			t.Fatal(err)
+		}
+		records = append(records, d)
+	}
+	bad := DispatchAuthorReference{Finding: FindingRef{run.RunID, "PM-01"}, RecordID: records[0].RecordID, Author: "coordinator", Artifact: ArtifactReference{in.TaskID, "../escape"}}
+	good := DispatchAuthorReference{Finding: FindingRef{run.RunID, "PM-02"}, RecordID: records[1].RecordID, Author: "codex", Artifact: ArtifactReference{in.TaskID, dispositionPath(records[1])}}
+	// The same key twice: the second entry is checked like the first.
+	in.Evidence.Fix.Authors = []DispatchAuthorReference{bad, good, good}
+	text := wantLines(t, checkProposal(t, root, in),
+		"has an invalid artifact",
+		`author: provided "coordinator", expected "codex"`,
+		"reference "+run.RunID+"/PM-02/"+records[1].RecordID+" is listed more than once",
+	)
+	if strings.Contains(text, "artifact.path: provided") {
+		t.Fatalf("an artifact already reported invalid was compared again:\n%s", text)
+	}
+}
+
+// The first failure reported for a chain of runs does not depend on the order
+// of a map: with two damaged ancestors it is always the first by run ID.
+func TestPublishedReviewVerificationNamesTheSameRunEachTime(t *testing.T) {
+	root := tempBoard(t)
+	id := gateCard(t, root, "chain")
+	gatePlan(t, root, []string{id}, archiveRequirements())
+	var previous ReviewRun
+	var runs []ReviewRun
+	for _, name := range []string{"chain-a", "chain-b", "chain-c"} {
+		input := archiveInput([]string{id}, name, "PMQA")
+		if previous.RunID != "" {
+			input.PreviousRunID, input.ReviewedCommit = previous.RunID, previous.Commit
+		}
+		previous = gateRun(t, root, input, emptyFindings())
+		runs = append(runs, previous)
+	}
+	for _, r := range runs[:2] {
+		if err := os.Remove(control(root, "groups", reviewControlGroup, "runs", r.RunID, "sidecar.json")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	verify := func() string {
+		err := WithTransaction(root, reviewScope([]string{id}, true), func(tx *Transaction) error { return verifyPublishedReview(tx, runs[2]) })
+		if err == nil {
+			t.Fatal("damaged ancestors verified")
+		}
+		return err.Error()
+	}
+	first := verify()
+	if !strings.Contains(first, "chain-a") {
+		t.Fatalf("the first ancestor by run ID is not the one named: %s", first)
+	}
+	for range 30 {
+		if again := verify(); again != first {
+			t.Fatalf("one board state named two runs:\n%s\n%s", first, again)
+		}
+	}
+}
+
+// The next step belongs to the proposal check alone, also when the binding has
+// the wrong shape, and the lines every check shares never name the sender's
+// command.
+func TestFixProposalShapeRefusalCarriesTheNextStep(t *testing.T) {
+	root, in, _, _ := twoFindingFixture(t)
+	next := config.Text("board.dispatch_problem_next_step")
+	shapeless := in
+	shapeless.Evidence = DispatchEvidence{}
+	wantLines(t, checkProposal0(t, root, shapeless), "1 problem(s):", "evidence.fix", next)
+	in.Base = strings.Repeat("c", 40)
+	_, err := PrepareDispatch(root, in)
+	text := wantLines(t, err, "base: provided")
+	if strings.Contains(text, "kander notify") || strings.Contains(text, next) {
+		t.Fatalf("a check of the holder tells the sender what to run:\n%s", text)
+	}
+}
+
+// A dispatch that was prepared is not replayed on a batch the check cannot read.
+func TestPreparedFixDispatchIsRefusedOnceItsBatchIsGone(t *testing.T) {
+	root, in, run, _ := fixBindingFixture(t)
+	useEnglish(t)
+	prepareTestDispatch(t, root, in)
+	if err := os.Remove(control(root, "groups", reviewControlGroup, "batches", run.BatchID+".json")); err != nil {
+		t.Fatal(err)
+	}
+	_, err := PrepareDispatch(root, in)
+	wantLines(t, err, "1 problem(s):", `batch_id "`+run.BatchID+`": no such review batch`)
 }

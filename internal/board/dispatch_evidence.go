@@ -42,11 +42,16 @@ func dispatchEvidenceError(detail string) error {
 func dispatchEvidenceScope(root string, in DispatchInput) (LockScope, error) {
 	scope := LockScope{Tasks: []string{in.TaskID}, Groups: []string{dispatchRegistry, reviewControlGroup, taskStartGroup}}
 	if in.Evidence.Fix != nil {
-		members, err := fixBatchMembers(root, in.Evidence.Fix.BatchID)
+		batch, problem, err := readFixBatchOutside(root, in.Evidence.Fix.BatchID)
 		if err != nil {
 			return scope, err
 		}
-		scope.Tasks = append(scope.Tasks, members...)
+		// A batch the check cannot go on with refuses the evidence here, as it
+		// always did, so a dispatch already prepared cannot be replayed on it.
+		if problem != "" {
+			return scope, dispatchProblemsError([]string{problem}, "")
+		}
+		scope.Tasks = append(scope.Tasks, batch.TaskIDs...)
 	}
 	if in.Evidence.WrapUp != nil {
 		review, err := reviewGateScope(root, in.TaskID, false)
@@ -150,9 +155,9 @@ func findingSection(findings ReviewFindings, id string) (ReviewFinding, string, 
 // finding as the evidence names it; a lineage step names itself next to it.
 func collectDispatchAuthors(tx *Transaction, run ReviewRun, findingID, task, origin string, refs map[string]DispatchAuthorReference, seen map[string]bool) (section, problem string, err error) {
 	key := run.RunID + "/" + findingID
-	label := origin
+	label := plain(origin)
 	if key != origin {
-		label = t("board.dispatch_problem_lineage_label", origin, key)
+		label = t("board.dispatch_problem_lineage_label", plain(origin), key)
 	}
 	fail := func(e error) (string, string, error) {
 		if line, ok := evidenceProblem(e); ok {

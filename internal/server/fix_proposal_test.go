@@ -168,3 +168,38 @@ func TestFixProposalWithoutABatchNamesTheBatchID(t *testing.T) {
 		t.Fatalf("refusal %+v", refusal)
 	}
 }
+
+// A later review round makes the first round obsolete. The holder that prepares
+// its own fix dispatch is told which run came after; a proposal made before the
+// round names the card version the publication of that round changed, so its
+// preparation is refused as stale and its sender proposes again.
+func TestFixOnASupersededRoundNamesTheLaterRun(t *testing.T) {
+	h := newReviewedHolder(t, "fix-proposal-superseded")
+	proposed, err := h.sendFix("before-successor", h.fixInput("fix-before"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := h.f.srv.BoardRoot(h.holder.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := boardtest.Successor(t, root, h.task, h.evidence)
+	card, err := h.holder.Show(t.Context(), h.task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := h.prepare("stale-prepare", *proposed.Dispatch)
+	expectCode(t, stale, api.CodeRevisionConflict)
+
+	h.card = card
+	direct := h.fixInput("fix-direct")
+	err = h.prepare("direct-prepare", direct)
+	if e := apiError(t, err); e.BoardCode != "board.dispatch_evidence_invalid" || !strings.Contains(e.Message, h.evidence.RunID+"/"+h.evidence.FindingID+": superseded review round; later run(s): "+next.RunID) || strings.Contains(e.Message, "Next step") {
+		t.Fatalf("prepare of a superseded round: %+v", e)
+	}
+	// The sender proposes again on the new version and learns it at once.
+	_, err = h.sendFix("after-successor", h.fixInput("fix-after"))
+	if e := apiError(t, err); !strings.Contains(e.Message, "later run(s): "+next.RunID) || !strings.Contains(e.Message, "Next step") {
+		t.Fatalf("proposal of a superseded round: %+v", e)
+	}
+}
