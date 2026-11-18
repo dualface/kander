@@ -63,6 +63,16 @@ func (p *project) validateWriter(tx *board.Transaction, writer reviewWriter) err
 	return nil
 }
 
+// prepareIdentityDigest recomputes the prepare digest of a request as if it
+// carried the version the run was created with. The requesting client's version
+// is a provenance record, not part of the run identity, so a same-ID retry from
+// an upgraded client compares equal to the digest written at the first prepare,
+// whichever version wrote that record. The run keeps its recorded version.
+func prepareIdentityDigest(request api.ReviewPrepare, recordedVersion string) string {
+	request.Version = recordedVersion
+	return requestDigest("review-prepare", request)
+}
+
 func (s *Server) reviewRuntimeRoutes(mux *http.ServeMux) {
 	const base = "/api/v1/projects/{project}/reviews/runtime"
 	s.projectRoute(mux, "POST "+base+"/prepare", func(p *project, r *http.Request) outcome {
@@ -88,7 +98,7 @@ func (s *Server) reviewRuntimeRoutes(mux *http.ServeMux) {
 				p.mu.Unlock()
 				return outcome{err: writerErr}
 			}
-			if writer.PrepareDigest != requestDigest("review-prepare", request) {
+			if writer.PrepareDigest != prepareIdentityDigest(request, existing.KanderVersion) {
 				p.mu.Unlock()
 				return outcome{err: apiError(api.CodeIdempotencyMismatch, "review run identity cannot be reused with different inputs")}
 			}
