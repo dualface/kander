@@ -164,8 +164,8 @@ func abandonRefusal(state reviewrun.State, facts reviewrun.Abandon, runID string
 		value   bool
 		refusal error
 	}{
-		{func(e *reviewrun.Abandon, v bool) { e.SameInput = v }, facts.SameInput, reviewError("intent conflict")},
-		{func(e *reviewrun.Abandon, v bool) { e.GroupOk = v }, facts.GroupOk, reviewError("card group binding")},
+		{func(e *reviewrun.Abandon, v bool) { e.SameInput = v }, facts.SameInput, reviewError(runID + ": " + t("board.review_abandon_input_changed"))},
+		{func(e *reviewrun.Abandon, v bool) { e.GroupOk = v }, facts.GroupOk, reviewError(runID + ": " + t("board.review_abandon_group_mismatch"))},
 		{func(e *reviewrun.Abandon, v bool) { e.Decision = v }, facts.Decision, reviewError(runID + ": " + t("board.review_abandon_decision_required"))},
 		{func(e *reviewrun.Abandon, v bool) { e.NoCopies = v }, facts.NoCopies, reviewError(runID + ": " + t("board.review_abandon_has_copies"))},
 		{func(e *reviewrun.Abandon, v bool) { e.BatchOpen = v }, facts.BatchOpen, reviewError(runID + ": " + t("board.review_abandon_batch_closed"))},
@@ -176,7 +176,7 @@ func abandonRefusal(state reviewrun.State, facts reviewrun.Abandon, runID string
 			return err
 		}
 	}
-	return reviewError("intent conflict")
+	return reviewError(runID + ": " + t("board.review_abandon_input_changed"))
 }
 
 // AbandonReviewRunWithTransaction retires a finalized run that has members
@@ -186,9 +186,12 @@ func abandonRefusal(state reviewrun.State, facts reviewrun.Abandon, runID string
 // published again. Nothing is written into a member card: no copy, no index line.
 // The same request again returns the first result and writes nothing.
 func AbandonReviewRunWithTransaction(root string, request ReviewAbandonRequest, extensions ...TransactionExtension) error {
-	before, err := ReadReviewRun(root, request.RunID)
+	before, exists, err := LookupReviewRun(root, request.RunID)
 	if err != nil {
 		return err
+	}
+	if !exists {
+		return reviewError(request.RunID + ": " + t("board.review_abandon_missing_run"))
 	}
 	return WithTransaction(root, reviewScope(before.TaskIDs, false), func(tx *Transaction) error {
 		var current ReviewRun
@@ -197,7 +200,7 @@ func AbandonReviewRunWithTransaction(root string, request ReviewAbandonRequest, 
 			return err
 		}
 		if !ok {
-			return reviewError("missing run: " + request.RunID)
+			return reviewError(request.RunID + ": " + t("board.review_abandon_missing_run"))
 		}
 		decision, reason := strings.TrimSpace(request.Decision), strings.TrimSpace(request.Reason)
 		// The replay is judged before the facts, so a batch that closed or a member

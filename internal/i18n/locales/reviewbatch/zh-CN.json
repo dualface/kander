@@ -73,5 +73,8 @@
   "board.review_abandon_successor": "另有运行把它写作 previous_run_id（{{.V0}}），不能放弃",
   "board.review_abandon_no_live": "该运行没有处于 working 或 review 且仍在批次中的成员，没有人能确认放弃。请先让一个成员回到 working，再放弃",
   "board.review_abandon_decision_required": "放弃需要非空的决定引用和非空的理由",
-  "board.review_abandon_conflict": "该运行已用另一个决定或理由放弃；不能用不同的值记录两次放弃"
+  "board.review_abandon_conflict": "该运行已用另一个决定或理由放弃；不能用不同的值记录两次放弃",
+  "board.review_abandon_missing_run": "没有这个 ID 的运行，无从放弃",
+  "board.review_abandon_input_changed": "准备放弃时运行已变化：请重新读取后再试",
+  "board.review_abandon_group_mismatch": "该运行的某张成员卡与运行不属于同一个任务组，不能放弃运行"
 }

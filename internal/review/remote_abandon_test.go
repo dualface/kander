@@ -133,3 +133,71 @@ func TestHolderAbandonsDirectlyThroughTheCommand(t *testing.T) {
 		t.Fatalf("a direct abandon created %d requests", got-before)
 	}
 }
+
+// With several live members a process that holds no member and coordinates no
+// group is refused before any joint material or request exists; the coordinator
+// of the group still gets its wait.
+func TestStrangerCannotAskForAJointAbandon(t *testing.T) {
+	r := newCoordinatedRunKeeping(t, 2, 2, true)
+	unlock, err := r.store.Lock("coordinated-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	requirements := map[string]string{"PMQA": "required", "Security": "N/A: repository policy"}
+	originals := map[string][]byte{"task-context.md": []byte("frozen task"), "review-context.md": []byte("context")}
+	input := r.input()
+	input.TaskIDs = r.ids
+	_, _, err = r.store.Prepare(input, requirements, nil, originals, "test")
+	if !api.IsCode(err, api.CodeEvidenceIncomplete) {
+		t.Fatalf("want a wait for the holders: %v", err)
+	}
+	publication := regexp.MustCompile(`review-[0-9a-f]{64}`).FindString(err.Error())
+	for _, id := range r.ids {
+		if _, err := r.holder.ConfirmReviewPublication(t.Context(), publication, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run, _, err := r.store.Prepare(input, requirements, nil, originals, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run.LaunchStatus, run.ExecutionStatus = "started", "ok"
+	if run, err = r.store.Finalize(run, []byte(emptyStructuredReview)); err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(board.ReviewAbandonRequest{RunID: run.RunID, Decision: "user decision 2026-11-19", Reason: "the writer secret was lost"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	abandonFile := filepath.Join(t.TempDir(), "abandon.json")
+	if err := os.WriteFile(abandonFile, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	requests := func() int {
+		total := 0
+		for _, id := range r.ids {
+			list, err := r.holder.Project.Requests(t.Context(), id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			total += len(list)
+		}
+		return total
+	}
+	before := requests()
+	_, err = remoteEvidenceAction(t.Context(), r.stranger, "/host-c/clone", "abandon", abandonFile, nil)
+	if !api.IsCode(err, api.CodeHeldByOther) {
+		t.Fatalf("a stranger was not refused: %v", err)
+	}
+	if got := requests(); got != before {
+		t.Fatalf("a stranger created %d requests", got-before)
+	}
+	_, err = remoteEvidenceAction(t.Context(), r.coordinate, "/host-b/clone", "abandon", abandonFile, nil)
+	if !api.IsCode(err, api.CodeEvidenceIncomplete) {
+		t.Fatalf("the coordinator was not asked to wait: %v", err)
+	}
+	if got := requests(); got != before+len(r.ids) {
+		t.Fatalf("the coordinator's wait left %d requests, want one per holder", got-before)
+	}
+}

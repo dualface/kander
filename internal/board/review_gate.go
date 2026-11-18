@@ -481,6 +481,10 @@ func unplannedReviewRun(tx *Transaction, p ReviewPlan, ids []string, enforce boo
 		if !ok {
 			return "", true, reviewError("missing run")
 		}
+		// An abandoned run left its batch, so it makes no unplanned batch.
+		if reviewRunAbandoned(run) {
+			continue
+		}
 		for _, id := range ids {
 			if enforce && containsID(run.TaskIDs, id) && !planned[run.BatchID] && resolvedBatch(p, run.BatchID) == nil {
 				return run.BatchID, true, nil

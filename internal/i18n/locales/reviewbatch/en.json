@@ -73,5 +73,8 @@
   "board.review_abandon_successor": "another run names this run as previous_run_id ({{.V0}}), so it cannot be abandoned",
   "board.review_abandon_no_live": "no member of this run is in working or review and still in the batch, so nobody can confirm the abandon. Move a member back to working first, then abandon",
   "board.review_abandon_decision_required": "an abandon needs a non-empty decision reference and a non-empty reason",
-  "board.review_abandon_conflict": "the run is already abandoned with another decision or reason; the abandon cannot be recorded twice with different values"
+  "board.review_abandon_conflict": "the run is already abandoned with another decision or reason; the abandon cannot be recorded twice with different values",
+  "board.review_abandon_missing_run": "no run with this ID exists, so there is nothing to abandon",
+  "board.review_abandon_input_changed": "the run changed while the abandon was prepared: read it again and retry",
+  "board.review_abandon_group_mismatch": "a member card of this run belongs to another task group than the run, so the run cannot be abandoned"
 }

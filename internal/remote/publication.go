@@ -125,6 +125,11 @@ func (s *Session) reviewAuthority(ctx context.Context, operation, replay string,
 			return nil, false, err
 		}
 	}
+	if operation == "review-abandon" && len(members) > 1 {
+		if err := s.requireAbandonCaller(members, shown); err != nil {
+			return nil, false, err
+		}
+	}
 	if len(members) <= 1 && !routed {
 		proof, joint, err := s.singleMemberAuthority(operation, tasks, members, shown)
 		if err != nil || !joint {
@@ -267,6 +272,29 @@ func (s *Session) singleMemberAuthority(operation string, tasks []string, member
 	}
 	claim := shown[member.TaskID].Claim
 	return nil, false, &api.Error{Code: api.CodeHeldByOther, Message: config.Text("remote.review_member_held_by_other", member.TaskID, claim.ExecutionID, claim.Owner, claim.Generation)}
+}
+
+// requireAbandonCaller refuses a review abandon of several live members from a
+// process that holds the credential of none of them and coordinates none of their
+// groups. Every holder still confirms the exact material before the server
+// writes; this keeps a stranger from creating that material and one confirmation
+// request per holder, as a single-member abandon already refuses it.
+func (s *Session) requireAbandonCaller(members []api.PublicationMember, shown map[string]api.Task) error {
+	for _, member := range members {
+		credential, found, err := s.Credential(member.TaskID)
+		if err != nil {
+			return err
+		}
+		if found && !credential.Lost {
+			return nil
+		}
+		coordinator, err := s.coordinatesTask(shown[member.TaskID])
+		if err != nil || coordinator {
+			return err
+		}
+	}
+	first := shown[members[0].TaskID].Claim
+	return &api.Error{Code: api.CodeHeldByOther, Message: config.Text("remote.review_member_held_by_other", members[0].TaskID, first.ExecutionID, first.Owner, first.Generation)}
 }
 
 // coordinatesTask reports whether this process holds the coordinator

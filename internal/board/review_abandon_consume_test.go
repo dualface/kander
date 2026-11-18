@@ -276,3 +276,57 @@ func TestAbandonedStrayRunIsNotBoundByAResolution(t *testing.T) {
 		t.Fatalf("the resolution bound the abandoned run: %+v", history.Resolution.Runs)
 	}
 }
+
+// A historical batch outside the plan whose only run was abandoned has no run left:
+// it is no unplanned batch, and nothing needs a resolution.
+func TestAbandonedOnlyRunLeavesNoUnplannedBatch(t *testing.T) {
+	s := &strayBoard{root: tempBoard(t)}
+	s.ids = []string{gateCard(t, s.root, "only-stray")}
+	s.plan = "plan-only-stray"
+	p := ReviewPlan{Schema: 1, PlanID: s.plan, Author: "coordinator", Basis: "fixture", CWD: "/repo", ReportLanguage: "en", TaskIDs: s.ids, Batches: []ReviewPlanBatch{{BatchID: "b1", TaskIDs: s.ids, Base: strayFirst, TargetCommit: straySecond, Requirements: archiveRequirements()}}}
+	if err := CreateReviewPlan(s.root, p); err != nil {
+		t.Fatal(err)
+	}
+	s.closeClean(t, "b1", strayFirst, straySecond, s.ids)
+	var lost ReviewRun
+	withoutPlanPointer(t, s.root, s.ids, func() {
+		run, _, err := PrepareReviewRun(s.root, strayRunInput(s.ids, strayBatchID, "stray-only"), archiveRequirements(), nil, archiveOriginals(), "test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		run.LaunchStatus, run.ExecutionStatus = "started", "ok"
+		if lost, err = FinalizeReviewRun(s.root, run, structuredReport(emptyFindings())); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if text := s.problems(s.ids[0]); !strings.Contains(text, "unplanned execution batch: "+strayBatchID) {
+		t.Fatalf("the stray batch is not reported before the abandon: %q", text)
+	}
+	if err := AbandonReviewRunWithTransaction(s.root, ReviewAbandonRequest{RunID: lost.RunID, Decision: "d", Reason: "r"}); err != nil {
+		t.Fatal(err)
+	}
+	if text := s.problems(s.ids[0]); strings.Contains(text, "unplanned") {
+		t.Fatalf("an abandoned run still makes an unplanned batch: %q", text)
+	}
+}
+
+// The abandoned message names the run also when its members finished since, as
+// the replacement run of the batch passed and the cards moved on.
+func TestPrepareOfAnAbandonedRunSaysSoAfterTheMembersFinished(t *testing.T) {
+	english(t)
+	b := newAbandonBoard(t)
+	run := b.unpublished(t, "finished-run")
+	if err := AbandonReviewRunWithTransaction(b.root, abandonRequest(run.RunID)); err != nil {
+		t.Fatal(err)
+	}
+	err := WithTransaction(b.root, LockScope{Tasks: []string{b.id}, ExclusiveBoard: true}, func(tx *Transaction) error {
+		return tx.Relocate(b.id, "done")
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = PrepareReviewRun(b.root, archiveInput([]string{b.id}, run.RunID, "PMQA"), nil, nil, archiveOriginals(), "test")
+	if err == nil || !strings.Contains(err.Error(), "abandoned") {
+		t.Fatalf("the abandoned message is hidden by the member state: %v", err)
+	}
+}

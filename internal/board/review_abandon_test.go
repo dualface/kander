@@ -6,19 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/dualface/kander/internal/config"
 )
-
-// englishMessages pins the message language: the tests match message text, and
-// the language is process-wide state that other tests of the package change.
-func englishMessages(t *testing.T) {
-	t.Helper()
-	t.Setenv(config.EnvLang, "en")
-	t.Setenv(config.EnvLangCLI, "1")
-	config.ApplyLanguageArgument([]string{"kander", "--lang", "en"})
-	t.Cleanup(func() { config.ApplyLanguageArgument([]string{"kander", "--lang", "cn"}) })
-}
 
 // abandonBoard is a one-card board with a sealed plan that requires PMQA. Its
 // runs are finalized without being published, the state an abandon retires.
@@ -143,7 +131,7 @@ func TestAbandonRetiresARunThatWasNeverPublished(t *testing.T) {
 }
 
 func TestAbandonRefusalsWriteNothing(t *testing.T) {
-	englishMessages(t)
+	english(t)
 	tests := map[string]struct {
 		setup   func(t *testing.T, b abandonBoard) string
 		request func(runID string) ReviewAbandonRequest
@@ -214,7 +202,7 @@ func TestAbandonRefusalsWriteNothing(t *testing.T) {
 		},
 		"run does not exist": {
 			setup: func(t *testing.T, b abandonBoard) string { return "never-prepared" },
-			want:  "missing run",
+			want:  "no run with this ID",
 		},
 	}
 	for name, test := range tests {
@@ -246,7 +234,7 @@ func TestAbandonRefusalsWriteNothing(t *testing.T) {
 }
 
 func TestAbandonReplayReturnsTheSameResultAndWritesNothing(t *testing.T) {
-	englishMessages(t)
+	english(t)
 	b := newAbandonBoard(t)
 	run := b.unpublished(t, "replay-run")
 	if err := AbandonReviewRunWithTransaction(b.root, abandonRequest(run.RunID)); err != nil {
@@ -377,7 +365,7 @@ func TestClosingNeedsANewRunWhenTheOnlyRunWasAbandoned(t *testing.T) {
 }
 
 func TestAbandonedRunCannotBePreparedPublishedOrUsedAsPredecessor(t *testing.T) {
-	englishMessages(t)
+	english(t)
 	b := newAbandonBoard(t)
 	run := b.unpublished(t, "dead-run")
 	if err := AbandonReviewRunWithTransaction(b.root, abandonRequest(run.RunID)); err != nil {
@@ -416,11 +404,11 @@ func TestAbandonedRunCannotBePreparedPublishedOrUsedAsPredecessor(t *testing.T) 
 	}
 }
 
-func TestAbandonAfterAConfirmedPublishIsRefusedByTheKernel(t *testing.T) {
-	englishMessages(t)
+func TestPublishAfterTheAbandonIsRefusedByTheKernel(t *testing.T) {
+	english(t)
 	b := newAbandonBoard(t)
 	run := b.unpublished(t, "raced-run")
-	// A publish that was confirmed before the abandon: it runs on the abandoned run.
+	// The kernel refuses the publish of an abandoned run, whoever confirmed it.
 	if err := AbandonReviewRunWithTransaction(b.root, abandonRequest(run.RunID)); err != nil {
 		t.Fatal(err)
 	}
@@ -442,7 +430,7 @@ func TestAbandonAfterPublishIsRefused(t *testing.T) {
 }
 
 func TestHintOnlyForFinalizedIncompletePublication(t *testing.T) {
-	englishMessages(t)
+	english(t)
 	b := newAbandonBoard(t)
 	b.unpublished(t, "hint-final")
 	_, _, err := PrepareReviewRun(b.root, archiveInput([]string{b.id}, "hint-open", "PMQA"), nil, nil, archiveOriginals(), "test")

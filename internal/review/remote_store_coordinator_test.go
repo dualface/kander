@@ -32,6 +32,7 @@ const (
 type coordinatedRun struct {
 	t                  *testing.T
 	holder, coordinate *remote.Session
+	stranger           *remote.Session
 	store              *remoteReviewStore
 	ids                []string
 	grants             map[string]api.ClaimGrant
@@ -48,6 +49,14 @@ func newCoordinatedRun(t *testing.T, members int) *coordinatedRun {
 // planned of them; a started card the plan leaves out stays live and unplanned.
 func newCoordinatedRunOf(t *testing.T, members, planned int) *coordinatedRun {
 	t.Helper()
+	return newCoordinatedRunKeeping(t, members, planned, false)
+}
+
+// newCoordinatedRunKeeping is newCoordinatedRunOf, and with keepLive the planned
+// members after the first stay live, so a run can have several live members. The
+// stranger session is a third host that holds no credential of the group.
+func newCoordinatedRunKeeping(t *testing.T, members, planned int, keepLive bool) *coordinatedRun {
+	t.Helper()
 	t.Setenv(remote.EnvExecutionID, "")
 	t.Setenv(remote.EnvCoordinatorExecutionID, "")
 	t.Setenv(config.EnvLang, "en")
@@ -60,6 +69,7 @@ func newCoordinatedRunOf(t *testing.T, members, planned int) *coordinatedRun {
 	t.Cleanup(func() { httpServer.Close(); _ = srv.Close() })
 	a, _ := client.New(httpServer.URL, "host-a")
 	b, _ := client.New(httpServer.URL, "host-b")
+	c, _ := client.New(httpServer.URL, "host-c")
 	info, err := a.Register(t.Context(), "coordinated-run", "")
 	if err != nil {
 		t.Fatal(err)
@@ -67,7 +77,7 @@ func newCoordinatedRunOf(t *testing.T, members, planned int) *coordinatedRun {
 	open := func(c *client.Client) *remote.Session {
 		return &remote.Session{Client: c, Project: c.Project(info.ID), Info: info, ServerURL: httpServer.URL, Home: t.TempDir()}
 	}
-	r := &coordinatedRun{t: t, holder: open(a), coordinate: open(b), grants: map[string]api.ClaimGrant{}}
+	r := &coordinatedRun{t: t, holder: open(a), coordinate: open(b), stranger: open(c), grants: map[string]api.ClaimGrant{}}
 	for i := range members {
 		task, err := r.holder.Project.NewTask(t.Context(), "", api.NewTask{Type: "chore", Slug: []string{"first-member", "second-member"}[i], Title: "Run a coordinated review", Language: "en"})
 		if err != nil {
@@ -108,6 +118,9 @@ func newCoordinatedRunOf(t *testing.T, members, planned int) *coordinatedRun {
 		t.Fatal(err)
 	}
 	for _, id := range r.ids[1:planned] {
+		if keepLive {
+			break
+		}
 		own, found, err := r.holder.Credential(id)
 		if err != nil || !found {
 			t.Fatalf("holder credential: %v", err)

@@ -159,7 +159,7 @@ The decision is a reference to a user decision. Kander records it and does not v
 
 **Difference from `superseded_runs`.** `superseded_runs` of the close request retires a successful run that is already published and is outside the chain of its role; its findings stay binding and the run stays in the closure's view. An abandon retires a run that was never published, before any record depends on it, and removes it from the view.
 
-An older server rejects the `abandon` action (`unsupported review action`), and an older client cannot read a run record with `abandonment` or a batch view with `abandoned_runs` (it decodes strictly): upgrade the server first, then every client that handles a batch with an abandoned run.
+An older server rejects the `abandon` action (`unsupported review action`), and an older client ignores the new fields: it neither shows `abandoned_runs` nor the `abandonment` of a run, and the view it prints and hashes for a batch with an abandoned run lacks the audit line, so a close request built from that output carries a view hash the server refuses. Upgrade the server first, then every client that handles a batch with an abandoned run.
 
 ## Consumption Interfaces and Checks
 

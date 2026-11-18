@@ -399,3 +399,42 @@ func TestPrepareOfAnAbandonedRunIsRefused(t *testing.T) {
 		t.Fatalf("the prepare of an abandoned run: %v", err)
 	}
 }
+
+// A publication the holder confirmed before the abandon is refused afterwards: the
+// confirmed material does not publish an abandoned run, and writes nothing.
+func TestConfirmedPublishIsRefusedAfterTheAbandon(t *testing.T) {
+	u := finalizedUnpublished(t)
+	before, err := u.p.Show(t.Context(), u.grant.Task.TaskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(u.run.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publication, err := u.p.PreparePublication(t.Context(), api.PublicationPrepare{ID: "confirmed-before-abandon", Operation: "review-publish:" + u.run.RunID, Payload: payload, Members: []api.PublicationMember{{TaskID: u.grant.Task.TaskID, Revision: before.Revision, Generation: u.grant.Claim.Generation}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := u.p.ConfirmPublication(t.Context(), publication.ID, api.PublicationApproval{TaskID: u.grant.Task.TaskID, Digest: publication.Digest, Revision: before.Revision, Generation: u.grant.Claim.Generation}, u.holder); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := u.p.ReviewAction(t.Context(), "abandon-after-confirm", "abandon", u.request(), &u.holder); err != nil {
+		t.Fatal(err)
+	}
+	proof := &client.Claim{PublicationID: publication.ID, ReviewWriter: u.writer.ReviewWriter}
+	_, err = u.p.ReviewRuntime(t.Context(), "publish-confirmed-material", u.run.RunID, "publish", map[string]string{}, proof)
+	if err == nil || !strings.Contains(err.Error(), "abandoned") {
+		t.Fatalf("the confirmed material published an abandoned run: %v", err)
+	}
+	after, err := u.p.Show(t.Context(), u.grant.Task.TaskID)
+	if err != nil || after.Revision != before.Revision {
+		t.Fatalf("the refused publish changed the member card: %+v %v", after, err)
+	}
+	if indexes, err := board.ParseReviewIndexes(after.Text); err != nil || len(indexes) != 0 {
+		t.Fatalf("the member card has a copy: %+v %v", indexes, err)
+	}
+	if got, err := u.p.Publication(t.Context(), publication.ID); err != nil || got.Status == "published" {
+		t.Fatalf("the publication was marked published: %+v %v", got, err)
+	}
+}

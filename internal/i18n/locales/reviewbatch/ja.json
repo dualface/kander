@@ -73,5 +73,8 @@
   "board.review_abandon_successor": "別の run がこの run を previous_run_id に指定しているため（{{.V0}}）、放棄できません",
   "board.review_abandon_no_live": "この run には working または review にあり、バッチに残っているメンバーがいないため、放棄を確認する人がいません。先にメンバーを working に戻してから放棄してください",
   "board.review_abandon_decision_required": "放棄には空でない決定参照と空でない理由が必要です",
-  "board.review_abandon_conflict": "この run はすでに別の決定または理由で放棄されています。異なる値で 2 回記録することはできません"
+  "board.review_abandon_conflict": "この run はすでに別の決定または理由で放棄されています。異なる値で 2 回記録することはできません",
+  "board.review_abandon_missing_run": "この ID の run は存在しないため、放棄できません",
+  "board.review_abandon_input_changed": "放棄の準備中に run が変化しました。読み直してから再試行してください",
+  "board.review_abandon_group_mismatch": "この run のメンバーカードが run と異なるタスクグループに属しているため、run を放棄できません"
 }
