@@ -222,6 +222,7 @@ func TestRetargetCorrectsWrongTargetThroughTheCLI(t *testing.T) {
 }
 
 func TestExtendPlanSchemaListsRetargetBatches(t *testing.T) {
+	setupLang(t, filepath.Join(t.TempDir(), "config.json"))
 	code, out, stderr := captureRun(t, []string{"extend-plan", "--schema"})
 	if code != 0 {
 		t.Fatalf("%d %s", code, stderr)
