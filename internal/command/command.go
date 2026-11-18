@@ -107,16 +107,19 @@ func helpCommand(root *cobra.Command) *cobra.Command {
 	}
 }
 
-// Annotations that make the root refuse to run a command in a checkout that is not bound to a
-// project: NeedsProject marks the command, and ProjectUnless names a flag whose presence lifts
-// the requirement (a command that only prints static text, such as review --schema).
+// Annotations that make GateProject refuse to run a command in a checkout that is not bound to a
+// project: NeedsProject marks the command, and ProjectUnless names a flag that lifts the
+// requirement (a command that only prints static text, such as review --schema). A bool flag
+// lifts it only while its parsed value is true, so --schema=false does not; a flag of another
+// type lifts it when it is given.
 const (
 	NeedsProject  = "kander/needs-project"
 	ProjectUnless = "kander/project-unless-flag"
 )
 
-// RequireProject marks c as needing a project binding and returns it. A flag named in unless
-// lifts the requirement when it is given.
+// RequireProject marks c as needing a project binding and returns it. The flag named in unless
+// lifts the requirement as ProjectUnless describes: a bool flag only when its value is true, any
+// other flag when it is given.
 func RequireProject(c *cobra.Command, unless ...string) *cobra.Command {
 	if c.Annotations == nil {
 		c.Annotations = map[string]string{}
