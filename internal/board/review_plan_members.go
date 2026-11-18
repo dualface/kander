@@ -51,14 +51,11 @@ func planGroup(tx *Transaction, p ReviewPlan) (string, error) {
 
 // memberAdditionFacts is the event of one new member for the plan kernel and, for
 // each fact that failed, the text that names the member and the value. The
-// kernel decides; the text only explains. A card that is not a directory card
-// cannot be judged and is an error, as it is for a new plan.
+// kernel decides; the text only explains. The snapshot of a write transaction
+// refuses a card that is not a directory card.
 func memberAdditionFacts(tx *Transaction, p ReviewPlan, group, id string, cas bool) (ev reviewplan.AddMembers, parts []string, s Snapshot, err error) {
 	if s, err = tx.Snapshot(id); err != nil {
 		return
-	}
-	if !s.Entry.IsDirectory() {
-		return ev, nil, s, kanbanError("board.migration_required", id)
 	}
 	ev.Cas = cas
 	if ev.Active = s.Entry.State == "working" || s.Entry.State == "review"; !ev.Active {
@@ -104,7 +101,11 @@ func memberAdditionFacts(tx *Transaction, p ReviewPlan, group, id string, cas bo
 	if ev.Language = language == p.ReportLanguage; !ev.Language {
 		parts = append(parts, t("board.review_add_member_language", id, language, p.PlanID, p.ReportLanguage))
 	}
-	batch, _, err := unplannedReviewRun(tx, p, []string{id}, true)
+	// A resolution of an unplanned batch covers the members of the plan when it was
+	// recorded, never a member who joins afterwards, so no resolution excuses a run.
+	unresolved := p
+	unresolved.ResolvedBatches = nil
+	batch, _, err := unplannedReviewRun(tx, unresolved, []string{id}, true)
 	if err != nil {
 		return
 	}
@@ -112,22 +113,6 @@ func memberAdditionFacts(tx *Transaction, p ReviewPlan, group, id string, cas bo
 		parts = append(parts, t("board.review_add_member_unplanned_run", id, batch, p.PlanID))
 	}
 	return
-}
-
-// addMembersRefusal is the refusal of an addition the kernel refused although the
-// shell found no cause: the conditions of `stepAddMembers` on the plan state.
-func addMembersRefusal(planID string, st reviewplan.State, ev reviewplan.AddMembers) error {
-	var conditions []string
-	if !st.Planned {
-		conditions = append(conditions, t("board.refusal_state_unplanned", planID))
-	}
-	if st.Sealed {
-		conditions = append(conditions, t("board.refusal_state_sealed", planID))
-	}
-	return kernelRefusal("plan extension refused", "addMembers", []refusalFact{
-		{"Cas", ev.Cas}, {"Active", ev.Active}, {"Free", ev.Free}, {"Group", ev.Group},
-		{"Language", ev.Language}, {"NoUnplannedRuns", ev.NoUnplannedRuns},
-	}, conditions)
 }
 
 // addPlanMembers adds the started members ids of the plan's group to the plan p
@@ -150,10 +135,9 @@ func addPlanMembers(tx *Transaction, pk *planKernel, p *ReviewPlan, x ReviewPlan
 		if e != nil {
 			return e
 		}
-		state := pk.state
 		if !pk.step(ev) {
 			if len(parts) == 0 {
-				return addMembersRefusal(p.PlanID, state, ev)
+				parts = []string{t("board.refusal_state_unknown")}
 			}
 			return reviewRefusal("plan member addition refused", t("board.review_add_members_next"), parts...)
 		}

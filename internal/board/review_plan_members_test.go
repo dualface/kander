@@ -492,3 +492,26 @@ func TestAddMembersKeepsTheCheckpointReconcilable(t *testing.T) {
 		t.Fatalf("check: %d %s %v %v", code, out, errs, err)
 	}
 }
+
+// A resolution of an unplanned batch covers the plan members of its time. A card
+// with a run in that batch is not excused by it and cannot join afterwards.
+func TestAddMembersRefusesARunInAResolvedBatch(t *testing.T) {
+	useEnglish(t)
+	s := defaultStrayBoard(t, "resolved-join")
+	other := gateCard(t, s.root, "resolved-join-other")
+	run := s.strayRun(t, strayRunInput(append(slices.Clone(s.ids), other), "stray-shared", "stray-shared-run"), archiveRequirements(), emptyFindings())
+	s.mustResolve(t)
+	x := s.request(t)
+	x.ResolveBatch.BatchID = run.BatchID
+	if err := s.resolve(x); err != nil {
+		t.Fatal(err)
+	}
+	before := s.revision(t)
+	err := ExtendReviewPlan(s.root, ReviewPlanExtension{PlanID: s.plan, ExpectedRevision: before, AddMembers: []string{other}, Author: "coordinator", Basis: "fixture"})
+	if err == nil || !strings.Contains(err.Error(), other) || !strings.Contains(err.Error(), run.BatchID) {
+		t.Fatalf("error: %v", err)
+	}
+	if got := s.revision(t); got != before {
+		t.Fatalf("revision moved to %d", got)
+	}
+}
