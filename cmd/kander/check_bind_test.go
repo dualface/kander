@@ -74,3 +74,42 @@ func TestCheckCommandDeliveryBoardFree(t *testing.T) {
 		t.Fatalf("stderr=%q, want %q", result.stderr, want)
 	}
 }
+
+// The full binary binds the agent status observer of liveness to list: a working
+// card with an observable terminal carries an agent object under --agent-status,
+// and a card without --agent-status carries none. A list command built without
+// the observer would print null in both forms.
+func TestListCommandObservesAgentStatusInFullBinary(t *testing.T) {
+	fixture := fakeMuxFixture(t)
+	id := readyCard(t, "list-agent-status")
+	runKander(t, "start", "--launcher", "fakemux", id).require(t, "start")
+	waitCommandFact(t, func() bool {
+		task, err := fixture.service.Project.Show(t.Context(), id)
+		return err == nil && task.State == "working" && board.MetadataFrom(task.Text, board.FieldWindow) != ""
+	})
+
+	agentOf := func(listed map[string]any) any {
+		tasks, _ := listed["tasks"].([]any)
+		if len(tasks) != 1 || tasks[0].(map[string]any)["task_id"] != id {
+			t.Fatalf("list: %v", listed)
+		}
+		return tasks[0].(map[string]any)["agent"]
+	}
+	observed := requireResult(t, runKander(t, "list", "--json", "--agent-status", "working"), "list --agent-status", "schema_version", "tasks")
+	agent, ok := agentOf(observed).(map[string]any)
+	if !ok {
+		t.Fatalf("a working card with a window has no agent observation: %v", observed)
+	}
+	for _, key := range []string{"status", "runtime_state", "observed_at", "valid"} {
+		if _, present := agent[key]; !present {
+			t.Fatalf("agent lacks %q: %v", key, agent)
+		}
+	}
+	if status, _ := agent["status"].(string); status == "" {
+		t.Fatalf("agent status is empty: %v", agent)
+	}
+	plain := requireResult(t, runKander(t, "list", "--json", "working"), "list", "schema_version", "tasks")
+	if got := agentOf(plain); got != nil {
+		t.Fatalf("agent without --agent-status: %v", got)
+	}
+}
