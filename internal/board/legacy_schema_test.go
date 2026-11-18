@@ -117,14 +117,16 @@ func TestNewCardUsesCanonicalTokensOnly(t *testing.T) {
 	if !strings.Contains(text, Placeholder) {
 		t.Fatal("template lost its placeholder")
 	}
-	for _, legacy := range legacyToken {
-		if strings.Contains(text, "\n- "+legacy+":") || strings.Contains(text, "\n## "+legacy+"\n") {
-			t.Fatalf("new card still carries the legacy token %s", legacy)
+	for _, names := range []map[string]string{legacyFieldNames, legacySectionNames, legacyMarkerNames} {
+		for legacy := range names {
+			if strings.Contains(text, "\n- "+legacy+":") || strings.Contains(text, "\n## "+legacy+"\n") {
+				t.Fatalf("new card still carries the legacy token %s", legacy)
+			}
 		}
 	}
 }
 
-// Reading accepts either spelling, so a legacy or mixed card keeps passing the
+// A legacy or mixed card is read with English names, so it keeps passing the
 // gates it passed before the rename.
 func TestGatesAcceptLegacyAndMixedCards(t *testing.T) {
 	resetLang(t)
@@ -143,13 +145,14 @@ func TestGatesAcceptLegacyAndMixedCards(t *testing.T) {
 			if code, _, _, err := CheckBoard(root, []string{taskID}, false); err != nil || code != 0 {
 				t.Fatalf("check code=%d err=%v", code, err)
 			}
-			if got := MetadataFrom(form.text, FieldTaskBranch); got != "legacy-branch" {
+			text := NormalizeLegacyCard(form.text)
+			if got := MetadataFrom(text, FieldTaskBranch); got != "legacy-branch" {
 				t.Fatalf("task branch %q", got)
 			}
-			if got := MetadataFrom(form.text, FieldStartedAt); got != "2026-09-01 04:00" {
+			if got := MetadataFrom(text, FieldStartedAt); got != "2026-09-01 04:00" {
 				t.Fatalf("started at %q", got)
 			}
-			if _, ok := SectionBody(form.text, SectionDiscussion); !ok {
+			if _, ok := SectionBody(text, SectionDiscussion); !ok {
 				t.Fatal("discussion section not found")
 			}
 
@@ -188,7 +191,7 @@ func TestGatesAcceptLegacyAndMixedCards(t *testing.T) {
 }
 
 // A legacy card that still writes its group inside the discussion block is read
-// through both the legacy and the canonical marker.
+// through both the converted legacy marker and the canonical one.
 func TestLegacyDiscussionMetadataStillParses(t *testing.T) {
 	resetLang(t)
 	for marker, group := range map[string]string{
@@ -198,7 +201,7 @@ func TestLegacyDiscussionMetadataStillParses(t *testing.T) {
 		text := strings.Replace(
 			legacyCard, "自审: 通过", marker+": "+group+"\n自审: 通过", 1,
 		)
-		if got := TaskGroupFrom(text); got != group {
+		if got := TaskGroupFrom(NormalizeLegacyCard(text)); got != group {
 			t.Fatalf("marker %s: group %q", marker, got)
 		}
 	}

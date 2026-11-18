@@ -73,7 +73,10 @@ func RestoreView(view CapturedView) (Board, error) {
 		}
 		path := view.Location + "/tasks/" + id
 		b.Entries[id] = Entry{TaskID: id, State: card.State, Kind: card.Kind, Path: path, Document: path + "/spec.md"}
-		b.documents[id], b.revisions[id], b.dispatches[id] = card.Text, card.Revision, copyDispatchSummary(card.Dispatch)
+		// The server sends English schema names. Converting again is a no-op for
+		// such text and makes a view from an older server read the same way.
+		text, _ := normalizeLegacyCard(card.Text)
+		b.documents[id], b.revisions[id], b.dispatches[id] = text, card.Revision, copyDispatchSummary(card.Dispatch)
 		if card.DocumentError != "" {
 			b.documentErrors[id] = errors.New(card.DocumentError)
 		}

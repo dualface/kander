@@ -28,7 +28,7 @@ func portableBoard(t *testing.T, state, taskID, windowValue string) string {
 	if _, err := config.Save(cfg); err != nil {
 		t.Fatal(err)
 	}
-	card := "# 冒烟\n\n- 类型: Chore\n- 会话: codex session-x\n- 窗口: " + windowValue + "\n"
+	card := "# 冒烟\n\n- TYPE: Chore\n- SESSION: codex session-x\n- WINDOW: " + windowValue + "\n"
 	if err := os.Mkdir(filepath.Join(root, state, taskID), 0700); err != nil {
 		t.Fatal(err)
 	}

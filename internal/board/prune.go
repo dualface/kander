@@ -222,7 +222,7 @@ func planPrune(root string, report *PruneReport) (*prunePlan, error) {
 	// An unreadable card hides its group, so no group may count as settled.
 	unreadable := map[string]bool{}
 	for id, e := range b.Entries {
-		text, e2 := readDocument(e)
+		text, e2 := readCardText(e)
 		if e2 != nil {
 			warn(id, e2)
 			unreadable[id] = true

@@ -35,6 +35,11 @@ type Snapshot struct {
 	Revision    uint64 `json:"revision"`
 	Text        string `json:"text"`
 	OperationID string `json:"operation_id"`
+
+	// legacy records that the card on disk uses the legacy Chinese schema names
+	// while Text carries the English ones; a controlled write that changes the
+	// text then puts the English names on disk.
+	legacy bool
 }
 
 // FileChange is a redo step. Paths are board-relative, never cached absolute paths.
@@ -203,7 +208,7 @@ func (tx *Transaction) Snapshot(id string) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	text, err := readDocument(e)
+	text, legacy, err := readCardTextLegacy(e)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -218,7 +223,7 @@ func (tx *Transaction) Snapshot(id string) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	return Snapshot{Entry: e, Revision: v, Text: text, OperationID: last.OperationID}, nil
+	return Snapshot{Entry: e, Revision: v, Text: text, OperationID: last.OperationID, legacy: legacy}, nil
 }
 
 // Expect rejects stale revisions and states before staging a mutation.
@@ -375,7 +380,13 @@ func (tx *Transaction) Relocate(id, state string) error {
 				return kanbanError("board.transaction_invalid", "duplicate move")
 			}
 		}
-		text := s.Text
+		// Recovery compares this text with the bytes at the target, so it is the
+		// text on disk: a legacy card read as English still sits there in Chinese
+		// unless this transaction stages a write of it.
+		text, err := readDocument(s.Entry)
+		if err != nil {
+			return err
+		}
 		for _, file := range tx.record.Files {
 			if filepath.Join(tx.root, file.Path) == s.Entry.Document {
 				text = file.After

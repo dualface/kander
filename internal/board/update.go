@@ -19,14 +19,13 @@ func setMetadata(text, field, value string) (string, error) {
 	if strings.ContainsAny(value, "\n\r") {
 		return "", kanbanError("board.transaction_invalid", field)
 	}
-	re := FieldLineRe(field)
-	matches := re.FindAllStringIndex(text, -1)
+	matches := FieldLineRe(field).FindAllStringIndex(CardHeader(text), -1)
 	if len(matches) > 1 {
 		return "", kanbanError("board.transaction_invalid", field)
 	}
 	line := RenderField(field, value)
 	if len(matches) == 1 {
-		return re.ReplaceAllStringFunc(text, func(string) string { return line }), nil
+		return text[:matches[0][0]] + line + text[matches[0][1]:], nil
 	}
 	at := strings.Index(text, "\n## ")
 	if at < 0 {
@@ -126,7 +125,10 @@ func frozenContract(text string) map[string]string {
 // executing agent may toggle; indented and uppercase markers stay frozen.
 var acceptanceTickRe = regexp.MustCompile(`(?m)^- \[x\] `)
 
-func fieldLines(text, name string) []string { return FieldLineRe(name).FindAllString(text, -1) }
+// fieldLines returns the header lines of one metadata field.
+func fieldLines(text, name string) []string {
+	return FieldLineRe(name).FindAllString(CardHeader(text), -1)
+}
 func validSpecUpdate(id, old, next, state, decision string) (string, error) {
 	// Duplicate headings and metadata create ambiguous contracts across readers.
 	for _, field := range append(append([]string(nil), managedFields...), FieldTaskGroup, "SIZE", FieldType, FieldTaskBranch) {
@@ -135,7 +137,7 @@ func validSpecUpdate(id, old, next, state, decision string) (string, error) {
 		}
 	}
 	for _, section := range append(append([]string(nil), frozenSections...), SectionDiscussion, "REVIEWS", "DISPATCHES", "CONTRACT_DECISIONS", "LIFECYCLE_DECISION") {
-		re := regexp.MustCompile(`(?m)^## ` + TokenPattern(section) + `[ \t\r]*$`)
+		re := regexp.MustCompile(`(?m)^## ` + regexp.QuoteMeta(section) + `[ \t\r]*$`)
 		if len(re.FindAllStringIndex(next, -1)) > 1 {
 			return "", withUpdateHint(kanbanError("board.transaction_invalid", section), "board.update_hint_duplicate")
 		}
@@ -255,6 +257,10 @@ func UpdateDocument(root, id string, o UpdateOptions) error {
 			crlfCard = strings.Contains(s.Text, "\r\n")
 			s.Text = lfLineEndings(s.Text)
 			o.Text = lfLineEndings(o.Text)
+			// The snapshot text already carries English schema names. A submission
+			// for a legacy card, or one that is itself a legacy card, is read the
+			// same way, so both sides of every comparison below agree.
+			o.Text = normalizeLegacyInput(o.Text, s.legacy)
 		}
 		if err = tx.requireExecution(s, o.Authorization, true); err != nil {
 			return err

@@ -319,7 +319,7 @@ func reviewScaleFromTask(taskInput string) string {
 	if err != nil {
 		return "large"
 	}
-	size := board.MetadataFrom(string(data), board.FieldSize)
+	size := board.MetadataFrom(board.NormalizeLegacyCard(string(data)), board.FieldSize)
 	if size == "small" || size == "large" {
 		return size
 	}

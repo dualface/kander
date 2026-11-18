@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/process"
@@ -142,7 +143,7 @@ func copySpecSnapshot(src, runtime, dest string) error {
 	if err != nil {
 		return err
 	}
-	if err := fs.WriteTextAtomic(runtime, dest, string(data), false); err != nil {
+	if err := fs.WriteTextAtomic(runtime, dest, board.NormalizeLegacyCard(string(data)), false); err != nil {
 		return err
 	}
 	return fs.MakeRegularFileReadOnly(runtime, dest)

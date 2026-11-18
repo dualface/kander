@@ -73,6 +73,10 @@ func ReadDocumentSnapshot(root, id, name string) (Snapshot, string, error) {
 		if !utf8.ValidString(text) {
 			return kanbanError("board.task_document_is_not_valid_utf_8", name)
 		}
+		if name == "spec.md" {
+			// The body shows the same text as the snapshot, English schema names included.
+			text, _ = normalizeLegacyCard(text)
+		}
 		return nil
 	})
 	if err != nil {

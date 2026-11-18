@@ -24,7 +24,7 @@ func (tx *Transaction) CommittedView() (Board, error) {
 	view.documentErrors = make(map[string]error)
 	view.revisions = make(map[string]uint64, len(view.Entries))
 	for id, entry := range view.Entries {
-		text, err := readDocument(entry)
+		text, err := readCardText(entry)
 		if err != nil {
 			view.documentErrors[id] = err
 		} else {

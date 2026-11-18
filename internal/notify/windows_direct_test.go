@@ -93,7 +93,7 @@ func TestNotifyDeliversThroughHerdrOnEveryPlatform(t *testing.T) {
 	t.Setenv("PATH", buildFakeHerdrNotify(t))
 
 	taskID := "20260906-notify-gate-task"
-	card := "# 冒烟" + "\n" + "\n" + "- 类型: Chore" + "\n" + "- 会话: codex session-x" + "\n" + "- 窗口: herdr:w1:t1:w1:p1" + "\n"
+	card := "# 冒烟" + "\n" + "\n" + "- TYPE: Chore" + "\n" + "- SESSION: codex session-x" + "\n" + "- WINDOW: herdr:w1:t1:w1:p1" + "\n"
 	if err := os.Mkdir(filepath.Join(root, "working", taskID), 0700); err != nil {
 		t.Fatal(err)
 	}

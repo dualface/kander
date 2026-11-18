@@ -138,7 +138,9 @@ func DefaultMissingSize(root string) ([]SizeDefault, error) {
 		if !entry.IsDirectory() {
 			continue
 		}
-		text, err := board.Document(id)
+		// The staged copy is compared byte for byte with the source, so the
+		// card is read as it lies on disk, not with English schema names.
+		text, err := readDocument(entry)
 		if err != nil {
 			return changed, err
 		}

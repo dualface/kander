@@ -131,10 +131,8 @@ func listTaskOf(entry Entry, text string, revision uint64) ListTask {
 		CreatedAt:  summary.CreatedAt,
 		StartedAt:  summary.StartedAt,
 		FinishedAt: summary.CompletedAt,
-		// MetadataFrom stays on the field line; resultFrom would read the next
-		// line of an empty RESULT field.
-		Result:   MetadataFrom(text, FieldResult),
-		Revision: revision,
+		Result:     MetadataFrom(text, FieldResult),
+		Revision:   revision,
 	}
 }
 

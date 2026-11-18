@@ -40,7 +40,7 @@ func newMechanicalFixtureWithRequirements(t *testing.T, files map[string]string,
 		t.Fatal(err)
 	}
 	if err = board.WithTransaction(root, board.LockScope{Tasks: []string{mechanicalTaskID}}, func(tx *board.Transaction) error {
-		return tx.Put(mechanicalTaskID, "spec.md", s.Text+"\n- OWNER: codex\n")
+		return tx.Put(mechanicalTaskID, "spec.md", strings.Replace(s.Text, "- TASK_BRANCH: task\n", "- OWNER: codex\n- TASK_BRANCH: task\n", 1))
 	}); err != nil {
 		t.Fatal(err)
 	}

@@ -325,7 +325,7 @@ func coordinatorMembership(tx *Transaction, group string, ids []string) error {
 	}
 	actual := []string{}
 	for id, entry := range b.Entries {
-		text, e := readDocument(entry)
+		text, e := readCardText(entry)
 		if e != nil {
 			return e
 		}
