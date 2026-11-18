@@ -183,6 +183,7 @@ func TestPrepareAfterUpgradeReusesJointPublication(t *testing.T) {
 				t.Fatal("the joint prepare carried no publication")
 			}
 
+			var legacyPath string
 			if legacy {
 				// Replace the record of this client by the one an older client wrote.
 				root, err := holder.LocalDataRoot()
@@ -216,7 +217,8 @@ func TestPrepareAfterUpgradeReusesJointPublication(t *testing.T) {
 				}
 				request := api.ReviewPrepare{Input: input, Requirements: requirements, Originals: originals, Version: "v-a", WriterHash: board.ReviewDigest([]byte(store.writer))}
 				request.Input.CWD = "project:" + info.ID
-				if err := os.WriteFile(filepath.Join(history, legacyHistoryName(t, request)), older, 0o600); err != nil {
+				legacyPath = filepath.Join(history, legacyHistoryName(t, request))
+				if err := os.WriteFile(legacyPath, older, 0o600); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -241,20 +243,39 @@ func TestPrepareAfterUpgradeReusesJointPublication(t *testing.T) {
 				}
 				return len(all)
 			}
-			beforePublications, beforeRequests := publications(), requests()
-			again, fresh, err := store.Prepare(input, requirements, nil, originals, "v-b")
-			if err != nil || fresh || again.KanderVersion != "v-a" {
-				t.Fatalf("prepare as another version: %+v fresh=%v %v", again, fresh, err)
+			// Each retry is a new request that carries the first prepare's
+			// publication and exact body, and it adds no publication or request.
+			retry := func(version string) {
+				t.Helper()
+				mu.Lock()
+				sentBefore := len(prepares)
+				mu.Unlock()
+				beforePublications, beforeRequests := publications(), requests()
+				again, fresh, err := store.Prepare(input, requirements, nil, originals, version)
+				if err != nil || fresh || again.KanderVersion != "v-a" {
+					t.Fatalf("prepare as %s: %+v fresh=%v %v", version, again, fresh, err)
+				}
+				mu.Lock()
+				defer mu.Unlock()
+				if len(prepares) != sentBefore+1 {
+					t.Fatalf("prepare as %s sent %d requests", version, len(prepares)-sentBefore)
+				}
+				retried := prepares[len(prepares)-1]
+				if retried.publication != first.publication || !bytes.Equal(retried.body, first.body) {
+					t.Fatalf("prepare as %s did not send the frozen material of publication %s: %s", version, first.publication, retried.publication)
+				}
+				if publications() != beforePublications || requests() != beforeRequests {
+					t.Fatalf("prepare as %s created publications %d -> %d or requests %d -> %d", version, beforePublications, publications(), beforeRequests, requests())
+				}
 			}
-			mu.Lock()
-			retried := prepares[len(prepares)-1]
-			mu.Unlock()
-			var sent api.ReviewPrepare
-			if err := json.Unmarshal(retried.body, &sent); err != nil || retried.publication != first.publication || sent.Version != "v-a" {
-				t.Fatalf("the retry did not send the frozen material of publication %s: %s version %q: %v", first.publication, retried.publication, sent.Version, err)
-			}
-			if publications() != beforePublications || requests() != beforeRequests {
-				t.Fatalf("the retry created publications %d -> %d or requests %d -> %d", beforePublications, publications(), beforeRequests, requests())
+			retry("v-b")
+			if legacyPath != "" {
+				// The older record found the publication and wrote it under the
+				// current key, so the older record is no longer needed.
+				if err := os.Remove(legacyPath); err != nil {
+					t.Fatal(err)
+				}
+				retry("v-c")
 			}
 		})
 	}
