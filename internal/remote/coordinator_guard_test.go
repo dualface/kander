@@ -363,3 +363,23 @@ func TestGuardTextsInEveryLanguage(t *testing.T) {
 		}
 	}
 }
+
+// The text says which generation took the group over, never that it still runs
+// it: the successor may have released the group since, and the replaced
+// execution is refused all the same.
+func TestATakenOverExecutionIsRefusedAfterTheSuccessorReleased(t *testing.T) {
+	f := newGuardFixture(t)
+	grant := f.first()
+	taken := f.takeOver(grant)
+	f.release(f.b)
+	f.log.take()
+	got := f.refused(f.a, firstCoordinator, f.request("again", grant.Checkpoint))
+	if want := config.Text("remote.coordinator_execution_taken_over", firstCoordinator, f.group, grant.Claim.Generation, taken.Claim.Generation); got != want {
+		t.Fatalf("%q, want %q", got, want)
+	}
+	for _, claim := range []string{"is running", "still holds", "now holds"} {
+		if strings.Contains(got, claim) {
+			t.Fatalf("the refusal speaks of a running successor: %q", got)
+		}
+	}
+}
