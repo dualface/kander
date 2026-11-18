@@ -24,9 +24,11 @@ var vectorEvents = []Event{
 	Create{Batches: 1, Seal: false, CoversAll: true, Chain: true, NoUnplannedRuns: true, MembersFree: true},
 	Create{Batches: 2, Seal: true, CoversAll: true, Chain: true, NoUnplannedRuns: true, MembersFree: true},
 	Create{Batches: 1, Seal: true, CoversAll: false, Chain: true, NoUnplannedRuns: true, MembersFree: true},
-	Extend{Rebind: true, Sync: false, Batch: false, Drop: false, Release: false, Resolve: false, Decision: false},
-	Extend{Rebind: true, Sync: true, Batch: false, Drop: false, Release: false, Resolve: false, Decision: false},
-	Extend{Rebind: false, Sync: false, Batch: false, Drop: false, Release: true, Resolve: false, Decision: true},
+	Extend{Rebind: true, Sync: false, Batch: false, Drop: false, Release: false, Resolve: false, Retarget: false, Decision: false},
+	Extend{Rebind: true, Sync: true, Batch: false, Drop: false, Release: false, Resolve: false, Retarget: false, Decision: false},
+	Extend{Rebind: false, Sync: false, Batch: false, Drop: false, Release: true, Resolve: false, Retarget: false, Decision: true},
+	Extend{Rebind: false, Sync: false, Batch: false, Drop: false, Release: false, Resolve: false, Retarget: true, Decision: false},
+	Extend{Rebind: false, Sync: false, Batch: false, Drop: false, Release: false, Resolve: false, Retarget: true, Decision: true},
 	Admit{Cas: true, OtherOp: false, BatchOnly: true, Owed: true},
 	Admit{Cas: true, OtherOp: false, BatchOnly: true, Owed: false},
 	Append{Seal: false, Owed: false, Cas: true, Binding: true, MembersActive: true, PreviousClosed: true, Requirements: true, AllAssigned: true, NoDropOwed: true},
@@ -35,6 +37,8 @@ var vectorEvents = []Event{
 	Seal{Cas: true, AllAssigned: true, NoDropOwed: true},
 	Rebind{Cas: true, Exact: true, MembersActive: true},
 	Sync{Cas: true, CyclesCurrent: true, Targets: true},
+	Retarget{At: 0, Cas: true, Binding: true, Chain: true, TargetKept: true},
+	Retarget{At: 0, Cas: true, Binding: true, Chain: true, TargetKept: false},
 	Drop{N: 1, Cas: true, Trailing: true},
 	Release{Cas: true, Decision: true, Members: true, Accepted: true},
 	Resolve{Cas: true, Fresh: true, Covered: true, Published: true, Git: true},
@@ -69,7 +73,7 @@ func encodeEvent(e Event) string {
 	case Create:
 		return vectortest.Event("create", "batches", vectortest.Uint(ev.Batches), "seal", vectortest.Bool(ev.Seal), "coversAll", vectortest.Bool(ev.CoversAll), "chain", vectortest.Bool(ev.Chain), "noUnplannedRuns", vectortest.Bool(ev.NoUnplannedRuns), "membersFree", vectortest.Bool(ev.MembersFree))
 	case Extend:
-		return vectortest.Event("extend", "rebind", vectortest.Bool(ev.Rebind), "sync", vectortest.Bool(ev.Sync), "batch", vectortest.Bool(ev.Batch), "drop", vectortest.Bool(ev.Drop), "release", vectortest.Bool(ev.Release), "resolve", vectortest.Bool(ev.Resolve), "decision", vectortest.Bool(ev.Decision))
+		return vectortest.Event("extend", "rebind", vectortest.Bool(ev.Rebind), "sync", vectortest.Bool(ev.Sync), "batch", vectortest.Bool(ev.Batch), "drop", vectortest.Bool(ev.Drop), "release", vectortest.Bool(ev.Release), "resolve", vectortest.Bool(ev.Resolve), "retarget", vectortest.Bool(ev.Retarget), "decision", vectortest.Bool(ev.Decision))
 	case Admit:
 		return vectortest.Event("admit", "cas", vectortest.Bool(ev.Cas), "otherOp", vectortest.Bool(ev.OtherOp), "batchOnly", vectortest.Bool(ev.BatchOnly), "owed", vectortest.Bool(ev.Owed))
 	case Append:
@@ -80,6 +84,8 @@ func encodeEvent(e Event) string {
 		return vectortest.Event("rebind", "cas", vectortest.Bool(ev.Cas), "exact", vectortest.Bool(ev.Exact), "membersActive", vectortest.Bool(ev.MembersActive))
 	case Sync:
 		return vectortest.Event("sync", "cas", vectortest.Bool(ev.Cas), "cyclesCurrent", vectortest.Bool(ev.CyclesCurrent), "targets", vectortest.Bool(ev.Targets))
+	case Retarget:
+		return vectortest.Event("retarget", "at", vectortest.Uint(ev.At), "cas", vectortest.Bool(ev.Cas), "binding", vectortest.Bool(ev.Binding), "chain", vectortest.Bool(ev.Chain), "targetKept", vectortest.Bool(ev.TargetKept))
 	case Drop:
 		return vectortest.Event("drop", "n", vectortest.Uint(ev.N), "cas", vectortest.Bool(ev.Cas), "trailing", vectortest.Bool(ev.Trailing))
 	case Release:

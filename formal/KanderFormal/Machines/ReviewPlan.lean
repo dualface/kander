@@ -62,7 +62,7 @@ def createEvent : EventDecl where
 
 /-! ## Plan extension (`ExtendReviewPlanWithTransaction`, `ResolveReviewBatch`) -/
 
-def ops : List String := ["rebind", "sync", "batch", "drop", "release", "resolve"]
+def ops : List String := ["rebind", "sync", "batch", "drop", "release", "resolve", "retarget"]
 
 /-- At most one of the Boolean arguments holds. -/
 def atMostOne : List String → Expr
@@ -82,7 +82,7 @@ def extendEvent : EventDecl where
   assigns := []
 
 /-- The admission of an extension to the plan: the CAS matched, and a sealed
-plan takes only a rebind, a target sync, a drop, a release, or a batch without
+plan takes only a rebind, a target sync, a batch retarget, a drop, a release, or a batch without
 a seal for a member whose rebound cycle has none or whose recovery still owes a
 review (`owed`). -/
 def admitEvent : EventDecl where
@@ -151,6 +151,22 @@ def dropEvent : EventDecl where
     ("closed", .afill (f "closed") (.sub count (a "n")) ff),
     ("touched", .afill (f "touched") (.sub count (a "n")) ff)
   ]
+
+def retargetFacts : List String := ["cas", "binding", "chain", "targetKept"]
+
+/-- `retarget_batches` corrects the base and target of the batch at `at`, which
+no run or advance reached and no closure covers. The plan CAS matched and the
+request binds (full SHAs, previous values equal to the records, a new value);
+`chain` holds when the new base is the target of the batch before it; a batch
+with a successor keeps its target (`targetKept`), because the successor's base
+is that target. -/
+def retargetEvent : EventDecl where
+  name := "retarget"
+  args := atArg :: boolArgs retargetFacts
+  guard := andE (f "planned") (andE openAt (andE (notE (.aget (f "touched") (a "at")))
+    (andE (allArgs (retargetFacts.take 3))
+      (orE (notE (lt (.add (a "at") (nat 1)) count)) (a "targetKept")))))
+  assigns := []
 
 /-- `release_obligation` with a user decision, for plan members whose kernels
 accept the release. -/
@@ -228,8 +244,8 @@ def reviewPlanMachine : Machine where
     { name := "closed", ty := .arr "maxBatch" (.scalar .bool), init := boolV false },
     { name := "touched", ty := .arr "maxBatch" (.scalar .bool), init := boolV false }
   ]
-  events := [createEvent, extendEvent, admitEvent, appendEvent, sealEvent, rebindEvent, syncEvent, dropEvent,
-    releaseEvent, resolveEvent, runEvent, advanceEvent, aggregateEvent, closeEvent]
+  events := [createEvent, extendEvent, admitEvent, appendEvent, sealEvent, rebindEvent, syncEvent, retargetEvent,
+    dropEvent, releaseEvent, resolveEvent, runEvent, advanceEvent, aggregateEvent, closeEvent]
   queries := [
     { name := "allClosed", ty := .base .bool,
       body := notE (.any (nat 0) count (notE (.aget (f "closed") (.bvar 0)))) },

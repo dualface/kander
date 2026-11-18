@@ -216,17 +216,17 @@ def Inv (p : Params) (s : State) : Prop :=
   M.StateConforms p s ∧ (lookup "planned" s = some (boolV false) → s = initial M p)
 
 theorem events_cases {ev : EventDecl} (h : ev ∈ M.events) :
-    ev = createEvent ∨ ev = extendEvent ∨ ev ∈ [admitEvent, appendEvent, sealEvent, rebindEvent, syncEvent, dropEvent,
+    ev = createEvent ∨ ev = extendEvent ∨ ev ∈ [admitEvent, appendEvent, sealEvent, rebindEvent, syncEvent, retargetEvent, dropEvent,
       releaseEvent, resolveEvent, runEvent, advanceEvent, aggregateEvent, closeEvent] := by
   simpa [M, reviewPlanMachine] using h
 
 theorem planned_guard {ev : EventDecl}
-    (h : ev ∈ [admitEvent, appendEvent, sealEvent, rebindEvent, syncEvent, dropEvent, releaseEvent, resolveEvent,
+    (h : ev ∈ [admitEvent, appendEvent, sealEvent, rebindEvent, syncEvent, retargetEvent, dropEvent, releaseEvent, resolveEvent,
       runEvent, advanceEvent, aggregateEvent, closeEvent]) :
     ∃ g, ev.guard = .and (f "planned") g ∧ ∀ x, ("planned", x) ∉ ev.assigns := by
   simp only [List.mem_cons, List.not_mem_nil, or_false] at h
-  rcases h with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
-    exact ⟨_, rfl, by simp [admitEvent, appendEvent, sealEvent, rebindEvent, syncEvent, dropEvent, releaseEvent,
+  rcases h with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+    exact ⟨_, rfl, by simp [admitEvent, appendEvent, sealEvent, rebindEvent, syncEvent, retargetEvent, dropEvent, releaseEvent,
       resolveEvent, runEvent, advanceEvent, aggregateEvent, closeEvent]⟩
 
 theorem lookup_names {s : State} {f : String} (hn : s.map Prod.fst = M.fields.map FieldDecl.name)
