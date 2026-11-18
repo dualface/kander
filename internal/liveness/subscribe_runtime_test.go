@@ -139,8 +139,9 @@ fi
 		defer close(updates)
 		for {
 			// Wait after each update, not on a fixed tick: when a slow fsync makes an
-			// update outlast the tick, a ticker leaves the board lock never free, and
-			// the subscription's shared-lock poll starves behind this writer.
+			// update outlast the tick, a ticker starts the next update the moment the
+			// card lock is released, and the subscription's 10ms shared-lock poll can
+			// miss every release window and starve behind this writer.
 			select {
 			case <-done:
 				return
