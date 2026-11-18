@@ -53,7 +53,11 @@ func (s *Server) reviewActionRoutes(mux *http.ServeMux) {
 			}
 			return p.reviewWrite(key, "review-extend-plan", request, func() ([]string, error) {
 				plan, err := board.ReadReviewPlan(p.board, request.PlanID)
-				return plan.TaskIDs, err
+				if err != nil {
+					return nil, err
+				}
+				// add_members brings its new members into the authority and lock set.
+				return board.ReviewPlanExtensionTasks(plan, request)
 			}, h, func(extension board.TransactionExtension) (any, error) {
 				return map[string]string{"plan_id": request.PlanID}, board.ExtendReviewPlanWithTransaction(p.board, request, extension)
 			})

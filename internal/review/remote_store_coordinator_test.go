@@ -41,6 +41,13 @@ type coordinatedRun struct {
 // first is trashed once the plan exists, so only the first stays live.
 func newCoordinatedRun(t *testing.T, members int) *coordinatedRun {
 	t.Helper()
+	return newCoordinatedRunOf(t, members, members)
+}
+
+// newCoordinatedRunOf starts members cards of the group and plans the first
+// planned of them; a started card the plan leaves out stays live and unplanned.
+func newCoordinatedRunOf(t *testing.T, members, planned int) *coordinatedRun {
+	t.Helper()
 	t.Setenv(remote.EnvExecutionID, "")
 	t.Setenv(remote.EnvCoordinatorExecutionID, "")
 	t.Setenv(config.EnvLang, "en")
@@ -92,15 +99,15 @@ func newCoordinatedRun(t *testing.T, members int) *coordinatedRun {
 		}
 		r.grants[id] = grant
 	}
-	plan := board.ReviewPlan{Schema: 1, PlanID: "coordinated-plan", Author: "coordinator", Basis: "coordinated run", CWD: "/host-a/clone", ReportLanguage: "en", TaskIDs: r.ids, Batches: []board.ReviewPlanBatch{{BatchID: "coordinated-batch", TaskIDs: r.ids, Base: coordinatedBase, TargetCommit: coordinatedHead, Requirements: map[string]string{"PMQA": "required", "Security": "N/A: repository policy"}}}}
-	proof, err := r.holder.ReviewAuthority(t.Context(), "review-plan", plan, r.ids)
+	plan := board.ReviewPlan{Schema: 1, PlanID: "coordinated-plan", Author: "coordinator", Basis: "coordinated run", CWD: "/host-a/clone", ReportLanguage: "en", TaskIDs: r.ids[:planned], Batches: []board.ReviewPlanBatch{{BatchID: "coordinated-batch", TaskIDs: r.ids[:planned], Base: coordinatedBase, TargetCommit: coordinatedHead, Requirements: map[string]string{"PMQA": "required", "Security": "N/A: repository policy"}}}}
+	proof, err := r.holder.ReviewAuthority(t.Context(), "review-plan", plan, r.ids[:planned])
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := r.holder.Project.ReviewPlan(t.Context(), client.NewKey(), plan, proof); err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range r.ids[1:] {
+	for _, id := range r.ids[1:planned] {
 		own, found, err := r.holder.Credential(id)
 		if err != nil || !found {
 			t.Fatalf("holder credential: %v", err)

@@ -189,7 +189,12 @@ func remoteEvidenceAction(ctx context.Context, session *remote.Session, cwd, act
 		if err := readRemoteResource(ctx, session, "plans", request.PlanID, &plan); err != nil {
 			return nil, err
 		}
-		tasks = plan.TaskIDs
+		// add_members brings its new members into the joint confirmation set, as it
+		// does into the authority set of the server.
+		var err error
+		if tasks, err = board.ReviewPlanExtensionTasks(plan, request); err != nil {
+			return nil, err
+		}
 		if request.ResolveBatch != nil {
 			return remoteResolveBatch(ctx, session, cwd, request)
 		}
