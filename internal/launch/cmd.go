@@ -24,7 +24,12 @@ func init() {
 	cli.Commands["dispatch"] = RunDispatch
 	cli.RemoteCommands["dispatch"] = cli.RequireService(RunDispatchRemote)
 	cli.Commands["coordinator"] = RunCoordinator
-	cli.RemoteCommands["coordinator"] = cli.RequireService(RunCoordinatorRemote)
+	cli.RemoteCommands["coordinator"] = func(args []string) int {
+		if _, status, refused := coordinatorArgs(args); refused {
+			return status
+		}
+		return cli.RequireService(RunCoordinatorRemote)(args)
+	}
 	cli.Commands["orchestrate"] = RunOrchestrate
 	cli.RemoteCommands["orchestrate"] = cli.RequireService(RunOrchestrateRemote)
 	// The issue command front end never imports this package; the takeover

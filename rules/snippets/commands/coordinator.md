@@ -74,6 +74,8 @@ kander coordinator remove-member <absolute-request.json>
   - `alive`, `alive-orphaned`, or `drifted` in `review/`, and `unknown` with evidence at one address: the error names the address. Stop the executor at that address and run `recover` again. A `review/` member takes `resume --agent` only while its start attempt has not ended, and a takeover cannot exit an executor it cannot prove.
   - 2 or more matches: the error names the count. Stop the executors that match this session and run `recover` again.
 - `remove-member` refuses a missing field or a blank `decision` or `reason`, a stale revision or epoch, a card that is not in the checkpoint or whose `TASK_GROUP` is another group, a started member (the error names the reason), the last remaining member (archive the card instead), and a card a remaining member lists in `PREREQUISITES` (the error lists those members). In a distributed project it also refuses a caller without a standing group lease (none, released, lost, or taken over) and a card with a service claim record. A repeated request fails on the revision; the same request with the same idempotency key returns the first answer. A refusal writes nothing.
+- `release` without `--end-execution` is refused with exit 2 before any request. The claim of a bound coordinator execution that released its lease, lost it, or was taken over is refused with `lease_invalid` after the client read the group and before it sends a claim request. A claim of a lease holder that changed the request, or repeated it after a `remove-member` reset, is refused with `board_rejected`, as above.
+- `--end-execution` belongs to `release` only, directly after the subcommand and before the path. It is a usage error anywhere else.
 - A wrong argument count, a relative `recover` or `remove-member` path, or an unknown subcommand is a usage error.
 
 ## Distributed project
@@ -86,12 +88,16 @@ After a member lease is lapsed, lost or released, an explicit user decision may 
 
 The client freezes recovery input, private proof and operation key before transport. A retry reconciles that exact request, including after a lost response or an expired coordinator lease. A completed receipt replays read-only; it cannot authorize a new recovery. `remove-member` is one group write under the same lease check as `reconcile`; the client sends it with a fresh idempotency key, and the service answers a retry of that key with the first result.
 
-To release a distributed coordinator explicitly, use `kander coordinator release <absolute-release.json>` with `group_id`, `reason`, and `decision`. This ends the private lease; the public checkpoint and its audit history remain readable.
+To release a distributed coordinator explicitly, use `kander coordinator release --end-execution <absolute-release.json>` with `group_id`, `reason`, and `decision`. This ends the private lease; the public checkpoint and its audit history remain readable.
+
+A release is final for the coordinator execution that runs it. That execution can never claim the group again, and it can no longer dismiss the members of the group, because the worker then removes its group credential. Dismiss first when that is still needed, and release afterwards. Release only when the group is complete, or when the user decides to hand the group to another session; only a new orchestrator session can take the group over, with the observed checkpoint revision and epoch and a decision reference. Never release to retry a refused claim. Without `--end-execution` the command sends nothing, exits 2, and prints these consequences and the confirmed syntax on standard error. With it, the command prints the same JSON as before on standard output, and a notice with the execution ID, the group ID, and the generation on standard error.
+
+While a coordinator execution holds its lease (active or lapsed), it needs no claim. A claim request that is byte for byte the last claim replays the stored checkpoint, unless `remove-member` reset the replay record since. A changed request, or a repeat after such a reset, is refused with `board_rejected`; the error names the generation held and points at `kander coordinator show <group-id>`, then `reconcile`. A coordinator execution bound to `KANDER_COORDINATOR_EXECUTION_ID` (or `KANDER_EXECUTION_ID`) that released its lease, lost it, or was taken over cannot claim again. The client reads the group, then refuses before it sends a claim request, with `lease_invalid` and a text for each case that names the next step: a new orchestrator session takes the group over.
 
 ## Additional Syntax
 
 ```text
-kander coordinator release <absolute-release.json>
+kander coordinator release --end-execution <absolute-release.json>
 kander coordinator integrate <absolute-integration.json>
 kander coordinator integration-show <target-ref>
 ```
