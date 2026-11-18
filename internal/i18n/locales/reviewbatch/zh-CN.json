@@ -40,7 +40,7 @@
   "board.review_stale_conclusion": "角色 {{.V1}} 的 run {{.V0}} 审的是成员 {{.V2}} 的另一个执行周期，不能关闭批次 {{.V3}}。在当前周期运行角色 {{.V1}}：在新 commit 上用 --advance-file 与 --previous-run-id，或在同一 commit 上运行并用 superseded_runs 取代旧 run",
   "board.review_withdrawal_owed": "已排除成员的已分配 finding 没有记录，或者最新状态是 confirmed 或 unverifiable 时，需要 withdrawn 记录（withdrawal:<run>/<finding>/<成员>），没有剩余成员的批次也一样：提交 kander review disposition，status 为 withdrawn，并写明该成员 kander review progress 给出的排除 ID 与用户决定",
   "board.review_stale_run_required": "要求的角色只有其他执行周期的 run（stale-run:<批次>/<角色>/<成员>）：在当前周期运行该角色，用新 run 关闭批次",
-  "board.review_extend_exclusive": "rebind_cycles、sync_targets、retarget_batches、drop_batches、release_obligation 和 batch/seal 互斥",
+  "board.review_extend_exclusive": "rebind_cycles、sync_targets、retarget_batches、add_members、drop_batches、release_obligation 和 batch/seal 互斥",
   "review.mechanical_fix_outside_range": "mechanical 修复范围未包含 fixed 处置 {{.V0}}/{{.V1}}（fix_commit {{.V2}} 不是 passed_at {{.V3}} 的祖先）；请修正 passed_at，或对该修复范围运行增量复审：kander review --task <task-id> --previous-run-id {{.V4}}",
   "review.mechanical_unreported_files": "mechanical 修复范围存在未申报文件：{{.V0}}；请补全 mechanical 评估的 paths，或对该修复范围运行增量复审：kander review --task <task-id> --previous-run-id {{.V1}}",
   "review.mechanical_added_lines": "mechanical 的 dead-code 或 redundant-test 修复含新增行（二进制改动视为含新增行）：{{.V0}}；请对该修复范围运行增量复审：kander review --task <task-id> --previous-run-id {{.V1}}",
@@ -54,5 +54,15 @@
   "board.review_retarget_same": "批次 {{.V0}} 的 retarget_batches 没有改动：新的 base 和 target 等于当前值",
   "board.review_retarget_ran": "批次 {{.V0}} 已有 run、推进或关闭记录，它的 base 和 target 已是证据，retarget_batches 不能改",
   "board.review_retarget_successor": "批次 {{.V0}} 有已规划的后继批次（{{.V1}}），后继的 base 就是它的 target。只改 base，或先用 drop_batches 移除后继",
-  "review.no_delivery_target_not_in_head": "无交付批次的目标 {{.V0}} 不在 CWD 所在仓库当前 HEAD {{.V1}} 的历史里。用 kander review extend-plan 的 retarget_batches 改正目标，或在包含该目标的工作树里运行命令"
+  "review.no_delivery_target_not_in_head": "无交付批次的目标 {{.V0}} 不在 CWD 所在仓库当前 HEAD {{.V1}} 的历史里。用 kander review extend-plan 的 retarget_batches 改正目标，或在包含该目标的工作树里运行命令",
+  "board.review_add_members_empty": "add_members 至少要写出一个任务",
+  "board.review_add_member_state": "{{.V0}} 处于 {{.V1}}；只有 working 或 review 的卡能加入计划",
+  "board.review_add_member_listed": "{{.V0}} 已经是计划 {{.V1}} 的成员",
+  "board.review_add_member_planned": "{{.V0}} 已经属于审核计划 {{.V1}}",
+  "board.review_add_member_excluded": "{{.V0}} 有成员排除记录，已经离开所在组的审核",
+  "board.review_add_member_no_group": "{{.V0}} 不能加入计划 {{.V1}}：该计划的成员没有共同的任务组，所以不接受新成员",
+  "board.review_add_member_group": "{{.V0}} 属于任务组 {{.V1}}，而计划 {{.V2}} 的成员属于任务组 {{.V3}}",
+  "board.review_add_member_language": "{{.V0}} 的报告语言是 {{.V1}}，而计划 {{.V2}} 的报告语言是 {{.V3}}",
+  "board.review_add_member_unplanned_run": "{{.V0}} 在批次 {{.V1}} 中有审核运行，而计划 {{.V2}} 的任何批次都不含该批次",
+  "board.review_add_members_next": "下一步：只加入计划所在任务组中、处于 working 或 review、不属于任何计划、也没有计划外运行的卡；其余的去掉后重新写出请求。尚未启动的卡，启动后再用 add_members 加入。"
 }

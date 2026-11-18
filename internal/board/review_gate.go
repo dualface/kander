@@ -434,34 +434,15 @@ func checkUnplannedReviewRuns(tx *Transaction, p ReviewPlan) error {
 	return checkUnplannedReviewRunsMode(tx, p, false)
 }
 func checkUnplannedReviewRunsMode(tx *Transaction, p ReviewPlan, importHistory bool) error {
-	planned := map[string]bool{}
-	for _, b := range p.Batches {
-		planned[b.BatchID] = true
-	}
-	entries, err := fs.ListDirectory(tx.root, control(tx.root, "groups", reviewControlGroup, "runs"))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
+	batch, listed, err := unplannedReviewRun(tx, p, p.TaskIDs, !importHistory)
 	if err != nil {
 		return err
 	}
-	for _, entry := range entries {
-		if !ValidReviewID(entry.Name) || entry.Kind != fs.KindDirectory {
-			return reviewError("invalid run entry")
-		}
-		var run ReviewRun
-		ok, e := readReviewJSON(tx, reviewRunName(entry.Name), &run)
-		if e != nil {
-			return e
-		}
-		if !ok {
-			return reviewError("missing run")
-		}
-		for _, id := range p.TaskIDs {
-			if !importHistory && containsID(run.TaskIDs, id) && !planned[run.BatchID] && resolvedBatch(p, run.BatchID) == nil {
-				return reviewError("unplanned execution batch: " + run.BatchID)
-			}
-		}
+	if batch != "" {
+		return reviewError("unplanned execution batch: " + batch)
+	}
+	if !listed {
+		return nil
 	}
 	for _, r := range p.ResolvedBatches {
 		if err = verifyBatchResolution(tx, p, r); err != nil {
@@ -469,4 +450,41 @@ func checkUnplannedReviewRunsMode(tx *Transaction, p ReviewPlan, importHistory b
 		}
 	}
 	return nil
+}
+
+// unplannedReviewRun finds the first run of one of ids in a batch that no batch of
+// p names and no resolution of p covers. listed is false when no run exists at
+// all. With enforce false every run record is still read and validated, but none
+// counts as unplanned.
+func unplannedReviewRun(tx *Transaction, p ReviewPlan, ids []string, enforce bool) (batch string, listed bool, err error) {
+	planned := map[string]bool{}
+	for _, b := range p.Batches {
+		planned[b.BatchID] = true
+	}
+	entries, err := fs.ListDirectory(tx.root, control(tx.root, "groups", reviewControlGroup, "runs"))
+	if errors.Is(err, os.ErrNotExist) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	for _, entry := range entries {
+		if !ValidReviewID(entry.Name) || entry.Kind != fs.KindDirectory {
+			return "", true, reviewError("invalid run entry")
+		}
+		var run ReviewRun
+		ok, e := readReviewJSON(tx, reviewRunName(entry.Name), &run)
+		if e != nil {
+			return "", true, e
+		}
+		if !ok {
+			return "", true, reviewError("missing run")
+		}
+		for _, id := range ids {
+			if enforce && containsID(run.TaskIDs, id) && !planned[run.BatchID] && resolvedBatch(p, run.BatchID) == nil {
+				return run.BatchID, true, nil
+			}
+		}
+	}
+	return "", true, nil
 }
