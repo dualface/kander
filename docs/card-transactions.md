@@ -95,7 +95,7 @@ If a crash or kill signal interrupts an operation:
 
 - **Committed Retention**: After each commit and recovery cycle, `kander` runs best-effort pruning under `journal.lock`. The constant `committedJournalRetention = 100` preserves the 100 most recent records (by modification time) to bound scan overhead.
 - **Migration Protection**: Any record with an active `.kander/migrations/<operation-id>` staging directory is preserved regardless of the 100-record threshold.
-- **Partition Layout**: Modern Kander partitions operations into `pending/` and `committed/`. Legacy flat `operations/<id>.json` layouts trigger a prompt to run `kander init --maintenance`.
+- **Partition Layout**: Modern Kander partitions operations into `pending/` and `committed/`. Legacy flat `operations/<id>.json` layouts trigger a prompt to run `kander server maintain --project NAME --maintenance`.
 
 ---
 

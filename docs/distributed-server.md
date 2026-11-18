@@ -252,7 +252,7 @@ The server logs JSON lines with method, path, status, client ID, operation ID (d
 
 ## Migrating a v1 board
 
-`kander server import [--data DIR] --project NAME [--remote URL] [--from KANBAN_DIR]` imports one v1 board into a project. Before running it, stop the v1 executing agents and other writers of the source board, as for `kander init --maintenance`. The server itself does not need to stop.
+`kander server import [--data DIR] --project NAME [--remote URL] [--from KANBAN_DIR]` imports one v1 board into a project. Before running it, stop the v1 executing agents and other writers of the source board, as for `kander server maintain`. The server itself does not need to stop.
 
 - Without `--from`, the command locates the source as v1 commands do: `KANBAN_DIR`, then the main worktree's `kanban/`, then an upward search from the current directory. A relative `--from` is resolved in the command's directory. The located path must be an existing directory; otherwise the command fails and asks for `--from`. Links are refused later by the board reads.
 - When no process holds the data directory lock, the command opens the data directory and imports offline.
@@ -351,4 +351,4 @@ A move's exact dispatch result and replay flag are captured inside its board tra
 
 For a non-replayed CLI terminal move, the reporting switch prints the completion template on stderr using the committed service snapshot and logical resource location. The Issue module compares central work-set readiness before and after that move, honors `issue.result_on_done`, and prints the explicit result handoff when the last member completes or is withdrawn. Advice failures never change a successful move. The TUI invokes no CLI advice hooks.
 
-`kander request --help` uses the supplemental collaboration forms in the notify contract. Root help lists `notify / request`; the installed historical command index remains the user's manually maintained file.
+`kander request --help` uses the supplemental collaboration forms in the notify contract. Root help lists `notify` and `request` as separate commands; the installed historical command index remains the user's manually maintained file.

@@ -94,7 +94,7 @@ kander move <task-id> trash --result trashed --reason <理由> --decision <決�
 
 - **コミット済みログの保持**：コミットおよび復旧の完了後、`journal.lock` 下でベストエフォートなクリーンアップが走ります。定数 `committedJournalRetention = 100` により最新の 100 件が保持されます。
 - **移行データの保護**：`.kander/migrations/<operation-id>` が存在するログは、100 件の制限に関わらず保持されます。
-- **パーティション構成**：最新の Kander はログを `pending/` と `committed/` に分割します。旧形式のフラットなファイルが見つかった場合は `kander init --maintenance` を促します。
+- **パーティション構成**：最新の Kander はログを `pending/` と `committed/` に分割します。旧形式のフラットなファイルが見つかった場合は `kander server maintain --project NAME --maintenance` を促します。
 
 ---
 

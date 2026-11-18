@@ -94,7 +94,7 @@ kander move <task-id> trash --result trashed --reason <原因> --decision <决�
 
 - **已提交日志保留**：每次提交与恢复后，系统在 `journal.lock` 下执行最佳努力清理。常量 `committedJournalRetention = 100` 保留最近的 100 条已提交记录，避免过度占用存储与扫描开销。
 - **迁移证据保护**：任何关联活跃迁移暂存区（`.kander/migrations/<operation-id>`）的记录，不受 100 条上限限制，始终保留用于验证。
-- **分区布局**：新版 Kander 严格将记录分为 `pending/` 和 `committed/` 两个子目录。检测到旧版扁平 `operations/<id>.json` 时会提示运行 `kander init --maintenance` 进行归类。
+- **分区布局**：新版 Kander 严格将记录分为 `pending/` 和 `committed/` 两个子目录。检测到旧版扁平 `operations/<id>.json` 时会提示运行 `kander server maintain --project NAME --maintenance` 进行归类。
 
 ---
 
