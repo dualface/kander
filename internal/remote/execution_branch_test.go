@@ -36,6 +36,28 @@ func (f *integrationFixture) publishedBaseline() api.Task {
 	return task
 }
 
+// recordWorktreeIntent leaves the intent of an interrupted first attempt that
+// named branch, as a start of an earlier release would have.
+func (f *integrationFixture) recordWorktreeIntent(task api.Task, branch string) {
+	f.t.Helper()
+	root, err := f.a.LocalDataRoot()
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	intent := remote.ExecutionWorktree{Path: filepath.Join(root, "worktrees", task.TaskID, "g1"), Branch: branch, Base: f.base, ExecutionID: f.credential.ExecutionID, Generation: f.credential.Generation, Phase: "creating"}
+	data, err := json.Marshal(intent)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	path := filepath.Join(root, "worktree-intents", task.TaskID, "g1.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		f.t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
 func (f *integrationFixture) remoteRefs(pattern string) string {
 	f.t.Helper()
 	return deliveryGit(f.t, f.bare, "for-each-ref", "--format=%(refname)", pattern)
@@ -132,23 +154,8 @@ func TestPrepareWorktreeRetryKeepsTheNameItsIntentRecorded(t *testing.T) {
 			isolateGlobalGit(t)
 			f := newIntegrationGitFixture(t)
 			task := f.publishedBaseline()
-			root, err := f.a.LocalDataRoot()
-			if err != nil {
-				t.Fatal(err)
-			}
 			branch := tc.branch(f, task)
-			intent := remote.ExecutionWorktree{Path: filepath.Join(root, "worktrees", task.TaskID, "g1"), Branch: branch, Base: f.base, ExecutionID: f.credential.ExecutionID, Generation: f.credential.Generation, Phase: "creating"}
-			data, err := json.Marshal(intent)
-			if err != nil {
-				t.Fatal(err)
-			}
-			path := filepath.Join(root, "worktree-intents", task.TaskID, "g1.json")
-			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(path, data, 0o600); err != nil {
-				t.Fatal(err)
-			}
+			f.recordWorktreeIntent(task, branch)
 			result, err := f.a.PrepareWorktree(t.Context(), f.first, f.base, f.credential)
 			if !tc.ok {
 				if err == nil || !strings.Contains(err.Error(), config.Text("remote.worktree_recovery_required")) {
@@ -196,10 +203,16 @@ func TestIntegrationOfACardRecordingALegacyTaskBranch(t *testing.T) {
 	if want := api.LegacyExecutionBranch(f.a.Info.ID, task.TaskID, f.credential.Generation); !strings.Contains(task.Text, "- TASK_BRANCH: "+want+"\n") {
 		t.Fatalf("card does not record %q", want)
 	}
-	// The card keeps its legacy name while the delivery is made from the managed worktree.
+	// The execution of an in-flight card holds the legacy name in its worktree
+	// and credential, as the card does.
+	legacy := api.LegacyExecutionBranch(f.a.Info.ID, task.TaskID, f.credential.Generation)
+	f.recordWorktreeIntent(task, legacy)
 	worktree, err := f.a.PrepareWorktree(t.Context(), f.first, f.base, f.credential)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if saved, _, err := f.a.Credential(task.TaskID); err != nil || worktree.Branch != legacy || saved.Branch != legacy {
+		t.Fatalf("legacy execution: worktree %q, credential %+v, %v", worktree.Branch, saved, err)
 	}
 	deliveryGit(t, worktree.Path, "merge", "--ff-only", f.commit)
 	moved, err := f.a.MoveTask(t.Context(), task.TaskID, api.Move{State: "review", DeliveryCommit: f.commit})
