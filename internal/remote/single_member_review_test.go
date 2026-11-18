@@ -469,3 +469,23 @@ func TestPublishedSingleMemberOperationReplaysAfterHolderReleased(t *testing.T) 
 		t.Fatal("replay changed the card")
 	}
 }
+
+// The holder's direct proof does not read or create the local directory of
+// replay records.
+func TestHolderRunsSingleMemberAggregateWithoutReplayRecords(t *testing.T) {
+	f := newSingleMember(t, "20261118-single-group", "20261118-single-group")
+	root, err := f.holder.LocalDataRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A file where the directory belongs makes every replay lookup fail.
+	if err := os.RemoveAll(filepath.Join(root, "review-operations")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "review-operations"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.holder.AggregateReview(t.Context(), singleBatch); err != nil {
+		t.Fatalf("holder depended on the replay records: %v", err)
+	}
+}

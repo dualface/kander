@@ -70,6 +70,30 @@ func (s *Session) reviewAuthority(ctx context.Context, operation, replay string,
 	if err != nil {
 		return nil, false, err
 	}
+	var members []api.PublicationMember
+	var shown map[string]api.Task
+	read, routed := false, false
+	if len(tasks) == 1 {
+		// The holder's direct proof needs no saved result, and so does not
+		// depend on the local record directory that holds them.
+		members, shown, err = s.liveReviewMembers(ctx, tasks)
+		switch {
+		case api.IsCode(err, api.CodeLeaseInvalid):
+			// A released claim cannot take part in a new write, but the saved
+			// result of a published operation still answers a retry.
+		case err != nil:
+			return nil, false, err
+		default:
+			read = true
+			if len(members) == 1 {
+				proof, joint, err := s.singleMemberAuthority(operation, tasks, members, shown)
+				if err != nil || !joint {
+					return proof, false, err
+				}
+				routed = true
+			}
+		}
+	}
 	saved, publication, err := s.completedReviewPublication(ctx, operation, replay, raw)
 	if err != nil {
 		return nil, false, err
@@ -86,11 +110,12 @@ func (s *Session) reviewAuthority(ctx context.Context, operation, replay string,
 		}
 		return saved, true, nil
 	}
-	members, shown, err := s.liveReviewMembers(ctx, tasks)
-	if err != nil {
-		return nil, false, err
+	if !read {
+		if members, shown, err = s.liveReviewMembers(ctx, tasks); err != nil {
+			return nil, false, err
+		}
 	}
-	if len(members) <= 1 {
+	if len(members) <= 1 && !routed {
 		proof, joint, err := s.singleMemberAuthority(operation, tasks, members, shown)
 		if err != nil || !joint {
 			return proof, false, err
