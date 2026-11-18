@@ -24,7 +24,10 @@ const (
 // follow the language of the process.
 func useEnglish(t *testing.T) {
 	t.Helper()
-	t.Setenv(config.EnvLangCLI, "en")
+	t.Setenv(config.EnvLang, "en")
+	t.Setenv(config.EnvLangCLI, "1")
+	config.ApplyLanguageArgument([]string{"kander", "--lang", "en"})
+	t.Cleanup(func() { config.ApplyLanguageArgument([]string{"kander", "--lang", "cn"}) })
 }
 
 // twoFindingFixture is a card in review with one successful PMQA run that holds
