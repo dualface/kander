@@ -296,7 +296,13 @@ func UpdateDocument(root, id string, o UpdateOptions) error {
 			if err != nil {
 				return err
 			}
-			if crlfCard {
+			if s.legacy && text == s.Text {
+				// Nothing changed, so the card keeps the bytes it has; the write
+				// still publishes a new revision.
+				if text, err = readDocument(s.Entry); err != nil {
+					return err
+				}
+			} else if crlfCard {
 				text = strings.ReplaceAll(text, "\n", "\r\n")
 			}
 		} else if o.ContractDecision != "" {

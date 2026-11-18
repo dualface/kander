@@ -139,7 +139,11 @@ func archiveInvocation(ctx *reviewContext, options archiveOptions, arguments []s
 		}
 		// *_RESOLVED records are rewritten by launches and review runs; keeping them
 		// out of the snapshot keeps the batch's frozen task context stable.
-		task = []byte(board.WithoutResolvedRecords(board.NormalizeLegacyCard(string(task))))
+		var frozen string
+		if b, err := store.Batch(options.batchID); err == nil {
+			frozen = b.TaskContextHash
+		}
+		task = taskContextBytes(string(task), frozen)
 	}
 	reviewContext := []byte{}
 	if len(arguments) >= 6 {
@@ -347,4 +351,16 @@ func (a *archiveExecution) backend() reviewStore {
 		return a.store
 	}
 	return localReviewStore{root: a.root}
+}
+
+// taskContextBytes is the task context a run freezes: the card with English
+// schema names and without *_RESOLVED records. A batch frozen before the schema
+// rename holds the Chinese bytes of a legacy card, and its hash is the identity
+// every later run must match, so the spelling that hashes to it is kept.
+func taskContextBytes(text, frozenHash string) []byte {
+	original := []byte(board.WithoutResolvedRecords(text))
+	if frozenHash != "" && board.ReviewDigest(original) == frozenHash {
+		return original
+	}
+	return []byte(board.WithoutResolvedRecords(board.NormalizeLegacyCard(text)))
 }

@@ -70,3 +70,27 @@ func TestDefaultMissingSizeKeepsTheBytesOfALegacyCard(t *testing.T) {
 		t.Fatalf("the card changed beyond the inserted SIZE line:\n%s", disk)
 	}
 }
+
+// An update that submits the card as it reads, or as it is on disk, changes no
+// text, so the card keeps its Chinese bytes while the revision still advances.
+func TestLegacyCardUpdateWithoutTextChangeKeepsDiskBytes(t *testing.T) {
+	root := tempBoard(t)
+	card := writeLegacyDirCard(t, root, "legacy-same", legacyDirCard)
+	id := card.Entry.TaskID
+	for name, submit := range map[string]func(Snapshot) string{
+		"as shown":   func(s Snapshot) string { return s.Text },
+		"as on disk": func(Snapshot) string { return legacyDirCard },
+	} {
+		before := transactionSnapshot(t, root, id)
+		if err := UpdateDocument(root, id, UpdateOptions{Document: "spec.md", Text: submit(before), ExpectedRevision: before.Revision}); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		disk, err := os.ReadFile(card.Entry.Document)
+		if err != nil || string(disk) != legacyDirCard {
+			t.Fatalf("%s: an update that changes no text rewrote the card: %v", name, err)
+		}
+		if after := transactionSnapshot(t, root, id); after.Revision <= before.Revision || after.Text != before.Text {
+			t.Fatalf("%s: revision %d -> %d", name, before.Revision, after.Revision)
+		}
+	}
+}

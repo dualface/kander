@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/dualface/kander/internal/board"
 )
 
 const legacySpec = "# 旧卡\n\n- 类型: Bug\n- SIZE: small\n- 创建时间: 2026-09-01 03:00\n- 结果:\n\n## 任务目标\n\n目标\n"
@@ -38,5 +40,27 @@ func TestSpecReadersConvertLegacyCard(t *testing.T) {
 	disk, err := os.ReadFile(spec)
 	if err != nil || string(disk) != legacySpec {
 		t.Fatalf("spec on disk changed: %v", err)
+	}
+}
+
+// A batch frozen before the schema rename holds the Chinese bytes of a legacy
+// card; the run that passes that original again must hash to the same identity.
+func TestTaskContextBytesKeepsTheSpellingOfAFrozenBatch(t *testing.T) {
+	frozen := board.ReviewDigest([]byte(board.WithoutResolvedRecords(legacySpec)))
+	english := board.WithoutResolvedRecords(board.NormalizeLegacyCard(legacySpec))
+	for name, tc := range map[string]struct {
+		frozen string
+		want   string
+	}{
+		"frozen with the Chinese bytes": {frozen, board.WithoutResolvedRecords(legacySpec)},
+		"new batch":                     {"", english},
+		"frozen with English names":     {board.ReviewDigest([]byte(english)), english},
+	} {
+		if got := string(taskContextBytes(legacySpec, tc.frozen)); got != tc.want {
+			t.Fatalf("%s: got\n%s\nwant\n%s", name, got, tc.want)
+		}
+	}
+	if got := string(taskContextBytes(english, board.ReviewDigest([]byte(english)))); got != english {
+		t.Fatalf("an English card changed:\n%s", got)
 	}
 }
