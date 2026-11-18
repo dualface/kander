@@ -40,10 +40,19 @@
   "board.review_stale_conclusion": "ロール {{.V1}} の run {{.V0}} はメンバー {{.V2}} の別の実行サイクルをレビューしたため、バッチ {{.V3}} をクローズできません。現在のサイクルでロール {{.V1}} を実行してください。新しいコミットでは --advance-file と --previous-run-id を使い、同じコミットでは superseded_runs で古い run を置き換えます",
   "board.review_withdrawal_owed": "除外メンバーに割り当てられた finding は、レコードがないか最新ステータスが confirmed か unverifiable のとき、withdrawn レコードが必要です（withdrawal:<run>/<finding>/<メンバー>）。メンバーが残っていないバッチも同じです。status を withdrawn とし、そのメンバーの kander review progress が示す除外 ID とユーザー決定を添えて kander review disposition を実行してください",
   "board.review_stale_run_required": "要求されたロールに別の実行サイクルの run しかありません（stale-run:<バッチ>/<ロール>/<メンバー>）。現在のサイクルでロールを実行し、新しい run でバッチをクローズしてください",
-  "board.review_extend_exclusive": "rebind_cycles、sync_targets、drop_batches、release_obligation、batch/seal は同時に使えません",
+  "board.review_extend_exclusive": "rebind_cycles、sync_targets、retarget_batches、drop_batches、release_obligation、batch/seal は同時に使えません",
   "review.mechanical_fix_outside_range": "mechanical 修正範囲に fixed 処置 {{.V0}}/{{.V1}} が含まれません（fix_commit {{.V2}} は passed_at {{.V3}} の祖先ではありません）。passed_at を訂正するか、この範囲の増分レビューを実行してください：kander review --task <task-id> --previous-run-id {{.V4}}",
   "review.mechanical_unreported_files": "mechanical 修正範囲に未申告ファイルがあります：{{.V0}}。mechanical 評価の paths を補完するか、この範囲の増分レビューを実行してください：kander review --task <task-id> --previous-run-id {{.V1}}",
   "review.mechanical_added_lines": "mechanical の dead-code または redundant-test 修正に追加行があります（バイナリ変更も追加行として扱います）：{{.V0}}。この範囲の増分レビューを実行してください：kander review --task <task-id> --previous-run-id {{.V1}}",
   "review.mechanical_diff_failed": "mechanical 修正範囲の diff を読み取れません：{{.V0}}",
-  "review.mechanical_numstat_invalid": "mechanical 修正の numstat が無効です：{{.V0}}"
+  "review.mechanical_numstat_invalid": "mechanical 修正の numstat が無効です：{{.V0}}",
+  "board.review_no_delivery_marker": "no_delivery と observed_head は対で使います。配信なしのクローズは両方を持ち（observed_head は完全な commit SHA）、他のクローズ記録はどちらも持ちません",
+  "board.review_no_delivery_batch": "バッチ {{.V0}} には配信があります（base が target と異なるか、required のロールがあります）。そのクローズ記録に配信なしの印は付けられません",
+  "board.review_retarget_unplanned": "retarget_batches が指すバッチ {{.V0}} は計画にありません",
+  "board.review_retarget_sha": "バッチ {{.V0}} の retarget_batches には、previous_base、previous_target、base、target の完全な commit SHA が必要です",
+  "board.review_retarget_cas": "バッチ {{.V0}} の retarget_batches：previous_base と previous_target は、バッチ記録と計画の現在の base と target に一致しなければなりません",
+  "board.review_retarget_same": "バッチ {{.V0}} の retarget_batches は何も変えません：新しい base と target が現在の値と同じです",
+  "board.review_retarget_ran": "バッチ {{.V0}} には run、前進、またはクローズの記録があり、base と target は証拠です。retarget_batches では変更できません",
+  "board.review_retarget_successor": "バッチ {{.V0}} には計画済みの後続バッチ（{{.V1}}）があり、後続の base はこのバッチの target です。base だけを変えるか、先に drop_batches で後続を外してください",
+  "review.no_delivery_target_not_in_head": "配信なしバッチのターゲット {{.V0}} は、CWD のリポジトリの現在の HEAD {{.V1}} の履歴にありません。kander review extend-plan の retarget_batches でターゲットを修正するか、そのターゲットを含むワークツリーでコマンドを実行してください"
 }

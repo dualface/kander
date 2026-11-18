@@ -110,7 +110,7 @@
   "review.schema.plan.schema": "計画の schema バージョン。新しい計画は 1 です。",
   "review.schema.plan.sealed": "true のとき、計画の全メンバーがいずれかのバッチに入っていなければなりません。false なら extend-plan で追加できます。",
   "review.schema.plan.task_ids": "メンバーのタスク ID。コマンドが並べ、重複を除きます。各バッチのタスク ID はこの一覧に含まれます。",
-  "review.schema.extend-plan.resolve_batch": "run のある計画外バッチを、クローズ済みの計画バッチ 1 つがカバーするものとして受け入れます。計画のバッチと封印は変わりません。他の操作とは排他です。CWD は計画のワークツリーです。実行サイクルが変わった場合は、この後で再バインドしてください。",
+  "review.schema.extend-plan.resolve_batch": "run のある計画外バッチを、クローズ済みの計画バッチ 1 つがカバーするものとして受け入れます。計画のバッチと封印は変わりません。他の操作とは排他です。新しい base と target の Git 検査は CWD のリポジトリで実行します。実行サイクルが変わった場合は、この後で再バインドしてください。",
   "review.schema.extend-plan.resolve_batch.batch_id": "resolve_batch では必須。計画外バッチです。",
   "review.schema.extend-plan.resolve_batch.covering_batch_id": "resolve_batch では必須。この計画のクローズ済みバッチ 1 つです。その base は計画外バッチの base かその祖先、目標は計画外バッチの目標かその子孫です。計画外バッチの required ロールと、計画に残るメンバーをすべて含みます。",
   "review.schema.extend-plan.resolve_batch.findings": "計画外バッチの全 run の全 finding を 1 項目ずつ挙げます。それ以外は含めません。",
@@ -155,5 +155,10 @@
   "review.schema.plan.drop_obligations.item.batch_id": "削除されたバッチ。",
   "review.schema.plan.drop_obligations.item.from_batch": "この義務を解除できる最初のバッチの位置。",
   "review.schema.plan.drop_obligations.item.roles": "削除されたバッチが要求したロール。",
-  "review.schema.plan.drop_obligations.item.task_ids": "これらのロールが未完了のメンバー。"
+  "review.schema.plan.drop_obligations.item.task_ids": "これらのロールが未完了のメンバー。",
+  "review.schema.extend-plan.retarget_batches": "一度も実行されていない計画済みバッチ（run、前進、クローズなし）の base と target を修正します。バッチ ID から下のエントリへのマップです。封印済みの計画でも、バッチを aggregate した後でも受け付けます。バッチ記録と計画の revision がそれぞれ 1 上がり、集約ビューは書き直され、以前の view_hash ではバッチを閉じられなくなります。他の操作とは排他です。新しい base と target の Git 検査は CWD のリポジトリで実行します。",
+  "review.schema.extend-plan.retarget_batches.key.previous_base": "各エントリで必須。バッチの現在の base。比較して交換するために使います。",
+  "review.schema.extend-plan.retarget_batches.key.previous_target": "各エントリで必須。バッチの現在のターゲット commit。比較して交換するために使います。",
+  "review.schema.extend-plan.retarget_batches.key.base": "各エントリで必須。新しい base。完全な commit SHA で、新しい target の祖先です。後続のバッチは直前のバッチの target を使います。",
+  "review.schema.extend-plan.retarget_batches.key.target": "各エントリで必須。新しいターゲット commit（完全な commit SHA）。計画済みの後続バッチがあるバッチは target を変えません。配信なしバッチの target は、CWD のリポジトリの HEAD またはその祖先でなければなりません。"
 }

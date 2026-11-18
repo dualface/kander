@@ -138,7 +138,7 @@ func closureEvidence(cwd string, v board.ReviewBatchView, r board.ReviewCloseReq
 	if !board.ReviewNeedsGit(board.ReviewPlanBatch{Base: v.Batch.Base, TargetCommit: v.Batch.TargetCommit, Requirements: v.Batch.Requirements}) {
 		return board.ReviewGitEvidence{CWD: cwd, Head: "N/A", NotApplicable: "review-plan: all roles explicitly N/A; no Git target", VerifiedAt: now(), Edges: edges}, nil
 	}
-	if err := verifyClosureHead(cwd, v.Batch.TargetCommit); err != nil {
+	if _, err := verifyBatchHead(cwd, v.Batch); err != nil {
 		return board.ReviewGitEvidence{}, err
 	}
 	for _, edge := range edges {
@@ -150,10 +150,11 @@ func closureEvidence(cwd string, v board.ReviewBatchView, r board.ReviewCloseReq
 	if err != nil {
 		return board.ReviewGitEvidence{}, err
 	}
-	if err := verifyClosureHead(cwd, v.Batch.TargetCommit); err != nil {
+	observed, err := verifyBatchHead(cwd, v.Batch)
+	if err != nil {
 		return board.ReviewGitEvidence{}, err
 	}
-	return board.ReviewGitEvidence{CWD: cwd, Head: v.Batch.TargetCommit, Mechanical: mechanical, VerifiedAt: now(), Edges: edges}, nil
+	return closureGitEvidence(cwd, v.Batch, mechanical, edges, observed), nil
 }
 
 func readRemoteResource(ctx context.Context, session *remote.Session, kind, id string, value any) error {
@@ -190,7 +191,12 @@ func remoteEvidenceAction(ctx context.Context, session *remote.Session, cwd, act
 			return remoteResolveBatch(ctx, session, cwd, request)
 		}
 		if request.Batch != nil && board.ReviewNeedsGit(*request.Batch) {
-			if err := verifyGitEdge(cwd, board.ReviewGitEdge{Ancestor: request.Batch.Base, Descendant: request.Batch.TargetCommit}); err != nil {
+			if err := verifyPlannedBatchGit(cwd, *request.Batch); err != nil {
+				return nil, err
+			}
+		}
+		if len(request.RetargetBatches) > 0 {
+			if err := verifyRetargetGit(cwd, plan, request); err != nil {
 				return nil, err
 			}
 		}

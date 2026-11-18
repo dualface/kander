@@ -422,3 +422,19 @@ func ReviewNeedsGit(b ReviewPlanBatch) bool {
 func CreateReviewPlanWithTransaction(root string, plan ReviewPlan, extensions ...TransactionExtension) error {
 	return createReviewPlan(root, plan, true, extensions...)
 }
+
+// ReviewNoDelivery reports a batch with no delivery commit: one full SHA as both
+// base and target, and no role that needs a run. Review has nothing to cover, so
+// closing it needs only a target that the client repository still holds, not a
+// HEAD that equals it. The explicit non-Git N/A batch is no such batch.
+func ReviewNoDelivery(b ReviewPlanBatch) bool {
+	if !validCommit(b.Base) || b.Base != b.TargetCommit || validateRequirements(b.Requirements) != nil {
+		return false
+	}
+	for _, value := range b.Requirements {
+		if value == "required" {
+			return false
+		}
+	}
+	return true
+}

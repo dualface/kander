@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -109,7 +110,13 @@ func runDispositionMode(args []string, required bool) int {
 				err = resolveBatchWithGit(root, cwd, x)
 			} else if err == nil {
 				if x.Batch != nil && board.ReviewNeedsGit(*x.Batch) {
-					err = verifyGitEdge(cwd, board.ReviewGitEdge{Ancestor: x.Batch.Base, Descendant: x.Batch.TargetCommit})
+					err = verifyPlannedBatchGit(cwd, *x.Batch)
+				}
+				if err == nil && len(x.RetargetBatches) > 0 {
+					var p board.ReviewPlan
+					if p, err = board.ReadReviewPlan(root, x.PlanID); err == nil {
+						err = verifyRetargetGit(cwd, p, x)
+					}
 				}
 				if err == nil {
 					err = board.ExtendReviewPlan(root, x)
@@ -181,7 +188,39 @@ func validatePlanGit(p board.ReviewPlan) error {
 		if !board.ReviewNeedsGit(b) {
 			continue
 		}
-		if err := verifyGitEdge(p.CWD, board.ReviewGitEdge{Ancestor: b.Base, Descendant: b.TargetCommit}); err != nil {
+		if err := verifyPlannedBatchGit(p.CWD, b); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// verifyPlannedBatchGit checks the Git claims of a batch that needs Git. A batch
+// with no delivery commit also needs its target in the history of the repository
+// at cwd now: that is the check closure repeats later, and a wrong commit shows
+// up here instead of when the batch cannot close.
+func verifyPlannedBatchGit(cwd string, b board.ReviewPlanBatch) error {
+	if err := verifyGitEdge(cwd, board.ReviewGitEdge{Ancestor: b.Base, Descendant: b.TargetCommit}); err != nil {
+		return err
+	}
+	if board.ReviewNoDelivery(b) {
+		_, err := verifyNoDeliveryHead(cwd, b.TargetCommit)
+		return err
+	}
+	return nil
+}
+
+// verifyRetargetGit runs the Git checks of the retarget_batches operation on the
+// new base and target of each batch; board checks the plan side.
+func verifyRetargetGit(cwd string, p board.ReviewPlan, x board.ReviewPlanExtension) error {
+	for _, id := range slices.Sorted(maps.Keys(x.RetargetBatches)) {
+		r := x.RetargetBatches[id]
+		at := slices.IndexFunc(p.Batches, func(b board.ReviewPlanBatch) bool { return b.BatchID == id })
+		if at < 0 {
+			continue
+		}
+		next := board.ReviewPlanBatch{BatchID: id, Base: r.Base, TargetCommit: r.Target, Requirements: p.Batches[at].Requirements}
+		if err := verifyPlannedBatchGit(cwd, next); err != nil {
 			return err
 		}
 	}
@@ -224,6 +263,55 @@ func verifyClosureHead(cwd, target string) error {
 	}
 	return nil
 }
+
+// verifyNoDeliveryHead checks that the target of a batch with no delivery commit is
+// HEAD or one of its ancestors, and returns the HEAD it observed. The worktree may
+// be dirty and HEAD may have moved on: no delivery means no reviewed patch to keep
+// out of the integration.
+func verifyNoDeliveryHead(cwd, target string) (string, error) {
+	out, _, code, err := gitCommand([]string{"rev-parse", "HEAD"}, cwd, "")
+	if err != nil {
+		return "", err
+	}
+	head := strings.TrimSpace(out)
+	if code != 0 || head == "" {
+		return "", archiveError("Git HEAD required")
+	}
+	_, _, code, err = gitCommand([]string{"merge-base", "--is-ancestor", target, head}, cwd, "")
+	if err != nil {
+		return "", err
+	}
+	switch code {
+	case 0:
+		return head, nil
+	case 1:
+		return "", newGate(2, "review.no_delivery_target_not_in_head", target, head)
+	default:
+		return "", archiveError("Git commit required: " + target)
+	}
+}
+
+// verifyBatchHead is the HEAD check of a closure. A batch with a delivery closes
+// only at its exact target on a clean worktree; a batch with no delivery closes at
+// any HEAD that still holds the target, and the HEAD it saw goes into the evidence.
+func verifyBatchHead(cwd string, b board.ReviewBatch) (observed string, err error) {
+	if board.ReviewNoDelivery(board.ReviewPlanBatch{Base: b.Base, TargetCommit: b.TargetCommit, Requirements: b.Requirements}) {
+		return verifyNoDeliveryHead(cwd, b.TargetCommit)
+	}
+	return "", verifyClosureHead(cwd, b.TargetCommit)
+}
+
+// closureGitEvidence is the Git evidence of a closure for a batch that needs Git,
+// without the checks that need the view: the target as the head, and the marker of
+// a batch with no delivery.
+func closureGitEvidence(cwd string, b board.ReviewBatch, mechanical []board.ReviewMechanicalGit, edges []board.ReviewGitEdge, observed string) board.ReviewGitEvidence {
+	evidence := board.ReviewGitEvidence{CWD: cwd, Head: b.TargetCommit, Mechanical: mechanical, VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano), Edges: edges}
+	if board.ReviewNoDelivery(board.ReviewPlanBatch{Base: b.Base, TargetCommit: b.TargetCommit, Requirements: b.Requirements}) {
+		evidence.NoDelivery, evidence.ObservedHead = true, observed
+	}
+	return evidence
+}
+
 func closeWithGit(root, cwd string, r board.ReviewCloseRequest) (board.ReviewClosure, error) {
 	var c board.ReviewClosure
 	v, err := board.ReadReviewBatchView(root, r.BatchID)
@@ -237,7 +325,7 @@ func closeWithGit(root, cwd string, r board.ReviewCloseRequest) (board.ReviewClo
 		}
 		return board.CloseReviewBatch(root, r, board.ReviewGitEvidence{CWD: cwd, Head: "N/A", NotApplicable: "review-plan: all roles explicitly N/A; no Git target", VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano), Edges: edges})
 	}
-	if err = verifyClosureHead(cwd, v.Batch.TargetCommit); err != nil {
+	if _, err = verifyBatchHead(cwd, v.Batch); err != nil {
 		return c, err
 	}
 	edges, _, err := board.ReviewClosureEdges(v, r)
@@ -254,10 +342,11 @@ func closeWithGit(root, cwd string, r board.ReviewCloseRequest) (board.ReviewClo
 		return c, err
 	}
 	// Recheck after the potentially long Git work; board then CASes the exact view.
-	if err = verifyClosureHead(cwd, v.Batch.TargetCommit); err != nil {
+	observed, err := verifyBatchHead(cwd, v.Batch)
+	if err != nil {
 		return c, err
 	}
-	return board.CloseReviewBatch(root, r, board.ReviewGitEvidence{CWD: cwd, Head: v.Batch.TargetCommit, Mechanical: mechanical, VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano), Edges: edges})
+	return board.CloseReviewBatch(root, r, closureGitEvidence(cwd, v.Batch, mechanical, edges, observed))
 }
 
 // resolveBatchWithGit verifies the claims of a resolution the way closeWithGit does:

@@ -14,8 +14,9 @@ import (
 
 // ReviewPlanExtension appends one batch after the prior closure, seals the
 // cycle, rebinds execution cycles, syncs a drifted plan target to the runtime
-// batch, drops trailing batches no run has reached, releases an obligation on a user
-// decision, or resolves an unplanned batch (ResolveReviewBatch). Existing
+// batch, drops trailing batches no run has reached, corrects the base and target
+// of a batch no run has reached, releases an obligation on a user decision, or
+// resolves an unplanned batch (ResolveReviewBatch). Existing
 // requirements, members and evidence are never replaced. A sealed plan takes a batch
 // only for a rebound cycle that has none, or for a recovery that still owes a review.
 type ReviewPlanExtension struct {
@@ -31,6 +32,9 @@ type ReviewPlanExtension struct {
 	Seal              bool                          `json:"seal"`
 	Author            string                        `json:"author"`
 	Basis             string                        `json:"basis"`
+
+	// RetargetBatches corrects the base and target of batches no run has reached.
+	RetargetBatches map[string]ReviewBatchRetarget `json:"retarget_batches,omitempty"`
 }
 
 func ExtendReviewPlanWithTransaction(root string, x ReviewPlanExtension, extensions ...TransactionExtension) error {
@@ -74,7 +78,7 @@ func ExtendReviewPlanWithTransaction(root string, x ReviewPlanExtension, extensi
 				return err
 			}
 		}
-		otherOp := len(x.RebindCycles) > 0 || len(x.SyncTargets) > 0 || len(x.DropBatches) > 0 || x.ReleaseObligation != nil
+		otherOp := len(x.RebindCycles) > 0 || len(x.SyncTargets) > 0 || len(x.RetargetBatches) > 0 || len(x.DropBatches) > 0 || x.ReleaseObligation != nil
 		if !pk.step(reviewplan.Admit{Cas: p.Revision == x.ExpectedRevision, OtherOp: otherOp, BatchOnly: x.Batch != nil && !x.Seal, Owed: cycleBatch}) {
 			return reviewError("plan extension CAS/sealed conflict")
 		}
@@ -108,6 +112,11 @@ func ExtendReviewPlanWithTransaction(root string, x ReviewPlanExtension, extensi
 		}
 		if len(x.RebindCycles) > 0 {
 			if err = rebindPlanCycles(tx, pk, &p, changed, x.RebindCycles); err != nil {
+				return err
+			}
+		}
+		if len(x.RetargetBatches) > 0 {
+			if err = retargetPlanBatches(tx, pk, &p, x.RetargetBatches); err != nil {
 				return err
 			}
 		}
@@ -171,6 +180,7 @@ func extensionShape(x ReviewPlanExtension) error {
 	shape := reviewplan.Extend{
 		Rebind:   len(x.RebindCycles) > 0,
 		Sync:     len(x.SyncTargets) > 0,
+		Retarget: len(x.RetargetBatches) > 0,
 		Batch:    x.Batch != nil || x.Seal,
 		Drop:     len(x.DropBatches) > 0,
 		Release:  x.ReleaseObligation != nil,
@@ -184,7 +194,7 @@ func extensionShape(x ReviewPlanExtension) error {
 	switch {
 	case accepted:
 		return nil
-	case !shape.Rebind && !shape.Sync && !shape.Batch && !shape.Drop && !shape.Release:
+	case !shape.Rebind && !shape.Sync && !shape.Retarget && !shape.Batch && !shape.Drop && !shape.Release:
 		return reviewError("plan extension provenance")
 	case shape.Decision && !shape.Drop && !shape.Release:
 		return reviewError(t("board.review_decision_unused"))

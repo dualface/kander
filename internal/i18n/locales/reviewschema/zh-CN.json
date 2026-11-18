@@ -110,7 +110,7 @@
   "review.schema.plan.schema": "计划的 schema 版本。新计划必须为 1。",
   "review.schema.plan.sealed": "为 true 时，每个计划成员都必须出现在某个批次中。false 表示计划仍可用 extend-plan 追加。",
   "review.schema.plan.task_ids": "成员任务 ID。命令会排序并去掉重复。每个批次里的任务 ID 都必须在这个列表中。",
-  "review.schema.extend-plan.resolve_batch": "接受一个已有 run 的计划外批次，由一个已关闭的计划批次覆盖它。计划的批次与封存状态不变。与其他操作互斥。CWD 必须是计划的工作树。执行周期变化时在此之后重绑。",
+  "review.schema.extend-plan.resolve_batch": "接受一个已有 run 的计划外批次，由一个已关闭的计划批次覆盖它。计划的批次与封存状态不变。与其他操作互斥。新 base 和 target 的 Git 检查在 CWD 所在的仓库里运行。执行周期变化时在此之后重绑。",
   "review.schema.extend-plan.resolve_batch.batch_id": "使用 resolve_batch 时必填。计划外批次。",
   "review.schema.extend-plan.resolve_batch.covering_batch_id": "使用 resolve_batch 时必填。本计划的一个已关闭批次。它的 base 等于计划外批次的 base 或是其祖先，它的目标等于计划外批次的目标或是其后代。它包含计划外批次的每个 required 角色和每个仍在计划中的成员。",
   "review.schema.extend-plan.resolve_batch.findings": "计划外批次每个 run 的每个 finding 各一项，不能有其他项。",
@@ -155,5 +155,10 @@
   "review.schema.plan.drop_obligations.item.batch_id": "被删除的批次。",
   "review.schema.plan.drop_obligations.item.from_batch": "能解除这项义务的第一个批次的位置。",
   "review.schema.plan.drop_obligations.item.roles": "被删除批次要求的角色。",
-  "review.schema.plan.drop_obligations.item.task_ids": "仍欠这些角色的成员。"
+  "review.schema.plan.drop_obligations.item.task_ids": "仍欠这些角色的成员。",
+  "review.schema.extend-plan.retarget_batches": "改正从未运行过的已规划批次的 base 和 target：没有 run、推进或关闭记录。键为批次 ID，值为下面的条目。封存的计划也接受，批次已 aggregate 也接受：批次记录和计划的 revision 各加一，聚合视图重写，旧的 view_hash 不能再关闭该批次。与其他操作互斥。新 base 和 target 的 Git 检查在 CWD 所在的仓库里运行。",
+  "review.schema.extend-plan.retarget_batches.key.previous_base": "每个条目必填。批次当前的 base，用作比较并交换。",
+  "review.schema.extend-plan.retarget_batches.key.previous_target": "每个条目必填。批次当前的目标 commit，用作比较并交换。",
+  "review.schema.extend-plan.retarget_batches.key.base": "每个条目必填。新的 base，完整 commit SHA，且是新 target 的祖先。后续批次必须取它前一批次的 target。",
+  "review.schema.extend-plan.retarget_batches.key.target": "每个条目必填。新的目标 commit，完整 commit SHA。有已规划后继批次的批次保持原 target。无交付批次的 target 必须是 CWD 所在仓库的 HEAD 或其祖先。"
 }
