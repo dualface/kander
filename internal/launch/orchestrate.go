@@ -181,7 +181,6 @@ func StartOrchestrator(request OrchestrateRequest) (result OrchestrateResult, er
 		plan.beforePrompt = func() error { journal.Value.Phase = "prompt-attempted"; return journal.Save() }
 		plan.judge = func() launchVerdict { return verdictKeep }
 	}
-	plan.Target.Title = orchestratorTabTitle(request.References)
 	// Local legacy orchestration has no card identity. Distributed sessions keep
 	// their identity in private launcher context for later coordinator leases.
 	outcome, err := launchAgent(plan, request.Root, orchestratorWindowName(tasks[0].TaskID), inv, location, paneSession, &session, service != nil)

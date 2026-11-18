@@ -76,56 +76,25 @@ func useTitleBackend(t *testing.T, warning string) *titleBackend {
 	return titleProbe
 }
 
-func wantPlacement(t *testing.T, probe *titleBackend, title string) {
+// wantPlacement checks that the one container was created and placed with no
+// display title, so the backend names its tab by the label, and that the label
+// starts with prefix.
+func wantPlacement(t *testing.T, probe *titleBackend, prefix string) {
 	t.Helper()
 	if len(probe.created) != 1 || len(probe.placed) != 1 || probe.created[0] != probe.placed[0] {
 		t.Fatalf("created=%+v placed=%+v", probe.created, probe.placed)
 	}
-	if probe.created[0].title != title {
-		t.Fatalf("title=%q, want %q", probe.created[0].title, title)
+	if title := probe.created[0].title; title != "" {
+		t.Fatalf("title=%q, want none", title)
+	}
+	if label := probe.created[0].label; !strings.HasPrefix(label, prefix) {
+		t.Fatalf("label=%q, want prefix %q", label, prefix)
 	}
 }
 
-func TestTaskTabTitle(t *testing.T) {
-	long := strings.Repeat("长", 60)
-	for _, tc := range []struct{ name, text, want string }{
-		{"card title", "# Open each agent in a tab\n", "Open each agent in a tab"},
-		{"control characters", "# a\x00b\x1b[0m\tc\n", "ab[0mc"},
-		{"long title is kept whole", "# " + long + "\n", long},
-		{"no title", "no heading here\n", ""},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			resetLang(t)
-			got := taskTabTitle(tc.text)
-			if got != tc.want {
-				t.Fatalf("title=%q, want %q", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestOrchestratorTabTitle(t *testing.T) {
-	for _, tc := range []struct {
-		references []string
-		want       string
-	}{
-		{nil, ""},
-		{[]string{"20261116-a-task"}, "20261116-a-task"},
-		{[]string{"20261116-a-group", "b"}, "20261116-a-group +1"},
-		{[]string{"A", "B", "C"}, "A +2"},
-	} {
-		if got := orchestratorTabTitle(tc.references); got != tc.want {
-			t.Fatalf("%v: title=%q, want %q", tc.references, got, tc.want)
-		}
-	}
-	long := strings.Repeat("a", 60)
-	if got := orchestratorTabTitle([]string{long, "b"}); got != long+" +1" {
-		t.Fatalf("title=%q", got)
-	}
-}
-
-// start gives the container the card title and lets the backend warn.
-func TestStartPlacesContainerWithCardTitle(t *testing.T) {
+// start sets no display title, so the tab is named by the kb- label, and lets
+// the backend warn.
+func TestStartPlacesContainerWithLabel(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("tmux fakes are POSIX")
 	}
@@ -136,18 +105,15 @@ func TestStartPlacesContainerWithCardTitle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantPlacement(t, probe, "任务 tab-title")
-	if label := probe.created[0].label; !strings.HasPrefix(label, "kb-") {
-		t.Fatalf("label=%q", label)
-	}
+	wantPlacement(t, probe, "kb-")
 	if len(result.Warnings) != 1 || !strings.Contains(result.Warnings[0], "tab not named") || !strings.HasPrefix(result.Warnings[0], "警告") {
 		t.Fatalf("warnings=%q", result.Warnings)
 	}
 }
 
-// resume takeover and the notify recovery process name the tab after the card
-// as well, and print the placement warning when the caller collects none.
-func TestResumeAndNotifyRecoveryPlaceContainerWithCardTitle(t *testing.T) {
+// resume takeover and the notify recovery process name the tab by the kb-
+// label as well, and print the placement warning when the caller collects none.
+func TestResumeAndNotifyRecoveryPlaceContainerWithLabel(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("tmux fakes are POSIX")
 	}
@@ -161,7 +127,7 @@ func TestResumeAndNotifyRecoveryPlaceContainerWithCardTitle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantPlacement(t, probe, "任务 tab-resume")
+	wantPlacement(t, probe, "kb-")
 	if !strings.Contains(stderr, "tab not named") {
 		t.Fatalf("takeover warning missing from stderr: %q", stderr)
 	}
@@ -183,13 +149,15 @@ func TestResumeAndNotifyRecoveryPlaceContainerWithCardTitle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantPlacement(t, probe, "任务 tab-recovery")
+	wantPlacement(t, probe, "kb-")
 	if !strings.Contains(stderr, "tab not named") {
 		t.Fatalf("recovery warning missing from stderr: %q", stderr)
 	}
 }
 
-func TestOrchestratorPlacesContainerWithReferenceTitle(t *testing.T) {
+// An orchestrator sets no display title either; its tab is named by the
+// orchestrate- label.
+func TestOrchestratorPlacesContainerWithLabel(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("tmux fakes are POSIX")
 	}
@@ -204,14 +172,15 @@ func TestOrchestratorPlacesContainerWithReferenceTitle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantPlacement(t, probe, second+" +2")
+	wantPlacement(t, probe, "orchestrate-"+second)
 	if len(result.Warnings) != 0 {
 		t.Fatalf("warnings=%q", result.Warnings)
 	}
 }
 
-// chat and issue triage set no title, so the backend falls back to the label.
-func TestChatAndTriagePlaceContainerWithoutTitle(t *testing.T) {
+// chat and issue triage set no display title, so their tabs are named by the
+// chat- and issue- labels.
+func TestChatAndTriagePlaceContainerWithLabel(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("tmux fakes are POSIX")
 	}
@@ -221,10 +190,7 @@ func TestChatAndTriagePlaceContainerWithoutTitle(t *testing.T) {
 	if _, err := StartChat(ChatRequest{Root: root, Message: "hello"}); err != nil {
 		t.Fatal(err)
 	}
-	wantPlacement(t, probe, "")
-	if !strings.HasPrefix(probe.created[0].label, "chat-") {
-		t.Fatalf("label=%q", probe.created[0].label)
-	}
+	wantPlacement(t, probe, "chat-")
 
 	probe = useTitleBackend(t, "")
 	request := triageRequest(t, root)
@@ -232,8 +198,5 @@ func TestChatAndTriagePlaceContainerWithoutTitle(t *testing.T) {
 	if _, err := StartTriage(request); err != nil {
 		t.Fatal(err)
 	}
-	wantPlacement(t, probe, "")
-	if !strings.HasPrefix(probe.created[0].label, "issue-dualface-kander-42") {
-		t.Fatalf("label=%q", probe.created[0].label)
-	}
+	wantPlacement(t, probe, "issue-dualface-kander-42")
 }

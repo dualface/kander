@@ -1,9 +1,7 @@
 package launch
 
 import (
-	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/terminal"
@@ -60,38 +58,4 @@ func recordWindowLocation(root string, plan LaunchPlan, entry board.Entry, choic
 		_, err := recordWindowFn(root, entry, locationOf(plan, outcome), choice.record)
 		return err
 	}
-}
-
-// taskTabTitle is the display title of a card launch: the card title, with
-// control characters removed and never shortened. It is empty for a card without a title, so the container label
-// stays in use.
-func taskTabTitle(text string) string {
-	title := board.TitleFrom(text)
-	if title == t("board.untitled") {
-		return ""
-	}
-	return cleanTabTitle(title)
-}
-
-// orchestratorTabTitle is the display title of an orchestrator launch: the ID
-// of the first reference, followed by the count of the others. References are
-// the user's arguments, so a task group is not expanded into its members.
-func orchestratorTabTitle(references []string) string {
-	if len(references) == 0 {
-		return ""
-	}
-	title := references[0]
-	if rest := len(references) - 1; rest > 0 {
-		title += " +" + strconv.Itoa(rest)
-	}
-	return cleanTabTitle(title)
-}
-
-func cleanTabTitle(title string) string {
-	return strings.TrimSpace(strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
-			return -1
-		}
-		return r
-	}, title))
 }
