@@ -102,20 +102,21 @@ type gateRig struct {
 
 const gateVersion = "v0.0.1"
 
-// fakeGo answers `go env NAME...` with the value of FAKE_NAME and records every
-// other call: its arguments and the variables the gate is meant to control.
+// fakeGo records every call: its arguments and the variables the gate is meant
+// to control. It answers `go env NAME...` with the value of FAKE_NAME. A
+// directory counts as empty only when it exists and ls -A prints nothing.
 const fakeGo = `#!/bin/sh
-if [ "$1" = env ]; then
-	shift
-	for name in "$@"; do
-		eval "printf '%s\n' \"\${FAKE_$name}\""
-	done
-	exit 0
-fi
-home_state=nonempty
-if [ -z "$(ls -A "$HOME")" ]; then home_state=empty; fi
-config_state=nonempty
-if [ -z "$(ls -A "$XDG_CONFIG_HOME")" ]; then config_state=empty; fi
+dir_state() {
+	if [ ! -d "$1" ]; then
+		printf 'missing'
+	elif [ -n "$(ls -A "$1")" ]; then
+		printf 'nonempty'
+	else
+		printf 'empty'
+	fi
+}
+home_state=$(dir_state "$HOME")
+config_state=$(dir_state "$XDG_CONFIG_HOME")
 {
 	printf 'args=%s\n' "$*"
 	printf 'HOME=%s\n' "$HOME"
@@ -128,7 +129,14 @@ if [ -z "$(ls -A "$XDG_CONFIG_HOME")" ]; then config_state=empty; fi
 	printf 'GOENV=%s\n' "$GOENV"
 	printf -- '--\n'
 } >> "$FAKE_GO_LOG"
-if [ "$1" = test ] && [ "${FAKE_GO_FAIL-}" = test ]; then exit 1; fi
+if [ "$1" = env ]; then
+	shift
+	for name in "$@"; do
+		eval "printf '%s\n' \"\${FAKE_$name}\""
+	done
+	exit 0
+fi
+if [ "$1" = "${FAKE_GO_FAIL-}" ]; then exit 1; fi
 exit 0
 `
 
@@ -255,6 +263,20 @@ func (r *gateRig) gateCalls(t *testing.T) []map[string]string {
 	return calls
 }
 
+// splitCalls separates the `go env` probes from the vet and test calls, each in
+// call order.
+func (r *gateRig) splitCalls(t *testing.T) (probes, gate []map[string]string) {
+	t.Helper()
+	for _, call := range r.gateCalls(t) {
+		if strings.HasPrefix(call["args"], "env ") {
+			probes = append(probes, call)
+		} else {
+			gate = append(gate, call)
+		}
+	}
+	return probes, gate
+}
+
 func (r *gateRig) callerValue(name string) string {
 	for _, kv := range r.callerEnv {
 		if value, ok := strings.CutPrefix(kv, name+"="); ok {
@@ -303,9 +325,12 @@ func TestReleaseLocalGate(t *testing.T) {
 		if code != 0 {
 			t.Fatalf("exit code = %d, want 0; stderr:\n%s", code, stderr)
 		}
-		calls := rig.gateCalls(t)
+		probes, calls := rig.splitCalls(t)
+		if len(probes) != 3 {
+			t.Fatalf("fake go recorded %d go env probes, want 3 (GOCACHE, GOMODCACHE, GOENV): %v", len(probes), probes)
+		}
 		if len(calls) != 2 {
-			t.Fatalf("fake go recorded %d calls, want 2 (vet, test): %v", len(calls), calls)
+			t.Fatalf("fake go recorded %d gate calls, want 2 (vet, test): %v", len(calls), calls)
 		}
 		if got := calls[0]["args"]; got != "vet ./..." {
 			t.Errorf("first go call = %q, want %q", got, "vet ./...")
@@ -315,6 +340,13 @@ func TestReleaseLocalGate(t *testing.T) {
 		}
 		callerHome := rig.callerValue("HOME")
 		callerConfig := rig.callerValue("XDG_CONFIG_HOME")
+		// The caches are read before the environment is replaced.
+		for _, probe := range probes {
+			if probe["HOME"] != callerHome || probe["XDG_CONFIG_HOME"] != callerConfig {
+				t.Errorf("%s ran with HOME=%q XDG_CONFIG_HOME=%q, want the caller's %q and %q",
+					probe["args"], probe["HOME"], probe["XDG_CONFIG_HOME"], callerHome, callerConfig)
+			}
+		}
 		for _, call := range calls {
 			if call["HOME"] == "" || call["HOME"] == callerHome {
 				t.Errorf("%s: HOME = %q, want a new directory different from %q", call["args"], call["HOME"], callerHome)
@@ -355,34 +387,42 @@ func TestReleaseLocalGate(t *testing.T) {
 		rig.requireNoLeftovers(t)
 	})
 
-	t.Run("failing gate stops before the tag", func(t *testing.T) {
-		rig := newGateRig(t)
-		code, stderr := rig.release(t, []string{"FAKE_GO_FAIL=test"}, gateVersion)
-		if code == 0 {
-			t.Fatalf("exit code = 0, want nonzero; stderr:\n%s", stderr)
-		}
-		if !strings.Contains(stderr, "gate failed; no tag was created") {
-			t.Errorf("stderr lacks the gate failure notice:\n%s", stderr)
-		}
-		if got := rig.localTags(t); got != "" {
-			t.Errorf("local tags = %q, want none", got)
-		}
-		if got := rig.originTags(t); got != "" {
-			t.Errorf("origin tags = %q, want none", got)
-		}
-		calls := rig.gateCalls(t)
-		for _, call := range calls {
-			for _, dir := range []string{call["HOME"], call["XDG_CONFIG_HOME"]} {
-				if _, err := os.Stat(dir); !os.IsNotExist(err) {
-					t.Errorf("gate directory %s still exists after the failed gate (stat err: %v)", dir, err)
+	for _, tc := range []struct {
+		fail      string // go subcommand the fake go fails
+		gateCalls int    // vet and test calls that must have run
+	}{
+		{fail: "vet", gateCalls: 1},
+		{fail: "test", gateCalls: 2},
+	} {
+		t.Run("failing go "+tc.fail+" stops before the tag", func(t *testing.T) {
+			rig := newGateRig(t)
+			code, stderr := rig.release(t, []string{"FAKE_GO_FAIL=" + tc.fail}, gateVersion)
+			if code == 0 {
+				t.Fatalf("exit code = 0, want nonzero; stderr:\n%s", stderr)
+			}
+			if !strings.Contains(stderr, "gate failed; no tag was created") {
+				t.Errorf("stderr lacks the gate failure notice:\n%s", stderr)
+			}
+			if got := rig.localTags(t); got != "" {
+				t.Errorf("local tags = %q, want none", got)
+			}
+			if got := rig.originTags(t); got != "" {
+				t.Errorf("origin tags = %q, want none", got)
+			}
+			_, calls := rig.splitCalls(t)
+			if len(calls) != tc.gateCalls {
+				t.Errorf("fake go recorded %d vet/test calls, want %d: %v", len(calls), tc.gateCalls, calls)
+			}
+			for _, call := range calls {
+				for _, dir := range []string{call["HOME"], call["XDG_CONFIG_HOME"]} {
+					if _, err := os.Stat(dir); !os.IsNotExist(err) {
+						t.Errorf("gate directory %s still exists after the failed gate (stat err: %v)", dir, err)
+					}
 				}
 			}
-		}
-		if len(calls) != 2 {
-			t.Errorf("fake go recorded %d calls, want 2 (vet, failing test)", len(calls))
-		}
-		rig.requireNoLeftovers(t)
-	})
+			rig.requireNoLeftovers(t)
+		})
+	}
 
 	t.Run("no-test skips the gate and still tags", func(t *testing.T) {
 		rig := newGateRig(t)
