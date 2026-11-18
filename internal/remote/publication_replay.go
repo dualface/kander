@@ -60,12 +60,9 @@ func (s *Session) publicationHistory(operation, replay string, raw json.RawMessa
 		return nil, err
 	}
 	defer lock.Unlock()
-	previous, found, err := fs.ReadRegularFileIfExists(s.Home, path)
+	ids, err = s.readHistory(path)
 	if err != nil {
 		return nil, err
-	}
-	if found && (json.Unmarshal(previous, &ids) != nil || len(ids) > 256) {
-		return nil, errors.New(config.Text("remote.review_material_conflict"))
 	}
 	if add != "" && !slices.Contains(ids, add) {
 		if len(ids) >= 256 {
@@ -99,6 +96,12 @@ func (s *Session) legacyPrepareHistory(replay string, raw json.RawMessage, recor
 	if err != nil {
 		return nil, err
 	}
+	return s.readHistory(path)
+}
+
+// readHistory returns the publication IDs recorded in one replay record, or
+// none when the record does not exist.
+func (s *Session) readHistory(path string) ([]string, error) {
 	previous, found, err := fs.ReadRegularFileIfExists(s.Home, path)
 	if err != nil || !found {
 		return nil, err
