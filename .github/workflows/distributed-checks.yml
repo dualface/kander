@@ -10,7 +10,7 @@ on:
 # Isolate runs using canonical macOS paths from earlier CI settings.
 concurrency:
   group: distributed-canonical-temp-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/v2' }}
 
 permissions:
   contents: read
