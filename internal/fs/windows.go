@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sync/atomic"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -19,6 +21,8 @@ const (
 	statusStoppedOnSymlink        windows.NTStatus = 0x8000002D
 	errorCantResolveFilename                       = syscall.Errno(1921)
 	fileNamesInformation                           = 12
+	// The x/sys release in use has no FileRenameInformationEx class for NtSetInformationFile.
+	fileRenameInformationExClass = 65
 )
 
 type fileAttributeTagInfo struct {
@@ -36,6 +40,22 @@ type fileRenameInformation struct {
 	RootDirectory   windows.Handle
 	FileNameLength  uint32
 	FileName        [1]uint16
+}
+
+// fileRenameInformationEx is FILE_RENAME_INFORMATION_EX. Like fileRenameInformation it assumes the 64-bit layout, where
+// RootDirectory sits at offset 8.
+type fileRenameInformationEx struct {
+	Flags          uint32
+	_              [4]byte
+	RootDirectory  windows.Handle
+	FileNameLength uint32
+	FileName       [1]uint16
+}
+
+// renameStats counts the system calls of renameOnce so that tests can tell which path a replacement took.
+var renameStats struct {
+	exAttempts       atomic.Int64
+	classicFallbacks atomic.Int64
 }
 
 func closeHandle(h windows.Handle) {
@@ -79,20 +99,29 @@ func isExistWin(err error) bool {
 	return false
 }
 
+// isReparseNTError reports whether err is an NT status that means the path crossed a reparse point.
+func isReparseNTError(err error) bool {
+	var st windows.NTStatus
+	if !errors.As(err, &st) {
+		return false
+	}
+	switch st {
+	case statusReparsePointEncountered, statusIOReparseTagNotHandled, statusStoppedOnSymlink:
+		return true
+	}
+	return st.Errno() == errorCantResolveFilename
+}
+
 func mapNTError(op, path string, err error) error {
 	if err == nil {
 		return nil
 	}
 	var st windows.NTStatus
 	if errors.As(err, &st) {
-		switch st {
-		case statusReparsePointEncountered, statusIOReparseTagNotHandled, statusStoppedOnSymlink:
+		if isReparseNTError(err) {
 			return failClosed(op, path, "reparse point is not allowed")
 		}
 		errno := st.Errno()
-		if errno == errorCantResolveFilename {
-			return failClosed(op, path, "reparse point is not allowed")
-		}
 		if errno == windows.ERROR_FILE_NOT_FOUND || errno == windows.ERROR_PATH_NOT_FOUND {
 			return notExistError(op, path, "protected path does not exist")
 		}
@@ -484,6 +513,13 @@ func writeHandle(handle windows.Handle, path string, data []byte) error {
 	return nil
 }
 
+// renameHandle renames the open handle to the name of targetPath inside targetParent. Only the two pinned handles take
+// part, so the retries below never resolve a path again.
+//
+// A replacement first asks for POSIX rename semantics, which let the rename succeed while another handle that shares
+// DELETE is still open on the target; the classic call fails in that case. A handle that does not share DELETE, such as
+// the scan of an antivirus product, still makes the rename fail with a busy error. Such handles are usually short lived,
+// so a busy error is retried with a bounded backoff before it is returned.
 func renameHandle(handle, targetParent windows.Handle, targetPath string, replace bool) error {
 	name := filepath.Base(targetPath)
 	if err := validateComponent(name, targetPath); err != nil {
@@ -493,26 +529,95 @@ func renameHandle(handle, targetParent windows.Handle, targetPath string, replac
 	if err != nil {
 		return wrap("rename", targetPath, err)
 	}
-	fileNameLen := len(encoded)*2 - 2
+	encoded = encoded[:len(encoded)-1]
+	for attempt := 0; ; attempt++ {
+		err = renameOnce(handle, targetParent, encoded, replace)
+		if err == nil {
+			return nil
+		}
+		// Reparse statuses come first so that a status which also maps to a busy errno is never retried.
+		if isReparseNTError(err) {
+			return mapNTError("rename", targetPath, err)
+		}
+		if !replace && isExistWin(err) {
+			return existError("rename", targetPath, "rename target already exists")
+		}
+		wait, retry := nextRenameWait(renameBackoff, attempt, isBusyRename(err))
+		if !retry {
+			return mapNTError("rename", targetPath, err)
+		}
+		time.Sleep(wait)
+	}
+}
+
+// isBusyRename reports whether err says that another handle on the target blocks the rename.
+func isBusyRename(err error) bool {
+	if isReparseNTError(err) {
+		return false
+	}
+	var st windows.NTStatus
+	if !errors.As(err, &st) {
+		return false
+	}
+	errno := st.Errno()
+	return errno == windows.ERROR_ACCESS_DENIED || errno == windows.ERROR_SHARING_VIOLATION
+}
+
+// isRenameExUnsupported reports whether err says the system does not know the Ex information class or one of its flags.
+func isRenameExUnsupported(err error) bool {
+	var st windows.NTStatus
+	if !errors.As(err, &st) {
+		return false
+	}
+	switch st {
+	case windows.STATUS_INVALID_INFO_CLASS, windows.STATUS_NOT_IMPLEMENTED, windows.STATUS_NOT_SUPPORTED, windows.STATUS_INVALID_PARAMETER:
+		return true
+	}
+	return false
+}
+
+// renameOnce makes one rename attempt on the handle. A replacement tries the POSIX semantics first and falls back to
+// the classic call on the same handle when the system does not support them. Nothing is cached between attempts.
+func renameOnce(handle, targetParent windows.Handle, name []uint16, replace bool) error {
+	if replace {
+		renameStats.exAttempts.Add(1)
+		err := setRenameInformationEx(handle, targetParent, name)
+		if !isRenameExUnsupported(err) {
+			return err
+		}
+		renameStats.classicFallbacks.Add(1)
+	}
+	return setRenameInformation(handle, targetParent, name, replace)
+}
+
+func setRenameInformation(handle, targetParent windows.Handle, name []uint16, replace bool) error {
 	var dummy fileRenameInformation
-	bufferSize := int(unsafe.Offsetof(dummy.FileName)) + fileNameLen
+	nameLen := len(name) * 2
+	bufferSize := int(unsafe.Offsetof(dummy.FileName)) + nameLen
 	buffer := make([]byte, bufferSize)
 	info := (*fileRenameInformation)(unsafe.Pointer(&buffer[0]))
 	if replace {
 		info.ReplaceIfExists = 1
 	}
 	info.RootDirectory = targetParent
-	info.FileNameLength = uint32(fileNameLen)
-	copy(unsafe.Slice(&info.FileName[0], fileNameLen/2), encoded[:len(encoded)-1])
+	info.FileNameLength = uint32(nameLen)
+	copy(unsafe.Slice(&info.FileName[0], len(name)), name)
 	var iosb windows.IO_STATUS_BLOCK
-	err = windows.NtSetInformationFile(handle, &iosb, &buffer[0], uint32(bufferSize), windows.FileRenameInformation)
-	if err != nil {
-		if !replace && isExistWin(err) {
-			return existError("rename", targetPath, "rename target already exists")
-		}
-		return mapNTError("rename", targetPath, err)
-	}
-	return nil
+	return windows.NtSetInformationFile(handle, &iosb, &buffer[0], uint32(bufferSize), windows.FileRenameInformation)
+}
+
+func setRenameInformationEx(handle, targetParent windows.Handle, name []uint16) error {
+	var dummy fileRenameInformationEx
+	nameLen := len(name) * 2
+	bufferSize := int(unsafe.Offsetof(dummy.FileName)) + nameLen
+	buffer := make([]byte, bufferSize)
+	info := (*fileRenameInformationEx)(unsafe.Pointer(&buffer[0]))
+	info.Flags = windows.FILE_RENAME_REPLACE_IF_EXISTS | windows.FILE_RENAME_POSIX_SEMANTICS
+	info.RootDirectory = targetParent
+	info.FileNameLength = uint32(nameLen)
+	copy(unsafe.Slice(&info.FileName[0], len(name)), name)
+	var iosb windows.IO_STATUS_BLOCK
+	return windows.NtSetInformationFile(handle, &iosb, &buffer[0], uint32(bufferSize), fileRenameInformationExClass)
 }
 
 func openOrCreateFile(parent windows.Handle, name, path string, access uint32, private bool) (windows.Handle, error) {
