@@ -47,11 +47,13 @@ func TestDoctorAndPanelProbeAgentOverride(t *testing.T) {
 
 // Each fake agent announces itself and then waits until all three have
 // started, so only probes that overlap in time can report the version. The
-// judgment never reads the clock: a loaded machine delays the probes but cannot
-// break the overlap. The barrier gives up after 300 polls, below the 5 second
-// probe timeout, so a sequential findAgents fails with a readable value instead
-// of a timeout. PATH holds only the fake directory, so the real agent CLIs of
-// the machine are not probed, and the scripts call only shell builtins and
+// judgment is made from the start markers, not from the clock. The barrier
+// gives up after 300 polls, which is about 3 seconds of nominal sleep, so a
+// sequential findAgents normally fails with a readable value instead of the 5
+// second probe timeout. Under heavy load the polls take longer than nominal: a
+// late third probe can still end the barrier early, and the probe timeout can
+// come first. PATH holds only the fake directory, so the real agent CLIs of the
+// machine are not probed, and the scripts call only shell builtins and
 // /bin/sleep because they run with that PATH.
 func TestFindAgentsProbesConcurrently(t *testing.T) {
 	h := newHarness(t)
@@ -60,13 +62,16 @@ func TestFindAgentsProbesConcurrently(t *testing.T) {
 	if err := os.MkdirAll(started, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	// The directory sits inside a single-quoted shell string, so escape any
+	// quote that a custom TMPDIR may put in its path.
+	quotedStarted := strings.ReplaceAll(started, "'", `'\''`)
 	cfg := config.DefaultConfig()
 	cfg.WelcomeComplete = true
 	cfg.Launcher = "foreground"
 	cfg.Agents = map[string]config.AgentDefinition{}
 	names := []string{"slow-a", "slow-b", "slow-c"}
 	for _, name := range names {
-		script := strings.NewReplacer("@DIR@", started, "@NAME@", name, "@COUNT@", strconv.Itoa(len(names))).Replace(`#!/bin/sh
+		script := strings.NewReplacer("@DIR@", quotedStarted, "@NAME@", name, "@COUNT@", strconv.Itoa(len(names))).Replace(`#!/bin/sh
 dir='@DIR@'
 : > "$dir/@NAME@"
 i=0
