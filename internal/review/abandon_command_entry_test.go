@@ -1,0 +1,80 @@
+//go:build unix
+
+package review
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/remote"
+)
+
+// writeAbandonRequest writes the request file of `kander review abandon` for run.
+func writeAbandonRequest(t *testing.T, run string) string {
+	t.Helper()
+	data, err := json.Marshal(board.ReviewAbandonRequest{RunID: run, Decision: "user decision 2026-11-19", Reason: "the writer secret was lost"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(t.TempDir(), "abandon.json")
+	if err := os.WriteFile(file, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return file
+}
+
+// The command entry (Run, runDispositionMode, runRemoteDisposition) abandons a
+// finalized run of a card that has no plan: the stray run a planless card can open
+// through the same entry as every other review.
+func TestAbandonRunsThroughTheCommandEntry(t *testing.T) {
+	w := newRemoteWorld(t)
+	store, err := newRemoteReviewStore(w.session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unlock, err := store.Lock("stray-lost")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	input := board.ReviewInput{RunID: "stray-lost", BatchID: "stray", TaskIDs: []string{w.task}, Role: "PMQA", Reviewer: "codex", Model: "test", Effort: "high", Base: w.h.base, Commit: w.h.head, ReportLanguage: "en"}
+	requirements := map[string]string{"PMQA": "required", "Security": "N/A: repository policy"}
+	originals := map[string][]byte{"task-context.md": []byte("frozen task"), "review-context.md": []byte("context")}
+	run, _, err := store.Prepare(input, requirements, nil, originals, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run.LaunchStatus, run.ExecutionStatus = "started", "ok"
+	if run, err = store.Finalize(run, []byte(emptyStructuredReview)); err != nil {
+		t.Fatal(err)
+	}
+	var result struct {
+		RunID string `json:"run_id"`
+	}
+	out := commandOK(t, "abandon", w.h.repo, writeAbandonRequest(t, run.RunID))
+	if err := json.Unmarshal([]byte(out), &result); err != nil || result.RunID != run.RunID {
+		t.Fatalf("the command did not name the abandoned run: %q %v", out, err)
+	}
+	var stored board.ReviewRun
+	if err := readRemoteResource(t.Context(), w.session, "runs", run.RunID, &stored); err != nil || stored.Abandonment == nil {
+		t.Fatalf("the run is not abandoned: %+v %v", stored, err)
+	}
+}
+
+// Without a configured project the local board has no abandon: the command fails
+// before it reads the request.
+func TestAbandonNeedsAConfiguredProject(t *testing.T) {
+	h := newCodexHarness(t)
+	t.Chdir(h.repo)
+	code, _, stderr := captureRun(t, []string{"abandon", h.repo, writeAbandonRequest(t, "stray-lost")})
+	if code == 0 || stderr == "" {
+		t.Fatalf("a local abandon was accepted: %d %q", code, stderr)
+	}
+	if want := remote.ErrNotConfigured.Error(); !strings.Contains(stderr, want) {
+		t.Fatalf("the failure does not say %q: %q", want, stderr)
+	}
+}
