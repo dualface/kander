@@ -74,15 +74,15 @@ func TestWindowsReadRejectsReparseLeafSwappedInTheWindow(t *testing.T) {
 					}
 					swap(t, outside, target)
 				})
-				content, _, err := reader.read(root, target)
+				content, found, err := reader.read(root, target)
 				if *calls == 0 {
 					t.Fatal("hook did not run for the target")
 				}
 				if err == nil {
 					t.Fatalf("read of a swapped %s succeeded with %q", kind, content)
 				}
-				if strings.Contains(content, "secret") {
-					t.Fatal("data of the link target was returned")
+				if found || content != "" {
+					t.Fatalf("a rejected %s handed back data or a file: found=%v content=%q", kind, found, content)
 				}
 				if !errors.Is(err, ErrUnsafe) {
 					t.Fatalf("error is not ErrUnsafe: %v", err)

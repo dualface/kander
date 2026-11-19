@@ -13,7 +13,8 @@ import (
 	"time"
 )
 
-// leafReader reads one file through a public read entrance and reports the content and whether the file was found.
+// leafReader reads one file through a public read entrance. found reports whether the entrance handed anything back,
+// data or a file, whatever its error; an entrance that rejects a path must hand back nothing.
 type leafReader struct {
 	name string
 	read func(root, path string) (content string, found bool, err error)
@@ -22,7 +23,7 @@ type leafReader struct {
 var leafReaders = []leafReader{
 	{"ReadRegularFile", func(root, path string) (string, bool, error) {
 		data, err := ReadRegularFile(root, path)
-		return string(data), err == nil, err
+		return string(data), data != nil, err
 	}},
 	{"ReadRegularFileIfExists", func(root, path string) (string, bool, error) {
 		data, found, err := ReadRegularFileIfExists(root, path)
@@ -30,11 +31,14 @@ var leafReaders = []leafReader{
 	}},
 	{"OpenRegularFileIfExists", func(root, path string) (string, bool, error) {
 		file, err := OpenRegularFileIfExists(root, path)
-		if err != nil || file == nil {
+		if file == nil {
 			return "", false, err
 		}
 		defer file.Close()
-		data, err := io.ReadAll(file)
+		data, readErr := io.ReadAll(file)
+		if err == nil {
+			err = readErr
+		}
 		return string(data), true, err
 	}},
 }
