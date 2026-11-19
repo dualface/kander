@@ -36,7 +36,8 @@ type WorkerStatus struct {
 
 // InspectWorker looks at the worker of home without creating or changing
 // anything: no client directory, no lock file, no record. A lock file that is
-// missing, or deleted while the probe runs, means no worker runs.
+// missing when the probe opens it means no worker runs. One deleted after the
+// probe opened it is still probed through that open handle.
 func InspectWorker(home string) (WorkerStatus, error) {
 	if _, err := os.Stat(home); os.IsNotExist(err) {
 		return WorkerStatus{Run: WorkerNoHome}, nil

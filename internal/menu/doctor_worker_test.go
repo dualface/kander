@@ -142,7 +142,9 @@ func TestDoctorWorkerCheckWithoutAUsableRecordFails(t *testing.T) {
 	}
 }
 
-// Doctor reads only: the lock file and the record keep their bytes.
+// Doctor reads only: the client directory keeps its files. The record keeps its
+// modification time and bytes; the lock file keeps its modification time and
+// size, because its content cannot be read while the worker holds it.
 func TestDoctorWorkerCheckChangesNothing(t *testing.T) {
 	home := t.TempDir()
 	holdLock(t, home)
