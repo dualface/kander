@@ -175,7 +175,7 @@ The client reads `server.url` and `project.name` from the scope config or the pr
 
 - `client-id`: the persistent host identity, created on first use.
 - `executions/<namespace>/<task>/<execution>.json`, where `<namespace>` is the SHA-256 hex of the server URL and project ID (project IDs derive from names, so two servers can serve one ID; `sessions/<namespace>/` and `retained-executions/<namespace>/` use the same namespace): the credential of each claim this host made (server URL, generation, token, lease timings, the managed agent PID when known), plus `latest`. Per-execution locks merge renewals and launch facts; release tombstones prevent a late writer from recreating a removed credential or erasing a successor pointer. On Windows, a lock-free read of a credential or its `latest-generation` / `latest` pointer (`remote.Credentials` and `Session.Credential`) that meets a sharing violation, because an atomic replacement still holds its temporary handle, is retried with a bounded backoff of at most 630ms in total; if the violation persists, the read reports a busy error that still wraps the system error. Reads under a credential lock never retry, and no other error is retried.
-- `worker.lock`, `worker.log`: the background worker.
+- `worker.lock`, `worker.log`, `worker.json`: the background worker: its lock, its log and its record ([Worker record and version mismatch](#worker-record-and-version-mismatch)).
 
 A process started for one execution carries `KANDER_EXECUTION_ID` and presents only that execution's credential, so an agent of an older generation cannot pick up a newer claim made on the same host. An interactive command without the variable uses the task's latest credential. `move <task> working --owner <agent>` claims a `todo` task; with `--decision` it takes over a lost claim.
 
@@ -195,7 +195,7 @@ A round of either loop that takes longer than the renewal interval is logged as 
 
 ### Handover to a replaced binary
 
-A worker does not keep running old code after an upgrade. At start, with `worker.lock` held, it records the path `os.Executable()` returned and the identity of the file there, read through an open handle (`os.SameFile` on a path-only `FileInfo` can compare two reads of the new file on Windows). It logs `worker started` with `version`, `pid`, and `executable`. After every work round it reads the identity again. An unreadable path (missing during the replacement, no permission) changes nothing; the worker tries again at the next tick.
+A worker does not keep running old code after an upgrade. At start, with `worker.lock` held, it records the path `os.Executable()` returned and the identity of the file there, read through an open handle (`os.SameFile` on a path-only `FileInfo` can compare two reads of the new file on Windows). It writes its [worker record](#worker-record-and-version-mismatch) and logs `worker started` with `version`, `pid`, and `executable`. After every work round it reads the identity again. An unreadable path (missing during the replacement, no permission) changes nothing; the worker tries again at the next tick.
 
 When the identity differs, the worker probes the new file with `<executable> version` through the bounded process runner of `internal/probe` (10 s, process tree reaped). The probe passes when the exit code is 0 and stdout starts with `kander `. The renewal loop keeps renewing while the probe runs. A failed probe logs a warning and the worker keeps serving. The same file identity is not probed again for one minute; another replacement is probed at once.
 
@@ -212,6 +212,35 @@ Limits:
 
 - A worker started before this behavior existed cannot hand over. Restart it once by hand (`kill` the `kander worker` process; the next command that needs it starts one from the current binary).
 - The check follows the file at the recorded path. If the installation is a symlink to a versioned directory (for example a Homebrew `Cellar/kander/<version>/bin/kander`), Linux reports the resolved real path, an upgrade changes only the symlink, and the worker does not hand over. An installation that replaces the file at its path (`mv` over `~/.local/bin/kander`, `kander update`) does.
+
+### Worker record and version mismatch
+
+A worker runs the binary it started from until it hands over, so a worker can run another version than the `kander` command a user types. The worker therefore writes `worker.json` into the client directory, and the commands that need a worker and `kander doctor` compare it with their own binary.
+
+`worker.json` is written atomically and privately through `internal/fs`, after the worker took `worker.lock` and before its first renewal. Every worker writes it at start, a worker that took over from an older binary too, and it replaces the record of the worker before it. A worker never deletes it, not even when it exits idle. The record only serves diagnostics: no authorization, lease or delivery decision reads it. A failed write logs one `worker record could not be written` ERROR to `worker.log`, and the worker renews as usual. Schema 1 has these fields:
+
+| Field | Meaning |
+| --- | --- |
+| `schema` | `1`. |
+| `version` | The version string of the binary the worker runs (`kander version`). |
+| `pid` | The process ID of the worker. |
+| `executable` | The path of the file the worker started from; empty when it could not be read. |
+| `handover` | `true` when the worker recorded the identity of its executable and so hands over to a replaced file; `false` otherwise. |
+| `started_at` | The start of the worker, UTC, RFC 3339. |
+
+The file is a contract between processes that can be different versions. A reader accepts unknown fields; a later change adds fields without changing the meaning of these, and an incompatible change raises `schema`. A reader that finds another schema, JSON that is not valid, or a file it cannot read treats the version of the worker as unknown and never fails because of it. A missing file means a worker that is older than the record, or one whose write failed. A reader trusts the record only while a worker holds `worker.lock`; `worker.lock` does not tell which process holds it, so the `pid` is not verified. In the short time between a new worker taking the lock and writing its record, a reader can read the record of the worker before it.
+
+**Commands that need a worker.** `kander start` (and the takeover start of `kander resume`), a claim in server mode (`kander move <task> working --owner <agent>`) and `kander coordinator claim` make sure a worker runs (`remote.EnsureWorkerChecked`). When no worker holds `worker.lock`, they start one from their own binary and say nothing about versions. When one runs, they read its record:
+
+- The version is the same: nothing is printed. Two builds without an injected version both report `dev` and count as the same version.
+- The version differs: a warning names both versions, the pid and path of the worker and the path of this binary. When both paths are the same and `handover` is `true`, the warning says the worker hands over on its next round and that the user stops the pid when the warning still appears after a minute (a failed or backed-off handover is retried at most once a minute). Otherwise, with another path or `handover` false, the worker does not hand over: the warning asks the user to stop the pid, and says the next `kander start`, claim or `kander coordinator claim` starts a worker from this binary. On Windows the paths are compared without regard to case.
+- No record exists: one line says the worker has no version record, that it may be an older worker that cannot hand over, and what to stop. A record of another schema or an unreadable record prints nothing; `kander doctor` reports it.
+
+Every message that asks for a stop also says what the stop costs: until a worker runs again no lease of this host is renewed, and a lease that lapses meanwhile can still be recovered, because only an explicit takeover hands a lapsed lease to a new execution. The commands never stop or restart a worker themselves. `kander start` prints the message among its warnings; a claim and `kander coordinator claim` print it to stderr. The other callers (integration claims, launch receipt recovery and the later worker checks of one command) stay silent.
+
+**`kander doctor`** reads the same record without creating or changing anything: it creates no client directory, no lock file and no record, and it stops no process. With no client directory it prints no worker line. With no lock holder it prints one `not running` line and stays healthy. With a holder and the same version it prints one line with the version and the pid. With a holder and another version it prints the warning above and the doctor result fails. With a holder and no usable record (missing, another schema, unreadable) it prints a `version not recorded` warning with what to stop, and the result fails.
+
+**Session identity text.** The liveness text `session identity was not reported` no longer tells the user to reopen the container. It says that the terminal shows no session marker this `kander` reads (for herdr-core the label `kander.session`), that direct delivery is unavailable, and that `kander doctor` compares the version of the background worker. A worker generates this text and stores it in the execution observation on the server, in the language of the worker's configuration; `kander list`, `show`, `check` and the TUI show the stored reason. The new text therefore appears after the worker runs the new version, and the text stored earlier is replaced at the next observation the worker reports.
 
 ## Collaboration requests
 

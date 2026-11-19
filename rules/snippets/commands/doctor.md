@@ -4,7 +4,7 @@ Source: new in this file; the rule files did not describe this command beyond it
 
 ## Purpose and users
 
-Checks the installation (binary, rules root, agent rules integration, terminal tools) and repairs what it can: missing or outdated rule files, templates, and snippets are rewritten from the embedded copies; locally modified files are listed and, in an interactive session, backed up and replaced on request. Run by the user, also after every upgrade.
+Checks the installation (binary, rules root, agent rules integration, terminal tools, the background worker of the client) and repairs what it can: missing or outdated rule files, templates, and snippets are rewritten from the embedded copies; locally modified files are listed and, in an interactive session, backed up and replaced on request. Run by the user, also after every upgrade.
 
 ## Syntax
 
@@ -27,11 +27,12 @@ None.
 - A reference that appears only inside an HTML comment, a code fence, or a negated sentence is reported as inactive, not as connected.
 - `install_rules` keys in the project overlay are ignored with one warning each.
 - Interactive sessions may back up and replace locally modified files.
+- Reads the background worker of the client directory without creating or changing anything (no client directory, lock file or record is created) and stops no process. It compares the version in the worker's record (`worker.json`) with its own: a worker that runs another version, or runs without a usable version record, is a warning that fails the check and names what to stop; an absent worker is reported as not running and does not fail it.
 - Never changes the board.
 
 ## Output
 
-- One line per check, then the overall result.
+- One line per check, then the overall result. The worker check prints one line: not running, running with its version and pid, or a warning (another version, or no version record) with the way out. With no client directory it prints none.
 
 ## Rejections
 
