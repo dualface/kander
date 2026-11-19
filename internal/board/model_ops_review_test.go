@@ -514,9 +514,10 @@ func (w *modelWorld) appendCycleBatch(review modelReviewFacts) error {
 }
 
 // appendAssignBatch gives the members no batch names an N/A batch after the last
-// batch, and closes it: the batch names members that can still take a run, the
-// done gate wants every such batch closed, and an N/A batch holds nothing to review. A plan seals only when every member
-// left is in a batch. The ID carries the drops of the path, as the cycle batch does.
+// batch, and closes it: the batch names members that were not excluded, so the
+// done gate wants it closed, and an N/A batch needs no run, so it closes at once.
+// A plan seals only when every member left is in a batch. The ID carries the drops
+// of the path, as the cycle batch does.
 func (w *modelWorld) appendAssignBatch(review modelReviewFacts) error {
 	last := review.batches[len(review.batches)-1]
 	p, err := ReadReviewPlan(w.root, last.plan)
