@@ -37,7 +37,20 @@ contribute to coverage reported by `-cover`.
 | default | `go test ./...` | explore 3, exit 2 | explore 2, exit 2, focused |
 | full | `KANDER_MODEL_DEPTH=full` | explore 4, exit 3 | explore 3, exit 3, focused |
 
-`platform-checks.yml` runs the model tests once, in full mode, in the `model-full` job on Linux; `-run TestModel` there covers the search and the small searches of `model_meta_test.go`. The search walks abstract states and has no platform branch, so the `test` jobs on Linux, macOS and Windows do not run it; the platform-specific file, lock and process behavior is covered by their other steps. The default mode still runs under `go test ./...`. The test logs one line per scenario as soon as that scenario ends, with its `states`, `expanded` and `seconds`. The `model-full` step runs with `-v`, so the CI log shows these lines at once, also in a run that times out.
+On v2, `distributed-checks.yml` runs the default mode in the `Complete native tests` step of its `ubuntu-latest` and `macos-latest` all jobs (`go test ./...`); the Windows jobs do not run it. The `Complete Windows board tests` step runs the other tests of `internal/board` with `-skip '^TestModel'`: the search and the small searches of `model_*_test.go` have no Windows-specific code path, so their result does not depend on the platform. `platform-checks.yml` runs the model tests only in its `model-full` job, in full mode on Linux; `-run TestModel` there covers the search and the small searches of `model_meta_test.go`. Its `test` jobs on Linux, macOS and Windows do not run them; the platform-specific file, lock and process behavior is covered by their other steps. The test logs one line per scenario as soon as that scenario ends, with its `states`, `expanded` and `seconds`. The `model-full` step runs with `-v`, so the CI log shows these lines at once, also in a run that times out.
+
+### Skipping the search
+
+The search only exercises the board commands and what they import, so a change outside the test dependencies of `./internal/board` cannot change its result. `scripts/model-test-scope.sh` decides whether the search runs. It runs in the all jobs of `distributed-checks.yml` and in the `model-full` job of `platform-checks.yml`, which check out the full history for it. It writes `run=true` or `run=false` to the step output and one line with the reason to the log and the job summary.
+
+- A push to `v2`, and a dispatch on `v2`, always run the search. `platform-checks.yml` also always runs it on `main` and `develop`. A push prints the files changed since its previous commit for reference only.
+- Elsewhere the script takes the files changed between a base and `HEAD`. The base is the `model_base` input of a dispatch (a full 40-digit commit ID; any other value runs the search), the base of the pull request, or else the merge base of `origin/v2` and `HEAD`.
+- It computes the dependency set at that moment with `go list -test -deps ./internal/board`, so there is no list to maintain. A changed file counts when it is below the directory of a package of that set, including `testdata` and `go:embed` files.
+- `go.mod`, `go.sum`, the workflow file that runs the script, and the script itself always count.
+- When a changed file counts, the search runs. When none does, or nothing changed, the all jobs run `go test ./...` with `-skip '^TestModelCompositeStates$'` in the step `Complete native tests without the model search`, so the small searches still run, and `model-full` skips its step. The job still ends with success.
+- When any step fails (no merge base, too little history, `go list` fails), the search runs and the reason names the failed step.
+
+The dependency set follows the imports, so a change of the runner image does not start the search. That is why `v2` itself always runs it.
 
 Without a memory directory the search is much slower. When the default mode still ran on every platform, the four passing `platform-checks` runs after commit 9c4341e (41285615796, 41394355819, 41394364238 and 41399684333) measured these model step times:
 
@@ -75,7 +88,7 @@ A failure that says `model infrastructure` is a defect of the test itself, not a
 3. Allocate identifiers with `nextID` and `nextCommit`, so one path gives one set of identifiers in every run.
 4. Add a seed when the new state sits deeper than the bounds.
 5. When the card repairs a dead end, remove its row. When it adds the records an invariant needs, give that row of `modelInvariants` a `check` and drop its `owner`.
-6. Run `go test ./internal/board -v -run TestModel` and `KANDER_MODEL_DEPTH=full go test ./internal/board -v -run TestModelCompositeStates`; without `-v` a passing test hides the scenario lines. Compare the `seconds` of each scenario with the same command before the change. A change that slows the search multiplies the Windows time in "Modes", which already uses most of its 150-minute limit, and the full mode, which is near its 30-minute limit.
+6. Run `go test ./internal/board -v -run TestModel` and `KANDER_MODEL_DEPTH=full go test ./internal/board -v -run TestModelCompositeStates`; without `-v` a passing test hides the scenario lines. Compare the `seconds` of each scenario with the same command before the change. A change that slows the search slows the all jobs of `distributed-checks.yml`, whose complete test step allows 150 minutes, and the full mode, which is near its 30-minute limit.
 
 `R.dropRequired` drops a required batch with no decision, from the seed `dropped-required`, which `R.planChainedRequired` builds. `H.recoverNoPlan` resets a member that has no plan, from the seed `recovered-no-plan`. The seed `dropped-recovered` resets a member after a drop left its plan with no required role. `R.dropBatch` drops an N/A batch and `H.recover` resets a member with a plan.
 

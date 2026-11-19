@@ -14,6 +14,14 @@ on:
         type: string
         required: false
         default: ''
+      model_base:
+        description: >-
+          Full commit ID to compare against, instead of the merge base with
+          origin/v2, when deciding whether the model search runs. See
+          scripts/model-test-scope.sh.
+        type: string
+        required: false
+        default: ''
 
 # Isolate runs using canonical macOS paths from earlier CI settings.
 concurrency:
@@ -51,10 +59,31 @@ jobs:
     env:
       GOMEMLIMIT: 2GiB
     steps:
+      # The all jobs need the history to find the merge base for the model
+      # search decision. The value is the string '0': a number 0 is false, and
+      # the expression would give 1.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ matrix.suite == 'all' && '0' || '1' }}
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      # Any failure of the decision leaves its output unset, and the model search
+      # then runs: both complete test steps test for 'false'.
+      - name: Decide whether the model search runs
+        id: model_scope
+        if: matrix.suite == 'all'
+        continue-on-error: true
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          MODEL_BASE: ${{ inputs.model_base }}
+          FULL_REFS: refs/heads/v2
+          WORKFLOW_FILE: .github/workflows/distributed-checks.yml
+        run: bash scripts/model-test-scope.sh
       - name: Build kander
         run: go build -o "${{ runner.temp }}/kander-check${{ matrix.suffix }}" ./cmd/kander
       - name: Static analysis
@@ -75,13 +104,23 @@ jobs:
       # Disable the test result cache: large model-test input logs otherwise
       # require substantially more memory after the tests themselves finish.
       - name: Complete native tests
-        if: matrix.suite == 'all'
+        if: matrix.suite == 'all' && steps.model_scope.outputs.run != 'false'
         # runner is available at step scope, not in the job's env mapping.
         env:
           TMPDIR: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
           TMP: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
           TEMP: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
         run: go test -p 1 -count=1 -timeout 150m ./...
+      # No dependency of the model search changed, see the decision step above.
+      # Only the large search is skipped; the small searches of
+      # internal/board/model_meta_test.go still run.
+      - name: Complete native tests without the model search
+        if: matrix.suite == 'all' && steps.model_scope.outputs.run == 'false'
+        env:
+          TMPDIR: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
+          TMP: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
+          TEMP: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
+        run: go test -p 1 -count=1 -timeout 150m -skip '^TestModelCompositeStates$' ./...
       # Windows runs the packages that can behave differently there. The
       # platform-neutral ones (internal/statemachine, internal/version) run in the
       # ubuntu-latest all job only; scripts/windows-test-packages.sh holds the rule
