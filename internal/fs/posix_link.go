@@ -12,6 +12,12 @@ func IsBusyFile(err error) bool {
 	return false
 }
 
+// IsSharingViolation reports whether err means another open handle blocked this open through its share mode.
+// POSIX has no share modes, so it always returns false.
+func IsSharingViolation(err error) bool {
+	return false
+}
+
 // RemoveNonDirectoryIfExists unlinks a regular file or symlink. Directories are rejected.
 func RemoveNonDirectoryIfExists(root, path string) (bool, error) {
 	parent, err := openPosixParent(root, path)
