@@ -85,8 +85,8 @@ func TestAuditChangesSuppressLiveness(t *testing.T) {
 				// would fail the subscription. The moves run in their own goroutine,
 				// which is the only owner of movingEntry. At most one move is pending,
 				// because the next state change appears only after the move commits. A
-				// failed move leaves the board unchanged and no further change would come,
-				// so it ends the subscription instead of waiting for the next change.
+				// failed move ends the subscription, so the subtest reports the error
+				// instead of waiting for a change that may never come.
 				moves := make(chan string, 1)
 				movesDone := make(chan struct{})
 				go func() {
