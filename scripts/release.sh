@@ -38,7 +38,8 @@ usage: scripts/release.sh [options] <version>
 options:
   --skip-tag     the tag is already pushed; only wait and update the tap
   --skip-tap     tag and release only, leave the Homebrew formula alone
-  --no-test      skip the local go vet / go test gate before tagging
+  --no-test      skip the local go vet / go test gate before tagging (the gate
+                 runs in a clean HOME and XDG_CONFIG_HOME, without KANDER_CONFIG)
   --dry-run      touch nothing: no tag, no push; print the formula instead
   --checksums F  read checksums from local file F instead of downloading them
                  (implies --dry-run; for checking the formula template)
@@ -100,9 +101,13 @@ repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || die "not inside a gi
 cd "$repo_root"
 
 workdir=
+gate_home=
+gate_config=
 cleanup() {
 	# An if keeps a false test from becoming the script's exit status.
 	if [ -n "$workdir" ] && [ -d "$workdir" ]; then rm -rf "$workdir"; fi
+	if [ -n "$gate_home" ] && [ -d "$gate_home" ]; then rm -rf "$gate_home"; fi
+	if [ -n "$gate_config" ] && [ -d "$gate_config" ]; then rm -rf "$gate_config"; fi
 }
 trap cleanup EXIT
 
@@ -144,10 +149,22 @@ if [ "$skip_tag" -eq 0 ] && [ "$dry_run" -eq 0 ]; then
 	fi
 
 	if [ "$skip_tests" -eq 0 ]; then
-		step "go vet ./... && go test ./..."
+		step "go vet ./... && go test -timeout 30m ./..."
 		command -v go >/dev/null 2>&1 || die "go not found; pass --no-test to skip the local gate"
-		go vet ./...
-		go test ./...
+		# Run like the Release workflow's runner: an empty HOME and
+		# XDG_CONFIG_HOME and no KANDER_CONFIG, so a test that reads the user's
+		# configuration fails here, before the tag exists. The build cache, the
+		# module cache and the go env file keep the caller's values, otherwise
+		# the gate would rebuild and redownload everything under the empty HOME.
+		go_cache="$(go env GOCACHE)"
+		go_mod_cache="$(go env GOMODCACHE)"
+		go_env_file="$(go env GOENV)"
+		gate_home="$(mktemp -d)"
+		gate_config="$(mktemp -d)"
+		env -u KANDER_CONFIG HOME="$gate_home" XDG_CONFIG_HOME="$gate_config" \
+			GOCACHE="$go_cache" GOMODCACHE="$go_mod_cache" GOENV="$go_env_file" \
+			sh -c 'go vet ./... && go test -timeout 30m ./...' ||
+			die "the local go vet / go test gate failed; no tag was created"
 	else
 		printf 'skipping local test gate (--no-test)\n' >&2
 	fi
