@@ -1,7 +1,9 @@
 package board
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 )
@@ -62,14 +64,21 @@ func requireNoPlanFiles(t *testing.T, root, id, planID, batch string) {
 		}
 	}
 	err := WithTransaction(root, reviewScope([]string{id}, true), func(tx *Transaction) error {
-		if text, e := tx.Read(id, "reviews/plan.json"); e == nil {
-			return fmt.Errorf("a refused plan left the plan copy of %s: %s", id, text)
+		text, e := tx.Read(id, "reviews/plan.json")
+		if !errors.Is(e, os.ErrNotExist) {
+			return fmt.Errorf("the plan copy of %s is not absent after a refused plan: %q, %v", id, text, e)
 		}
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+// cardSpec reads the card file of id.
+func cardSpec(t *testing.T, root, id string) string {
+	t.Helper()
+	return transactionSnapshot(t, root, id).Text
 }
 
 // probePlan is a plan of one open batch over id. The batch does not share an ID
@@ -107,6 +116,7 @@ func TestAbandonedOffPlanRunAndANewPlan(t *testing.T) {
 				}
 			}
 			before := controlFiles(t, root, reviewRunName(run.RunID), reviewBatchName("stray"))
+			spec := cardSpec(t, root, id)
 			p := probePlan(id)
 			if c.resolutes {
 				p.ResolvedBatches = []ReviewBatchResolution{{Request: ReviewBatchResolutionRequest{BatchID: "stray"}}}
@@ -122,13 +132,17 @@ func TestAbandonedOffPlanRunAndANewPlan(t *testing.T) {
 					t.Fatalf("the refused plan changed %s", name)
 				}
 			}
+			if cardSpec(t, root, id) != spec {
+				t.Fatal("the refused plan changed the card file")
+			}
 		})
 	}
 }
 
 // A started group card with no plan and an unpublished run outside the plan
 // cannot be added to the plan of its group, kept or abandoned. The refusal names
-// the card, the batch, and the plan, and changes nothing.
+// the card, the batch, and the plan, and changes nothing, the stray run and batch
+// included. An abandoned card then gets a plan of its own that names the batch.
 func TestAbandonedOffPlanRunAndAddMembers(t *testing.T) {
 	for _, abandon := range []bool{false, true} {
 		name := "kept"
@@ -143,6 +157,8 @@ func TestAbandonedOffPlanRunAndAddMembers(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			stray := []string{reviewRunName(run.RunID), reviewBatchName("stray")}
+			before := controlFiles(t, w.root, stray...)
 			err := w.extend(ReviewPlanExtension{AddMembers: []string{w.second}})
 			if err == nil {
 				t.Fatal("the card joined the plan")
@@ -152,6 +168,21 @@ func TestAbandonedOffPlanRunAndAddMembers(t *testing.T) {
 				t.Fatalf("the refusal does not say %q: %v", want, err)
 			}
 			w.untouched(t, "")
+			for name, was := range controlFiles(t, w.root, stray...) {
+				if was != before[name] {
+					t.Fatalf("the refused request changed %s", name)
+				}
+			}
+			if !abandon {
+				return
+			}
+			// The refused card still gets a plan of its own that names the stray batch.
+			if err := CreateReviewPlan(w.root, strayAdoptingPlan(w.second, "probe-own")); err != nil {
+				t.Fatalf("the card got no plan of its own: %v", err)
+			}
+			if id, ok := w.planOf(t, w.second); !ok || id != "probe-own" {
+				t.Fatalf("the plan pointer of the card is %q", id)
+			}
 		})
 	}
 }
@@ -229,24 +260,5 @@ func TestAbandonedOffPlanRunIsAdoptedByANewPlan(t *testing.T) {
 				t.Fatalf("the stray batch is not in the plan: %+v, %v", batch, err)
 			}
 		})
-	}
-}
-
-// A card that add_members refuses still gets a plan of its own that names the
-// stray batch.
-func TestAbandonedOffPlanAddMembersRefusedCardGetsItsOwnPlan(t *testing.T) {
-	w := newMembersWorld(t, "probe-own-plan", false)
-	run := strayFinished(t, w.root, w.second, "stray")
-	if err := AbandonReviewRunWithTransaction(w.root, abandonRequest(run.RunID)); err != nil {
-		t.Fatal(err)
-	}
-	if err := w.extend(ReviewPlanExtension{AddMembers: []string{w.second}}); err == nil {
-		t.Fatal("the card joined the plan")
-	}
-	if err := CreateReviewPlan(w.root, strayAdoptingPlan(w.second, "probe-own")); err != nil {
-		t.Fatalf("the card got no plan of its own: %v", err)
-	}
-	if id, ok := w.planOf(t, w.second); !ok || id != "probe-own" {
-		t.Fatalf("the plan pointer of the card is %q", id)
 	}
 }

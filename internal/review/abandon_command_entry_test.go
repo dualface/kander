@@ -4,8 +4,6 @@ package review
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -13,18 +11,9 @@ import (
 	"github.com/dualface/kander/internal/remote"
 )
 
-// writeAbandonRequest writes the request file of `kander review abandon` for run.
-func writeAbandonRequest(t *testing.T, run string) string {
-	t.Helper()
-	data, err := json.Marshal(board.ReviewAbandonRequest{RunID: run, Decision: "user decision 2026-11-19", Reason: "the writer secret was lost"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	file := filepath.Join(t.TempDir(), "abandon.json")
-	if err := os.WriteFile(file, data, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	return file
+// abandonRequest is the request `kander review abandon` reads for run.
+func abandonRequest(run string) board.ReviewAbandonRequest {
+	return board.ReviewAbandonRequest{RunID: run, Decision: "user decision 2026-11-19", Reason: "the writer secret was lost"}
 }
 
 // The command entry (Run, runDispositionMode, runRemoteDisposition) abandons a
@@ -55,7 +44,7 @@ func TestAbandonRunsThroughTheCommandEntry(t *testing.T) {
 	var result struct {
 		RunID string `json:"run_id"`
 	}
-	out := commandOK(t, "abandon", w.h.repo, writeAbandonRequest(t, run.RunID))
+	out := commandOK(t, "abandon", w.h.repo, dispositionJSON(t, w.h, "abandon", abandonRequest(run.RunID)))
 	if err := json.Unmarshal([]byte(out), &result); err != nil || result.RunID != run.RunID {
 		t.Fatalf("the command did not name the abandoned run: %q %v", out, err)
 	}
@@ -70,7 +59,7 @@ func TestAbandonRunsThroughTheCommandEntry(t *testing.T) {
 func TestAbandonNeedsAConfiguredProject(t *testing.T) {
 	h := newCodexHarness(t)
 	t.Chdir(h.repo)
-	code, _, stderr := captureRun(t, []string{"abandon", h.repo, writeAbandonRequest(t, "stray-lost")})
+	code, _, stderr := captureRun(t, []string{"abandon", h.repo, dispositionJSON(t, h, "abandon", abandonRequest("stray-lost"))})
 	if code == 0 || stderr == "" {
 		t.Fatalf("a local abandon was accepted: %d %q", code, stderr)
 	}
