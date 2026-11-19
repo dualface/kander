@@ -89,7 +89,7 @@
   "review.schema.extend-plan.expected_revision": "计划的当前修订号。过期的值会被拒绝。",
   "review.schema.extend-plan.plan_id": "已有计划的 ID。",
   "review.schema.extend-plan.rebind_cycles": "任务 ID 到 review progress 返回的周期摘要。必须正好列出周期已变化的成员。不能与 sync_targets、drop_batches 或 batch、seal 同时使用。",
-  "review.schema.extend-plan.seal": "为 true 时，每个计划成员都必须已经属于某个批次。可以与 batch 一起发送。不能与 rebind_cycles 或 sync_targets 同时使用。",
+  "review.schema.extend-plan.seal": "为 true 时，每个未被排除的计划成员都必须已经属于某个批次。可以与 batch 一起发送。不能与 rebind_cycles 或 sync_targets 同时使用。",
   "review.schema.extend-plan.sync_targets": "批次 ID 到该批次当前目标 commit。值必须等于运行中的批次目标，且计划副本仍与它不同。不能与 rebind_cycles、drop_batches 或 batch、seal 同时使用。",
   "review.schema.missing": "schema 字段缺少描述：{{.V0}}",
   "review.schema.plan.author": "创建计划的调用方名称，不能为空。",
