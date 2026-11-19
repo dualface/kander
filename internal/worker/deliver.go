@@ -303,6 +303,10 @@ func (w *loop) settleBlock(log *slog.Logger, key credentialKey, ready []api.Coll
 // the remote message never reach the pane.
 func requestLine(task string, r api.CollabRequest) string {
 	message := stripControl(r.Message)
+	if r.Kind == api.RequestNote {
+		// A note proposes no dispatch, so it must never be taken as the grant of one.
+		message += "; no dispatch is attached: handle the message within the card contract; do not run kander dispatch prepare for it and do not use it as the grant of a dispatch-bound move"
+	}
 	message += fmt.Sprintf("; inspect the full request and its proposed material: kander request show %s %s --json; do not act on superseded requests or another execution generation", task, r.ID)
 	return fmt.Sprintf("# kander-request %s %s for %s from %s: %s (answer: kander request answer %s %s done|rejected [note])",
 		r.ID, r.Kind, task, r.FromClient, message, task, r.ID)

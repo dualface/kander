@@ -165,13 +165,13 @@ func runRemoteDispatch(args []string, cfg *config.Config) int {
 			}
 			return 0
 		}
-		kind := api.RequestSync
-		if command.Input.Kind == "fix" {
-			kind = api.RequestFix
+		if err := remote.CheckRequestMessage(command.Input.Message); err != nil {
+			return fail(err)
 		}
+		kind := api.RequestKindFor(command.Input)
 		request, err := session.Project.CreateRequest(ctx, client.NewKey(), current.TaskID, api.NewCollabRequest{Kind: kind, Message: command.Input.Message, Dispatch: command.Input, CardRevision: current.Revision, TargetGeneration: current.Claim.Generation})
 		if err != nil {
-			return fail(err)
+			return fail(remote.RequestCreateError(kind, err))
 		}
 		// This is explicitly a proposal, never a fabricated prepared dispatch.
 		if err := json.NewEncoder(os.Stdout).Encode(request); err != nil {

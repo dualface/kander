@@ -17,7 +17,7 @@ import (
 // RunRequest implements kander request, the collaboration requests of a
 // claimed task in server mode:
 //
-//	kander request <task-id> fix|sync|review|stop <message...>
+//	kander request <task-id> fix|sync|review|stop|note <message...>
 //	kander request list <task-id>
 //	kander request answer <task-id> <request-id> accepted|done|rejected [note...]
 //
@@ -95,8 +95,11 @@ func RunRequest(args []string) int {
 		fmt.Fprintln(stdout, r.ID, r.Status)
 		return 0
 	}
-	if len(args) < 3 || !slices.Contains([]string{api.RequestFix, api.RequestSync, api.RequestReview, api.RequestStop}, args[1]) {
+	if len(args) < 3 || !slices.Contains([]string{api.RequestFix, api.RequestSync, api.RequestReview, api.RequestStop, api.RequestNote}, args[1]) {
 		return requestUsage()
+	}
+	if err := CheckRequestMessage(strings.Join(args[2:], " ")); err != nil {
+		return fail(err)
 	}
 	logical := struct{ Task, Kind, Message string }{args[0], args[1], strings.Join(args[2:], " ")}
 	if recovered, found, err := s.RecoverRequest(ctx, logical); found || err != nil {
