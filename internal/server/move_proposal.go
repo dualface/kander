@@ -37,10 +37,21 @@ func (p *project) refuseBareMoveOfProposal(tx *board.Transaction, task string, c
 		return err
 	}
 	parts := make([]string, len(pending))
-	for i, request := range pending {
-		parts[i] = fmt.Sprintf("request %s proposes dispatch %s", request.ID, request.Dispatch.ID)
+	for i, proposal := range pending {
+		parts[i] = fmt.Sprintf("request %s proposes dispatch %s", proposal.request.ID, proposal.request.Dispatch.ID)
+		if proposal.unusable {
+			parts[i] += " (no dispatch can be prepared with that ID: answer the request rejected and ask the sender to propose again with a valid dispatch ID)"
+		}
 	}
-	return apiError(api.CodeEvidenceIncomplete, fmt.Sprintf("move into working needs the dispatch of a pending proposal: %s. Next step: run kander dispatch prepare for it and move with --dispatch-id and --execution-epoch, or answer it with kander request answer %s %s rejected", strings.Join(parts, "; "), task, pending[0].ID))
+	return apiError(api.CodeEvidenceIncomplete, fmt.Sprintf("move into working needs the dispatch of a pending proposal: %s. Next step: run kander dispatch prepare for it and move with --dispatch-id and --execution-epoch, or answer it with kander request answer %s %s rejected", strings.Join(parts, "; "), task, pending[0].request.ID))
+}
+
+// pendingProposal is a proposal that holds a plain move. unusable says that the
+// card cannot read a dispatch under the proposal's dispatch ID (the ID is not a
+// dispatch ID, or its record does not match it), so a preparation fails on it.
+type pendingProposal struct {
+	request  api.CollabRequest
+	unusable bool
 }
 
 // preparableProposals are the proposals of a task that the request kernel
@@ -50,12 +61,12 @@ func (p *project) refuseBareMoveOfProposal(tx *board.Transaction, task string, c
 // as pending, and the error then offers the answer "rejected" as the way out.
 // The Prepare event is the one the formal preparation builds; its material is
 // true because the holder prepares exactly the material the proposal froze.
-func (p *project) preparableProposals(tx *board.Transaction, task string, claim claimRecord, cardRevision uint64) ([]api.CollabRequest, error) {
+func (p *project) preparableProposals(tx *board.Transaction, task string, claim claimRecord, cardRevision uint64) ([]pendingProposal, error) {
 	requests, err := p.readRequests(task)
 	if err != nil {
 		return nil, err
 	}
-	var pending []api.CollabRequest
+	var pending []pendingProposal
 	for _, request := range requests {
 		if request.Dispatch == nil {
 			continue
@@ -67,11 +78,12 @@ func (p *project) preparableProposals(tx *board.Transaction, task string, claim 
 		var refusal *board.Error
 		switch _, err := tx.StagedDispatch(task, request.Dispatch.ID); {
 		case err == nil:
-		case errors.Is(err, os.ErrNotExist), errors.As(err, &refusal) && refusal.Code == "board.dispatch_conflict":
-			// No record of this card names the ID. An ID that is not a dispatch ID
-			// reads as a dispatch conflict and counts here: the proposal stays
-			// pending, and the holder answers it "rejected" to move on.
-			pending = append(pending, request)
+		case errors.Is(err, os.ErrNotExist):
+			pending = append(pending, pendingProposal{request: request})
+		case errors.As(err, &refusal) && refusal.Code == "board.dispatch_conflict":
+			// No dispatch of this card can be read under the ID, so the proposal
+			// stays pending and the holder answers it "rejected" to move on.
+			pending = append(pending, pendingProposal{request: request, unusable: true})
 		default:
 			return nil, err
 		}

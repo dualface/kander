@@ -204,11 +204,15 @@ func TestBareMoveIsRefusedForAProposalWithAnInvalidDispatchID(t *testing.T) {
 	before := m.requests(t)
 	_, err := m.bareMove("bare")
 	m.requireRefusal(t, before, before, err)
+	if message := apiError(t, err).Message; !strings.Contains(message, "no dispatch can be prepared with that ID") || !strings.Contains(message, "propose again with a valid dispatch ID") {
+		t.Fatalf("the refusal does not say that only the answer rejected applies:\n%s", message)
+	}
 }
 
-// The guard only refuses a proposal the holder could still prepare. Every other
-// plain move keeps the behavior it had, so a holder is never stuck on a
-// proposal it cannot prepare.
+// The guard only refuses a proposal the request kernel still accepts for
+// Prepare and that no dispatch record of the card names. Every other plain move
+// keeps the behavior it had, so a holder is never stuck on a settled or stale
+// proposal.
 func TestBareMoveKeepsItsBehaviorWithoutAPreparableProposal(t *testing.T) {
 	const group = "20261119-move-group"
 	for _, status := range []string{api.RequestDone, api.RequestSuperseded} {
