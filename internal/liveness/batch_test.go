@@ -240,7 +240,19 @@ func TestCheckCollectsBatchAndPreservesOutputOrder(t *testing.T) {
 	t.Setenv("BATCH_EVENTS", filepath.Join(dir, "events"))
 	script := `#!/bin/sh
 printf 'start %s\n' "$3" >> "$BATCH_EVENTS"
-/bin/sleep 0.1
+# Hold every probe until all four have started, so the four processes overlap
+# whatever the machine load. The cap of about 5s stays below the batch budget;
+# on reaching it the script continues and the peak assertion decides.
+i=0
+while [ "$i" -lt 500 ]; do
+  n=0
+  while IFS= read -r line; do
+    case "$line" in "start "*) n=$((n+1)) ;; esac
+  done < "$BATCH_EVENTS"
+  [ "$n" -ge 4 ] && break
+  /bin/sleep 0.01
+  i=$((i+1))
+done
 printf 'end %s\n' "$3" >> "$BATCH_EVENTS"
 printf '{"result":{"pane":{"pane_id":"%s","agent":"codex","agent_status":"idle","agent_session":{"value":"wanted"}}}}\n' "$3"
 `
