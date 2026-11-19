@@ -240,9 +240,10 @@ func TestCheckCollectsBatchAndPreservesOutputOrder(t *testing.T) {
 	t.Setenv("BATCH_EVENTS", filepath.Join(dir, "events"))
 	script := `#!/bin/sh
 printf 'start %s\n' "$3" >> "$BATCH_EVENTS"
-# Hold every probe until all four have started, so the four processes overlap
-# whatever the machine load. The cap of about 5s stays below the batch budget;
-# on reaching it the script continues and the peak assertion decides.
+# Hold every probe until the event file shows four starts, so the four
+# processes overlap even on a loaded machine. The script continues after four
+# starts or after 500 polls (about 5s, below the batch budget), whichever comes
+# first; if the cap is reached first, the peak assertion reports the failure.
 i=0
 while [ "$i" -lt 500 ]; do
   n=0
