@@ -287,6 +287,8 @@ kander review progress <绝对工作目录> <task-id>
 
 `done/` 的成员与其他计划写入一样接收新的计划副本，已归档成员不接收。被排除的成员不需要在覆盖批次中。执行周期变化不阻止处理，也不能阻止：批次处理之后 `review progress` 才能给出 `rebind_cycles`，所以重绑在处理之后。批次中不属于本计划的成员由它自己的计划处理。带处理记录的看板需要认识 `resolved_batches` 的版本；v1.0.0 把它当作未知字段并拒绝计划。归档清理与其他证据一起删除计划和 `plan-history`。
 
+还没有计划的卡仍能在所有计划之外的批次中运行审核，这个 run 会阻止它进入计划：建一个含该卡的新计划报 `unplanned execution batch: <batch-id>`，`extend-plan` 的 `add_members` 以含 `<task-id> has a run in batch <batch-id>, which no batch of plan <plan-id> names` 的错误拒绝它。批次处理和放弃都解除不了这个拒绝：新计划和新加入的成员不看 `resolved_batches`，准入也计入已放弃的 run。出路是建一个新计划，让它的第一个批次点名这个批次，并与批次记录完全一致：成员相同（只有该卡），`base`、`target_commit`、`requirements` 与报告语言相同；绑定有任何不同都报 `existing batch/plan mismatch`。这样新计划接收该批次，run 是否已放弃都一样，所以被 `add_members` 拒绝的卡可以用这种方式进入自己的计划。
+
 ## 3. 结构化结论与历史报告映射
 
 每个审查 Agent 的报告末尾必须输出且仅输出一个独立的围栏代码块：

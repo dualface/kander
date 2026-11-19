@@ -148,6 +148,7 @@ A finalized run counts only when every member holds its copy or was skipped. In 
 - The run is no run of the batch. The batch view lists it in `abandoned_runs` (run ID, decision, reason) and not in `runs`, so its findings bind nothing and nobody has to assign or dispose them. The closure keeps the view and so the audit line. A batch without an abandoned run keeps the bytes of its view.
 - It cannot be the predecessor of another run, cannot satisfy a role, and is not published, prepared, or consumed again; each of these is refused with an error that says the run is abandoned. A role of the batch still needs a passing, published conclusion run, so a new run satisfies it.
 - A batch with a run abandoned still counts as touched: it cannot be retargeted for that reason.
+- The admission of a plan still counts it: a card with no plan whose run is abandoned is refused by a new plan and by `add_members` as before the abandon. [Unplanned Batch Resolution](review-disposition.md#unplanned-batch-resolution) names the way out.
 
 The decision is a reference to a user decision. Kander records it and does not verify it, like the decision of `superseded_runs`, `coordinator release`, and `coordinator remove-member`.
 

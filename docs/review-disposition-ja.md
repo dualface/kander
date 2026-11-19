@@ -249,6 +249,8 @@ kander review progress <絶対作業ディレクトリ> <task-id>
 
 計画は `resolved_batches` に、バッチのリビジョン、全 run ID とレポートハッシュ、検証済みの Git の辺を記録します。`plan-history` にも同じ記録が残ります。ゲートはこれらの条件を現在のレコードで再検証するため、run の追加やリビジョンの変更は再び失敗します。実行サイクルの再バインドは、この処理の後で行います。条件の全文は [英語版](review-disposition.md#unplanned-batch-resolution) を参照してください。
 
+まだ計画を持たないカードは、どの計画にも属さないバッチでレビューを実行できます。その run はカードの受け入れを妨げます。そのカードを含む新しい計画の作成は `unplanned execution batch: <batch-id>` で失敗し、`extend-plan` の `add_members` は `<task-id> has a run in batch <batch-id>, which no batch of plan <plan-id> names` を含むエラーでカードを拒否します。バッチの処理も破棄もこの拒否を解除しません。新しい計画と追加メンバーは `resolved_batches` を参照せず、受け入れでは破棄済みの run も数えます。解決策は、最初のバッチがそのバッチを指名し、バッチレコードと完全に一致する新しい計画を作ることです。メンバー（そのカードのみ）、`base`、`target_commit`、`requirements`、レポート言語が同じでなければならず、異なる束縛は `existing batch/plan mismatch` で失敗します。新しい計画は run が破棄済みかどうかに関係なくそのバッチを受け入れるため、`add_members` に拒否されたカードもこの方法で自分の計画に入れます。
+
 ## 3. 構造化された指摘とレガシーレポートのマッピング
 
 各 Reviewer Agent のレポート末尾には、以下の独立したコードブロックを必ず 1 つ出力する必要があります：
