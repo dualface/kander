@@ -205,21 +205,21 @@ func (w *membersWorld) differences(t *testing.T) []string {
 
 // requireNoCopies fails the test when a card the request names, other than the
 // first member, holds a plan copy. A copy that was there before the request and
-// stayed is no difference, so the capture alone would pass it.
+// stayed is no difference, so the capture alone would pass it. It reads the file
+// itself: only a missing file counts as no copy, whatever the content would be.
 func (w *membersWorld) requireNoCopies(t *testing.T) {
 	t.Helper()
-	now, err := w.files()
+	cards := slices.Concat([]string{w.candidate}, w.also)
+	err := WithTransaction(w.root, reviewScope(cards, true), func(tx *Transaction) error {
+		for _, id := range cards {
+			if _, e := tx.Read(id, "reviews/plan.json"); !errors.Is(e, os.ErrNotExist) {
+				return fmt.Errorf("%s holds a plan copy or the read failed: %v", id, e)
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
-	}
-	for _, id := range slices.Concat([]string{w.candidate}, w.also) {
-		label := "plan copy of the candidate"
-		if id != w.candidate {
-			label = "plan copy of " + id
-		}
-		if now[label] != absent {
-			t.Fatalf("%s holds a plan copy", id)
-		}
 	}
 }
 
