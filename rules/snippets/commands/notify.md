@@ -58,6 +58,8 @@ kander notify [--pane HERDR-PANE-ID] [--timeout SECONDS] (--message TEXT | --mes
 
 With a configured server, notify queues a generation-bound collaboration request for the owning worker and prints its JSON state. A queued or accepted request is not a business dispatch receipt. Dispatch options freeze the typed intent and inspected card revision; reuse the ID to inspect/retry the same material, and use a new ID after changing it. Relative acceptance windows use the service clock and are bounded to 24 hours. A retry retains the original deadline.
 
+The request kind follows the dispatch. A notify without dispatch options is a `note`. A notify with dispatch options carries the kind of its dispatch: `fix`, `sync`, or `wrap-up` (`--kind`, default `fix`). A non-holder `kander dispatch prepare` proposal and a `kander resume` that turns into a notify follow the same mapping. A `note` has no dispatch attached: the executing agent handles the message within the card contract, never runs `kander dispatch prepare` for it, and never uses it as the grant of a dispatch-bound move. A note still carries status, requirements and answers, and can send an idle executing agent back to its unmet acceptance criteria. Formal fix, sync and wrap-up rounds come only from a request with a dispatch. The message must not be blank and must not exceed 64 KiB; the client checks both before it sends. The server must be upgraded before the clients: a server that predates the `note` and `wrap-up` kinds refuses them, and the client then says to upgrade the server first.
+
 The worker resolves the target pane first, which types nothing, and reserves delivery only after that succeeded and while that version and generation remain current. Stale or expired proposals are rejected without typing. Formal preparation by the holder verifies the original proposal and acknowledges it in the dispatch transaction. Inspect the full request with `kander request show <task-id> <request-id> --json`; do not act on a superseded request or one for another execution generation.
 
 When a new proposal is a `fix` dispatch, the server checks its `evidence.fix` before it creates the request, with the check that `kander dispatch prepare` runs at the holder (`snippets/commands/dispatch.md`). A failed check creates no proposal: the command exits nonzero and prints every problem at once, one line each. A line that belongs to a finding starts with `<run_id>/<finding_id>`, names the field, and gives the provided and the expected value; every missing author original is one line with `finding.run_id`, `finding.finding_id`, `record_id`, `author` and `artifact.path`. The lines never carry the text, the evidence or the basis of a finding. Correct the evidence file and run `kander notify` again without `--dispatch-id`, or with a new dispatch ID: the refused ID keeps its stored refusal, so changed evidence under it is an `idempotency_mismatch`. The holder's `prepare` still checks again and refuses what changed after the creation.
@@ -71,7 +73,7 @@ Before transport the client saves a private operation receipt. A lost response i
 ## Additional Syntax
 
 ```text
-kander request <task-id> fix|sync|review|stop <message...>
+kander request <task-id> fix|sync|review|stop|note <message...>
 kander request list <task-id>
 kander request show <task-id> <request-id> --json
 kander request answer <task-id> <request-id> accepted|done|rejected [note...]

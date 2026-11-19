@@ -122,3 +122,15 @@ func TestCommandUsageIncludesDistributedForms(t *testing.T) {
 		}
 	}
 }
+
+// The usage lines come from the embedded rules here, never from an installed
+// copy under the user's home.
+func TestRequestUsageListsTheNoteKindButNotWrapUp(t *testing.T) {
+	got := commandUsage("", "request", nil)
+	if !strings.Contains(got, "kander request <task-id> fix|sync|review|stop|note <message...>") {
+		t.Fatalf("request usage omitted the note kind: %s", got)
+	}
+	if strings.Contains(got, "wrap-up <message") {
+		t.Fatalf("request usage offers wrap-up as a message kind: %s", got)
+	}
+}
