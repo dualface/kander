@@ -14,7 +14,7 @@ import (
 	"github.com/dualface/kander/internal/board"
 )
 
-// clockEvents records delivery and changes only the temporary board from the output worker.
+// clockEvents records delivery and runs the test's callback from the output worker.
 type clockEvents struct {
 	events  []groupEvent
 	onEvent func(groupEvent) error
@@ -77,6 +77,30 @@ func TestAuditChangesSuppressLiveness(t *testing.T) {
 				nowFn = func() time.Time { clockMu.Lock(); defer clockMu.Unlock(); return clock }
 				t.Cleanup(func() { nowFn = oldNow })
 				stop := make(chan struct{})
+				var stopOnce sync.Once
+				finish := func() { stopOnce.Do(func() { close(stop) }) }
+				// The event writer runs inside the output worker, and every queued line
+				// carries a write deadline counted from its enqueue time. A board
+				// transaction there would count against that deadline, so a slow move
+				// would fail the subscription. The moves run in their own goroutine,
+				// which is the only owner of movingEntry. At most one move is pending,
+				// because the next state change appears only after the move commits. A
+				// failed move ends the subscription, so the subtest reports the error
+				// instead of waiting for a change that may never come.
+				moves := make(chan string, 1)
+				movesDone := make(chan struct{})
+				go func() {
+					defer close(movesDone)
+					for next := range moves {
+						moved, err := board.MoveEntry(movingEntry, root, next)
+						if err != nil {
+							t.Errorf("move to %s: %v", next, err)
+							finish()
+							continue
+						}
+						movingEntry = moved
+					}
+				}()
 				changes, heartbeats := 0, 0
 				writer := &clockEvents{}
 				writer.onEvent = func(event groupEvent) error {
@@ -94,7 +118,7 @@ func TestAuditChangesSuppressLiveness(t *testing.T) {
 							t.Errorf("unexpected liveness without working tasks: %+v", event)
 						}
 						if heartbeats == 2 {
-							close(stop)
+							finish()
 						}
 						return nil
 					case "state-change":
@@ -106,7 +130,7 @@ func TestAuditChangesSuppressLiveness(t *testing.T) {
 							t.Errorf("incorrect state change: %+v", event)
 						}
 						if changes == 12 {
-							close(stop)
+							finish()
 							return nil
 						}
 					}
@@ -117,14 +141,15 @@ func TestAuditChangesSuppressLiveness(t *testing.T) {
 					if state == "todo" {
 						next = "backlog"
 					}
-					moved, err := board.MoveEntry(movingEntry, root, next)
-					if err != nil {
-						return err
-					}
-					movingEntry, state = moved, moved.State
+					// The change after this move reports the state requested here.
+					state = next
+					moves <- next
 					return nil
 				}
-				if err := Subscribe(root, opts, writer, stop); err != nil {
+				err := Subscribe(root, opts, writer, stop)
+				close(moves)
+				<-movesDone
+				if err != nil {
 					t.Fatal(err)
 				}
 				if heartbeats != 2 || changes < 6 {
@@ -157,8 +182,16 @@ func TestSubscribePureHeartbeatBeforeRefresh(t *testing.T) {
 	if err := Subscribe(root, subscribeOptions{Group: group, Members: []string{id}, Refresh: 3600, Heartbeat: .002}, writer, stop); err != nil {
 		t.Fatal(err)
 	}
-	if len(writer.events) != 2 || writer.events[1].Event != "heartbeat" || writer.events[1].Liveness != nil {
-		t.Fatalf("events: %+v", writer.events)
+	// The writer runs in the asynchronous output worker, so the loop can emit
+	// another heartbeat before it sees stop. Only the first two events are fixed.
+	if len(writer.events) < 2 {
+		t.Fatalf("want at least 2 events, got %d: %+v", len(writer.events), writer.events)
+	}
+	if writer.events[0].Event != "snapshot" {
+		t.Fatalf("first event is %q, want snapshot: %+v", writer.events[0].Event, writer.events)
+	}
+	if writer.events[1].Event != "heartbeat" || writer.events[1].Liveness != nil {
+		t.Fatalf("second event is not a pure heartbeat: %+v", writer.events)
 	}
 }
 
