@@ -45,9 +45,11 @@ func (p *project) refuseBareMoveOfProposal(tx *board.Transaction, task string, c
 
 // preparableProposals are the proposals of a task that the request kernel
 // accepts a Prepare for, with the holder of claim, the card at cardRevision, and
-// no dispatch record yet, in creation order. The Prepare event is the one the
-// formal preparation builds; its material is true because the holder prepares
-// exactly the material the proposal froze.
+// no dispatch record of this card yet, in creation order. The project-wide
+// registry of dispatch IDs is not read: an ID that another card took still shows
+// as pending, and the error then offers the answer "rejected" as the way out.
+// The Prepare event is the one the formal preparation builds; its material is
+// true because the holder prepares exactly the material the proposal froze.
 func (p *project) preparableProposals(tx *board.Transaction, task string, claim claimRecord, cardRevision uint64) ([]api.CollabRequest, error) {
 	requests, err := p.readRequests(task)
 	if err != nil {
@@ -62,10 +64,14 @@ func (p *project) preparableProposals(tx *board.Transaction, task string, claim 
 		if !newRequestKernel(frame, &request).accepts(event) {
 			continue
 		}
+		var refusal *board.Error
 		switch _, err := tx.StagedDispatch(task, request.Dispatch.ID); {
 		case err == nil:
 		case errors.Is(err, os.ErrNotExist):
 			pending = append(pending, request)
+		case errors.As(err, &refusal) && refusal.Code == "board.dispatch_conflict":
+			// The ID is not a dispatch ID, or its record does not match it: a
+			// preparation fails on it too, so the holder is not held to it.
 		default:
 			return nil, err
 		}

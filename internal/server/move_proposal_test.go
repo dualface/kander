@@ -202,7 +202,12 @@ func TestBareMoveKeepsItsBehaviorWithoutAPreparableProposal(t *testing.T) {
 		t.Run("settled-"+status, func(t *testing.T) {
 			m := newReviewMember(t, "settled-"+status, group)
 			proposal := m.propose(t, api.RequestFix, "proposal", "settled-fix")
-			m.seed(t, proposal, func(r *api.CollabRequest) { r.Status = status })
+			if status == api.RequestSuperseded {
+				// Only a handoff supersedes a request, and it changes the generation.
+				m.seed(t, proposal, func(r *api.CollabRequest) { r.Status = status })
+			} else {
+				m.answer(t, "settle", proposal.ID, status)
+			}
 			before := m.requests(t)
 			moved, err := m.bareMove("bare")
 			m.requireMoved(t, before, moved, err)
@@ -247,6 +252,15 @@ func TestBareMoveKeepsItsBehaviorWithoutAPreparableProposal(t *testing.T) {
 		m := newReviewMember(t, "no-proposal", group)
 		moved, err := m.bareMove("bare")
 		m.requireMoved(t, m.requests(t), moved, err)
+	})
+	t.Run("dispatch-id-cannot-be-prepared", func(t *testing.T) {
+		// Nothing checks the dispatch ID of a proposal when it is created, and no
+		// preparation can take such an ID, so the move is not held to the proposal.
+		m := newReviewMember(t, "invalid-dispatch-id", group)
+		m.propose(t, api.RequestSync, "proposal", "Not A Dispatch ID")
+		before := m.requests(t)
+		moved, err := m.bareMove("bare")
+		m.requireMoved(t, before, moved, err)
 	})
 	t.Run("note-request", func(t *testing.T) {
 		m := newReviewMember(t, "note-request", group)
