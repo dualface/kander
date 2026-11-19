@@ -19,6 +19,7 @@ import (
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/version"
 )
@@ -39,6 +40,8 @@ type Options struct {
 	// worker from the one that handed over to it in the same process.
 	Version func() string
 	PID     func() int
+	// WriteRecord publishes worker.json; the default is remote.WriteWorkerRecord.
+	WriteRecord func(home string, r remote.WorkerRecord) error
 	// Stop overrides process termination in tests. The default verifies the
 	// recorded process incarnation before signaling its kernel handle.
 	Stop func(pid int) error
@@ -92,6 +95,8 @@ func Run(args []string) int {
 		fmt.Fprintln(os.Stderr, "kander worker:", err)
 		return 1
 	}
+	// The text of the observations this worker reports follows its configuration.
+	config.BindEffectiveLanguage()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	err = Serve(ctx, Options{Home: home, Logger: slog.New(slog.NewJSONHandler(os.Stderr, nil))})
@@ -132,6 +137,9 @@ func Serve(ctx context.Context, o Options) error {
 	if o.PID == nil {
 		o.PID = os.Getpid
 	}
+	if o.WriteRecord == nil {
+		o.WriteRecord = remote.WriteWorkerRecord
+	}
 	o.defaultHandover()
 	if err := os.MkdirAll(o.Home, 0o700); err != nil {
 		return err
@@ -147,12 +155,16 @@ func Serve(ctx context.Context, o Options) error {
 		o.Logger.Warn("the executable of this worker cannot be identified; handover to a replaced binary is off", "error", err)
 	}
 	// The record only serves diagnostics, so a failed write is logged and the
-	// worker renews as usual.
-	if err := remote.WriteWorkerRecord(o.Home, remote.WorkerRecord{
+	// worker renews as usual. The record of the worker before this one is
+	// removed then: left in place it would name that worker's version and pid.
+	if err := o.WriteRecord(o.Home, remote.WorkerRecord{
 		Version: o.Version(), PID: o.PID(), Executable: self.path(),
 		Handover: self.enabled(), StartedAt: o.Now(),
 	}); err != nil {
 		o.Logger.Error("worker record could not be written", "error", err)
+		if err := remote.RemoveWorkerRecord(o.Home); err != nil {
+			o.Logger.Error("the record of the earlier worker could not be removed", "error", err)
+		}
 	}
 	o.Logger.Info("worker started", "version", o.Version(), "pid", o.PID(), "executable", self.path())
 	// Registered after the lock release, so it runs first: only the worker that

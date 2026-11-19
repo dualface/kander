@@ -61,6 +61,14 @@ func WriteWorkerRecord(home string, r WorkerRecord) error {
 	return fs.WriteTextAtomic(home, filepath.Join(home, WorkerRecordName), string(data)+"\n", true)
 }
 
+// RemoveWorkerRecord deletes the worker record of home, if there is one. A
+// worker that cannot publish its own record uses it so that the record of an
+// earlier worker does not pass for its own.
+func RemoveWorkerRecord(home string) error {
+	_, err := fs.RemoveRegularFileIfExists(home, filepath.Join(home, WorkerRecordName))
+	return err
+}
+
 // ReadWorkerRecord reads the worker record of home. Only a record of a known
 // schema is WorkerRecordRecorded; unknown fields are accepted. A file that
 // cannot be used is WorkerRecordUnknown and never stops the caller; err then

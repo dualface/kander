@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/remote"
 )
 
@@ -76,20 +78,63 @@ func TestWorkerRecordSaysWhetherTheWorkerHandsOver(t *testing.T) {
 	}
 }
 
-func TestFailedRecordWriteIsLoggedAndTheWorkerRenews(t *testing.T) {
+// A record that an earlier worker left names that worker's version and pid, so a
+// worker that cannot publish its own removes it.
+func TestFailedRecordWriteIsLoggedRemovesTheOldRecordAndTheWorkerRenews(t *testing.T) {
 	r := newRig(t)
 	r.claimed("record-fails")
-	// A directory in the place of the record makes the atomic replace fail.
-	if err := os.Mkdir(filepath.Join(r.home, remote.WorkerRecordName), 0o700); err != nil {
+	if err := remote.WriteWorkerRecord(r.home, remote.WorkerRecord{Version: "v-earlier", PID: 99, StartedAt: r.now()}); err != nil {
 		t.Fatal(err)
 	}
+	opts := r.options()
+	opts.WriteRecord = func(string, remote.WorkerRecord) error { return errors.New("no space left on device") }
 	ctx, cancel := context.WithCancel(t.Context())
-	done := r.serve(ctx)
+	done := make(chan error, 1)
+	go func() { done <- Serve(ctx, opts) }()
+	waitFor(t, "the worker start", func() bool { return r.sink.find("worker started") != nil })
 	if got := r.sink.find("worker record could not be written"); got == nil || got["level"] != "ERROR" {
 		t.Fatalf("a failed write of the record is an ERROR in the log: %v", got)
 	}
+	if _, state, err := remote.ReadWorkerRecord(r.home); state != remote.WorkerRecordMissing || err != nil {
+		t.Fatalf("the record of the earlier worker is gone: state %v, error %v", state, err)
+	}
 	r.expectRenewal()
 	finish(t, done, cancel)
+}
+
+// kander worker binds the language of its configuration, so the observation
+// texts it stores do not follow the locale of the process.
+func TestRunBindsTheConfiguredLanguage(t *testing.T) {
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	t.Setenv(config.EnvLang, "")
+	t.Setenv(config.EnvLangCLI, "")
+	t.Setenv("LC_ALL", "en_US.UTF-8")
+	t.Cleanup(func() { config.BindConfigLanguage(nil) })
+	cfg := config.DefaultConfig()
+	cfg.Language = "ja"
+	cfg.WelcomeComplete = true
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	t.Setenv(remote.EnvClientHome, home)
+	// A held lock makes Run return as soon as it has bound the language.
+	file, err := fs.OpenLockFile(home, filepath.Join(home, remote.WorkerLockName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	lock, err := fs.LockExclusive(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Unlock()
+	if code := Run(nil); code != 0 {
+		t.Fatalf("Run exits 0 when another worker holds the lock: %d", code)
+	}
+	if got := config.ResolveLanguage(); got != "ja" {
+		t.Fatalf("language %q, want the configured ja", got)
+	}
 }
 
 func TestHandoverReplacesTheWorkerRecord(t *testing.T) {
