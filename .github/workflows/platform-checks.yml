@@ -38,6 +38,14 @@ jobs:
           TMP: ${{ runner.temp }}
           TEMP: ${{ runner.temp }}
         run: go test -v ./internal/process -count=1
+      # The darwin-only probe tests run only here, and no other step covers internal/probe.
+      - name: Probe process-group tests
+        if: ${{ runner.os == 'macOS' && !cancelled() }}
+        env:
+          TMPDIR: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+          TEMP: ${{ runner.temp }}
+        run: go test -v ./internal/probe -count=1
       # Type-checks every package, test files included, on the runner's own OS. The
       # other steps name their packages, so a darwin-only or windows-only test file
       # elsewhere would otherwise never compile in CI.
