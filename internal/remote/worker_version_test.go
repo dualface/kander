@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -90,18 +91,18 @@ func TestEnsureWorkerNoticeForARunningWorker(t *testing.T) {
 		{name: "another version at this path with handover",
 			record: &WorkerRecord{Version: "v9.9.9", PID: 4711, Executable: self, Handover: true},
 			contains: []string{"kander v9.9.9", "kander " + version.String(), "pid 4711", self,
-				"hands over to this binary on its next round", "after a minute, stop process 4711", "Until a worker runs again"},
+				"hands over to this binary on its next round", "after a minute, stop process 4711", "Until the next kander start, server claim or kander coordinator claim starts a worker"},
 			absent: []string{"does not hand over"}},
 		{name: "another version at another path",
 			record: &WorkerRecord{Version: "v9.9.9", PID: 4711, Executable: other, Handover: true},
 			contains: []string{"kander v9.9.9", "kander " + version.String(), "pid 4711", other, self,
-				"does not hand over to this binary", "Stop process 4711", "next kander start, server claim or kander coordinator claim", "Until a worker runs again"},
+				"does not hand over to this binary", "Stop process 4711", "the worker started next runs this binary", "Until the next kander start, server claim or kander coordinator claim starts a worker"},
 			absent: []string{"on its next round"}},
 		{name: "another version without handover at this path",
 			record:   &WorkerRecord{Version: "v9.9.9", PID: 4711, Executable: self, Handover: false},
-			contains: []string{"does not hand over to this binary", "Stop process 4711", "Until a worker runs again"},
+			contains: []string{"does not hand over to this binary", "Stop process 4711", "Until the next kander start, server claim or kander coordinator claim starts a worker"},
 			absent:   []string{"on its next round"}},
-		{name: "no record", contains: []string{"no version record", "older worker", "Until a worker runs again"}},
+		{name: "no record", contains: []string{"no version record", "older worker", "Until the next kander start, server claim or kander coordinator claim starts a worker"}},
 		{name: "a record of another schema", raw: `{"schema":2,"version":"v9"}`},
 		{name: "a record that is not JSON", raw: `not json`},
 	} {
@@ -195,6 +196,9 @@ func TestSamePathCleansAndRejectsEmptyPaths(t *testing.T) {
 	}
 	if samePath("/a/kander", "/b/kander") {
 		t.Fatal("different paths do not match")
+	}
+	if got, want := samePath("/Opt/Kander", "/opt/kander"), runtime.GOOS == "windows"; got != want {
+		t.Fatalf("paths that differ only in case match on Windows only: got %v", got)
 	}
 	if samePath("", "") || samePath("", "/a") {
 		t.Fatal("an empty path never matches")

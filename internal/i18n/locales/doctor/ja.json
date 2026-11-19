@@ -33,5 +33,5 @@
   "menu.keep_modified_rules": "ローカルファイルを保持",
   "menu.background_worker_not_running": "バックグラウンド worker: 実行されていません",
   "menu.background_worker_running": "バックグラウンド worker: kander {{.V0}}, pid {{.V1}}",
-  "menu.background_worker_version_unrecorded": "バックグラウンド worker: 実行中ですが、使えるバージョン記録がありません (クライアントディレクトリ {{.V0}})。このバイナリへ引き継げない古い worker の可能性があります。そのディレクトリの kander worker プロセスを停止してください。次の kander start、サーバー側の claim、kander coordinator claim がこのバイナリから worker を起動します。{{.V1}}"
+  "menu.background_worker_version_unrecorded": "バックグラウンド worker: 実行中ですが、使えるバージョン記録がありません (クライアントディレクトリ {{.V0}})。このバイナリへ引き継げない古い worker の可能性があります。そのディレクトリの kander worker プロセスを停止してください。その後に起動する worker はこのバイナリで動きます。{{.V1}}"
 }
