@@ -326,12 +326,19 @@ type Handoff struct {
 	Decision       string    `json:"decision"`
 }
 
-// Collaboration request kinds and states.
+// Collaboration request kinds and states. A request that proposes a dispatch
+// carries the kind of that dispatch; a request without one is a note.
 const (
 	RequestFix    = "fix"
 	RequestSync   = "sync"
+	RequestWrapUp = "wrap-up"
 	RequestReview = "review"
 	RequestStop   = "stop"
+	RequestNote   = "note"
+
+	// MaxRequestMessage bounds the message of one request in bytes; the server
+	// refuses a longer one and clients check it before they send.
+	MaxRequestMessage = 64 << 10
 
 	RequestOpen       = "open"
 	RequestAccepted   = "accepted"
@@ -358,6 +365,16 @@ type CollabRequest struct {
 	Note             string               `json:"note,omitempty"`
 	CreatedAt        time.Time            `json:"created_at"`
 	UpdatedAt        time.Time            `json:"updated_at"`
+}
+
+// RequestKindFor is the request kind of a request with the given dispatch
+// proposal: the dispatch kind (fix, sync or wrap-up), or note when no dispatch
+// is attached.
+func RequestKindFor(dispatch *board.DispatchInput) string {
+	if dispatch == nil {
+		return RequestNote
+	}
+	return dispatch.Kind
 }
 
 // NewCollabRequest is POST .../tasks/{task}/requests.
