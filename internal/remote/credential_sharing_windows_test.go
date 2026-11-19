@@ -51,11 +51,32 @@ func holdLikeAtomicWriter(t *testing.T, path string) (release func()) {
 	return release
 }
 
-func releaseAfter(d time.Duration, release func()) {
-	go func() {
-		time.Sleep(d)
-		release()
-	}()
+// releaseAfterFirstWait lets go of the holder d after the retry helper first
+// waits, so a test passes only when its read really met the sharing violation.
+// It returns the number of waits seen. The tests using it must not run in parallel.
+func releaseAfterFirstWait(t *testing.T, d time.Duration, release func()) (waits func() int) {
+	t.Helper()
+	original := sharedReadSleep
+	var (
+		mu sync.Mutex
+		n  int
+	)
+	sharedReadSleep = func(wait time.Duration) {
+		mu.Lock()
+		n++
+		first := n == 1
+		mu.Unlock()
+		if first {
+			time.AfterFunc(d, release)
+		}
+		original(wait)
+	}
+	t.Cleanup(func() { sharedReadSleep = original })
+	return func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return n
+	}
 }
 
 // The first test proves the fixture reproduces the conflict. It prints the
@@ -70,10 +91,13 @@ func TestWindowsCredentialSharingFixtureBlocksReaders(t *testing.T) {
 
 func TestWindowsCredentialSharingCredentialsWaitsForTheHolder(t *testing.T) {
 	session, credential, record := sharingFixture(t)
-	releaseAfter(100*time.Millisecond, holdLikeAtomicWriter(t, record))
+	waits := releaseAfterFirstWait(t, 100*time.Millisecond, holdLikeAtomicWriter(t, record))
 	got, err := Credentials(session.Home)
 	if err != nil || len(got) != 1 || got[0].ExecutionID != credential.ExecutionID {
 		t.Fatalf("got %d credentials, err %v", len(got), err)
+	}
+	if waits() == 0 {
+		t.Fatal("the read never met the sharing violation")
 	}
 }
 
@@ -93,10 +117,13 @@ func TestWindowsCredentialSharingCredentialsReportsBusyAfterTheBound(t *testing.
 
 func TestWindowsCredentialSharingSessionCredentialWaitsForTheHolder(t *testing.T) {
 	session, credential, record := sharingFixture(t)
-	releaseAfter(100*time.Millisecond, holdLikeAtomicWriter(t, record))
+	waits := releaseAfterFirstWait(t, 100*time.Millisecond, holdLikeAtomicWriter(t, record))
 	got, found, err := session.Credential(sharingTask)
 	if err != nil || !found || got.ExecutionID != credential.ExecutionID {
 		t.Fatalf("got %+v found=%v err=%v", got, found, err)
+	}
+	if waits() == 0 {
+		t.Fatal("the read never met the sharing violation")
 	}
 }
 
@@ -110,10 +137,13 @@ func TestWindowsCredentialSharingSessionCredentialWaitsForThePointers(t *testing
 					t.Fatal(err)
 				}
 			}
-			releaseAfter(100*time.Millisecond, holdLikeAtomicWriter(t, filepath.Join(filepath.Dir(record), pointer)))
+			waits := releaseAfterFirstWait(t, 100*time.Millisecond, holdLikeAtomicWriter(t, filepath.Join(filepath.Dir(record), pointer)))
 			got, found, err := session.Credential(sharingTask)
 			if err != nil || !found || got.ExecutionID != credential.ExecutionID {
 				t.Fatalf("got %+v found=%v err=%v", got, found, err)
+			}
+			if waits() == 0 {
+				t.Fatal("the read never met the sharing violation")
 			}
 		})
 	}
@@ -129,6 +159,8 @@ func TestWindowsCredentialSharingReadersSurviveRealRenewals(t *testing.T) {
 		stop      = make(chan struct{})
 	)
 	wg.Add(1)
+	// A failing read must not leave the writer running into the temp dir cleanup.
+	t.Cleanup(wg.Wait)
 	go func() {
 		defer wg.Done()
 		defer close(stop)

@@ -28,8 +28,8 @@ func IsBusyFile(err error) bool {
 // IsSharingViolation reports whether err means another open handle blocked this open through its share mode.
 // Unlike IsBusyFile it excludes access-denied and lock violations, which can be real refusals.
 func IsSharingViolation(err error) bool {
-	var errno syscall.Errno
-	return errors.As(err, &errno) && errno == windows.ERROR_SHARING_VIOLATION
+	// errors.Is walks every branch of a joined error, where errors.As would stop at the first errno.
+	return errors.Is(err, windows.ERROR_SHARING_VIOLATION)
 }
 
 // RemoveNonDirectoryIfExists unlinks a regular file or reparse point. Directories are rejected.

@@ -14,12 +14,13 @@ import (
 func TestIsSharingViolationMatchesOnlyTheShareModeConflict(t *testing.T) {
 	violation := &pathError{Op: "open", Path: "x", Err: windows.ERROR_SHARING_VIOLATION}
 	for name, err := range map[string]error{
-		"errno":      windows.ERROR_SHARING_VIOLATION,
-		"path error": violation,
-		"os path":    &os.PathError{Op: "open", Path: "x", Err: windows.ERROR_SHARING_VIOLATION},
-		"wrapped":    fmt.Errorf("read: %w", violation),
-		"joined":     errors.Join(errors.New("other"), violation),
-		"nt status":  wrapNTStatus(windows.STATUS_SHARING_VIOLATION),
+		"errno":                      windows.ERROR_SHARING_VIOLATION,
+		"path error":                 violation,
+		"os path":                    &os.PathError{Op: "open", Path: "x", Err: windows.ERROR_SHARING_VIOLATION},
+		"wrapped":                    fmt.Errorf("read: %w", violation),
+		"joined":                     errors.Join(errors.New("other"), violation),
+		"joined after another errno": errors.Join(windows.ERROR_ACCESS_DENIED, violation),
+		"nt status":                  wrapNTStatus(windows.STATUS_SHARING_VIOLATION),
 	} {
 		if !IsSharingViolation(err) {
 			t.Errorf("%s: want a sharing violation", name)
