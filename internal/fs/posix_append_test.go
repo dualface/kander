@@ -111,6 +111,9 @@ func TestOpenAppendFileRetriesAVanishedCreate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if file == nil {
+		t.Fatal("OpenAppendFile returned no file and no error")
+	}
 	defer file.Close()
 	if len(*dirfds) != 3 {
 		t.Fatalf("opens=%d, want 3", len(*dirfds))
