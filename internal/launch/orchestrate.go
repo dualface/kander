@@ -63,10 +63,13 @@ func StartOrchestrator(request OrchestrateRequest) (OrchestrateResult, error) {
 	if err := remote.RequireBinding(cfg); err != nil {
 		return OrchestrateResult{}, err
 	}
-	// The session always starts, so a launcher that takes the terminal is refused before the
-	// server session of this host is opened (which creates the client identity on first use).
-	if err := refuseConfiguredLauncher(cfg, request.Launcher); err != nil {
-		return OrchestrateResult{}, err
+	// A host with no receipt of an orchestrator session has none to replay, so a launcher that
+	// takes the terminal is refused before the server session of this host is opened (which
+	// creates the client identity and registers the project). Otherwise the receipt decides.
+	if !mayLaunchAnew("orchestrate", "") {
+		if err := refuseConfiguredLauncher(cfg, request.Launcher); err != nil {
+			return OrchestrateResult{}, err
+		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), remoteCall)
 	loaded, service, root, err := remoteOrchestrateBoard(ctx, cfg)
@@ -78,22 +81,38 @@ func StartOrchestrator(request OrchestrateRequest) (OrchestrateResult, error) {
 	return startOrchestrator(request, cfg, loaded, service)
 }
 
+// orchestrateReceiptInput is the logical input of the receipt of one orchestrator session.
+type orchestrateReceiptInput struct {
+	References                             []string
+	Handover, Agent, Launcher, OperationID string
+}
+
 // startOrchestrator validates the plan against the loaded board and starts the
 // session. service is the server session the board came from.
 func startOrchestrator(request OrchestrateRequest, cfg *config.Config, loaded board.Board, service *remote.Session) (result OrchestrateResult, err error) {
 	if strings.TrimSpace(request.Handover) == "" {
 		return result, launchError("launch.message_must_not_be_empty", "orchestrate")
 	}
-	if err := refuseConfiguredLauncher(cfg, request.Launcher); err != nil {
-		return result, err
-	}
 	var journal *remote.ActionJournal
+	if service == nil {
+		// Without a receipt every call starts a session.
+		if err := gateLaunch(cfg, request.Launcher, true); err != nil {
+			return result, err
+		}
+	}
 	if service != nil {
 		var fresh bool
-		journal, fresh, err = service.BeginAction("orchestrate", struct {
-			References                             []string
-			Handover, Agent, Launcher, OperationID string
-		}{request.References, request.Handover, request.Agent, request.Launcher, request.OperationID})
+		logical := orchestrateReceiptInput{request.References, request.Handover, request.Agent, request.Launcher, request.OperationID}
+		var current *remote.LocalAction
+		if stored, found, err := service.PeekAction("orchestrate", logical); err != nil {
+			return result, err
+		} else if found {
+			current = &stored
+		}
+		if err := gateLaunch(cfg, request.Launcher, launchWouldStart(current, true)); err != nil {
+			return result, err
+		}
+		journal, fresh, err = service.BeginActionGated("orchestrate", logical, true, actionGate(cfg, request.Launcher, true))
 		if err != nil {
 			return result, err
 		}

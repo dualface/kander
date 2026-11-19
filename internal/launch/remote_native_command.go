@@ -19,6 +19,10 @@ type nativeResumeIntent struct {
 
 // The implicit decision must be durable before a handoff can change the current
 // generation. A new invocation reads this command record before agent probing.
+// afterEarlyNativeGate is a seam for tests: it runs between the read-only decision and the
+// receipt writer, where a concurrent retry can change the receipt.
+var afterEarlyNativeGate = func() {}
+
 // nativeResumeReceipt is the logical input of the command receipt of an implicit resume.
 type nativeResumeReceipt struct {
 	Task, Launcher, Message string
@@ -57,31 +61,43 @@ func runImplicitNativeResume(ctx context.Context, session *remote.Session, card 
 		}
 		return continuable
 	}
-	// With --json a launcher that takes the terminal is refused, but only where this command would
-	// start an agent: a replay of a completed receipt, and a message to a live executor, start
-	// nothing. The receipts are read without writing, so a refusal leaves none behind and the same
-	// command can be repeated without --json.
-	if command.JSON() {
-		starts := canContinue()
-		if action, exists, err := session.PeekAction("native-resume-command", logical); err == nil && exists {
+	// With --json a launcher that takes the terminal is refused where this command would start an
+	// agent (launchWouldStart): the receipt of the command and, for a pending command, the receipt
+	// of its launch are read without writing, and the same decision is taken again under the lock
+	// of the command receipt, before anything is written.
+	wouldStart := func(existing *remote.LocalAction) bool {
+		var child *remote.LocalAction
+		if existing != nil && existing.Phase == "pending" {
 			var saved nativeResumeIntent
-			if len(action.Result) != 0 {
-				_ = json.Unmarshal(action.Result, &saved)
-			}
-			switch action.Phase {
-			case "pending":
-				starts = childLaunchStarts(session, card.TaskID, saved.Input)
-			case "complete":
-				starts = starts && saved.CompletedExecution != "" && saved.CompletedExecution == credential.ExecutionID
+			_ = json.Unmarshal(existing.Result, &saved)
+			if stored, found, err := session.PeekAction("task-launch", launchReceiptInput{card.TaskID, saved.Input}); err == nil && found {
+				child = &stored
 			}
 		}
-		if starts {
-			if err := RefuseTerminalLauncher(launcher); err != nil {
-				return fail(err)
-			}
+		return nativeResumeWouldStart(existing, child, canContinue(), credential.ExecutionID)
+	}
+	gate := func(existing *remote.LocalAction) error {
+		if !command.JSON() {
+			return nil
+		}
+		if !wouldStart(existing) {
+			return nil
+		}
+		return RefuseTerminalLauncher(launcher)
+	}
+	if command.JSON() {
+		var current *remote.LocalAction
+		if stored, exists, err := session.PeekAction("native-resume-command", logical); err != nil {
+			return fail(err)
+		} else if exists {
+			current = &stored
+		}
+		if err := gate(current); err != nil {
+			return fail(err)
 		}
 	}
-	journal, _, err := session.RetainAction("native-resume-command", logical)
+	afterEarlyNativeGate()
+	journal, _, err := session.BeginActionGated("native-resume-command", logical, false, gate)
 	if err != nil {
 		return fail(err)
 	}

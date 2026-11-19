@@ -3,6 +3,7 @@ package launch
 import (
 	"bytes"
 	"encoding/json"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -458,5 +459,144 @@ func TestRemoteReleaseAndFreshTakeoverAcrossIndependentClones(t *testing.T) {
 	}
 	if _, err := os.Stat(forbidden); !os.IsNotExist(err) {
 		t.Fatalf("local board was used: %v", err)
+	}
+}
+
+// receiptFiles returns the contents of every receipt below root, by file name.
+func receiptFiles(t *testing.T, root string) map[string]string {
+	t.Helper()
+	dir := filepath.Join(root, "launch-actions")
+	entries, _ := os.ReadDir(dir)
+	files := map[string]string{}
+	for _, entry := range entries {
+		data, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		files[entry.Name()] = string(data)
+	}
+	return files
+}
+
+// setReceiptPhase rewrites the phase of every receipt of the kind and returns the names changed.
+func setReceiptPhase(t *testing.T, root, kind, phase string) []string {
+	t.Helper()
+	dir := filepath.Join(root, "launch-actions")
+	entries, _ := os.ReadDir(dir)
+	var changed []string
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var receipt map[string]any
+		if err := json.Unmarshal(data, &receipt); err != nil {
+			t.Fatal(err)
+		}
+		if receipt["kind"] != kind {
+			continue
+		}
+		receipt["phase"] = phase
+		data, _ = json.Marshal(receipt)
+		if err := os.WriteFile(path, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		changed = append(changed, entry.Name())
+	}
+	return changed
+}
+
+// A failed launch receipt is not overwritten by a --json retry that the launcher gate refuses:
+// BeginAction would start a new attempt over it, so the retry is refused first, with the receipt
+// as it was.
+func TestFailedLaunchReceiptSurvivesARefusedJSONRetry(t *testing.T) {
+	skipOnWindows(t)
+	session, task, _ := remoteGitFixture(t, "failed-receipt-json")
+	root, err := session.LocalDataRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("KANBAN_LAUNCH_CWD", filepath.Join(root, "worktrees", task.TaskID, "g1"))
+	if _, err := StartRemote("claude", "", task.TaskID); err != nil {
+		t.Fatal(err)
+	}
+	if changed := setReceiptPhase(t, root, "task-launch", "failed"); len(changed) != 1 {
+		t.Fatalf("changed %v", changed)
+	}
+	before := receiptFiles(t, root)
+	log := os.Getenv("KANBAN_TMUX_LOG")
+	prior, _ := os.ReadFile(log)
+	restore := withTerminalDefaultLauncher(t)
+	defer restore()
+	code, stdout, stderr := commandtest.Capture(func() int { return RunStartRemote([]string{"--json", "--agent", "claude", task.TaskID}) })
+	if code != 2 || stdout != "" || !strings.Contains(stderr, "interactive_required") {
+		t.Fatalf("code=%d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+	if after := receiptFiles(t, root); !maps.Equal(before, after) {
+		t.Fatalf("the refused retry changed the receipts:\nbefore %v\nafter  %v", before, after)
+	}
+	if actual, _ := os.ReadFile(log); !bytes.Equal(prior, actual) {
+		t.Fatal("the refused retry invoked the terminal")
+	}
+}
+
+// Two overlapping retries of an implicit resume whose launch completed but whose command receipt
+// is still pending: the first one completes the command receipt between the read-only decision
+// of the second (a replay) and its lock. Under the lock the second one sees a completed command
+// and a stopped executor, which is a new continuation, and is refused with the receipt untouched.
+func TestOverlappingImplicitResumeRetriesRefuseUnderTheLockWithoutRewriting(t *testing.T) {
+	skipOnWindows(t)
+	session, task, _ := remoteGitFixture(t, "implicit-native-overlap")
+	root, err := session.LocalDataRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("KANBAN_LAUNCH_CWD", filepath.Join(root, "worktrees", task.TaskID, "g1"))
+	if _, err := StartRemote("claude", "tmux", task.TaskID); err != nil {
+		t.Fatal(err)
+	}
+	markRemoteExecutorStopped(t, session, task.TaskID)
+	t.Setenv("KANBAN_LAUNCH_CWD", filepath.Join(root, "worktrees", task.TaskID, "g2"))
+	args := []string{task.TaskID, "--message", "Continue after the stop"}
+	if code := RunResumeRemote(args); code != 0 {
+		t.Fatalf("resume: exit %d", code)
+	}
+	complete := receiptFiles(t, root)
+	if changed := setReceiptPhase(t, root, "native-resume-command", "pending"); len(changed) != 1 {
+		t.Fatalf("changed %v", changed)
+	}
+	pending := receiptFiles(t, root)
+	markRemoteExecutorStopped(t, session, task.TaskID)
+	// The other retry completes the command receipt after this one decided.
+	old := afterEarlyNativeGate
+	t.Cleanup(func() { afterEarlyNativeGate = old })
+	afterEarlyNativeGate = func() {
+		for name, text := range complete {
+			if text != pending[name] {
+				if err := os.WriteFile(filepath.Join(root, "launch-actions", name), []byte(text), 0o600); err != nil {
+					t.Error(err)
+				}
+			}
+		}
+	}
+	log := os.Getenv("KANBAN_TMUX_LOG")
+	prior, _ := os.ReadFile(log)
+	restore := withTerminalDefaultLauncher(t)
+	defer restore()
+	code, stdout, stderr := commandtest.Capture(func() int { return RunResumeRemote(append([]string{"--json"}, args...)) })
+	if code != 2 || stdout != "" || !strings.Contains(stderr, "interactive_required") {
+		t.Fatalf("code=%d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+	if after := receiptFiles(t, root); !maps.EqualFunc(after, complete, func(a, b string) bool {
+		return a == b || strings.TrimSpace(a) == strings.TrimSpace(b)
+	}) {
+		t.Fatalf("the refusal rewrote a receipt:\nwant %v\ngot  %v", complete, after)
+	}
+	if actual, _ := os.ReadFile(log); !bytes.Equal(prior, actual) {
+		t.Fatal("the refused retry invoked the terminal")
 	}
 }

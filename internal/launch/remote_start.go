@@ -39,17 +39,6 @@ type launchReceiptInput struct {
 	Input remoteLaunchInput
 }
 
-// childLaunchStarts reports, without writing anything, whether the launch of input would start
-// an agent: it has no receipt yet, or a receipt that was only prepared. A completed, failed, or
-// recoverable receipt is replayed or reconciled and starts nothing.
-func childLaunchStarts(session *remote.Session, task string, input remoteLaunchInput) bool {
-	action, found, err := session.PeekAction("task-launch", launchReceiptInput{task, input})
-	if err != nil || !found {
-		return true
-	}
-	return action.Phase == "prepared" || action.Phase == "session-ready"
-}
-
 func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 	agentOverride, launcherOverride, taskID := input.Agent, input.Launcher, input.TaskID
 	verb := "start"
@@ -63,11 +52,10 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 	if err != nil {
 		return result, err
 	}
-	// Every form of launchRemote that is not a replay starts an agent. On a host that has no
-	// client identity yet nothing can be replayed, so the launcher is checked before the server
-	// session is opened, which creates the identity. Otherwise it is checked below, once the
-	// receipt of this launch has been read and before it is written.
-	if !remote.ClientStarted() {
+	// Before the session is opened (which creates the client identity and registers the
+	// project) a call that cannot be a replay is refused for its launcher; otherwise the
+	// receipt of the launch decides below, once it has been read.
+	if !mayLaunchAnew("task-launch", taskID) {
 		if err := refuseConfiguredLauncher(cfg, launcherOverride); err != nil {
 			return result, err
 		}
@@ -92,16 +80,19 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 	if err != nil {
 		return result, err
 	}
-	if childLaunchStarts(session, task.TaskID, input) {
-		if err := refuseConfiguredLauncher(cfg, launcherOverride); err != nil {
-			return result, err
-		}
+	// The receipt of this launch is read without writing; a launch that starts an agent is refused
+	// for its launcher before anything is written, and again under the lock of the receipt.
+	retryFailed := !input.Native
+	var current *remote.LocalAction
+	if stored, found, err := session.PeekAction("task-launch", launchReceiptInput{task.TaskID, input}); err != nil {
+		return result, err
+	} else if found {
+		current = &stored
 	}
-	begin := session.BeginAction
-	if input.Native {
-		begin = session.RetainAction
+	if err := gateLaunch(cfg, launcherOverride, launchWouldStart(current, retryFailed)); err != nil {
+		return result, err
 	}
-	journal, fresh, err := begin("task-launch", launchReceiptInput{task.TaskID, input})
+	journal, fresh, err := session.BeginActionGated("task-launch", launchReceiptInput{task.TaskID, input}, retryFailed, actionGate(cfg, launcherOverride, retryFailed))
 	if err != nil {
 		return result, err
 	}

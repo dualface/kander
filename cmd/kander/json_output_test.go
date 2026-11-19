@@ -402,6 +402,12 @@ func TestJSONInteractiveFormsAreRefusedWithoutEffects(t *testing.T) {
 	// nothing is created in it.
 	clientHome := t.TempDir()
 	t.Setenv(remote.EnvClientHome, clientHome)
+	// A host that has been used before: its identity exists, and the project of the card has no
+	// local directory yet (and the service no registration of it here). The refusals still create
+	// nothing besides the identity.
+	if _, err := remote.ClientID(clientHome); err != nil {
+		t.Fatal(err)
+	}
 	for name, args := range forms {
 		r := runKander(t, args...)
 		requireFailure(t, r, name, "interactive_required", 2)
@@ -410,8 +416,8 @@ func TestJSONInteractiveFormsAreRefusedWithoutEffects(t *testing.T) {
 	if err != nil || string(after) != string(before) {
 		t.Fatalf("the configuration changed: %v", err)
 	}
-	if entries, _ := os.ReadDir(clientHome); len(entries) != 0 {
-		t.Fatalf("the refusals created client state: %v", entries)
+	if entries, _ := os.ReadDir(clientHome); len(entries) != 1 || entries[0].Name() != "client-id" {
+		t.Fatalf("the refusals created client state besides the identity: %v", entries)
 	}
 	if got := cardField(t, id, board.FieldOwner); got != "" {
 		t.Fatalf("the card was claimed: owner=%q", got)
@@ -774,5 +780,31 @@ func TestJSONSubscribeFailureBeforeTheFirstSnapshotIsOneErrorObject(t *testing.T
 	}
 	if object := jsonLine(t, r.stderr); object["error"] == nil || object["notice"] != nil {
 		t.Fatalf("stderr=%q", r.stderr)
+	}
+}
+
+// A refusal comes before the session of the host is opened, which registers the project with the
+// service: on a host that has no launch receipt to replay, a project the service does not know
+// stays unknown after start, an explicit takeover, orchestrate and issue triage are refused.
+func TestJSONInteractiveRefusalDoesNotRegisterTheProject(t *testing.T) {
+	fixture := fakeMuxFixture(t)
+	id := readyCard(t, "json-unregistered")
+	cfg, err := config.Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Project.Name = "unregistered-project"
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	for name, args := range map[string][]string{
+		"start":       {"start", "--json", "--launcher", "foreground", id},
+		"takeover":    {"resume", "--json", "--agent", "claude", "--decision", "test", "--message", "go", "--launcher", "foreground", id},
+		"orchestrate": {"orchestrate", "--json", "--launcher", "console", "--message", "go", id},
+	} {
+		requireFailure(t, runKander(t, args...), name, "interactive_required", 2)
+	}
+	if project, err := fixture.service.Client.ProjectByName(t.Context(), "unregistered-project"); err == nil {
+		t.Fatalf("the refusals registered the project: %+v", project)
 	}
 }
