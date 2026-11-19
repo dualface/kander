@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/probe"
 )
 
 const (
@@ -40,25 +41,44 @@ var (
 	gitAssignPattern = regexp.MustCompile(`(?i)((?:token|password|passwd|secret)\s*[:=]\s*)[^\s'"&]+`)
 )
 
-// gitError is the error of a Git process that exited non-zero. plain is the
-// localized text without Git's output. Error() returns plain followed by the
-// sanitized diagnostic when there is one, so it is for the local user only.
-// Anything sent to the server goes through ServerText, which returns plain.
+// gitError is the error of a Git process that exited non-zero or did not run to
+// its end. plain is the localized text without Git's output. Error() returns
+// plain followed by the sanitized diagnostic when there is one, so it is for
+// the local user only. Anything sent to the server goes through ServerText,
+// which returns plain.
 type gitError struct {
 	plain      string
 	diagnostic string
+	// cause is the probe error of a Git process that did not run to its end. It
+	// feeds Unwrap and the cause text of Error() and never reaches ServerText,
+	// which takes plain only.
+	cause error
 }
 
 func newGitError(stderr string) *gitError {
 	return &gitError{plain: config.Text("remote.git_unverified"), diagnostic: gitDiagnostic(stderr)}
 }
 
+// newGitTransportError reports a Git process that did not run to its end:
+// the deadline expired, the context was canceled, the process did not start, or
+// its process tree could not be cleaned up or read. The diagnostic comes from
+// the probe error alone, never from Git's output, argv or environment.
+func newGitTransportError(cause error) *gitError {
+	return &gitError{plain: config.Text("remote.git_interrupted"), diagnostic: gitDiagnostic(probe.FailureDetail(cause)), cause: cause}
+}
+
 func (e *gitError) Error() string {
-	if e.diagnostic == "" {
+	switch {
+	case e.diagnostic == "":
 		return e.plain
+	case e.cause != nil:
+		return config.Text("remote.git_cause", e.plain, e.diagnostic)
 	}
 	return config.Text("remote.git_diagnostic", e.plain, e.diagnostic)
 }
+
+// Unwrap lets errors.Is and errors.As find the class of the probe error.
+func (e *gitError) Unwrap() error { return e.cause }
 
 // gitDiagnostic turns Git stderr into one bounded line without control
 // characters, URL user information, authorization headers or token-shaped

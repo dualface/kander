@@ -38,7 +38,7 @@ func commitPatch(ctx context.Context, dir, commit string) (string, error) {
 	args := []string{"diff", "--no-ext-diff", "--no-textconv", "--no-color", "--binary", "--full-index", "--no-renames", commit + "^1", commit, "--"}
 	result, err := probe.CaptureWithEnvDirLimit(ctx, "git", args, env, dir, replayPatchMaxSize)
 	if err != nil {
-		return "", integrationFailure("remote.git_interrupted")
+		return "", newGitTransportError(err)
 	}
 	if result.Code != 0 || result.Overflow {
 		return "", integrationFailure("remote.git_unverified")

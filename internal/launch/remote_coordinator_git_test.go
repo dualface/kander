@@ -1,12 +1,14 @@
 package launch
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
@@ -83,5 +85,26 @@ func TestCoordinatorGitCheckCarriesNoGitDiagnostic(t *testing.T) {
 	}
 	if check := coordinatorGitCheck(board.CoordinatorGitFacts{}, nil); check.Error != "" {
 		t.Fatalf("a passing check carries %q", check.Error)
+	}
+}
+
+// TestCoordinatorGitCheckCarriesNoTransportCause proves a Git process that did
+// not run to its end is local text with its cause and server text without it.
+func TestCoordinatorGitCheckCarriesNoTransportCause(t *testing.T) {
+	t.Setenv(config.EnvLang, "en")
+	t.Setenv(config.EnvLangCLI, "1")
+	ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
+	defer cancel()
+	// A valid SHA makes the first Git call of FetchCommit run under ctx.
+	err := (&remote.Session{}).FetchCommit(ctx, t.TempDir(), strings.Repeat("a", 40))
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("FetchCommit error %v is not a deadline failure", err)
+	}
+	plain := config.Text("remote.git_interrupted")
+	if !strings.HasPrefix(err.Error(), plain) || len(err.Error()) <= len(plain) {
+		t.Fatalf("local text %q does not state a cause after %q", err, plain)
+	}
+	if check := coordinatorGitCheck(board.CoordinatorGitFacts{}, err); check.Error != plain {
+		t.Fatalf("Error = %q, want %q", check.Error, plain)
 	}
 }

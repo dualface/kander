@@ -26,7 +26,7 @@ func gitCommand(ctx context.Context, dir string, args ...string) (string, error)
 	env := append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never")
 	result, err := probe.CaptureWithEnvDirLimit(ctx, "git", gitArgs(runtime.GOOS, args), env, dir, 1<<20)
 	if err != nil {
-		return "", errors.New(config.Text("remote.git_interrupted"))
+		return "", newGitTransportError(err)
 	}
 	if result.Code != 0 || result.Overflow {
 		return "", newGitError(result.Stderr)

@@ -52,6 +52,7 @@
   "remote.git_interrupted": "Git 転送が失敗または中断しました。再試行前にローカルとリモートを確認してください",
   "remote.git_unverified": "Git 転送で指定コミットまたはリモート参照を確認できませんでした",
   "remote.git_diagnostic": "{{.V0}}。Git の出力: {{.V1}}",
+  "remote.git_cause": "{{.V0}}。原因: {{.V1}}",
   "remote.git_remote_mismatch": "ローカル origin が登録済みプロジェクトのリモートと一致しません",
   "remote.git_push_remote_mismatch": "origin の push と fetch の URL は同じプロジェクトリモートを示す必要があります",
   "remote.git_ref_conflict": "配信参照が別のコミットを示しています",

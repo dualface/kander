@@ -34,7 +34,7 @@ func gitStatus(ctx context.Context, dir string, args ...string) (probe.Result, e
 	env := append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never")
 	result, err := probe.CaptureWithEnvDirLimit(ctx, "git", args, env, dir, mergeTreeMaxOutput)
 	if err != nil {
-		return result, integrationFailure("remote.git_interrupted")
+		return result, newGitTransportError(err)
 	}
 	return result, nil
 }
