@@ -31,6 +31,7 @@ kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--owner
 - Into `done/`: the completion gates of `snippets/review-evidence-gate.md` "Review Evidence Completion Gate" and the `SUMMARY` or `report.md` written through `update` first.
 - Into `archived/` or `trash/`: a result, a reason, and a decision reference. An `archived/` card is final: every later write fails.
 - A card that carries a `DISPATCH_ID` accepts only the ID/epoch-bound form.
+- From `review/` into `working/` without `--dispatch-id --execution-epoch`: a task group card with a proposal that `kander dispatch prepare` would still accept is refused (`snippets/commands/dispatch.md`); prepare the proposal first, or answer it `rejected`.
 
 ## Effects
 
