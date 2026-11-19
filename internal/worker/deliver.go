@@ -16,6 +16,11 @@ import (
 const (
 	expiredNote = "dispatch proposal acceptance window elapsed; a new inspected proposal needs a new ID"
 	staleNote   = "dispatch proposal targets an earlier card version; inspect the current task before creating a new proposal"
+
+	// reservationNote is the note of the answer that reserves a delivery.
+	reservationNote = "automatic delivery reserved; outcome is uncertain until observed"
+	// reservationKeyPrefix starts the idempotency key of that answer.
+	reservationKeyPrefix = "delivery-"
 )
 
 // bounded gives one server call of a delivery its own time limit.
@@ -155,7 +160,7 @@ func (w *loop) rejectExpired(ctx context.Context, log *slog.Logger, project *cli
 // reached the pane, so it is never typed again.
 func (w *loop) deliverResolved(ctx context.Context, log *slog.Logger, project *client.Project, c *remote.Credential, r api.CollabRequest, prompt Prompt) {
 	reserveCtx, stopReserve := bounded(ctx)
-	accepted, err := project.AnswerRequest(reserveCtx, "delivery-"+c.ExecutionID+"-"+r.ID, c.TaskID, r.ID, api.CollabAnswer{Status: api.RequestAccepted, ExpectedRevision: r.Revision, Note: "automatic delivery reserved; outcome is uncertain until observed"}, *c.Claim())
+	accepted, err := project.AnswerRequest(reserveCtx, reservationKeyPrefix+c.ExecutionID+"-"+r.ID, c.TaskID, r.ID, api.CollabAnswer{Status: api.RequestAccepted, ExpectedRevision: r.Revision, Note: reservationNote}, *c.Claim())
 	stopReserve()
 	if err != nil {
 		log.Warn("reserving request delivery failed", "request", r.ID, "error", err)
