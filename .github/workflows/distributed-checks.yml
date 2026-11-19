@@ -135,6 +135,8 @@ jobs:
         run: |
           bash scripts/windows-test-packages.sh > "$RUNNER_TEMP/windows-packages.txt"
           cat "$RUNNER_TEMP/windows-packages.txt"
+      # Four packages at a time: the runner has four vCPUs, and runs 44453011243
+      # and 44453016220 took 250 and 255 s here against 374 and 364 s with -p 1.
       - name: Complete Windows service tests
         if: matrix.suite == 'services'
         env:
@@ -145,7 +147,7 @@ jobs:
         run: |
           $packages = @(Get-Content -LiteralPath "$env:RUNNER_TEMP\windows-packages.txt" | Where-Object { $_ -ne '' })
           if ($packages.Count -eq 0) { Write-Error "no Windows service packages are listed"; exit 1 }
-          go test -v -p 1 -count=1 -timeout 20m $packages
+          go test -v -p 4 -count=1 -timeout 20m $packages
       # Windows-specific tests of internal/remote, named TestWindows*, such as the
       # TestWindowsCredentialSharing tests planned by
       # 20261119-windows-credential-read-sharing-v2-task. With no match go test
