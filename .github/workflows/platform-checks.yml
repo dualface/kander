@@ -23,6 +23,12 @@ jobs:
         run: |
           go test ./internal/check -count=1
           go test ./cmd/kander -count=1 -run TestCheck
+      # Type-checks every package, test files included, on the runner's own OS. The
+      # other steps name their packages, so a darwin-only or windows-only test file
+      # elsewhere would otherwise never compile in CI.
+      - name: Static analysis
+        if: ${{ !cancelled() }}
+        run: go vet ./...
       # A checkout that converts line endings would embed CRLF rules and templates.
       - name: Embedded line endings
         if: ${{ !cancelled() }}
