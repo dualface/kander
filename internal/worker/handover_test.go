@@ -256,12 +256,12 @@ func finish(t *testing.T, done <-chan error, cancel context.CancelFunc) {
 }
 
 // homeBytes reads every private file of the client home except the worker's
-// own lock and log.
+// own lock, log and record.
 func homeBytes(t *testing.T, home string) map[string]string {
 	t.Helper()
 	files := map[string]string{}
 	err := filepath.WalkDir(home, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || d.Name() == remote.WorkerLockName || d.Name() == "worker.log" {
+		if err != nil || d.IsDir() || d.Name() == remote.WorkerLockName || d.Name() == remote.WorkerRecordName || d.Name() == "worker.log" {
 			return err
 		}
 		data, err := os.ReadFile(path)

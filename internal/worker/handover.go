@@ -166,7 +166,7 @@ func startSuccessor(home, executable string) (Successor, error) {
 // due reports the current identity of the executable when it differs from the
 // recorded one and is not inside the backoff of a failed attempt.
 func (h *handover) due(o Options) (os.FileInfo, bool) {
-	if h == nil || h.identity == nil {
+	if !h.enabled() {
 		return nil, false
 	}
 	current, err := o.Identity(h.executable)
@@ -185,6 +185,12 @@ func (h *handover) path() string {
 		return ""
 	}
 	return h.executable
+}
+
+// enabled reports whether this worker watches its executable for a
+// replacement, which needs the identity of the file.
+func (h *handover) enabled() bool {
+	return h != nil && h.identity != nil
 }
 
 func (h *handover) fail(o Options, current os.FileInfo) {

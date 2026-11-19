@@ -34,6 +34,11 @@ type Options struct {
 	IdleExit time.Duration
 	Logger   *slog.Logger
 	Now      func() time.Time
+	// Version and PID name this worker in worker.json and in the log; the
+	// defaults are version.String and os.Getpid. Tests set them to tell a
+	// worker from the one that handed over to it in the same process.
+	Version func() string
+	PID     func() int
 	// Stop overrides process termination in tests. The default verifies the
 	// recorded process incarnation before signaling its kernel handle.
 	Stop func(pid int) error
@@ -121,6 +126,12 @@ func Serve(ctx context.Context, o Options) error {
 	if o.Resolve == nil {
 		o.Resolve = Resolve
 	}
+	if o.Version == nil {
+		o.Version = version.String
+	}
+	if o.PID == nil {
+		o.PID = os.Getpid
+	}
 	o.defaultHandover()
 	if err := os.MkdirAll(o.Home, 0o700); err != nil {
 		return err
@@ -135,7 +146,15 @@ func Serve(ctx context.Context, o Options) error {
 	if err != nil {
 		o.Logger.Warn("the executable of this worker cannot be identified; handover to a replaced binary is off", "error", err)
 	}
-	o.Logger.Info("worker started", "version", version.String(), "pid", os.Getpid(), "executable", self.path())
+	// The record only serves diagnostics, so a failed write is logged and the
+	// worker renews as usual.
+	if err := remote.WriteWorkerRecord(o.Home, remote.WorkerRecord{
+		Version: o.Version(), PID: o.PID(), Executable: self.path(),
+		Handover: self.enabled(), StartedAt: o.Now(),
+	}); err != nil {
+		o.Logger.Error("worker record could not be written", "error", err)
+	}
+	o.Logger.Info("worker started", "version", o.Version(), "pid", o.PID(), "executable", self.path())
 	// Registered after the lock release, so it runs first: only the worker that
 	// holds worker.lock acts on credentials.
 	w.startRenewals(ctx)
