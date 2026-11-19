@@ -203,6 +203,26 @@ func (w *membersWorld) differences(t *testing.T) []string {
 	return changed
 }
 
+// requireNoCopies fails the test when a card the request names, other than the
+// first member, holds a plan copy. A copy that was there before the request and
+// stayed is no difference, so the capture alone would pass it.
+func (w *membersWorld) requireNoCopies(t *testing.T) {
+	t.Helper()
+	now, err := w.files()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range slices.Concat([]string{w.candidate}, w.also) {
+		label := "plan copy of the candidate"
+		if id != w.candidate {
+			label = "plan copy of " + id
+		}
+		if now[label] != absent {
+			t.Fatalf("%s holds a plan copy", id)
+		}
+	}
+}
+
 // untouched checks that a refused request changed no plan, copy, pointer, cycle
 // record, history, batch record, or candidate card file. The candidate keeps the
 // plan pointer it had, if any.
@@ -210,6 +230,9 @@ func (w *membersWorld) untouched(t *testing.T, pointer string) {
 	t.Helper()
 	if changed := w.differences(t); len(changed) != 0 {
 		t.Fatalf("a refused request changed: %v", changed)
+	}
+	if pointer == "" {
+		w.requireNoCopies(t)
 	}
 	if got := readOwedPlan(t, w.root, w.plan.PlanID); reviewJSON(got) != reviewJSON(w.plan) {
 		t.Fatalf("plan changed: %+v", got)
