@@ -199,11 +199,11 @@ func TestBackoffGrowsPerFailureInARow(t *testing.T) {
 	}
 }
 
-func TestBackoffTableValues(t *testing.T) {
-	for attempts, want := range map[int]time.Duration{1: 30, 2: 60, 3: 120, 4: 240, 5: 300, 6: 300, 40: 300} {
-		if got := blockBackoff(attempts); got != want*time.Second {
-			t.Fatalf("backoff after %d failures = %v, want %v", attempts, got, want*time.Second)
-		}
+// The failure counts of the first six rows are covered by
+// TestBackoffGrowsPerFailureInARow; this pins that the wait stays at the cap.
+func TestBackoffStaysAtTheCap(t *testing.T) {
+	if got := blockBackoff(40); got != blockBackoffMax {
+		t.Fatalf("backoff after 40 failures = %v, want %v", got, blockBackoffMax)
 	}
 }
 

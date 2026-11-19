@@ -148,9 +148,11 @@ func (w *loop) rejectExpired(ctx context.Context, log *slog.Logger, project *cli
 }
 
 // deliverResolved reserves the delivery of a request whose target was resolved,
-// then types it. A reservation that fails types nothing and leaves the request
-// open for the next round. A typing that fails leaves the request reserved and
-// uncertain: the line may have reached the pane, so it is never typed again.
+// then types it. A reservation the server refuses types nothing and leaves the
+// request open for the next round; a reservation whose answer is lost may have
+// been committed, and recovering that case is not part of this delivery. A
+// typing that fails leaves the request reserved and uncertain: the line may have
+// reached the pane, so it is never typed again.
 func (w *loop) deliverResolved(ctx context.Context, log *slog.Logger, project *client.Project, c *remote.Credential, r api.CollabRequest, prompt Prompt) {
 	reserveCtx, stopReserve := bounded(ctx)
 	accepted, err := project.AnswerRequest(reserveCtx, "delivery-"+c.ExecutionID+"-"+r.ID, c.TaskID, r.ID, api.CollabAnswer{Status: api.RequestAccepted, ExpectedRevision: r.Revision, Note: "automatic delivery reserved; outcome is uncertain until observed"}, *c.Claim())
