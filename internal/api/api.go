@@ -326,8 +326,11 @@ type Handoff struct {
 	Decision       string    `json:"decision"`
 }
 
-// Collaboration request kinds and states. A request that proposes a dispatch
-// carries the kind of that dispatch; a request without one is a note.
+// Collaboration request kinds and states. Clients created by notify, by a
+// resume that turns into a notify, and by a non-holder dispatch prepare give a
+// request the kind of its dispatch (fix, sync or wrap-up), or note without one.
+// The server also keeps the other combinations older clients and kander request
+// produce (see checkRequestShape in internal/server).
 const (
 	RequestFix    = "fix"
 	RequestSync   = "sync"
@@ -367,14 +370,20 @@ type CollabRequest struct {
 	UpdatedAt        time.Time            `json:"updated_at"`
 }
 
-// RequestKindFor is the request kind of a request with the given dispatch
-// proposal: the dispatch kind (fix, sync or wrap-up), or note when no dispatch
-// is attached.
-func RequestKindFor(dispatch *board.DispatchInput) string {
+// RequestKindFor is the request kind that a client gives a request with the
+// given dispatch proposal: the dispatch kind (fix, sync or wrap-up), or note
+// when no dispatch is attached. Any other dispatch kind is refused, so a
+// request never shows a kind such as stop for a dispatch that cannot be
+// prepared.
+func RequestKindFor(dispatch *board.DispatchInput) (string, error) {
 	if dispatch == nil {
-		return RequestNote
+		return RequestNote, nil
 	}
-	return dispatch.Kind
+	switch dispatch.Kind {
+	case RequestFix, RequestSync, RequestWrapUp:
+		return dispatch.Kind, nil
+	}
+	return "", &Error{Code: CodeInvalidRequest, Message: fmt.Sprintf("dispatch kind %q is not fix, sync or wrap-up", dispatch.Kind)}
 }
 
 // NewCollabRequest is POST .../tasks/{task}/requests.

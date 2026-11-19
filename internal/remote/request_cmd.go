@@ -26,6 +26,17 @@ func RunRequest(args []string) int {
 	if len(args) < 2 {
 		return requestUsage()
 	}
+	// A new request is checked before the server is contacted: the kind and the
+	// message need no server, and neither error depends on one being reachable.
+	create := !slices.Contains([]string{"show", "list", "answer"}, args[0])
+	if create {
+		if len(args) < 3 || !slices.Contains([]string{api.RequestFix, api.RequestSync, api.RequestReview, api.RequestStop, api.RequestNote}, args[1]) {
+			return requestUsage()
+		}
+		if err := CheckRequestMessage(strings.Join(args[2:], " ")); err != nil {
+			return fail(err)
+		}
+	}
 	ctx, cancel := commandContext()
 	defer cancel()
 	s, _, err := open(ctx)
@@ -94,12 +105,6 @@ func RunRequest(args []string) int {
 		}
 		fmt.Fprintln(stdout, r.ID, r.Status)
 		return 0
-	}
-	if len(args) < 3 || !slices.Contains([]string{api.RequestFix, api.RequestSync, api.RequestReview, api.RequestStop, api.RequestNote}, args[1]) {
-		return requestUsage()
-	}
-	if err := CheckRequestMessage(strings.Join(args[2:], " ")); err != nil {
-		return fail(err)
 	}
 	logical := struct{ Task, Kind, Message string }{args[0], args[1], strings.Join(args[2:], " ")}
 	if recovered, found, err := s.RecoverRequest(ctx, logical); found || err != nil {

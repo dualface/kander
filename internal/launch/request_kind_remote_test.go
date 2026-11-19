@@ -2,9 +2,11 @@ package launch
 
 import (
 	"encoding/json"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/dualface/kander/internal/api"
@@ -49,6 +51,30 @@ func newRequestKindFixture(t *testing.T, slug string) requestKindFixture {
 	}
 	t.Setenv(remote.EnvClientHome, filepath.Join(t.TempDir(), "coordinator"))
 	return requestKindFixture{session: session, task: card.TaskID, reviewed: reviewed, evidence: file}
+}
+
+// countingTransport counts what reaches the server: every call, and the
+// creations of requests among them.
+type countingTransport struct {
+	next          http.RoundTripper
+	all, creating *atomic.Int32
+}
+
+func (c countingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	c.all.Add(1)
+	if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/requests") {
+		c.creating.Add(1)
+	}
+	return c.next.RoundTrip(r)
+}
+
+func countServerCalls(t *testing.T) (all, creating *atomic.Int32) {
+	t.Helper()
+	all, creating = &atomic.Int32{}, &atomic.Int32{}
+	saved := http.DefaultTransport
+	http.DefaultTransport = countingTransport{next: saved, all: all, creating: creating}
+	t.Cleanup(func() { http.DefaultTransport = saved })
+	return all, creating
 }
 
 func (f requestKindFixture) requests(t *testing.T) []api.CollabRequest {
@@ -127,6 +153,7 @@ func TestRemoteDispatchProposalKindEqualsTheDispatchKind(t *testing.T) {
 // refusal of the older server can only mean the kind.
 func TestRemoteNotifyChecksTheMessageBeforeSending(t *testing.T) {
 	f := newRequestKindFixture(t, "notify-message-check")
+	_, creating := countServerCalls(t)
 	for name, message := range map[string]string{"blank": " \t\n ", "long": strings.Repeat("a", api.MaxRequestMessage+1)} {
 		if _, err := NotifyRemote(f.task, message, "", "", true, 120, DispatchOptions{}); err == nil {
 			t.Errorf("%s message was sent", name)
@@ -138,8 +165,12 @@ func TestRemoteNotifyChecksTheMessageBeforeSending(t *testing.T) {
 			t.Errorf("blank %s proposal was sent", kind)
 		}
 	}
-	if requests := f.requests(t); len(requests) != 0 {
-		t.Fatalf("refused messages left requests: %+v", requests)
+	if requests := f.requests(t); len(requests) != 0 || creating.Load() != 0 {
+		t.Fatalf("refused messages reached the server: %d creations, requests %+v", creating.Load(), requests)
+	}
+	// A dispatch kind that is not fix, sync or wrap-up never becomes a request kind.
+	if _, err := NotifyRemote(f.task, "Stop", "", "", true, 120, DispatchOptions{ID: "kind-stop", Kind: "stop", Base: strings.Repeat("a", 40)}); !api.IsCode(err, api.CodeInvalidRequest) || creating.Load() != 0 {
+		t.Fatalf("a stop dispatch: %v (%d creations)", err, creating.Load())
 	}
 	if _, err := NotifyRemote(f.task, strings.Repeat("a", api.MaxRequestMessage), "", "", true, 120, DispatchOptions{}); err != nil {
 		t.Fatalf("a message at the bound: %v", err)
@@ -150,6 +181,7 @@ func TestRemoteNotifyChecksTheMessageBeforeSending(t *testing.T) {
 // before the request is created.
 func TestRemoteDispatchProposalChecksTheMessageBeforeSending(t *testing.T) {
 	f := newRequestKindFixture(t, "proposal-message-check")
+	_, creating := countServerCalls(t)
 	for name, message := range map[string]string{"blank": "  ", "long": strings.Repeat("a", api.MaxRequestMessage+1)} {
 		raw, err := json.Marshal(board.DispatchInput{ID: "proposal-" + name, TaskID: f.task, Kind: "sync", Base: strings.Repeat("a", 40), Message: message})
 		if err != nil {
@@ -163,8 +195,19 @@ func TestRemoteDispatchProposalChecksTheMessageBeforeSending(t *testing.T) {
 			t.Errorf("%s message was proposed", name)
 		}
 	}
-	if requests := f.requests(t); len(requests) != 0 {
-		t.Fatalf("refused messages left requests: %+v", requests)
+	raw, err := json.Marshal(board.DispatchInput{ID: "proposal-stop", TaskID: f.task, Kind: "stop", Base: strings.Repeat("a", 40), Message: "Stop"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "intent.json")
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := captureStdout(t, func() int { return RunDispatch([]string{"prepare", path}) }); code == 0 {
+		t.Error("a stop dispatch was proposed")
+	}
+	if requests := f.requests(t); len(requests) != 0 || creating.Load() != 0 {
+		t.Fatalf("refused proposals reached the server: %d creations, requests %+v", creating.Load(), requests)
 	}
 }
 
@@ -172,6 +215,7 @@ func TestRemoteDispatchProposalChecksTheMessageBeforeSending(t *testing.T) {
 // meaning without the dispatch evidence of notify.
 func TestRequestCommandCreatesNotesAndRefusesWrapUp(t *testing.T) {
 	f := newRequestKindFixture(t, "request-command-kinds")
+	all, _ := countServerCalls(t)
 	if code := remote.RunRequest([]string{f.task, "note", "the", "group", "advanced"}); code != 0 {
 		t.Fatalf("request note: exit %d", code)
 	}
@@ -179,22 +223,49 @@ func TestRequestCommandCreatesNotesAndRefusesWrapUp(t *testing.T) {
 	if len(requests) != 1 || requests[0].Kind != api.RequestNote || requests[0].Message != "the group advanced" || requests[0].Dispatch != nil {
 		t.Fatalf("note request: %+v", requests)
 	}
+	// None of the refused forms contacts the server.
+	before := all.Load()
 	if code := remote.RunRequest([]string{f.task, "wrap-up", "finish"}); code != 2 {
 		t.Fatalf("request wrap-up: exit %d, want 2", code)
 	}
 	for _, message := range [][]string{{" ", "\t"}, {strings.Repeat("a", api.MaxRequestMessage+1)}} {
-		if code := remote.RunRequest(append([]string{f.task, "note"}, message...)); code == 0 || code == 2 {
+		if code := remote.RunRequest(append([]string{f.task, "note"}, message...)); code != 1 {
 			t.Fatalf("request note %q: exit %d, want a local failure", message, code)
 		}
+	}
+	if all.Load() != before {
+		t.Fatalf("a refused request form contacted the server %d times", all.Load()-before)
 	}
 	if requests := f.requests(t); len(requests) != 1 {
 		t.Fatalf("a refused request was sent: %+v", requests)
 	}
-	if code, out := captureStdout(t, func() int { return remote.RunRequest([]string{"show", f.task, requests[0].ID, "--json"}) }); code != 0 || !strings.Contains(string(out), `"kind":"note"`) {
-		t.Fatalf("request show: exit %d %s", code, out)
+}
+
+// request list and request show print the kinds as stored, wrap-up included.
+func TestRequestCommandPrintsNoteAndWrapUpKinds(t *testing.T) {
+	f := newRequestKindFixture(t, "request-command-output")
+	if code := remote.RunRequest([]string{f.task, "note", "status", "only"}); code != 0 {
+		t.Fatalf("request note: exit %d", code)
 	}
-	if code, out := captureStdout(t, func() int { return remote.RunRequest([]string{"list", f.task}) }); code != 0 || !strings.Contains(string(out), "note") {
-		t.Fatalf("request list: exit %d %s", code, out)
+	wrapUp, err := NotifyRemote(f.task, "Deliver it", "", "", true, 120, DispatchOptions{ID: "output-wrap-up", Kind: "wrap-up", Base: strings.Repeat("a", 40)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, list := captureStdout(t, func() int { return remote.RunRequest([]string{"list", f.task}) })
+	kinds := map[string]string{}
+	for _, line := range strings.Split(string(list), "\n") {
+		if fields := strings.Fields(line); len(fields) > 1 {
+			kinds[fields[0]] = fields[1]
+		}
+	}
+	if code != 0 || len(kinds) != 2 || kinds[wrapUp.ID] != api.RequestWrapUp {
+		t.Fatalf("request list: exit %d\n%s", code, list)
+	}
+	for _, r := range f.requests(t) {
+		code, out := captureStdout(t, func() int { return remote.RunRequest([]string{"show", f.task, r.ID, "--json"}) })
+		if code != 0 || !strings.Contains(string(out), `"kind":"`+r.Kind+`"`) {
+			t.Fatalf("request show of %s: exit %d %s", r.Kind, code, out)
+		}
 	}
 }
 

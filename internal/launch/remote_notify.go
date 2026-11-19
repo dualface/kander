@@ -95,7 +95,7 @@ func notifyRemoteForExecution(task, message, messageFile, pane string, messageSe
 	if !durable && card.State == "review" && (board.TaskGroupFrom(card.Text) != "" || board.MetadataFrom(card.Text, "DISPATCH_ID") != "") {
 		return out, launchError("launch.review_dispatch_required", card.TaskID)
 	}
-	request := api.NewCollabRequest{Message: message}
+	request := api.NewCollabRequest{Kind: api.RequestNote, Message: message}
 	if durable {
 		evidence, err := readDispatchEvidence(options.EvidenceFile)
 		if err != nil {
@@ -137,12 +137,14 @@ func notifyRemoteForExecution(task, message, messageFile, pane string, messageSe
 			}
 		}
 		request.Dispatch = &board.DispatchInput{ID: options.ID, TaskID: card.TaskID, Kind: options.Kind, Base: options.Base, Message: message, Evidence: evidence}
+		if request.Kind, err = api.RequestKindFor(request.Dispatch); err != nil {
+			return out, err
+		}
 		if err := completeRemoteDispatchInput(ctx, session, cwd, request.Dispatch); err != nil {
 			return out, err
 		}
 		request.CardRevision, request.AcceptWithin = card.Revision, api.DurationOf(time.Duration(timeout*float64(time.Second)))
 	}
-	request.Kind = api.RequestKindFor(request.Dispatch)
 	if card.Claim == nil || !api.ClaimStands(card.Claim.Status) {
 		return out, &api.Error{Code: api.CodeLeaseInvalid, Message: config.Text("remote.git_owner_changed")}
 	}

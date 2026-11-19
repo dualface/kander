@@ -168,7 +168,10 @@ func runRemoteDispatch(args []string, cfg *config.Config) int {
 		if err := remote.CheckRequestMessage(command.Input.Message); err != nil {
 			return fail(err)
 		}
-		kind := api.RequestKindFor(command.Input)
+		kind, err := api.RequestKindFor(command.Input)
+		if err != nil {
+			return fail(err)
+		}
 		request, err := session.Project.CreateRequest(ctx, client.NewKey(), current.TaskID, api.NewCollabRequest{Kind: kind, Message: command.Input.Message, Dispatch: command.Input, CardRevision: current.Revision, TargetGeneration: current.Claim.Generation})
 		if err != nil {
 			return fail(remote.RequestCreateError(kind, err))
