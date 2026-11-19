@@ -77,12 +77,16 @@ func TestAuditChangesSuppressLiveness(t *testing.T) {
 				nowFn = func() time.Time { clockMu.Lock(); defer clockMu.Unlock(); return clock }
 				t.Cleanup(func() { nowFn = oldNow })
 				stop := make(chan struct{})
+				var stopOnce sync.Once
+				finish := func() { stopOnce.Do(func() { close(stop) }) }
 				// The event writer runs inside the output worker, and every queued line
 				// carries a write deadline counted from its enqueue time. A board
 				// transaction there would count against that deadline, so a slow move
 				// would fail the subscription. The moves run in their own goroutine,
 				// which is the only owner of movingEntry. At most one move is pending,
-				// because the next state change appears only after the move commits.
+				// because the next state change appears only after the move commits. A
+				// failed move leaves the board unchanged and no further change would come,
+				// so it ends the subscription instead of waiting for the next change.
 				moves := make(chan string, 1)
 				movesDone := make(chan struct{})
 				go func() {
@@ -91,6 +95,7 @@ func TestAuditChangesSuppressLiveness(t *testing.T) {
 						moved, err := board.MoveEntry(movingEntry, root, next)
 						if err != nil {
 							t.Errorf("move to %s: %v", next, err)
+							finish()
 							continue
 						}
 						movingEntry = moved
@@ -113,7 +118,7 @@ func TestAuditChangesSuppressLiveness(t *testing.T) {
 							t.Errorf("unexpected liveness without working tasks: %+v", event)
 						}
 						if heartbeats == 2 {
-							close(stop)
+							finish()
 						}
 						return nil
 					case "state-change":
@@ -125,7 +130,7 @@ func TestAuditChangesSuppressLiveness(t *testing.T) {
 							t.Errorf("incorrect state change: %+v", event)
 						}
 						if changes == 12 {
-							close(stop)
+							finish()
 							return nil
 						}
 					}
