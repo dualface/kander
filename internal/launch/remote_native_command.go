@@ -20,11 +20,6 @@ type nativeResumeIntent struct {
 // The implicit decision must be durable before a handoff can change the current
 // generation. A new invocation reads this command record before agent probing.
 func runImplicitNativeResume(ctx context.Context, session *remote.Session, card api.Task, launcher, text string, timeout float64, options DispatchOptions) int {
-	if command.JSON() && nativeResumeLaunches(ctx, session, card) {
-		if err := RefuseTerminalLauncher(launcher); err != nil {
-			return fail(err)
-		}
-	}
 	journal, _, err := session.RetainAction("native-resume-command", struct {
 		Task, Launcher, Message string
 		Options                 DispatchOptions
@@ -43,7 +38,19 @@ func runImplicitNativeResume(ctx context.Context, session *remote.Session, card 
 			return fail(err)
 		}
 	}
+	// The launcher is checked at each point where this command would start an agent, after the
+	// receipt and the one probe of the executor decided that it does, and before the receipt
+	// changes: a replay of a completed receipt and a message to a live executor start nothing.
+	refuseTerminal := func() error {
+		if !command.JSON() {
+			return nil
+		}
+		return RefuseTerminalLauncher(launcher)
+	}
 	if journal.Value.Phase == "pending" {
+		if err := refuseTerminal(); err != nil {
+			return fail(err)
+		}
 		return executeRemoteResume(saved.Input, saved.Options, saved.NewRound, timeout, journal)
 	}
 	ownedStopped := found && !credential.Lost && card.Claim != nil && api.ClaimStands(card.Claim.Status) && card.Claim.ClientID == session.Client.ClientID() && card.Claim.ExecutionID == credential.ExecutionID && observeLocalExecution(ctx, credential).Status == "stopped"
@@ -53,6 +60,9 @@ func runImplicitNativeResume(ctx context.Context, session *remote.Session, card 
 		}
 		// A later confirmed stop is a new intentional continuation. Keep the child
 		// task-launch receipt; rotate only this command's next decision identity.
+		if err := refuseTerminal(); err != nil {
+			return fail(err)
+		}
 		journal.Value.ExecutionID = remote.NewExecutionID()
 		journal.Value.Result = nil
 		journal.Value.Phase = "prepared"
@@ -80,22 +90,11 @@ func runImplicitNativeResume(ctx context.Context, session *remote.Session, card 
 		}
 		return 0
 	}
+	if err := refuseTerminal(); err != nil {
+		return fail(err)
+	}
 	options.Decision = "native-resume:" + journal.Value.ExecutionID
 	return runRemoteResumeLaunch(ctx, session, card, nil, launcher, text, timeout, options, journal)
-}
-
-// nativeResumeLaunches reports, without writing anything, whether an implicit resume of card
-// continues the stopped executor of this host (it launches an agent) instead of delivering its
-// message to a live one. It is the condition under which runImplicitNativeResume launches.
-func nativeResumeLaunches(ctx context.Context, session *remote.Session, card api.Task) bool {
-	credential, found, err := session.Credential(card.TaskID)
-	if err != nil || !found || credential.Lost || card.Claim == nil || !api.ClaimStands(card.Claim.Status) ||
-		card.Claim.ClientID != session.Client.ClientID() || card.Claim.ExecutionID != credential.ExecutionID ||
-		observeLocalExecution(ctx, credential).Status != "stopped" {
-		return false
-	}
-	record, err := session.Project.ExecutionRecord(ctx, card.TaskID)
-	return err == nil && !record.StartUnfinished()
 }
 
 func reportNativeReceipt(task string) int {

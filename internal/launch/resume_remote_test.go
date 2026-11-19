@@ -215,6 +215,91 @@ func TestRemoteResumeOfLiveAgentWithJSONIgnoresATerminalDefaultLauncher(t *testi
 	}
 }
 
+// withTerminalDefaultLauncher makes the default launcher of the configuration one that takes the
+// terminal, and returns the function that restores it.
+func withTerminalDefaultLauncher(t *testing.T) (restore func()) {
+	t.Helper()
+	loaded := loadEffective
+	loadEffective = func() (*config.Config, error) {
+		cfg, err := loaded()
+		if err != nil {
+			return nil, err
+		}
+		terminal := *cfg
+		terminal.Launcher = "foreground"
+		return &terminal, nil
+	}
+	return func() { loadEffective = loaded }
+}
+
+// A stopped executor of this host is continued by an implicit resume. With --json and a default
+// launcher that takes the terminal the command is refused before its receipt changes, so the
+// same command without --json launches; and once it completed, repeating it with --json replays
+// the receipt even after the continued executor stopped too, because a replay starts nothing.
+func TestImplicitNativeResumeWithJSONRefusesBeforeTheReceiptAndReplaysCompletedOnes(t *testing.T) {
+	skipOnWindows(t)
+	session, task, _ := remoteGitFixture(t, "implicit-native-json")
+	root, err := session.LocalDataRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("KANBAN_LAUNCH_CWD", filepath.Join(root, "worktrees", task.TaskID, "g1"))
+	if _, err := StartRemote("claude", "tmux", task.TaskID); err != nil {
+		t.Fatal(err)
+	}
+	markRemoteExecutorStopped(t, session, task.TaskID)
+	args := []string{task.TaskID, "--message", "Continue after the stop"}
+	log := os.Getenv("KANBAN_TMUX_LOG")
+	prior, _ := os.ReadFile(log)
+
+	restore := withTerminalDefaultLauncher(t)
+	code, stdout, stderr := commandtest.Capture(func() int { return RunResumeRemote(append([]string{"--json"}, args...)) })
+	restore()
+	if code != 2 || stdout != "" || !strings.Contains(stderr, "interactive_required") {
+		t.Fatalf("refusal: code=%d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+	if actual, _ := os.ReadFile(log); !bytes.Equal(prior, actual) {
+		t.Fatal("the refused command invoked the terminal")
+	}
+	// The refusal left no pending receipt: the same command without --json continues the executor,
+	// in the worktree of the next generation.
+	t.Setenv("KANBAN_LAUNCH_CWD", filepath.Join(root, "worktrees", task.TaskID, "g2"))
+	if code := RunResumeRemote(args); code != 0 {
+		t.Fatalf("retry without --json: exit %d", code)
+	}
+	if actual, _ := os.ReadFile(log); bytes.Equal(prior, actual) {
+		t.Fatal("the retry did not launch")
+	}
+	// The continued executor stops: repeating the command is a new intentional continuation, which
+	// starts an agent, so --json refuses it before the receipt changes.
+	markRemoteExecutorStopped(t, session, task.TaskID)
+
+	restore = withTerminalDefaultLauncher(t)
+	code, stdout, stderr = commandtest.Capture(func() int { return RunResumeRemote(append([]string{"--json"}, args...)) })
+	restore()
+	if code != 2 || !strings.Contains(stderr, "interactive_required") {
+		t.Fatalf("new continuation: code=%d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+	// Another command takes the card over. When that executor has stopped too, the completed receipt
+	// of the implicit command belongs to an older execution, so repeating it is a replay that starts
+	// nothing, and --json must not refuse it for the launcher.
+	t.Setenv("KANBAN_LAUNCH_CWD", filepath.Join(root, "worktrees", task.TaskID, "g3"))
+	if code := RunResumeRemote([]string{task.TaskID, "--agent", "claude", "--decision", "test-takeover", "--message", "Take over"}); code != 0 {
+		t.Fatalf("takeover: exit %d", code)
+	}
+	markRemoteExecutorStopped(t, session, task.TaskID)
+	afterTakeover, _ := os.ReadFile(log)
+	restore = withTerminalDefaultLauncher(t)
+	defer restore()
+	code, stdout, stderr = commandtest.Capture(func() int { return RunResumeRemote(append([]string{"--json"}, args...)) })
+	if code != 0 || strings.Contains(stderr, "interactive_required") || !strings.Contains(stdout, "replayed") {
+		t.Fatalf("replay: code=%d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+	if actual, _ := os.ReadFile(log); !bytes.Equal(afterTakeover, actual) {
+		t.Fatal("the replay invoked the terminal")
+	}
+}
+
 func TestRemoteReleaseAndFreshTakeoverAcrossIndependentClones(t *testing.T) {
 	skipOnWindows(t)
 	session, task, forbidden := remoteGitFixture(t, "cross-clone-takeover")
