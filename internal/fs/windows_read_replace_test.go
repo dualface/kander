@@ -23,7 +23,7 @@ type leafReader struct {
 var leafReaders = []leafReader{
 	{"ReadRegularFile", func(root, path string) (string, bool, error) {
 		data, err := ReadRegularFile(root, path)
-		return string(data), data != nil, err
+		return string(data), err == nil || data != nil, err
 	}},
 	{"ReadRegularFileIfExists", func(root, path string) (string, bool, error) {
 		data, found, err := ReadRegularFileIfExists(root, path)
