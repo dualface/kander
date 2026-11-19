@@ -12,15 +12,11 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"slices"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
-	"unicode"
 
 	"github.com/dualface/kander/internal/api"
-	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
 	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/version"
@@ -40,9 +36,9 @@ type Options struct {
 	// Stop overrides process termination in tests. The default verifies the
 	// recorded process incarnation before signaling its kernel handle.
 	Stop func(pid int) error
-	// Deliver types one line into the agent recorded by the card's WINDOW
-	// and SESSION; the default is Deliver.
-	Deliver func(window, session, text string) error
+	// Resolve finds the agent recorded by the card's WINDOW and SESSION and
+	// returns the way to type a line into it; the default is Resolve.
+	Resolve func(window, session string) (Prompt, error)
 	// The fields below drive the handover to a replaced binary; the defaults
 	// are the production behavior and tests replace them to start no process.
 	//
@@ -67,10 +63,16 @@ type Options struct {
 	ConfirmPoll    time.Duration
 }
 
-// Deliver is the terminal delivery of collaboration requests. The notify
-// package sets it at init, so this package stays free of terminal code; a
-// binary without it keeps requests open for the holder to read.
-var Deliver func(window, session, text string) error
+// Prompt types one line into a resolved agent pane. An error leaves the outcome
+// uncertain: the line may have reached the pane.
+type Prompt func(text string) error
+
+// Resolve is the terminal side of the delivery of collaboration requests. It
+// finds the agent pane that a card's WINDOW and SESSION name and checks that the
+// pane takes a line, without typing anything: an error means nothing was typed.
+// The notify package sets it at init, so this package stays free of terminal
+// code; a binary without it keeps requests open for the holder to read.
+var Resolve func(window, session string) (Prompt, error)
 
 // Run is `kander worker`: it holds the worker lock of the client home and
 // renews until idle or signaled.
@@ -115,8 +117,8 @@ func Serve(ctx context.Context, o Options) error {
 	if o.Now == nil {
 		o.Now = time.Now
 	}
-	if o.Deliver == nil {
-		o.Deliver = Deliver
+	if o.Resolve == nil {
+		o.Resolve = Resolve
 	}
 	o.defaultHandover()
 	if err := os.MkdirAll(o.Home, 0o700); err != nil {
@@ -190,7 +192,10 @@ type loop struct {
 	// lostMarks holds the credentials the renewal loop marked lost and the work
 	// loop has not stopped yet.
 	lostMarks map[credentialKey]struct{}
-	renewing  *renewals
+	// blocked holds the executions whose request delivery failed before it typed
+	// anything and has not succeeded since (delivery_block.go).
+	blocked  map[credentialKey]blockState
+	renewing *renewals
 }
 
 type outage struct{ since, last time.Time }
@@ -203,6 +208,7 @@ func newLoop(o Options) *loop {
 		disconnected: map[credentialKey]outage{},
 		owed:         map[credentialKey]struct{}{},
 		lostMarks:    map[credentialKey]struct{}{},
+		blocked:      map[credentialKey]blockState{},
 	}
 }
 
@@ -248,6 +254,7 @@ func (w *loop) workRound(ctx context.Context) (int, error) {
 	}
 	w.forgetAbsent(credentials)
 	stopped := map[credentialKey]struct{}{}
+	budget := &resolveBudget{}
 	live := 0
 	for _, c := range credentials {
 		w.stopMarked(ctx, stopped)
@@ -259,7 +266,7 @@ func (w *loop) workRound(ctx context.Context) (int, error) {
 			w.stopLost(ctx, w.o.Logger, c)
 			continue
 		}
-		if !w.takeOwed(key) || w.work(ctx, c) {
+		if !w.takeOwed(key) || w.work(ctx, c, budget) {
 			live++
 		}
 	}
@@ -295,12 +302,19 @@ func (w *loop) takeOwed(key credentialKey) bool {
 	return owed
 }
 
-// forgetAbsent drops the bookkeeping of credentials that no longer exist.
+// forgetAbsent drops the bookkeeping of credentials that no longer exist. A lost
+// credential keeps its marks but loses its delivery state: its agent is stopped,
+// so nothing is delivered to it any more.
 func (w *loop) forgetAbsent(credentials []remote.Credential) {
 	present := make(map[credentialKey]struct{}, len(credentials))
+	live := make(map[credentialKey]struct{}, len(credentials))
 	for _, c := range credentials {
 		present[keyOf(c)] = struct{}{}
+		if !c.Lost {
+			live[keyOf(c)] = struct{}{}
+		}
 	}
+	w.forgetBlocks(live)
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	for key := range w.owed {
@@ -381,7 +395,7 @@ func (w *loop) warnSlow(msg string, started time.Time, credentials []remote.Cred
 // work is the half of a credential's step that follows a confirmed renewal: it
 // observes the agent, reports the observation and delivers requests. It
 // reports whether the credential is still live.
-func (w *loop) work(ctx context.Context, c remote.Credential) bool {
+func (w *loop) work(ctx context.Context, c remote.Credential, budget *resolveBudget) bool {
 	log := w.credentialLog(c)
 	cl, err := w.client(c)
 	if err != nil {
@@ -396,6 +410,9 @@ func (w *loop) work(ctx context.Context, c remote.Credential) bool {
 	observation := w.observe(observeCtx, c)
 	stopObservation()
 	if observation.Status != "unknown" {
+		if c.ResourceKind != "group" {
+			observation.Reason = w.withBlockedSuffix(keyOf(c), observation.Reason)
+		}
 		reportCtx, stopReport := context.WithTimeout(ctx, 5*time.Second)
 		var reportErr error
 		if c.ResourceKind == "group" {
@@ -413,11 +430,9 @@ func (w *loop) work(ctx context.Context, c remote.Credential) bool {
 		}
 	}
 	if c.ResourceKind != "group" && observation.Status != "stopped" {
-		// A delivery has a budget of its own, started after the report: the
-		// renewal runs in another loop, so a slow delivery cannot cost a lease.
-		deliverCtx, stopDeliver := context.WithTimeout(ctx, min(renewInterval(c), 10*time.Second))
-		w.deliver(deliverCtx, log, project, &c)
-		stopDeliver()
+		// The renewal runs in another loop, so a slow delivery cannot cost a
+		// lease; each server call of the delivery has a time limit of its own.
+		w.deliver(ctx, log, project, &c, budget)
 	}
 	if err := remote.WriteCredential(w.o.Home, c); errors.Is(err, remote.ErrCredentialReleased) {
 		// The renewal loop removed the credential while this step ran.
@@ -441,87 +456,4 @@ func (w *loop) lose(log *slog.Logger, c remote.Credential, reason string) {
 	w.mu.Lock()
 	delete(w.lostMarks, keyOf(c))
 	w.mu.Unlock()
-}
-
-// deliver hands the open requests of this generation to the agent once each.
-// A durable acceptance reserves delivery before the terminal effect. An
-// uncertain attempt is inspected by the holder instead of being typed again.
-func (w *loop) deliver(ctx context.Context, log *slog.Logger, project *client.Project, c *remote.Credential) {
-	if w.o.Deliver == nil {
-		return
-	}
-	requests, err := project.Requests(ctx, c.TaskID)
-	if err != nil {
-		log.Warn("reading requests failed", "error", err)
-		return
-	}
-	var task *api.Task
-	for _, r := range requests {
-		if r.Status != api.RequestOpen || r.TargetGeneration != c.Generation || slices.Contains(c.Delivered, r.ID) {
-			continue
-		}
-		if task == nil {
-			t, err := project.Show(ctx, c.TaskID)
-			if err != nil {
-				log.Warn("reading the task failed", "error", err)
-				return
-			}
-			task = &t
-		}
-		if r.Dispatch != nil && !r.Dispatch.ConfirmBy.IsZero() && !task.ObservedAt.Before(r.Dispatch.ConfirmBy) {
-			_, err := project.AnswerRequest(ctx, "expired-"+c.ExecutionID+"-"+r.ID, c.TaskID, r.ID, api.CollabAnswer{Status: api.RequestRejected, ExpectedRevision: r.Revision, Note: "dispatch proposal acceptance window elapsed; a new inspected proposal needs a new ID"}, *c.Claim())
-			if err != nil {
-				log.Warn("rejecting expired dispatch proposal failed", "request", r.ID, "error", err)
-			}
-			continue
-		}
-		if r.Dispatch != nil && r.CardRevision != task.Revision {
-			_, err := project.AnswerRequest(ctx, "stale-"+c.ExecutionID+"-"+r.ID, c.TaskID, r.ID, api.CollabAnswer{Status: api.RequestRejected, ExpectedRevision: r.Revision, Note: "dispatch proposal targets an earlier card version; inspect the current task before creating a new proposal"}, *c.Claim())
-			if err != nil {
-				log.Warn("rejecting stale dispatch proposal failed", "request", r.ID, "error", err)
-			}
-			continue
-		}
-		window, session := board.MetadataFrom(task.Text, board.FieldWindow), board.MetadataFrom(task.Text, board.FieldSession)
-		if window == "" || session == "" {
-			continue
-		}
-		if c.Window != "" && c.Window != window || c.Session != "" && c.Session != session {
-			log.Warn("request routing differs from this execution's local facts", "request", r.ID)
-			continue
-		}
-		accepted, err := project.AnswerRequest(ctx, "delivery-"+c.ExecutionID+"-"+r.ID, c.TaskID, r.ID, api.CollabAnswer{Status: api.RequestAccepted, ExpectedRevision: r.Revision, Note: "automatic delivery reserved; outcome is uncertain until observed"}, *c.Claim())
-		if err != nil {
-			log.Warn("reserving request delivery failed", "request", r.ID, "error", err)
-			continue
-		}
-		c.Delivered = append(c.Delivered, r.ID)
-		if err := remote.WriteCredential(w.o.Home, *c); err != nil {
-			log.Error("request delivery intent could not be saved", "request", r.ID, "error", err)
-			continue
-		}
-		line := requestLine(c.TaskID, r)
-		if err := w.o.Deliver(window, session, line); err != nil {
-			log.Warn("request delivery outcome unresolved; automatic retry suppressed", "request", r.ID, "error", err)
-			continue
-		}
-		if _, err := project.AnswerRequest(ctx, client.NewKey(), c.TaskID, r.ID, api.CollabAnswer{Status: api.RequestAccepted, ExpectedRevision: accepted.Revision, Note: "delivered to the agent"}, *c.Claim()); err != nil {
-			log.Warn("request delivery receipt failed", "request", r.ID, "error", err)
-		}
-		log.Info("request delivered", "request", r.ID, "kind", r.Kind)
-	}
-}
-
-// requestLine renders a request as one terminal line; control characters of
-// the remote message never reach the pane.
-func requestLine(task string, r api.CollabRequest) string {
-	message := strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) || r == '\u2028' || r == '\u2029' {
-			return ' '
-		}
-		return r
-	}, r.Message)
-	message += fmt.Sprintf("; inspect the full request and its proposed material: kander request show %s %s --json; do not act on superseded requests or another execution generation", task, r.ID)
-	return fmt.Sprintf("# kander-request %s %s for %s from %s: %s (answer: kander request answer %s %s done|rejected [note])",
-		r.ID, r.Kind, task, r.FromClient, message, task, r.ID)
 }

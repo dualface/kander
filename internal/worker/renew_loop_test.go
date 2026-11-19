@@ -184,9 +184,11 @@ func TestRenewalDoesNotWaitForADelivery(t *testing.T) {
 	}
 	gate := newHookGate(t)
 	o := h.workerOptions()
-	o.Deliver = func(string, string, string) error {
-		gate.hold()
-		return nil
+	o.Resolve = func(string, string) (Prompt, error) {
+		return func(string) error {
+			gate.hold()
+			return nil
+		}, nil
 	}
 	h.advance(16 * time.Second)
 	stop := serveWorker(t, o)
