@@ -339,6 +339,10 @@ func openRelative(
 	return handle, nil
 }
 
+// leafOpenHook runs for every leaf open that still probes and reopens, between the probe and the reopen. Tests use it
+// to change the leaf inside that window; production leaves it nil.
+var leafOpenHook func(path string, access uint32)
+
 func tryOpenLeaf(
 	parent windows.Handle,
 	name, path string,
@@ -368,6 +372,9 @@ func tryOpenLeaf(
 	if err != nil {
 		closeHandle(probe)
 		return 0, err
+	}
+	if leafOpenHook != nil {
+		leafOpenHook(path, access)
 	}
 	result, err := openRelative(parent, name, path, access, false, expected, shareWrite, shareDelete, kindAny)
 	closeHandle(probe)
