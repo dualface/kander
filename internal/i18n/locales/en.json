@@ -482,7 +482,7 @@
   "liveness.reason": "reason={{.V0}}",
   "liveness.refresh_interval_must_be_greater_than_0": "Refresh interval must be greater than 0, finite, and at least 1e-9 but less than 9223372036.854776 seconds",
   "liveness.session_identity_mismatch": "session identity mismatch",
-  "liveness.session_identity_was_not_reported_direct_delivery_is_unavailable": "session identity was not reported; direct delivery is unavailable and notify will resume; reopen the container to report again",
+  "liveness.session_identity_was_not_reported_direct_delivery_is_unavailable": "session identity was not reported: the terminal shows no session marker this kander reads (herdr-core: label kander.session); direct delivery is unavailable; check the marker and run kander doctor to compare the background worker version",
   "liveness.status": "status={{.V0}}",
   "liveness.suggestion_kander_notify_message_status": "suggestion=kander notify {{.V0}} --message <status>",
   "liveness.suggestion_kander_resume_agent_other_message_status": "suggestion=kander resume [--agent <other>] {{.V0}} --message <status>",

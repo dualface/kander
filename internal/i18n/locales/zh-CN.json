@@ -482,7 +482,7 @@
   "liveness.reason": "原因={{.V0}}",
   "liveness.refresh_interval_must_be_greater_than_0": "扫描间隔必须大于 0、为有限数，且至少为 1e-9 秒并小于 9223372036.854776 秒",
   "liveness.session_identity_mismatch": "会话身份不匹配",
-  "liveness.session_identity_was_not_reported_direct_delivery_is_unavailable": "会话身份未上报, 直投不可用, notify 将走恢复通道; 重开容器可重新上报",
+  "liveness.session_identity_was_not_reported_direct_delivery_is_unavailable": "会话身份未上报: 终端没有本 kander 能读取的会话标记 (如 herdr-core 的标签 kander.session); 直投不可用; 请检查该标记, 并运行 kander doctor 比较后台 worker 的版本",
   "liveness.status": "状态={{.V0}}",
   "liveness.suggestion_kander_notify_message_status": "建议=kander notify {{.V0}} --message <现状>",
   "liveness.suggestion_kander_resume_agent_other_message_status": "建议=kander resume [--agent <其他>] {{.V0}} --message <现状>",
