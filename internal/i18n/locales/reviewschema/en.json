@@ -89,7 +89,7 @@
   "review.schema.extend-plan.expected_revision": "Current plan revision. The command rejects a stale value.",
   "review.schema.extend-plan.plan_id": "ID of the existing plan.",
   "review.schema.extend-plan.rebind_cycles": "Map of task ID to the cycle digest from review progress. It must name exactly the members whose cycle changed. Mutually exclusive with sync_targets, with drop_batches, and with batch or seal.",
-  "review.schema.extend-plan.seal": "When true, every plan member must already belong to a batch. May be sent together with batch. Mutually exclusive with rebind_cycles and with sync_targets.",
+  "review.schema.extend-plan.seal": "When true, every plan member that is not excluded must already belong to a batch. May be sent together with batch. Mutually exclusive with rebind_cycles and with sync_targets.",
   "review.schema.extend-plan.sync_targets": "Map of batch ID to that batch's current target commit. The value must equal the runtime batch target, and the plan copy must still differ. Mutually exclusive with rebind_cycles, with drop_batches, and with batch or seal.",
   "review.schema.missing": "schema field has no description: {{.V0}}",
   "review.schema.plan.author": "Non-empty name of the caller creating the plan.",

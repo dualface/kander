@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fix (review): a review plan can now be sealed while a member that moved into `archived/` or `trash/` is in none of its batches, whether no batch ever named it or `drop_batches` removed the batch that did. The seal used to refuse with `seal requires every member assigned`, a batch could not name the excluded member (`batch member is terminal`), and the other members could never reach `done`, because `move done` waits for a sealed plan. The seal now skips members with a member exclusion record, as the completion gate and the cycle drift check already did, and still refuses with the same error while a member that is not excluded has no batch. The rules, `docs/review-disposition*.md`, and `kander review extend-plan --schema` now say the seal needs every member that is not excluded in a batch.
+
 ## v1.4.5 — 2026-11-18
 
 - herdr-core launcher: every tab Kander opens is now named by its window label, so all launches share one format: `kb-<card title>` for a task agent (start, resume takeover, notify recovery), `orchestrate-<first task ID>` for an orchestrator, and the existing `chat-` and `issue-` labels. A task agent tab no longer shows the whole card title, and an orchestrator tab no longer shows `<first reference> +N`. Terminal definitions still receive `{title}`, which now always equals `{label}` for Kander's own launches.

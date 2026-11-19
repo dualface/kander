@@ -89,7 +89,7 @@
   "review.schema.extend-plan.expected_revision": "計画の現在のリビジョン。古い値は拒否されます。",
   "review.schema.extend-plan.plan_id": "既存の計画 ID。",
   "review.schema.extend-plan.rebind_cycles": "タスク ID から review progress のサイクル要約への対応。変化したメンバーちょうどを指名します。sync_targets、drop_batches、および batch または seal とは同時に使えません。",
-  "review.schema.extend-plan.seal": "true のとき、全計画メンバーが既にいずれかのバッチに属していなければなりません。batch と同時に送れます。rebind_cycles および sync_targets とは同時に使えません。",
+  "review.schema.extend-plan.seal": "true のとき、除外されていない全計画メンバーが既にいずれかのバッチに属していなければなりません。batch と同時に送れます。rebind_cycles および sync_targets とは同時に使えません。",
   "review.schema.extend-plan.sync_targets": "バッチ ID からそのバッチの現在の目標 commit。値は実行中バッチの目標と一致し、計画側のコピーはまだ異なっていなければなりません。rebind_cycles、drop_batches、および batch または seal とは同時に使えません。",
   "review.schema.missing": "schema フィールドの説明がありません: {{.V0}}",
   "review.schema.plan.author": "計画を作る呼び出し側の名前。空にできません。",
