@@ -350,6 +350,15 @@ func (p *project) move(key, id string, req api.Move, h holder) outcome {
 				return nil
 			}
 		}
+		if from == "review" && req.State == "working" && req.Authorization.DispatchID == "" {
+			ownership := validate
+			validate = func(tx *board.Transaction) error {
+				if err := ownership(tx); err != nil {
+					return err
+				}
+				return p.refuseBareMoveOfProposal(tx, entry.TaskID, claim)
+			}
+		}
 		if p.info.Remote != "" && from == "working" && req.State == "review" {
 			ownership := validate
 			validate = func(tx *board.Transaction) error {
