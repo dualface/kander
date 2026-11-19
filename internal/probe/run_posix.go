@@ -23,10 +23,26 @@ func (tree *processTree) start(ctx context.Context) error {
 	return tree.cmd.Start()
 }
 
+// killGroup and groupOnlyZombies are variables so tests can inject them.
+var (
+	killGroup        = syscall.Kill
+	groupOnlyZombies = osGroupOnlyZombies
+)
+
 func (tree *processTree) kill() error {
-	err := syscall.Kill(-tree.cmd.Process.Pid, syscall.SIGKILL)
+	pgid := tree.cmd.Process.Pid
+	err := killGroup(-pgid, syscall.SIGKILL)
 	if errors.Is(err, syscall.ESRCH) {
 		return nil
+	}
+	if errors.Is(err, syscall.EPERM) {
+		// macOS refuses to signal a group whose only members are zombies (or that
+		// just lost its last one). Nothing there can run or hold a pipe, so the
+		// kill has nothing left to do. Any live member, or a check that cannot
+		// finish, keeps the original error.
+		if only, checkErr := groupOnlyZombies(pgid); checkErr == nil && only {
+			return nil
+		}
 	}
 	return err
 }
