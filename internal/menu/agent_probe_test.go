@@ -52,12 +52,17 @@ func TestDoctorAndPanelProbeAgentOverride(t *testing.T) {
 // sequential findAgents normally fails with a readable value instead of the 5
 // second probe timeout. Under heavy load the polls take longer than nominal: a
 // late third probe can still end the barrier early, and the probe timeout can
-// come first. PATH holds only the fake directory, so the real agent CLIs of the
-// machine are not probed, and the scripts call only shell builtins and
-// /bin/sleep because they run with that PATH.
+// come first. PATH holds only the fake directory and the reviewer override
+// variables are cleared, so the real agent CLIs of the machine are not probed:
+// limiting PATH alone is not enough, because an absolute <NAME>_REVIEW_BIN does
+// not consult PATH. The scripts call only shell builtins and /bin/sleep because
+// they run with that PATH.
 func TestFindAgentsProbesConcurrently(t *testing.T) {
 	h := newHarness(t)
 	t.Setenv("PATH", h.fakeBin)
+	for _, name := range config.ExecutionAgents {
+		t.Setenv(strings.ToUpper(name)+"_REVIEW_BIN", "")
+	}
 	started := filepath.Join(h.root, "probe-started")
 	if err := os.MkdirAll(started, 0o755); err != nil {
 		t.Fatal(err)
