@@ -175,11 +175,13 @@ func (r *rig) options() Options {
 		Logger: slog.New(slog.NewJSONHandler(r.sink, nil)),
 		Now:    r.now,
 		Stop:   func(int) error { return nil },
-		Deliver: func(window, session, text string) error {
-			r.mu.Lock()
-			defer r.mu.Unlock()
-			r.delivered = append(r.delivered, text)
-			return nil
+		Resolve: func(window, session string) (Prompt, error) {
+			return func(text string) error {
+				r.mu.Lock()
+				defer r.mu.Unlock()
+				r.delivered = append(r.delivered, text)
+				return nil
+			}, nil
 		},
 		Executable: func() (string, error) { return r.exe, nil },
 		Identity: func(path string) (os.FileInfo, error) {

@@ -72,12 +72,18 @@ func (h *harness) workerOptions() Options {
 		defer h.mu.Unlock()
 		h.stopped = append(h.stopped, pid)
 		return nil
-	}, Deliver: func(window, session, text string) error {
+	}, Resolve: h.resolveRecording}
+}
+
+// resolveRecording is the default target resolution of the harness: it always
+// resolves, and the prompt it returns records the lines typed.
+func (h *harness) resolveRecording(window, session string) (Prompt, error) {
+	return func(text string) error {
 		h.mu.Lock()
 		defer h.mu.Unlock()
 		h.lines = append(h.lines, text)
 		return nil
-	}}
+	}, nil
 }
 
 // pass is one tick of the worker with the loops run in turn: the renewals

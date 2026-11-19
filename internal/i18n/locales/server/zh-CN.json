@@ -193,5 +193,6 @@
   "remote.server_version_warning": "警告：本机服务端版本 {{.V0}} 与客户端 {{.V1}} 不同；继续执行。可运行 kander server restart 更新。",
   "remote.server_restart_required": "服务端 {{.V0}} 与客户端 {{.V1}} 的协议不兼容。请运行 kander server restart。",
   "remote.server_restart_prompt": "本机服务端版本：{{.V0}}；客户端版本：{{.V1}}。现在重启服务端吗？[Y/n] ",
+  "worker.request_delivery_blocked": "投递在发送前受阻（自 {{.V2}} 起）；等待中的请求 {{.V0}} 条（首条 {{.V1}}）：{{.V3}}",
   "config.server_default": "默认"
 }
