@@ -1,11 +1,11 @@
 package remote
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -46,16 +46,11 @@ type ActionJournal struct {
 func (a *ActionJournal) Save() error  { return a.save() }
 func (a *ActionJournal) Close() error { return a.close() }
 
-// BeginAction serializes one logical invocation. Callers must inspect existing
-// receipts before changing central state or performing any terminal operation.
+// BeginAction serializes one logical invocation and starts a new attempt over a failed receipt.
+// Callers must inspect existing receipts before changing central state or performing any
+// terminal operation. BeginActionGated with retryFailed false keeps a failed receipt instead.
 func (s *Session) BeginAction(kind string, logical any) (journal *ActionJournal, fresh bool, err error) {
 	return s.beginAction(kind, logical, true)
-}
-
-// RetainAction preserves a conclusively failed attempt as well. An implicit
-// native continuation must not turn a recovery retry into a fresh launch.
-func (s *Session) RetainAction(kind string, logical any) (journal *ActionJournal, fresh bool, err error) {
-	return s.beginAction(kind, logical, false)
 }
 
 // actionName is the file name of the receipt of one logical invocation. Every reader and writer
@@ -86,12 +81,15 @@ func decodeAction(data []byte, kind string) (LocalAction, error) {
 // anything: not even the directory that holds the receipts. found is false when the invocation
 // has no receipt yet. A receipt is written atomically, so the read never sees a partial one.
 func (s *Session) PeekAction(kind string, logical any) (action LocalAction, found bool, err error) {
+	return peekAction(s.Home, filepath.Join(s.Home, "projects", projectNamespace(s.ServerURL, s.Info.ID)), kind, logical)
+}
+
+func peekAction(home, root, kind string, logical any) (action LocalAction, found bool, err error) {
 	name, err := actionName(kind, logical)
 	if err != nil {
 		return action, false, err
 	}
-	root := filepath.Join(s.Home, "projects", projectNamespace(s.ServerURL, s.Info.ID))
-	data, found, err := fs.ReadRegularFileIfExists(s.Home, filepath.Join(root, "launch-actions", name))
+	data, found, err := fs.ReadRegularFileIfExists(home, filepath.Join(root, "launch-actions", name))
 	if err != nil || !found {
 		return action, false, err
 	}
@@ -99,60 +97,69 @@ func (s *Session) PeekAction(kind string, logical any) (action LocalAction, foun
 	return action, err == nil, err
 }
 
-// MayReplayAction reports, reading only, whether this host may hold a receipt of the given kind
-// for task, in any project: a receipt that names the task, or one that does not name any task
-// yet. It needs no session. It is false when the host has no client directory or no receipt of
-// the kind, so a command that is about to be refused can be refused before a session creates the
-// client identity or registers the project. An empty task matches every receipt of the kind.
-func MayReplayAction(kind, task string) (bool, error) {
+// ReadOnlyHost is what a command can learn about the receipts of this host and project without
+// creating or registering anything: it reads the client identity if there is one, asks the
+// service to resolve the project by name (which never registers it), and reads receipts below
+// the namespace of that server and project. It exists for the refusals that must come before
+// Open, which creates the client identity and registers the project.
+type ReadOnlyHost struct {
+	home, serverURL, projectID string
+}
+
+// LookupHost opens the read-only view for cfg. nothing is true when no receipt of this project
+// can exist: the host has no client identity, or the service does not know the project. An error
+// means the view could not be determined (the service did not answer, say); the caller then
+// leaves the decision to Open and the exact check that follows it.
+func LookupHost(ctx context.Context, cfg *config.Config) (host *ReadOnlyHost, nothing bool, err error) {
+	if cfg == nil || cfg.Project.Name == "" {
+		return nil, false, ErrNotConfigured
+	}
 	home, err := Home()
 	if err != nil {
-		return false, err
+		return nil, false, err
 	}
-	projects := filepath.Join(home, "projects")
-	namespaces, err := fs.ListDirectory(home, projects)
+	data, found, err := fs.ReadRegularFileIfExists(home, filepath.Join(home, "client-id"))
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return false, nil
-		}
-		return false, err
+		return nil, false, err
 	}
-	for _, namespace := range namespaces {
-		dir := filepath.Join(projects, namespace.Name, "launch-actions")
-		entries, err := fs.ListDirectory(home, dir)
-		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				continue
-			}
-			return false, err
-		}
-		for _, entry := range entries {
-			if !strings.HasSuffix(entry.Name, ".json") {
-				continue
-			}
-			data, found, err := fs.ReadRegularFileIfExists(home, filepath.Join(dir, entry.Name))
-			if err != nil || !found {
-				continue
-			}
-			var action LocalAction
-			if json.Unmarshal(data, &action) != nil {
-				return true, nil
-			}
-			if action.Kind == kind && (task == "" || action.TaskID == "" || action.TaskID == task) {
-				return true, nil
-			}
-		}
+	if !found {
+		return nil, true, nil
 	}
-	return false, nil
+	id := strings.TrimSpace(string(data))
+	if !api.ValidIdentity(id) {
+		return nil, false, errors.New("client identity file under " + home + " is damaged")
+	}
+	serverURL := config.ServerURL(cfg)
+	c, err := client.New(serverURL, id)
+	if err != nil {
+		return nil, false, err
+	}
+	project, err := c.ProjectByName(ctx, cfg.Project.Name)
+	if err != nil {
+		var refused *api.Error
+		if errors.As(err, &refused) && refused.Code == api.CodeNotFound {
+			return nil, true, nil
+		}
+		return nil, false, err
+	}
+	return &ReadOnlyHost{home: home, serverURL: serverURL, projectID: project.ID}, false, nil
+}
+
+// PeekAction reads the receipt of one logical invocation of this project, like Session.PeekAction.
+func (h *ReadOnlyHost) PeekAction(kind string, logical any) (action LocalAction, found bool, err error) {
+	return peekAction(h.home, filepath.Join(h.home, "projects", projectNamespace(h.serverURL, h.projectID)), kind, logical)
 }
 
 // ActionGate is called with the lock of a receipt held and the receipt as it stands (nil when
-// there is none), before beginAction writes anything. An error ends the call and leaves the
-// receipt as it was.
+// there is none), before beginAction writes the receipt. An error ends the call, leaves the
+// receipt as it was, and releases the lock. The gate is not the first write of the call: on an
+// empty client directory the project directory, the receipt directory and the lock file are
+// created before it runs.
 type ActionGate func(existing *LocalAction) error
 
-// BeginActionGated is BeginAction (retryFailed true) or RetainAction (retryFailed false) with a
-// gate that decides under the lock, from the current state of the receipt.
+// BeginActionGated is BeginAction (retryFailed true) or, with retryFailed false, the same call
+// that keeps a failed receipt, with a gate that decides under the lock from the current state
+// of the receipt.
 func (s *Session) BeginActionGated(kind string, logical any, retryFailed bool, gate ActionGate) (journal *ActionJournal, fresh bool, err error) {
 	return s.beginActionGated(kind, logical, retryFailed, gate)
 }

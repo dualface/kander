@@ -24,13 +24,17 @@ func runRemoteResume(cfg *config.Config, agent *string, launcher, task, message,
 	if err != nil {
 		return fail(err)
 	}
-	if (agent != nil || options.Decision != "") && !mayLaunchAnew("task-launch", task) {
-		// An explicit takeover starts an agent unless it replays a completed launch, and a host
-		// with no launch receipt for the card has none to replay: refuse before the session
-		// creates the client identity or registers the project. Otherwise launchRemote decides
-		// from the receipt. An implicit resume may only deliver the message to a live executor,
-		// so it decides for itself.
-		if err := refuseConfiguredLauncher(cfg, launcher); err != nil {
+	if agent != nil || options.Decision != "" {
+		// An explicit takeover starts an agent unless it replays a completed launch. Refuse it
+		// before the session creates the client identity or registers the project, when no
+		// receipt of this project under the keys the takeover can have is one to replay.
+		// launchRemote decides from the receipt otherwise. An implicit resume may only deliver
+		// the message to a live executor, so it decides for itself.
+		var keys []any
+		for _, newRound := range takeoverRounds(options) {
+			keys = append(keys, launchReceiptInput{task, takeoverInput(task, launcher, text, agent, options, newRound)})
+		}
+		if err := refuseBeforeSession(cfg, launcher, "task-launch", agent != nil, keys...); err != nil {
 			return fail(err)
 		}
 	}
@@ -58,6 +62,30 @@ func runRemoteResume(cfg *config.Config, agent *string, launcher, task, message,
 		return runImplicitNativeResume(ctx, session, card, launcher, text, timeout, options)
 	}
 	return runRemoteResumeLaunch(ctx, session, card, agent, launcher, text, timeout, options, nil)
+}
+
+// takeoverInput is the launch input of a takeover. runRemoteResumeLaunch and the check before the
+// session build it here, so both name the same receipt. options.ID must be set when newRound.
+func takeoverInput(task, launcher, text string, agent *string, options DispatchOptions, newRound bool) remoteLaunchInput {
+	input := remoteLaunchInput{Launcher: launcher, TaskID: task, Message: text, Decision: options.Decision, Base: options.Base, Takeover: true, Native: agent == nil}
+	if agent != nil {
+		input.Agent = *agent
+	}
+	if newRound {
+		digest := sha256.Sum256([]byte(task + "\x00" + options.ID))
+		input.PendingRequest = api.CollaborationRequestID("dispatch-proposal-" + hex.EncodeToString(digest[:]))
+	}
+	return input
+}
+
+// takeoverRounds lists the ways a takeover can be keyed before the card is read: as a plain
+// takeover, and, when the options name a dispatch, as the round of that dispatch. A takeover
+// that starts a new round without a dispatch ID gets a fresh one, so it never repeats a receipt.
+func takeoverRounds(options DispatchOptions) []bool {
+	if options.ID != "" {
+		return []bool{false, true}
+	}
+	return []bool{false}
 }
 
 func runRemoteResumeLaunch(ctx context.Context, session *remote.Session, card api.Task, agent *string, launcher, text string, timeout float64, options DispatchOptions, journal *remote.ActionJournal) int {
@@ -90,20 +118,13 @@ func runRemoteResumeLaunch(ctx context.Context, session *remote.Session, card ap
 			return fail(launchError("launch.review_dispatch_required", card.TaskID))
 		}
 	}
-	input := remoteLaunchInput{Launcher: launcher, TaskID: card.TaskID, Message: text, Decision: options.Decision, Base: options.Base, Takeover: true, Native: agent == nil}
-	if agent != nil {
-		input.Agent = *agent
-	}
-	if newRound {
-		if options.ID == "" {
-			options.ID, err = board.NewDispatchID()
-			if err != nil {
-				return fail(err)
-			}
+	if newRound && options.ID == "" {
+		options.ID, err = board.NewDispatchID()
+		if err != nil {
+			return fail(err)
 		}
-		digest := sha256.Sum256([]byte(card.TaskID + "\x00" + options.ID))
-		input.PendingRequest = api.CollaborationRequestID("dispatch-proposal-" + hex.EncodeToString(digest[:]))
 	}
+	input := takeoverInput(card.TaskID, launcher, text, agent, options, newRound)
 	if journal != nil {
 		state := nativeResumeIntent{Input: input, Options: options, NewRound: newRound}
 		data, err := json.Marshal(state)

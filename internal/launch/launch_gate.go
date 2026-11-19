@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/dualface/kander/internal/config"
@@ -16,8 +17,8 @@ import (
 // writes nothing: its inputs are the receipt as it stands (nil when there is none) and the facts
 // the caller already holds. Every entry that can start an agent asks it:
 //
-//   - start and an explicit takeover (launchRemote): before the session is opened, through
-//     mayLaunchAnew, and again once the receipt of the launch has been read;
+//   - start and an explicit takeover (launchRemote, runRemoteResume): before the session is opened,
+//     through refuseBeforeSession, and again once the receipt of the launch has been read;
 //   - an implicit resume (runImplicitNativeResume): before its command receipt is written;
 //   - orchestrate (StartOrchestrator and startOrchestrator): before the session and before the
 //     receipt of the session;
@@ -25,7 +26,7 @@ import (
 //     triage has no receipt and the receipt key of result needs the inspection.
 //
 // Every write that follows is sequenced behind it: the directories and the registration of the
-// session (remote.Open), and the receipts (BeginAction and RetainAction). The receipt writers
+// session (remote.Open), and the receipts (BeginAction and BeginActionGated). The receipt writers
 // call the same decision again under the lock of the receipt, with the state it has then, so a
 // retry that read an older state cannot rewrite a receipt before it is refused.
 func launchWouldStart(existing *remote.LocalAction, retryFailed bool) bool {
@@ -36,8 +37,8 @@ func launchWouldStart(existing *remote.LocalAction, retryFailed bool) bool {
 	case "prepared", "session-ready":
 		return true
 	case "failed":
-		// BeginAction starts a new attempt over a failed receipt; RetainAction keeps it and
-		// replays the failure.
+		// BeginAction starts a new attempt over a failed receipt; BeginActionGated with
+		// retryFailed false keeps it and replays the failure.
 		return retryFailed
 	}
 	// complete replays; every other phase is reconciled by the recovery of the launch.
@@ -80,10 +81,36 @@ func actionGate(cfg *config.Config, launcher string, retryFailed bool) remote.Ac
 	}
 }
 
-// mayLaunchAnew reports, before any session exists, whether a call may be a replay. A host with
-// no receipt of the kind for the task has nothing to replay, so a call that is refused for its
-// launcher is refused before the session creates the client identity or registers the project.
-func mayLaunchAnew(kind, task string) bool {
-	maybe, err := remote.MayReplayAction(kind, task)
-	return err != nil || maybe
+// refuseBeforeSession is the check that comes before the session of the host is opened, which
+// creates the client identity and registers the project. It reads only: the client identity if
+// there is one, the project resolved by name without registering it, and the receipts of this
+// server and project under the exact keys of the invocation (logicals, one per way the
+// invocation can be keyed). When no receipt of this project can exist, or none of the receipts
+// is one that a call would replay or reconcile, the call certainly starts an agent and is
+// refused for its launcher now. When anything is uncertain (the service did not answer, a
+// receipt may be replayed) it returns nil and the exact check after Open decides.
+func refuseBeforeSession(cfg *config.Config, launcher, kind string, retryFailed bool, logicals ...any) error {
+	refusal := gateLaunch(cfg, launcher, true)
+	if refusal == nil {
+		return nil // not a launcher that takes the terminal, or not --json
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), remoteCall)
+	defer cancel()
+	host, nothing, err := remote.LookupHost(ctx, cfg)
+	if err != nil {
+		return nil
+	}
+	if nothing {
+		return refusal
+	}
+	for _, logical := range logicals {
+		existing, found, err := host.PeekAction(kind, logical)
+		if err != nil {
+			return nil
+		}
+		if found && !launchWouldStart(&existing, retryFailed) {
+			return nil
+		}
+	}
+	return refusal
 }

@@ -63,13 +63,12 @@ func StartOrchestrator(request OrchestrateRequest) (OrchestrateResult, error) {
 	if err := remote.RequireBinding(cfg); err != nil {
 		return OrchestrateResult{}, err
 	}
-	// A host with no receipt of an orchestrator session has none to replay, so a launcher that
-	// takes the terminal is refused before the server session of this host is opened (which
-	// creates the client identity and registers the project). Otherwise the receipt decides.
-	if !mayLaunchAnew("orchestrate", "") {
-		if err := refuseConfiguredLauncher(cfg, request.Launcher); err != nil {
-			return OrchestrateResult{}, err
-		}
+	// A launcher that takes the terminal is refused before the server session of this host is
+	// opened (which creates the client identity and registers the project) when this project
+	// holds no receipt of this orchestrator session that a call would replay. Otherwise the
+	// receipt decides.
+	if err := refuseBeforeSession(cfg, request.Launcher, "orchestrate", true, orchestrateReceiptInput{request.References, request.Handover, request.Agent, request.Launcher, request.OperationID}); err != nil {
+		return OrchestrateResult{}, err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), remoteCall)
 	loaded, service, root, err := remoteOrchestrateBoard(ctx, cfg)

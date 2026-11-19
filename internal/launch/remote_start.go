@@ -33,7 +33,7 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (StartResult, e
 }
 
 // launchReceiptInput is the logical input of the receipt of one launch: the identity of the
-// receipt that launchRemote begins and childLaunchStarts reads.
+// receipt that launchRemote begins and the pre-session check reads.
 type launchReceiptInput struct {
 	Task  string
 	Input remoteLaunchInput
@@ -53,12 +53,10 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 		return result, err
 	}
 	// Before the session is opened (which creates the client identity and registers the
-	// project) a call that cannot be a replay is refused for its launcher; otherwise the
-	// receipt of the launch decides below, once it has been read.
-	if !mayLaunchAnew("task-launch", taskID) {
-		if err := refuseConfiguredLauncher(cfg, launcherOverride); err != nil {
-			return result, err
-		}
+	// project) a call that certainly starts an agent is refused for its launcher, by the exact
+	// key of its receipt in this project; otherwise the receipt decides below.
+	if err := refuseBeforeSession(cfg, launcherOverride, "task-launch", !input.Native, launchReceiptInput{taskID, input}); err != nil {
+		return result, err
 	}
 	cwd, err := os.Getwd()
 	if err != nil {

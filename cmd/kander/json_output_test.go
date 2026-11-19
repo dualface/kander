@@ -784,27 +784,40 @@ func TestJSONSubscribeFailureBeforeTheFirstSnapshotIsOneErrorObject(t *testing.T
 }
 
 // A refusal comes before the session of the host is opened, which registers the project with the
-// service: on a host that has no launch receipt to replay, a project the service does not know
-// stays unknown after start, an explicit takeover, orchestrate and issue triage are refused.
+// service. The host has real receipts in project A (a start and an orchestrator session that
+// succeeded); the same client then works in project B, which the service does not know. The
+// receipts of A say nothing about B, so start, an explicit takeover and orchestrate are refused
+// for their launcher before B is registered.
 func TestJSONInteractiveRefusalDoesNotRegisterTheProject(t *testing.T) {
 	fixture := fakeMuxFixture(t)
-	id := readyCard(t, "json-unregistered")
+	started := readyCard(t, "json-receipt-start")
+	planned := readyCard(t, "json-receipt-orchestrate")
+	requireResult(t, runKander(t, "start", "--json", "--launcher", "fakemux", started), "start in project A", "task_id")
+	requireResult(t, runKander(t, "orchestrate", "--json", "--launcher", "fakemux", "--message", "go", planned), "orchestrate in project A", "tasks")
+	root, err := fixture.service.LocalDataRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entries, _ := os.ReadDir(filepath.Join(root, "launch-actions")); len(entries) < 2 {
+		t.Fatalf("project A holds no receipts: %v", entries)
+	}
 	cfg, err := config.Load(false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.Project.Name = "unregistered-project"
+	cfg.Project.Name = "unregistered-project-b"
 	if _, err := config.Save(cfg); err != nil {
 		t.Fatal(err)
 	}
+	// The same task IDs and the same arguments as the receipts of project A.
 	for name, args := range map[string][]string{
-		"start":       {"start", "--json", "--launcher", "foreground", id},
-		"takeover":    {"resume", "--json", "--agent", "claude", "--decision", "test", "--message", "go", "--launcher", "foreground", id},
-		"orchestrate": {"orchestrate", "--json", "--launcher", "console", "--message", "go", id},
+		"start":       {"start", "--json", "--launcher", "foreground", started},
+		"takeover":    {"resume", "--json", "--agent", "claude", "--decision", "test", "--message", "go", "--launcher", "foreground", started},
+		"orchestrate": {"orchestrate", "--json", "--launcher", "console", "--message", "go", planned},
 	} {
 		requireFailure(t, runKander(t, args...), name, "interactive_required", 2)
 	}
-	if project, err := fixture.service.Client.ProjectByName(t.Context(), "unregistered-project"); err == nil {
+	if project, err := fixture.service.Client.ProjectByName(t.Context(), "unregistered-project-b"); err == nil {
 		t.Fatalf("the refusals registered the project: %+v", project)
 	}
 }
