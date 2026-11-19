@@ -195,17 +195,23 @@ func captureWithin(program string, args []string, timeout time.Duration) (Result
 
 func TestAuditDescendantOutputOutlivesProbeDeadline(t *testing.T) {
 	configureProbeHelpers(t)
-	// Invert the original audit: a five-second descendant must not hold a
-	// 300ms probe open after its parent is killed at the deadline.
+	// Invert the original audit: a five-second descendant must not hold the
+	// probe open after its parent is killed at the deadline. The deadline must
+	// outlast the startup of both helpers under load, so both have published
+	// their PID files before it expires. The upper bound stays below the
+	// descendant's five-second lifetime, so a probe that waits for the
+	// descendant to exit still fails.
+	const deadline = 2 * time.Second
+	const cleanupTolerance = 1500 * time.Millisecond
 	dir := t.TempDir()
 	started := time.Now()
-	result, err := captureWithin(os.Args[0], helperArgs("parent", dir), 300*time.Millisecond)
+	result, err := captureWithin(os.Args[0], helperArgs("parent", dir), deadline)
 	elapsed := time.Since(started)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
-	if elapsed < 300*time.Millisecond || elapsed > 600*time.Millisecond {
-		t.Fatalf("elapsed=%s; deadline=300ms, cleanup tolerance=300ms", elapsed)
+	if elapsed < deadline || elapsed > deadline+cleanupTolerance {
+		t.Fatalf("elapsed=%s; deadline=%s, cleanup tolerance=%s", elapsed, deadline, cleanupTolerance)
 	}
 	requireStopped(t, helperPID(t, dir, "parent"))
 	requireStopped(t, helperPID(t, dir, "child"))
