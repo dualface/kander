@@ -5,6 +5,7 @@ import (
 	"maps"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -441,6 +442,72 @@ func checkpointRevisionRefusal(c CoordinatorCheckpoint, r CoordinatorReconcile) 
 	return coordinatorRefusal("checkpoint CAS", t("board.refusal_next_group", r.GroupID),
 		t("board.refusal_group_revision", r.GroupID, r.ExpectedRevision, c.Revision),
 		t("board.refusal_request_replay", coordinatorHash(r), quoted(c.LastRequestHash)))
+}
+
+// roundRefusal is the block reason of a member whose observation does not name
+// the round the card is bound to. The label keeps its place as the prefix, so a
+// caller or a search that knew it still finds it. The parts name the round the
+// card binds and what the observation gave, so a round the caller left out reads
+// differently from a stale one. withBase also names a base the observation gave:
+// only a member without a binding judges the base by itself. Nothing here changes
+// which observation is accepted, and no value that changes between two identical
+// requests is written, so a repeated request keeps its text.
+func roundRefusal(label string, s Snapshot, o CoordinatorObservation, withBase bool) error {
+	a := authFrom(s.Text)
+	parts := []string{cardRoundPart(a)}
+	if a != (ExecutionAuthorization{}) || o.DispatchID != "" || o.Epoch != 0 {
+		parts = append(parts, observedRoundPart(o))
+	}
+	if withBase && o.Base != "" {
+		parts = append(parts, t("board.refusal_round_observed_base", quoted(o.Base)))
+	}
+	return coordinatorRefusal(label+s.Entry.TaskID, nextRoundStep(s), parts...)
+}
+
+// dispatchBaseRefusal is the block reason of a member whose observation names the
+// bound round but not the base, or not the epoch, the dispatch record holds.
+func dispatchBaseRefusal(s Snapshot, d Dispatch, o CoordinatorObservation) error {
+	return coordinatorRefusal("dispatch base or epoch: "+s.Entry.TaskID, nextRoundStep(s),
+		cardRoundPart(authFrom(s.Text)),
+		t("board.refusal_round_record", d.Authorization.Epoch, quoted(d.Input.Base), givenValue(o.Base)))
+}
+
+func cardRoundPart(a ExecutionAuthorization) string {
+	if a == (ExecutionAuthorization{}) {
+		return t("board.refusal_round_card_none")
+	}
+	return t("board.refusal_round_card", quoted(a.DispatchID), a.Epoch)
+}
+
+// observedRoundPart writes the round of an observation. A field it left out is
+// written as not given, which is what a caller who left it out needs to see.
+func observedRoundPart(o CoordinatorObservation) string {
+	if o.DispatchID == "" && o.Epoch == 0 {
+		return t("board.refusal_round_observed_none")
+	}
+	epoch := givenValue("")
+	if o.Epoch != 0 {
+		epoch = strconv.FormatUint(o.Epoch, 10)
+	}
+	return t("board.refusal_round_observed", givenValue(o.DispatchID), epoch)
+}
+
+// givenValue writes a value of an observation, or says that it was not given.
+func givenValue(s string) string {
+	if s == "" {
+		return t("board.refusal_value_missing")
+	}
+	return quoted(s)
+}
+
+// nextRoundStep points at the three places that hold the values of a round. The
+// group comes from the card header, which a member always has in a checkpoint.
+func nextRoundStep(s Snapshot) string {
+	group := MetadataFrom(s.Text, FieldTaskGroup)
+	if group == "" {
+		group = "<group-id>"
+	}
+	return t("board.refusal_next_round", s.Entry.TaskID, group)
 }
 
 // staleTaskError is the transaction conflict of a request that holds another
