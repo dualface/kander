@@ -219,8 +219,8 @@ func truncateUTF8(text string, limit int) string {
 	return text[:limit]
 }
 
-// waiting returns the number of requests of ready that no delivery has reserved
-// yet, and the ID of the first.
+// waiting returns the number of requests of ready whose ID is not on the local
+// list, so that nothing was typed for them, and the ID of the first.
 func waiting(ready []api.CollabRequest, delivered []string) (int, string) {
 	count, first := 0, ""
 	for _, r := range ready {

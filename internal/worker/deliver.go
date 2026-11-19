@@ -34,12 +34,13 @@ func bounded(ctx context.Context) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(ctx, serverCallTimeout)
 }
 
-// deliver hands the open requests of this generation to the agent once each.
-// For each request it resolves the target first, which types nothing; only a
-// resolved target gets a durable reservation, and only a reserved request is
-// typed. A failed resolution leaves the request open and backs the execution
-// off (delivery_block.go). An uncertain typing is inspected by the holder
-// instead of being typed again.
+// deliver hands the open requests of this generation, and the requests it
+// reserved but never typed, to the agent once each. For each request it
+// resolves the target first, which types nothing; only a resolved target gets a
+// durable reservation (or, for a request reserved earlier, a confirmation), and
+// only a reserved request is typed. A failed resolution leaves the request as it
+// was, open or reserved, and backs the execution off (delivery_block.go). An
+// uncertain typing is inspected by the holder instead of being typed again.
 func (w *loop) deliver(ctx context.Context, log *slog.Logger, project *client.Project, c *remote.Credential, budget *resolveBudget) {
 	if w.o.Resolve == nil {
 		return
@@ -81,7 +82,8 @@ func (w *loop) deliver(ctx context.Context, log *slog.Logger, project *client.Pr
 	w.settleBlock(log, key, ready, c.Delivered)
 }
 
-// readyRequests sorts the open requests of the generation. It answers the
+// readyRequests sorts the deliverable requests of the generation: the open ones
+// and the ones reserved but never typed. It answers the
 // dispatch proposals that cannot be delivered any more (an expired window, an
 // earlier card version) and returns the others as the deliverable requests,
 // with the card's WINDOW and SESSION and, when a dispatch proposal has an
@@ -105,17 +107,7 @@ func (w *loop) readyRequests(ctx context.Context, log *slog.Logger, project *cli
 			task, shown = &t, w.o.Now()
 			window, session = board.MetadataFrom(task.Text, board.FieldWindow), board.MetadataFrom(task.Text, board.FieldSession)
 		}
-		if r.Dispatch != nil && !r.Dispatch.ConfirmBy.IsZero() && !task.ObservedAt.Before(r.Dispatch.ConfirmBy) {
-			w.rejectExpired(ctx, log, project, c, r)
-			continue
-		}
-		if r.Dispatch != nil && r.CardRevision != task.Revision {
-			answerCtx, stopAnswer := bounded(ctx)
-			_, err := project.AnswerRequest(answerCtx, "stale-"+c.ExecutionID+"-"+r.ID, c.TaskID, r.ID, api.CollabAnswer{Status: api.RequestRejected, ExpectedRevision: r.Revision, Note: staleNote}, *c.Claim())
-			stopAnswer()
-			if err != nil {
-				log.Warn("rejecting stale dispatch proposal failed", "request", r.ID, "error", err)
-			}
+		if w.rejectUnusable(ctx, log, project, c, r, *task) {
 			continue
 		}
 		if window == "" || session == "" {
@@ -141,6 +133,29 @@ func (w *loop) readyRequests(ctx context.Context, log *slog.Logger, project *cli
 	return ready, window, session, deadline, true
 }
 
+// rejectUnusable answers a dispatch proposal that cannot be delivered any more
+// with a rejection, and reports whether it did: its acceptance window has
+// elapsed on the server clock of the task read, or it binds an earlier card
+// version. Any other request is left alone.
+func (w *loop) rejectUnusable(ctx context.Context, log *slog.Logger, project *client.Project, c *remote.Credential, r api.CollabRequest, task api.Task) bool {
+	if r.Dispatch == nil {
+		return false
+	}
+	if !r.Dispatch.ConfirmBy.IsZero() && !task.ObservedAt.Before(r.Dispatch.ConfirmBy) {
+		w.rejectExpired(ctx, log, project, c, r)
+		return true
+	}
+	if r.CardRevision != task.Revision {
+		answerCtx, stopAnswer := bounded(ctx)
+		defer stopAnswer()
+		if _, err := project.AnswerRequest(answerCtx, "stale-"+c.ExecutionID+"-"+r.ID, c.TaskID, r.ID, api.CollabAnswer{Status: api.RequestRejected, ExpectedRevision: r.Revision, Note: staleNote}, *c.Claim()); err != nil {
+			log.Warn("rejecting stale dispatch proposal failed", "request", r.ID, "error", err)
+		}
+		return true
+	}
+	return false
+}
+
 // rejectExpired answers a dispatch proposal whose acceptance window has
 // elapsed. While the delivery of the execution is blocked, the note names the
 // reason, so the one who sent the proposal can tell a blocked terminal from an
@@ -158,9 +173,10 @@ func (w *loop) rejectExpired(ctx context.Context, log *slog.Logger, project *cli
 	}
 }
 
-// reservedUntyped reports a request this worker reserved whose reservation
-// answer it never saw: typing never began, because the request ID goes on the
-// local list before the first character is typed.
+// reservedUntyped reports a request this worker reserved and never typed, the
+// reservation answer lost or the local list unsaved: the request ID goes on the
+// local list before the first character is typed, so an ID that is not on it
+// was never typed.
 func reservedUntyped(r api.CollabRequest, c *remote.Credential) bool {
 	return r.Status == api.RequestAccepted && r.Note == reservationNote &&
 		r.TargetGeneration == c.Generation && !slices.Contains(c.Delivered, r.ID)
@@ -178,6 +194,23 @@ func markDelivered(c *remote.Credential, id string, save func(remote.Credential)
 	return nil
 }
 
+// proposalStillUsable checks a dispatch proposal reserved earlier against the
+// card as it is after the target resolution, which may have taken as long as
+// the acceptance window had left. A reservation made now would have the server
+// check the window and the card version; the confirmation of a request that
+// is already accepted does not, so the worker does. It reports false when the
+// proposal was rejected, or could not be checked and waits for the next round.
+func (w *loop) proposalStillUsable(ctx context.Context, log *slog.Logger, project *client.Project, c *remote.Credential, r api.CollabRequest) bool {
+	showCtx, stopShow := bounded(ctx)
+	task, err := project.Show(showCtx, c.TaskID)
+	stopShow()
+	if err != nil {
+		log.Warn("reading the task failed", "request", r.ID, "error", err)
+		return false
+	}
+	return !w.rejectUnusable(ctx, log, project, c, r, task)
+}
+
 // deliverResolved reserves the delivery of a request whose target was resolved,
 // then types it. A request found reserved but never typed (its reservation
 // answer was lost) is confirmed with an answer that changes nothing instead of
@@ -189,6 +222,9 @@ func (w *loop) deliverResolved(ctx context.Context, log *slog.Logger, project *c
 	resumed := reservedUntyped(r, c)
 	key := reservationKeyPrefix + c.ExecutionID + "-" + r.ID
 	if resumed {
+		if r.Dispatch != nil && !w.proposalStillUsable(ctx, log, project, c, r) {
+			return
+		}
 		// The server treats the same status, note and revision as the same
 		// answer: nothing changes, and it still checks that this execution holds
 		// the claim and the generation is current, as a reservation would.

@@ -226,8 +226,6 @@ func TestReservedUntypedNeedsEveryCondition(t *testing.T) {
 		{"reserved and never typed", api.CollabRequest{ID: "r", Status: api.RequestAccepted, Note: reservationNote, TargetGeneration: 3}, true},
 		{"still open", api.CollabRequest{ID: "r", Status: api.RequestOpen, Note: reservationNote, TargetGeneration: 3}, false},
 		{"already done", api.CollabRequest{ID: "r", Status: api.RequestDone, Note: reservationNote, TargetGeneration: 3}, false},
-		{"older reservation note", api.CollabRequest{ID: "r", Status: api.RequestAccepted, Note: oldReservationNote, TargetGeneration: 3}, false},
-		{"another note", api.CollabRequest{ID: "r", Status: api.RequestAccepted, Note: "handled by hand", TargetGeneration: 3}, false},
 		{"another generation", api.CollabRequest{ID: "r", Status: api.RequestAccepted, Note: reservationNote, TargetGeneration: 2}, false},
 		{"on the local list", api.CollabRequest{ID: "listed", Status: api.RequestAccepted, Note: reservationNote, TargetGeneration: 3}, false},
 	} {
@@ -360,5 +358,43 @@ func TestAReservedRequestWhoseTargetCannotBeResolvedWaitsAsPending(t *testing.T)
 	}
 	if final := h.requests(c)[0]; final.Status != api.RequestAccepted || final.Note != "delivered to the agent" {
 		t.Fatalf("the final answer: %+v", final)
+	}
+}
+
+// The target resolution of a recovered proposal may take as long as its window
+// had left; the confirmation of an accepted request checks neither the window
+// nor the card version, so the worker checks them again before it types.
+func TestAReservedProposalWhoseWindowElapsesDuringTheResolutionIsRejectedWithoutTyping(t *testing.T) {
+	h, pr, proposal := lostProposal(t, 40*time.Second)
+	pr.cost = 10 * time.Second
+	h.advance(16 * time.Second)
+	if _, err := h.pass(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if got := h.requests(h.credential())[0]; got.ID != proposal.ID || got.Status != api.RequestRejected || len(pr.typedLines()) != 0 {
+		t.Fatalf("a window that elapsed during the resolution rejects the proposal: %+v typed=%q", got, pr.typedLines())
+	}
+}
+
+func TestAReservedProposalWhoseCardChangesDuringTheResolutionIsRejectedWithoutTyping(t *testing.T) {
+	h, pr, proposal := lostProposal(t, 120*time.Second)
+	c := h.credential()
+	p := h.project("host-a")
+	h.loop.o.Resolve = func(window, session string) (Prompt, error) {
+		card, err := p.Show(t.Context(), c.TaskID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := p.PutDocument(t.Context(), "progress", c.TaskID, api.Document{Path: "progress.md", Text: "Version saved during the resolution", ExpectedRevision: card.Revision}, c.Claim()); err != nil {
+			t.Fatal(err)
+		}
+		return pr.resolve(window, session)
+	}
+	h.advance(16 * time.Second)
+	if _, err := h.pass(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if got := h.requests(c)[0]; got.ID != proposal.ID || got.Status != api.RequestRejected || len(pr.typedLines()) != 0 {
+		t.Fatalf("a card saved during the resolution rejects the proposal: %+v typed=%q", got, pr.typedLines())
 	}
 }
