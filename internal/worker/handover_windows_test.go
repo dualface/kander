@@ -37,11 +37,14 @@ func TestWriteExecutableWaitsForABusyHandle(t *testing.T) {
 		// next to the executable, so the first rename is made while the handle
 		// is open however long the scheduler delays the call. The deadline
 		// only keeps a helper that writes no sibling from hanging the test.
+		// The 250ms hold stays below the last retry of internal/fs (630ms in
+		// total) and leaves a bare rename that stalls for up to that long
+		// after the sibling appears still refused.
 		deadline := time.Now().Add(5 * time.Second)
 		for time.Now().Before(deadline) && !hasReplacementSibling(r.exe) {
 			time.Sleep(time.Millisecond)
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(250 * time.Millisecond)
 		if err := windows.CloseHandle(handle); err != nil {
 			t.Error(err)
 		}
