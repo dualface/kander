@@ -36,23 +36,22 @@ func (p *project) refuseBareMoveOfProposal(tx *board.Transaction, task string, c
 	if err != nil || len(pending) == 0 {
 		return err
 	}
-	var parts, usable, unusable []string
+	var parts, usable []string
 	for _, proposal := range pending {
-		parts = append(parts, fmt.Sprintf("request %s proposes dispatch %s", proposal.request.ID, proposal.request.Dispatch.ID))
+		part := fmt.Sprintf("request %s proposes dispatch %s", proposal.request.ID, proposal.request.Dispatch.ID)
 		if proposal.unusable {
-			unusable = append(unusable, proposal.request.ID)
+			part += " (no dispatch can be prepared with that ID: ask the sender to propose again with a valid dispatch ID)"
 		} else {
 			usable = append(usable, proposal.request.ID)
 		}
+		parts = append(parts, part)
 	}
-	message := "move into working needs the dispatch of a pending proposal: " + strings.Join(parts, "; ") + "."
-	if len(usable) > 0 {
-		message += fmt.Sprintf(" Next step: run kander dispatch prepare for it and move with --dispatch-id and --execution-epoch, or answer it with kander request answer %s %s rejected.", task, usable[0])
+	message := "move into working needs the dispatch of a pending proposal: " + strings.Join(parts, "; ") + ". Next step: "
+	// The message ends with the command to run, without punctuation after it.
+	if len(usable) == 0 {
+		return apiError(api.CodeEvidenceIncomplete, fmt.Sprintf("%sanswer the request with kander request answer %s %s rejected", message, task, pending[0].request.ID))
 	}
-	for _, id := range unusable {
-		message += fmt.Sprintf(" No dispatch can be prepared with the dispatch ID of request %s: answer it with kander request answer %s %s rejected and ask the sender to propose again with a valid dispatch ID.", id, task, id)
-	}
-	return apiError(api.CodeEvidenceIncomplete, message)
+	return apiError(api.CodeEvidenceIncomplete, fmt.Sprintf("%srun kander dispatch prepare for it and move with --dispatch-id and --execution-epoch, or answer it with kander request answer %s %s rejected", message, task, usable[0]))
 }
 
 // pendingProposal is a proposal that holds a plain move. unusable says that the

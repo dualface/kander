@@ -118,10 +118,12 @@ func (m *reviewMember) requireRefusal(t *testing.T, before []api.CollabRequest, 
 			}
 		}
 	}
-	for _, want := range []string{"kander dispatch prepare", "kander request answer " + m.task, "rejected"} {
-		if !strings.Contains(refusal.Message, want) {
-			t.Fatalf("refusal lacks %q:\n%s", want, refusal.Message)
-		}
+	if !strings.Contains(refusal.Message, "kander dispatch prepare") {
+		t.Fatalf("refusal lacks the preparation:\n%s", refusal.Message)
+	}
+	// The command to answer the request ends the message, so it can be copied whole.
+	if want := "kander request answer " + m.task + " " + requests[0].ID + " rejected"; !strings.HasSuffix(refusal.Message, want) {
+		t.Fatalf("refusal does not end with %q:\n%s", want, refusal.Message)
 	}
 	m.requireKept(t, before)
 }
@@ -214,13 +216,41 @@ func TestBareMoveIsRefusedForAProposalWithAnInvalidDispatchID(t *testing.T) {
 	if refusal.Code != api.CodeEvidenceIncomplete {
 		t.Fatalf("refusal %+v", refusal)
 	}
-	for _, want := range []string{proposal.ID, "Not A Dispatch ID", "kander request answer " + m.task + " " + proposal.ID + " rejected", "propose again with a valid dispatch ID"} {
+	for _, want := range []string{proposal.ID, "Not A Dispatch ID", "propose again with a valid dispatch ID"} {
 		if !strings.Contains(refusal.Message, want) {
 			t.Fatalf("refusal lacks %q:\n%s", want, refusal.Message)
 		}
 	}
+	if want := "kander request answer " + m.task + " " + proposal.ID + " rejected"; !strings.HasSuffix(refusal.Message, want) {
+		t.Fatalf("refusal does not end with %q:\n%s", want, refusal.Message)
+	}
 	if strings.Contains(refusal.Message, "kander dispatch prepare") {
 		t.Fatalf("the refusal sends the holder to a preparation that fails:\n%s", refusal.Message)
+	}
+	m.requireKept(t, before)
+}
+
+// A valid proposal and one with an invalid dispatch ID are both named; the
+// preparation is offered, and the answer rejected ends the message for the
+// proposal that can be prepared.
+func TestBareMoveRefusalSeparatesAnUnusableProposalFromAPreparableOne(t *testing.T) {
+	m := newReviewMember(t, "mixed-proposals", "20261119-move-group")
+	bad := m.propose(t, api.RequestSync, "bad", "Not A Dispatch ID")
+	m.f.clock.advance(time.Second)
+	good := m.propose(t, api.RequestSync, "good", "mixed-sync")
+	before := m.requests(t)
+	_, err := m.bareMove("bare")
+	refusal := apiError(t, err)
+	if refusal.Code != api.CodeEvidenceIncomplete {
+		t.Fatalf("refusal %+v", refusal)
+	}
+	for _, want := range []string{bad.ID, good.ID, "kander dispatch prepare", "propose again with a valid dispatch ID"} {
+		if !strings.Contains(refusal.Message, want) {
+			t.Fatalf("refusal lacks %q:\n%s", want, refusal.Message)
+		}
+	}
+	if want := "kander request answer " + m.task + " " + good.ID + " rejected"; !strings.HasSuffix(refusal.Message, want) {
+		t.Fatalf("refusal does not end with %q:\n%s", want, refusal.Message)
 	}
 	m.requireKept(t, before)
 }
