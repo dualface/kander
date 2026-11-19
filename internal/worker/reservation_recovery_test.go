@@ -27,11 +27,16 @@ type reservationLoss struct {
 	mu           sync.Mutex
 	lose         bool
 	refuse       bool
+	before       func()
 	reservations int
 	answers      int
 }
 
 func (l *reservationLoss) loseNext() { l.mu.Lock(); l.lose = true; l.mu.Unlock() }
+
+// beforeNextConfirmation runs f once, while the next answer that is not a
+// reservation is on its way to the server.
+func (l *reservationLoss) beforeNextConfirmation(f func()) { l.mu.Lock(); l.before = f; l.mu.Unlock() }
 
 func (l *reservationLoss) refuseNextConfirmation() { l.mu.Lock(); l.refuse = true; l.mu.Unlock() }
 
@@ -54,6 +59,10 @@ func (l *reservationLoss) wrap(next http.Handler) http.Handler {
 		}
 		lose := reservation && l.lose
 		refuse := !reservation && l.refuse
+		var before func()
+		if !reservation {
+			before, l.before = l.before, nil
+		}
 		if lose {
 			l.lose = false
 		}
@@ -61,6 +70,9 @@ func (l *reservationLoss) wrap(next http.Handler) http.Handler {
 			l.refuse = false
 		}
 		l.mu.Unlock()
+		if before != nil {
+			before()
+		}
 		switch {
 		case lose:
 			// The server commits; the answer never reaches the worker.
@@ -269,7 +281,7 @@ func TestResumingALostReservationLogsAWarning(t *testing.T) {
 
 // lostProposal loses the reservation of a dispatch proposal with the given
 // acceptance window.
-func lostProposal(t *testing.T, window time.Duration) (*harness, *fakeTarget, api.CollabRequest) {
+func lostProposal(t *testing.T, window time.Duration) (*harness, *reservationLoss, *fakeTarget, api.CollabRequest) {
 	t.Helper()
 	loss := &reservationLoss{}
 	h := newHarnessWrapped(t, 0, loss.wrap)
@@ -284,11 +296,11 @@ func lostProposal(t *testing.T, window time.Duration) (*harness, *fakeTarget, ap
 	if got := h.requests(c)[0]; got.Status != api.RequestAccepted || got.Note != reservationNote || len(pr.typedLines()) != 0 {
 		t.Fatalf("the lost reservation of the proposal was not set up: %+v typed=%q", got, pr.typedLines())
 	}
-	return h, pr, proposal
+	return h, loss, pr, proposal
 }
 
 func TestAReservedProposalInsideItsWindowAndOnItsCardVersionIsTypedOnce(t *testing.T) {
-	h, pr, proposal := lostProposal(t, 120*time.Second)
+	h, _, pr, proposal := lostProposal(t, 120*time.Second)
 	h.advance(16 * time.Second)
 	if _, err := h.pass(t.Context()); err != nil {
 		t.Fatal(err)
@@ -299,7 +311,7 @@ func TestAReservedProposalInsideItsWindowAndOnItsCardVersionIsTypedOnce(t *testi
 }
 
 func TestAReservedProposalWhoseWindowElapsedIsRejectedWithoutTyping(t *testing.T) {
-	h, pr, proposal := lostProposal(t, 30*time.Second)
+	h, _, pr, proposal := lostProposal(t, 30*time.Second)
 	h.advance(16 * time.Second)
 	if _, err := h.pass(t.Context()); err != nil {
 		t.Fatal(err)
@@ -310,7 +322,7 @@ func TestAReservedProposalWhoseWindowElapsedIsRejectedWithoutTyping(t *testing.T
 }
 
 func TestAReservedProposalOnAnEarlierCardVersionIsRejectedWithoutTyping(t *testing.T) {
-	h, pr, proposal := lostProposal(t, 120*time.Second)
+	h, _, pr, proposal := lostProposal(t, 120*time.Second)
 	c := h.credential()
 	p := h.project("host-a")
 	card, err := p.Show(t.Context(), c.TaskID)
@@ -361,40 +373,68 @@ func TestAReservedRequestWhoseTargetCannotBeResolvedWaitsAsPending(t *testing.T)
 	}
 }
 
-// The target resolution of a recovered proposal may take as long as its window
-// had left; the confirmation of an accepted request checks neither the window
-// nor the card version, so the worker checks them again before it types.
-func TestAReservedProposalWhoseWindowElapsesDuringTheResolutionIsRejectedWithoutTyping(t *testing.T) {
-	h, pr, proposal := lostProposal(t, 40*time.Second)
-	pr.cost = 10 * time.Second
-	h.advance(16 * time.Second)
-	if _, err := h.pass(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-	if got := h.requests(h.credential())[0]; got.ID != proposal.ID || got.Status != api.RequestRejected || len(pr.typedLines()) != 0 {
-		t.Fatalf("a window that elapsed during the resolution rejects the proposal: %+v typed=%q", got, pr.typedLines())
+// The target resolution and the confirmation of a recovered proposal may take
+// as long as its window had left. The confirmation of an accepted request checks
+// neither the window nor the card version, so the worker checks them again
+// before it types.
+func TestAReservedProposalThatTurnsUnusableBeforeTypingIsRejectedWithoutTyping(t *testing.T) {
+	for _, phase := range []string{"resolution", "confirmation"} {
+		for _, change := range []string{"window", "card"} {
+			t.Run(phase+"/"+change, func(t *testing.T) {
+				h, loss, pr, proposal := lostProposal(t, 40*time.Second)
+				c := h.credential()
+				p := h.project("host-a")
+				apply := func() {
+					if change == "window" {
+						h.advance(10 * time.Second)
+						return
+					}
+					card, err := p.Show(t.Context(), c.TaskID)
+					if err != nil {
+						t.Error(err)
+						return
+					}
+					if _, err := p.PutDocument(t.Context(), "progress", c.TaskID, api.Document{Path: "progress.md", Text: "Version saved while the delivery ran", ExpectedRevision: card.Revision}, c.Claim()); err != nil {
+						t.Error(err)
+					}
+				}
+				if phase == "resolution" {
+					h.loop.o.Resolve = func(window, session string) (Prompt, error) {
+						apply()
+						return pr.resolve(window, session)
+					}
+				} else {
+					loss.beforeNextConfirmation(apply)
+				}
+				h.advance(16 * time.Second)
+				if _, err := h.pass(t.Context()); err != nil {
+					t.Fatal(err)
+				}
+				if got := h.requests(c)[0]; got.ID != proposal.ID || got.Status != api.RequestRejected || len(pr.typedLines()) != 0 || slices.Contains(h.credential().Delivered, proposal.ID) {
+					t.Fatalf("the proposal must be rejected before anything is recorded or typed: %+v typed=%q", got, pr.typedLines())
+				}
+			})
+		}
 	}
 }
 
-func TestAReservedProposalWhoseCardChangesDuringTheResolutionIsRejectedWithoutTyping(t *testing.T) {
-	h, pr, proposal := lostProposal(t, 120*time.Second)
-	c := h.credential()
-	p := h.project("host-a")
-	h.loop.o.Resolve = func(window, session string) (Prompt, error) {
-		card, err := p.Show(t.Context(), c.TaskID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := p.PutDocument(t.Context(), "progress", c.TaskID, api.Document{Path: "progress.md", Text: "Version saved during the resolution", ExpectedRevision: card.Revision}, c.Claim()); err != nil {
-			t.Fatal(err)
-		}
-		return pr.resolve(window, session)
+// A proposal that the recheck rejects is not waiting any more: the observation
+// of the execution must not list it, and the ERROR of a long block must not
+// name it.
+func TestARejectedRecheckLeavesNoPendingRequest(t *testing.T) {
+	h, _, pr, proposal := lostProposal(t, 60*time.Second)
+	pr.set(errNoIdentity)
+	h.workAfter(16 * time.Second)
+	if state, blocked := h.blockOf(); !blocked || state.pending != 1 {
+		t.Fatalf("the proposal waits behind the failed resolution: %+v %v", state, blocked)
 	}
-	h.advance(16 * time.Second)
-	if _, err := h.pass(t.Context()); err != nil {
-		t.Fatal(err)
+	pr.set(nil)
+	pr.cost = 15 * time.Second
+	h.workAfter(15 * time.Second)
+	if got := h.requests(h.credential())[0]; got.ID != proposal.ID || got.Status != api.RequestRejected || len(pr.typedLines()) != 0 {
+		t.Fatalf("the window elapsed during the resolution: %+v typed=%q", got, pr.typedLines())
 	}
-	if got := h.requests(c)[0]; got.ID != proposal.ID || got.Status != api.RequestRejected || len(pr.typedLines()) != 0 {
-		t.Fatalf("a card saved during the resolution rejects the proposal: %+v typed=%q", got, pr.typedLines())
+	if state, blocked := h.blockOf(); !blocked || state.pending != 0 || state.first != "" {
+		t.Fatalf("a rejected proposal is not pending: %+v %v", state, blocked)
 	}
 }

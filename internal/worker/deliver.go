@@ -57,6 +57,12 @@ func (w *loop) deliver(ctx context.Context, log *slog.Logger, project *client.Pr
 		return
 	}
 	key := keyOf(*c)
+	var rejected []string
+	// waitingNow is the deliverable requests that are still waiting: a proposal
+	// rejected during this round is not.
+	waitingNow := func() []api.CollabRequest {
+		return slices.DeleteFunc(slices.Clone(ready), func(r api.CollabRequest) bool { return slices.Contains(rejected, r.ID) })
+	}
 	for _, r := range ready {
 		if !w.canResolve(key, w.o.Now(), window, session, deadline) {
 			break
@@ -71,15 +77,17 @@ func (w *loop) deliver(ctx context.Context, log *slog.Logger, project *client.Pr
 		budget.spent += failedAt.Sub(started)
 		if err != nil {
 			state := w.failResolution(key, window, session, cleanReason(err.Error()), failedAt)
-			pending, first := waiting(ready, c.Delivered)
+			pending, first := waiting(waitingNow(), c.Delivered)
 			log.Warn("request delivery blocked before sending; retrying later",
 				"request", first, "pending", pending, "reason", state.reason, "attempt", state.attempts,
 				"blocked_since", state.since, "next_attempt", state.next)
 			break
 		}
-		w.deliverResolved(ctx, log, project, c, r, prompt)
+		if w.deliverResolved(ctx, log, project, c, r, prompt) {
+			rejected = append(rejected, r.ID)
+		}
 	}
-	w.settleBlock(log, key, ready, c.Delivered)
+	w.settleBlock(log, key, waitingNow(), c.Delivered)
 }
 
 // readyRequests sorts the deliverable requests of the generation: the open ones
@@ -194,37 +202,42 @@ func markDelivered(c *remote.Credential, id string, save func(remote.Credential)
 	return nil
 }
 
-// proposalStillUsable checks a dispatch proposal reserved earlier against the
-// card as it is after the target resolution, which may have taken as long as
-// the acceptance window had left. A reservation made now would have the server
-// check the window and the card version; the confirmation of a request that
-// is already accepted does not, so the worker does. It reports false when the
-// proposal was rejected, or could not be checked and waits for the next round.
-func (w *loop) proposalStillUsable(ctx context.Context, log *slog.Logger, project *client.Project, c *remote.Credential, r api.CollabRequest) bool {
+// recheckProposal checks a dispatch proposal reserved earlier against the card
+// as it is after the target resolution and the confirmation, which together may
+// have taken as long as the acceptance window had left. A reservation made now
+// would have the server check the window and the card version just before the
+// typing; the confirmation of a request that is already accepted does not, so
+// the worker does. It reports whether the proposal may be typed, and whether it
+// was rejected instead; a proposal that could not be checked is neither and
+// waits for the next round.
+func (w *loop) recheckProposal(ctx context.Context, log *slog.Logger, project *client.Project, c *remote.Credential, r api.CollabRequest) (usable, rejected bool) {
 	showCtx, stopShow := bounded(ctx)
 	task, err := project.Show(showCtx, c.TaskID)
 	stopShow()
 	if err != nil {
 		log.Warn("reading the task failed", "request", r.ID, "error", err)
-		return false
+		return false, false
 	}
-	return !w.rejectUnusable(ctx, log, project, c, r, task)
+	if w.rejectUnusable(ctx, log, project, c, r, task) {
+		return false, true
+	}
+	return true, false
 }
 
 // deliverResolved reserves the delivery of a request whose target was resolved,
 // then types it. A request found reserved but never typed (its reservation
-// answer was lost) is confirmed with an answer that changes nothing instead of
-// being reserved again. A reservation or confirmation the server refuses types
+// answer was lost, or its local list entry was not saved) is confirmed with an
+// answer that changes nothing instead of being reserved again, and a dispatch
+// proposal among them is checked against its window and card version once more
+// before it is typed. A reservation or confirmation the server refuses types
 // nothing and is tried again in the next round. A typing that fails leaves the
 // request reserved and uncertain: the line may have reached the pane, so it is
-// never typed again.
-func (w *loop) deliverResolved(ctx context.Context, log *slog.Logger, project *client.Project, c *remote.Credential, r api.CollabRequest, prompt Prompt) {
+// never typed again. It reports whether the request was rejected instead of
+// delivered, which takes it out of the requests still waiting.
+func (w *loop) deliverResolved(ctx context.Context, log *slog.Logger, project *client.Project, c *remote.Credential, r api.CollabRequest, prompt Prompt) (rejected bool) {
 	resumed := reservedUntyped(r, c)
 	key := reservationKeyPrefix + c.ExecutionID + "-" + r.ID
 	if resumed {
-		if r.Dispatch != nil && !w.proposalStillUsable(ctx, log, project, c, r) {
-			return
-		}
 		// The server treats the same status, note and revision as the same
 		// answer: nothing changes, and it still checks that this execution holds
 		// the claim and the generation is current, as a reservation would.
@@ -235,7 +248,12 @@ func (w *loop) deliverResolved(ctx context.Context, log *slog.Logger, project *c
 	stopReserve()
 	if err != nil {
 		log.Warn("reserving request delivery failed", "request", r.ID, "resumed", resumed, "error", err)
-		return
+		return false
+	}
+	if resumed && r.Dispatch != nil {
+		if usable, rejected := w.recheckProposal(ctx, log, project, c, r); !usable {
+			return rejected
+		}
 	}
 	if resumed {
 		log.Warn("request reserved earlier and never typed; typing it now", "request", r.ID, "revision", accepted.Revision)
@@ -243,11 +261,11 @@ func (w *loop) deliverResolved(ctx context.Context, log *slog.Logger, project *c
 	save := func(saved remote.Credential) error { return remote.WriteCredential(w.o.Home, saved) }
 	if err := markDelivered(c, r.ID, save); err != nil {
 		log.Error("request delivery intent could not be saved", "request", r.ID, "error", err)
-		return
+		return false
 	}
 	if err := prompt(requestLine(c.TaskID, r)); err != nil {
 		log.Warn("request delivery outcome unresolved; automatic retry suppressed", "request", r.ID, "error", err)
-		return
+		return false
 	}
 	if state, blocked := w.endBlock(keyOf(*c)); blocked {
 		log.Info("request delivery unblocked", "blocked_for", w.o.Now().Sub(state.since))
@@ -258,6 +276,7 @@ func (w *loop) deliverResolved(ctx context.Context, log *slog.Logger, project *c
 		log.Warn("request delivery receipt failed", "request", r.ID, "error", err)
 	}
 	log.Info("request delivered", "request", r.ID, "kind", r.Kind)
+	return false
 }
 
 // settleBlock ends a round of the delivery of one execution. A blocked
