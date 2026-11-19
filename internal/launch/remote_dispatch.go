@@ -168,7 +168,7 @@ func runRemoteDispatch(args []string, cfg *config.Config) int {
 		if err := remote.CheckRequestMessage(command.Input.Message); err != nil {
 			return fail(err)
 		}
-		kind, err := api.RequestKindFor(command.Input)
+		kind, err := api.DispatchRequestKind(command.Input.Kind)
 		if err != nil {
 			return fail(err)
 		}

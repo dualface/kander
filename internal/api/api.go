@@ -370,20 +370,17 @@ type CollabRequest struct {
 	UpdatedAt        time.Time            `json:"updated_at"`
 }
 
-// RequestKindFor is the request kind that a client gives a request with the
-// given dispatch proposal: the dispatch kind (fix, sync or wrap-up), or note
-// when no dispatch is attached. Any other dispatch kind is refused, so a
-// request never shows a kind such as stop for a dispatch that cannot be
-// prepared.
-func RequestKindFor(dispatch *board.DispatchInput) (string, error) {
-	if dispatch == nil {
-		return RequestNote, nil
-	}
-	switch dispatch.Kind {
+// DispatchRequestKind is the request kind of a request that proposes a
+// dispatch of the given kind: the same word. Any dispatch kind other than fix,
+// sync and wrap-up is refused, so a request never shows a kind such as stop
+// for a dispatch that cannot be prepared. A request without a dispatch is a
+// note.
+func DispatchRequestKind(dispatchKind string) (string, error) {
+	switch dispatchKind {
 	case RequestFix, RequestSync, RequestWrapUp:
-		return dispatch.Kind, nil
+		return dispatchKind, nil
 	}
-	return "", &Error{Code: CodeInvalidRequest, Message: fmt.Sprintf("dispatch kind %q is not fix, sync or wrap-up", dispatch.Kind)}
+	return "", &Error{Code: CodeInvalidRequest, Message: fmt.Sprintf("dispatch kind %q is not fix, sync or wrap-up", dispatchKind)}
 }
 
 // NewCollabRequest is POST .../tasks/{task}/requests.

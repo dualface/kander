@@ -2,6 +2,7 @@ package launch
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -247,25 +248,38 @@ func TestRequestCommandPrintsNoteAndWrapUpKinds(t *testing.T) {
 	if code := remote.RunRequest([]string{f.task, "note", "status", "only"}); code != 0 {
 		t.Fatalf("request note: exit %d", code)
 	}
-	wrapUp, err := NotifyRemote(f.task, "Deliver it", "", "", true, 120, DispatchOptions{ID: "output-wrap-up", Kind: "wrap-up", Base: strings.Repeat("a", 40)})
-	if err != nil {
+	if _, err := NotifyRemote(f.task, "Deliver it", "", "", true, 120, DispatchOptions{ID: "output-wrap-up", Kind: "wrap-up", Base: strings.Repeat("a", 40)}); err != nil {
 		t.Fatal(err)
 	}
+	stored := f.requests(t)
+	wantKinds := map[string]string{}
+	for _, r := range stored {
+		wantKinds[r.ID] = r.Kind
+	}
+	if len(stored) != 2 || len(wantKinds) != 2 {
+		t.Fatalf("stored requests: %+v", stored)
+	}
 	code, list := captureStdout(t, func() int { return remote.RunRequest([]string{"list", f.task}) })
-	kinds := map[string]string{}
+	listed := map[string]string{}
 	for _, line := range strings.Split(string(list), "\n") {
 		if fields := strings.Fields(line); len(fields) > 1 {
-			kinds[fields[0]] = fields[1]
+			listed[fields[0]] = fields[1]
 		}
 	}
-	if code != 0 || len(kinds) != 2 || kinds[wrapUp.ID] != api.RequestWrapUp {
-		t.Fatalf("request list: exit %d\n%s", code, list)
+	if code != 0 || !maps.Equal(listed, wantKinds) {
+		t.Fatalf("request list: exit %d, kinds %v, want %v\n%s", code, listed, wantKinds, list)
 	}
-	for _, r := range f.requests(t) {
+	seen := map[string]bool{}
+	for _, r := range stored {
 		code, out := captureStdout(t, func() int { return remote.RunRequest([]string{"show", f.task, r.ID, "--json"}) })
-		if code != 0 || !strings.Contains(string(out), `"kind":"`+r.Kind+`"`) {
+		var shown api.CollabRequest
+		if code != 0 || json.Unmarshal(out, &shown) != nil || shown.Kind != r.Kind {
 			t.Fatalf("request show of %s: exit %d %s", r.Kind, code, out)
 		}
+		seen[shown.Kind] = true
+	}
+	if !seen[api.RequestNote] || !seen[api.RequestWrapUp] {
+		t.Fatalf("kinds shown: %v", seen)
 	}
 }
 

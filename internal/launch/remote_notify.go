@@ -137,7 +137,7 @@ func notifyRemoteForExecution(task, message, messageFile, pane string, messageSe
 			}
 		}
 		request.Dispatch = &board.DispatchInput{ID: options.ID, TaskID: card.TaskID, Kind: options.Kind, Base: options.Base, Message: message, Evidence: evidence}
-		if request.Kind, err = api.RequestKindFor(request.Dispatch); err != nil {
+		if request.Kind, err = api.DispatchRequestKind(options.Kind); err != nil {
 			return out, err
 		}
 		if err := completeRemoteDispatchInput(ctx, session, cwd, request.Dispatch); err != nil {
