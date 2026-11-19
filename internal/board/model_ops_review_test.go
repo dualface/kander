@@ -324,7 +324,9 @@ func modelReviewOps() []modelOp {
 				ids := w.memberIDs()
 				return w.createPlan(modelPlanID, ids, false, modelPlanBatch("model-batch-1", "", ids, modelCommit(0), modelCommit(1), modelRequired()))
 			}},
-		{name: "R.planOpenPartial", cli: "kander review plan: one unsealed batch that names member A only", shared: true, guard: allStarted,
+		{name: "R.planOpenPartial", cli: "kander review plan: one unsealed batch that names member A only", shared: true,
+			// A plan of one member has no member left out.
+			guard: func(f *modelFacts, i int) bool { return len(f.world.members) > 1 && allStarted(f, i) },
 			apply: func(w *modelWorld, _ *modelMember, _ *modelFacts) error {
 				ids := w.memberIDs()
 				return w.createPlan(modelPlanID, ids, false, modelPlanBatch("model-batch-1", "", ids[:1], modelCommit(0), modelCommit(1), noReviewRequirements()))
@@ -512,8 +514,8 @@ func (w *modelWorld) appendCycleBatch(review modelReviewFacts) error {
 }
 
 // appendAssignBatch gives the members no batch names an N/A batch after the last
-// batch and closes it, because the done gate wants every batch of the plan closed
-// and an N/A batch holds nothing to review. A plan seals only when every member
+// batch, and closes it: the batch names members that can still take a run, the
+// done gate wants every such batch closed, and an N/A batch holds nothing to review. A plan seals only when every member
 // left is in a batch. The ID carries the drops of the path, as the cycle batch does.
 func (w *modelWorld) appendAssignBatch(review modelReviewFacts) error {
 	last := review.batches[len(review.batches)-1]
@@ -593,7 +595,8 @@ func (w *modelWorld) settleReview(m *modelMember) error {
 			continue
 		}
 		// A plan that named only some members cannot seal until a batch names the
-		// rest, and that batch appends only after its predecessor closed.
+		// rest, and that batch appends only after no batch can still close: the
+		// predecessor closed, or every member of it left.
 		if len(review.unassigned) > 0 && !ok {
 			if err := w.appendAssignBatch(review); err != nil {
 				return err
