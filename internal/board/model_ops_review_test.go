@@ -324,6 +324,11 @@ func modelReviewOps() []modelOp {
 				ids := w.memberIDs()
 				return w.createPlan(modelPlanID, ids, false, modelPlanBatch("model-batch-1", "", ids, modelCommit(0), modelCommit(1), modelRequired()))
 			}},
+		{name: "R.planOpenPartial", cli: "kander review plan: one unsealed batch that names member A only", shared: true, guard: allStarted,
+			apply: func(w *modelWorld, _ *modelMember, _ *modelFacts) error {
+				ids := w.memberIDs()
+				return w.createPlan(modelPlanID, ids, false, modelPlanBatch("model-batch-1", "", ids[:1], modelCommit(0), modelCommit(1), noReviewRequirements()))
+			}},
 		run("R.run", "kander review <cwd> <base> <commit> PMQA: a full run that reports one finding", true),
 		run("R.runClean", "kander review <cwd> <base> <commit> PMQA: a full run with no findings", false),
 		{name: "R.runIncremental", cli: "kander review --previous-run-id <run>: a clean incremental round", shared: true,
@@ -506,6 +511,32 @@ func (w *modelWorld) appendCycleBatch(review modelReviewFacts) error {
 	return ExtendReviewPlan(w.root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, Batch: &batch, Author: "coordinator", Basis: "model cycle batch"})
 }
 
+// appendAssignBatch gives the members no batch names an N/A batch after the last
+// batch and closes it, because the done gate wants every batch of the plan closed
+// and an N/A batch holds nothing to review. A plan seals only when every member
+// left is in a batch. The ID carries the drops of the path, as the cycle batch does.
+func (w *modelWorld) appendAssignBatch(review modelReviewFacts) error {
+	last := review.batches[len(review.batches)-1]
+	p, err := ReadReviewPlan(w.root, last.plan)
+	if err != nil {
+		return modelInfra(err)
+	}
+	ids := slices.Sorted(slices.Values(review.unassigned))
+	batch := modelPlanBatch(fmt.Sprintf("model-assign-%d-%d", len(review.batches), w.drops), last.id, ids, last.target, w.nextCommit(), noReviewRequirements())
+	if err = ExtendReviewPlan(w.root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, Batch: &batch, Author: "coordinator", Basis: "model assign batch"}); err != nil {
+		return err
+	}
+	review, err = w.readReview()
+	if err != nil {
+		return err
+	}
+	appended, ok := review.batch(batch.BatchID)
+	if !ok {
+		return modelInfra(errors.New("assign batch disappeared"))
+	}
+	return w.closeBatch(appended.id, appended)
+}
+
 func (w *modelWorld) rebind(m *modelMember) error {
 	p, err := ReviewTaskProgress(w.root, m.id)
 	if err != nil {
@@ -527,8 +558,8 @@ func (w *modelWorld) sealPlan(id string) error {
 }
 
 // settleReview finishes the review evidence one card needs for completion: it
-// creates an N/A plan when none exists, rebinds a changed cycle, and closes each
-// open batch of the plan. An unassigned finding goes to this card; a finding
+// creates an N/A plan when none exists, rebinds a changed cycle, names the members
+// no batch names yet, and closes each open batch of the plan. An unassigned finding goes to this card; a finding
 // assigned to another card that has no record refuses the close.
 func (w *modelWorld) settleReview(m *modelMember) error {
 	p, err := ReviewTaskProgress(w.root, m.id)
@@ -557,6 +588,14 @@ func (w *modelWorld) settleReview(m *modelMember) error {
 		// A batch appends only after its predecessor closed.
 		if len(review.cycleOwed) > 0 || review.batchOwed() && !ok {
 			if err := w.appendCycleBatch(review); err != nil {
+				return err
+			}
+			continue
+		}
+		// A plan that named only some members cannot seal until a batch names the
+		// rest, and that batch appends only after its predecessor closed.
+		if len(review.unassigned) > 0 && !ok {
+			if err := w.appendAssignBatch(review); err != nil {
 				return err
 			}
 			continue

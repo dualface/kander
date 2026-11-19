@@ -90,6 +90,7 @@ func modelGroupSeeds() []modelSeed {
 		{name: "confirmed", focus: "B", steps: slices.Concat(claimed, []string{"R.planNA", "R.close", "A:X.review", "B:X.review", "C.reconcile", "A:F.done", "C.gitRejected", "A:H.recover", "C.reconcile"})},
 		{name: "stray", focus: "A", steps: slices.Concat(claimed, []string{"R.planRequired", "R.runClean", "A:R.assign", "R.close", "U.oldStrayRun", "A:X.review", "B:X.review", "C.reconcile"})},
 		{name: "excluded", focus: "A", steps: slices.Concat(claimed, []string{"R.planRequired", "R.run", "B:R.assign", "B:T.trash", "C.reconcile"})},
+		{name: "excluded-unassigned", focus: "A", steps: slices.Concat(claimed, []string{"R.planOpenPartial", "R.close", "B:T.archive", "C.reconcile"})},
 		{name: "old-start", focus: "A", steps: oldStart},
 		{name: "old-takeover", focus: "A", steps: oldTakeover},
 		{name: "old-takeover-review", focus: "A", steps: slices.Concat(oldTakeover, []string{"A:X.review", "B:X.review", "C.reconcile"})},

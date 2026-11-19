@@ -231,6 +231,7 @@ type modelReviewFacts struct {
 	cycleOwed  []string // members whose rebound cycle has no batch
 	reviewOwed []string // members whose recovery still needs an actual review
 	dropOwed   []string // members a dropped required batch still owes a review
+	unassigned []string // members of a plan that no batch names and no exclusion record covers
 	recoveries int      // recovery records of members reset with no plan
 	foreign    []string // runs of a plan member outside every batch of that plan
 	resolved   int      // unplanned batches a plan accepted
@@ -325,6 +326,9 @@ func (w *modelWorld) readReview() (facts modelReviewFacts, err error) {
 				}
 				if gone {
 					continue
+				}
+				if !slices.ContainsFunc(p.Batches, func(b ReviewPlanBatch) bool { return containsID(b.TaskIDs, member) }) {
+					facts.unassigned = append(facts.unassigned, member)
 				}
 				missing, e := cycleBatchMissing(tx, p, member)
 				if e != nil {
@@ -601,7 +605,7 @@ func (f *modelFacts) reviewKey() string {
 		}
 		parts = append(parts, fmt.Sprintf("%s/%s/sealed=%v/adv=%d/%s", b.id, state, b.sealed, b.advances, strings.Join(runs, ",")))
 	}
-	parts = append(parts, fmt.Sprintf("cycle-owed=%d review-owed=%d drop-owed=%d recoveries=%d foreign=%d resolved=%d", len(f.review.cycleOwed), len(f.review.reviewOwed), len(f.review.dropOwed), f.review.recoveries, len(f.review.foreign), f.review.resolved))
+	parts = append(parts, fmt.Sprintf("cycle-owed=%d review-owed=%d drop-owed=%d unassigned=%d recoveries=%d foreign=%d resolved=%d", len(f.review.cycleOwed), len(f.review.reviewOwed), len(f.review.dropOwed), len(f.review.unassigned), f.review.recoveries, len(f.review.foreign), f.review.resolved))
 	return strings.Join(parts, ";")
 }
 
