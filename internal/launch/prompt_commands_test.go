@@ -1,7 +1,10 @@
 package launch
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -21,20 +24,36 @@ var promptCommand = regexp.MustCompile("kander ([a-z][a-z-]*(?: [^ \\n`]*[^ \\n`
 // promptProse are the mentions of the command name in a prompt that are not command lines.
 var promptProse = map[string]bool{"move prints it prefilled": true}
 
+// promptReferences are the mentions that name a command without telling the agent to run it, as
+// in "controlled `kander update` commands". Every other command line of a prompt is an
+// instruction, and an instruction goes through the argument validation however short it is: a
+// `kander show` without its task ID is refused by the command, so it fails here too.
+var promptReferences = map[string]bool{"update": true}
+
 // promptActions finds the actions the result prompt lists after its command line.
 var promptActions = regexp.MustCompile(`--action ([a-z]+)`)
 
+// resultActions are the actions the result prompt must name, each as a command line of its own.
+var resultActions = []string{"inspect", "apply", "decide"}
+
 // promptCommandLines are the command lines a rendered prompt tells an agent to run. The three
-// actions of `issue result` stand in the sentence after the line, so they are added to it.
-func promptCommandLines(text string) []string {
+// actions of `issue result` stand in the sentence after the line, so they are added to it; a
+// prompt that lost one of them has lost a command line, which fails the test.
+func promptCommandLines(t *testing.T, name, text string) []string {
+	t.Helper()
 	var lines []string
 	for _, match := range promptCommand.FindAllStringSubmatch(text, -1) {
 		line := match[1]
 		switch {
 		case promptProse[line]:
 		case strings.HasPrefix(line, "issue result "):
+			var actions []string
 			for _, action := range promptActions.FindAllStringSubmatch(text, -1) {
+				actions = append(actions, action[1])
 				lines = append(lines, line+" --action "+action[1])
+			}
+			if !slices.Equal(actions, resultActions) {
+				t.Errorf("%s: the result prompt names the actions %v, want %v", name, actions, resultActions)
 			}
 		default:
 			lines = append(lines, line)
@@ -102,7 +121,7 @@ func renderedPrompts(t *testing.T) map[string]string {
 func TestRenderedPromptCommandLinesAreAccepted(t *testing.T) {
 	seen := map[string]bool{}
 	for name, prompt := range renderedPrompts(t) {
-		for _, line := range promptCommandLines(prompt) {
+		for _, line := range promptCommandLines(t, name, prompt) {
 			words := strings.Fields(line)
 			root := cli.NewRoot()
 			target, rest, err := root.Find(words)
@@ -110,22 +129,52 @@ func TestRenderedPromptCommandLinesAreAccepted(t *testing.T) {
 				t.Errorf("%s: kander %s names no command", name, line)
 				continue
 			}
-			seen[target.CommandPath()] = true
-			if len(rest) == 0 {
-				// The prompt only names the command, as in "controlled `kander update` commands".
+			if len(rest) == 0 && promptReferences[line] {
+				seen[target.CommandPath()] = true
 				continue
 			}
 			t.Run(name+"/"+line, func(t *testing.T) {
 				commandtest.Stub(root, func(*cobra.Command, []string) {})
-				if code, _, stderr := commandtest.Capture(func() int { return command.Execute(root, words) }); code != 0 {
+				code, _, stderr := commandtest.Capture(func() int { return command.Execute(root, words) })
+				if code != 0 {
 					t.Errorf("kander %s: exit=%d %s", line, code, stderr)
+					return
 				}
+				seen[target.CommandPath()] = true
 			})
 		}
 	}
 	for _, name := range []string{"kander config", "kander show", "kander move", "kander issue result", "kander issue import", "kander update"} {
 		if !seen[name] {
 			t.Errorf("no prompt names %q any more", name)
+		}
+	}
+}
+
+// Every prompt template that names a command is rendered by a production renderer above, so its
+// command lines are tested. resume.md names commands but no renderer uses it, so it is listed
+// as unrendered: a template added without a renderer in this test fails here.
+func TestEveryPromptTemplateThatNamesACommandIsRendered(t *testing.T) {
+	rendered := map[string]bool{
+		"dispatch.md": true, "refine.md": true, "reporting.md": true, "result.md": true, "rule-loading.md": true,
+		"self-move-review.md": true, "start.md": true, "takeover.md": true, "triage.md": true,
+	}
+	unrendered := map[string]bool{"resume.md": true}
+	files, err := filepath.Glob(filepath.Join("..", "..", "rules", "templates", "prompt", "*.md"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("prompt templates: %v %v", files, err)
+	}
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		name := filepath.Base(file)
+		if !strings.Contains(string(data), "{{.Command}}") && !strings.Contains(string(data), "kander ") {
+			continue
+		}
+		if !rendered[name] && !unrendered[name] {
+			t.Errorf("%s names a command but no test renders it", name)
 		}
 	}
 }
