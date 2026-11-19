@@ -11,25 +11,30 @@ import (
 )
 
 func TestClosedProblemTasksNeedsEveryCardClosed(t *testing.T) {
-	root := "/board"
+	// Paths go through filepath because closedProblemTasks matches entry
+	// directories with filepath.Separator.
+	root := filepath.FromSlash("/board")
+	doneDir := filepath.Join(root, "done", "done-task")
+	workingDir := filepath.Join(root, "working", "working-task")
+	trashFile := filepath.Join(root, "trash", "trash-task.md")
 	b := Board{Entries: map[string]Entry{
-		"done-task":    {TaskID: "done-task", State: "done", Path: root + "/done/done-task", Document: root + "/done/done-task/spec.md"},
-		"trash-task":   {TaskID: "trash-task", State: "trash", Path: root + "/trash/trash-task.md", Document: root + "/trash/trash-task.md"},
-		"working-task": {TaskID: "working-task", State: "working", Path: root + "/working/working-task", Document: root + "/working/working-task/spec.md"},
+		"done-task":    {TaskID: "done-task", State: "done", Path: doneDir, Document: filepath.Join(doneDir, "spec.md")},
+		"trash-task":   {TaskID: "trash-task", State: "trash", Path: trashFile, Document: trashFile},
+		"working-task": {TaskID: "working-task", State: "working", Path: workingDir, Document: filepath.Join(workingDir, "spec.md")},
 	}}
 	for name, tc := range map[string]struct {
 		problem Problem
 		want    []string
 	}{
 		"task id":               {Problem{Path: "done-task"}, []string{"done-task"}},
-		"entry path":            {Problem{Path: root + "/done/done-task"}, []string{"done-task"}},
-		"file inside the entry": {Problem{Path: root + "/done/done-task/reviews/r1/report.md"}, []string{"done-task"}},
-		"two closed cards":      {Problem{Path: "trash-task", RelatedPaths: []string{root + "/done/done-task"}}, []string{"done-task", "trash-task"}},
+		"entry path":            {Problem{Path: doneDir}, []string{"done-task"}},
+		"file inside the entry": {Problem{Path: filepath.Join(doneDir, "reviews", "r1", "report.md")}, []string{"done-task"}},
+		"two closed cards":      {Problem{Path: "trash-task", RelatedPaths: []string{doneDir}}, []string{"done-task", "trash-task"}},
 		"an active card":        {Problem{Path: "working-task"}, nil},
-		"closed with active":    {Problem{Path: "done-task", RelatedPaths: []string{root + "/working/working-task"}}, nil},
+		"closed with active":    {Problem{Path: "done-task", RelatedPaths: []string{workingDir}}, nil},
 		"no such card":          {Problem{Path: "stray-run"}, nil},
 		"the board itself":      {Problem{Path: root}, nil},
-		"a sibling name":        {Problem{Path: root + "/done/done-task-other"}, nil},
+		"a sibling name":        {Problem{Path: filepath.Join(root, "done", "done-task-other")}, nil},
 	} {
 		t.Run(name, func(t *testing.T) {
 			got, ok := closedProblemTasks(b, tc.problem)
