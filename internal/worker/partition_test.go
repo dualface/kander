@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -79,6 +80,8 @@ func TestWorkerKeepsEveryLeaseThroughAPartition(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			h := newHarness(t)
+			logs := &recording{}
+			h.loop.o.Logger = slog.New(logs)
 			h.loop.o.Observe = func(context.Context, remote.Credential) api.AgentObservation {
 				return api.AgentObservation{Status: "alive"}
 			}
@@ -100,6 +103,15 @@ func TestWorkerKeepsEveryLeaseThroughAPartition(t *testing.T) {
 			}
 			if got := h.credential(); got.Lost || got.Generation != c.Generation || !got.RenewedAt.Equal(h.now()) || len(h.stopped) != 0 {
 				t.Fatalf("lease after the partition: %+v %v", got, h.stopped)
+			}
+			if len(logs.find(slog.LevelInfo, "renewal confirmed again")) == 0 {
+				t.Fatal("the renewal after the partition was not logged as confirmed again")
+			}
+			h.loop.mu.Lock()
+			outages := len(h.loop.disconnected)
+			h.loop.mu.Unlock()
+			if outages != 0 {
+				t.Fatalf("the renewal after the partition left %d disconnect records", outages)
 			}
 		})
 	}

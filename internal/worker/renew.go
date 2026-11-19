@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -230,8 +231,10 @@ func (w *loop) renewOne(ctx context.Context, c remote.Credential) {
 				log.Error("credential removal failed", "error", err)
 			}
 		case claim != nil && claim.Generation == c.Generation && api.ClaimStands(claim.Status) && !api.IsCode(err, api.CodeRevisionConflict):
-			w.withdrawWork(c)
-			log.Error("renewal refused while the server still shows this generation; retrying", "error", err, "status", claim.Status)
+			// The refusal proves nothing while the server's view still shows
+			// this generation, so it is retried every renewal interval like an
+			// outage; without a disconnect record it would be retried every tick.
+			w.retry(log, c, now, fmt.Errorf("%w; the server still shows generation %d %s", err, claim.Generation, claim.Status))
 		default:
 			w.markLost(log, c, err.Error())
 		}
