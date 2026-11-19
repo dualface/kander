@@ -3,10 +3,14 @@
 package fs
 
 import (
+	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // leafReader reads one file through a public read entrance and reports the content and whether the file was found.
@@ -91,5 +95,79 @@ func TestWindowsReadSurvivesAtomicReplacementBetweenProbeAndReopen(t *testing.T)
 				t.Fatalf("content = %q, want old or new", content)
 			}
 		})
+	}
+}
+
+// TestWindowsReadUnderContinuousAtomicReplacement runs lock-free readers against a writer that keeps replacing one
+// file. A read returns one complete version or a sharing violation; an identity error is a failure.
+func TestWindowsReadUnderContinuousAtomicReplacement(t *testing.T) {
+	const (
+		replacements = 200
+		readers      = 16
+		deadline     = 2 * time.Minute
+	)
+	root := t.TempDir()
+	target := filepath.Join(root, "target.json")
+	version := func(n int) []byte { return []byte(fmt.Sprintf("version %08d %s end", n, strings.Repeat("x", 4096))) }
+	complete := func(data []byte) bool {
+		var n int
+		_, err := fmt.Sscanf(string(data), "version %d", &n)
+		return err == nil && string(data) == string(version(n))
+	}
+	if err := WriteBytesAtomicInherited(root, target, version(0), true); err != nil {
+		t.Fatal(err)
+	}
+	var stop atomic.Bool
+	var okReads, sharingReads, otherReads, partialReads, busyWrites atomic.Int64
+	var wg sync.WaitGroup
+	for range readers {
+		wg.Go(func() {
+			for !stop.Load() {
+				data, err := ReadRegularFile(root, target)
+				switch {
+				case err == nil && complete(data):
+					okReads.Add(1)
+				case err == nil:
+					partialReads.Add(1)
+				case IsSharingViolation(err):
+					sharingReads.Add(1)
+				default:
+					otherReads.Add(1)
+				}
+			}
+		})
+	}
+	replaced := 0
+	end := time.Now().Add(deadline)
+	var writeFailure error
+	for replaced < replacements && time.Now().Before(end) {
+		err := WriteBytesAtomicInherited(root, target, version(replaced+1), true)
+		switch {
+		case err == nil:
+			replaced++
+		case IsBusyFile(err):
+			busyWrites.Add(1)
+		default:
+			writeFailure = err
+		}
+		if writeFailure != nil {
+			break
+		}
+	}
+	stop.Store(true)
+	wg.Wait()
+	t.Logf("replacements=%d busy_writes=%d reads_ok=%d reads_sharing=%d reads_other=%d reads_partial=%d",
+		replaced, busyWrites.Load(), okReads.Load(), sharingReads.Load(), otherReads.Load(), partialReads.Load())
+	if writeFailure != nil {
+		t.Fatal("writer failed with an error that is not a busy file")
+	}
+	if replaced < replacements {
+		t.Fatalf("only %d replacements succeeded, want %d", replaced, replacements)
+	}
+	if otherReads.Load() != 0 || partialReads.Load() != 0 {
+		t.Fatalf("reads with other errors = %d, partial content = %d", otherReads.Load(), partialReads.Load())
+	}
+	if okReads.Load() == 0 {
+		t.Fatal("no read succeeded")
 	}
 }

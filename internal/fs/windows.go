@@ -339,9 +339,47 @@ func openRelative(
 	return handle, nil
 }
 
-// leafOpenHook runs for every leaf open that still probes and reopens, between the probe and the reopen. Tests use it
-// to change the leaf inside that window; production leaves it nil.
+// leafOpenHook runs for every leaf open that is not attribute-only, just before the open that returns the handle:
+// between the probe and the reopen when the leaf open still probes, and before the single open of a read-only leaf
+// open. Tests use it to change the leaf inside that window; production leaves it nil.
 var leafOpenHook func(path string, access uint32)
+
+// readOnlyLeafAccess reports whether access asks for nothing but reading file data. It is a whitelist: only
+// GENERIC_READ, FILE_READ_ATTRIBUTES and SYNCHRONIZE may be set, and GENERIC_READ must be. A write, delete, ACL,
+// directory listing or traversal right, or any bit this function does not know, makes the access not read-only.
+func readOnlyLeafAccess(access uint32) bool {
+	const allowed = windows.GENERIC_READ | windows.FILE_READ_ATTRIBUTES | windows.SYNCHRONIZE
+	return access&windows.GENERIC_READ != 0 && access&^allowed == 0
+}
+
+// openReadOnlyLeaf opens a regular file for reading with one by-name open. A read-only caller observes the file
+// through the returned handle only, so comparing it with a separately probed object adds no protection: an atomic
+// replacement between the probe and the reopen can only turn a valid read into an identity error. The open keeps
+// the guarantees of the probe: it is relative to the pinned parent, it carries FILE_OPEN_REPARSE_POINT so a
+// reparse point is opened as itself and rejected, and it does not ask for a non-directory so that a junction is
+// reported as a reparse point rather than as a directory. The returned handle is then validated as a regular file.
+func openReadOnlyLeaf(
+	parent windows.Handle,
+	name, path string,
+	access uint32,
+	shareWrite, shareDelete bool,
+) (windows.Handle, error) {
+	if leafOpenHook != nil {
+		leafOpenHook(path, access)
+	}
+	handle, err := openRelative(parent, name, path, access, false, kindAny, shareWrite, shareDelete, kindAny)
+	if err != nil {
+		if isMissingWin(err) || isNotExist(err) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	if err := validateHandleKind(handle, path, kindFile); err != nil {
+		closeHandle(handle)
+		return 0, err
+	}
+	return handle, nil
+}
 
 func tryOpenLeaf(
 	parent windows.Handle,
@@ -350,6 +388,9 @@ func tryOpenLeaf(
 	expected objectKind,
 	shareWrite, shareDelete bool,
 ) (windows.Handle, error) {
+	if expected == kindFile && readOnlyLeafAccess(access) {
+		return openReadOnlyLeaf(parent, name, path, access, shareWrite, shareDelete)
+	}
 	probeKind := kindAny
 	if expected == kindAnyWithReparse {
 		probeKind = kindAnyWithReparse
