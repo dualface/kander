@@ -260,10 +260,19 @@ func rebindPlanCycles(tx *Transaction, pk *planKernel, p *ReviewPlan, changed, r
 }
 
 // sealFacts computes the seal conditions on the plan as it stands: every member
-// is in a batch, and every drop obligation has a planned batch.
+// that is not excluded is in a batch, and every drop obligation has a planned
+// batch. An excluded member can never be named by a batch again, and the
+// completion gate already exempts it.
 func sealFacts(tx *Transaction, p ReviewPlan) (assigned, noDropOwed bool, refusal error, err error) {
 	assigned = true
 	for _, id := range p.TaskIDs {
+		excluded, e := memberExcluded(tx, id)
+		if e != nil {
+			return false, false, nil, e
+		}
+		if excluded {
+			continue
+		}
 		k, e := loadMemberKernel(tx, p, true, id, kernelBound(p))
 		if e != nil {
 			return false, false, nil, e
