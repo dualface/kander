@@ -93,10 +93,20 @@ func TestReviewContractNamesEveryRunRole(t *testing.T) {
 			line = candidate
 		}
 	}
-	for _, role := range []string{"PMQA", "Security", "PM", "QA", "CSA", "Hacker"} {
-		if !strings.Contains(line, "`"+role+"`") {
-			t.Errorf("the line of aggregate.runs[].run does not name the role `%s`", role)
+	// Every role of every requirements set a batch can hold, as the board orders them.
+	for size := range 7 {
+		requirements := map[string]string{}
+		for i := range size {
+			requirements[string(rune('a'+i))] = "required"
 		}
+		for _, role := range reviewRequirementRoles(requirements) {
+			if !strings.Contains(line, "`"+role+"`") {
+				t.Errorf("the line of aggregate.runs[].run does not name the role `%s` of a %d-role batch", role, size)
+			}
+		}
+	}
+	if !strings.Contains(line, "requirements") || strings.Contains(line, "for a new run, and") {
+		t.Error("the role of a run is not described by the requirements role set of its batch")
 	}
 	if strings.Contains(string(data), "the record the `assign` form printed") {
 		t.Error("review.md still says that assign prints the saved assignment")
