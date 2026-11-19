@@ -38,8 +38,8 @@ func TestCaptureClosesPipesHeldOutsideProcessGroup(t *testing.T) {
 	configureProbeHelpers(t)
 	// The deadline must outlast the startup of both helpers under load, so the
 	// child has published its PID file before it expires. The upper bound stays
-	// below the child's five-second lifetime, so a pipe wait that outlives the
-	// deadline still fails.
+	// below the child's five-second lifetime, so waiting for the child to exit
+	// still fails this test.
 	const deadline = 2 * time.Second
 	const cleanupTolerance = 1500 * time.Millisecond
 	dir := t.TempDir()
