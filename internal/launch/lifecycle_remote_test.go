@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -62,7 +63,7 @@ func remoteLifecycleFixture(t *testing.T, slug string, origin ...string) (*confi
 		t.Fatal(err)
 	}
 	previousWorker := ensureRemoteWorker
-	ensureRemoteWorker = func(string) error { return nil }
+	ensureRemoteWorker = func(string) (string, error) { return "", nil }
 	t.Cleanup(func() { ensureRemoteWorker = previousWorker })
 	return cfg, session, card, forbidden, fakeRoot
 }
@@ -171,9 +172,14 @@ func TestRemoteStartCreatesExecutionWorktreeAndPublishesItsActualHead(t *testing
 	}
 	worktree := filepath.Join(root, "worktrees", card.TaskID, "g1")
 	t.Setenv("KANBAN_LAUNCH_CWD", worktree)
+	const workerNotice = "the background worker runs another kander version"
+	ensureRemoteWorker = func(string) (string, error) { return workerNotice, nil }
 	result, err := StartRemote("claude", "tmux", card.TaskID)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !slices.Contains(result.Warnings, workerNotice+"\n") {
+		t.Fatalf("the start result carries the worker notice as a warning: %q", result.Warnings)
 	}
 	command := lastCommand(t, fakeRoot)
 	assertTaskLanguage(t, command, taskFileFromCommand(t, command), "en")

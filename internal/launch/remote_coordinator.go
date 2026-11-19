@@ -15,7 +15,17 @@ import (
 	"github.com/dualface/kander/internal/remote"
 )
 
-var ensureRemoteWorker = remote.EnsureWorker
+// ensureRemoteWorker is remote.EnsureWorkerChecked; tests replace it so no
+// worker process starts. Only the entrances that print a notice use it
+// directly; the others go through startRemoteWorker.
+var ensureRemoteWorker = remote.EnsureWorkerChecked
+
+// startRemoteWorker makes sure a worker runs and drops the version notice, for
+// the callers whose command already compared the versions or that show none.
+func startRemoteWorker(home string) error {
+	_, err := ensureRemoteWorker(home)
+	return err
+}
 
 func runRemoteCoordinator(ctx context.Context, cfg *config.Config, args []string) int {
 	cwd, err := os.Getwd()
@@ -60,8 +70,10 @@ func runRemoteCoordinator(ctx context.Context, cfg *config.Config, args []string
 		if err != nil {
 			return fail(err)
 		}
-		if err := ensureRemoteWorker(session.Home); err != nil {
+		if notice, err := ensureRemoteWorker(session.Home); err != nil {
 			fmt.Fprintln(os.Stderr, config.Text("remote.worker_start_failed", err.Error()))
+		} else if notice != "" {
+			fmt.Fprintln(os.Stderr, notice)
 		}
 		checkpoint = grant.Checkpoint
 	case "reconcile":
