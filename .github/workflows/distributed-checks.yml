@@ -83,7 +83,8 @@ jobs:
           TEMP: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
         run: go test -p 1 -count=1 -timeout 150m ./...
       # internal/remote's platform-neutral tests run in the ubuntu-latest all job
-      # and the race job; on Windows only its TestWindows tests run, in the next step.
+      # and the race job; by default only its TestWindows tests run on Windows, in
+      # the next step. A dispatch can add the whole package, see the extra step.
       - name: Complete Windows service tests
         if: matrix.suite == 'services'
         env:
@@ -122,16 +123,16 @@ jobs:
           foreach ($package in $packages) {
             if ($package -cnotmatch '^\./(internal|cmd)(/[A-Za-z0-9_-]+)+\z') {
               Write-Error "windows_extra_packages: refused package path: $package"
-              exit 1
             }
           }
           if ($packages.Count -eq 0) { exit 0 }
           go test -v -p 1 -count=1 -timeout 30m -skip '^TestModelCompositeStates$' $packages
           exit $LASTEXITCODE
-      # TestModelCompositeStates searches abstract board states and has no
-      # platform branch, so its result does not depend on the platform. The
-      # ubuntu-latest all job runs it in default mode (as does macos-latest);
-      # on Windows it alone took 67 minutes (run 44410469265).
+      # TestModelCompositeStates searches abstract board states, so its pass or
+      # fail result does not depend on the platform; only the temporary directory
+      # it uses is chosen per platform. The ubuntu-latest all job runs it in
+      # default mode (as does macos-latest); on Windows it alone took 67 minutes
+      # (run 44410469265).
       - name: Complete Windows board tests
         if: matrix.suite == 'board'
         env:
