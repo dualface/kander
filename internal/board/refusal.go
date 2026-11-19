@@ -1,6 +1,7 @@
 package board
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"regexp"
@@ -444,64 +445,105 @@ func checkpointRevisionRefusal(c CoordinatorCheckpoint, r CoordinatorReconcile) 
 		t("board.refusal_request_replay", coordinatorHash(r), quoted(c.LastRequestHash)))
 }
 
+// blockText is a refusal whose block reason starts with its own label instead of
+// the coordinator conflict that wraps the error text, so a caller or a search that
+// knows the label finds it at the start. The error itself is the same coordinator
+// conflict, with its code and message. The reason is rendered once more for the
+// checkpoint, when the token of the coordinator is known and a value of the
+// request that equals it is not written.
+type blockText struct {
+	conflict *Error
+	render   func(token string) string
+}
+
+func newBlockText(render func(token string) string) error {
+	return &blockText{conflict: kanbanError("board.coordinator_conflict", render("")), render: render}
+}
+
+func (b *blockText) Error() string { return b.conflict.Error() }
+func (b *blockText) Unwrap() error { return b.conflict }
+
+// blockReasonFor is blockReason for the checkpoint of a request that holds token.
+func blockReasonFor(err error, token string) string {
+	var b *blockText
+	if errors.As(err, &b) {
+		return b.render(token)
+	}
+	return blockReason(err)
+}
+
 // roundRefusal is the block reason of a member whose observation does not name
-// the round the card is bound to. The label keeps its place as the prefix, so a
-// caller or a search that knew it still finds it. The parts name the round the
-// card binds and what the observation gave, so a round the caller left out reads
-// differently from a stale one. withBase also names a base the observation gave:
-// only a member without a binding judges the base by itself. Nothing here changes
-// which observation is accepted, and no value that changes between two identical
+// the round the card is bound to. The parts name the round the card binds and
+// what the observation gave, so a round the caller left out reads differently from
+// a stale one. withBase also names a base the observation gave: only a member
+// without a binding judges the base by itself. Nothing here changes which
+// observation is accepted, and no value that changes between two identical
 // requests is written, so a repeated request keeps its text.
 func roundRefusal(label string, s Snapshot, o CoordinatorObservation, withBase bool) error {
-	a := authFrom(s.Text)
-	parts := []string{cardRoundPart(a)}
-	if a != (ExecutionAuthorization{}) || o.DispatchID != "" || o.Epoch != 0 {
-		parts = append(parts, observedRoundPart(o))
-	}
-	if withBase && o.Base != "" {
-		parts = append(parts, t("board.refusal_round_observed_base", quoted(o.Base)))
-	}
-	return coordinatorRefusal(label+s.Entry.TaskID, nextRoundStep(s), parts...)
+	return newBlockText(func(token string) string {
+		parts := []string{cardRoundPart(authFrom(s.Text), token), observedRoundPart(o, token)}
+		if withBase && o.Base != "" {
+			parts = append(parts, t("board.refusal_round_observed_base", idText(o.Base, token)))
+		}
+		return refusalText(label+s.Entry.TaskID, nextRoundStep(s), parts...)
+	})
 }
 
 // dispatchBaseRefusal is the block reason of a member whose observation names the
 // bound round but not the base, or not the epoch, the dispatch record holds.
 func dispatchBaseRefusal(s Snapshot, d Dispatch, o CoordinatorObservation) error {
-	return coordinatorRefusal("dispatch base or epoch: "+s.Entry.TaskID, nextRoundStep(s),
-		cardRoundPart(authFrom(s.Text)),
-		t("board.refusal_round_record", d.Authorization.Epoch, quoted(d.Input.Base), givenValue(o.Base)))
+	return newBlockText(func(token string) string {
+		return refusalText("dispatch base or epoch: "+s.Entry.TaskID, nextRoundStep(s),
+			cardRoundPart(authFrom(s.Text), token),
+			observedRoundPart(o, token),
+			t("board.refusal_round_record", d.Authorization.Epoch, idText(d.Input.Base, token), givenValue(o.Base, token)))
+	})
 }
 
-func cardRoundPart(a ExecutionAuthorization) string {
+func cardRoundPart(a ExecutionAuthorization, token string) string {
 	if a == (ExecutionAuthorization{}) {
 		return t("board.refusal_round_card_none")
 	}
-	return t("board.refusal_round_card", quoted(a.DispatchID), a.Epoch)
+	return t("board.refusal_round_card", idText(a.DispatchID, token), a.Epoch)
 }
 
 // observedRoundPart writes the round of an observation. A field it left out is
 // written as not given, which is what a caller who left it out needs to see.
-func observedRoundPart(o CoordinatorObservation) string {
+func observedRoundPart(o CoordinatorObservation, token string) string {
 	if o.DispatchID == "" && o.Epoch == 0 {
 		return t("board.refusal_round_observed_none")
 	}
-	epoch := givenValue("")
+	epoch := givenValue("", token)
 	if o.Epoch != 0 {
 		epoch = strconv.FormatUint(o.Epoch, 10)
 	}
-	return t("board.refusal_round_observed", givenValue(o.DispatchID), epoch)
+	return t("board.refusal_round_observed", givenValue(o.DispatchID, token), epoch)
 }
 
 // givenValue writes a value of an observation, or says that it was not given.
-func givenValue(s string) string {
-	if s == "" {
+func givenValue(v, token string) string {
+	if v == "" {
 		return t("board.refusal_value_missing")
 	}
-	return quoted(s)
+	return idText(v, token)
 }
 
-// nextRoundStep points at the three places that hold the values of a round. The
-// group comes from the card header, which a member always has in a checkpoint.
+// idText writes a dispatch ID or a base in full: a valid ID may be longer than
+// quoted keeps, and two IDs that share a long prefix must not read as one value.
+// Anything else is quoted, and the token of the coordinator is never written, as
+// with an owner.
+func idText(v, token string) string {
+	switch {
+	case token != "" && v == token:
+		return "<invalid>"
+	case validDispatchID(v):
+		return v
+	}
+	return quoted(v)
+}
+
+// nextRoundStep points at where the values of a round are read. The group comes
+// from the card header, which a member always has in a checkpoint.
 func nextRoundStep(s Snapshot) string {
 	group := MetadataFrom(s.Text, FieldTaskGroup)
 	if group == "" {

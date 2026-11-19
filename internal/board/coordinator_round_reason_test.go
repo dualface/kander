@@ -48,12 +48,12 @@ func reconcileBlocked(t *testing.T, root string, c CoordinatorCheckpoint, id str
 	return next, b.Reason
 }
 
-// requireReason requires that the detail of the coordinator conflict, which every
-// block reason is, starts with the label that names the refusal.
+// requireReason requires that the reason starts with the label that names the
+// refusal, as the checkpoint keeps it.
 func requireReason(tb testing.TB, reason, label string, want ...string) {
 	tb.Helper()
-	if !strings.HasPrefix(reason, t("board.coordinator_conflict", label)) {
-		tb.Fatalf("%q does not start with the conflict of %q", reason, label)
+	if !strings.HasPrefix(reason, label) {
+		tb.Fatalf("%q does not start with %q", reason, label)
 	}
 	for _, part := range want {
 		if !strings.Contains(reason, part) {
@@ -71,6 +71,7 @@ func TestRoundReasonNamesBothSides(t *testing.T) {
 	base := strings.Repeat("a", 40)
 	other := strings.Repeat("c", 40)
 	bound := "the card binds dispatch round-one at epoch 1"
+	same := "the observation gives dispatch_id round-one and epoch 1"
 	for name, tc := range map[string]struct {
 		obs    CoordinatorObservation
 		prefix string
@@ -87,9 +88,9 @@ func TestRoundReasonNamesBothSides(t *testing.T) {
 		"epoch only": {CoordinatorObservation{Epoch: 1, Base: base}, "wrong dispatch round: ",
 			[]string{bound, "the observation gives dispatch_id (not given) and epoch 1"}},
 		"base not given": {CoordinatorObservation{DispatchID: "round-one", Epoch: 1}, "dispatch base or epoch: ",
-			[]string{bound, "the dispatch record holds epoch 1 and base " + base + ", but the observation gives base (not given)"}},
+			[]string{bound, same, "the dispatch record holds epoch 1 and base " + base + ", but the observation gives base (not given)"}},
 		"base differs": {CoordinatorObservation{DispatchID: "round-one", Epoch: 1, Base: other}, "dispatch base or epoch: ",
-			[]string{bound, "the dispatch record holds epoch 1 and base " + base + ", but the observation gives base " + other}},
+			[]string{bound, same, "the dispatch record holds epoch 1 and base " + base + ", but the observation gives base " + other}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			root := tempBoard(t)
@@ -119,7 +120,7 @@ func TestRoundReasonOfAnUnboundMember(t *testing.T) {
 		"round": {CoordinatorObservation{DispatchID: "stale-round", Epoch: 1},
 			[]string{"the card binds no dispatch", "the observation gives dispatch_id stale-round and epoch 1"}},
 		"base only": {CoordinatorObservation{Base: strings.Repeat("c", 40)},
-			[]string{"the card binds no dispatch", "the observation gives base " + strings.Repeat("c", 40)}},
+			[]string{"the card binds no dispatch", "the observation gives no dispatch_id and no epoch", "the observation gives base " + strings.Repeat("c", 40)}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			root := tempBoard(t)
@@ -191,4 +192,54 @@ func TestRoundReasonIsStableForTheSameObservation(t *testing.T) {
 	if other == reason || third.Revision != second.Revision+1 {
 		t.Fatalf("another observation kept the text: %q at %d", other, third.Revision)
 	}
+}
+
+// The token of the coordinator is never written, also when an observation holds it
+// by mistake in a field the reason echoes.
+func TestRoundReasonNeverWritesTheToken(t *testing.T) {
+	english(t)
+	base := strings.Repeat("a", 40)
+	for name, o := range map[string]CoordinatorObservation{
+		"dispatch": {DispatchID: firstToken, Epoch: 1, Base: base},
+		"base":     {DispatchID: "round-one", Epoch: 1, Base: firstToken},
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := tempBoard(t)
+			id, c, _ := roundGroup(t, root)
+			_, reason := reconcileBlocked(t, root, c, id, o)
+			if !strings.Contains(reason, "<invalid>") {
+				t.Fatalf("the token was not marked in %q", reason)
+			}
+		})
+	}
+	// An unbound member echoes the base of the observation as well.
+	root := tempBoard(t)
+	id, c, _ := roundGroup(t, root)
+	rest := checkpointIDs(c)[0]
+	if rest == id {
+		rest = checkpointIDs(c)[1]
+	}
+	_, reason := reconcileBlocked(t, root, c, rest, CoordinatorObservation{Base: firstToken})
+	if !strings.Contains(reason, "<invalid>") {
+		t.Fatalf("the token was not marked in %q", reason)
+	}
+}
+
+// Two valid dispatch IDs that share a long prefix are written in full, so the
+// reason shows the difference that blocked the member.
+func TestRoundReasonKeepsLongDispatchIDsApart(t *testing.T) {
+	english(t)
+	root := tempBoard(t)
+	prefix := strings.Repeat("long-round-", 10)
+	bound, stale := prefix+"one", prefix+"two"
+	id := coordinatorCard(t, root, "round-long").Entry.TaskID
+	rest := coordinatorCard(t, root, "round-long-rest").Entry.TaskID
+	c, err := ClaimCoordinator(context.Background(), root, CoordinatorClaim{GroupID: coordinatorGroup, Owner: "coordinator", Token: firstToken, Basis: "测试编排授权", Members: []string{id, rest}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepareTestDispatch(t, root, dispatchInput(transactionSnapshot(t, root, id), bound))
+	c = coordinatorReconcile(t, root, c)
+	_, reason := reconcileBlocked(t, root, c, id, CoordinatorObservation{DispatchID: stale, Epoch: 1})
+	requireReason(t, reason, "wrong dispatch round: "+id, "the card binds dispatch "+bound+" at epoch 1", "the observation gives dispatch_id "+stale+" and epoch 1")
 }
