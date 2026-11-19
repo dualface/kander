@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -121,11 +122,20 @@ func (m *reviewMember) requireRefusal(t *testing.T, before []api.CollabRequest, 
 	if !strings.Contains(refusal.Message, "kander dispatch prepare") {
 		t.Fatalf("refusal lacks the preparation:\n%s", refusal.Message)
 	}
-	// The command to answer the request ends the message, so it can be copied whole.
-	if want := "kander request answer " + m.task + " " + requests[0].ID + " rejected"; !strings.HasSuffix(refusal.Message, want) {
-		t.Fatalf("refusal does not end with %q:\n%s", want, refusal.Message)
+	for _, request := range requests {
+		m.requireCommandLine(t, refusal.Message, request.ID)
 	}
 	m.requireKept(t, before)
+}
+
+// requireCommandLine asserts that the message has the command to reject request
+// id on a line of its own.
+func (m *reviewMember) requireCommandLine(t *testing.T, message, id string) {
+	t.Helper()
+	want := "kander request answer " + m.task + " " + id + " rejected"
+	if !slices.Contains(strings.Split(message, "\n"), want) {
+		t.Fatalf("refusal has no line %q:\n%s", want, message)
+	}
 }
 
 // requireKept asserts that a refused move left the card in review at its
@@ -221,9 +231,7 @@ func TestBareMoveIsRefusedForAProposalWithAnInvalidDispatchID(t *testing.T) {
 			t.Fatalf("refusal lacks %q:\n%s", want, refusal.Message)
 		}
 	}
-	if want := "kander request answer " + m.task + " " + proposal.ID + " rejected"; !strings.HasSuffix(refusal.Message, want) {
-		t.Fatalf("refusal does not end with %q:\n%s", want, refusal.Message)
-	}
+	m.requireCommandLine(t, refusal.Message, proposal.ID)
 	if strings.Contains(refusal.Message, "kander dispatch prepare") {
 		t.Fatalf("the refusal sends the holder to a preparation that fails:\n%s", refusal.Message)
 	}
@@ -231,8 +239,7 @@ func TestBareMoveIsRefusedForAProposalWithAnInvalidDispatchID(t *testing.T) {
 }
 
 // A valid proposal and one with an invalid dispatch ID are both named; the
-// preparation is offered, and the answer rejected ends the message for the
-// proposal that can be prepared.
+// preparation is offered, and each request has its own command to reject it.
 func TestBareMoveRefusalSeparatesAnUnusableProposalFromAPreparableOne(t *testing.T) {
 	m := newReviewMember(t, "mixed-proposals", "20261119-move-group")
 	bad := m.propose(t, api.RequestSync, "bad", "Not A Dispatch ID")
@@ -249,9 +256,8 @@ func TestBareMoveRefusalSeparatesAnUnusableProposalFromAPreparableOne(t *testing
 			t.Fatalf("refusal lacks %q:\n%s", want, refusal.Message)
 		}
 	}
-	if want := "kander request answer " + m.task + " " + good.ID + " rejected"; !strings.HasSuffix(refusal.Message, want) {
-		t.Fatalf("refusal does not end with %q:\n%s", want, refusal.Message)
-	}
+	m.requireCommandLine(t, refusal.Message, bad.ID)
+	m.requireCommandLine(t, refusal.Message, good.ID)
 	m.requireKept(t, before)
 }
 

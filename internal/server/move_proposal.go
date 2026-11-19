@@ -36,22 +36,24 @@ func (p *project) refuseBareMoveOfProposal(tx *board.Transaction, task string, c
 	if err != nil || len(pending) == 0 {
 		return err
 	}
-	var parts, usable []string
+	var parts, answers []string
+	usable := false
 	for _, proposal := range pending {
 		part := fmt.Sprintf("request %s proposes dispatch %s", proposal.request.ID, proposal.request.Dispatch.ID)
 		if proposal.unusable {
 			part += " (no dispatch can be prepared with that ID: ask the sender to propose again with a valid dispatch ID)"
 		} else {
-			usable = append(usable, proposal.request.ID)
+			usable = true
 		}
 		parts = append(parts, part)
+		answers = append(answers, fmt.Sprintf("kander request answer %s %s rejected", task, proposal.request.ID))
 	}
-	message := "move into working needs the dispatch of a pending proposal: " + strings.Join(parts, "; ") + ". Next step: "
-	// The message ends with the command to run, without punctuation after it.
-	if len(usable) == 0 {
-		return apiError(api.CodeEvidenceIncomplete, fmt.Sprintf("%sanswer the request with kander request answer %s %s rejected", message, task, pending[0].request.ID))
+	message := "move into working needs the dispatch of a pending proposal: " + strings.Join(parts, "; ") + "."
+	if usable {
+		message += " Run kander dispatch prepare for a proposal that can be prepared and move with --dispatch-id and --execution-epoch."
 	}
-	return apiError(api.CodeEvidenceIncomplete, fmt.Sprintf("%srun kander dispatch prepare for it and move with --dispatch-id and --execution-epoch, or answer it with kander request answer %s %s rejected", message, task, usable[0]))
+	// Each command to run stands on a line of its own, so it can be copied whole.
+	return apiError(api.CodeEvidenceIncomplete, message+" To reject a proposal instead, answer its request:\n"+strings.Join(answers, "\n"))
 }
 
 // pendingProposal is a proposal that holds a plain move. unusable says that the
