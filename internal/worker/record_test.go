@@ -105,6 +105,8 @@ func TestFailedRecordWriteIsLoggedRemovesTheOldRecordAndTheWorkerRenews(t *testi
 // kander worker binds the language of its configuration, so the observation
 // texts it stores do not follow the locale of the process.
 func TestRunBindsTheConfiguredLanguage(t *testing.T) {
+	// The project overlay is read from the working directory.
+	t.Chdir(t.TempDir())
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
 	t.Setenv(config.EnvLang, "")
 	t.Setenv(config.EnvLangCLI, "")
