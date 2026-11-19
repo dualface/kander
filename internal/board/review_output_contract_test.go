@@ -20,6 +20,7 @@ var reviewOutputObjects = []struct {
 	{"aggregate.batch", []any{ReviewBatch{}}},
 	{"aggregate.batch.advances[]", []any{ReviewAdvance{}}},
 	{"aggregate.runs[]", []any{ReviewRunView{}}},
+	{"aggregate.runs[].assignment", []any{ReviewAssignment{}}},
 	{"aggregate.runs[].run", []any{ReviewRun{}, ReviewInput{}}},
 	{"close", []any{ReviewClosure{}}},
 	{"close.request", []any{ReviewCloseRequest{}}},
@@ -76,5 +77,28 @@ func TestReviewContractDefinesEveryResultObjectWithTypes(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// The role of a run is any of the six roles a batch can hold: PMQA and Security for new runs, and
+// PM, QA, CSA and Hacker for the runs of historical batches.
+func TestReviewContractNamesEveryRunRole(t *testing.T) {
+	data, err := rules.File("snippets/commands/review.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var line string
+	for _, candidate := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(candidate, "  - `aggregate.runs[].run` (") {
+			line = candidate
+		}
+	}
+	for _, role := range []string{"PMQA", "Security", "PM", "QA", "CSA", "Hacker"} {
+		if !strings.Contains(line, "`"+role+"`") {
+			t.Errorf("the line of aggregate.runs[].run does not name the role `%s`", role)
+		}
+	}
+	if strings.Contains(string(data), "the record the `assign` form printed") {
+		t.Error("review.md still says that assign prints the saved assignment")
 	}
 }
