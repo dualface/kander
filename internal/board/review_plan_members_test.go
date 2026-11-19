@@ -15,11 +15,13 @@ import (
 // membersWorld is a plan of one started group card whose only batch closed
 // without a review, and a second started card of the same group with no plan.
 // candidate is the card a request adds; it is the second card unless a test names
-// another one. before is the capture a refused request is compared with.
+// another one. also lists further cards a request names, and before is the capture
+// a refused request is compared with.
 type membersWorld struct {
 	root          string
 	first, second string
 	candidate     string
+	also          []string
 	plan          ReviewPlan
 	before        map[string]string
 }
@@ -145,7 +147,8 @@ func (w *membersWorld) capture(t *testing.T) {
 
 func (w *membersWorld) files() (map[string]string, error) {
 	got := map[string]string{}
-	err := WithTransaction(w.root, reviewScope([]string{w.first, w.candidate}, true), func(tx *Transaction) error {
+	cards := slices.Concat([]string{w.first, w.candidate}, w.also)
+	err := WithTransaction(w.root, reviewScope(cards, true), func(tx *Transaction) error {
 		for _, b := range w.plan.Batches {
 			raw, exists, e := tx.ReadGroup(reviewControlGroup, reviewBatchName(b.BatchID))
 			if e != nil {
@@ -153,11 +156,15 @@ func (w *membersWorld) files() (map[string]string, error) {
 			}
 			got["batch record "+b.BatchID] = shownBytes(raw, exists)
 		}
-		for _, file := range []struct{ label, id, name string }{
+		files := []struct{ label, id, name string }{
 			{"plan copy of the first member", w.first, "reviews/plan.json"},
 			{"card file of the candidate", w.candidate, "spec.md"},
 			{"plan copy of the candidate", w.candidate, "reviews/plan.json"},
-		} {
+		}
+		for _, id := range w.also {
+			files = append(files, struct{ label, id, name string }{"card file of " + id, id, "spec.md"}, struct{ label, id, name string }{"plan copy of " + id, id, "reviews/plan.json"})
+		}
+		for _, file := range files {
 			text, e := tx.Read(file.id, file.name)
 			if e != nil && !errors.Is(e, os.ErrNotExist) {
 				return e
@@ -389,6 +396,7 @@ func TestAddMembersRefusesTheWholeRequest(t *testing.T) {
 	w := newMembersWorld(t, "members-whole", false)
 	third := gateCard(t, w.root, "members-whole-c")
 	w.relocate(t, third, "todo")
+	w.also = []string{third}
 	err := w.extend(ReviewPlanExtension{AddMembers: []string{w.second, third}})
 	if err == nil || !strings.Contains(err.Error(), third+" is in todo") || strings.Contains(err.Error(), w.second+" is in") {
 		t.Fatalf("error: %v", err)

@@ -6,21 +6,8 @@ import (
 	"testing"
 )
 
-// todoGroupCard creates a todo card of the group of membersWorld. It takes the
-// same move to todo as a real card, so that a start can run on it.
-func todoGroupCard(t *testing.T, root, slug string) Snapshot {
-	t.Helper()
-	s := transactionCard(t, root, slug, false)
-	text := strings.ReplaceAll(readyText(s), "<FILL_IN>", "fixture")
-	text = strings.Replace(text, "- TASK_GROUP:", "- TASK_GROUP: 20260907-evidence-group", 1)
-	text = strings.Replace(text, "- TASK_BRANCH:", "- TASK_BRANCH: evidence", 1)
-	updateSnapshot(t, root, s, text)
-	s = transactionSnapshot(t, root, s.Entry.TaskID)
-	if _, err := MoveEntry(s.Entry, root, "todo"); err != nil {
-		t.Fatal(err)
-	}
-	return transactionSnapshot(t, root, s.Entry.TaskID)
-}
+// evidenceGroup is the task group of the cards of gateCard.
+const evidenceGroup = "20260907-evidence-group"
 
 // beginStart is the first half of a real start: the start metadata and the
 // execution record, with the card in working and the launcher not yet confirmed.
@@ -40,7 +27,19 @@ func startGroupCard(t *testing.T, root string, s Snapshot) Entry {
 	if err := ConfirmTaskStart(root, moved); err != nil {
 		t.Fatal(err)
 	}
+	l := ledgerOf(t, root, moved.TaskID)
+	if kinds := chainKinds(l); l.current == nil || l.current.Status != ExecutionRunning || kinds[len(kinds)-1] != TransitionConfirm {
+		t.Fatalf("the start is not confirmed: current %+v, chain %v", l.current, kinds)
+	}
 	return moved
+}
+
+// requireClosed fails the test unless the closure record of the batch is stored.
+func requireClosed(t *testing.T, root, batch string) {
+	t.Helper()
+	if c, err := readClosure(root, batch); err != nil || c.BatchID != batch {
+		t.Fatalf("closure of %s: %+v %v", batch, c, err)
+	}
 }
 
 func (w *membersWorld) putFile(t *testing.T, id, name, text string) {
@@ -56,7 +55,7 @@ func (w *membersWorld) putFile(t *testing.T, id, name, text string) {
 // wrote, takes its own batch, and the plan seals with no cycle rebind.
 func TestAddMembersAfterALateStart(t *testing.T) {
 	w := newMembersWorld(t, "members-late", false)
-	late := todoGroupCard(t, w.root, "members-late-c")
+	late := modelTodoCard(t, w.root, "members-late-c", evidenceGroup)
 	id := late.Entry.TaskID
 	w.candidate = id
 
@@ -81,6 +80,7 @@ func TestAddMembersAfterALateStart(t *testing.T) {
 	}
 	w.refresh(t)
 	closeOwedBatch(t, w.root, batch)
+	requireClosed(t, w.root, batch.BatchID)
 	if err = w.extend(ReviewPlanExtension{Seal: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestAddMembersCaptureSeesEachFile(t *testing.T) {
 // start finishes through unresolve and adopt, and the plan seals with no rebind.
 func TestAddMembersThenStartRollback(t *testing.T) {
 	w := newMembersWorld(t, "members-rollback", false)
-	late := todoGroupCard(t, w.root, "members-rollback-c")
+	late := modelTodoCard(t, w.root, "members-rollback-c", evidenceGroup)
 	id := late.Entry.TaskID
 	w.candidate = id
 	moved := beginStart(t, w.root, late)
@@ -184,8 +184,12 @@ func TestAddMembersThenStartRollback(t *testing.T) {
 	}
 	w.refresh(t)
 	closeOwedBatch(t, w.root, batch)
+	requireClosed(t, w.root, batch.BatchID)
 	if err = w.extend(ReviewPlanExtension{Seal: true}); err != nil {
 		t.Fatal(err)
+	}
+	if w.refresh(t); !w.plan.Sealed {
+		t.Fatalf("plan after the seal: %+v", w.plan)
 	}
 	if problems := CheckReviewGate(w.root, []string{w.first, id}); len(problems) != 0 {
 		t.Fatalf("%v", problems)
