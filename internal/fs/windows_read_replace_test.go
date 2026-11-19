@@ -14,7 +14,8 @@ import (
 )
 
 // leafReader reads one file through a public read entrance. found reports whether the entrance handed anything back,
-// data or a file, whatever its error; an entrance that rejects a path must hand back nothing.
+// data or a file, whatever its error; an entrance that rejects a path must hand back nothing. ReadRegularFile also
+// counts as found when it returns no error, because it returns nil data for an empty file.
 type leafReader struct {
 	name string
 	read func(root, path string) (content string, found bool, err error)
