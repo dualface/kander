@@ -172,10 +172,11 @@ func childAlive(table map[int]procInfo, pid int) bool {
 
 // read serves real snapshots. The first snapshot with a short deadline that holds the gated child releases it
 // and is returned as taken, so that observation records the child. Later snapshots with a short deadline wait
-// until the child is gone, but never past the deadline of their own context. The recheck takes such snapshots
-// (at most recheckSnapshotLimit each), and so does a single observation without a recheck. The pre-check in
-// processGroupHasLiveMembers and the tracker use processTableBudget, so they pass through untouched and can not
-// release the child before the first observation.
+// until the child is gone. The wait checks for cancellation between polls, and boundedProcessTable stops
+// waiting for the caller at the snapshot deadline, so the wait limit is the caller's and not the hook's. The
+// recheck takes such snapshots (at most recheckSnapshotLimit each), and so does a single observation without a
+// recheck. The pre-check in processGroupHasLiveMembers and the tracker use processTableBudget, so they pass
+// through untouched and cannot release the child before the first observation.
 func (g *releaseGate) read(ctx context.Context) (map[int]procInfo, error) {
 	deadline, bounded := ctx.Deadline()
 	shortDeadline := bounded && time.Until(deadline) <= recheckSnapshotLimit
