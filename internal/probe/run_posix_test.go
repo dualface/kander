@@ -36,13 +36,19 @@ func helperProcessRunning(pid int) bool {
 
 func TestCaptureClosesPipesHeldOutsideProcessGroup(t *testing.T) {
 	configureProbeHelpers(t)
+	// The deadline must outlast the startup of both helpers under load, so the
+	// child has published its PID file before it expires. The upper bound stays
+	// below the child's five-second lifetime, so a pipe wait that outlives the
+	// deadline still fails.
+	const deadline = 2 * time.Second
+	const cleanupTolerance = 1500 * time.Millisecond
 	dir := t.TempDir()
 	started := time.Now()
-	_, err := captureWithin(os.Args[0], helperArgs("parent-escape", dir), 300*time.Millisecond)
+	_, err := captureWithin(os.Args[0], helperArgs("parent-escape", dir), deadline)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err=%v", err)
 	}
-	if elapsed := time.Since(started); elapsed > 600*time.Millisecond {
+	if elapsed := time.Since(started); elapsed > deadline+cleanupTolerance {
 		t.Fatalf("pipe wait outlived deadline: %s", elapsed)
 	}
 	child := helperPID(t, dir, "child")
