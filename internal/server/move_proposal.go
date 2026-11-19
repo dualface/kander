@@ -36,14 +36,23 @@ func (p *project) refuseBareMoveOfProposal(tx *board.Transaction, task string, c
 	if err != nil || len(pending) == 0 {
 		return err
 	}
-	parts := make([]string, len(pending))
-	for i, proposal := range pending {
-		parts[i] = fmt.Sprintf("request %s proposes dispatch %s", proposal.request.ID, proposal.request.Dispatch.ID)
+	var parts, usable, unusable []string
+	for _, proposal := range pending {
+		parts = append(parts, fmt.Sprintf("request %s proposes dispatch %s", proposal.request.ID, proposal.request.Dispatch.ID))
 		if proposal.unusable {
-			parts[i] += " (no dispatch can be prepared with that ID: answer the request rejected and ask the sender to propose again with a valid dispatch ID)"
+			unusable = append(unusable, proposal.request.ID)
+		} else {
+			usable = append(usable, proposal.request.ID)
 		}
 	}
-	return apiError(api.CodeEvidenceIncomplete, fmt.Sprintf("move into working needs the dispatch of a pending proposal: %s. Next step: run kander dispatch prepare for it and move with --dispatch-id and --execution-epoch, or answer it with kander request answer %s %s rejected", strings.Join(parts, "; "), task, pending[0].request.ID))
+	message := "move into working needs the dispatch of a pending proposal: " + strings.Join(parts, "; ") + "."
+	if len(usable) > 0 {
+		message += fmt.Sprintf(" Next step: run kander dispatch prepare for it and move with --dispatch-id and --execution-epoch, or answer it with kander request answer %s %s rejected.", task, usable[0])
+	}
+	for _, id := range unusable {
+		message += fmt.Sprintf(" No dispatch can be prepared with the dispatch ID of request %s: answer it with kander request answer %s %s rejected and ask the sender to propose again with a valid dispatch ID.", id, task, id)
+	}
+	return apiError(api.CodeEvidenceIncomplete, message)
 }
 
 // pendingProposal is a proposal that holds a plain move. unusable says that the

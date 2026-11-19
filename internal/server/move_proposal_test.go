@@ -123,6 +123,13 @@ func (m *reviewMember) requireRefusal(t *testing.T, before []api.CollabRequest, 
 			t.Fatalf("refusal lacks %q:\n%s", want, refusal.Message)
 		}
 	}
+	m.requireKept(t, before)
+}
+
+// requireKept asserts that a refused move left the card in review at its
+// revision and the requests as they were.
+func (m *reviewMember) requireKept(t *testing.T, before []api.CollabRequest) {
+	t.Helper()
 	current, err := m.holder.Show(t.Context(), m.task)
 	if err != nil || current.State != "review" || current.Revision != m.card.Revision {
 		t.Fatalf("card after the refusal: %+v %v, want review at revision %d", current, err, m.card.Revision)
@@ -200,13 +207,22 @@ func TestBareMoveRefusalNamesEveryPendingProposal(t *testing.T) {
 // propose again with a valid ID.
 func TestBareMoveIsRefusedForAProposalWithAnInvalidDispatchID(t *testing.T) {
 	m := newReviewMember(t, "invalid-dispatch-id", "20261119-move-group")
-	m.propose(t, api.RequestSync, "proposal", "Not A Dispatch ID")
+	proposal := m.propose(t, api.RequestSync, "proposal", "Not A Dispatch ID")
 	before := m.requests(t)
 	_, err := m.bareMove("bare")
-	m.requireRefusal(t, before, before, err)
-	if message := apiError(t, err).Message; !strings.Contains(message, "no dispatch can be prepared with that ID") || !strings.Contains(message, "propose again with a valid dispatch ID") {
-		t.Fatalf("the refusal does not say that only the answer rejected applies:\n%s", message)
+	refusal := apiError(t, err)
+	if refusal.Code != api.CodeEvidenceIncomplete {
+		t.Fatalf("refusal %+v", refusal)
 	}
+	for _, want := range []string{proposal.ID, "Not A Dispatch ID", "kander request answer " + m.task + " " + proposal.ID + " rejected", "propose again with a valid dispatch ID"} {
+		if !strings.Contains(refusal.Message, want) {
+			t.Fatalf("refusal lacks %q:\n%s", want, refusal.Message)
+		}
+	}
+	if strings.Contains(refusal.Message, "kander dispatch prepare") {
+		t.Fatalf("the refusal sends the holder to a preparation that fails:\n%s", refusal.Message)
+	}
+	m.requireKept(t, before)
 }
 
 // The guard only refuses a proposal the request kernel still accepts for
