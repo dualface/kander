@@ -193,12 +193,25 @@ func TestBareMoveRefusalNamesEveryPendingProposal(t *testing.T) {
 	}
 }
 
+// Nothing checks the dispatch ID of a proposal when it is created, and no
+// preparation can take an ID that is not a dispatch ID. The kernel still accepts
+// the proposal and no dispatch record names it, so the move is refused like any
+// other; the holder answers the request "rejected" and asks the sender to
+// propose again with a valid ID.
+func TestBareMoveIsRefusedForAProposalWithAnInvalidDispatchID(t *testing.T) {
+	m := newReviewMember(t, "invalid-dispatch-id", "20261119-move-group")
+	m.propose(t, api.RequestSync, "proposal", "Not A Dispatch ID")
+	before := m.requests(t)
+	_, err := m.bareMove("bare")
+	m.requireRefusal(t, before, before, err)
+}
+
 // The guard only refuses a proposal the holder could still prepare. Every other
 // plain move keeps the behavior it had, so a holder is never stuck on a
 // proposal it cannot prepare.
 func TestBareMoveKeepsItsBehaviorWithoutAPreparableProposal(t *testing.T) {
 	const group = "20261119-move-group"
-	for _, status := range []string{api.RequestRejected, api.RequestDone, api.RequestSuperseded} {
+	for _, status := range []string{api.RequestDone, api.RequestSuperseded} {
 		t.Run("settled-"+status, func(t *testing.T) {
 			m := newReviewMember(t, "settled-"+status, group)
 			proposal := m.propose(t, api.RequestFix, "proposal", "settled-fix")
@@ -252,15 +265,6 @@ func TestBareMoveKeepsItsBehaviorWithoutAPreparableProposal(t *testing.T) {
 		m := newReviewMember(t, "no-proposal", group)
 		moved, err := m.bareMove("bare")
 		m.requireMoved(t, m.requests(t), moved, err)
-	})
-	t.Run("dispatch-id-cannot-be-prepared", func(t *testing.T) {
-		// Nothing checks the dispatch ID of a proposal when it is created, and no
-		// preparation can take such an ID, so the move is not held to the proposal.
-		m := newReviewMember(t, "invalid-dispatch-id", group)
-		m.propose(t, api.RequestSync, "proposal", "Not A Dispatch ID")
-		before := m.requests(t)
-		moved, err := m.bareMove("bare")
-		m.requireMoved(t, before, moved, err)
 	})
 	t.Run("note-request", func(t *testing.T) {
 		m := newReviewMember(t, "note-request", group)

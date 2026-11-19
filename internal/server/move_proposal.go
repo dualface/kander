@@ -67,11 +67,11 @@ func (p *project) preparableProposals(tx *board.Transaction, task string, claim 
 		var refusal *board.Error
 		switch _, err := tx.StagedDispatch(task, request.Dispatch.ID); {
 		case err == nil:
-		case errors.Is(err, os.ErrNotExist):
+		case errors.Is(err, os.ErrNotExist), errors.As(err, &refusal) && refusal.Code == "board.dispatch_conflict":
+			// No record of this card names the ID. An ID that is not a dispatch ID
+			// reads as a dispatch conflict and counts here: the proposal stays
+			// pending, and the holder answers it "rejected" to move on.
 			pending = append(pending, request)
-		case errors.As(err, &refusal) && refusal.Code == "board.dispatch_conflict":
-			// The ID is not a dispatch ID, or its record does not match it: a
-			// preparation fails on it too, so the holder is not held to it.
 		default:
 			return nil, err
 		}
