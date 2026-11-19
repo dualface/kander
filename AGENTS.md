@@ -139,7 +139,7 @@ Shared by POSIX and Windows (Windows-specific tests skip on non-Windows):
 go test -timeout 30m ./...
 ```
 
-`-timeout 30m` replaces Go's default 10 minutes per package: `internal/board` runs the state model search ([Composite state model test](docs/model-test.md)), which takes about 5 to 9 minutes on a CI runner and longer on a loaded machine. The Release workflow and the local gate of `scripts/release.sh` use the same value.
+`-timeout 30m` replaces Go's default 10 minutes per package: `internal/board` runs the state model search ([Composite state model test](docs/model-test.md)), which takes about 6 minutes on a Linux CI runner and about 22 minutes on a macOS runner, and longer on a loaded machine. The Release workflow and the local gate of `scripts/release.sh` use the same value.
 
 For a single package:
 
