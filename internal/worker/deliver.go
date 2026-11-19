@@ -17,10 +17,16 @@ const (
 	expiredNote = "dispatch proposal acceptance window elapsed; a new inspected proposal needs a new ID"
 	staleNote   = "dispatch proposal targets an earlier card version; inspect the current task before creating a new proposal"
 
-	// reservationNote is the note of the answer that reserves a delivery.
-	reservationNote = "automatic delivery reserved; outcome is uncertain until observed"
-	// reservationKeyPrefix starts the idempotency key of that answer.
-	reservationKeyPrefix = "delivery-"
+	// reservationNote is the note of the answer that reserves a delivery. The
+	// reservation call writes it, and a request found accepted with this note and
+	// missing from the local list is read back as reserved but never typed.
+	// Requests that older workers reserved carry a different note, so they are
+	// never resumed: nothing tells whether their line reached the pane.
+	reservationNote = "automatic delivery reserved before typing; outcome is uncertain until observed"
+	// reservationKeyPrefix starts the idempotency key of a reservation. It differs
+	// from the prefix older workers used, so a pending receipt of an older
+	// reservation cannot clash with a new one that carries another note.
+	reservationKeyPrefix = "reserve-"
 )
 
 // bounded gives one server call of a delivery its own time limit.
@@ -85,7 +91,7 @@ func (w *loop) readyRequests(ctx context.Context, log *slog.Logger, project *cli
 	var task *api.Task
 	var shown time.Time
 	for _, r := range requests {
-		if r.Status != api.RequestOpen || r.TargetGeneration != c.Generation || slices.Contains(c.Delivered, r.ID) {
+		if r.Status != api.RequestOpen && !reservedUntyped(r, c) || r.TargetGeneration != c.Generation || slices.Contains(c.Delivered, r.ID) {
 			continue
 		}
 		if task == nil {
@@ -152,22 +158,54 @@ func (w *loop) rejectExpired(ctx context.Context, log *slog.Logger, project *cli
 	}
 }
 
+// reservedUntyped reports a request this worker reserved whose reservation
+// answer it never saw: typing never began, because the request ID goes on the
+// local list before the first character is typed.
+func reservedUntyped(r api.CollabRequest, c *remote.Credential) bool {
+	return r.Status == api.RequestAccepted && r.Note == reservationNote &&
+		r.TargetGeneration == c.Generation && !slices.Contains(c.Delivered, r.ID)
+}
+
+// markDelivered adds the request ID to the local list and saves the credential.
+// When the save fails, the ID is taken back out of the in-memory list: a later
+// save of the same credential must not write an ID that was never typed.
+func markDelivered(c *remote.Credential, id string, save func(remote.Credential) error) error {
+	c.Delivered = append(c.Delivered, id)
+	if err := save(*c); err != nil {
+		c.Delivered = c.Delivered[:len(c.Delivered)-1]
+		return err
+	}
+	return nil
+}
+
 // deliverResolved reserves the delivery of a request whose target was resolved,
-// then types it. A reservation the server refuses types nothing and leaves the
-// request open for the next round; a reservation whose answer is lost may have
-// been committed, and recovering that case is not part of this delivery. A
-// typing that fails leaves the request reserved and uncertain: the line may have
-// reached the pane, so it is never typed again.
+// then types it. A request found reserved but never typed (its reservation
+// answer was lost) is confirmed with an answer that changes nothing instead of
+// being reserved again. A reservation or confirmation the server refuses types
+// nothing and is tried again in the next round. A typing that fails leaves the
+// request reserved and uncertain: the line may have reached the pane, so it is
+// never typed again.
 func (w *loop) deliverResolved(ctx context.Context, log *slog.Logger, project *client.Project, c *remote.Credential, r api.CollabRequest, prompt Prompt) {
+	resumed := reservedUntyped(r, c)
+	key := reservationKeyPrefix + c.ExecutionID + "-" + r.ID
+	if resumed {
+		// The server treats the same status, note and revision as the same
+		// answer: nothing changes, and it still checks that this execution holds
+		// the claim and the generation is current, as a reservation would.
+		key = client.NewKey()
+	}
 	reserveCtx, stopReserve := bounded(ctx)
-	accepted, err := project.AnswerRequest(reserveCtx, reservationKeyPrefix+c.ExecutionID+"-"+r.ID, c.TaskID, r.ID, api.CollabAnswer{Status: api.RequestAccepted, ExpectedRevision: r.Revision, Note: reservationNote}, *c.Claim())
+	accepted, err := project.AnswerRequest(reserveCtx, key, c.TaskID, r.ID, api.CollabAnswer{Status: api.RequestAccepted, ExpectedRevision: r.Revision, Note: reservationNote}, *c.Claim())
 	stopReserve()
 	if err != nil {
-		log.Warn("reserving request delivery failed", "request", r.ID, "error", err)
+		log.Warn("reserving request delivery failed", "request", r.ID, "resumed", resumed, "error", err)
 		return
 	}
-	c.Delivered = append(c.Delivered, r.ID)
-	if err := remote.WriteCredential(w.o.Home, *c); err != nil {
+	if resumed {
+		log.Warn("request reserved earlier and never typed; typing it now", "request", r.ID, "revision", accepted.Revision)
+	}
+	save := func(saved remote.Credential) error { return remote.WriteCredential(w.o.Home, saved) }
+	if err := markDelivered(c, r.ID, save); err != nil {
 		log.Error("request delivery intent could not be saved", "request", r.ID, "error", err)
 		return
 	}
