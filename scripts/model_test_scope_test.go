@@ -18,7 +18,7 @@ const (
 )
 
 // modelScopeBase is the base commit of every case: internal/board imports
-// internal/dep, which embeds sub/data.txt; its external test imports
+// internal/dep, which embeds sub/*.txt; its external test imports
 // internal/xtest; internal/other is imported by nothing.
 var modelScopeBase = map[string]string{
 	"go.mod":                           "module example.test/m\n\ngo 1.25\n",
@@ -26,8 +26,9 @@ var modelScopeBase = map[string]string{
 	modelScopeWorkflow:                 "name: w\n",
 	"internal/board/board.go":          "package board\n\nimport _ \"example.test/m/internal/dep\"\n",
 	"internal/board/board_ext_test.go": "package board_test\n\nimport _ \"example.test/m/internal/xtest\"\n",
-	"internal/dep/dep.go":              "package dep\n\nimport _ \"embed\"\n\n//go:embed sub/data.txt\nvar Data string\n",
+	"internal/dep/dep.go":              "package dep\n\nimport \"embed\"\n\n//go:embed sub/*.txt\nvar Data embed.FS\n",
 	"internal/dep/sub/data.txt":        "data\n",
+	"internal/dep/sub/more.txt":        "more\n",
 	"internal/xtest/x.go":              "package xtest\n",
 	"internal/other/other.go":          "package other\n",
 }
@@ -109,6 +110,7 @@ func modelScopeWrite(t *testing.T, repo string, files map[string]string) {
 type modelScopeCase struct {
 	name       string
 	changes    map[string]string // files written in the commit after the base
+	removes    []string          // files removed in that commit
 	event      string
 	ref        string // refs/heads/task when empty
 	env        func(base string) []string
@@ -145,6 +147,10 @@ func TestModelScope(t *testing.T) {
 			wantRun: "true", wantReason: "internal/dep/x.go"},
 		{name: "dispatch runs for an embedded file below a dependency", event: "workflow_dispatch",
 			changes: map[string]string{"internal/dep/sub/data.txt": "changed\n"},
+			env:     func(base string) []string { return []string{"MODEL_BASE=" + base} },
+			wantRun: "true", wantReason: "internal/dep/sub/data.txt"},
+		{name: "dispatch runs when a file moves out of a dependency", event: "workflow_dispatch",
+			changes: map[string]string{"docs/data.txt": "data\n"}, removes: []string{"internal/dep/sub/data.txt"},
 			env:     func(base string) []string { return []string{"MODEL_BASE=" + base} },
 			wantRun: "true", wantReason: "internal/dep/sub/data.txt"},
 		{name: "dispatch runs for a dependency of the external test", event: "workflow_dispatch",
@@ -209,6 +215,11 @@ func TestModelScope(t *testing.T) {
 				modelScopeGit(t, repo, env, "update-ref", "refs/remotes/origin/v2", base)
 			}
 			modelScopeWrite(t, repo, tc.changes)
+			for _, rel := range tc.removes {
+				if err := os.Remove(filepath.Join(repo, filepath.FromSlash(rel))); err != nil {
+					t.Fatal(err)
+				}
+			}
 			modelScopeGit(t, repo, env, "add", "-A")
 			modelScopeGit(t, repo, env, "commit", "-q", "-m", "change")
 

@@ -61,7 +61,7 @@ Without a memory directory the search is much slower. When the default mode stil
 | `test (windows-latest)` | default | 61.5 to 83.7 |
 | `model-full` (Linux) | full | 12.8 to 27.6 |
 
-Windows takes 10 to 16 times as long as Linux in the same run, and one commit can vary widely: on commit 66c6b4b, Windows took 61.5 minutes in run 41399684333 and reached the earlier 90-minute limit in run 41399815626. Run 41363725793 also reached that limit. These times are why the default mode no longer runs on macOS and Windows. The full mode comes close to its 30-minute limit.
+Windows takes 10 to 16 times as long as Linux in the same run, and one commit can vary widely: on commit 66c6b4b, Windows took 61.5 minutes in run 41399684333 and reached the earlier 90-minute limit in run 41399815626. Run 41363725793 also reached that limit. These times are why the `test` jobs of `platform-checks.yml` no longer run the default mode. On v2, `distributed-checks.yml` still runs it on macOS, and not on Windows. The full mode comes close to its 30-minute limit.
 
 `tempBoard` refuses the symlinked default temp path of macOS, so a local run there needs `TMPDIR` to name a real directory. On Linux the search runs in `/dev/shm` when that mount has at least 1 GiB free, because board writes sync every file. The full mode peaks near 310 MiB there. The search keeps few copies on disk: it drops a copy as soon as its state is known and expands at most 64 states between merges.
 

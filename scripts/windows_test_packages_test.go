@@ -73,12 +73,17 @@ func windowsPackagesRun(t *testing.T, env []string, args ...string) ([]string, i
 	return strings.Fields(stdout.String()), code, stderr.String()
 }
 
-// windowsPackagesMust runs the script and requires exit code 0.
-func windowsPackagesMust(t *testing.T, args ...string) []string {
+// windowsPackagesGOOS are the platforms whose package lists the script must
+// cover: a package whose files all carry a Windows constraint is invisible to
+// go list on Linux.
+var windowsPackagesGOOS = []string{"linux", "windows"}
+
+// windowsPackagesMust runs the script for one GOOS and requires exit code 0.
+func windowsPackagesMust(t *testing.T, goos string, args ...string) []string {
 	t.Helper()
-	out, code, stderr := windowsPackagesRun(t, nil, args...)
+	out, code, stderr := windowsPackagesRun(t, []string{"GOOS=" + goos}, args...)
 	if code != 0 {
-		t.Fatalf("windows-test-packages.sh %v exited %d: %s", args, code, stderr)
+		t.Fatalf("GOOS=%s windows-test-packages.sh %v exited %d: %s", goos, args, code, stderr)
 	}
 	return out
 }
@@ -132,10 +137,17 @@ func TestWindowsPackagesLinuxOnlyMeetTheRule(t *testing.T) {
 	root := windowsPackagesRoot(t)
 	module := strings.TrimSpace(windowsPackagesGo(t, root, nil, "list", "-m"))
 	suffix := windowsPackagesNameSuffix(t, root)
-	linuxOnly := windowsPackagesMust(t, "--linux-only")
-	listed := make(map[string]bool, len(linuxOnly))
-	for _, importPath := range linuxOnly {
-		listed[windowsPackagesRel(module, importPath)] = true
+	// The union over both platforms: a package only Windows sees is listed too.
+	listed := map[string]bool{}
+	var linuxOnly []string
+	for _, goos := range windowsPackagesGOOS {
+		for _, importPath := range windowsPackagesMust(t, goos, "--linux-only") {
+			rel := windowsPackagesRel(module, importPath)
+			if !listed[rel] {
+				listed[rel] = true
+				linuxOnly = append(linuxOnly, importPath)
+			}
+		}
 	}
 	for _, importPath := range linuxOnly {
 		rel := windowsPackagesRel(module, importPath)
@@ -194,57 +206,55 @@ func TestWindowsPackagesLinuxOnlyMeetTheRule(t *testing.T) {
 	}
 }
 
-// TestWindowsPackagesPartition checks that the Linux-only list, the services
-// list and the packages of the other Windows steps are disjoint and together
-// cover go list ./....
+// TestWindowsPackagesPartition checks, for the package list of each platform,
+// that the Linux-only list, the services list and the packages of the other
+// Windows steps are disjoint and together cover go list ./....
 func TestWindowsPackagesPartition(t *testing.T) {
 	windowsPackagesSkip(t)
 	root := windowsPackagesRoot(t)
 	module := strings.TrimSpace(windowsPackagesGo(t, root, nil, "list", "-m"))
-	all := strings.Fields(windowsPackagesGo(t, root, nil, "list", "./..."))
-	linuxOnly := windowsPackagesMust(t, "--linux-only")
-	services := windowsPackagesMust(t)
-
 	var others []string
 	for _, rel := range windowsPackagesOtherSteps {
 		others = append(others, module+"/"+rel)
 	}
-	owner := map[string]string{}
-	for group, packages := range map[string][]string{"linux-only": linuxOnly, "services": services, "other steps": others} {
-		for _, importPath := range packages {
-			if previous, ok := owner[importPath]; ok {
-				t.Errorf("%s is in both %s and %s", importPath, previous, group)
+	for _, goos := range windowsPackagesGOOS {
+		t.Run(goos, func(t *testing.T) {
+			all := strings.Fields(windowsPackagesGo(t, root, []string{"GOOS=" + goos}, "list", "./..."))
+			linuxOnly := windowsPackagesMust(t, goos, "--linux-only")
+			services := windowsPackagesMust(t, goos)
+			owner := map[string]string{}
+			for group, packages := range map[string][]string{"linux-only": linuxOnly, "services": services, "other steps": others} {
+				for _, importPath := range packages {
+					if previous, ok := owner[importPath]; ok {
+						t.Errorf("%s is in both %s and %s", importPath, previous, group)
+					}
+					owner[importPath] = group
+				}
 			}
-			owner[importPath] = group
-		}
-	}
-	for _, importPath := range all {
-		if _, ok := owner[importPath]; !ok {
-			t.Errorf("%s is in no list", importPath)
-		}
-	}
-	if len(owner) != len(all) {
-		t.Errorf("the lists name %d packages, go list ./... has %d", len(owner), len(all))
-	}
-	for _, rel := range windowsPackagesOtherSteps {
-		if !slices.Contains(all, module+"/"+rel) {
-			t.Errorf("the other-step package %s does not exist", rel)
-		}
-	}
+			for _, importPath := range all {
+				if _, ok := owner[importPath]; !ok {
+					t.Errorf("%s is in no list", importPath)
+				}
+			}
+			if len(owner) != len(all) {
+				t.Errorf("the lists name %d packages, go list ./... has %d", len(owner), len(all))
+			}
 
-	// Entries that end in a slash match a prefix and the others match exactly.
-	for _, want := range []struct {
-		importPath string
-		group      string
-	}{
-		{module + "/internal/statemachine/dispatch", "linux-only"},
-		{module + "/internal/version", "linux-only"},
-		{module + "/internal/board/boardtest", "services"},
-		{module + "/internal/board", "other steps"},
-	} {
-		if owner[want.importPath] != want.group {
-			t.Errorf("%s is in %q, want %q", want.importPath, owner[want.importPath], want.group)
-		}
+			// Entries that end in a slash match a prefix and the others match exactly.
+			for _, want := range []struct {
+				importPath string
+				group      string
+			}{
+				{module + "/internal/statemachine/dispatch", "linux-only"},
+				{module + "/internal/version", "linux-only"},
+				{module + "/internal/board/boardtest", "services"},
+				{module + "/internal/board", "other steps"},
+			} {
+				if owner[want.importPath] != want.group {
+					t.Errorf("%s is in %q, want %q", want.importPath, owner[want.importPath], want.group)
+				}
+			}
+		})
 	}
 }
 

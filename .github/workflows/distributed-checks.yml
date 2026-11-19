@@ -123,11 +123,11 @@ jobs:
         run: go test -p 1 -count=1 -timeout 150m -skip '^TestModelCompositeStates$' ./...
       # Windows runs the packages that can behave differently there. The
       # platform-neutral ones (internal/statemachine, internal/version) run in the
-      # ubuntu-latest all job only; scripts/windows-test-packages.sh holds the rule
-      # and the list. internal/board has its own step below. internal/remote's
-      # platform-neutral tests run in the ubuntu-latest all job and the race job;
-      # by default only its TestWindows tests run on Windows, in a later step. A
-      # dispatch can add any package, see the extra step. The script runs under
+      # ubuntu-latest and macos-latest all jobs only; scripts/windows-test-packages.sh
+      # holds the rule and the list. internal/board has its own step below.
+      # internal/remote's platform-neutral tests run in the all jobs and the race
+      # job; by default only its TestWindows tests run on Windows, in a later step.
+      # A dispatch can add any package, see the extra step. The script runs under
       # bash, because the bash of a pwsh step may be the one of WSL.
       - name: List the Windows service packages
         if: matrix.suite == 'services'

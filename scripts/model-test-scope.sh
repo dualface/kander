@@ -106,7 +106,7 @@ else
   base_from="the merge base with origin/v2"
 fi
 
-git diff --name-only -z "$base" HEAD -- >"$tmp" || emit true "model search runs: git diff against ${base} failed"
+git diff --no-renames --name-only -z "$base" HEAD -- >"$tmp" || emit true "model search runs: git diff against ${base} failed"
 
 deps=$(go list -test -deps -f '{{if not .Standard}}{{.ImportPath}}{{end}}' "$target") || emit true "model search runs: go list failed for ${target}"
 module=$(go list -m) || emit true "model search runs: go list -m failed"
