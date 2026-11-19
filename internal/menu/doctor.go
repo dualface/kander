@@ -102,6 +102,9 @@ func printDoctorWithTools(tools TerminalTools, repair bool, interactive bool) bo
 		healthy = false
 	}
 	reportGitHubCLI()
+	if !reportBackgroundWorker() {
+		healthy = false
+	}
 	agentConfig, agentConfigErr := config.Load(false)
 	if agentConfigErr != nil && !repair {
 		warning(agentConfigErr.Error())

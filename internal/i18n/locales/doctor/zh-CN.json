@@ -30,5 +30,8 @@
   "menu.agent_session_file_store_no": "保持继承 session.file",
   "menu.modified_rules_backup_replace_prompt": "上面列出的 {{.V0}} 个规则文件被本地修改过。先备份每个文件, 再替换为内嵌版本?",
   "menu.backup_and_replace_modified_rules": "备份并替换",
-  "menu.keep_modified_rules": "保留本地文件"
+  "menu.keep_modified_rules": "保留本地文件",
+  "menu.background_worker_not_running": "后台 worker: 未运行",
+  "menu.background_worker_running": "后台 worker: kander {{.V0}}, pid {{.V1}}",
+  "menu.background_worker_version_unrecorded": "后台 worker: 正在运行, 但没有可用的版本记录 (客户端目录 {{.V0}}). 它可能是不能接管到本二进制的旧 worker. 请停止该目录的 kander worker 进程; 下一次 kander start, 服务端认领或 kander coordinator claim 会从本二进制启动 worker. {{.V1}}"
 }
