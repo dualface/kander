@@ -2,6 +2,7 @@ package menu
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -158,6 +159,13 @@ func TestDoctorWorkerCheckChangesNothing(t *testing.T) {
 			info, err := e.Info()
 			if err != nil {
 				t.Fatal(err)
+			}
+			if e.Name() == remote.WorkerLockName {
+				// A Windows byte-range lock refuses a read through another
+				// handle while the worker holds it, so the lock file is
+				// compared by metadata only.
+				out[e.Name()] = fmt.Sprintf("%s|%d", info.ModTime(), info.Size())
+				continue
 			}
 			data, err := os.ReadFile(filepath.Join(home, e.Name()))
 			if err != nil {

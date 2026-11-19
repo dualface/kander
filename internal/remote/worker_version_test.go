@@ -2,6 +2,7 @@ package remote
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -188,6 +189,75 @@ func TestInspectWorkerReadsWithoutCreatingAnything(t *testing.T) {
 			t.Fatalf("another version is a mismatch: %v", got)
 		}
 	})
+}
+
+// The window between "the lock file exists" and "the lock file is opened" is
+// microseconds wide, so this test covers it only by chance. The deterministic
+// evidence is that InspectWorker has no path that creates the lock file.
+func TestInspectWorkerNeverCreatesTheLockFile(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("a Windows handle does not share DELETE, so the concurrent remove fails by design")
+	}
+	home := t.TempDir()
+	lockPath := filepath.Join(home, WorkerLockName)
+	if err := os.WriteFile(lockPath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stop := make(chan struct{})
+	inspected := make(chan error, 1)
+	go func() {
+		for {
+			select {
+			case <-stop:
+				inspected <- nil
+				return
+			default:
+			}
+			if status, err := InspectWorker(home); err != nil || status.Run != WorkerStopped {
+				inspected <- fmt.Errorf("status %+v, error %v", status, err)
+				return
+			}
+		}
+	}()
+	time.Sleep(5 * time.Millisecond)
+	if err := os.Remove(lockPath); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	close(stop)
+	if err := <-inspected; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
+		t.Fatalf("the probe must not bring the lock file back: %v", err)
+	}
+}
+
+// Runs on every platform; the name keeps it in the Windows CI step that runs
+// only TestWindows* of this package.
+func TestWindowsInspectWorkerSeesAHeldLock(t *testing.T) {
+	home := t.TempDir()
+	file, err := fs.OpenLockFile(home, filepath.Join(home, WorkerLockName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	lock, err := fs.LockExclusive(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeRecord(t, home, WorkerRecord{Version: "v9.9.9", PID: 41})
+	status, err := InspectWorker(home)
+	if err != nil || status.Run != WorkerRunning || status.RecordState != WorkerRecordRecorded || status.Record.PID != 41 {
+		t.Fatalf("a held lock is a running worker with its record: %+v, error %v", status, err)
+	}
+	if err := lock.Unlock(); err != nil {
+		t.Fatal(err)
+	}
+	status, err = InspectWorker(home)
+	if err != nil || status.Run != WorkerStopped {
+		t.Fatalf("a released lock is a stopped worker: %+v, error %v", status, err)
+	}
 }
 
 func TestSamePathCleansAndRejectsEmptyPaths(t *testing.T) {

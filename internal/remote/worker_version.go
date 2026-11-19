@@ -1,11 +1,13 @@
 package remote
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/fs"
@@ -33,23 +35,15 @@ type WorkerStatus struct {
 }
 
 // InspectWorker looks at the worker of home without creating or changing
-// anything: no client directory, no lock file, no record.
+// anything: no client directory, no lock file, no record. A lock file that is
+// missing, or deleted while the probe runs, means no worker runs.
 func InspectWorker(home string) (WorkerStatus, error) {
 	if _, err := os.Stat(home); os.IsNotExist(err) {
 		return WorkerStatus{Run: WorkerNoHome}, nil
 	} else if err != nil {
 		return WorkerStatus{}, err
 	}
-	// WorkerHeld opens the lock file and creates it when it is missing, so an
-	// absent lock file is answered here first.
-	exists, err := fs.RegularFileExists(home, filepath.Join(home, WorkerLockName))
-	if err != nil {
-		return WorkerStatus{}, err
-	}
-	if !exists {
-		return WorkerStatus{Run: WorkerStopped}, nil
-	}
-	held, err := WorkerHeld(home)
+	held, err := workerLockHeld(home)
 	if err != nil {
 		return WorkerStatus{}, err
 	}
@@ -57,6 +51,28 @@ func InspectWorker(home string) (WorkerStatus, error) {
 		return WorkerStatus{Run: WorkerStopped}, nil
 	}
 	return heldWorkerStatus(home), nil
+}
+
+// workerLockHeld is WorkerHeld for a probe that must not create the lock
+// file: it opens only an existing one, and an absent one is not held. Opening
+// and the absence answer are one step, so no interleaving with a delete can
+// leave a new lock file behind.
+func workerLockHeld(home string) (bool, error) {
+	file, err := fs.OpenExistingLockFile(home, filepath.Join(home, WorkerLockName))
+	if err != nil {
+		return false, err
+	}
+	if file == nil {
+		return false, nil
+	}
+	defer file.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	lock, err := fs.LockExclusiveContext(ctx, file)
+	if err != nil {
+		return true, nil
+	}
+	return false, lock.Unlock()
 }
 
 // heldWorkerStatus reads the record of a worker known to hold the lock. A read
