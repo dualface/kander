@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"reflect"
 	"sync"
 	"syscall"
 	"time"
@@ -279,13 +280,19 @@ func (w *loop) workRound(ctx context.Context) (int, error) {
 
 // refreshGroupContext completes a group credential with the facts of the
 // execution that coordinates the group: the agent of a task that also
-// coordinates its own group is recorded on the task credential only.
+// coordinates its own group is recorded on the task credential only. The
+// credential is written only when the completion changed it: a write of the
+// same content every round would rewrite a lost credential for as long as it
+// is kept.
 func (w *loop) refreshGroupContext(c *remote.Credential) {
 	if c.ResourceKind != "group" {
 		return
 	}
+	before := *c
 	if err := remote.RefreshExecutionContext(w.o.Home, c); err != nil {
 		w.o.Logger.Error("group execution context could not be read", "group", c.TaskID, "error", err)
+	} else if reflect.DeepEqual(before, *c) {
+		return
 	} else if err := remote.WriteCredential(w.o.Home, *c); err != nil && !errors.Is(err, remote.ErrCredentialReleased) {
 		w.o.Logger.Error("group execution context could not be saved", "group", c.TaskID, "error", err)
 	}
