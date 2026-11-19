@@ -234,7 +234,8 @@ func (w *loop) renewOne(ctx context.Context, c remote.Credential) {
 			// The refusal proves nothing while the server's view still shows
 			// this generation, so it is retried every renewal interval like an
 			// outage; without a disconnect record it would be retried every tick.
-			w.retry(log, c, now, fmt.Errorf("%w; the server still shows generation %d %s", err, claim.Generation, claim.Status))
+			// The wait starts at the refusal, not at the start of the call.
+			w.retry(log, c, w.o.Now(), fmt.Errorf("%w; the server still shows generation %d %s", err, claim.Generation, claim.Status))
 		default:
 			w.markLost(log, c, err.Error())
 		}

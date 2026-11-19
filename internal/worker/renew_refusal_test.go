@@ -5,12 +5,16 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/remote"
 )
+
+// refusalDelay is the time the server takes to refuse the forged renewal.
+const refusalDelay = 4 * time.Second
 
 // A refusal that proves nothing while the server still shows the credential's
 // generation is retried once per renewal interval, like an outage: it
@@ -24,16 +28,23 @@ func TestRefusalThatProvesNothingWaitsARenewalInterval(t *testing.T) {
 		defer mu.Unlock()
 		return renewals[token]
 	}
+	var clock atomic.Pointer[harness]
 	h := newHarnessWrapped(t, 0, func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if _, ok := isRenewal(r); ok {
+				token := r.Header.Get(api.HeaderClaimToken)
 				mu.Lock()
-				renewals[r.Header.Get(api.HeaderClaimToken)]++
+				renewals[token]++
 				mu.Unlock()
+				if strings.Trim(token, "0") == "" {
+					// The refusal takes time: the wait must start when it comes.
+					clock.Load().advance(refusalDelay)
+				}
 			}
 			next.ServeHTTP(w, r)
 		})
 	})
+	clock.Store(h)
 	logs := &recording{}
 	h.loop.o.Logger = slog.New(logs)
 
@@ -61,7 +72,8 @@ func TestRefusalThatProvesNothingWaitsARenewalInterval(t *testing.T) {
 		t.Error("the refusal registered no disconnect record for the forged credential")
 	}
 
-	// Every tick before the next interval is over leaves the credential alone.
+	// Every tick before the next interval is over, counted from the refusal,
+	// leaves the credential alone.
 	for elapsed := tick; elapsed < interval; elapsed += tick {
 		h.advance(tick)
 		if _, err := h.pass(t.Context()); err != nil {
