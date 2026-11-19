@@ -7,14 +7,11 @@ import (
 )
 
 // sealExits are the two states a started member leaves a plan by.
-var sealExits = []struct{ state, result string }{
-	{"archived", "cancelled"},
-	{"trash", "trashed"},
-}
+var sealExits = []string{"archived", "trash"}
 
-func sealExit(t *testing.T, root, id, state, result string) {
+func sealExit(t *testing.T, root, id, state string) {
 	t.Helper()
-	moveWith(t, root, id, state, MoveOptions{Result: result, Reason: "the member left the group", Decision: "decision-1"})
+	deadEndExit(t, root, id, state)
 	if _, ok := deadEndExclusion(t, root, id); !ok {
 		t.Fatalf("%s has no member exclusion record after the move into %s", id, state)
 	}
@@ -99,20 +96,20 @@ func requireSealedPlanFinishes(t *testing.T, w *membersWorld) {
 }
 
 func TestSealSkipsAnExcludedAddedMember(t *testing.T) {
-	for _, exit := range sealExits {
-		t.Run(exit.state, func(t *testing.T) {
-			w := addedWorld(t, "seal-added-"+exit.state)
-			sealExit(t, w.root, w.second, exit.state, exit.result)
+	for _, state := range sealExits {
+		t.Run(state, func(t *testing.T) {
+			w := addedWorld(t, "seal-added-"+state)
+			sealExit(t, w.root, w.second, state)
 			requireSealedAndDone(t, w)
 		})
 	}
 }
 
 func TestSealSkipsAnExcludedFoundingMember(t *testing.T) {
-	for _, exit := range sealExits {
-		t.Run(exit.state, func(t *testing.T) {
-			w := foundingWorld(t, "seal-founding-"+exit.state)
-			sealExit(t, w.root, w.second, exit.state, exit.result)
+	for _, state := range sealExits {
+		t.Run(state, func(t *testing.T) {
+			w := foundingWorld(t, "seal-founding-"+state)
+			sealExit(t, w.root, w.second, state)
 			requireSealedAndDone(t, w)
 		})
 	}
@@ -120,7 +117,7 @@ func TestSealSkipsAnExcludedFoundingMember(t *testing.T) {
 
 func TestBatchAndSealSkipAnExcludedMember(t *testing.T) {
 	w := addedWorld(t, "seal-batch")
-	sealExit(t, w.root, w.second, "archived", "cancelled")
+	sealExit(t, w.root, w.second, "archived")
 	batch := ReviewPlanBatch{BatchID: "second", PreviousBatchID: "first", TaskIDs: []string{w.first}, Base: sha("b"), TargetCommit: sha("c"), Requirements: noReviewRequirements()}
 	if err := w.extend(ReviewPlanExtension{Batch: &batch, Seal: true}); err != nil {
 		t.Fatalf("batch and seal: %v", err)
@@ -168,7 +165,7 @@ func TestSealWaitsForAnUnassignedMemberBesideAnExcludedOne(t *testing.T) {
 	}
 	w.plan.PlanID = p.PlanID
 	w.refresh(t)
-	sealExit(t, root, w.second, "archived", "cancelled")
+	sealExit(t, root, w.second, "archived")
 	err := w.extend(ReviewPlanExtension{Seal: true})
 	if err == nil || !strings.Contains(err.Error(), "seal requires every member assigned") {
 		t.Fatalf("seal with an unassigned member beside an excluded one: %v", err)
@@ -190,7 +187,7 @@ func TestSealAfterAnAssignedMemberLeaves(t *testing.T) {
 	if _, err := deadEndClose(t, w.root, "second", map[string]ReviewRoleConclusion{}, nil); err != nil {
 		t.Fatal(err)
 	}
-	sealExit(t, w.root, w.second, "archived", "cancelled")
+	sealExit(t, w.root, w.second, "archived")
 	requireSealedAndDone(t, w)
 }
 
