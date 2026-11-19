@@ -56,6 +56,33 @@ func (s *Session) RetainAction(kind string, logical any) (journal *ActionJournal
 	return s.beginAction(kind, logical, false)
 }
 
+// PeekAction reads the receipt of one logical invocation without creating, locking, or changing
+// anything. found is false when the invocation has no receipt yet. A receipt is written
+// atomically, so the read never sees a partial one.
+func (s *Session) PeekAction(kind string, logical any) (action LocalAction, found bool, err error) {
+	data, err := json.Marshal(struct {
+		Kind  string
+		Input any
+	}{kind, logical})
+	if err != nil {
+		return action, false, err
+	}
+	root, err := s.LocalDataRoot()
+	if err != nil {
+		return action, false, err
+	}
+	sum := sha256.Sum256(data)
+	path := filepath.Join(root, "launch-actions", hex.EncodeToString(sum[:])+".json")
+	previous, found, err := fs.ReadRegularFileIfExists(s.Home, path)
+	if err != nil || !found {
+		return action, false, err
+	}
+	if err := json.Unmarshal(previous, &action); err != nil || action.Schema != 1 || action.Kind != kind {
+		return LocalAction{}, false, errors.New(config.Text("remote.launch_receipt_damaged"))
+	}
+	return action, true, nil
+}
+
 func (s *Session) beginAction(kind string, logical any, retryFailed bool) (journal *ActionJournal, fresh bool, err error) {
 	data, err := json.Marshal(struct {
 		Kind  string

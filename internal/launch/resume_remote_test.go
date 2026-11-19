@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -251,6 +252,15 @@ func TestImplicitNativeResumeWithJSONRefusesBeforeTheReceiptAndReplaysCompletedO
 	args := []string{task.TaskID, "--message", "Continue after the stop"}
 	log := os.Getenv("KANBAN_TMUX_LOG")
 	prior, _ := os.ReadFile(log)
+	receipts := func() []string {
+		entries, _ := os.ReadDir(filepath.Join(root, "launch-actions"))
+		var names []string
+		for _, entry := range entries {
+			names = append(names, entry.Name())
+		}
+		return names
+	}
+	receiptsBefore := receipts()
 
 	restore := withTerminalDefaultLauncher(t)
 	code, stdout, stderr := commandtest.Capture(func() int { return RunResumeRemote(append([]string{"--json"}, args...)) })
@@ -260,6 +270,9 @@ func TestImplicitNativeResumeWithJSONRefusesBeforeTheReceiptAndReplaysCompletedO
 	}
 	if actual, _ := os.ReadFile(log); !bytes.Equal(prior, actual) {
 		t.Fatal("the refused command invoked the terminal")
+	}
+	if after := receipts(); !slices.Equal(receiptsBefore, after) {
+		t.Fatalf("the refusal wrote a receipt: before %v, after %v", receiptsBefore, after)
 	}
 	// The refusal left no pending receipt: the same command without --json continues the executor,
 	// in the worktree of the next generation.
@@ -296,6 +309,71 @@ func TestImplicitNativeResumeWithJSONRefusesBeforeTheReceiptAndReplaysCompletedO
 		t.Fatalf("replay: code=%d\nstdout=%s\nstderr=%s", code, stdout, stderr)
 	}
 	if actual, _ := os.ReadFile(log); !bytes.Equal(afterTakeover, actual) {
+		t.Fatal("the replay invoked the terminal")
+	}
+}
+
+// An implicit resume that was interrupted after its launch completed leaves the command receipt
+// pending and the launch receipt complete. Repeating it with --json under a terminal default
+// launcher replays the completed launch: it starts nothing, so the launcher does not matter.
+func TestImplicitNativeResumeWithJSONReplaysACompletedLaunchOfAPendingCommand(t *testing.T) {
+	skipOnWindows(t)
+	session, task, _ := remoteGitFixture(t, "implicit-native-pending")
+	root, err := session.LocalDataRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("KANBAN_LAUNCH_CWD", filepath.Join(root, "worktrees", task.TaskID, "g1"))
+	if _, err := StartRemote("claude", "tmux", task.TaskID); err != nil {
+		t.Fatal(err)
+	}
+	markRemoteExecutorStopped(t, session, task.TaskID)
+	t.Setenv("KANBAN_LAUNCH_CWD", filepath.Join(root, "worktrees", task.TaskID, "g2"))
+	args := []string{task.TaskID, "--message", "Continue after the stop"}
+	if code := RunResumeRemote(args); code != 0 {
+		t.Fatalf("resume: exit %d", code)
+	}
+	// Interrupt the command after its launch: the command receipt goes back to pending.
+	dir := filepath.Join(root, "launch-actions")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reopened := 0
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var receipt map[string]any
+		if err := json.Unmarshal(data, &receipt); err != nil {
+			t.Fatal(err)
+		}
+		if receipt["kind"] == "native-resume-command" {
+			receipt["phase"] = "pending"
+			data, _ = json.Marshal(receipt)
+			if err := os.WriteFile(path, data, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			reopened++
+		}
+	}
+	if reopened != 1 {
+		t.Fatalf("found %d command receipts", reopened)
+	}
+	log := os.Getenv("KANBAN_TMUX_LOG")
+	before, _ := os.ReadFile(log)
+	restore := withTerminalDefaultLauncher(t)
+	defer restore()
+	code, stdout, stderr := commandtest.Capture(func() int { return RunResumeRemote(append([]string{"--json"}, args...)) })
+	if code != 0 || strings.Contains(stderr, "interactive_required") || !strings.Contains(stdout, "replayed") {
+		t.Fatalf("replay: code=%d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+	if after, _ := os.ReadFile(log); !bytes.Equal(before, after) {
 		t.Fatal("the replay invoked the terminal")
 	}
 }

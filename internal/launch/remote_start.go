@@ -32,6 +32,24 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (StartResult, e
 	return launchRemote(remoteLaunchInput{Agent: agentOverride, Launcher: launcherOverride, TaskID: taskID})
 }
 
+// launchReceiptInput is the logical input of the receipt of one launch: the identity of the
+// receipt that launchRemote begins and childLaunchStarts reads.
+type launchReceiptInput struct {
+	Task  string
+	Input remoteLaunchInput
+}
+
+// childLaunchStarts reports, without writing anything, whether the launch of input would start
+// an agent: it has no receipt yet, or a receipt that was only prepared. A completed, failed, or
+// recoverable receipt is replayed or reconciled and starts nothing.
+func childLaunchStarts(session *remote.Session, task string, input remoteLaunchInput) bool {
+	action, found, err := session.PeekAction("task-launch", launchReceiptInput{task, input})
+	if err != nil || !found {
+		return true
+	}
+	return action.Phase == "prepared" || action.Phase == "session-ready"
+}
+
 func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 	agentOverride, launcherOverride, taskID := input.Agent, input.Launcher, input.TaskID
 	verb := "start"
@@ -45,10 +63,14 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 	if err != nil {
 		return result, err
 	}
-	// Every form of launchRemote starts an agent, so the launcher is checked before the server
-	// session is opened, which creates the client identity on first use.
-	if err := refuseConfiguredLauncher(cfg, launcherOverride); err != nil {
-		return result, err
+	// Every form of launchRemote that is not a replay starts an agent. On a host that has no
+	// client identity yet nothing can be replayed, so the launcher is checked before the server
+	// session is opened, which creates the identity. Otherwise it is checked below, once the
+	// receipt of this launch has been read and before it is written.
+	if !remote.ClientStarted() {
+		if err := refuseConfiguredLauncher(cfg, launcherOverride); err != nil {
+			return result, err
+		}
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -70,14 +92,16 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 	if err != nil {
 		return result, err
 	}
+	if childLaunchStarts(session, task.TaskID, input) {
+		if err := refuseConfiguredLauncher(cfg, launcherOverride); err != nil {
+			return result, err
+		}
+	}
 	begin := session.BeginAction
 	if input.Native {
 		begin = session.RetainAction
 	}
-	journal, fresh, err := begin("task-launch", struct {
-		Task  string
-		Input remoteLaunchInput
-	}{task.TaskID, input})
+	journal, fresh, err := begin("task-launch", launchReceiptInput{task.TaskID, input})
 	if err != nil {
 		return result, err
 	}

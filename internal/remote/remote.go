@@ -77,6 +77,18 @@ func Home() (string, error) {
 	return filepath.Join(paths.ShareDir, "client"), nil
 }
 
+// ClientStarted reports whether this host already has a client identity. Without one nothing
+// private exists yet, not even a launch receipt, so a command that is about to be refused can
+// be refused before anything is created.
+func ClientStarted() bool {
+	home, err := Home()
+	if err != nil {
+		return false
+	}
+	_, ok, err := fs.ReadRegularFileIfExists(home, filepath.Join(home, "client-id"))
+	return err == nil && ok
+}
+
 func ensureHome(home string) error {
 	if err := os.MkdirAll(filepath.Dir(home), 0o700); err != nil {
 		return err

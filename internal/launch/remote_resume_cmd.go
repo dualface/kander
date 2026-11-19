@@ -24,9 +24,11 @@ func runRemoteResume(cfg *config.Config, agent *string, launcher, task, message,
 	if err != nil {
 		return fail(err)
 	}
-	if agent != nil || options.Decision != "" {
-		// An explicit takeover always starts an agent. An implicit resume may only deliver the
-		// message to a live executor, so it checks the launcher once it knows it launches.
+	if (agent != nil || options.Decision != "") && !remote.ClientStarted() {
+		// An explicit takeover starts an agent unless it replays a completed launch, and a host
+		// with no client identity has none to replay: refuse before the session creates it.
+		// Otherwise launchRemote checks the launcher after it has read the receipt. An implicit
+		// resume may only deliver the message to a live executor, so it decides for itself.
 		if err := refuseConfiguredLauncher(cfg, launcher); err != nil {
 			return fail(err)
 		}
