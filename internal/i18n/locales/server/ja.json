@@ -193,5 +193,6 @@
   "remote.server_version_warning": "警告: ローカルサーバー {{.V0}} とクライアント {{.V1}} のバージョンが異なります。処理を続行します。更新には kander server restart を実行してください。",
   "remote.server_restart_required": "サーバー {{.V0}} とクライアント {{.V1}} のプロトコルに互換性がありません。kander server restart を実行してください。",
   "remote.server_restart_prompt": "ローカルサーバー: {{.V0}}、クライアント: {{.V1}}。サーバーを再起動しますか？[Y/n] ",
+  "worker.request_delivery_blocked": "送信前に配信が停止（{{.V2}} から）。待機中のリクエスト {{.V0}} 件（先頭 {{.V1}}）: {{.V3}}",
   "config.server_default": "既定"
 }

@@ -193,5 +193,6 @@
   "remote.server_version_warning": "Warning: local server version {{.V0}} differs from client {{.V1}}; continuing. Run kander server restart to update.",
   "remote.server_restart_required": "Server {{.V0}} is incompatible with client {{.V1}}. Run kander server restart.",
   "remote.server_restart_prompt": "Local server version: {{.V0}}; client version: {{.V1}}. Restart the server now? [Y/n] ",
+  "worker.request_delivery_blocked": "delivery blocked before sending since {{.V2}}; {{.V0}} request(s) waiting (first {{.V1}}): {{.V3}}",
   "config.server_default": "default"
 }
