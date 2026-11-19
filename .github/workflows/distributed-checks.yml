@@ -82,9 +82,20 @@ jobs:
           TMP: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
           TEMP: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
         run: go test -p 1 -count=1 -timeout 150m ./...
-      # internal/remote's platform-neutral tests run in the ubuntu-latest all job
-      # and the race job; by default only its TestWindows tests run on Windows, in
-      # the next step. A dispatch can add the whole package, see the extra step.
+      # Windows runs the packages that can behave differently there. The
+      # platform-neutral ones (internal/statemachine, internal/version) run in the
+      # ubuntu-latest all job only; scripts/windows-test-packages.sh holds the rule
+      # and the list. internal/board has its own step below. internal/remote's
+      # platform-neutral tests run in the ubuntu-latest all job and the race job;
+      # by default only its TestWindows tests run on Windows, in a later step. A
+      # dispatch can add any package, see the extra step. The script runs under
+      # bash, because the bash of a pwsh step may be the one of WSL.
+      - name: List the Windows service packages
+        if: matrix.suite == 'services'
+        shell: bash
+        run: |
+          bash scripts/windows-test-packages.sh > "$RUNNER_TEMP/windows-packages.txt"
+          cat "$RUNNER_TEMP/windows-packages.txt"
       - name: Complete Windows service tests
         if: matrix.suite == 'services'
         env:
@@ -93,8 +104,8 @@ jobs:
           TEMP: ${{ runner.temp }}
         shell: pwsh
         run: |
-          $packages = @(go list ./... | Where-Object { $_ -ne 'github.com/dualface/kander/internal/board' -and $_ -ne 'github.com/dualface/kander/internal/remote' })
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $packages = @(Get-Content -LiteralPath "$env:RUNNER_TEMP\windows-packages.txt" | Where-Object { $_ -ne '' })
+          if ($packages.Count -eq 0) { Write-Error "no Windows service packages are listed"; exit 1 }
           go test -v -p 1 -count=1 -timeout 20m $packages
       # Windows-specific tests of internal/remote, named TestWindows*, such as the
       # TestWindowsCredentialSharing tests planned by
@@ -128,18 +139,19 @@ jobs:
           if ($packages.Count -eq 0) { exit 0 }
           go test -v -p 1 -count=1 -timeout 30m -skip '^TestModelCompositeStates$' $packages
           exit $LASTEXITCODE
-      # TestModelCompositeStates searches abstract board states, so its pass or
-      # fail result does not depend on the platform; only the temporary directory
-      # it uses is chosen per platform. The ubuntu-latest all job runs it in
-      # default mode (as does macos-latest); on Windows it alone took 67 minutes
-      # (run 44410469265).
+      # The TestModel tests of internal/board are searches over abstract board
+      # states and the checks of that search, in model_*_test.go. Their result does
+      # not depend on the platform; only the temporary directory they use is chosen
+      # per platform. The ubuntu-latest all job runs them (so does macos-latest);
+      # on Windows TestModelCompositeStates alone took 67 minutes (run
+      # 44410469265). See docs/model-test.md.
       - name: Complete Windows board tests
         if: matrix.suite == 'board'
         env:
           TMPDIR: ${{ runner.temp }}
           TMP: ${{ runner.temp }}
           TEMP: ${{ runner.temp }}
-        run: go test -v -p 1 -count=1 -timeout 30m -skip '^TestModelCompositeStates$' ./internal/board
+        run: go test -v -p 1 -count=1 -timeout 30m -skip '^TestModel' ./internal/board
 
   race:
     runs-on: ubuntu-latest
