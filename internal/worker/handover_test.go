@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/api"
+	kfs "github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/process"
 	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/version"
@@ -157,13 +158,12 @@ func newRigOn(t *testing.T, h *harness) *rig {
 }
 
 // writeExecutable replaces the file the way an upgrade does: a new file is
-// renamed over the old path.
+// renamed over the old path. The rename goes through internal/fs because the
+// worker opens the path every tick, and on Windows that open does not share
+// DELETE, so a bare os.Rename of the same moment fails with access denied;
+// internal/fs retries that busy rename for a bounded time.
 func (r *rig) writeExecutable(content string) {
-	next := r.exe + ".new"
-	if err := os.WriteFile(next, []byte(content), 0o700); err != nil {
-		r.t.Fatal(err)
-	}
-	if err := os.Rename(next, r.exe); err != nil {
+	if err := kfs.WriteExecutableAtomicInherited(filepath.Dir(r.exe), r.exe, []byte(content), true); err != nil {
 		r.t.Fatal(err)
 	}
 }
