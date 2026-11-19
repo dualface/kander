@@ -344,11 +344,17 @@ func subscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 // A merged stdout/stderr pipe must not turn an output failure into another
 // unbounded write. When diagnostics also fail, the nonzero exit is the signal.
 func writeSubscriptionDiagnostic(w io.Writer, message string) error {
+	return writeSubscriptionDiagnosticContext(context.Background(), w, message)
+}
+
+// writeSubscriptionDiagnosticContext is writeSubscriptionDiagnostic for a write that must stop
+// when the subscription is canceled: it keeps the write limit and ends earlier with the context.
+func writeSubscriptionDiagnosticContext(parent context.Context, w io.Writer, message string) error {
 	writer, cleanup, err := subscriptionWriter(w)
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), subscriptionWriteTimeout)
+	ctx, cancel := context.WithTimeout(parent, subscriptionWriteTimeout)
 	defer cancel()
 	data := []byte(message + "\n")
 	n, err := writer.WriteContext(ctx, data)
@@ -360,9 +366,12 @@ func writeSubscriptionDiagnostic(w io.Writer, message string) error {
 
 // bindStreamNotices makes the remarks of the stream use the bounded diagnostic writer, and
 // returns the function that undoes it. While the subscription writes to a shared stdout and
-// stderr, the descriptor is non-blocking, and a plain stderr write would fail with EAGAIN.
-func bindStreamNotices() (restore func()) {
-	return command.SetStreamLineWriter(func(line string) error { return writeSubscriptionDiagnostic(os.Stderr, line) })
+// stderr, the descriptor is non-blocking, and a plain stderr write would fail with EAGAIN. The
+// write ends with ctx, so canceling the subscription does not wait for a reader that stopped.
+func bindStreamNotices(ctx context.Context) (restore func()) {
+	return command.SetStreamLineWriter(func(line string) error {
+		return writeSubscriptionDiagnosticContext(ctx, os.Stderr, line)
+	})
 }
 
 // runSubscribe implements kander subscribe against the server. Every failure is written by the
@@ -388,9 +397,9 @@ func runSubscribe(opts subscribeOptions) int {
 	}
 	// The remarks of the stream go through the bounded writer too: stdout and stderr may be
 	// one full, non-blocking pipe.
-	defer bindStreamNotices()()
 	ctx, cancel := subscriptionSignalContext()
 	defer cancel()
+	defer bindStreamNotices(ctx)()
 	service, err := remote.Open(ctx, cfg, cwd)
 	if err == nil {
 		err = subscribeContext(ctx, service.Location(""), opts, os.Stdout, service)
