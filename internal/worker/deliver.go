@@ -59,7 +59,8 @@ func (w *loop) deliver(ctx context.Context, log *slog.Logger, project *client.Pr
 	key := keyOf(*c)
 	var rejected []string
 	// waitingNow is the deliverable requests that are still waiting: a proposal
-	// rejected during this round is not.
+	// found unusable during this round is not, whether or not its rejection
+	// reached the server.
 	waitingNow := func() []api.CollabRequest {
 		return slices.DeleteFunc(slices.Clone(ready), func(r api.CollabRequest) bool { return slices.Contains(rejected, r.ID) })
 	}
@@ -142,9 +143,10 @@ func (w *loop) readyRequests(ctx context.Context, log *slog.Logger, project *cli
 }
 
 // rejectUnusable answers a dispatch proposal that cannot be delivered any more
-// with a rejection, and reports whether it did: its acceptance window has
-// elapsed on the server clock of the task read, or it binds an earlier card
-// version. Any other request is left alone.
+// with a rejection, and reports whether the proposal is unusable: its acceptance
+// window has elapsed on the server clock of the task read, or it binds an
+// earlier card version. The rejection itself may fail; that is logged, and the
+// result does not depend on it. Any other request is left alone.
 func (w *loop) rejectUnusable(ctx context.Context, log *slog.Logger, project *client.Project, c *remote.Credential, r api.CollabRequest, task api.Task) bool {
 	if r.Dispatch == nil {
 		return false
@@ -208,8 +210,9 @@ func markDelivered(c *remote.Credential, id string, save func(remote.Credential)
 // would have the server check the window and the card version just before the
 // typing; the confirmation of a request that is already accepted does not, so
 // the worker does. It reports whether the proposal may be typed, and whether it
-// was rejected instead; a proposal that could not be checked is neither and
-// waits for the next round.
+// was found unusable and a rejection was tried instead (a failed rejection is
+// logged); a proposal that could not be checked is neither and waits for the
+// next round.
 func (w *loop) recheckProposal(ctx context.Context, log *slog.Logger, project *client.Project, c *remote.Credential, r api.CollabRequest) (usable, rejected bool) {
 	showCtx, stopShow := bounded(ctx)
 	task, err := project.Show(showCtx, c.TaskID)
@@ -232,8 +235,9 @@ func (w *loop) recheckProposal(ctx context.Context, log *slog.Logger, project *c
 // before it is typed. A reservation or confirmation the server refuses types
 // nothing and is tried again in the next round. A typing that fails leaves the
 // request reserved and uncertain: the line may have reached the pane, so it is
-// never typed again. It reports whether the request was rejected instead of
-// delivered, which takes it out of the requests still waiting.
+// never typed again. It reports whether the request was found unusable and a
+// rejection was tried instead of a delivery, which takes it out of the requests
+// still waiting, whether or not the server received the rejection.
 func (w *loop) deliverResolved(ctx context.Context, log *slog.Logger, project *client.Project, c *remote.Credential, r api.CollabRequest, prompt Prompt) (rejected bool) {
 	resumed := reservedUntyped(r, c)
 	key := reservationKeyPrefix + c.ExecutionID + "-" + r.ID
