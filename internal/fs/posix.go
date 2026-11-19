@@ -4,6 +4,7 @@ package fs
 
 import (
 	"os"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -22,6 +23,9 @@ func openRootDir(path string) (int, error) {
 	}
 	return fd, nil
 }
+
+// appendOpenat opens the leaf of OpenAppendFile. Only tests replace it.
+var appendOpenat = openat
 
 func openat(dirfd int, name string, flags int, mode uint32) (int, error) {
 	fd, err := unix.Openat(dirfd, name, openFlags(flags), mode)
@@ -345,7 +349,16 @@ func OpenAppendFile(root, path string) (*AppendFile, error) {
 		return nil, err
 	}
 	defer parent.close()
-	fd, err := openat(parent.parentFD, parent.name, unix.O_RDWR|unix.O_CREAT|unix.O_APPEND, 0o666)
+	// The parent stays pinned across the attempts and O_NOFOLLOW stays set, so a retry never resolves the path again.
+	var fd int
+	for attempt := 0; ; attempt++ {
+		fd, err = appendOpenat(parent.parentFD, parent.name, unix.O_RDWR|unix.O_CREAT|unix.O_APPEND, 0o666)
+		wait, retry := nextRenameWait(appendCreateBackoff, attempt, err == unix.ENOENT)
+		if !retry {
+			break
+		}
+		time.Sleep(wait)
+	}
 	if err != nil {
 		return nil, mapOpenErr("append", parent.path, err)
 	}
