@@ -528,14 +528,22 @@ func givenValue(v, token string) string {
 	return idText(v, token)
 }
 
+// minMaskedToken is the length from which a token is also hidden inside a longer
+// value. A shorter token has too little entropy to protect, and hiding it inside
+// every value would mangle the IDs of a reason.
+const minMaskedToken = 8
+
 // idText writes a dispatch ID or a base in full: a valid ID may be longer than
 // quoted keeps, and two IDs that share a long prefix must not read as one value.
-// Anything else is quoted, and the token of the coordinator is never written, as
-// with an owner.
+// Anything else is quoted. The token of the coordinator is never written, as with
+// an owner: a value that equals it, or holds it in a longer text, shows
+// <invalid> in its place.
 func idText(v, token string) string {
 	switch {
 	case token != "" && v == token:
 		return "<invalid>"
+	case len(token) >= minMaskedToken && strings.Contains(v, token):
+		return quoted(strings.ReplaceAll(v, token, "<invalid>"))
 	case validDispatchID(v):
 		return v
 	}
@@ -548,6 +556,10 @@ func nextRoundStep(s Snapshot) string {
 	group := MetadataFrom(s.Text, FieldTaskGroup)
 	if group == "" {
 		group = "<group-id>"
+	}
+	if authFrom(s.Text) == (ExecutionAuthorization{}) {
+		// Nothing to read: the right observation leaves the round out.
+		return t("board.refusal_next_round_unbound", s.Entry.TaskID)
 	}
 	return t("board.refusal_next_round", s.Entry.TaskID, group)
 }

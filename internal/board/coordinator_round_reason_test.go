@@ -118,7 +118,7 @@ func TestRoundReasonOfAnUnboundMember(t *testing.T) {
 		want []string
 	}{
 		"round": {CoordinatorObservation{DispatchID: "stale-round", Epoch: 1},
-			[]string{"the card binds no dispatch", "the observation gives dispatch_id stale-round and epoch 1"}},
+			[]string{"the card binds no dispatch", "the observation gives dispatch_id stale-round and epoch 1", "leave dispatch_id, epoch and base out"}},
 		"base only": {CoordinatorObservation{Base: strings.Repeat("c", 40)},
 			[]string{"the card binds no dispatch", "the observation gives no dispatch_id and no epoch", "the observation gives base " + strings.Repeat("c", 40)}},
 	} {
@@ -160,7 +160,7 @@ func TestRoundReasonOfATerminalMember(t *testing.T) {
 					t.Fatal(err)
 				}
 				blocked, reason := reconcileBlocked(t, root, c, id, obs)
-				requireReason(t, reason, "wrong dispatch round: "+id, "the card binds no dispatch", "the observation gives dispatch_id "+obs.DispatchID+" and epoch 1")
+				requireReason(t, reason, "wrong dispatch round: "+id, "the card binds no dispatch", "the observation gives dispatch_id "+obs.DispatchID+" and epoch 1", "leave dispatch_id, epoch and base out")
 				if next := coordinatorReconcile(t, root, blocked); next.Members[id].Blocked != nil || next.Members[id].State != target {
 					t.Fatalf("a correct observation kept the block: %+v", next.Members[id])
 				}
@@ -202,6 +202,7 @@ func TestRoundReasonNeverWritesTheToken(t *testing.T) {
 	for name, o := range map[string]CoordinatorObservation{
 		"dispatch": {DispatchID: firstToken, Epoch: 1, Base: base},
 		"base":     {DispatchID: "round-one", Epoch: 1, Base: firstToken},
+		"labelled": {DispatchID: "token=" + firstToken, Epoch: 1, Base: base},
 	} {
 		t.Run(name, func(t *testing.T) {
 			root := tempBoard(t)
@@ -209,6 +210,9 @@ func TestRoundReasonNeverWritesTheToken(t *testing.T) {
 			_, reason := reconcileBlocked(t, root, c, id, o)
 			if !strings.Contains(reason, "<invalid>") {
 				t.Fatalf("the token was not marked in %q", reason)
+			}
+			if strings.Contains(reason, firstToken) {
+				t.Fatalf("the token is written in %q", reason)
 			}
 		})
 	}
