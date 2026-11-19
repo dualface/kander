@@ -265,7 +265,17 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 			p.Batches = append(p.Batches, b)
 		}
 		if x.Seal {
+			// The seal needs every member that is not excluded in a batch. An
+			// excluded member can never be named by a batch again, and the
+			// completion gate already exempts it.
 			for _, id := range p.TaskIDs {
+				excluded, e := memberExcluded(tx, id)
+				if e != nil {
+					return e
+				}
+				if excluded {
+					continue
+				}
 				found := false
 				for _, b := range p.Batches {
 					if containsID(b.TaskIDs, id) {
