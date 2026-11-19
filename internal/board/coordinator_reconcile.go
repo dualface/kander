@@ -122,7 +122,7 @@ func walkCoordinatorMember(ctx context.Context, tx *Transaction, pass *coordinat
 	}
 	if a == (ExecutionAuthorization{}) {
 		if o.DispatchID != "" || o.Epoch != 0 || o.Base != "" {
-			return m, coordinatorError("unbound member cannot acknowledge a dispatch: " + id)
+			return m, roundRefusal("unbound member cannot acknowledge a dispatch: ", s, o, true)
 		}
 		if o.DeliveryCommit != "" {
 			branch := MetadataFrom(s.Text, "TASK_BRANCH")
@@ -138,14 +138,14 @@ func walkCoordinatorMember(ctx context.Context, tx *Transaction, pass *coordinat
 		return m, nil
 	}
 	if a != (ExecutionAuthorization{DispatchID: o.DispatchID, Epoch: o.Epoch}) {
-		return m, coordinatorError("wrong dispatch round: " + id)
+		return m, roundRefusal("wrong dispatch round: ", s, o, false)
 	}
 	d, err := readDispatch(tx, id, a.DispatchID)
 	if err != nil {
 		return m, err
 	}
 	if d.Authorization != a || d.Input.Base != o.Base {
-		return m, coordinatorError("dispatch base or epoch: " + id)
+		return m, dispatchBaseRefusal(s, d, o)
 	}
 	if d.Input.Kind == "fix" && d.State == DispatchCompleted {
 		// A closed later round may supersede the batch target. Verify immutable

@@ -209,7 +209,7 @@ func walkTerminalMember(ctx context.Context, tx *Transaction, s Snapshot, old Co
 		return m, coordinatorError("terminal member has no result: " + id)
 	}
 	if authFrom(s.Text) != (ExecutionAuthorization{DispatchID: o.DispatchID, Epoch: o.Epoch}) {
-		return m, coordinatorError("wrong dispatch round: " + id)
+		return m, roundRefusal("wrong dispatch round: ", s, o, false)
 	}
 	if o.DeliveryCommit != "" && o.DeliveryCommit != old.DeliveryCommit {
 		return m, coordinatorError("delivery has no completed receipt: " + id)

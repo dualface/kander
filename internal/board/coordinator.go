@@ -539,7 +539,7 @@ func reconcileCheckpoint(ctx context.Context, tx *Transaction, r CoordinatorReco
 			}
 			m = c.Members[id]
 			if newMirrorKernel(m).block().Blocked {
-				m.Blocked = &CoordinatorBlock{Reason: keepBlockReason(c.Members[id].Blocked, blockReason(e), id)}
+				m.Blocked = &CoordinatorBlock{Reason: keepBlockReason(c.Members[id].Blocked, blockReasonFor(e, r.Authority.Token), id)}
 			}
 		}
 		if m.Blocked != nil {
