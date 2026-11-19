@@ -4,6 +4,7 @@ package worker
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -32,6 +33,14 @@ func TestWriteExecutableWaitsForABusyHandle(t *testing.T) {
 	t.Cleanup(func() { <-released })
 	go func() {
 		defer close(released)
+		// The hold starts only once the helper has written its replacement
+		// next to the executable, so the first rename is made while the handle
+		// is open however long the scheduler delays the call. The deadline
+		// only keeps a helper that writes no sibling from hanging the test.
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) && !hasReplacementSibling(r.exe) {
+			time.Sleep(time.Millisecond)
+		}
 		time.Sleep(100 * time.Millisecond)
 		if err := windows.CloseHandle(handle); err != nil {
 			t.Error(err)
@@ -45,4 +54,19 @@ func TestWriteExecutableWaitsForABusyHandle(t *testing.T) {
 	if string(got) != "v2" {
 		t.Fatalf("got %q, want v2", got)
 	}
+}
+
+// hasReplacementSibling reports whether the directory of exe holds an entry
+// other than the executable and its v1 hard link.
+func hasReplacementSibling(exe string) bool {
+	entries, err := os.ReadDir(filepath.Dir(exe))
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if name := entry.Name(); name != filepath.Base(exe) && name != filepath.Base(exe)+".v1" {
+			return true
+		}
+	}
+	return false
 }
