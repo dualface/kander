@@ -373,3 +373,53 @@ func TestFixProposalRefusalIsAShellRefusal(t *testing.T) {
 		t.Fatalf("the slot of a refused proposal changed: %+v -> %+v %v", slot, after, err)
 	}
 }
+
+// A plain move out of review asks the request kernel whether it would accept the
+// Prepare of a pending proposal, and never steps the kernel: the move changes no
+// request. When the kernel accepts, the move is refused and the projection is
+// kept; when it refuses (here an elapsed window), the move succeeds and the
+// projection is kept.
+func TestBareMoveGuardAsksTheKernelForPrepare(t *testing.T) {
+	prepared := serverrequest.Prepare{Unique: true, Holder: true, Cgen: 1, Window: true, Card: 1, Material: true}
+
+	t.Run("accepts", func(t *testing.T) {
+		m := newReviewMember(t, "request-kernel-bare-accepts", "20261119-kernel-group")
+		proposal := m.propose(t, api.RequestFix, "proposal", "kernel-bare-fix")
+		probe := requestProbe{t: t, f: m.f, p: m.holder, task: m.task}
+		probe.acceptedAndKept(proposal.ID, m.grant.Claim.Generation, m.card.Revision, prepared, api.CodeEvidenceIncomplete, func() error {
+			_, err := m.bareMove("bare")
+			return err
+		})
+	})
+
+	t.Run("refuses", func(t *testing.T) {
+		m := newReviewMember(t, "request-kernel-bare-refuses", "20261119-kernel-group")
+		proposal := m.propose(t, api.RequestFix, "proposal", "kernel-bare-late")
+		m.f.clock.advance(61 * time.Second)
+		if _, err := m.holder.Renew(t.Context(), m.task, m.proof); err != nil {
+			t.Fatal(err)
+		}
+		m.f.clock.advance(60 * time.Second)
+		late := prepared
+		late.Window = false
+		probe := requestProbe{t: t, f: m.f, p: m.holder, task: m.task}
+		probe.unchanged(proposal.ID, m.grant.Claim.Generation, m.card.Revision, late, func() error {
+			_, err := m.bareMove("bare")
+			return err
+		})
+	})
+}
+
+// acceptedAndKept runs fn, an entrance that asks the kernel for e without
+// stepping it: the kernel accepts e, the entrance refuses with code, and the
+// projection of the request is kept.
+func (r requestProbe) acceptedAndKept(id string, gen, card uint64, e serverrequest.Event, code string, fn func() error) {
+	r.t.Helper()
+	rev := r.revision(id)
+	before, params := r.state(id, gen, card, rev)
+	err := fn()
+	after, _ := r.state(id, gen, card, rev)
+	if _, ok := serverrequest.Step(before, e, params); !ok || !api.IsCode(err, code) || after != before {
+		r.t.Fatalf("%T on %+v: kernel accepted %v, error %v, after %+v", e, before, ok, err, after)
+	}
+}

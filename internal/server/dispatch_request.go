@@ -34,10 +34,9 @@ func (p *project) inspectDispatchProposal(tx *board.Transaction, task string, co
 		return nil, nil
 	}
 	match := matches[0]
-	event := serverrequest.Prepare{Unique: newProposalSlot(len(matches)).accepts(serverproposal.Lookup{})}
 	var claim claimRecord
-	frame := newRequestFrame(0, 0, &match)
-	if event.Unique {
+	var cardRevision uint64
+	if proposalUnique(len(matches)) {
 		if claim, err = p.requireHolder(task, h); err != nil {
 			return nil, err
 		}
@@ -45,18 +44,41 @@ func (p *project) inspectDispatchProposal(tx *board.Transaction, task string, co
 		if err != nil {
 			return nil, err
 		}
-		frame = newRequestFrame(claim.Generation, snapshot.Revision, &match)
-		left, _ := json.Marshal(match.Dispatch)
-		right, _ := json.Marshal(command.Input)
-		event.Holder, event.Cgen, event.Card = true, frame.generation(claim.Generation), frame.cardRevision(snapshot.Revision)
-		event.Window = match.Dispatch.ConfirmBy.IsZero() || p.server.now().Before(match.Dispatch.ConfirmBy)
-		event.Material = string(left) == string(right)
+		cardRevision = snapshot.Revision
 	}
+	left, _ := json.Marshal(match.Dispatch)
+	right, _ := json.Marshal(command.Input)
+	frame, event := p.prepareEvent(match, len(matches), claim, cardRevision, string(left) == string(right))
 	kernel := newRequestKernel(frame, &match)
 	if !kernel.accepts(event) {
 		return nil, p.proposalError(tx, task, command, match, claim, event, kernel.state)
 	}
 	return &dispatchProposal{request: match, kernel: kernel, event: event}, nil
+}
+
+// proposalUnique says that the proposals one dispatch ID names are exactly one,
+// which the slot kernel decides.
+func proposalUnique(proposals int) bool {
+	return newProposalSlot(proposals).accepts(serverproposal.Lookup{})
+}
+
+// prepareEvent is the frame and the Prepare event the request kernel decides
+// for match, the first of proposals requests that carry its dispatch ID, when the
+// holder of claim prepares it against the card at cardRevision. The preparation
+// and the guard of a plain move share it, so both ask the kernel the same
+// question. material says that the dispatch the holder submits is the one the
+// proposal froze. A slot that is not unique has no holder, generation, card, or
+// window to compare, and the kernel refuses it whatever they are.
+func (p *project) prepareEvent(match api.CollabRequest, proposals int, claim claimRecord, cardRevision uint64, material bool) (requestFrame, serverrequest.Prepare) {
+	event := serverrequest.Prepare{Unique: proposalUnique(proposals)}
+	if !event.Unique {
+		return newRequestFrame(0, 0, &match), event
+	}
+	frame := newRequestFrame(claim.Generation, cardRevision, &match)
+	event.Holder, event.Cgen, event.Card = true, frame.generation(claim.Generation), frame.cardRevision(cardRevision)
+	event.Window = match.Dispatch.ConfirmBy.IsZero() || p.server.now().Before(match.Dispatch.ConfirmBy)
+	event.Material = material
+	return frame, event
 }
 
 // proposalError is the answer to a preparation the kernel refused, in the order
