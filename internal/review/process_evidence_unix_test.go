@@ -170,15 +170,17 @@ func childAlive(table map[int]procInfo, pid int) bool {
 	return ok && !info.zombie
 }
 
-// read serves real snapshots. The first recheck snapshot that holds the gated child releases it and is returned
-// as taken, so the recheck records the child. Later recheck snapshots wait until the child is gone, so the
-// recheck ends with an empty group however slowly the child gets scheduled. A recheck snapshot is told from the
-// others by its short deadline: processGroupHasLiveMembers and the tracker use processTableBudget.
+// read serves real snapshots. The first snapshot with a short deadline that holds the gated child releases it
+// and is returned as taken, so that observation records the child. Later snapshots with a short deadline wait
+// until the child is gone, but never past the deadline of their own context. The recheck takes such snapshots
+// (at most recheckSnapshotLimit each), and so does a single observation without a recheck. The pre-check in
+// processGroupHasLiveMembers and the tracker use processTableBudget, so they pass through untouched and can not
+// release the child before the first observation.
 func (g *releaseGate) read(ctx context.Context) (map[int]procInfo, error) {
 	deadline, bounded := ctx.Deadline()
-	fromRecheck := bounded && time.Until(deadline) <= recheckSnapshotLimit
+	shortDeadline := bounded && time.Until(deadline) <= recheckSnapshotLimit
 	table, err := snapshotProcessTable(ctx)
-	if err != nil || !fromRecheck {
+	if err != nil || !shortDeadline {
 		return table, err
 	}
 	g.mu.Lock()
