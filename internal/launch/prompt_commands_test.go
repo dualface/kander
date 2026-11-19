@@ -24,11 +24,13 @@ var promptCommand = regexp.MustCompile("kander ([a-z][a-z-]*(?: [^ \\n`]*[^ \\n`
 // promptProse are the mentions of the command name in a prompt that are not command lines.
 var promptProse = map[string]bool{"move prints it prefilled": true}
 
-// promptReferences are the mentions that name a command without telling the agent to run it, as
-// in "controlled `kander update` commands". Every other command line of a prompt is an
-// instruction, and an instruction goes through the argument validation however short it is: a
-// `kander show` without its task ID is refused by the command, so it fails here too.
-var promptReferences = map[string]bool{"update": true}
+// promptReferences are the exact phrases that name a command without telling the agent to run
+// it. The context decides, not the command name: the same `kander update` outside this phrase,
+// as in "Then run kander update", is an instruction, and an instruction goes through the
+// argument validation however short it is. Each phrase is removed before the command lines are
+// read, and a phrase that no prompt contains any more fails the test, so the list cannot
+// outlive the text it excuses.
+var promptReferences = []string{"controlled `kander update` commands"}
 
 // promptActions finds the actions the result prompt lists after its command line.
 var promptActions = regexp.MustCompile(`--action ([a-z]+)`)
@@ -39,8 +41,14 @@ var resultActions = []string{"inspect", "apply", "decide"}
 // promptCommandLines are the command lines a rendered prompt tells an agent to run. The three
 // actions of `issue result` stand in the sentence after the line, so they are added to it; a
 // prompt that lost one of them has lost a command line, which fails the test.
-func promptCommandLines(t *testing.T, name, text string) []string {
+func promptCommandLines(t *testing.T, name, text string, referenced map[string]bool) []string {
 	t.Helper()
+	for _, reference := range promptReferences {
+		if strings.Contains(text, reference) {
+			referenced[reference] = true
+			text = strings.ReplaceAll(text, reference, "")
+		}
+	}
 	var lines []string
 	for _, match := range promptCommand.FindAllStringSubmatch(text, -1) {
 		line := match[1]
@@ -119,18 +127,14 @@ func renderedPrompts(t *testing.T) map[string]string {
 // through the parsing, the argument validation and the checks before the command body of the
 // real command tree, with only the body replaced.
 func TestRenderedPromptCommandLinesAreAccepted(t *testing.T) {
-	seen := map[string]bool{}
+	seen, referenced := map[string]bool{}, map[string]bool{}
 	for name, prompt := range renderedPrompts(t) {
-		for _, line := range promptCommandLines(t, name, prompt) {
+		for _, line := range promptCommandLines(t, name, prompt, referenced) {
 			words := strings.Fields(line)
 			root := cli.NewRoot()
-			target, rest, err := root.Find(words)
+			target, _, err := root.Find(words)
 			if err != nil || target == root {
 				t.Errorf("%s: kander %s names no command", name, line)
-				continue
-			}
-			if len(rest) == 0 && promptReferences[line] {
-				seen[target.CommandPath()] = true
 				continue
 			}
 			t.Run(name+"/"+line, func(t *testing.T) {
@@ -144,7 +148,12 @@ func TestRenderedPromptCommandLinesAreAccepted(t *testing.T) {
 			})
 		}
 	}
-	for _, name := range []string{"kander config", "kander show", "kander move", "kander issue result", "kander issue import", "kander update"} {
+	for _, reference := range promptReferences {
+		if !referenced[reference] {
+			t.Errorf("no prompt contains the reference %q any more", reference)
+		}
+	}
+	for _, name := range []string{"kander config", "kander show", "kander move", "kander issue result", "kander issue import"} {
 		if !seen[name] {
 			t.Errorf("no prompt names %q any more", name)
 		}
