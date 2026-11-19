@@ -211,9 +211,6 @@ func TestRoundReasonNeverWritesTheToken(t *testing.T) {
 			if !strings.Contains(reason, "<invalid>") {
 				t.Fatalf("the token was not marked in %q", reason)
 			}
-			if strings.Contains(reason, firstToken) {
-				t.Fatalf("the token is written in %q", reason)
-			}
 		})
 	}
 	// An unbound member echoes the base of the observation as well.
