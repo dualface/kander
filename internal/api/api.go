@@ -370,11 +370,12 @@ type CollabRequest struct {
 	UpdatedAt        time.Time            `json:"updated_at"`
 }
 
-// DispatchRequestKind is the request kind of a request that proposes a
-// dispatch of the given kind: the same word. Any dispatch kind other than fix,
-// sync and wrap-up is refused, so a request never shows a kind such as stop
-// for a dispatch that cannot be prepared. A request without a dispatch is a
-// note.
+// DispatchRequestKind is the request kind that a client gives a new dispatch
+// proposal: the same word as the dispatch kind. Any dispatch kind other than
+// fix, sync and wrap-up is refused, so a proposal never shows a kind such as
+// stop for a dispatch that cannot be prepared. It says nothing about requests
+// without a dispatch: notify makes those notes, and kander request also makes
+// fix, sync, review and stop requests without one.
 func DispatchRequestKind(dispatchKind string) (string, error) {
 	switch dispatchKind {
 	case RequestFix, RequestSync, RequestWrapUp:
