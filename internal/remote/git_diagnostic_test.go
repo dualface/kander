@@ -89,6 +89,8 @@ func TestGitDiagnosticRedactsCredentials(t *testing.T) {
 		{"query token", "fatal: unable to access 'https://example.invalid/r.git?access_token=abc123def456'", "abc123def456"},
 		{"query token among others", "see https://example.invalid/r.git?a=1&token=abc123def456&b=2", "abc123def456"},
 		{"assignment", "GITHUB_TOKEN=abc123def456 git push", "abc123def456"},
+		{"header keyword in a URL password", "fatal: unable to access 'https://build:demoAuthorization123@proxy.example.invalid/': 407", "demoAuthorization"},
+		{"header keyword in a URL password, user", "fatal: unable to access 'https://build:demoAuthorization123@proxy.example.invalid/': 407", "build:"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := gitDiagnostic(tc.stderr)
@@ -207,5 +209,20 @@ func TestServerTextKeepsAShorterGitErrorFromLeavingADiagnosticBehind(t *testing.
 	got := ServerText(errors.Join(bare, detailed))
 	if strings.Contains(got, "kept-out") {
 		t.Fatalf("server text %q holds the diagnostic", got)
+	}
+}
+
+func TestGitArgsAddLongPathsOnlyOnWindows(t *testing.T) {
+	args := []string{"fetch", "--no-tags", "origin", "refs/heads/x"}
+	if got := gitArgs("windows", args); strings.Join(got, " ") != "-c core.longpaths=true fetch --no-tags origin refs/heads/x" {
+		t.Fatalf("windows arguments = %q", got)
+	}
+	for _, goos := range []string{"linux", "darwin", "freebsd"} {
+		if got := gitArgs(goos, args); strings.Join(got, " ") != strings.Join(args, " ") {
+			t.Fatalf("%s arguments = %q", goos, got)
+		}
+	}
+	if args[0] != "fetch" {
+		t.Fatalf("the caller's arguments were changed: %q", args)
 	}
 }

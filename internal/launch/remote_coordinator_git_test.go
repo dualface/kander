@@ -32,6 +32,10 @@ func (w rewordedError) Unwrap() error { return w.err }
 func TestCoordinatorGitCheckCarriesNoGitDiagnostic(t *testing.T) {
 	t.Setenv(config.EnvLang, "en")
 	t.Setenv(config.EnvLangCLI, "1")
+	// Git translates its messages, and the diagnostic below is matched by its
+	// English wording.
+	t.Setenv("LC_ALL", "C")
+	t.Setenv("LANGUAGE", "C")
 	dir := t.TempDir()
 	if out, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
 		t.Skipf("git init: %v: %s", err, out)

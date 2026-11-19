@@ -14,7 +14,9 @@ const (
 	// truncated one included.
 	gitDiagnosticLimit = 300
 	// gitDiagnosticInput bounds the stderr bytes read before sanitizing, so a
-	// verbose Git run costs a bounded amount of regexp work.
+	// verbose Git run costs a bounded amount of regexp work. The capture layer
+	// keeps the first 1 MiB of a stream, so for output beyond that the tail is
+	// the tail of what was captured.
 	gitDiagnosticInput = 64 << 10
 	gitRedacted        = "[REDACTED]"
 )
@@ -38,9 +40,10 @@ var (
 	gitAssignPattern = regexp.MustCompile(`(?i)((?:token|password|passwd|secret)\s*[:=]\s*)[^\s'"&]+`)
 )
 
-// gitError is the error of a Git process that exited non-zero. Err.Error() is
-// the localized plain text; the sanitized stderr rides along for the local
-// user only. Anything sent to the server goes through ServerText.
+// gitError is the error of a Git process that exited non-zero. plain is the
+// localized text without Git's output. Error() returns plain followed by the
+// sanitized diagnostic when there is one, so it is for the local user only.
+// Anything sent to the server goes through ServerText, which returns plain.
 type gitError struct {
 	plain      string
 	diagnostic string
@@ -77,6 +80,10 @@ func gitDiagnostic(stderr string) string {
 			}
 			return -1
 		}, line)
+		// URL user information goes first: a password may itself contain the
+		// header keyword, and the header rule below would cut the URL in the
+		// middle and leave part of the credential in front of the cut.
+		line = gitUserinfoPattern.ReplaceAllString(line, "${1}"+gitRedacted+"@")
 		// The header rule runs per line, before lines are merged: after a merge
 		// the end of the credential is no longer findable.
 		if loc := gitHeaderPattern.FindStringIndex(line); loc != nil {
