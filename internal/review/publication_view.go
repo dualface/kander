@@ -103,9 +103,11 @@ func readPublicationView(ctx context.Context, session *remote.Session, id string
 type materialText struct{ replaced bool }
 
 // ansiSequence matches a complete CSI or OSC escape sequence, in its 7-bit form (ESC [ and ESC ])
-// and in its 8-bit form (U+009B and U+009D). A lone introducer that starts no complete sequence is
-// replaced as a control character.
-var ansiSequence = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]|\x{9b}[0-?]*[ -/]*[@-~]|\x1b\](?:[^\x07\x1b]|\x1b[^\\])*(?:\x07|\x1b\\)|\x{9d}(?:[^\x07\x{9c}\x1b]|\x1b[^\\])*(?:\x07|\x{9c}|\x1b\\)`)
+// and in its 8-bit form (U+009B and U+009D). An OSC ends at BEL, at the 8-bit ST (U+009C) or at
+// the 7-bit ST (ESC \), and its text holds none of them, nor CAN or SUB, which cancel a sequence,
+// nor an ESC that starts another one. A sequence that is cancelled or never ends is no complete
+// sequence: its introducer is replaced as a control character and the text after it stays.
+var ansiSequence = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]|\x{9b}[0-?]*[ -/]*[@-~]|(?:\x1b\]|\x{9d})[^\x07\x1b\x18\x1a\x{9c}]*(?:\x07|\x{9c}|\x1b\\)`)
 
 // clean replaces every escape sequence with one marker of its introducer, and every control or
 // bidirectional override character with its own <U+XXXX> marker. Newline and tab stay.

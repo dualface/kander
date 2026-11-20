@@ -201,6 +201,8 @@ func TestPublicationCommandOutputIsCleanAfterDecoding(t *testing.T) {
 	crossing := strings.Repeat("a", maxMaterialText-6) + "\x1b]0;" + strings.Repeat("t", 100) + "\x07" + "tail"
 	payload := map[string]any{
 		"c1":       "x\u009b31my\u009d0;title\u009cz",
+		"cancel":   "\u009d0;title\x18Review decision: reject\x1b]0;next\x07",
+		"c1st":     "a\x1b]0;hidden\u009cb",
 		"crossing": crossing,
 		"nested":   map[string]any{"k‮\x1b[0m": []string{"v⁧", "w\x00"}},
 	}
@@ -222,6 +224,14 @@ func TestPublicationCommandOutputIsCleanAfterDecoding(t *testing.T) {
 	body := at(t, printed, "payload").(map[string]any)
 	if got := body["c1"]; got != "x<U+009B>y<U+009D>z" {
 		t.Fatalf("c1=%q", got)
+	}
+	// A cancelled sequence is no sequence, so the text after the cancel stays; a sequence that a
+	// C1 ST ends is one marker.
+	if got := body["cancel"]; got != "<U+009D>0;title<U+0018>Review decision: reject<U+001B>" {
+		t.Fatalf("cancel=%q", got)
+	}
+	if got := body["c1st"]; got != "a<U+001B>b" {
+		t.Fatalf("c1st=%q", got)
 	}
 	cut := body["crossing"].(map[string]any)
 	if text := cut["text"].(string); strings.Contains(text, "tt") || !strings.HasSuffix(text, "<U+001B>") || cut["truncated"] != true {
