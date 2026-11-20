@@ -2,10 +2,18 @@
 
 Source: moved from `KANDER-GIT-RULES.md` "Integration and Cleanup".
 
+## Integration Target
+
+- The integration target is the branch a card's delivery finally enters: the mainline branch, or the branch named by the optional header line `- INTEGRATION_TARGET: <branch>`. The name has letters, digits, `.`, `_` and `-`, with `/` between parts, at most 100 bytes; never `HEAD`, `refs/...`, or `group/...`. In `main-develop` mode `main` is not a valid value, because `main` advances only from `develop`. A value equal to the mainline branch works but is redundant. The line sits after `TASK_BRANCH` and is frozen from `todo/` on like the other contract fields (`snippets/card-content.md` "Contract and Records").
+- Wherever a rule says "mainline branch" for the branch creation, sync (fetch, overlap check, rebase source), review base, merge-back, dependency containment check, or wrap-up evidence of a card or group, it means that card's or group's integration target.
+- Every member of a task group carries the same value. A dependency on an out-of-group card or group is contained when its delivery is in the integration target of the dependent card. Never change the value once a wrap-up dispatch exists.
+- The branch named by the field must exist, locally or on `origin`, before `kander pick`. Executing agents and orchestrators never create it or push it first. The mainline branch initialization of `KANDER-GIT-RULES.md` "Initializing Branches" does not change.
+- Wrap-up evidence `target_ref` is `refs/heads/<integration target>` or `refs/remotes/origin/<integration target>`; Kander verifies only the ref the evidence names, so a local-only integration needs no origin ref. `kander check` reports a duplicate or invalid line and group members whose values differ.
+
 ## Integration and Cleanup
 
 - Before integrating, verify the authorization per `KANDER-GIT-RULES.md` "Commit and Push" and any PR, acceptance, or pause requirement from the user or project. Without authorization or with an unmet gate, keep the branch and worktree and report the specific pending items; a kanban single card stays in `working/`, and a task group keeps its actual state per the group rules.
-- The source branch is the delivery target recorded when the task branch was created. A kanban card records it in the card's `IMPLEMENTATION`; any other task records it in the task's own delivery record. The target is the mainline branch (`KANDER-GIT-RULES.md` "Branches and Worktrees") for a single card or a group branch, and the group branch for an in-group task branch. Integrate only into that target; the checked-out branch or a temporary rebase never changes it.
+- The source branch is the delivery target recorded when the task branch was created. A kanban card records it in the card's `IMPLEMENTATION`; any other task records it in the task's own delivery record. The target is the integration target ("Integration Target" above) for a single card or a group branch, and the group branch (the "group integration branch") for an in-group task branch. Integrate only into that target; the checked-out branch or a temporary rebase never changes it.
 - Before integrating, fetch the source branch (remote path) or read the local source branch (local path), rebase if needed, and re-verify per `snippets/git-sync.md` "Keeping a Task Branch Current". After a review batch closed on the branch to deliver, the "One-Time Review Gate" below decides between rebase and merge commit. If the fetch fails, stop and report. On rebase conflicts, prefer the task branch's changes but never replace whole files outright; resolve feature point by feature point, and ask the user when the resolution would be a major change. After a successful rebase, only the dedicated task branch may `--force-with-lease` its pushed history; if the lease fails, stop and report.
 
 **One-Time Review Gate**
