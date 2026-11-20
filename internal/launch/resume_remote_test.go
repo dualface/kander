@@ -187,17 +187,7 @@ func TestRemoteResumeOfLiveAgentWithJSONIgnoresATerminalDefaultLauncher(t *testi
 		t.Fatal(err)
 	}
 	// The default launcher of the configuration takes the terminal.
-	loaded := loadEffective
-	t.Cleanup(func() { loadEffective = loaded })
-	loadEffective = func() (*config.Config, error) {
-		cfg, err := loaded()
-		if err != nil {
-			return nil, err
-		}
-		terminal := *cfg
-		terminal.Launcher = "foreground"
-		return &terminal, nil
-	}
+	t.Cleanup(withTerminalDefaultLauncher(t))
 	if effective, err := loadEffective(); err != nil || effective.Launcher != "foreground" {
 		t.Fatalf("the default launcher is %q (%v)", effective.Launcher, err)
 	}
