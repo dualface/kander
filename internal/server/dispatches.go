@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 
@@ -119,12 +120,27 @@ func (p *project) dispatchWrite(key, action, task string, input api.DispatchComm
 		return outcome{status: http.StatusOK, body: value}
 	}, func() (outcome, bool) { return outcome{}, false })
 }
+
+// missingDispatch explains why a dispatch has no record. A proposal that carries
+// the ID means the holder has not run kander dispatch prepare for it yet; a
+// request list that cannot be read keeps the plain answer.
+func (p *project) missingDispatch(task, dispatchID string) error {
+	if id, err := board.NormalizeTaskID(task); err == nil {
+		if requests, err := p.readRequests(id); err == nil {
+			if proposals := proposalsOf(requests, dispatchID); len(proposals) > 0 {
+				return apiError(api.CodeNotFound, fmt.Sprintf("dispatch does not exist: request %s proposed it and the holder has not prepared it; inspect it with kander request show %s %s", proposals[0].ID, id, proposals[0].ID))
+			}
+		}
+	}
+	return apiError(api.CodeNotFound, "dispatch does not exist")
+}
+
 func (s *Server) dispatchRoutes(mux *http.ServeMux) {
 	const base = "/api/v1/projects/{project}/tasks/{task}/dispatches"
 	s.projectRoute(mux, "GET "+base+"/{dispatch}", func(p *project, r *http.Request) outcome {
 		value, err := board.ReadDispatch(p.board, r.PathValue("task"), r.PathValue("dispatch"))
 		if errors.Is(err, os.ErrNotExist) {
-			err = apiError(api.CodeNotFound, "dispatch does not exist")
+			err = p.missingDispatch(r.PathValue("task"), r.PathValue("dispatch"))
 		}
 		return result(http.StatusOK, value, err)
 	})
