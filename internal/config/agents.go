@@ -262,9 +262,9 @@ func cloneExitCommand(src *string) *string {
 }
 
 // validateAgentProgram checks only the form of a program value. It never
-// probes the file system: an agent whose program does not resolve leaves the
-// configuration valid, and start, review, and doctor report it when used, as
-// they do for a built-in agent whose CLI is missing.
+// probes the file system: a program that does not resolve leaves the
+// configuration valid and is reported by the step that runs it, as a missing
+// built-in CLI is.
 func validateAgentProgram(path string) bool {
 	if !validAgentText(path) {
 		return false
