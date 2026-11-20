@@ -198,11 +198,12 @@ func sampleArguments(t *testing.T, leaf leafCommand) []string {
 	return positionals
 }
 
-// platformAbs turns a POSIX style absolute path such as /abs/claim.json into an absolute path of
-// this platform. The coordinator commands check paths with filepath.IsAbs, which on Windows does
-// not accept a path without a drive letter, so a literal /abs/x.json would be refused as a usage
-// error before the branch under test. Other words, and paths that are already absolute, stay as
-// they are, so on POSIX the result equals the input.
+// platformAbs turns a word that starts with a slash, such as /abs/claim.json, into an absolute path
+// of this platform through filepath.FromSlash and filepath.Abs, so the result is also cleaned.
+// The coordinator commands check paths with filepath.IsAbs, which on Windows does not accept a
+// single-slash path that has no volume name, so a literal /abs/x.json would be refused as a usage
+// error before the branch under test. A word that does not start with a slash is returned as it
+// is. On POSIX a clean path keeps its text, which holds for every sample used here.
 func platformAbs(t *testing.T, word string) string {
 	t.Helper()
 	if !strings.HasPrefix(word, "/") {
