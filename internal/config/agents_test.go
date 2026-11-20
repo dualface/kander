@@ -57,6 +57,8 @@ func TestAgentDefinitionValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// An empty PATH keeps the missing-name case missing on every machine.
+	t.Setenv("PATH", t.TempDir())
 	base, _ := json.Marshal(DefaultConfig())
 	for _, test := range []struct {
 		name       string
@@ -66,7 +68,6 @@ func TestAgentDefinitionValidation(t *testing.T) {
 		{"path", map[string]any{"path": executable}, false},
 		{"trampoline", map[string]any{"process_name": "node"}, false},
 		{"empty-path", map[string]any{"path": ""}, true},
-		{"relative", map[string]any{"path": "./wrapper"}, true},
 		{"missing", map[string]any{"path": filepath.Join(t.TempDir(), "missing")}, false},
 		{"missing-name", map[string]any{"path": "kander-test-missing-agent"}, false},
 		{"control", map[string]any{"path": "bad\tvalue"}, true},
@@ -95,7 +96,6 @@ func TestAgentDefinitionValidation(t *testing.T) {
 		{"allocate", map[string]any{"session": map[string]any{"mode": "allocated", "allocate": []string{executable, "allocate"}, "json_field": "id"}}, false},
 		{"bad-allocate", map[string]any{"session": map[string]any{"mode": "allocated", "allocate": []string{executable, "bad\narg"}}}, true},
 		{"missing-allocate", map[string]any{"session": map[string]any{"mode": "allocated", "allocate": []string{filepath.Join(t.TempDir(), "missing"), "allocate"}}}, false},
-		{"relative-allocate", map[string]any{"session": map[string]any{"mode": "allocated", "allocate": []string{"bin/allocate"}}}, true},
 		{"unneeded-allocate", map[string]any{"session": map[string]any{"mode": "generated", "allocate": []string{executable}}}, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -109,9 +109,27 @@ func TestAgentDefinitionValidation(t *testing.T) {
 			}
 		})
 	}
+	for _, test := range []struct {
+		name       string
+		definition map[string]any
+		want       string
+	}{
+		{"relative", map[string]any{"path": "./wrapper"}, Text("config.agent_path", "./wrapper")},
+		{"relative-allocate", map[string]any{"session": map[string]any{"mode": "allocated", "allocate": []string{"bin/allocate"}}}, Text("config.agent_allocate")},
+	} {
+		var root map[string]any
+		json.Unmarshal(base, &root)
+		root["agents"] = map[string]any{"claude": test.definition}
+		data, _ := json.Marshal(root)
+		if _, err := ValidateJSON(data); err == nil || !strings.Contains(err.Error(), test.want) {
+			t.Fatalf("%s: err=%v, want %q", test.name, err, test.want)
+		}
+	}
 	if runtime.GOOS != "windows" {
 		p := filepath.Join(t.TempDir(), "file")
-		os.WriteFile(p, []byte("x"), 0600)
+		if err := os.WriteFile(p, []byte("x"), 0600); err != nil {
+			t.Fatal(err)
+		}
 		var root map[string]any
 		json.Unmarshal(base, &root)
 		root["agents"] = map[string]any{"claude": map[string]any{"path": p}}
