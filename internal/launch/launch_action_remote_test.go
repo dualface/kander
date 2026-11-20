@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/dualface/kander/internal/config"
 )
 
 func TestRemoteLostClaimResponseRecoversOriginalKeyWithoutLaunching(t *testing.T) {
@@ -109,6 +111,37 @@ func TestRemoteOrchestratorUncertainLaunchIsNeverRepeated(t *testing.T) {
 	}
 	if _, err := os.Stat(journal.Value.TaskFile); err != nil {
 		t.Fatalf("uncertain launch lost task file: %v", err)
+	}
+}
+
+// A missing allocator refuses the start before the receipt records the
+// allocation, so the same start reaches the allocator once it is installed.
+func TestRemoteMissingSessionAllocatorKeepsStartRetryable(t *testing.T) {
+	skipOnWindows(t)
+	cfg, service, task, _, fakeRoot := remoteLifecycleFixture(t, "missing-session-allocator")
+	allocator := filepath.Join(fakeRoot, "allocator")
+	cfg.Agents = map[string]config.AgentDefinition{"custom": {
+		Path:    filepath.Join(fakeRoot, "fake-bin", "codex"),
+		Dialect: "codex",
+		Session: &config.AgentSessionDefinition{Mode: "allocated", Allocate: []string{allocator}},
+	}}
+	if _, err := StartRemote("custom", "tmux", task.TaskID); err == nil || err.Error() != config.Text("launch.agent_is_not_in_path", allocator) {
+		t.Fatalf("missing allocator: %v", err)
+	}
+	marker := filepath.Join(fakeRoot, "allocator-ran")
+	script := "#!/bin/sh\ntouch '" + marker + "'\nexit 1\n"
+	if err := os.WriteFile(allocator, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := StartRemote("custom", "tmux", task.TaskID); err == nil || err.Error() != config.Text("launch.agent_allocate_failed", 1) {
+		t.Fatalf("retry after installing the allocator: %v", err)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("retry did not reach the allocator: %v", err)
+	}
+	current, err := service.Project.Show(t.Context(), task.TaskID)
+	if err != nil || current.State != "todo" || current.Claim != nil {
+		t.Fatalf("refused start mutated the card: %+v %v", current, err)
 	}
 }
 

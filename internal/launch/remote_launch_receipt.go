@@ -109,6 +109,9 @@ func journalAgentSession(journal *remote.ActionJournal, agent string, program *p
 		}
 		return AgentSession{Agent: name, Reference: reference}, nil
 	}
+	if err := requireSessionAllocator(agent, cfg); err != nil {
+		return AgentSession{}, err
+	}
 	journal.Value.Phase = "allocating-session"
 	if err := journal.Save(); err != nil {
 		return AgentSession{}, err
