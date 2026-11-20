@@ -12,7 +12,7 @@ Git is invoked with `exec.CommandContext` and a direct argv. There is no shell, 
 
 ## Integration target problems
 
-For every card the no-mode form selects (`backlog/`, `todo/`, `working/`, and `review/` by default; `done/` and `archived/` too when a card is named or `--all` is set) it also reports the optional `INTEGRATION_TARGET` header line (see [Directory cards](directory-cards.md#integration-target)). Each of these is a problem and makes the exit code non-zero:
+For every card the no-mode form selects (`backlog/`, `todo/`, `working/`, `review/`, and `trash/` by default; `done/` and `archived/` too when a card is named or `--all` is set) it also reports the optional `INTEGRATION_TARGET` header line (see [Directory cards](directory-cards.md#integration-target)). Each of these is a problem and makes the exit code non-zero:
 
 - the line appears more than once;
 - the value is not a valid branch name;
