@@ -81,7 +81,7 @@ kander dispatch show <task-id> <id>
 |---|---|---|
 | `fix` | `working` $\to$ `review` | Binds batch ID, finding IDs, and prior author disposition records. |
 | `sync` | `working` $\to$ `review` | Used for branch/rebase synchronization. Does not accept review finding bindings. |
-| `wrap-up` | `working` $\to$ `done` | Binds closed review target SHA, Git integration commit, and mainline branch ref. |
+| `wrap-up` | `working` $\to$ `done` | Binds closed review target SHA, Git integration commit, and the integration target ref. |
 
 ---
 
@@ -124,7 +124,9 @@ Fix dispatches enforce that the executor receives exact, structured review findi
 
 ### Standard Wrap-up
 
-Binds the closed review final commit with the commit integrated into the mainline branch. `git.branch_mode` of the checkout at `cwd` (its project overlay included) selects the mainline branch: `develop` for `main-develop` (the default), `main` for `main-only`. `target_ref` must be `refs/heads/<mainline>` or `refs/remotes/origin/<mainline>`; the example uses `main-develop`:
+Binds the closed review final commit with the commit integrated into the mainline branch. `git.branch_mode` of the checkout at `cwd` (its project overlay included) selects the mainline branch: `develop` for `main-develop` (the default), `main` for `main-only`. `target_ref` must be `refs/heads/<mainline>` or `refs/remotes/origin/<mainline>`; the example uses `main-develop`.
+
+A card may declare another integration target with the optional header line `- INTEGRATION_TARGET: <branch>` (for example `v2`), see [Card header](directory-cards.md#integration-target). The board structural check and the launch Git verifier then read the card, not the configuration: `target_ref` must be `refs/heads/<branch>` or `refs/remotes/origin/<branch>`. The verifier proves only the one ref `target_ref` names, so a local-only integration needs no origin ref, and the ancestry edges and the reread are unchanged. In `main-develop` mode `main` is refused as a target. `DispatchIntegration` and `WrapUpGitEvidence` keep their fields. A card with no such line keeps the mainline rule above.
 
 ```json
 {

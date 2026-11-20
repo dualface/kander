@@ -116,7 +116,9 @@ kander dispatch show <task-id> <id>
 
 ### 通常の Wrap-up
 
-レビュー済みの最終コミットとメインラインブランチへの統合コミットをバインドします。メインラインブランチは `cwd` のチェックアウト（プロジェクト設定を含む）の `git.branch_mode` で決まります：`main-develop`（既定）は `develop`、`main-only` は `main`。`target_ref` は `refs/heads/<メインライン>` または `refs/remotes/origin/<メインライン>` です。例は `main-develop` です：
+レビュー済みの最終コミットとメインラインブランチへの統合コミットをバインドします。メインラインブランチは `cwd` のチェックアウト（プロジェクト設定を含む）の `git.branch_mode` で決まります：`main-develop`（既定）は `develop`、`main-only` は `main`。`target_ref` は `refs/heads/<メインライン>` または `refs/remotes/origin/<メインライン>` です。例は `main-develop` です。
+
+カードは任意のカードヘッダー行 `- INTEGRATION_TARGET: <ブランチ>`（例: `v2`）で別の統合先を宣言できます。[カードヘッダー](directory-cards.md#integration-target)を参照してください。このとき board の構造チェックと launch の Git 検証は設定ではなくカードを読み、`target_ref` は `refs/heads/<ブランチ>` または `refs/remotes/origin/<ブランチ>` でなければなりません。検証は `target_ref` が指す 1 つの参照だけを確認するため、ローカルのみの統合では origin の参照は不要です。祖先エッジと再読み取りは変わりません。`main-develop` モードでは `main` を統合先にできません。`DispatchIntegration` と `WrapUpGitEvidence` のフィールドは変わりません。この行がないカードは上記のメインライン規則のままです。
 
 ```json
 {

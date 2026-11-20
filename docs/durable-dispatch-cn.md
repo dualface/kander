@@ -116,7 +116,9 @@ kander dispatch show <task-id> <id>
 
 ### 标准收尾派发
 
-将已审查通过的最终 Commit 与已集成进主线分支的 Commit 建立绑定。主线分支由 `cwd` 所在检出（含其项目配置）的 `git.branch_mode` 决定：`main-develop`（默认）为 `develop`，`main-only` 为 `main`。`target_ref` 必须是 `refs/heads/<主线分支>` 或 `refs/remotes/origin/<主线分支>`；示例为 `main-develop`：
+将已审查通过的最终 Commit 与已集成进主线分支的 Commit 建立绑定。主线分支由 `cwd` 所在检出（含其项目配置）的 `git.branch_mode` 决定：`main-develop`（默认）为 `develop`，`main-only` 为 `main`。`target_ref` 必须是 `refs/heads/<主线分支>` 或 `refs/remotes/origin/<主线分支>`；示例为 `main-develop`。
+
+卡片可以用可选的卡片头行 `- INTEGRATION_TARGET: <分支>`（例如 `v2`）声明另一个集成目标，见[卡片头](directory-cards.md#integration-target)。此时看板的结构检查与 launch 的 Git 校验器都读卡片而不是配置：`target_ref` 必须是 `refs/heads/<分支>` 或 `refs/remotes/origin/<分支>`。校验器只验证 `target_ref` 所指的那一个引用，因此只做本地集成时不需要 origin 引用；祖先边与重读检查不变。`main-develop` 模式下 `main` 不能作为目标。`DispatchIntegration` 与 `WrapUpGitEvidence` 的字段不变。没有该行的卡仍按上面的主线规则处理。
 
 ```json
 {
