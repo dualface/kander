@@ -42,6 +42,14 @@ var reviewOutputObjects = []struct {
 	{"progress.resolved_batches[].git", []any{ReviewResolutionGit{}}},
 }
 
+// Fields of a type that the line of its object does not define as a field. The one entry is the
+// abandonment record: an abandoned run is listed in abandoned_runs and never in runs, so no run of a
+// view has it, and the contract describes it in a sentence about the stored run record. The
+// placement test below checks that sentence. A missing field of any other run still fails.
+var reviewOutputUndefinedFields = map[string]bool{
+	"ReviewRun.Abandonment": true,
+}
+
 func TestReviewContractDefinesEveryResultObjectWithTypes(t *testing.T) {
 	data, err := rules.File("snippets/commands/review.md")
 	if err != nil {
@@ -70,7 +78,7 @@ func TestReviewContractDefinesEveryResultObjectWithTypes(t *testing.T) {
 			kind := reflect.TypeOf(value)
 			for i := range kind.NumField() {
 				name, _, _ := strings.Cut(kind.Field(i).Tag.Get("json"), ",")
-				if name == "" || name == "-" {
+				if name == "" || name == "-" || reviewOutputUndefinedFields[kind.Name()+"."+kind.Field(i).Name] {
 					continue
 				}
 				if !strings.Contains(line, "`"+name+"` (") {
