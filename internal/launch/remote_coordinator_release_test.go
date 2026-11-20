@@ -211,20 +211,23 @@ func TestCoordinatorArgumentRefusalPrecedesTheBindingCheck(t *testing.T) {
 	t.Setenv(config.EnvLang, "en")
 	t.Setenv(config.EnvLangCLI, "1")
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
-	t.Chdir(t.TempDir())
+	dir := t.TempDir()
+	t.Chdir(dir)
+	releasePath := filepath.Join(dir, "release.json")
+	claimPath := filepath.Join(dir, "claim.json")
 	if _, err := config.Save(config.DefaultConfig()); err != nil {
 		t.Fatal(err)
 	}
 	run := RunCoordinatorRemote
-	status, _, diagnostics := captureBoth(t, func() int { return run([]string{"release", "/tmp/release.json"}) })
+	status, _, diagnostics := captureBoth(t, func() int { return run([]string{"release", releasePath}) })
 	if status != 2 || !slices.Contains(strings.Split(diagnostics, "\n"), releaseSyntax) {
 		t.Fatalf("status %d: %q", status, diagnostics)
 	}
-	if status, _, _ = captureBoth(t, func() int { return run([]string{"claim", "--end-execution", "/tmp/claim.json"}) }); status != 2 {
+	if status, _, _ = captureBoth(t, func() int { return run([]string{"claim", "--end-execution", claimPath}) }); status != 2 {
 		t.Fatalf("status %d", status)
 	}
 	// A well-formed command still needs the binding.
-	if status, _, diagnostics = captureBoth(t, func() int { return run([]string{"release", "--end-execution", "/tmp/release.json"}) }); status != 1 || !strings.Contains(diagnostics, config.Text("remote.not_configured")) {
+	if status, _, diagnostics = captureBoth(t, func() int { return run([]string{"release", "--end-execution", releasePath}) }); status != 1 || !strings.Contains(diagnostics, config.Text("remote.not_configured")) {
 		t.Fatalf("status %d: %q", status, diagnostics)
 	}
 }

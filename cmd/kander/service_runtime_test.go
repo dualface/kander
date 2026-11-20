@@ -177,7 +177,7 @@ func TestUnboundCheckoutRefusesEveryCommandThatNeedsAProject(t *testing.T) {
 		args := append(strings.Fields(leaf.path), sampleArguments(t, leaf)...)
 		if leaf.path == "coordinator release" {
 			// The confirmation is an argument check, which precedes the binding check.
-			args = []string{"coordinator", "release", "--end-execution", "/abs/release.json"}
+			args = []string{"coordinator", "release", "--end-execution", platformAbs(t, "/abs/release.json")}
 		}
 		// Argument errors precede the binding check, so the command line is a complete one.
 		args = append(args, requiredFlags[leaf.path]...)

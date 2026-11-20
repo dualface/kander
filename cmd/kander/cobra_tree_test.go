@@ -188,7 +188,31 @@ func sampleArguments(t *testing.T, leaf leafCommand) []string {
 	if !ok {
 		t.Fatalf("no sample arguments for %q", leaf.path)
 	}
-	return slices.Clone(positionals)
+	positionals = slices.Clone(positionals)
+	if strings.HasPrefix(leaf.path, "coordinator ") {
+		// The coordinator commands refuse a path that is not absolute on this platform.
+		for i, word := range positionals {
+			positionals[i] = platformAbs(t, word)
+		}
+	}
+	return positionals
+}
+
+// platformAbs turns a POSIX style absolute path such as /abs/claim.json into an absolute path of
+// this platform. The coordinator commands check paths with filepath.IsAbs, which on Windows does
+// not accept a path without a drive letter, so a literal /abs/x.json would be refused as a usage
+// error before the branch under test. Other words, and paths that are already absolute, stay as
+// they are, so on POSIX the result equals the input.
+func platformAbs(t *testing.T, word string) string {
+	t.Helper()
+	if !strings.HasPrefix(word, "/") {
+		return word
+	}
+	abs, err := filepath.Abs(filepath.FromSlash(word))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return abs
 }
 
 // invocation is what a stubbed command saw.

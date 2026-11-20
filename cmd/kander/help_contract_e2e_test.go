@@ -426,7 +426,12 @@ func TestEveryExampleParsesAndEveryPathHasOne(t *testing.T) {
 			if !strings.HasPrefix(example.Command, "kander "+path) {
 				t.Errorf("%s: example %q does not start with `kander %s`", command, example.Command, path)
 			}
-			if code, _, stderr := runStubbed(t, words[1:]...); code != 0 {
+			// The words of the example stay POSIX in the contract; the run needs the paths of this platform.
+			args := slices.Clone(words[1:])
+			for i, word := range args {
+				args[i] = platformAbs(t, word)
+			}
+			if code, _, stderr := runStubbed(t, args...); code != 0 {
 				t.Errorf("example %q: exit=%d %s", example.Command, code, stderr)
 			}
 		}
