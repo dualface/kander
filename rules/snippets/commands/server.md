@@ -23,7 +23,7 @@ kander server projects [--data DIR]
 - `--listen`: explicit TCP listen address. Default: the configured loopback server URL's address, otherwise `127.0.0.1:7878`.
 - `--ttl`, `--renew`: positive Go durations. Defaults: `90s`, `15s`. Renewal must be shorter than TTL.
 - `status`: read the server's actual URL, version, PID, data directory, log path, project count, and listen/lease settings.
-- `stop`: authenticate through a current-user private management key and gracefully shut down a loopback server. Wait up to 10 seconds. Already stopped is success.
+- `stop`: authenticate through a current-user private management key and gracefully shut down a loopback server. Wait up to 10 seconds. Already stopped is success. `stop` leaves no mark: the next command that opens a session starts the server again (see `init`), so stop and restart the server only while no Agent runs, and pause every executor before an offline `maintain`.
 - `restart`: read the running server's data directory, listen address and lease settings, stop it, then start it with those settings.
 - `import`: explicitly import a paused v1 board into an empty service project. When no process holds the data directory lock, it imports offline under that lock. When a local server serves the data directory, that server performs the import and keeps serving. `--from` defaults to the board v1 commands locate: `KANBAN_DIR`, then the main worktree's `kanban/`, then an upward search.
 - `maintain`: offline legacy file-card maintenance. `--maintenance` acknowledges that all writers and executors are paused.
