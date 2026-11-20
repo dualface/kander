@@ -105,9 +105,12 @@ func prepareServer(ctx context.Context, c *client.Client, cfg *config.Config) (b
 		}
 		if !awaited {
 			prompted = true
-			fresh, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			fresh, cancel := startContext(ctx, selfStart)
 			defer cancel()
 			if _, err := startLocalServer(fresh, servicectl.StartOptions{DataDir: dir, Listen: servicectl.ListenAddress(target), TTL: api.DefaultTTL, Renew: api.DefaultRenewInterval}); err != nil {
+				if selfStart && errors.Is(ctx.Err(), context.Canceled) {
+					return true, ctx.Err()
+				}
 				return true, err
 			}
 			if selfStart {

@@ -237,3 +237,32 @@ func TestOpenStartsNothingForACommandCanceledWhileTheServerStarts(t *testing.T) 
 		t.Fatalf("err=%v worker starts=%d", err, starts.Load())
 	}
 }
+
+// The start wait of a self-start ends with the cancellation of the command: the
+// server never becomes available here, so only the cancellation can end it.
+func TestOpenReturnsAsSoonAsTheCommandIsCanceledWhileTheServerStarts(t *testing.T) {
+	cfg, available, _, _ := serverGateFixture(t)
+	createBoard(t, cfg)
+	home, starts, _ := workerStartFixture(t)
+	t.Setenv(EnvClientHome, home)
+	writeCredential(t, home, renewable("e1"))
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	startLocalServer = func(c context.Context, o servicectl.StartOptions) (api.ServerInfo, error) {
+		cancel()
+		select {
+		case <-c.Done():
+			return api.ServerInfo{}, c.Err()
+		case <-time.After(10 * time.Second):
+			t.Error("the start wait outlived the cancellation of the command")
+			return api.ServerInfo{}, nil
+		}
+	}
+	began := time.Now()
+	if _, err := Open(ctx, cfg, t.TempDir()); !errors.Is(err, context.Canceled) || starts.Load() != 0 || available.Load() {
+		t.Fatalf("err=%v worker starts=%d", err, starts.Load())
+	}
+	if time.Since(began) > 5*time.Second {
+		t.Fatalf("Open took %v", time.Since(began))
+	}
+}

@@ -50,6 +50,23 @@ func lockHeld(root, path string) (bool, error) {
 	return false, lock.Unlock()
 }
 
+// startContext is the 30 s budget of a server start. It is independent of the
+// deadline of the command, which an earlier wait or a question may have used
+// up. With followCancel (a start nobody asked for) an explicit cancellation of
+// the command, such as Ctrl+C, ends the start wait as well.
+func startContext(ctx context.Context, followCancel bool) (context.Context, context.CancelFunc) {
+	fresh, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	if !followCancel {
+		return fresh, cancel
+	}
+	stop := context.AfterFunc(ctx, func() {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			cancel()
+		}
+	})
+	return fresh, func() { stop(); cancel() }
+}
+
 // lockGrace is how long a client waits for a server it found the data
 // directory lock held by. A server that a concurrent client just started holds
 // the lock before it listens, so a held lock alone does not mean a server that
