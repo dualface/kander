@@ -3,10 +3,12 @@ package main
 import (
 	"encoding/json"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/cli"
 	"github.com/dualface/kander/internal/config"
 )
 
@@ -121,9 +123,31 @@ func TestProjectGateStandsBehindArgumentsAndBeforeTheWork(t *testing.T) {
 			t.Errorf("%v: exit=%d stderr=%s", args, result.code, result.stderr)
 		}
 	}
-	// A schema is static text: it needs no binding, and an explicit false does not lift it.
-	if result := runKander(t, "review", "plan", "--schema"); result.code != 0 {
-		t.Errorf("review plan --schema: exit=%d stderr=%s", result.code, result.stderr)
+	// A schema is static text: it needs no binding, and an explicit false does not lift it. Every
+	// review subcommand that has a schema is read from the tree, so a new one is covered too and
+	// the exemption of any of them cannot be dropped unnoticed.
+	var withSchema []string
+	arguments := map[string]int{}
+	for _, leaf := range commandLeaves(cli.NewRoot()) {
+		if strings.HasPrefix(leaf.path, "review ") && leaf.Flags().Lookup("schema") != nil {
+			name := strings.TrimPrefix(leaf.path, "review ")
+			withSchema = append(withSchema, name)
+			arguments[name] = strings.Count(leaf.Use, "<")
+		}
+	}
+	if !slices.Contains(withSchema, "abandon") || !slices.Contains(withSchema, "plan") {
+		t.Fatalf("review subcommands with a schema: %v", withSchema)
+	}
+	for _, name := range withSchema {
+		result := runKander(t, "review", name, "--schema", "--json")
+		var body map[string]any
+		if result.code != 0 || result.stderr != "" || json.Unmarshal([]byte(result.stdout), &body) != nil || body["command"] != name || body["schema"] == nil {
+			t.Errorf("review %s --schema --json: exit=%d stderr=%q stdout=%q", name, result.code, result.stderr, result.stdout)
+		}
+		args := append([]string{"review", name, "--schema=false"}, slices.Repeat([]string{"/abs"}, arguments[name])...)
+		if result := runKander(t, args...); result.code != 1 || !strings.Contains(result.stderr, config.Text("remote.not_configured")) {
+			t.Errorf("review %s --schema=false: exit=%d stderr=%s", name, result.code, result.stderr)
+		}
 	}
 	// Choosing from a list needs a terminal, with or without a binding.
 	for _, args := range [][]string{{"--json", "pick"}, {"--json", "start"}} {
