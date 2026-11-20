@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.4.7 — 2026-11-20
 
 - Fix: a user agent definition whose program does not resolve no longer makes the whole configuration invalid. Config loading used to look up `agents.<name>.path`, `review.path`, and `session.allocate[0]` on PATH and failed every command with `must resolve on PATH or be an existing executable absolute path` when one was missing, for example `kander config` from a non-interactive ssh whose PATH lacks the directory of an agent no role uses. Loading now checks only the form (a command name or an absolute path, no relative path with separators, no control characters). A missing program is reported where it is used, as for a built-in agent whose CLI is not installed: `start`, `resume`, and session allocation report that the program is not in PATH, `kander review` reports the reviewer CLI as unavailable, and `doctor` shows the agent as not installed when its `path` is missing, or without the review capability and with its configured review roles unavailable when only its review program is missing.
 
