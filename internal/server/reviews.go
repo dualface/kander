@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"path/filepath"
+	"slices"
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
@@ -43,7 +44,18 @@ func (p *project) reviewWrite(key, operation string, request any, tasks func() (
 		return outcome{err: err}
 	}
 	defer p.mu.Unlock()
+	coordinatorGroup := ""
 	run := func() outcome {
+		if h.basis != nil {
+			// A coordinator declaration proves the group lease, never a card
+			// claim or a joint publication; mixing the proofs is ambiguous.
+			if h.publication != "" || h.members != nil || h.invalid != nil {
+				return outcome{err: apiError(api.CodeInvalidRequest, "a coordinator basis cannot accompany a publication or multi-task claim proofs")}
+			}
+			if h.basis.err != nil {
+				return outcome{err: h.basis.err}
+			}
+		}
 		if h.publication != "" {
 			existing, err := p.readPublication(h.publication)
 			if err != nil {
@@ -81,6 +93,12 @@ func (p *project) reviewWrite(key, operation string, request any, tasks func() (
 				return outcome{status: http.StatusOK, body: value.Result}
 			}
 			publication = &value
+		} else if h.basis != nil {
+			group, err := p.coordinatorAuthority(operation, authorityIDs, h, func(id string) (board.Snapshot, error) { return board.ReadSnapshot(p.board, id) }, func(task, id string) (board.Dispatch, error) { return board.ReadDispatch(p.board, task, id) })
+			if err != nil {
+				return outcome{err: err}
+			}
+			coordinatorGroup = group
 		} else {
 			if err := p.requireHolders(authorityIDs, h); err != nil {
 				return outcome{err: err}
@@ -93,6 +111,10 @@ func (p *project) reviewWrite(key, operation string, request any, tasks func() (
 		extension := board.TransactionExtension{Groups: []string{serviceGroup}, Tasks: ids, Before: func(tx *board.Transaction) error {
 			if publication != nil {
 				return p.validatePublication(tx, *publication)
+			}
+			if h.basis != nil {
+				_, err := p.coordinatorAuthority(operation, authorityIDs, h, tx.Snapshot, nil)
+				return err
 			}
 			for _, id := range authorityIDs {
 				snapshot, err := tx.Snapshot(id)
@@ -129,6 +151,10 @@ func (p *project) reviewWrite(key, operation string, request any, tasks func() (
 					if !confirmed {
 						return apiError(api.CodeEvidenceIncomplete, "producer writes a card outside the confirmed member set")
 					}
+				} else if h.basis != nil && claimedState(snapshot.Entry.State) {
+					if !slices.ContainsFunc(h.basis.members, func(member api.PublicationMember) bool { return member.TaskID == id }) {
+						return apiError(api.CodeEvidenceIncomplete, "producer writes a card outside the declared coordinator basis")
+					}
 				} else if claimedState(snapshot.Entry.State) {
 					if _, err := p.requireHolder(id, h); err != nil {
 						return err
@@ -159,8 +185,15 @@ func (p *project) reviewWrite(key, operation string, request any, tasks func() (
 		if err != nil {
 			return outcome{err: err}
 		}
+		// The generation of an event is the writer's card execution. The joint
+		// publication has none, and a group lease generation is not a card's.
+		generation := h.generation
+		if h.basis != nil {
+			generation = 0
+			p.log().Info("review write by group coordinator", "operation", operation, "group", coordinatorGroup, "generation", h.generation, "tasks", authorityIDs)
+		}
 		for _, id := range ids {
-			p.changed(id, h.generation)
+			p.changed(id, generation)
 		}
 		return outcome{status: http.StatusOK, body: body}
 	}

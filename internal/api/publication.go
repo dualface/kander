@@ -13,6 +13,15 @@ type PublicationMember struct {
 	Generation uint64 `json:"generation"`
 }
 
+// HeaderCoordinatorBasis carries the CoordinatorBasis of a review write that a
+// group coordinator makes with its group lease token.
+const HeaderCoordinatorBasis = "Kander-Coordinator-Basis"
+
+// CoordinatorBasis is the version of every live member a group coordinator
+// declares when it writes review evidence without the holders' confirmation.
+// The server writes only while each card still has that revision and execution.
+type CoordinatorBasis []PublicationMember
+
 // PublicationPrepare saves immutable material before any holder confirms it.
 type PublicationPrepare struct {
 	ID        string              `json:"id"`

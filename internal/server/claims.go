@@ -45,6 +45,8 @@ type holder struct {
 	token       string
 	generation  uint64
 	clientID    string
+	// basis is the coordinator declaration of a review write, nil when absent.
+	basis *coordinatorBasis
 }
 
 func claimPath(task string) string { return servicePath("claims", task+".json") }

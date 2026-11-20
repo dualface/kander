@@ -56,6 +56,12 @@ type Claim struct {
 	Members            map[string]api.ClaimProof
 	Token              string
 	Generation         uint64
+	// CoordinatorBasis, when not nil, declares the live members of a review
+	// write that Token and Generation prove as the group lease, not a card claim.
+	CoordinatorBasis api.CoordinatorBasis
+	// CoordinatorNote is the next step added to a refusal of that write: the
+	// server's refusal is final, so the caller reads the cards and starts again.
+	CoordinatorNote string
 }
 
 // NewKey returns a fresh idempotency key.
@@ -77,6 +83,26 @@ type call struct {
 }
 
 func (c *Client) do(ctx context.Context, in call, out any) error {
+	return explainCoordinatorRefusal(in, c.send(ctx, in, out))
+}
+
+// explainCoordinatorRefusal adds the note of a coordinator write to a refusal
+// that can come from its authority. The code stays the server's.
+func explainCoordinatorRefusal(in call, err error) error {
+	var refusal *api.Error
+	if in.claim == nil || in.claim.CoordinatorNote == "" || !errors.As(err, &refusal) {
+		return err
+	}
+	switch refusal.Code {
+	case api.CodeHeldByOther, api.CodeRevisionConflict, api.CodeLeaseInvalid, api.CodeTakenOver, api.CodeEvidenceIncomplete, api.CodeInvalidRequest:
+		explained := *refusal
+		explained.Message += " " + in.claim.CoordinatorNote
+		return &explained
+	}
+	return err
+}
+
+func (c *Client) send(ctx context.Context, in call, out any) error {
 	var payload []byte
 	if in.claim != nil && in.claim.PublicationID != "" && len(in.claim.PublicationPayload) != 0 {
 		if !strings.Contains(in.path, "/reviews/") || !json.Valid(in.claim.PublicationPayload) {
@@ -149,6 +175,13 @@ func (c *Client) once(ctx context.Context, in call, target string, payload []byt
 				return false, err
 			}
 			req.Header.Set(api.HeaderClaims, string(proofs))
+		}
+		if in.claim.CoordinatorBasis != nil {
+			basis, err := json.Marshal(in.claim.CoordinatorBasis)
+			if err != nil {
+				return false, err
+			}
+			req.Header.Set(api.HeaderCoordinatorBasis, string(basis))
 		}
 		req.Header.Set(api.HeaderClaimToken, in.claim.Token)
 		req.Header.Set(api.HeaderClaimGen, strconv.FormatUint(in.claim.Generation, 10))

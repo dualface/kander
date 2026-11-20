@@ -360,3 +360,9 @@ func (s *Server) BoardRoot(id string) (string, error) {
 	}
 	return p.board, nil
 }
+
+// OpenDispatchRefusal runs the open-dispatch condition of the coordinator
+// review write on a card text, reading the dispatch record through read.
+func OpenDispatchRefusal(task, text string, read func(task, id string) (board.Dispatch, error)) error {
+	return openDispatch(task, text, read)
+}
