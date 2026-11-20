@@ -233,7 +233,10 @@ func (s *Session) liveReviewMembers(ctx context.Context, tasks []string) ([]api.
 // directly. A group coordinator process holds no credential of that
 // generation, so it takes the coordinator write authority when it applies
 // (coordinatorAuthority) and otherwise prepares a joint publication with that
-// one member and waits for the holder; joint reports the second choice. Any other process without a credential for the
+// one member and waits for the holder. joint reports that the caller coordinates
+// the card's group: the flow goes on with the replay of a published
+// publication and the coordinator write check, and ends in the one-member
+// publication when neither applies. Any other process without a credential for the
 // member is refused here with the holder named, because the server refuses
 // every unproven write to a claimed card. A credential of an older generation
 // held by any other process is sent as it is, and the server answers with the
