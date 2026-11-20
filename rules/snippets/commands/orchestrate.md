@@ -40,7 +40,7 @@ kander orchestrate --agent claude --launcher tmux --message "Run the cards in or
 
 ## Output
 
-- On success the agent, launcher, and container address. With `foreground` the command returns only after the orchestrator exits. With `--json`: `agent`, `launcher`, `address` (empty without a container), and `tasks` (the task IDs); a `foreground` or `console` launcher is refused with `interactive_required` and exit status 2 before any container or agent exists. Launch warnings are notices with the code `launch_warning`.
+- On success the agent, launcher, and container address. With `foreground` the command returns only after the orchestrator exits. With `--json`: `agent`, `launcher`, `address` (empty without a container), and `tasks` (the task IDs); a `foreground` or `console` launcher is refused with `interactive_required` and exit status 2 before any container or agent exists; when the service project lookup that precedes the refusal gets no answer, the call ends with that error (`unreachable` or `not_ready`, exit status 1) instead, still before any container or agent exists, and repeating it once the service answers gives the refusal. Launch warnings are notices with the code `launch_warning`.
 
 ## Rejections
 
