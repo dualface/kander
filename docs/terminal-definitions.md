@@ -18,6 +18,7 @@ These points are the contract and are not extended:
 | global   | `<global share dir>/terminals/<name>.json` (`~/.local/share/kander/terminals`) |
 | project  | `<main worktree>/.kander/share/terminals/<name>.json` of the Git repository of the current directory |
 
+- The background `kander worker` runs in the client directory, outside any repository, so it reads only the embedded and global definitions, and a relative `KANDER_CONFIG` resolves against that directory. A launcher whose definition exists only in a project share cannot be resolved by the worker; put a definition the worker must use (request delivery, agent observation and stops) in the global share.
 - Precedence is embedded < global < project. A file replaces the same-name definition of a lower source as a whole; fields are never merged, so a user copy cannot run half old and half new.
 - The file name without `.json` must equal `name`. Files are read without following symbolic links or reparse points; a link, a non-regular file, invalid JSON or a failed validation is reported and ignored, and the lower-precedence definition (or the built-in launcher) stays in force.
 - A launcher name must be unique: it may not be `auto`, a Go launcher (`foreground`, `console`), or a launcher of another definition.
