@@ -942,7 +942,7 @@ func TestCoordinatorReviewRefusesMixedProofsWhenRecoveringAPreparedRun(t *testin
 			proof := build(w)
 			proof.ReviewWriter = coordWriter[:64]
 			request := w.prepareRequest("recover-run", "recover-batch", 0, required())
-			_, err := w.coordinator.ReviewRuntime(t.Context(), "recover-"+name, "recover-run", "prepare", request, proof)
+			_, err := w.coordinator.ReviewRuntime(t.Context(), client.NewKey(), "recover-run", "prepare", request, proof)
 			expectCode(t, err, api.CodeInvalidRequest)
 			if !reflect.DeepEqual(before, w.revisions()) {
 				t.Fatal("a refused recovery changed the members")

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -150,7 +149,7 @@ func TestPublishedJointPublicationReplaysWhenMembersMeetCoordinatorConditions(t 
 				revisions[task], requests[task] = card.Revision, len(list)
 			}
 			again, err := r.coordinate.AggregateReview(t.Context(), "coordinated-batch")
-			if err != nil || !sameJSON(t, first, again) {
+			if err != nil || !sameView(t, first, again) {
 				t.Fatalf("the saved result was not replayed: %v", err)
 			}
 			for _, task := range live {
@@ -177,15 +176,16 @@ func errString(err error) string {
 	return err.Error()
 }
 
-// sameJSON compares values, not bytes: the saved result is stored compact.
-func sameJSON(t *testing.T, a, b []byte) bool {
+// sameView compares two aggregate views by their digest: the saved result is
+// stored compact, so its bytes differ from a freshly printed view.
+func sameView(t *testing.T, a, b []byte) bool {
 	t.Helper()
-	var x, y any
+	var x, y board.ReviewBatchView
 	if err := json.Unmarshal(a, &x); err != nil {
 		t.Fatal(err)
 	}
 	if err := json.Unmarshal(b, &y); err != nil {
 		t.Fatal(err)
 	}
-	return reflect.DeepEqual(x, y)
+	return board.ReviewViewDigest(x) == board.ReviewViewDigest(y)
 }
