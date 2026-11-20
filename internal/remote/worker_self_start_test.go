@@ -63,6 +63,9 @@ func TestWorkerStartsForARenewableCredential(t *testing.T) {
 	if err := ensureCredentialWorker(home); err != nil || starts.Load() != 1 {
 		t.Fatalf("err=%v starts=%d", err, starts.Load())
 	}
+	if _, err := os.Stat(lockPath(home)); !os.IsNotExist(err) {
+		t.Fatalf("the probe created worker.lock: %v", err)
+	}
 	// The probe takes and releases the lock; it never leaves it held.
 	if held, err := lockHeld(home, lockPath(home)); held || err != nil {
 		t.Fatalf("held=%v err=%v", held, err)
@@ -132,8 +135,13 @@ func TestWorkerIsNotStartedWhileOneHoldsTheLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer lock.Unlock()
+	began := time.Now()
 	if err := ensureCredentialWorker(home); err != nil || starts.Load() != 0 {
 		t.Fatalf("err=%v starts=%d", err, starts.Load())
+	}
+	// WorkerHeld would wait 50 ms on a held lock; the probe never waits.
+	if elapsed := time.Since(began); elapsed > 30*time.Millisecond {
+		t.Fatalf("a held worker.lock took %v", elapsed)
 	}
 }
 

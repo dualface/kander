@@ -65,7 +65,9 @@ func prepareServer(ctx context.Context, c *client.Client, cfg *config.Config) (b
 		return false, err
 	}
 	prompted := false
-	if client.IsUnreachable(err) {
+	// A canceled or expired command is no reason to start anything: the failed
+	// probe may only be the cancellation.
+	if client.IsUnreachable(err) && ctx.Err() == nil {
 		dir, pathErr := servicectl.DataDir("")
 		if pathErr != nil {
 			return false, pathErr

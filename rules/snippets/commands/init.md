@@ -49,7 +49,7 @@ kander init --server http://127.0.0.1:7878 --project demo /tmp/checkout
 
 ## Offline service maintenance
 
-Run `kander server stop` and pause every executor and external writer. Run `kander server maintain [--data DIR] --project NAME`. If active cards require form migration, add `--maintenance` only after all writers are paused. The command takes the exclusive server data-directory lock and never starts an HTTP listener or stops agents. It converts imported legacy file cards using the existing board redo journal. A repeat reports zero changes. Original import snapshots and evidence bytes stay intact. Keep writers paused after failure and retry the same maintenance command; never choose or delete a partial copy manually.
+Pause every executor and external writer first, then run `kander server stop`: a running Agent starts the server again on its next command. Run `kander server maintain [--data DIR] --project NAME`. If active cards require form migration, add `--maintenance` only after all writers are paused. The command takes the exclusive server data-directory lock and never starts an HTTP listener or stops agents. It converts imported legacy file cards using the existing board redo journal. A repeat reports zero changes. Original import snapshots and evidence bytes stay intact. Keep writers paused after failure and retry the same maintenance command; never choose or delete a partial copy manually.
 
 ## Binding fields
 

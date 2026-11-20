@@ -175,7 +175,7 @@ func TestSelfStartLeavesAFreeLockFileAlone(t *testing.T) {
 	}
 	began := time.Now()
 	held, err := lockHeld(dir, path)
-	if !held || err != nil || time.Since(began) > 10*time.Millisecond+50*time.Millisecond {
+	if !held || err != nil || time.Since(began) > 30*time.Millisecond {
 		t.Fatalf("held lock: %v, %v after %v", held, err, time.Since(began))
 	}
 	if err := lock.Unlock(); err != nil {
@@ -248,5 +248,17 @@ func TestSelfStartWaitsForAServerThatHoldsTheLockWhileStarting(t *testing.T) {
 	prompted, err := prepareServer(t.Context(), gateClient(t, cfg), cfg)
 	if err != nil || prompted || starts.Load() != 0 || out.Len() != 0 {
 		t.Fatalf("prompted=%v err=%v starts=%d out=%q", prompted, err, starts.Load(), out.String())
+	}
+}
+
+func TestACanceledSessionNeverSelfStarts(t *testing.T) {
+	cfg, available, _, out := serverGateFixture(t)
+	createBoard(t, cfg)
+	starts := countStarts()
+	serverPromptInput = forbiddenInput{t}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := prepareServer(ctx, gateClient(t, cfg), cfg); err == nil || starts.Load() != 0 || available.Load() || out.Len() != 0 {
+		t.Fatalf("err=%v starts=%d out=%q", err, starts.Load(), out.String())
 	}
 }
