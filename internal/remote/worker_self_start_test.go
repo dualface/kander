@@ -230,8 +230,11 @@ func TestOpenStartsNothingForACommandCanceledWhileTheServerStarts(t *testing.T) 
 	defer cancel()
 	next := startLocalServer
 	startLocalServer = func(c context.Context, o servicectl.StartOptions) (api.ServerInfo, error) {
+		// The fixture starter checks its context, so it runs before the
+		// cancellation, which the start budget forwards from another goroutine.
+		info, err := next(c, o)
 		cancel()
-		return next(c, o)
+		return info, err
 	}
 	if _, err := Open(ctx, cfg, t.TempDir()); !errors.Is(err, context.Canceled) || starts.Load() != 0 || !available.Load() {
 		t.Fatalf("err=%v worker starts=%d", err, starts.Load())
