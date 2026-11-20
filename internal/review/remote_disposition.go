@@ -1,6 +1,7 @@
 package review
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,7 +10,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
 	"github.com/dualface/kander/internal/command"
@@ -22,7 +22,7 @@ import (
 // coordinator process without that credential asks the holder to confirm a
 // joint publication instead, except for disposition, which only the holder
 // submits.
-var remoteDispositionCommands = map[string]bool{"plan": true, "aggregate": true, "close": true, "progress": true, "extend-plan": true, "advance": true, "assign": true, "disposition": true, "interpret": true, "map-legacy": true, "abandon": true, "confirm": true}
+var remoteDispositionCommands = map[string]bool{"plan": true, "aggregate": true, "close": true, "progress": true, "extend-plan": true, "advance": true, "assign": true, "disposition": true, "interpret": true, "map-legacy": true, "abandon": true, "confirm": true, "publication": true}
 
 // runRemoteDisposition runs one evidence command against the server project.
 // Git facts are verified here against the client's repository at cwd, exactly
@@ -56,12 +56,17 @@ func runRemoteDisposition(cfg *config.Config, args []string) int {
 	var typed any
 	switch action {
 	case "confirm":
-		var publication api.Publication
-		publication, err = session.ConfirmReviewPublication(ctx, input, args[3])
-		if err == nil {
-			out, err = json.Marshal(map[string]string{"publication_id": publication.ID, "task_id": args[3], "status": "confirmed", "digest": publication.Digest})
+		confirmed, confirmErr := confirmPublication(ctx, session, input, args[3])
+		if confirmErr != nil {
+			return dispositionFailure(confirmErr)
 		}
-		typed = &map[string]string{}
+		return printMaterial(confirmed)
+	case "publication":
+		view, viewErr := readPublicationView(ctx, session, input)
+		if viewErr != nil {
+			return dispositionFailure(viewErr)
+		}
+		return printMaterial(view)
 
 	case "plan":
 		var p board.ReviewPlan
@@ -115,17 +120,32 @@ func runRemoteDisposition(cfg *config.Config, args []string) int {
 	if err := json.Unmarshal(out, typed); err != nil {
 		return dispositionFailure(err)
 	}
-	if command.JSON() {
-		if view, ok := typed.(*board.ReviewBatchView); ok {
-			return command.Result(aggregateResult(view))
-		}
-		return command.Result(typed)
+	if view, ok := typed.(*board.ReviewBatchView); ok && command.JSON() {
+		return printDisposition(aggregateResult(view))
 	}
-	data, err := json.MarshalIndent(typed, "", "  ")
-	if err != nil {
+	return printDisposition(typed)
+}
+
+// printDisposition prints the answer of an evidence command: the JSON object of --json, or the
+// same object indented. The text of an answer that other commands hash (the aggregate view)
+// escapes <, > and &; printMaterial does not, so the <U+XXXX> markers of a cleaned publication
+// stay readable.
+func printDisposition(result any) int { return printObject(result, true) }
+
+func printMaterial(result any) int { return printObject(result, false) }
+
+func printObject(result any, escapeHTML bool) int {
+	if command.JSON() {
+		return command.Result(result)
+	}
+	var out bytes.Buffer
+	encoder := json.NewEncoder(&out)
+	encoder.SetEscapeHTML(escapeHTML)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(result); err != nil {
 		return dispositionFailure(err)
 	}
-	fmt.Fprintln(os.Stdout, string(data))
+	fmt.Fprint(os.Stdout, out.String())
 	return 0
 }
 

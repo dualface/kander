@@ -59,6 +59,25 @@ func (j *jointReview) confirm(t *testing.T, index int) {
 	j.publication = value
 }
 
+// Reading a prepared publication needs no claim credential and no writer secret: any client of
+// the project reads the material a holder is asked to confirm, and the holder reads it with the
+// same call before it confirms.
+func TestPreparedPublicationReadsWithoutCredentials(t *testing.T) {
+	joint := prepareJointReview(t)
+	stranger := joint.fixture.project("host-without-credentials")
+	read, err := stranger.Publication(t.Context(), joint.publication.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if read.Status != "prepared" || read.Operation != "review-plan" || read.Digest != joint.publication.Digest || len(read.Members) != 2 || len(read.Approvals) != 0 || read.CreatedAt.IsZero() {
+		t.Fatalf("the read publication is incomplete: %+v", read)
+	}
+	var stored board.ReviewPlan
+	if err := json.Unmarshal(read.Payload, &stored); err != nil || stored.PlanID != joint.plan.PlanID || len(stored.Batches) != 1 {
+		t.Fatalf("the read material is not the prepared plan: %v %s", err, read.Payload)
+	}
+}
+
 func TestJointReviewRecoversPartialConfirmationAndPublishesAtomically(t *testing.T) {
 	joint := prepareJointReview(t)
 	joint.confirm(t, 0)

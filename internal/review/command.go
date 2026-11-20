@@ -56,6 +56,7 @@ func newCommand(run func(options archiveOptions, args []string) int) *cobra.Comm
 		newEvidenceCommand("advance", "<absolute-CWD> <absolute-advance-request.json>", 2),
 		newEvidenceCommand("close", "<absolute-CWD> <absolute-close-request.json>", 2),
 		newEvidenceCommand("progress", "<absolute-CWD> <task-id>", 2),
+		newEvidenceCommand("publication", "<absolute-CWD> <publication-id>", 2),
 		newEvidenceCommand("confirm", "<absolute-CWD> <publication-id> <task-id>", 3),
 	)
 	return c

@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
@@ -31,6 +32,10 @@ const (
 // A test that moves cards to review sets one, because the service accepts
 // delivery facts only for a registered remote.
 var coordinatedRemote string
+
+// coordinatedClock, when set, is the clock of the fixture's server. A test that lapses a
+// lease sets it and moves it past the lease.
+var coordinatedClock func() time.Time
 
 // coordinatedRun is a group review whose cards are held by a process on host a
 // and whose reviewer runs on host b, the process that coordinates the group.
@@ -66,7 +71,7 @@ func newCoordinatedRunKeeping(t *testing.T, members, planned int, keepLive bool)
 	t.Setenv(remote.EnvCoordinatorExecutionID, "")
 	t.Setenv(config.EnvLang, "en")
 	t.Setenv(config.EnvLangCLI, "1")
-	srv, err := server.Open(server.Options{DataDir: filepath.Join(t.TempDir(), "server"), Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	srv, err := server.Open(server.Options{DataDir: filepath.Join(t.TempDir(), "server"), Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Now: coordinatedClock})
 	if err != nil {
 		t.Fatal(err)
 	}
