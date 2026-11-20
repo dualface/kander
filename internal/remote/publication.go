@@ -143,16 +143,10 @@ func (s *Session) reviewAuthority(ctx context.Context, operation, replay string,
 	if err != nil {
 		return nil, false, err
 	}
-	identity, err := json.Marshal(struct {
-		Operation string
-		Payload   json.RawMessage
-		Members   []api.PublicationMember
-	}{operation, raw, members})
+	id, err := publicationID(operation, raw, members)
 	if err != nil {
 		return nil, false, err
 	}
-	digest := sha256.Sum256(identity)
-	id := "review-" + hex.EncodeToString(digest[:])
 	if _, err := s.publicationHistory(operation, replay, raw, id); err != nil {
 		return nil, false, err
 	}
@@ -175,9 +169,7 @@ func (s *Session) reviewAuthority(ctx context.Context, operation, replay string,
 				return nil, false, err
 			}
 		} else if _, approved := prepared.Approvals[member.TaskID]; !approved {
-			key := sha256.Sum256([]byte(id + "\x00" + member.TaskID))
-			message := config.Text("remote.publication_confirmation_request", id, member.TaskID)
-			if _, err := s.Project.CreateRequest(ctx, "approval-"+hex.EncodeToString(key[:]), member.TaskID, api.NewCollabRequest{Kind: api.RequestReview, TargetGeneration: member.Generation, Message: message}); err != nil {
+			if err := s.requestConfirmation(ctx, id, member); err != nil {
 				return nil, false, err
 			}
 			pending = append(pending, member.TaskID)
@@ -187,6 +179,43 @@ func (s *Session) reviewAuthority(ctx context.Context, operation, replay string,
 		return nil, false, &ConfirmationPending{Cause: &api.Error{Code: api.CodeEvidenceIncomplete, Message: config.Text("remote.review_confirmation_pending", id, strings.Join(pending, ", "))}}
 	}
 	return &client.Claim{PublicationID: id, PublicationPayload: raw}, false, nil
+}
+
+// requestConfirmation asks the holder of member to confirm the publication, once. A review
+// request of the member's generation whose text names the publication is the question already,
+// whatever its status but superseded: the client that wrote it may have been an earlier version
+// with another text and another key, and a retry in another interface language writes another
+// text. Only when there is none does it create one, under a key that also names the text, so a
+// later change of the wording never reuses the key of an older request.
+func (s *Session) requestConfirmation(ctx context.Context, id string, member api.PublicationMember) error {
+	requests, err := s.Project.Requests(ctx, member.TaskID)
+	if err != nil {
+		return err
+	}
+	for _, request := range requests {
+		if request.Kind == api.RequestReview && request.TargetGeneration == member.Generation && request.Status != api.RequestSuperseded && strings.Contains(request.Message, id) {
+			return nil
+		}
+	}
+	message := config.Text("remote.publication_confirmation_request", id, member.TaskID)
+	key := sha256.Sum256([]byte(id + "\x00" + member.TaskID + "\x00" + message))
+	_, err = s.Project.CreateRequest(ctx, "approval-"+hex.EncodeToString(key[:]), member.TaskID, api.NewCollabRequest{Kind: api.RequestReview, TargetGeneration: member.Generation, Message: message})
+	return err
+}
+
+// publicationID names a joint publication by its operation, material and members: the same three
+// always give the same ID.
+func publicationID(operation string, raw json.RawMessage, members []api.PublicationMember) (string, error) {
+	identity, err := json.Marshal(struct {
+		Operation string
+		Payload   json.RawMessage
+		Members   []api.PublicationMember
+	}{operation, raw, members})
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(identity)
+	return "review-" + hex.EncodeToString(digest[:]), nil
 }
 
 // replayRoute routes a saved one-member publication for the calling execution.

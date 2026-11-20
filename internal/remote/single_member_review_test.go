@@ -218,7 +218,7 @@ func (f *singleMember) requests() []api.CollabRequest {
 func (f *singleMember) awaitHolder(err error) {
 	f.t.Helper()
 	id := pendingPublicationID(f.t, err)
-	for _, want := range []string{f.ids[0], "kander review confirm <absolute-CWD> " + id + " <task-id>"} {
+	for _, want := range []string{f.ids[0], "kander review publication <absolute-CWD> " + id, "kander review confirm <absolute-CWD> " + id + " <task-id>"} {
 		if !strings.Contains(err.Error(), want) {
 			f.t.Fatalf("wait omits %q: %v", want, err)
 		}
