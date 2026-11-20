@@ -74,9 +74,5 @@ func (s *Session) dispatchInProgress(ctx context.Context, task api.Task) bool {
 	if err != nil {
 		return true
 	}
-	switch dispatch.State {
-	case board.DispatchPrepared, board.DispatchUnknown, board.DispatchAccepted:
-		return true
-	}
-	return false
+	return board.DispatchInProgress(dispatch.State)
 }

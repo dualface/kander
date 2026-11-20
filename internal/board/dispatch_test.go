@@ -10,6 +10,28 @@ import (
 	"time"
 )
 
+func TestDispatchInProgress(t *testing.T) {
+	tests := []struct {
+		state DispatchState
+		want  bool
+	}{
+		{DispatchPrepared, true},
+		{DispatchUnknown, true},
+		{DispatchAccepted, true},
+		{DispatchCompleted, false},
+		{DispatchFailed, false},
+		{DispatchCancelled, false},
+		// A state this version does not know is deliberately not in progress.
+		{"", false},
+		{"retired", false},
+	}
+	for _, tt := range tests {
+		if got := DispatchInProgress(tt.state); got != tt.want {
+			t.Errorf("DispatchInProgress(%q) = %v, want %v", tt.state, got, tt.want)
+		}
+	}
+}
+
 func dispatchCard(t *testing.T, root, slug string) Snapshot {
 	t.Helper()
 	s := transactionCard(t, root, slug, false)

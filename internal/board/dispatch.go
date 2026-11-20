@@ -26,6 +26,18 @@ const (
 	DispatchCancelled DispatchState = "cancelled"
 )
 
+// DispatchInProgress reports whether a dispatch in state is still in progress:
+// prepared, delivery-unknown or accepted. Every other state, including one
+// this version does not know, is not in progress. A caller that cannot read
+// the dispatch decides on its own how to treat it.
+func DispatchInProgress(state DispatchState) bool {
+	switch state {
+	case DispatchPrepared, DispatchUnknown, DispatchAccepted:
+		return true
+	}
+	return false
+}
+
 // ArtifactReference survives card moves; Path is relative to the named card.
 // Evidence producers, not this storage layer, interpret the referenced content.
 type ArtifactReference struct {

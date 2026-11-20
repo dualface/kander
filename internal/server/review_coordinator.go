@@ -162,8 +162,7 @@ func openDispatch(task, text string, read func(task, id string) (board.Dispatch,
 	if err != nil {
 		return coordinatorRefused(task, "its dispatch "+id+" cannot be read, so it counts as in progress")
 	}
-	switch record.State {
-	case board.DispatchPrepared, board.DispatchUnknown, board.DispatchAccepted:
+	if board.DispatchInProgress(record.State) {
 		return coordinatorRefused(task, "its dispatch "+id+" is "+string(record.State))
 	}
 	return nil
