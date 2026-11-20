@@ -41,6 +41,18 @@ func runRemoteDisposition(cfg *config.Config, args []string) int {
 	cwd = canonicalEvidenceCWD(cwd)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
+	if action == "publication" {
+		// A read creates neither the client identity of this host nor a project.
+		session, err := remote.OpenReadOnly(ctx, cfg, cwd)
+		if err != nil {
+			return dispositionFailure(err)
+		}
+		view, err := readPublicationView(ctx, session, input)
+		if err != nil {
+			return dispositionFailure(err)
+		}
+		return printMaterial(view)
+	}
 	session, err := remote.Open(ctx, cfg, cwd)
 	if err != nil {
 		return dispositionFailure(err)
@@ -61,12 +73,6 @@ func runRemoteDisposition(cfg *config.Config, args []string) int {
 			return dispositionFailure(confirmErr)
 		}
 		return printMaterial(confirmed)
-	case "publication":
-		view, viewErr := readPublicationView(ctx, session, input)
-		if viewErr != nil {
-			return dispositionFailure(viewErr)
-		}
-		return printMaterial(view)
 
 	case "plan":
 		var p board.ReviewPlan

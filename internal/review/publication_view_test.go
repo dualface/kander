@@ -418,3 +418,21 @@ func TestConfirmResultListsTheMembersThatStillWait(t *testing.T) {
 		t.Fatalf("printed=%s %v", printed, err)
 	}
 }
+
+// A file the client left empty is a nil byte slice, which JSON writes as null: it prints as an
+// entry of zero bytes, and the other files stay readable.
+func TestPublicationViewReadsAnEmptyOriginal(t *testing.T) {
+	r := newCoordinatedRun(t, 1)
+	request := api.ReviewPrepare{Input: r.input(), Requirements: map[string]string{"PMQA": "required"}, Originals: map[string][]byte{"review-context.md": nil, "task-context.md": []byte("frozen")}, Version: "test", WriterHash: strings.Repeat("b", 64)}
+	_, err := r.coordinate.PrepareReviewAuthority(t.Context(), request, r.ids[:1], "")
+	publication := r.stored(err)
+	if !strings.Contains(string(publication.Payload), `"review-context.md":null`) {
+		t.Fatalf("the stored material does not hold the null: %s", publication.Payload)
+	}
+	files := at(t, r.view(publication.ID), "payload", "originals").([]any)
+	empty := sha256.Sum256(nil)
+	first := files[0].(map[string]any)
+	if len(files) != 2 || first["name"] != "review-context.md" || first["bytes"] != float64(0) || first["sha256"] != hex.EncodeToString(empty[:]) {
+		t.Fatalf("originals=%v", files)
+	}
+}

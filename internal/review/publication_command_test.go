@@ -6,10 +6,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/remote"
 )
 
 // prepared stores a joint publication of the world's card, as an orchestrator's client does.
@@ -56,7 +60,7 @@ func TestPublicationCommandFailures(t *testing.T) {
 		if len(args) == 2 {
 			want, _, _ = captureRun(t, []string{"progress", w.h.repo})
 		}
-		if code == 0 || code != want || stdout != "" || stderr == "" {
+		if code != 2 || code != want || stdout != "" || stderr == "" {
 			t.Fatalf("%v: code=%d (other subcommand %d) stdout=%q stderr=%q", args, code, want, stdout, stderr)
 		}
 	}
@@ -139,5 +143,91 @@ func TestPublicationCommandPrintsReadableMarkers(t *testing.T) {
 		if strings.Contains(out, forbidden) {
 			t.Fatalf("output holds %q: %s", forbidden, out)
 		}
+	}
+}
+
+// Reading creates no client identity, registers no project and sends nothing but GET, whether
+// the read succeeds, the publication is unknown, or the project is.
+func TestPublicationCommandWritesNothing(t *testing.T) {
+	w := newRemoteWorld(t)
+	publication := w.prepared(t, "review-assign", map[string]string{"run_id": "run-1"})
+	home := filepath.Join(t.TempDir(), "empty-client-home")
+	t.Setenv(remote.EnvClientHome, home)
+	w.writes.take()
+	assertNothingWritten := func(what string) {
+		t.Helper()
+		if calls := w.writes.take(); len(calls) != 0 {
+			t.Fatalf("%s sent writes: %v", what, calls)
+		}
+		if _, err := os.Stat(home); !os.IsNotExist(err) {
+			t.Fatalf("%s created the client home: %v", what, err)
+		}
+	}
+	commandOK(t, "publication", w.h.repo, publication.ID)
+	assertNothingWritten("a read")
+	if code, _, _ := captureRun(t, []string{"publication", w.h.repo, "review-" + strings.Repeat("0", 64)}); code != 2 {
+		t.Fatalf("unknown publication: code=%d", code)
+	}
+	assertNothingWritten("a read of an unknown publication")
+
+	configPath := os.Getenv(config.EnvConfig)
+	var settings map[string]any
+	if err := json.Unmarshal([]byte(readFile(t, configPath)), &settings); err != nil {
+		t.Fatal(err)
+	}
+	settings["project"] = map[string]string{"name": "never-registered"}
+	data, err := json.Marshal(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := captureRun(t, []string{"publication", w.h.repo, publication.ID, "--json"})
+	if detail := jsonObject(t, stderr)["error"].(map[string]any); code != 2 || detail["code"] != "not_found" {
+		t.Fatalf("unknown project: code=%d stderr=%s", code, stderr)
+	}
+	assertNothingWritten("a read in an unregistered project")
+	if _, err := w.session.Client.ProjectByName(t.Context(), "never-registered"); !api.IsCode(err, api.CodeNotFound) {
+		t.Fatalf("the read registered the project: %v", err)
+	}
+}
+
+// What a reader decodes from the stdout of the command holds no steering character in any string
+// or key, however the material hides it: 8-bit sequences, a sequence across the cut of a long
+// string, and nested keys.
+func TestPublicationCommandOutputIsCleanAfterDecoding(t *testing.T) {
+	w := newRemoteWorld(t)
+	crossing := strings.Repeat("a", maxMaterialText-6) + "\x1b]0;" + strings.Repeat("t", 100) + "\x07" + "tail"
+	payload := map[string]any{
+		"c1":       "x\u009b31my\u009d0;title\u009cz",
+		"crossing": crossing,
+		"nested":   map[string]any{"k‮\x1b[0m": []string{"v⁧", "w\x00"}},
+	}
+	publication := w.prepared(t, "review-assign", payload)
+	var printed map[string]any
+	if err := json.Unmarshal([]byte(commandOK(t, "publication", w.h.repo, publication.ID, "--json")), &printed); err != nil {
+		t.Fatal(err)
+	}
+	if printed["sanitized"] != true {
+		t.Fatalf("sanitized=%v", printed["sanitized"])
+	}
+	for _, text := range stringsOf(printed) {
+		for _, r := range text {
+			if unsafeRune(r) {
+				t.Fatalf("the decoded string %q holds %U", text, r)
+			}
+		}
+	}
+	body := at(t, printed, "payload").(map[string]any)
+	if got := body["c1"]; got != "x<U+009B>y<U+009D>z" {
+		t.Fatalf("c1=%q", got)
+	}
+	cut := body["crossing"].(map[string]any)
+	if text := cut["text"].(string); strings.Contains(text, "tt") || !strings.HasSuffix(text, "<U+001B>") || cut["truncated"] != true {
+		t.Fatalf("crossing=%v", cut)
+	}
+	if _, ok := at(t, body, "nested").(map[string]any)["k<U+202E><U+001B>"]; !ok {
+		t.Fatalf("nested keys=%v", body["nested"])
 	}
 }

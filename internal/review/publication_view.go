@@ -102,39 +102,48 @@ func readPublicationView(ctx context.Context, session *remote.Session, id string
 // replaced any character.
 type materialText struct{ replaced bool }
 
-// ansiSequence matches a complete CSI or OSC escape sequence. A lone ESC that
-// starts neither is replaced as a control character.
-var ansiSequence = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]|\x1b\](?:[^\x07\x1b]|\x1b[^\\])*(?:\x07|\x1b\\)`)
+// ansiSequence matches a complete CSI or OSC escape sequence, in its 7-bit form (ESC [ and ESC ])
+// and in its 8-bit form (U+009B and U+009D). A lone introducer that starts no complete sequence is
+// replaced as a control character.
+var ansiSequence = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]|\x{9b}[0-?]*[ -/]*[@-~]|\x1b\](?:[^\x07\x1b]|\x1b[^\\])*(?:\x07|\x1b\\)|\x{9d}(?:[^\x07\x{9c}\x1b]|\x1b[^\\])*(?:\x07|\x{9c}|\x1b\\)`)
 
-// clean replaces every escape sequence with one <U+001B> marker, and every
-// control or bidirectional override character with its own <U+XXXX> marker.
-// Newline and tab stay.
-func (m *materialText) clean(value string) string {
-	if strings.IndexFunc(value, unsafeRune) < 0 {
+// clean replaces every escape sequence with one marker of its introducer, and every control or
+// bidirectional override character with its own <U+XXXX> marker. Newline and tab stay.
+func (m *materialText) clean(value string) string { return m.cleanPrefix(value, -1) }
+
+// cleanPrefix is clean for the first limit characters of value; a negative limit takes all of it.
+// Sequences are found in the whole value, so one that starts inside the prefix and ends after it
+// is one marker and leaves none of its text behind.
+func (m *materialText) cleanPrefix(value string, limit int) string {
+	if limit < 0 && strings.IndexFunc(value, unsafeRune) < 0 {
 		return value
 	}
-	m.replaced = true
+	sequences := ansiSequence.FindAllStringIndex(value, -1)
 	var out strings.Builder
-	rest := 0
-	for _, at := range ansiSequence.FindAllStringIndex(value, -1) {
-		out.WriteString(markUnsafe(value[rest:at[0]]))
-		out.WriteString("<U+001B>")
-		rest = at[1]
-	}
-	out.WriteString(markUnsafe(value[rest:]))
-	return out.String()
-}
-
-func markUnsafe(value string) string {
-	var out strings.Builder
-	for _, r := range value {
+	for at, taken := 0, 0; at < len(value) && (limit < 0 || taken < limit); {
+		if len(sequences) > 0 && sequences[0][0] == at {
+			end := sequences[0][1]
+			r, _ := utf8.DecodeRuneInString(value[at:])
+			m.mark(&out, r)
+			taken += utf8.RuneCountInString(value[at:end])
+			at, sequences = end, sequences[1:]
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(value[at:])
 		if unsafeRune(r) {
-			fmt.Fprintf(&out, "<U+%04X>", r)
+			m.mark(&out, r)
 		} else {
 			out.WriteRune(r)
 		}
+		at += size
+		taken++
 	}
 	return out.String()
+}
+
+func (m *materialText) mark(out *strings.Builder, r rune) {
+	m.replaced = true
+	fmt.Fprintf(out, "<U+%04X>", r)
 }
 
 // unsafeRune reports a character that can change what a terminal or a reader
@@ -198,13 +207,17 @@ func summarizeOriginals(value any) ([]originalSummary, error) {
 	}
 	list := make([]originalSummary, 0, len(files))
 	for _, name := range slices.Sorted(maps.Keys(files)) {
-		encoded, ok := files[name].(string)
-		if !ok {
-			return nil, archiveError("publication material has invalid originals")
-		}
-		data, err := base64.StdEncoding.DecodeString(encoded)
-		if err != nil {
-			return nil, archiveError("publication material has invalid originals")
+		// A file the client left empty is a nil byte slice, which JSON writes as null.
+		var data []byte
+		if files[name] != nil {
+			encoded, ok := files[name].(string)
+			if !ok {
+				return nil, archiveError("publication material has invalid originals")
+			}
+			var err error
+			if data, err = base64.StdEncoding.DecodeString(encoded); err != nil {
+				return nil, archiveError("publication material has invalid originals")
+			}
 		}
 		sum := sha256.Sum256(data)
 		list = append(list, originalSummary{name: name, bytes: len(data), sha256: hex.EncodeToString(sum[:])})
@@ -235,7 +248,7 @@ func (m *materialText) value(value any) any {
 			return m.clean(v)
 		}
 		sum := sha256.Sum256([]byte(v))
-		return map[string]any{"text": m.clean(string([]rune(v)[:maxMaterialText])), "truncated": true, "length": length, "sha256": hex.EncodeToString(sum[:])}
+		return map[string]any{"text": m.cleanPrefix(v, maxMaterialText), "truncated": true, "length": length, "sha256": hex.EncodeToString(sum[:])}
 	case []any:
 		list := make([]any, len(v))
 		for i, item := range v {

@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,6 +30,33 @@ type remoteWorld struct {
 	h       *reviewHarness
 	session *remote.Session
 	task    string
+	writes  *writeRecorder
+}
+
+// writeRecorder lists the requests that reached the service with a method other than GET.
+type writeRecorder struct {
+	mu    sync.Mutex
+	calls []string
+}
+
+func (r *writeRecorder) wrap(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet {
+			r.mu.Lock()
+			r.calls = append(r.calls, req.Method+" "+req.URL.Path)
+			r.mu.Unlock()
+		}
+		next.ServeHTTP(w, req)
+	})
+}
+
+// take returns the writes recorded since the last call and forgets them.
+func (r *writeRecorder) take() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	calls := r.calls
+	r.calls = nil
+	return calls
 }
 
 func newRemoteWorld(t *testing.T) *remoteWorld {
@@ -42,7 +71,8 @@ func newRemoteWorld(t *testing.T) *remoteWorld {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = srv.Close() })
-	httpServer := httptest.NewServer(srv.Handler())
+	writes := &writeRecorder{}
+	httpServer := httptest.NewServer(writes.wrap(srv.Handler()))
 	t.Cleanup(httpServer.Close)
 	var cfg map[string]any
 	configPath := os.Getenv(config.EnvConfig)
@@ -86,7 +116,7 @@ func newRemoteWorld(t *testing.T) *remoteWorld {
 	if err := session.SaveCredential(credential); err != nil {
 		t.Fatal(err)
 	}
-	return &remoteWorld{h: h, session: session, task: task.TaskID}
+	return &remoteWorld{h: h, session: session, task: task.TaskID, writes: writes}
 }
 
 func (w *remoteWorld) batch(id, previous, base, target string) board.ReviewPlanBatch {

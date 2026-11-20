@@ -5,7 +5,44 @@ import (
 	"slices"
 
 	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/config"
 )
+
+// readOnlyClientID names the client of a read-only session. It is no identity of this host: a
+// read-only command creates no client identity file.
+const readOnlyClientID = "readonly-session"
+
+// OpenReadOnly resolves the project of cfg for a command that only reads. Open creates the client
+// identity of this host and registers an unknown project, so a read that fails could leave both
+// behind. OpenReadOnly sends only GET requests, writes nothing below the client home, and fails
+// with not_found for a project the service does not know. It checks the protocol and, like Open,
+// that the origin of the checkout at dir is the remote the project is bound to. The session has no
+// client home, so it serves calls that need no host-private record.
+func OpenReadOnly(ctx context.Context, cfg *config.Config, dir string) (*Session, error) {
+	if cfg == nil || cfg.Project.Name == "" {
+		return nil, ErrNotConfigured
+	}
+	c, err := client.New(config.ServerURL(cfg), readOnlyClientID)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := c.CheckCompatible(ctx); err != nil {
+		return nil, err
+	}
+	repository, err := ResolveGitRemote(ctx, dir)
+	if err != nil {
+		return nil, err
+	}
+	info, err := c.ProjectByName(ctx, cfg.Project.Name)
+	if err != nil {
+		return nil, err
+	}
+	if repository != "" && info.Remote != "" && info.Remote != repository {
+		return nil, &api.Error{Code: api.CodeProjectMismatch, Message: "project " + cfg.Project.Name + " is bound to another Git remote"}
+	}
+	return &Session{ServerURL: config.ServerURL(cfg), Client: c, Project: c.Project(info.ID), Info: info}, nil
+}
 
 // MemberConfirmed reports whether the publication holds a confirmation of the
 // member that names the digest of the publication and the member's own
