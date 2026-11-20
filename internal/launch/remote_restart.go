@@ -14,6 +14,11 @@ import (
 type remoteLaunchInput struct {
 	Agent, Launcher, TaskID, Message, Decision, Base, PendingRequest string
 	Takeover, Native                                                 bool
+	// SessionChecked is set by a caller that opened the session of the host before it called
+	// launchRemote: the check that precedes the session has no meaning then, and the receipt
+	// decides. It is not part of the logical input, so it stays out of the receipt key and of the
+	// intent a command receipt stores.
+	SessionChecked bool `json:"-"`
 }
 
 type remoteRestart struct {

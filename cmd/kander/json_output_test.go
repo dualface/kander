@@ -1,22 +1,30 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/cli"
+	"github.com/dualface/kander/internal/client"
 	"github.com/dualface/kander/internal/command/commandtest"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
@@ -784,10 +792,10 @@ func TestJSONSubscribeFailureBeforeTheFirstSnapshotIsOneErrorObject(t *testing.T
 }
 
 // A refusal comes before the session of the host is opened, which registers the project with the
-// service. The host has real receipts in project A (a start and an orchestrator session that
-// succeeded); the same client then works in project B, which the service does not know. The
-// receipts of A say nothing about B, so start, an explicit takeover and orchestrate are refused
-// for their launcher before B is registered.
+// service. The host has real receipts in project A: one start and one orchestrator session that
+// succeeded (it has no takeover receipt). The same client then works in project B, which the
+// service does not know. The receipts of A say nothing about B, so start, an explicit takeover
+// and orchestrate are refused for their launcher before B is registered.
 func TestJSONInteractiveRefusalDoesNotRegisterTheProject(t *testing.T) {
 	fixture := fakeMuxFixture(t)
 	started := readyCard(t, "json-receipt-start")
@@ -809,7 +817,9 @@ func TestJSONInteractiveRefusalDoesNotRegisterTheProject(t *testing.T) {
 	if _, err := config.Save(cfg); err != nil {
 		t.Fatal(err)
 	}
-	// The same task IDs and the same arguments as the receipts of project A.
+	// The task IDs of the receipts of project A are reused, but the refused calls use a launcher
+	// that takes the terminal (foreground, console) where A used fakemux, so their receipt keys
+	// differ from those of A as well.
 	for name, args := range map[string][]string{
 		"start":       {"start", "--json", "--launcher", "foreground", started},
 		"takeover":    {"resume", "--json", "--agent", "claude", "--decision", "test", "--message", "go", "--launcher", "foreground", started},
@@ -819,5 +829,142 @@ func TestJSONInteractiveRefusalDoesNotRegisterTheProject(t *testing.T) {
 	}
 	if project, err := fixture.service.Client.ProjectByName(t.Context(), "unregistered-project-b"); err == nil {
 		t.Fatalf("the refusals registered the project: %+v", project)
+	}
+}
+
+// lookupProxy stands in front of the service. It answers the first failures read-only lookups of
+// one project name with not_ready, as a service that is restarting does, forwards everything else,
+// and records the names of the projects that a POST asks it to register.
+type lookupProxy struct {
+	mu       sync.Mutex
+	name     string
+	failures int
+	lookups  int
+	posts    []string
+}
+
+// arm makes the next failures lookups fail and starts counting lookups again.
+func (p *lookupProxy) arm(failures int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.failures, p.lookups = failures, 0
+}
+
+func (p *lookupProxy) state() (lookups int, posts []string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.lookups, slices.Clone(p.posts)
+}
+
+func newLookupProxy(t *testing.T, target, name string) (*lookupProxy, string) {
+	t.Helper()
+	upstream, err := url.Parse(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxy := &lookupProxy{name: name}
+	forward := httputil.NewSingleHostReverseProxy(upstream)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/projects" {
+			proxy.mu.Lock()
+			fail := false
+			switch r.Method {
+			case http.MethodGet:
+				if r.URL.Query().Get("name") == proxy.name {
+					proxy.lookups++
+					fail = proxy.failures > 0
+					if fail {
+						proxy.failures--
+					}
+				}
+			case http.MethodPost:
+				var register api.RegisterProject
+				body, _ := io.ReadAll(r.Body)
+				_ = json.Unmarshal(body, &register)
+				r.Body = io.NopCloser(bytes.NewReader(body))
+				proxy.posts = append(proxy.posts, register.Name)
+			}
+			proxy.mu.Unlock()
+			if fail {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_ = json.NewEncoder(w).Encode(api.Error{Code: api.CodeNotReady, Message: "restarting"})
+				return
+			}
+		}
+		forward.ServeHTTP(w, r)
+	}))
+	t.Cleanup(server.Close)
+	return proxy, server.URL
+}
+
+// A refusal that cannot read the project does not go on to register it. The host has a client
+// identity, and the configuration now names project B, which the service does not know. The
+// service is restarting: the read-only lookup before the session fails with not_ready on every
+// attempt the client makes. The call ends with that error, and the service never sees a POST that
+// would create B or bind its Git source. When the service is back the same call is refused for its
+// launcher and B is still unregistered.
+func TestJSONInteractiveRefusalDoesNotRegisterWhileTheLookupFails(t *testing.T) {
+	fixture := fakeMuxFixture(t)
+	started := readyCard(t, "json-lookup-start")
+	planned := readyCard(t, "json-lookup-orchestrate")
+	const missing = "unregistered-project-b"
+	proxy, proxyURL := newLookupProxy(t, fixture.cfg.Server.URL, missing)
+	cfg, err := config.Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Project.Name, cfg.Server.URL = missing, proxyURL
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	// One call of the client makes Retries+1 attempts; failing exactly that many exhausts it.
+	probe, err := client.New(proxyURL, "attempt-probe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempts := probe.Retries + 1
+	home, err := remote.Home()
+	if err != nil {
+		t.Fatal(err)
+	}
+	namespaces := func() []string {
+		entries, _ := os.ReadDir(filepath.Join(home, "projects"))
+		var names []string
+		for _, entry := range entries {
+			names = append(names, entry.Name())
+		}
+		return names
+	}
+	before := namespaces()
+	for _, refused := range []struct {
+		name string
+		args []string
+	}{
+		{"start", []string{"start", "--json", "--launcher", "foreground", started}},
+		{"takeover", []string{"resume", "--json", "--agent", "claude", "--decision", "test", "--message", "go", "--launcher", "foreground", started}},
+		{"orchestrate", []string{"orchestrate", "--json", "--launcher", "console", "--message", "go", planned}},
+	} {
+		name, args := refused.name, refused.args
+		proxy.arm(attempts)
+		failed := runKander(t, args...)
+		lookups, posts := proxy.state()
+		if len(posts) != 0 {
+			t.Fatalf("%s registered projects while the lookup failed: %v\nexit=%d stderr=%s", name, posts, failed.code, failed.stderr)
+		}
+		if lookups < attempts {
+			t.Fatalf("%s: %d lookups, want at least %d: the failing path was not taken", name, lookups, attempts)
+		}
+		requireFailure(t, failed, name+" while the lookup fails", "not_ready", 1)
+		if after := namespaces(); !slices.Equal(after, before) {
+			t.Fatalf("%s created a namespace for project B: before=%v after=%v", name, before, after)
+		}
+		proxy.arm(0)
+		requireFailure(t, runKander(t, args...), name+" once the service answers", "interactive_required", 2)
+		if _, posts := proxy.state(); len(posts) != 0 {
+			t.Fatalf("%s registered projects after the lookup recovered: %v", name, posts)
+		}
+	}
+	if project, err := fixture.service.Client.ProjectByName(t.Context(), missing); !api.IsCode(err, api.CodeNotFound) {
+		t.Fatalf("project B must stay unregistered: %+v, %v", project, err)
 	}
 }

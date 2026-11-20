@@ -2,7 +2,9 @@ package launch
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"maps"
 	"os"
 	"os/exec"
@@ -314,12 +316,13 @@ func TestImplicitNativeResumeWithJSONRefusesBeforeTheReceiptAndReplaysCompletedO
 	}
 }
 
-// An implicit resume that was interrupted after its launch completed leaves the command receipt
-// pending and the launch receipt complete. Repeating it with --json under a terminal default
-// launcher replays the completed launch: it starts nothing, so the launcher does not matter.
-func TestImplicitNativeResumeWithJSONReplaysACompletedLaunchOfAPendingCommand(t *testing.T) {
+// pendingImplicitResume runs an implicit resume to completion and then reopens its command
+// receipt, as an interruption after the launch leaves it: the command receipt is pending and the
+// launch receipt it wraps is complete. It returns the task and the arguments of the command.
+func pendingImplicitResume(t *testing.T, slug string) (api.Task, []string) {
+	t.Helper()
 	skipOnWindows(t)
-	session, task, _ := remoteGitFixture(t, "implicit-native-pending")
+	session, task, _ := remoteGitFixture(t, slug)
 	root, err := session.LocalDataRoot()
 	if err != nil {
 		t.Fatal(err)
@@ -334,7 +337,6 @@ func TestImplicitNativeResumeWithJSONReplaysACompletedLaunchOfAPendingCommand(t 
 	if code := RunResumeRemote(args); code != 0 {
 		t.Fatalf("resume: exit %d", code)
 	}
-	// Interrupt the command after its launch: the command receipt goes back to pending.
 	dir := filepath.Join(root, "launch-actions")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -366,6 +368,14 @@ func TestImplicitNativeResumeWithJSONReplaysACompletedLaunchOfAPendingCommand(t 
 	if reopened != 1 {
 		t.Fatalf("found %d command receipts", reopened)
 	}
+	return task, args
+}
+
+// An implicit resume that was interrupted after its launch completed leaves the command receipt
+// pending and the launch receipt complete. Repeating it with --json under a terminal default
+// launcher replays the completed launch: it starts nothing, so the launcher does not matter.
+func TestImplicitNativeResumeWithJSONReplaysACompletedLaunchOfAPendingCommand(t *testing.T) {
+	_, args := pendingImplicitResume(t, "implicit-native-pending")
 	log := os.Getenv("KANBAN_TMUX_LOG")
 	before, _ := os.ReadFile(log)
 	restore := withTerminalDefaultLauncher(t)
@@ -376,6 +386,30 @@ func TestImplicitNativeResumeWithJSONReplaysACompletedLaunchOfAPendingCommand(t 
 	}
 	if after, _ := os.ReadFile(log); !bytes.Equal(before, after) {
 		t.Fatal("the replay invoked the terminal")
+	}
+}
+
+// The session of an implicit resume is open when its launch runs, so the check that precedes the
+// session (and reads the project through the service) does not run for it. A service that fails
+// that read therefore changes nothing: the replay of the completed launch still succeeds.
+func TestImplicitNativeResumeWithJSONDoesNotLookTheProjectUpAgain(t *testing.T) {
+	_, args := pendingImplicitResume(t, "implicit-native-lookup")
+	lookups := 0
+	failing := errors.New("lookup failed: the service is restarting")
+	lookup := lookupHost
+	t.Cleanup(func() { lookupHost = lookup })
+	lookupHost = func(context.Context, *config.Config) (receiptReader, bool, error) {
+		lookups++
+		return nil, false, failing
+	}
+	restore := withTerminalDefaultLauncher(t)
+	defer restore()
+	code, stdout, stderr := commandtest.Capture(func() int { return RunResumeRemote(append([]string{"--json"}, args...)) })
+	if code != 0 || strings.Contains(stderr, "interactive_required") || strings.Contains(stderr, failing.Error()) || !strings.Contains(stdout, "replayed") {
+		t.Fatalf("replay: code=%d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+	if lookups != 0 {
+		t.Fatalf("the launch of an open session looked the project up %d times", lookups)
 	}
 }
 

@@ -18,7 +18,10 @@ import (
 // the caller already holds. Every entry that can start an agent asks it:
 //
 //   - start and an explicit takeover (launchRemote, runRemoteResume): before the session is opened,
-//     through refuseBeforeSession, and again once the receipt of the launch has been read;
+//     through refuseBeforeSession, and again once the receipt of the launch has been read. A
+//     launchRemote call that comes after the session was opened (executeRemoteResume, for a
+//     takeover and for an implicit resume) skips the first of the two: the project is registered
+//     by then, and the receipt decides;
 //   - an implicit resume (runImplicitNativeResume): before its command receipt is written;
 //   - orchestrate (StartOrchestrator and startOrchestrator): before the session and before the
 //     receipt of the session;
@@ -81,14 +84,35 @@ func actionGate(cfg *config.Config, launcher string, retryFailed bool) remote.Ac
 	}
 }
 
+// receiptReader reads the receipts of one host and project without writing.
+type receiptReader interface {
+	PeekAction(kind string, logical any) (remote.LocalAction, bool, error)
+}
+
+// lookupHost is the read-only view of the receipts of this host and project, which a test replaces.
+var lookupHost = func(ctx context.Context, cfg *config.Config) (receiptReader, bool, error) {
+	host, nothing, err := remote.LookupHost(ctx, cfg)
+	if host == nil {
+		return nil, nothing, err
+	}
+	return host, nothing, err
+}
+
 // refuseBeforeSession is the check that comes before the session of the host is opened, which
 // creates the client identity and registers the project. It reads only: the client identity if
 // there is one, the project resolved by name without registering it, and the receipts of this
 // server and project under the exact keys of the invocation (logicals, one per way the
 // invocation can be keyed). When no receipt of this project can exist, or none of the receipts
 // is one that a call would replay or reconcile, the call certainly starts an agent and is
-// refused for its launcher now. When anything is uncertain (the service did not answer, a
-// receipt may be replayed) it returns nil and the exact check after Open decides.
+// refused for its launcher now.
+//
+// It returns nil in two cases only: the call is not a refusal candidate (not --json, or a
+// launcher with a container), so nothing is read; or the project is known and a receipt is one
+// that a call would replay or reconcile, which the exact check after Open then decides. When the
+// view cannot be read (the service did not answer after the retries of the client, or a receipt
+// is damaged) it returns that error: the call ends there, because Open would register the project
+// before the exact check refuses the call. The caller repeats the command once the service
+// answers.
 func refuseBeforeSession(cfg *config.Config, launcher, kind string, retryFailed bool, logicals ...any) error {
 	refusal := gateLaunch(cfg, launcher, true)
 	if refusal == nil {
@@ -96,9 +120,9 @@ func refuseBeforeSession(cfg *config.Config, launcher, kind string, retryFailed 
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), remoteCall)
 	defer cancel()
-	host, nothing, err := remote.LookupHost(ctx, cfg)
+	host, nothing, err := lookupHost(ctx, cfg)
 	if err != nil {
-		return nil
+		return err
 	}
 	if nothing {
 		return refusal
@@ -106,7 +130,7 @@ func refuseBeforeSession(cfg *config.Config, launcher, kind string, retryFailed 
 	for _, logical := range logicals {
 		existing, found, err := host.PeekAction(kind, logical)
 		if err != nil {
-			return nil
+			return err
 		}
 		if found && !launchWouldStart(&existing, retryFailed) {
 			return nil

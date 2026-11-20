@@ -139,7 +139,10 @@ func runRemoteResumeLaunch(ctx context.Context, session *remote.Session, card ap
 	return executeRemoteResume(input, options, newRound, timeout, journal)
 }
 
+// executeRemoteResume runs after the session of the host was opened, so the launch skips the
+// check that precedes the session.
 func executeRemoteResume(input remoteLaunchInput, options DispatchOptions, newRound bool, timeout float64, journal *remote.ActionJournal) int {
+	input.SessionChecked = true
 	result, err := launchRemote(input)
 	for _, warning := range result.Warnings {
 		command.Notify("launch_warning", warning)

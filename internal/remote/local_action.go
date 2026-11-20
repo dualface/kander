@@ -108,8 +108,9 @@ type ReadOnlyHost struct {
 
 // LookupHost opens the read-only view for cfg. nothing is true when no receipt of this project
 // can exist: the host has no client identity, or the service does not know the project. An error
-// means the view could not be determined (the service did not answer, say); the caller then
-// leaves the decision to Open and the exact check that follows it.
+// means the view could not be determined (the service did not answer after the retries of the
+// client, say). The caller reports it as the result of its own call: it must not open the
+// session on that basis, because Open registers a project the service does not know.
 func LookupHost(ctx context.Context, cfg *config.Config) (host *ReadOnlyHost, nothing bool, err error) {
 	if cfg == nil || cfg.Project.Name == "" {
 		return nil, false, ErrNotConfigured

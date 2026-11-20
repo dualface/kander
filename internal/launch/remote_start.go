@@ -54,9 +54,12 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 	}
 	// Before the session is opened (which creates the client identity and registers the
 	// project) a call that certainly starts an agent is refused for its launcher, by the exact
-	// key of its receipt in this project; otherwise the receipt decides below.
-	if err := refuseBeforeSession(cfg, launcherOverride, "task-launch", !input.Native, launchReceiptInput{taskID, input}); err != nil {
-		return result, err
+	// key of its receipt in this project; otherwise the receipt decides below. A caller that
+	// opened the session already has the project registered, so it skips this check.
+	if !input.SessionChecked {
+		if err := refuseBeforeSession(cfg, launcherOverride, "task-launch", !input.Native, launchReceiptInput{taskID, input}); err != nil {
+			return result, err
+		}
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
