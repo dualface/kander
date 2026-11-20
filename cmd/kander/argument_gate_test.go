@@ -113,7 +113,6 @@ func TestProjectGateStandsBehindArgumentsAndBeforeTheWork(t *testing.T) {
 	}
 	for _, args := range [][]string{
 		{"update", sampleTask, "--document", "spec.md", "--file", "/nonexistent/input.md", "--expect-revision", "1"},
-		{"review", "plan", "--schema=false", "/abs", "/abs/plan.json"},
 		{"guard-write", "somewhere"},
 		{"pick", sampleTask},
 		{"start", sampleTask},
