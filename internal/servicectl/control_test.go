@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -64,5 +65,24 @@ func TestPathsAndListenDefaults(t *testing.T) {
 		if got, err := ProbeURL(tc.listen); err != nil || got != tc.url {
 			t.Fatalf("probe=%s %v", got, err)
 		}
+	}
+}
+
+func TestServerCommandIsDetachedFromTheCallerContext(t *testing.T) {
+	t.Setenv("KANDER_EXECUTION_ID", "exec-1")
+	t.Setenv("KANDER_COORDINATOR_EXECUTION_ID", "exec-2")
+	t.Setenv("KANDER_CLIENT_HOME", "/clients/kept")
+	dir := filepath.Join(t.TempDir(), "data")
+	cmd := serverCommand("/bin/kander", dir, StartOptions{Listen: "127.0.0.1:1"})
+	if cmd.Dir != dir {
+		t.Fatalf("server directory %q, want the data directory %q", cmd.Dir, dir)
+	}
+	for _, entry := range cmd.Env {
+		if strings.HasPrefix(entry, "KANDER_EXECUTION_ID=") || strings.HasPrefix(entry, "KANDER_COORDINATOR_EXECUTION_ID=") {
+			t.Fatalf("server env keeps %q", entry)
+		}
+	}
+	if !slices.Contains(cmd.Env, "KANDER_CLIENT_HOME=/clients/kept") {
+		t.Fatalf("server env lost a variable: %v", cmd.Env)
 	}
 }

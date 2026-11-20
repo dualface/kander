@@ -17,6 +17,22 @@ func LockExclusiveContext(ctx context.Context, file *os.File) (*ExclusiveLock, e
 	return lockContext(ctx, file, false)
 }
 
+// TryLockExclusive tries the exclusive lock once and never waits. The bool is
+// false, with a nil error, when another handle holds the lock.
+func TryLockExclusive(file *os.File) (*ExclusiveLock, bool, error) {
+	if file == nil {
+		return nil, false, wrap("lock", "", os.ErrInvalid)
+	}
+	locked, err := tryContextLock(file, false)
+	if err != nil {
+		return nil, false, wrap("lock", file.Name(), err)
+	}
+	if !locked {
+		return nil, false, nil
+	}
+	return &ExclusiveLock{file: file}, true, nil
+}
+
 func lockContext(ctx context.Context, file *os.File, shared bool) (*ExclusiveLock, error) {
 	if file == nil {
 		return nil, wrap("lock", "", os.ErrInvalid)

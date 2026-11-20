@@ -57,6 +57,11 @@ func Info(ctx context.Context, target string) (api.ServerInfo, error) {
 	info.URL = target
 	return info, err
 }
+
+// DataLockName is the lock file in the data directory that a running server
+// and the offline import and maintenance commands hold.
+const DataLockName = "server.lock"
+
 func healthy(ctx context.Context, target string) bool {
 	ctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
 	defer cancel()
@@ -66,6 +71,17 @@ func healthy(ctx context.Context, target string) bool {
 	}
 	h, err := p.Health(ctx)
 	return err == nil && h.Ready
+}
+
+// serverCommand builds the detached server command. The server outlives the
+// caller, so it runs in the data directory, not in the caller's directory (an
+// agent worktree that Windows then cannot remove), and without the execution
+// variables of the calling agent.
+func serverCommand(exe, dir string, o StartOptions) *exec.Cmd {
+	cmd := exec.Command(exe, ServerStartArguments(dir, o)...)
+	cmd.Env = process.DaemonEnvironment()
+	cmd.Dir = dir
+	return cmd
 }
 
 func (c Controller) Start(ctx context.Context, o StartOptions) (api.ServerInfo, error) {
@@ -99,7 +115,7 @@ func (c Controller) Start(ctx context.Context, o StartOptions) (api.ServerInfo, 
 			return api.ServerInfo{}, err
 		}
 	}
-	cmd := exec.Command(exe, ServerStartArguments(dir, o)...)
+	cmd := serverCommand(exe, dir, o)
 	cmd.Stdout, cmd.Stderr = log.File, log.File
 	process.Detach(cmd)
 	if err := cmd.Start(); err != nil {
@@ -179,7 +195,7 @@ func (c Controller) Stop(ctx context.Context, target string) (bool, error) {
 		if client.IsUnreachable(err) && wait.Err() == nil {
 			// Shutdown closes the listener before draining active requests.
 			// The lock protects those writes until the old instance is closed.
-			file, err := fs.OpenLockFile(info.DataDir, filepath.Join(info.DataDir, "server.lock"))
+			file, err := fs.OpenLockFile(info.DataDir, filepath.Join(info.DataDir, DataLockName))
 			if err != nil {
 				return true, err
 			}

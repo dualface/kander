@@ -154,3 +154,40 @@ func TestOpenExistingLockFileSeesAHeldLock(t *testing.T) {
 	}
 	_ = again.Unlock()
 }
+
+func TestTryLockExclusiveNeverWaits(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "server.lock")
+	holder, err := OpenLockFile(root, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer holder.Close()
+	probe, err := OpenLockFile(root, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer probe.Close()
+	lock, ok, err := TryLockExclusive(holder)
+	if err != nil || !ok || lock == nil {
+		t.Fatalf("a free lock is taken: %v, %v, %v", lock, ok, err)
+	}
+	start := time.Now()
+	if other, ok, err := TryLockExclusive(probe); err != nil || ok || other != nil {
+		t.Fatalf("a held lock is reported held: %v, %v, %v", other, ok, err)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("the probe waited %v", elapsed)
+	}
+	if err := lock.Unlock(); err != nil {
+		t.Fatal(err)
+	}
+	again, ok, err := TryLockExclusive(probe)
+	if err != nil || !ok {
+		t.Fatalf("a released lock is taken: %v, %v", ok, err)
+	}
+	_ = again.Unlock()
+	if _, _, err := TryLockExclusive(nil); err == nil {
+		t.Fatal("a nil file is refused")
+	}
+}
