@@ -3,7 +3,6 @@ package board
 import (
 	"fmt"
 	"regexp"
-	"slices"
 	"sort"
 	"strings"
 )
@@ -62,10 +61,6 @@ func IntegrationTargetOf(text string) (string, error) {
 	return values[0], nil
 }
 
-// integrationTargetClosedStates hold cards that no longer take part in an
-// integration; their fields are not compared with the members of a group.
-var integrationTargetClosedStates = []string{"archived", "trash"}
-
 // integrationTargetProblems reports a duplicated or invalid target field of
 // every selected card and one inconsistency per task group. A default check
 // skips the cards of deferredCheckStates unless all is set. Members are read
@@ -81,7 +76,7 @@ func integrationTargetProblems(selected, full Board, all bool) []Problem {
 	sort.Strings(ids)
 	for _, id := range ids {
 		entry := selected.Entries[id]
-		if _, deferred := deferredCheckStates[entry.State]; deferred && !all || slices.Contains(integrationTargetClosedStates, entry.State) {
+		if _, deferred := deferredCheckStates[entry.State]; deferred && !all {
 			continue
 		}
 		text, err := selected.Document(id)
@@ -118,7 +113,8 @@ func integrationTargetMismatch(board Board, group string) string {
 	values := map[string]struct{}{}
 	var members []string
 	for _, id := range ids {
-		if slices.Contains(integrationTargetClosedStates, board.Entries[id].State) {
+		// A trashed card is not a task state; every other card of the group counts.
+		if board.Entries[id].State == "trash" {
 			continue
 		}
 		text, err := board.Document(id)

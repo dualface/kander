@@ -391,3 +391,18 @@ func TestCheckSeesTargetsOfBacklogAndNamedCards(t *testing.T) {
 		t.Fatalf("named card: code=%d output=%q", code, out)
 	}
 }
+
+// An archived sibling still counts as a member of its group.
+func TestCheckComparesArchivedMembers(t *testing.T) {
+	root := tempBoard(t)
+	const group = "20260901-archived-group"
+	archived := groupCard(t, root, "archived-sibling", group, "v2")
+	live := groupCard(t, root, "live-member", group, "v3")
+	s := transactionSnapshot(t, root, archived)
+	if _, err := MoveWithOptions(s.Entry, root, "archived", MoveOptions{Result: "cancelled", Reason: "fixture", Decision: "fixture"}); err != nil {
+		t.Fatal(err)
+	}
+	if code, out := checkProblems(t, root, live); code == 0 || !strings.Contains(out, group) {
+		t.Fatalf("archived sibling ignored: code=%d output=%q", code, out)
+	}
+}
