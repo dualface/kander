@@ -100,7 +100,6 @@
   "remote.finish_dispatch_before_restart": "任务已有未完成派发；请检查回执并复用原 ID，或明确结束原轮次后再提出新轮次",
   "remote.continuation_recovery_required": "无法安全迁移本机修改。请保留两代工作树，并在重试前检查私有续接记录。",
   "remote.release_takes_only_a_decision": "--release 必须带 --decision，且不能与启动、消息、采纳或派发选项混用",
-  "remote.release_requires_server": "任务租约释放需要配置服务端",
   "remote.execution_released": "已释放任务执行：{{.V0}}",
   "remote.launch_receipt_damaged": "私有启动回执损坏",
   "remote.launch_reconciliation_required": "再次启动前，请核对已有启动回执与实际执行：{{.V0}}",

@@ -1,4 +1,3 @@
 {
-  "board.document_not_found": "Document not found in the card: {{.V0}}",
-  "board.option_given_twice": "option {{.V0}} was given more than once"
+  "board.document_not_found": "Document not found in the card: {{.V0}}"
 }

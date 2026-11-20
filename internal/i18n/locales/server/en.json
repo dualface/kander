@@ -100,7 +100,6 @@
   "remote.finish_dispatch_before_restart": "An unfinished dispatch already owns the task; inspect its receipt and reuse that ID or explicitly end it before proposing another round",
   "remote.continuation_recovery_required": "Local changes could not be transferred safely. Preserve both worktrees and inspect the private continuation intent before retrying.",
   "remote.release_takes_only_a_decision": "--release requires --decision and accepts no launch, message, adoption, or dispatch options",
-  "remote.release_requires_server": "Task lease release requires a configured server",
   "remote.execution_released": "Released task execution: {{.V0}}",
   "remote.launch_receipt_damaged": "The private launch receipt is damaged",
   "remote.launch_reconciliation_required": "Inspect the previous launch receipt and actual execution before starting another agent: {{.V0}}",

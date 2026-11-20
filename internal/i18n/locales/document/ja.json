@@ -1,4 +1,3 @@
 {
-  "board.document_not_found": "カードにその文書がありません: {{.V0}}",
-  "board.option_given_twice": "オプション {{.V0}} が複数回指定されました"
+  "board.document_not_found": "カードにその文書がありません: {{.V0}}"
 }

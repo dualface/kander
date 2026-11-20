@@ -1,4 +1,3 @@
 {
-  "board.document_not_found": "卡片中没有该文档: {{.V0}}",
-  "board.option_given_twice": "选项 {{.V0}} 重复给出"
+  "board.document_not_found": "卡片中没有该文档: {{.V0}}"
 }
