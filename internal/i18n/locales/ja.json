@@ -34,7 +34,7 @@
   "config.agent_config_dir_fixed": "config_dir は指定できません。この agent はワークスペースから上位へたどった既定ディレクトリでのみグローバルルールを読みます。",
   "config.agent_name": "名前は小文字で始まる64文字以内の英小文字、数字、_、- にしてください。",
   "config.agent_text": "{{.V0}} は制御文字を含まない空でない値にしてください。既定値にはフィールドを省略します。",
-  "config.agent_path": "{{.V0}} は PATH で解決できる名前か、存在する実行可能な絶対パスにしてください。",
+  "config.agent_path": "{{.V0}} はコマンド名か絶対パスにしてください。",
   "config.agent_dialect": "dialect は codex、claude、grok、cursor、pi、devin、opencode、kimi、droid のいずれかです。",
   "config.agent_adapter": "カスタム agent に dialect または args.start/args.resume を設定してください。",
   "config.agent_start": "args.start に argv 配列を指定してください（空配列可）。",

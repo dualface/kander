@@ -34,7 +34,7 @@
   "config.agent_config_dir_fixed": "config_dir is not accepted: this agent reads its global rules only below the default directory found by walking up from the workspace.",
   "config.agent_name": "Use a lowercase agent name starting with a letter, at most 64 characters (letters, digits, _ or -).",
   "config.agent_text": "{{.V0}} must be nonempty without control characters; omit it to use defaults.",
-  "config.agent_path": "{{.V0}} must resolve on PATH or be an existing executable absolute path.",
+  "config.agent_path": "{{.V0}} must be a command name or an absolute path.",
   "config.agent_dialect": "dialect must be codex, claude, grok, cursor, pi, devin, opencode, kimi or droid.",
   "config.agent_adapter": "Set dialect or args.start/args.resume for the custom agent.",
   "config.agent_start": "Provide args.start as an argv array (an empty array is allowed).",

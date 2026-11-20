@@ -48,6 +48,18 @@ func TestCustomDialectArguments(t *testing.T) {
 	}
 }
 
+// The configuration accepts an agent whose program does not resolve, so the
+// launch is the step that refuses it.
+func TestRequireAgentProgramRefusesMissingExecutable(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing-agent")
+	cfg := envConfig("custom", "tmux", nil)
+	cfg.Agents = map[string]config.AgentDefinition{"custom": {Path: missing, Dialect: "claude"}}
+	program, err := requireAgentProgram("custom", cfg)
+	if program != nil || err == nil || err.Error() != config.Text("launch.agent_is_not_in_path", missing) {
+		t.Fatalf("%+v %v", program, err)
+	}
+}
+
 func TestAgentTemplatePrecedenceAndSessions(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fake agents are POSIX shell scripts")

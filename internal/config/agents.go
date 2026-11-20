@@ -3,7 +3,6 @@ package config
 import (
 	"bytes"
 	"encoding/json"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -262,15 +261,15 @@ func cloneExitCommand(src *string) *string {
 	return &v
 }
 
+// validateAgentProgram checks only the form of a program value. It never
+// probes the file system: an agent whose program does not resolve leaves the
+// configuration valid, and start, review, and doctor report it when used, as
+// they do for a built-in agent whose CLI is missing.
 func validateAgentProgram(path string) bool {
 	if !validAgentText(path) {
 		return false
 	}
-	if strings.ContainsAny(path, `/\`) && !filepath.IsAbs(path) {
-		return false
-	}
-	_, err := exec.LookPath(path)
-	return err == nil
+	return !strings.ContainsAny(path, `/\`) || filepath.IsAbs(path)
 }
 
 func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {

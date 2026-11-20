@@ -34,7 +34,7 @@
   "config.agent_config_dir_fixed": "不接受 config_dir：该 agent 只在从工作区向上查找到的默认目录中读取全局规则。",
   "config.agent_name": "agent 名须以小写字母开头，最多 64 字符，仅含小写字母、数字、_ 或 -。",
   "config.agent_text": "{{.V0}} 须非空且不含控制字符；使用默认值请删除该字段。",
-  "config.agent_path": "{{.V0}} 须能从 PATH 解析，或为存在且可执行的绝对路径。",
+  "config.agent_path": "{{.V0}} 须为命令名或绝对路径。",
   "config.agent_dialect": "dialect 仅接受 codex、claude、grok、cursor、pi、devin、opencode、kimi 或 droid。",
   "config.agent_adapter": "自定义 agent 请设置 dialect 或 args.start/args.resume。",
   "config.agent_start": "请提供 args.start argv 数组（允许空数组）。",

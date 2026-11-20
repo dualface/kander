@@ -67,7 +67,8 @@ func TestAgentDefinitionValidation(t *testing.T) {
 		{"trampoline", map[string]any{"process_name": "node"}, false},
 		{"empty-path", map[string]any{"path": ""}, true},
 		{"relative", map[string]any{"path": "./wrapper"}, true},
-		{"missing", map[string]any{"path": filepath.Join(t.TempDir(), "missing")}, true},
+		{"missing", map[string]any{"path": filepath.Join(t.TempDir(), "missing")}, false},
+		{"missing-name", map[string]any{"path": "kander-test-missing-agent"}, false},
 		{"control", map[string]any{"path": "bad\tvalue"}, true},
 		{"process-control", map[string]any{"process_name": "node\x7f"}, true},
 		{"process-empty", map[string]any{"process_name": ""}, true},
@@ -93,6 +94,8 @@ func TestAgentDefinitionValidation(t *testing.T) {
 		{"unknown-session", map[string]any{"session": map[string]any{"mode": "generated", "typo": 1}}, true},
 		{"allocate", map[string]any{"session": map[string]any{"mode": "allocated", "allocate": []string{executable, "allocate"}, "json_field": "id"}}, false},
 		{"bad-allocate", map[string]any{"session": map[string]any{"mode": "allocated", "allocate": []string{executable, "bad\narg"}}}, true},
+		{"missing-allocate", map[string]any{"session": map[string]any{"mode": "allocated", "allocate": []string{filepath.Join(t.TempDir(), "missing"), "allocate"}}}, false},
+		{"relative-allocate", map[string]any{"session": map[string]any{"mode": "allocated", "allocate": []string{"bin/allocate"}}}, true},
 		{"unneeded-allocate", map[string]any{"session": map[string]any{"mode": "generated", "allocate": []string{executable}}}, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -109,8 +112,12 @@ func TestAgentDefinitionValidation(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		p := filepath.Join(t.TempDir(), "file")
 		os.WriteFile(p, []byte("x"), 0600)
-		if validateAgentProgram(p) {
-			t.Fatal("non executable")
+		var root map[string]any
+		json.Unmarshal(base, &root)
+		root["agents"] = map[string]any{"claude": map[string]any{"path": p}}
+		data, _ := json.Marshal(root)
+		if _, err := ValidateJSON(data); err != nil {
+			t.Fatalf("non executable path rejected at load: %v", err)
 		}
 	}
 }

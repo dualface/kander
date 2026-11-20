@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fix: a user agent definition whose program does not resolve no longer makes the whole configuration invalid. Config loading used to look up `agents.<name>.path`, `review.path`, and `session.allocate[0]` on PATH and failed every command with `must resolve on PATH or be an existing executable absolute path` when one was missing, for example `kander server restart` over a non-interactive ssh whose PATH lacks the directory of an agent no role uses. Loading now checks only the form (a command name or an absolute path, no relative path with separators, no control characters). An agent whose program is missing is unavailable: `start`, `resume`, and session allocation report that it is not in PATH, `kander review` reports the reviewer CLI as unavailable, and `doctor` shows it as not found, as for a built-in agent whose CLI is not installed.
+
 ## v1.4.6 — 2026-11-20
 
 - Fix (macOS): an external command that exited normally no longer fails with `operation not permitted`. After the command was reaped, `internal/probe` kills its process group to clean up leftover descendants, and macOS answers that kill with `EPERM` when the group holds only zombies or has just lost its last member. Every `probe.Capture*` caller, such as the tmux, herdr and hc calls of the terminal backends, the agent version probes, and the liveness and takeover probes, reported that as a failure although the command had succeeded. The kill now reads the group members (`kern.proc.pgrp`) and treats `EPERM` as success only when there is none or every one is a zombie; a live member, or a membership check that fails, keeps the `EPERM`. Linux and Windows are unchanged.
