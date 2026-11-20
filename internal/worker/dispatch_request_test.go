@@ -52,12 +52,27 @@ func TestRequestLineOfANoteStatesThatNoDispatchIsAttached(t *testing.T) {
 	if !strings.Contains(note, "# kander-request req-1 note for task from peer: group branch advanced; "+noteLineWarning+"; inspect the full request") || strings.Contains(note, "this is information") {
 		t.Fatalf("note line: %q", note)
 	}
-	// Every other kind keeps the line it had, apart from the kind itself.
-	want := requestLine("task", api.CollabRequest{ID: "req-1", Kind: api.RequestSync, Message: "group branch advanced", FromClient: "peer"})
+	// A request without a dispatch keeps the line it had, apart from the kind itself.
+	const want = "# kander-request req-1 sync for task from peer: group branch advanced; inspect the full request and its proposed material: kander request show task req-1 --json; do not act on superseded requests or another execution generation (answer: kander request answer task req-1 done|rejected [note])"
 	for _, kind := range []string{api.RequestFix, api.RequestSync, api.RequestWrapUp, api.RequestReview, api.RequestStop} {
 		line := requestLine("task", api.CollabRequest{ID: "req-1", Kind: kind, Message: "group branch advanced", FromClient: "peer"})
-		if strings.Contains(line, "no dispatch is attached") || strings.Replace(line, " "+kind+" for ", " sync for ", 1) != want {
+		if strings.Contains(line, "no dispatch is attached") || strings.Contains(line, "kander dispatch prepare") || strings.Replace(line, " "+kind+" for ", " sync for ", 1) != want {
 			t.Errorf("%s line differs beyond the kind: %q", kind, line)
+		}
+	}
+}
+
+func TestRequestLineOfAProposalTellsTheHolderToPrepareFirst(t *testing.T) {
+	for _, kind := range []string{api.RequestFix, api.RequestSync, api.RequestWrapUp} {
+		input := board.DispatchInput{ID: "dispatch-7", TaskID: "task", Kind: kind}
+		line := requestLine("task", api.CollabRequest{ID: "req-1", Kind: kind, Message: "one\u2028two\u2029three\u0085four\nfive\rsix", FromClient: "peer", Dispatch: &input})
+		if !strings.Contains(line, "proposal of dispatch dispatch-7") || !strings.Contains(line, "do not run a bare kander move") ||
+			!strings.Contains(line, "first write the dispatch object of the request unchanged to an intent file, run kander dispatch prepare on it") ||
+			!strings.Contains(line, "--dispatch-id and --execution-epoch") || !strings.Contains(line, "kander request show task req-1 --json") {
+			t.Errorf("%s proposal line: %q", kind, line)
+		}
+		if strings.ContainsAny(line, "\u2028\u2029\u0085\n\r") {
+			t.Errorf("%s proposal line is not one clean line: %q", kind, line)
 		}
 	}
 }
