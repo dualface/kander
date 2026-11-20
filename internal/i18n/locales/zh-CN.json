@@ -228,7 +228,7 @@
   "cli.error_flag_required": "必须给出选项 {{.V0}}",
   "cli.error_json_unsupported": "--json 不适用于此命令",
   "cli.error_absolute_path": "{{.V0}} 必须是绝对路径",
-  "remote.request_kind_invalid": "request 类型必须是 fix、sync、review 或 stop: {{.V0}}",
+  "remote.request_kind_invalid": "request 类型必须是 fix、sync、review、stop 或 note: {{.V0}}",
   "remote.integration_input_invalid": "integration 输入必须是不超过 64 KiB 的 UTF-8 文本",
   "install.choose_language": "语言",
   "install.language_cn": "中文",

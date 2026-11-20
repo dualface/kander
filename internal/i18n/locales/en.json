@@ -228,7 +228,7 @@
   "cli.error_flag_required": "option {{.V0}} is required",
   "cli.error_json_unsupported": "--json does not apply to this command",
   "cli.error_absolute_path": "{{.V0}} must be an absolute path",
-  "remote.request_kind_invalid": "request kind must be fix, sync, review, or stop: {{.V0}}",
+  "remote.request_kind_invalid": "request kind must be fix, sync, review, stop, or note: {{.V0}}",
   "remote.integration_input_invalid": "the integration input must be UTF-8 text of at most 64 KiB",
   "install.choose_language": "Language",
   "install.language_cn": "Chinese",

@@ -17,6 +17,13 @@ import (
 	"github.com/dualface/kander/internal/command"
 )
 
+// RequestKinds are the kinds a client may send with kander request, in the order the usage
+// error of an unknown kind lists them. wrap-up is a dispatch kind that only the dispatch commands
+// send, so it is not among them.
+func RequestKinds() []string {
+	return []string{api.RequestFix, api.RequestSync, api.RequestReview, api.RequestStop, api.RequestNote}
+}
+
 // NewRequestCommand builds kander request, the collaboration requests of a claimed task in
 // server mode:
 //
@@ -33,7 +40,7 @@ func NewRequestCommand() *cobra.Command {
 			if err := command.Args(3, -1)(c, args); err != nil {
 				return err
 			}
-			if !slices.Contains([]string{api.RequestFix, api.RequestSync, api.RequestReview, api.RequestStop, api.RequestNote}, args[1]) {
+			if !slices.Contains(RequestKinds(), args[1]) {
 				return command.Usage("remote.request_kind_invalid", command.Escape(args[1]))
 			}
 			return nil
