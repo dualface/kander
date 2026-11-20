@@ -16,8 +16,6 @@ var (
 	// --branch` accepts: path segments that start with a letter or digit and
 	// hold only letters, digits, '.', '_' and '-'.
 	integrationTargetRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)*$`)
-	// integrationTargetFieldRe reads the target field from a card header.
-	integrationTargetFieldRe = regexp.MustCompile(`(?m)^- ` + FieldIntegrationTarget + `:[ \t]*(.*?)[ \t\r]*$`)
 )
 
 // ValidIntegrationTarget reports whether value is a branch name a card may
@@ -40,7 +38,7 @@ func ValidIntegrationTarget(value string) bool {
 // integrationTargetValues returns the value of every target field line in the
 // card header. A line with the same spelling in a body section is ordinary text.
 func integrationTargetValues(text string) []string {
-	matches := integrationTargetFieldRe.FindAllStringSubmatch(CardHeader(text), -1)
+	matches := metadataValueRe(FieldIntegrationTarget).FindAllStringSubmatch(CardHeader(text), -1)
 	values := make([]string, len(matches))
 	for i, match := range matches {
 		values[i] = match[1]
@@ -64,15 +62,16 @@ func IntegrationTargetOf(text string) (string, error) {
 	return values[0], nil
 }
 
-// integrationTargetMemberStates are the states in which a group member is
-// compared with its siblings. Backlog cards are drafts and closed cards no
-// longer take part in an open integration.
-var integrationTargetMemberStates = []string{"todo", "working", "review"}
+// integrationTargetClosedStates hold cards that no longer take part in an
+// integration; their fields are not compared with the members of a group.
+var integrationTargetClosedStates = []string{"archived", "trash"}
 
 // integrationTargetProblems reports a duplicated or invalid target field of
-// every selected card and one inconsistency per task group. Members are read
-// from full, the whole board, so a check of one member still sees its siblings.
-func integrationTargetProblems(selected, full Board) []Problem {
+// every selected card and one inconsistency per task group. A default check
+// skips the cards of deferredCheckStates unless all is set. Members are read
+// from full, the whole board, so a check of one member still sees its siblings,
+// and so does the check the orchestrator runs on backlog cards before `pick`.
+func integrationTargetProblems(selected, full Board, all bool) []Problem {
 	var problems []Problem
 	reported := map[string]struct{}{}
 	ids := make([]string, 0, len(selected.Entries))
@@ -82,7 +81,7 @@ func integrationTargetProblems(selected, full Board) []Problem {
 	sort.Strings(ids)
 	for _, id := range ids {
 		entry := selected.Entries[id]
-		if !slices.Contains(integrationTargetMemberStates, entry.State) {
+		if _, deferred := deferredCheckStates[entry.State]; deferred && !all || slices.Contains(integrationTargetClosedStates, entry.State) {
 			continue
 		}
 		text, err := selected.Document(id)
@@ -119,7 +118,7 @@ func integrationTargetMismatch(board Board, group string) string {
 	values := map[string]struct{}{}
 	var members []string
 	for _, id := range ids {
-		if !slices.Contains(integrationTargetMemberStates, board.Entries[id].State) {
+		if slices.Contains(integrationTargetClosedStates, board.Entries[id].State) {
 			continue
 		}
 		text, err := board.Document(id)

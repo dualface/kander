@@ -75,6 +75,13 @@ func TestIntegrationTargetAcceptsOnlyTheNamedRef(t *testing.T) {
 			t.Fatal("a missing ref was accepted")
 		}
 	})
+	t.Run("same name in another namespace", func(t *testing.T) {
+		// A local branch named like the missing remote-tracking ref is not that ref.
+		gitIn(t, cwd, "branch", "refs/remotes/origin/v2", head)
+		if err := verifyIntegrationTarget(ctx, targetEvidence(cwd, head, "refs/remotes/origin/v2"), "v2"); err == nil {
+			t.Fatal("a lookalike branch stood in for the named ref")
+		}
+	})
 	t.Run("mainline ref for a card that names another target", func(t *testing.T) {
 		if err := verifyIntegrationTarget(ctx, targetEvidence(cwd, head, "refs/heads/develop"), "v2"); err == nil {
 			t.Fatal("develop accepted for a card targeting v2")

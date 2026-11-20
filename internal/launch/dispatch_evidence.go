@@ -85,7 +85,19 @@ func verifyIntegrationTarget(ctx context.Context, g board.DispatchIntegration, t
 		}
 		return strings.TrimSpace(string(data)), nil
 	}
-	head, err := git("rev-parse", "--verify", g.TargetRef+"^{commit}")
+	// A card's own target is read as the exact ref path, so a same-named ref in
+	// another namespace cannot stand in for a missing one.
+	resolve := func() (string, error) {
+		if target == "" {
+			return git("rev-parse", "--verify", g.TargetRef+"^{commit}")
+		}
+		exact, err := git("show-ref", "--verify", "--hash", g.TargetRef)
+		if err != nil {
+			return "", err
+		}
+		return git("rev-parse", "--verify", exact+"^{commit}")
+	}
+	head, err := resolve()
 	if err != nil {
 		return err
 	}
@@ -109,7 +121,7 @@ func verifyIntegrationTarget(ctx context.Context, g board.DispatchIntegration, t
 			return err
 		}
 	}
-	after, err := git("rev-parse", "--verify", g.TargetRef+"^{commit}")
+	after, err := resolve()
 	if err != nil {
 		return err
 	}

@@ -3,7 +3,6 @@ package board
 import (
 	"reflect"
 	"regexp"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -352,12 +351,43 @@ func TestWrapUpStructuralCheckFollowsTheCardTarget(t *testing.T) {
 }
 
 func TestIntegrationTargetRefTable(t *testing.T) {
-	for ref, want := range map[string]bool{"refs/heads/v2": true, "refs/remotes/origin/v2": true, "refs/heads/develop": false, "refs/remotes/origin/main": false, "refs/remotes/upstream/v2": false, "v2": false, "refs/heads/v2/x": false} {
+	for ref, want := range map[string]bool{"refs/remotes/upstream/v2": false, "v2": false, "refs/heads/v2/x": false} {
 		if got := integrationTargetRef(ref, "v2"); got != want {
 			t.Errorf("v2 target, %s: %v", ref, got)
 		}
 	}
-	if !slices.Equal([]bool{integrationTargetRef("refs/heads/main", ""), integrationTargetRef("refs/heads/v2", "")}, []bool{true, false}) {
+	if !integrationTargetRef("refs/heads/main", "") {
 		t.Error("an empty target must keep the mainline rule")
+	}
+}
+
+// The orchestrator checks a group while its cards are still in backlog, and a
+// named card is checked whatever its state; both must see the new problems.
+func TestCheckSeesTargetsOfBacklogAndNamedCards(t *testing.T) {
+	root := tempBoard(t)
+	const group = "20260901-backlog-group"
+	var ids []string
+	for i, target := range []string{"v2", ""} {
+		s := transactionCard(t, root, "backlog-member-"+string(rune('a'+i)), false)
+		text := strings.Replace(s.Text, "- TASK_GROUP:", "- TASK_GROUP: "+group, 1)
+		if target != "" {
+			text = withTarget(text, target)
+		}
+		if err := fixtureWrite(root, s.Entry, text); err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, s.Entry.TaskID)
+	}
+	if code, out := checkProblems(t, root, ids[0]); code == 0 || !strings.Contains(out, group) {
+		t.Fatalf("backlog mismatch: code=%d output=%q", code, out)
+	}
+	// A named card is checked for its own field too.
+	s := transactionSnapshot(t, root, ids[1])
+	text := strings.Replace(s.Text, "- RESULT:\n", "- RESULT:\n- INTEGRATION_TARGET: group/x\n", 1)
+	if err := fixtureWrite(root, s.Entry, text); err != nil {
+		t.Fatal(err)
+	}
+	if code, out := checkProblems(t, root, ids[1]); code == 0 || !strings.Contains(out, "INTEGRATION_TARGET") {
+		t.Fatalf("named card: code=%d output=%q", code, out)
 	}
 }

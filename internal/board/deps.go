@@ -359,7 +359,7 @@ func CheckBoard(root string, taskIDs []string, includeAll bool) (code int, stdou
 	}
 	allProblems = append(allProblems, dependencyProblems(dependencyBoard, selected, skipStates)...)
 	allProblems = append(allProblems, contractProblems(board)...)
-	allProblems = append(allProblems, integrationTargetProblems(board, dependencyBoard)...)
+	allProblems = append(allProblems, integrationTargetProblems(board, dependencyBoard, len(taskIDs) > 0 || includeAll)...)
 	checked := 0
 	if len(taskIDs) > 0 || includeAll {
 		checked = len(board.Entries)
