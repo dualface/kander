@@ -80,6 +80,9 @@ func (s *Server) reviewRuntimeRoutes(mux *http.ServeMux) {
 		if err := decode(r, &request); err != nil {
 			return outcome{err: err}
 		}
+		if err := holderOf(r).coordinatorConflict(); err != nil {
+			return outcome{err: err}
+		}
 		secret, client := r.Header.Get(api.HeaderReviewWriter), r.Header.Get(api.HeaderClientID)
 		hash, err := hex.DecodeString(request.WriterHash)
 		if err != nil || len(hash) != 32 || len(secret) != 64 || request.WriterHash != tokenHash(secret) || !api.ValidIdentity(client) {

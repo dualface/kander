@@ -46,15 +46,8 @@ func (p *project) reviewWrite(key, operation string, request any, tasks func() (
 	defer p.mu.Unlock()
 	coordinatorGroup := ""
 	run := func() outcome {
-		if h.basis != nil {
-			// A coordinator declaration proves the group lease, never a card
-			// claim or a joint publication; mixing the proofs is ambiguous.
-			if h.publication != "" || h.members != nil || h.invalid != nil {
-				return outcome{err: apiError(api.CodeInvalidRequest, "a coordinator basis cannot accompany a publication or multi-task claim proofs")}
-			}
-			if h.basis.err != nil {
-				return outcome{err: h.basis.err}
-			}
+		if err := h.coordinatorConflict(); err != nil {
+			return outcome{err: err}
 		}
 		if h.publication != "" {
 			existing, err := p.readPublication(h.publication)

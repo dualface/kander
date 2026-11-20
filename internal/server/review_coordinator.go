@@ -51,6 +51,21 @@ func coordinatorBasisOf(r *http.Request) *coordinatorBasis {
 	return &coordinatorBasis{members: members}
 }
 
+// coordinatorConflict refuses a malformed coordinator declaration, or one that
+// accompanies another proof. The declaration proves the group lease, never a
+// card claim or a joint publication, so mixing them is ambiguous. Every review
+// write answers it, including the recovery of a prepared run, which returns
+// before it reaches reviewWrite.
+func (h holder) coordinatorConflict() error {
+	if h.basis == nil {
+		return nil
+	}
+	if h.publication != "" || h.members != nil || h.invalid != nil {
+		return apiError(api.CodeInvalidRequest, "a coordinator basis cannot accompany a publication or multi-task claim proofs")
+	}
+	return h.basis.err
+}
+
 // coordinatorRefused is the answer to a coordinator write that the conditions
 // do not allow. The request is not retried as a joint publication; the client
 // reads the cards again and selects the flow anew.

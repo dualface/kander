@@ -479,8 +479,10 @@ func TestCoordinatorReviewRefusesAStaleBasis(t *testing.T) {
 	})
 }
 
-func TestCoordinatorReviewRefusesMixedOrMalformedProofs(t *testing.T) {
-	cases := map[string]func(w *coordWorld) *client.Claim{
+// mixedProofs builds the coordinator proofs that must be refused as invalid
+// requests: another proof next to the declaration, or a malformed declaration.
+func mixedProofs() map[string]func(w *coordWorld) *client.Claim {
+	return map[string]func(w *coordWorld) *client.Claim{
 		"a joint publication": func(w *coordWorld) *client.Claim {
 			proof := w.proof()
 			proof.PublicationID = "review-" + strings.Repeat("a", 64)
@@ -512,7 +514,10 @@ func TestCoordinatorReviewRefusesMixedOrMalformedProofs(t *testing.T) {
 			return proof
 		},
 	}
-	for name, build := range cases {
+}
+
+func TestCoordinatorReviewRefusesMixedOrMalformedProofs(t *testing.T) {
+	for name, build := range mixedProofs() {
 		t.Run(name, func(t *testing.T) {
 			w := newCoordWorld(t)
 			w.refused(api.CodeInvalidRequest, build(w))
@@ -644,18 +649,21 @@ func (w *coordWorld) writerProof() *client.Claim {
 	return proof
 }
 
-// prepareRun prepares a review run of both members; the batch is planned when
-// a plan holds batchID.
-func (w *coordWorld) prepareRun(runID, batchID string, schema int, requirements map[string]string) board.ReviewRun {
-	w.t.Helper()
-	secret := coordWriter[:64]
-	request := api.ReviewPrepare{
+func (w *coordWorld) prepareRequest(runID, batchID string, schema int, requirements map[string]string) api.ReviewPrepare {
+	return api.ReviewPrepare{
 		Input:        board.ReviewInput{RunID: runID, BatchID: batchID, TaskIDs: w.tasks[:], Role: "PMQA", Reviewer: "codex", Model: "test", Effort: "high", CWD: "/independent/clone", Base: coordBase, Commit: coordTarget, ReportLanguage: "en", FindingsSchema: schema},
 		Requirements: requirements,
 		Originals:    map[string][]byte{"task-context.md": []byte("frozen task"), "review-context.md": []byte("context")},
 		Version:      "test",
-		WriterHash:   board.ReviewDigest([]byte(secret)),
+		WriterHash:   board.ReviewDigest([]byte(coordWriter[:64])),
 	}
+}
+
+// prepareRun prepares a review run of both members; the batch is planned when
+// a plan holds batchID.
+func (w *coordWorld) prepareRun(runID, batchID string, schema int, requirements map[string]string) board.ReviewRun {
+	w.t.Helper()
+	request := w.prepareRequest(runID, batchID, schema, requirements)
 	raw, err := w.coordinator.ReviewRuntime(w.t.Context(), "prepare-"+runID, runID, "prepare", request, w.writerProof())
 	if err != nil {
 		w.t.Fatalf("the coordinator prepare was refused: %v", err)
@@ -720,10 +728,6 @@ func TestCoordinatorReviewWritesEveryOperation(t *testing.T) {
 	}
 	ctx := func(t *testing.T) context.Context { return t.Context() }
 
-	t.Run("review-plan", func(t *testing.T) {
-		w := newCoordWorld(t)
-		ok(t, w, "plan", w.writePlan(w.plan("plan-op", notApplicable(), "N/A", "N/A"), "plan-op", w.proof()))
-	})
 	t.Run("review-extend-plan add_members", func(t *testing.T) {
 		w := newCoordWorld(t)
 		plan := w.plan("members-plan", notApplicable(), "N/A", "N/A", w.tasks[0])
@@ -923,5 +927,26 @@ func TestCoordinatorReviewResolvesAnUnplannedBatch(t *testing.T) {
 	}
 	if w.requests() != 0 {
 		t.Fatal("the resolution created collaboration requests")
+	}
+}
+
+// The recovery of a prepared run returns the existing run before any write, and
+// still answers a malformed or mixed coordinator declaration as an invalid
+// request: the same four refusals as a write.
+func TestCoordinatorReviewRefusesMixedProofsWhenRecoveringAPreparedRun(t *testing.T) {
+	for name, build := range mixedProofs() {
+		t.Run(name, func(t *testing.T) {
+			w := newCoordWorld(t)
+			w.prepareRun("recover-run", "recover-batch", 0, required())
+			before := w.revisions()
+			proof := build(w)
+			proof.ReviewWriter = coordWriter[:64]
+			request := w.prepareRequest("recover-run", "recover-batch", 0, required())
+			_, err := w.coordinator.ReviewRuntime(t.Context(), "recover-"+name, "recover-run", "prepare", request, proof)
+			expectCode(t, err, api.CodeInvalidRequest)
+			if !reflect.DeepEqual(before, w.revisions()) {
+				t.Fatal("a refused recovery changed the members")
+			}
+		})
 	}
 }
