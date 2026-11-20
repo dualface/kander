@@ -7,8 +7,8 @@ import (
 )
 
 // ruleExample returns the JSON of the first fenced block that follows the line
-// containing lead in the rules text of kander dispatch, without the indent of
-// the list item that holds it.
+// containing lead in the rules text of kander dispatch. The lines keep the
+// indent of the list item that holds them, which JSON decoding ignores.
 func ruleExample(t *testing.T, lead string) []byte {
 	t.Helper()
 	data, err := os.ReadFile("../../rules/snippets/commands/dispatch.md")
