@@ -19,6 +19,7 @@ var reviewOutputObjects = []struct {
 	{"aggregate", []any{ReviewBatchView{}}},
 	{"aggregate.batch", []any{ReviewBatch{}}},
 	{"aggregate.batch.advances[]", []any{ReviewAdvance{}}},
+	{"aggregate.abandoned_runs[]", []any{ReviewAbandonedRun{}}},
 	{"aggregate.runs[]", []any{ReviewRunView{}}},
 	{"aggregate.runs[].assignment", []any{ReviewAssignment{}}},
 	{"aggregate.runs[].run", []any{ReviewRun{}, ReviewInput{}}},
@@ -110,5 +111,36 @@ func TestReviewContractNamesEveryRunRole(t *testing.T) {
 	}
 	if strings.Contains(string(data), "the record the `assign` form printed") {
 		t.Error("review.md still says that assign prints the saved assignment")
+	}
+}
+
+// An abandoned run leaves the batch: the view lists it in abandoned_runs and never in runs, and the
+// closure keeps that view. The contract names the success field of abandon and the closure field, and
+// does not offer the abandonment record as a field of the runs of a view.
+func TestReviewContractPlacesAbandonedRuns(t *testing.T) {
+	data, err := rules.File("snippets/commands/review.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := map[string]string{}
+	for _, candidate := range strings.Split(string(data), "\n") {
+		for _, prefix := range []string{"  - `abandon`: ", "  - `close` (object): ", "  - `aggregate.runs[].run` ("} {
+			if strings.HasPrefix(candidate, prefix) {
+				lines[prefix] = candidate
+			}
+		}
+	}
+	if !strings.Contains(lines["  - `abandon`: "], "`run_id` (string)") {
+		t.Error("the Output section does not define the run_id that abandon prints")
+	}
+	if !strings.Contains(lines["  - `close` (object): "], "`abandoned_runs`") {
+		t.Error("the line of close does not name the abandoned_runs its view keeps")
+	}
+	run := lines["  - `aggregate.runs[].run` ("]
+	if strings.Contains(run, "; `abandonment` (") {
+		t.Error("the line of aggregate.runs[].run defines abandonment as a field of its entries, but a retired run is listed in abandoned_runs")
+	}
+	if !strings.Contains(run, "`abandoned_runs`, not in `runs`") {
+		t.Error("the line of aggregate.runs[].run does not say where a run that carries abandonment is listed")
 	}
 }
