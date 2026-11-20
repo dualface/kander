@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -106,4 +108,84 @@ func (r *coordinatedRun) assignWithoutConfirmation(run board.ReviewRun) {
 	if _, err := remoteEvidenceAction(r.t.Context(), r.coordinate, "/host-b/clone", "assign", input, nil); err != nil {
 		r.t.Fatalf("assign needed more than the coordinator: %v", err)
 	}
+}
+
+// A joint publication that was published while its members were in working (as
+// before the coordinator write existed) still answers a retry after the members
+// reached review and meet every condition: the saved result comes back, no new
+// write happens, and no request is created.
+func TestPublishedJointPublicationReplaysWhenMembersMeetCoordinatorConditions(t *testing.T) {
+	for _, members := range []int{1, 2} {
+		t.Run(map[int]string{1: "one member", 2: "two live members"}[members], func(t *testing.T) {
+			coordinatedRemote = "git@example.invalid:demo.git"
+			t.Cleanup(func() { coordinatedRemote = "" })
+			r := newCoordinatedRunKeeping(t, members, members, true)
+			live := r.ids[:members]
+			_, err := r.coordinate.AggregateReview(t.Context(), "coordinated-batch")
+			id := regexp.MustCompile(`review-[0-9a-f]{64}`).FindString(errString(err))
+			if !api.IsCode(err, api.CodeEvidenceIncomplete) || id == "" {
+				t.Fatalf("want a joint publication: %v", err)
+			}
+			for _, task := range live {
+				if _, err := r.holder.ConfirmReviewPublication(t.Context(), id, task); err != nil {
+					t.Fatal(err)
+				}
+			}
+			first, err := r.coordinate.AggregateReview(t.Context(), "coordinated-batch")
+			if err != nil {
+				t.Fatalf("joint publication: %v", err)
+			}
+			r.inReview(live...)
+			revisions := map[string]uint64{}
+			requests := map[string]int{}
+			for _, task := range live {
+				card, err := r.holder.Project.Show(t.Context(), task)
+				if err != nil {
+					t.Fatal(err)
+				}
+				list, err := r.holder.Project.Requests(t.Context(), task)
+				if err != nil {
+					t.Fatal(err)
+				}
+				revisions[task], requests[task] = card.Revision, len(list)
+			}
+			again, err := r.coordinate.AggregateReview(t.Context(), "coordinated-batch")
+			if err != nil || !sameJSON(t, first, again) {
+				t.Fatalf("the saved result was not replayed: %v", err)
+			}
+			for _, task := range live {
+				card, err := r.holder.Project.Show(t.Context(), task)
+				if err != nil {
+					t.Fatal(err)
+				}
+				list, err := r.holder.Project.Requests(t.Context(), task)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if card.Revision != revisions[task] || len(list) != requests[task] {
+					t.Fatalf("%s: the replay wrote: revision %d -> %d, requests %d -> %d", task, revisions[task], card.Revision, requests[task], len(list))
+				}
+			}
+		})
+	}
+}
+
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+// sameJSON compares values, not bytes: the saved result is stored compact.
+func sameJSON(t *testing.T, a, b []byte) bool {
+	t.Helper()
+	var x, y any
+	if err := json.Unmarshal(a, &x); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(b, &y); err != nil {
+		t.Fatal(err)
+	}
+	return reflect.DeepEqual(x, y)
 }
