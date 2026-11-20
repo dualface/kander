@@ -1,0 +1,5 @@
+{
+  "board.integration_target_group_mismatch": "タスクグループ {{.V0}} のメンバーで INTEGRATION_TARGET の値が一致しません（{{.V1}}）。全メンバーが同じ値を使う必要があります",
+  "board.integration_target_invalid": "INTEGRATION_TARGET の値 {{.V0}} が不正です: 英数字、'.'、'_'、'-' からなり '/' で区切るブランチ名で、100 バイト以内、HEAD は不可、refs/ または group/ で始まらず、'..' を含まず、各区切りが '.lock' や '.' で終わらないこと",
+  "board.integration_target_none": "（なし）"
+}

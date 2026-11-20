@@ -1,0 +1,5 @@
+{
+  "board.integration_target_group_mismatch": "任务组 {{.V0}} 的成员 INTEGRATION_TARGET 值不一致（{{.V1}}）；全部成员必须使用相同的值",
+  "board.integration_target_invalid": "INTEGRATION_TARGET 的值 {{.V0}} 非法：只接受由字母、数字、'.'、'_'、'-' 组成并以 '/' 分段的分支名，长度不超过 100 字节，不能是 HEAD，不能以 refs/ 或 group/ 开头，不含 '..'，任何一段不能以 '.lock' 或 '.' 结尾",
+  "board.integration_target_none": "（无）"
+}

@@ -1,0 +1,5 @@
+{
+  "board.integration_target_group_mismatch": "task group {{.V0}} has different INTEGRATION_TARGET values ({{.V1}}); every member must use the same value",
+  "board.integration_target_invalid": "invalid INTEGRATION_TARGET value {{.V0}}: use a branch name of letters, digits, '.', '_' and '-' with '/' between parts, at most 100 bytes, not HEAD, not starting with refs/ or group/, with no '..' and no part ending in '.lock' or '.'",
+  "board.integration_target_none": "(none)"
+}

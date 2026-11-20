@@ -44,6 +44,16 @@ func mainlineTargetRef(ref string) bool {
 	return false
 }
 
+// integrationTargetRef accepts the local or origin ref of a card's integration
+// target. A card without a target field keeps the mainline rule. The Git
+// verifier in launch narrows both to the one branch this checkout allows.
+func integrationTargetRef(ref, target string) bool {
+	if target == "" {
+		return mainlineTargetRef(ref)
+	}
+	return ref == "refs/heads/"+target || ref == "refs/remotes/origin/"+target
+}
+
 // validateDispatchWrapUp checks the integration of a wrap-up. A completed round
 // (historical) was bound to the plan of its day: a batch appended later for
 // another member's rebound cycle moves the end of the plan, not this delivery.
@@ -53,7 +63,15 @@ func validateDispatchWrapUp(tx *Transaction, in DispatchInput, published, histor
 		return dispatchEvidenceError("wrap-up binding required")
 	}
 	g := w.Git
-	if w.Artifact != (ArtifactReference{in.TaskID, dispatchPath(in.ID, "integration")}) || g.DispatchID != in.ID || g.TaskID != in.TaskID || !filepath.IsAbs(g.CWD) || g.SourceCommit != in.Base || !dispatchCommitPattern.MatchString(g.TargetCommit) || !mainlineTargetRef(g.TargetRef) || strings.TrimSpace(g.Author) == "" || strings.TrimSpace(g.Basis) == "" || g.VerifiedAt.IsZero() || g.VerifiedAt.After(time.Now()) {
+	card, err := tx.Snapshot(in.TaskID)
+	if err != nil {
+		return err
+	}
+	target, err := IntegrationTargetOf(card.Text)
+	if err != nil {
+		return dispatchEvidenceError("integration binding: " + err.Error())
+	}
+	if w.Artifact != (ArtifactReference{in.TaskID, dispatchPath(in.ID, "integration")}) || g.DispatchID != in.ID || g.TaskID != in.TaskID || !filepath.IsAbs(g.CWD) || g.SourceCommit != in.Base || !dispatchCommitPattern.MatchString(g.TargetCommit) || !integrationTargetRef(g.TargetRef, target) || strings.TrimSpace(g.Author) == "" || strings.TrimSpace(g.Basis) == "" || g.VerifiedAt.IsZero() || g.VerifiedAt.After(time.Now()) {
 		return dispatchEvidenceError("integration binding")
 	}
 	var reviewRange ReviewGitEdge

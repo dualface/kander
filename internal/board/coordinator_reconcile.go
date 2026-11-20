@@ -108,7 +108,11 @@ func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, pass *coor
 			if s.Entry.State != "review" || branch == "" || !dispatchCommitPattern.MatchString(o.DeliveryCommit) || verify == nil {
 				return m, coordinatorError("first delivery requires review state, task branch and Git verification")
 			}
-			if err = verify(ctx, CoordinatorGitFacts{Delivery: &CoordinatorDelivery{TaskID: id, Branch: branch, Commit: o.DeliveryCommit}}); err != nil {
+			target, e := IntegrationTargetOf(s.Text)
+			if e != nil {
+				return m, e
+			}
+			if err = verify(ctx, CoordinatorGitFacts{IntegrationTarget: target, Delivery: &CoordinatorDelivery{TaskID: id, Branch: branch, Commit: o.DeliveryCommit}}); err != nil {
 				return m, err
 			}
 			m.DeliveryCommit = o.DeliveryCommit

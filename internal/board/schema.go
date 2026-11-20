@@ -22,6 +22,9 @@ const (
 	FieldFinishedAt = "FINISHED_AT"
 	FieldTaskBranch = "TASK_BRANCH"
 	FieldResult     = "RESULT"
+	// FieldIntegrationTarget is optional: it names the non-mainline branch a
+	// card integrates into. `kander new` never writes it.
+	FieldIntegrationTarget = "INTEGRATION_TARGET"
 )
 
 const (
