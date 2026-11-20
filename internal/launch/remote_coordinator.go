@@ -13,7 +13,17 @@ import (
 	"github.com/dualface/kander/internal/remote"
 )
 
-var ensureRemoteWorker = remote.EnsureWorker
+// ensureRemoteWorker is remote.EnsureWorkerChecked; tests replace it so no
+// worker process starts. Only the entrances that print a notice use it
+// directly; the others go through startRemoteWorker.
+var ensureRemoteWorker = remote.EnsureWorkerChecked
+
+// startRemoteWorker makes sure a worker runs and drops the version notice, for
+// the callers whose command already compared the versions or that show none.
+func startRemoteWorker(home string) error {
+	_, err := ensureRemoteWorker(home)
+	return err
+}
 
 func runRemoteCoordinator(ctx context.Context, cfg *config.Config, args []string) int {
 	cwd, err := os.Getwd()
@@ -55,8 +65,10 @@ func runRemoteCoordinator(ctx context.Context, cfg *config.Config, args []string
 		if err != nil {
 			return fail(err)
 		}
-		if err := ensureRemoteWorker(session.Home); err != nil {
+		if notice, err := ensureRemoteWorker(session.Home); err != nil {
 			command.Notify("worker_start_failed", config.Text("remote.worker_start_failed", err.Error()))
+		} else if notice != "" {
+			command.Notify("worker_version_warning", notice)
 		}
 		checkpoint = grant.Checkpoint
 	case "reconcile":
@@ -75,11 +87,7 @@ func runRemoteCoordinator(ctx context.Context, cfg *config.Config, args []string
 		}
 		input := api.GroupReconcile{Request: request}
 		for _, fact := range facts {
-			check := api.CoordinatorGitCheck{Facts: fact}
-			if err := verifyRemoteCoordinatorGitFacts(ctx, session, localCWD, fact); err != nil {
-				check.Error = err.Error()
-			}
-			input.Checks = append(input.Checks, check)
+			input.Checks = append(input.Checks, coordinatorGitCheck(fact, verifyRemoteCoordinatorGitFacts(ctx, session, localCWD, fact)))
 		}
 		proof, err := session.CoordinatorAuthority(request.GroupID, nil)
 		if err != nil {

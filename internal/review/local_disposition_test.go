@@ -35,7 +35,7 @@ func useServer(t *testing.T) {
 // runLocalDisposition runs one evidence command against the board directory.
 func runLocalDisposition(_ *config.Config, args []string) int {
 	action, cwd, input := args[0], args[1], args[2]
-	if action == "confirm" {
+	if action == "confirm" || action == "abandon" {
 		return dispositionFailure(remote.ErrNotConfigured)
 	}
 	if !filepath.IsAbs(cwd) {

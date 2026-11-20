@@ -53,7 +53,11 @@ func (s *Server) reviewActionRoutes(mux *http.ServeMux) {
 			}
 			return p.reviewWrite(key, "review-extend-plan", request, func() ([]string, error) {
 				plan, err := board.ReadReviewPlan(p.board, request.PlanID)
-				return plan.TaskIDs, err
+				if err != nil {
+					return nil, err
+				}
+				// add_members brings its new members into the authority and lock set.
+				return board.ReviewPlanExtensionTasks(plan, request)
 			}, h, func(extension board.TransactionExtension) (any, error) {
 				return map[string]string{"plan_id": request.PlanID}, board.ExtendReviewPlanWithTransaction(p.board, request, extension)
 			})
@@ -99,6 +103,16 @@ func (s *Server) reviewActionRoutes(mux *http.ServeMux) {
 			}
 			return p.reviewWrite(key, "review-interpret", request, p.runTasks(request.RunID), h, func(extension board.TransactionExtension) (any, error) {
 				return map[string]string{"run_id": request.RunID}, board.InterpretReviewWithTransaction(p.board, request, extension)
+			})
+		case "abandon":
+			var request board.ReviewAbandonRequest
+			if err := decode(r, &request); err != nil {
+				return outcome{err: err}
+			}
+			// No writer credential: the abandon is for a run whose writer can no longer
+			// publish it, so the holders of the members confirm it like any review write.
+			return p.reviewWrite(key, "review-abandon", request, p.runTasks(request.RunID), h, func(extension board.TransactionExtension) (any, error) {
+				return map[string]string{"run_id": request.RunID}, board.AbandonReviewRunWithTransaction(p.board, request, extension)
 			})
 		case "map-legacy":
 			var request board.LegacyFindingMap

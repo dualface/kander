@@ -260,6 +260,10 @@ func PrepareReviewRunWithTransaction(root string, input ReviewInput, requirement
 		if e != nil {
 			return e
 		}
+		if exists && reviewRunAbandoned(run) {
+			// Before the members are read: a member that finished since must not hide it.
+			return abandonedRunError(run.RunID)
+		}
 		fallback := input.ReportLanguage
 		input.ReportLanguage = ""
 		if exists {

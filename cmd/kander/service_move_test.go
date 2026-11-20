@@ -39,6 +39,18 @@ func moveServiceFixture(t *testing.T) (*remote.Session, *config.Config) {
 
 func readyServiceCard(t *testing.T, session *remote.Session, task api.Task) api.Task {
 	t.Helper()
+	todoServiceCard(t, session, task)
+	runKander(t, "move", task.TaskID, "working", "--owner", "codex").require(t, "claim")
+	task, err := session.Project.Show(t.Context(), task.TaskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return task
+}
+
+// todoServiceCard fills the contract of a new card and moves it to todo.
+func todoServiceCard(t *testing.T, session *remote.Session, task api.Task) {
+	t.Helper()
 	text := strings.ReplaceAll(task.Text, "<FILL_IN>", "filled")
 	text = strings.ReplaceAll(text, "- [ ]", "- [x]")
 	text = strings.Replace(text, "- TASK_BRANCH:", "- TASK_BRANCH: move-fixture", 1)
@@ -49,12 +61,6 @@ func readyServiceCard(t *testing.T, session *remote.Session, task api.Task) api.
 		t.Fatal(err)
 	}
 	runKander(t, "move", task.TaskID, "todo").require(t, "ready")
-	runKander(t, "move", task.TaskID, "working", "--owner", "codex").require(t, "claim")
-	task, err = session.Project.Show(t.Context(), task.TaskID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return task
 }
 
 func closeNonGitFixturePlan(t *testing.T, session *remote.Session, task api.Task) {

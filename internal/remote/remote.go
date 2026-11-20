@@ -302,7 +302,7 @@ func Credentials(home string) ([]Credential, error) {
 				if f.Kind != fs.KindFile || !strings.HasSuffix(f.Name, ".json") {
 					continue
 				}
-				data, err := fs.ReadRegularFile(home, filepath.Join(dir, f.Name))
+				data, err := readSharedFile(home, filepath.Join(dir, f.Name))
 				if err != nil {
 					return nil, err
 				}
@@ -345,14 +345,14 @@ func (s *Session) credentialFor(task, execution string) (Credential, bool, error
 	}
 	dir := credentialDir(s.Home, s.ServerURL, s.Info.ID, task)
 	if execution == "" {
-		head, found, err := readCredentialHead(s.Home, dir)
+		head, found, err := readSharedCredentialHead(s.Home, dir)
 		if err != nil {
 			return Credential{}, false, err
 		}
 		if found {
 			execution, indexedGeneration = head.ExecutionID, head.Generation
 		} else {
-			data, ok, err := fs.ReadRegularFileIfExists(s.Home, filepath.Join(dir, "latest"))
+			data, ok, err := readSharedFileIfExists(s.Home, filepath.Join(dir, "latest"))
 			if err != nil || !ok {
 				return Credential{}, false, err
 			}
@@ -366,7 +366,7 @@ func (s *Session) credentialFor(task, execution string) (Credential, bool, error
 	if err != nil || released {
 		return Credential{}, false, err
 	}
-	data, ok, err := fs.ReadRegularFileIfExists(s.Home, filepath.Join(dir, execution+".json"))
+	data, ok, err := readSharedFileIfExists(s.Home, filepath.Join(dir, execution+".json"))
 	if err != nil || !ok {
 		return Credential{}, false, err
 	}

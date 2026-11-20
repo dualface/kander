@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -101,9 +102,114 @@ func readPID(t *testing.T, path string) int {
 	return pid
 }
 
+// releaseGate holds a background reviewer child on a FIFO until the recheck has observed it, so the child exits
+// when the test lets it go and not when a timer runs out under load.
+type releaseGate struct {
+	t       *testing.T
+	fifo    *os.File
+	path    string
+	pidFile string
+
+	mu       sync.Mutex
+	released bool
+}
+
+func newReleaseGate(t *testing.T, dir string) *releaseGate {
+	t.Helper()
+	g := &releaseGate{t: t, path: filepath.Join(dir, "release.fifo"), pidFile: filepath.Join(dir, "gated.pid")}
+	if err := syscall.Mkfifo(g.path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// The read-write open keeps the child's open from waiting for a writer and lets the release write without
+	// waiting for the child to reach its read.
+	fifo, err := os.OpenFile(g.path, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.fifo = fifo
+	// A failed test must not leave the child blocked either.
+	t.Cleanup(func() {
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		g.release()
+		_ = g.fifo.Close()
+	})
+	return g
+}
+
+// script starts the gated child in the background and records its PID before the reviewer leader exits.
+func (g *releaseGate) script() string {
+	return fmt.Sprintf("( read _ <%q ) >/dev/null 2>&1 &\nprintf '%%s\\n' \"$!\" > %q", g.path, g.pidFile)
+}
+
+// release lets the child exit. The caller holds g.mu.
+func (g *releaseGate) release() {
+	if g.released {
+		return
+	}
+	g.released = true
+	if _, err := g.fifo.Write([]byte("\n")); err != nil {
+		g.t.Errorf("releasing the gated child: %v", err)
+	}
+}
+
+func (g *releaseGate) childPID() int {
+	data, err := os.ReadFile(g.pidFile)
+	if err != nil {
+		return 0
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return 0
+	}
+	return pid
+}
+
+func childAlive(table map[int]procInfo, pid int) bool {
+	info, ok := table[pid]
+	return ok && !info.zombie
+}
+
+// read serves real snapshots. The first snapshot with a short deadline that holds the gated child releases it
+// and is returned as taken, so that observation records the child. Later snapshots with a short deadline wait
+// until the child is gone. The wait checks for cancellation between polls, and boundedProcessTable stops
+// waiting for the caller at the snapshot deadline, so the wait limit is the caller's and not the hook's. The
+// recheck takes such snapshots (at most recheckSnapshotLimit each), and so does a single observation without a
+// recheck. The pre-check in processGroupHasLiveMembers and the tracker use processTableBudget, so they pass
+// through untouched and cannot release the child before the first observation.
+func (g *releaseGate) read(ctx context.Context) (map[int]procInfo, error) {
+	deadline, bounded := ctx.Deadline()
+	shortDeadline := bounded && time.Until(deadline) <= recheckSnapshotLimit
+	table, err := snapshotProcessTable(ctx)
+	if err != nil || !shortDeadline {
+		return table, err
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	pid := g.childPID()
+	if pid == 0 {
+		return table, nil
+	}
+	if !g.released {
+		if childAlive(table, pid) {
+			g.release()
+		}
+		return table, nil
+	}
+	for childAlive(table, pid) && ctx.Err() == nil {
+		time.Sleep(5 * time.Millisecond)
+		if table, err = snapshotProcessTable(ctx); err != nil {
+			return nil, err
+		}
+	}
+	return table, nil
+}
+
 func TestChildExitingDuringRecheckIsNotLeftover(t *testing.T) {
 	h, root, args := archiveHarness(t)
-	reviewerChild(t, h, "(sleep 0.2) >/dev/null 2>&1 &")
+	gate := newReleaseGate(t, h.root)
+	injectRead(t, gate.read)
+	reviewerChild(t, h, gate.script())
 	code, out, stderr := captureRun(t, args)
 	if code != 0 || !strings.Contains(out, "REPORT BODY") {
 		t.Fatalf("%d %q %s", code, out, stderr)

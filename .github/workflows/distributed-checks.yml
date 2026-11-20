@@ -6,11 +6,27 @@ on:
   pull_request:
     branches: [v2]
   workflow_dispatch:
+    inputs:
+      windows_extra_packages:
+        description: >-
+          Extra packages for the Windows services job, separated by spaces.
+          Only ./internal/<path> and ./cmd/<path> are accepted.
+        type: string
+        required: false
+        default: ''
+      model_base:
+        description: >-
+          Full commit ID to compare against, instead of the merge base with
+          origin/v2, when deciding whether the model search runs. See
+          scripts/model-test-scope.sh.
+        type: string
+        required: false
+        default: ''
 
 # Isolate runs using canonical macOS paths from earlier CI settings.
 concurrency:
   group: distributed-canonical-temp-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/v2' }}
 
 permissions:
   contents: read
@@ -18,7 +34,9 @@ permissions:
 jobs:
   native:
     name: Native ${{ matrix.os }} (${{ matrix.suite }})
-    timeout-minutes: 180
+    # The all jobs run go test with a 150-minute timeout; the Windows board job
+    # skips the model search and needs far less.
+    timeout-minutes: ${{ matrix.suite == 'board' && 60 || 180 }}
     strategy:
       fail-fast: false
       matrix:
@@ -32,8 +50,8 @@ jobs:
           - os: windows-latest
             suffix: '.exe'
             suite: services
-          # The Windows board model passed in 71 minutes. Run it separately so
-          # service failures are visible without waiting for the model search.
+          # The Windows board tests run in a job of their own so that service
+          # failures are visible without waiting for them.
           - os: windows-latest
             suffix: '.exe'
             suite: board
@@ -41,10 +59,31 @@ jobs:
     env:
       GOMEMLIMIT: 2GiB
     steps:
+      # The all jobs need the history to find the merge base for the model
+      # search decision. The value is the string '0': a number 0 is false, and
+      # the expression would give 1.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ matrix.suite == 'all' && '0' || '1' }}
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      # Any failure of the decision leaves its output unset, and the model search
+      # then runs: both complete test steps test for 'false'.
+      - name: Decide whether the model search runs
+        id: model_scope
+        if: matrix.suite == 'all'
+        continue-on-error: true
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          MODEL_BASE: ${{ inputs.model_base }}
+          FULL_REFS: refs/heads/v2
+          WORKFLOW_FILE: .github/workflows/distributed-checks.yml
+        run: bash scripts/model-test-scope.sh
       - name: Build kander
         run: go build -o "${{ runner.temp }}/kander-check${{ matrix.suffix }}" ./cmd/kander
       - name: Static analysis
@@ -65,13 +104,39 @@ jobs:
       # Disable the test result cache: large model-test input logs otherwise
       # require substantially more memory after the tests themselves finish.
       - name: Complete native tests
-        if: matrix.suite == 'all'
+        if: matrix.suite == 'all' && steps.model_scope.outputs.run != 'false'
         # runner is available at step scope, not in the job's env mapping.
         env:
           TMPDIR: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
           TMP: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
           TEMP: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
         run: go test -p 1 -count=1 -timeout 150m ./...
+      # No dependency of the model search changed, see the decision step above.
+      # Only the large search is skipped; the small searches of
+      # internal/board/model_meta_test.go still run.
+      - name: Complete native tests without the model search
+        if: matrix.suite == 'all' && steps.model_scope.outputs.run == 'false'
+        env:
+          TMPDIR: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
+          TMP: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
+          TEMP: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
+        run: go test -p 1 -count=1 -timeout 150m -skip '^TestModelCompositeStates$' ./...
+      # Windows runs the packages that can behave differently there. The
+      # platform-neutral ones (internal/statemachine, internal/version) run in the
+      # ubuntu-latest and macos-latest all jobs only; scripts/windows-test-packages.sh
+      # holds the rule and the list. internal/board has its own step below.
+      # internal/remote's platform-neutral tests run in the all jobs and the race
+      # job; by default only its TestWindows tests run on Windows, in a later step.
+      # A dispatch can add any package, see the extra step. The script runs under
+      # bash, because the bash of a pwsh step may be the one of WSL.
+      - name: List the Windows service packages
+        if: matrix.suite == 'services'
+        shell: bash
+        run: |
+          bash scripts/windows-test-packages.sh > "$RUNNER_TEMP/windows-packages.txt"
+          cat "$RUNNER_TEMP/windows-packages.txt"
+      # Four packages at a time: the runner has four vCPUs, and runs 44453011243
+      # and 44453016220 took 250 and 255 s here against 374 and 364 s with -p 1.
       - name: Complete Windows service tests
         if: matrix.suite == 'services'
         env:
@@ -80,16 +145,54 @@ jobs:
           TEMP: ${{ runner.temp }}
         shell: pwsh
         run: |
-          $packages = @(go list ./... | Where-Object { $_ -ne 'github.com/dualface/kander/internal/board' })
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          go test -v -p 1 -count=1 -timeout 20m $packages
+          $packages = @(Get-Content -LiteralPath "$env:RUNNER_TEMP\windows-packages.txt" | Where-Object { $_ -ne '' })
+          if ($packages.Count -eq 0) { Write-Error "no Windows service packages are listed"; exit 1 }
+          go test -v -p 4 -count=1 -timeout 20m $packages
+      # Windows-specific tests of internal/remote, named TestWindows*, such as the
+      # TestWindowsCredentialSharing tests planned by
+      # 20261119-windows-credential-read-sharing-v2-task. With no match go test
+      # reports "no tests to run" and exits 0.
+      - name: Windows-specific remote tests
+        if: ${{ !cancelled() && matrix.suite == 'services' }}
+        env:
+          TMPDIR: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+          TEMP: ${{ runner.temp }}
+        run: go test -v -p 1 -count=1 -timeout 15m ./internal/remote -run '^TestWindows'
+      # A dispatch can name extra packages to test on Windows, for example
+      # -f windows_extra_packages=./internal/remote. The value reaches the script
+      # only through env and must name ./internal or ./cmd packages.
+      - name: Extra Windows packages
+        if: ${{ !cancelled() && matrix.suite == 'services' && inputs.windows_extra_packages != '' }}
+        env:
+          TMPDIR: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+          TEMP: ${{ runner.temp }}
+          WINDOWS_EXTRA_PACKAGES: ${{ inputs.windows_extra_packages }}
+        shell: pwsh
+        run: |
+          $packages = @($env:WINDOWS_EXTRA_PACKAGES -split '\s+' | Where-Object { $_ -ne '' })
+          foreach ($package in $packages) {
+            if ($package -cnotmatch '^\./(internal|cmd)(/[A-Za-z0-9_-]+)+\z') {
+              Write-Error "windows_extra_packages: refused package path: $package"
+            }
+          }
+          if ($packages.Count -eq 0) { exit 0 }
+          go test -v -p 1 -count=1 -timeout 30m -skip '^TestModelCompositeStates$' $packages
+          exit $LASTEXITCODE
+      # The TestModel tests of internal/board are searches over abstract board
+      # states and the checks of that search, in model_*_test.go. Their result does
+      # not depend on the platform; only the temporary directory they use is chosen
+      # per platform. The ubuntu-latest all job runs them (so does macos-latest);
+      # on Windows TestModelCompositeStates alone took 67 minutes (run
+      # 44410469265). See docs/model-test.md.
       - name: Complete Windows board tests
         if: matrix.suite == 'board'
         env:
           TMPDIR: ${{ runner.temp }}
           TMP: ${{ runner.temp }}
           TEMP: ${{ runner.temp }}
-        run: go test -v -p 1 -count=1 -timeout 150m ./internal/board
+        run: go test -v -p 1 -count=1 -timeout 30m -skip '^TestModel' ./internal/board
 
   race:
     runs-on: ubuntu-latest

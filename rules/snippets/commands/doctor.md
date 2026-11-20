@@ -4,7 +4,7 @@ Source: new in this file; the rule files did not describe this command beyond it
 
 ## Purpose and users
 
-Checks the installation and repairs what it can. The check covers the binary, rules root, agent rules integration, and terminal tools; missing or outdated rule files, templates, and snippets are rewritten from the embedded copies; locally modified files are listed and, in an interactive session, backed up and replaced on request. Run by the user, also after every upgrade.
+Checks the installation and repairs what it can. The check covers the binary, rules root, agent rules integration, terminal tools, and the background worker of the client; missing or outdated rule files, templates, and snippets are rewritten from the embedded copies; locally modified files are listed and, in an interactive session, backed up and replaced on request. Run by the user, also after every upgrade.
 
 ## Syntax
 
@@ -34,11 +34,12 @@ kander doctor
 - A reference that appears only inside an HTML comment, a code fence, or a negated sentence is reported as inactive, not as connected.
 - `install_rules` keys in the project overlay are ignored with one warning each.
 - Interactive sessions may back up and replace locally modified files.
+- Reads the background worker of the client directory without creating or changing anything (no client directory, lock file or record is created) and stops no process. It compares the version in the worker's record (`worker.json`) with its own: a worker that runs another version, or runs without a usable version record, is a warning that fails the check and names what to stop; an absent worker is reported as not running and does not fail it.
 - Never changes the board.
 
 ## Output
 
-- One line per check, then the overall result. With `--json`: `healthy` (boolean) and `lines` (array of `level`, one of `ok`, `warn`, `info`, `note`, and `message`). `doctor --json` never asks a question. When an interactive doctor would ask something before it repairs (the backup and replacement of a modified rule file, the replacement of an unusable agent, the storing of an agent session file, the herdr install, the Homebrew upgrade, the choice of the kander executable to keep when several are on PATH), the run is refused as an interactive form (`interactive_required`, exit 2) before any repair, and nothing is repaired; run `kander doctor` in a terminal. The version guard comes first: when the running binary is older than one on PATH, doctor stops with that diagnostic as the result, never with this refusal. Otherwise it repairs and reports as usual. An unhealthy installation is the result with `healthy` false and exit status 1.
+- One line per check, then the overall result. The worker check prints one line: not running, running with its version and pid, or a warning (another version, or no version record) with the way out. With no client directory it prints none. With `--json`: `healthy` (boolean) and `lines` (array of `level`, one of `ok`, `warn`, `info`, `note`, and `message`). `doctor --json` never asks a question. When an interactive doctor would ask something before it repairs (the backup and replacement of a modified rule file, the replacement of an unusable agent, the storing of an agent session file, the herdr install, the Homebrew upgrade, the choice of the kander executable to keep when several are on PATH), the run is refused as an interactive form (`interactive_required`, exit 2) before any repair, and nothing is repaired; run `kander doctor` in a terminal. The version guard comes first: when the running binary is older than one on PATH, doctor stops with that diagnostic as the result, never with this refusal. Otherwise it repairs and reports as usual. An unhealthy installation is the result with `healthy` false and exit status 1.
 
 ## Rejections
 

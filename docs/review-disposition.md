@@ -141,6 +141,7 @@ A recovery binds its member. A member in `done/`, or one that moved from `done/`
 A `kander move` into `archived/` or `trash/` of a plan or task group member writes `exclusions/<task-id>.json` in the same transaction: exclusion ID, plan, task group, source and target state, result, cycle, reason, and decision reference. Only that move writes the record, and neither state has a way back, so an exclusion cannot be forged to escape a review. A move from `done/` into `archived/` writes none. A move from `done/` into `trash/` does, because the card no longer counts as delivered.
 
 - Plan, batch, closure, assignment, interpretation, and legacy-map writes skip the copies of excluded members and of every archived member, and the validators stop comparing those copies. A copy that exists stays as it is.
+- The seal skips an excluded member: it needs no batch, because a batch can never name it again, and the other members can still seal the plan. This holds for a member that joined with `add_members` and for one the plan named at creation, whether or not any batch named it before it left.
 - Only an excluded member is exempt from the gate. Its cycle needs no rebind, and completion covers the other members. A member archived after `done/` keeps its facts and has no exemption; it only stops owing a recovery (see "Recovery With No Plan").
 - A new run names the batch members that remain. A run prepared before the exclusion takes no copy on the excluded member (`skipped_members`) and settles for the others; a same-ID retry keeps the members of that run. A batch with no member left does not close: the chain continues over it, and wrap-up evidence ends at the last batch with a member. It blocks the other members only through the `withdrawn` records it owes.
 - An assigned finding of an excluded member blocks aggregation, advance, and closure until it has a `withdrawn` record (see "Status Lifecycle"). A finding with no record, or whose latest status is `confirmed` or `unverifiable`, is owed; a latest status of `fixed`, `rejected`, `deferred`, `waived`, or `withdrawn` is not. In a batch with no member left, each such finding blocks `kander move <id> done` of the other members until the record is written. The record needs no closure of that batch. A card already in `done/` stays valid when another member leaves later. A new assignment refuses an excluded member, so a finding of such a batch that was never assigned needs no record and blocks nothing.
@@ -218,6 +219,27 @@ A wrong `base` or `target_commit` normally cannot be repaired: `drop_batches` mu
 - When the batch was aggregated and not closed, the same transaction rewrites the aggregate view and its card copies. The batch revision changes, so the old `view_hash` no longer closes the batch: run `review aggregate` again, then `review close` with the new hash. The minimal N/A sequence therefore recovers from a wrong target found only at close.
 - The operation is mutually exclusive with every other `extend-plan` operation. A batch with a run, an advance, or a closure fails and nothing is written.
 
+### Adding a Started Member to an Unsealed Plan
+
+A group plan can be created once the members that are ready for review have started; it does not wait for the last member of the group. `add_members` adds a group member that starts later, while the plan is not sealed. It changes the plan members (`task_ids` of the plan) only. It never changes which cards belong to the group, and a group with a coordinator checkpoint still takes no new group member. A card that depends on work outside the group does not join this way: it moves to a later group or leaves with `coordinator remove-member`, so the anchor rule stays as it is.
+
+```json
+{
+  "plan_id": "implementation-cycle",
+  "expected_revision": 2,
+  "author": "coordinator",
+  "basis": "the third member started",
+  "add_members": ["20261118-third-member-task"]
+}
+```
+
+- Every new member must be in `working/` or `review/`, carry the same non-empty `TASK_GROUP` as the plan members (a plan whose members share no group, such as the plan of one independent card, takes none), belong to no plan, have no member exclusion, have no run in a batch outside the plan, and report in the plan's `report_language`.
+- The plan must not be sealed, and `expected_revision` must equal the plan revision. The list must not be empty and must hold valid task IDs. The operation is exclusive with every other `extend-plan` operation, including `resolve_batch`.
+- One request is one decision: when a single card fails, nothing is written and the error names the card and the condition that does not hold.
+- One transaction records the cards in `task_ids`, the current execution cycle of each new member (in the plan and in `tracked-cycles/<id>.json`), and the plan pointer `task-plans/<id>.json`, and rewrites the plan copy of every member that still takes one (an excluded or archived member keeps its old copy). The plan revision rises by one, and `plan-history/<plan>/<revision>.json` keeps the previous plan and the request.
+- A new member is in none of the existing batches, so no batch is owed for it. Append a batch that names it with `batch` once its predecessor closed, as for any member; `seal` is refused until every member that is not excluded, the new ones included, is in a batch.
+- In server mode the request runs on the server. The holder of every started new member confirms the same publication with `kander review confirm`, as the holder of every started plan member does. Upgrade the server before the clients: an older server rejects the unknown field `add_members`.
+
 ---
 
 ### Unplanned Batch Resolution
@@ -264,6 +286,8 @@ The limit: one covering batch only. A range that spans two closed batches has no
 The gate reruns these conditions on the current records. A new run in the batch, a changed batch revision, or a changed report fails `kander check` and `kander move <id> done` again. Another unplanned batch fails them on its own.
 
 Members in `done/` take the new plan copy like any other plan write, and archived members take none. An excluded member needs no place in the covering batch. A changed execution cycle does not block the resolution, and it must not: `review progress` can name `rebind_cycles` only after the batch is resolved. Rebind afterwards. A member of the batch outside this plan answers in its own plan. A board with a resolution needs a binary that knows `resolved_batches`; v1.0.0 rejects the plan as an unknown field. Archive cleanup removes the plan and `plan-history` with the rest of the evidence.
+
+A card that has no plan yet can still run a review in a batch outside every plan, and that run then blocks its admission: a new plan that includes the card fails with `unplanned execution batch: <batch-id>`, and `extend-plan` with `add_members` refuses it with an error that says `<task-id> has a run in batch <batch-id>, which no batch of plan <plan-id> names`. Neither a resolution nor an abandonment lifts this refusal: a new plan and an added member ignore `resolved_batches`, and admission counts abandoned runs too. The way out is a new plan whose first batch names that batch and repeats its record exactly: the same members (that card only), `base`, `target_commit`, `requirements`, and report language; any other binding fails with `existing batch/plan mismatch`. The plan then takes the batch, whether its run was abandoned or not, so a card that `add_members` refused joins a plan of its own this way.
 
 ## 3. Report Extraction and Receiver Interpretation
 

@@ -22,7 +22,7 @@ import (
 // coordinator process without that credential asks the holder to confirm a
 // joint publication instead, except for disposition, which only the holder
 // submits.
-var remoteDispositionCommands = map[string]bool{"plan": true, "aggregate": true, "close": true, "progress": true, "extend-plan": true, "advance": true, "assign": true, "disposition": true, "interpret": true, "map-legacy": true, "confirm": true}
+var remoteDispositionCommands = map[string]bool{"plan": true, "aggregate": true, "close": true, "progress": true, "extend-plan": true, "advance": true, "assign": true, "disposition": true, "interpret": true, "map-legacy": true, "abandon": true, "confirm": true}
 
 // runRemoteDisposition runs one evidence command against the server project.
 // Git facts are verified here against the client's repository at cwd, exactly
@@ -87,7 +87,7 @@ func runRemoteDisposition(cfg *config.Config, args []string) int {
 	case "progress":
 		out, err = session.Project.ReviewProgress(ctx, input)
 		typed = &board.ReviewProgress{}
-	case "extend-plan", "advance", "assign", "disposition", "interpret", "map-legacy":
+	case "extend-plan", "advance", "assign", "disposition", "interpret", "map-legacy", "abandon":
 		out, err = remoteEvidenceAction(ctx, session, cwd, action, input, args)
 		typed = &map[string]string{}
 
@@ -196,7 +196,12 @@ func remoteEvidenceAction(ctx context.Context, session *remote.Session, cwd, act
 		if err := readRemoteResource(ctx, session, "plans", request.PlanID, &plan); err != nil {
 			return nil, err
 		}
-		tasks = plan.TaskIDs
+		// add_members brings its new members into the joint confirmation set, as it
+		// does into the authority set of the server.
+		var err error
+		if tasks, err = board.ReviewPlanExtensionTasks(plan, request); err != nil {
+			return nil, err
+		}
 		if request.ResolveBatch != nil {
 			return remoteResolveBatch(ctx, session, cwd, request)
 		}
@@ -265,6 +270,15 @@ func remoteEvidenceAction(ctx context.Context, session *remote.Session, cwd, act
 		payload = request
 	case "map-legacy":
 		var request board.LegacyFindingMap
+		if err := readArchiveJSON(input, &request); err != nil {
+			return nil, err
+		}
+		if err := runMembers(request.RunID); err != nil {
+			return nil, err
+		}
+		payload = request
+	case "abandon":
+		var request board.ReviewAbandonRequest
 		if err := readArchiveJSON(input, &request); err != nil {
 			return nil, err
 		}

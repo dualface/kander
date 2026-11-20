@@ -29,6 +29,7 @@ func deliveryGit(t *testing.T, dir string, args ...string) string {
 }
 
 func TestDeliveryCrossesIndependentClonesAndMissingRemoteBlocks(t *testing.T) {
+	isolateGlobalGit(t)
 	root := t.TempDir()
 	bare, first, second := filepath.Join(root, "common.git"), filepath.Join(root, "first"), filepath.Join(root, "second")
 	deliveryGit(t, root, "init", "--bare", bare)

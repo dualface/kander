@@ -162,3 +162,28 @@ func TestIntegrationGroupAssemblyAndJointReviewAcrossIndependentClones(t *testin
 		t.Fatal("late CAS overwrote the reviewed group")
 	}
 }
+
+func TestIntegrationGroupRefusesAMemberThatNeverDeliveredAndLeavesTheTarget(t *testing.T) {
+	f := newIntegrationGitFixture(t)
+	group := "20261119-undelivered-member-group"
+	ids, _ := integrationGroupCards(t, f, group)
+	if _, err := f.a.AcquireCoordinator(t.Context(), board.CoordinatorClaim{GroupID: group, Owner: "coordinator", Token: "undelivered-member-session", Basis: "explicitly coordinate the complete group", Members: ids}, "explicit group coordination"); err != nil {
+		t.Fatal(err)
+	}
+	target := "refs/heads/group/" + group
+	options := remote.IntegrationOptions{OperationID: "initialize-undelivered-group", Purpose: "initialize", TargetRef: target, Commit: f.base, GroupID: group, Decision: "initialize the confirmed common anchor"}
+	if initialized, err := f.a.Integrate(t.Context(), f.first, options); err != nil || initialized.Phase != "integrated" {
+		t.Fatalf("group anchor: %+v %v", initialized, err)
+	}
+	before := deliveryGit(t, f.bare, "rev-parse", target)
+	// The member stays in working/: no delivery is published and the card never moves into review/.
+	options.OperationID, options.Purpose, options.Commit, options.Contributors = "assemble-undelivered-member", "assemble", f.commit, []string{ids[0]}
+	if _, err := f.a.Integrate(t.Context(), f.first, options); err == nil {
+		t.Fatal("a member without a current delivery was integrated")
+	} else if !strings.Contains(err.Error(), ids[0]) || !strings.Contains(err.Error(), "working/") {
+		t.Fatalf("the refusal does not name the member and its state: %v", err)
+	}
+	if after := deliveryGit(t, f.bare, "rev-parse", target); after != before {
+		t.Fatalf("the refused integration moved the target from %s to %s", before, after)
+	}
+}

@@ -300,8 +300,10 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 	if err := session.SaveCredential(credential); err != nil {
 		return result, err
 	}
-	if err := ensureRemoteWorker(session.Home); err != nil {
+	if notice, err := ensureRemoteWorker(session.Home); err != nil {
 		result.Warnings = append(result.Warnings, t("remote.worker_start_failed", err.Error())+"\n")
+	} else if notice != "" {
+		result.Warnings = append(result.Warnings, notice+"\n")
 	}
 	own := *credential.Claim()
 	executionUpdate := func(u api.ExecutionUpdate) error {
@@ -418,7 +420,7 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 			if err := remote.WriteCredential(session.Home, credential); err != nil {
 				return err
 			}
-			_ = ensureRemoteWorker(session.Home)
+			_ = startRemoteWorker(session.Home)
 			return executionUpdate(api.ExecutionUpdate{Action: api.ExecutionConfirm, SessionBefore: initialSession, SessionAfter: effective.Render()})
 		}
 	}
@@ -503,7 +505,7 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 			result.Warnings = append(result.Warnings, err.Error()+"\n")
 		}
 	}
-	_ = ensureRemoteWorker(session.Home)
+	_ = startRemoteWorker(session.Home)
 	if !persistSession {
 		credential.Session = agentSession.Render()
 		if err := remote.WriteCredential(session.Home, credential); err != nil {

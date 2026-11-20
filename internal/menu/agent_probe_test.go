@@ -6,9 +6,9 @@ import (
 	"github.com/dualface/kander/internal/config"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestDoctorAndPanelProbeAgentOverride(t *testing.T) {
@@ -45,30 +45,65 @@ func TestDoctorAndPanelProbeAgentOverride(t *testing.T) {
 	}
 }
 
-// Three agents that each sleep one second must finish probing well under the
-// three seconds a sequential loop would need.
+// Each fake agent announces itself and then waits until all three have
+// started, so only probes that overlap in time can report the version. The
+// judgment is made from the start markers, not from the clock. The barrier
+// gives up after 300 polls, which is about 3 seconds of nominal sleep, so a
+// sequential findAgents normally fails with a readable value instead of the 5
+// second probe timeout. Under heavy load the polls take longer than nominal: a
+// late third probe can still end the barrier early, and the probe timeout can
+// come first. PATH holds only the fake directory and the reviewer override
+// variables are cleared, so the real agent CLIs of the machine are not probed:
+// limiting PATH alone is not enough, because an absolute <NAME>_REVIEW_BIN does
+// not consult PATH. The scripts call only shell builtins and /bin/sleep because
+// they run with that PATH.
 func TestFindAgentsProbesConcurrently(t *testing.T) {
 	h := newHarness(t)
+	t.Setenv("PATH", h.fakeBin)
+	for _, name := range config.ExecutionAgents {
+		t.Setenv(strings.ToUpper(name)+"_REVIEW_BIN", "")
+	}
+	started := filepath.Join(h.root, "probe-started")
+	if err := os.MkdirAll(started, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// The directory sits inside a single-quoted shell string, so escape any
+	// quote that a custom TMPDIR may put in its path.
+	quotedStarted := strings.ReplaceAll(started, "'", `'\''`)
 	cfg := config.DefaultConfig()
 	cfg.WelcomeComplete = true
 	cfg.Launcher = "foreground"
 	cfg.Agents = map[string]config.AgentDefinition{}
-	for _, name := range []string{"slow-a", "slow-b", "slow-c"} {
+	names := []string{"slow-a", "slow-b", "slow-c"}
+	for _, name := range names {
+		script := strings.NewReplacer("@DIR@", quotedStarted, "@NAME@", name, "@COUNT@", strconv.Itoa(len(names))).Replace(`#!/bin/sh
+dir='@DIR@'
+: > "$dir/@NAME@"
+i=0
+while [ "$i" -lt 300 ]; do
+  n=0
+  for f in "$dir"/*; do
+    [ -e "$f" ] && n=$((n+1))
+  done
+  if [ "$n" -ge @COUNT@ ]; then
+    echo slow-version
+    exit 0
+  fi
+  /bin/sleep 0.01
+  i=$((i+1))
+done
+echo barrier-timeout
+`)
 		path := filepath.Join(h.fakeBin, name)
-		if err := os.WriteFile(path, []byte("#!/bin/sh\nsleep 1\necho slow-version\n"), 0700); err != nil {
+		if err := os.WriteFile(path, []byte(script), 0700); err != nil {
 			t.Fatal(err)
 		}
 		cfg.Agents[name] = config.AgentDefinition{Path: path, Dialect: "claude"}
 	}
-	started := time.Now()
 	states := findAgents(cfg)
-	elapsed := time.Since(started)
-	if elapsed >= 2*time.Second {
-		t.Fatalf("probes look sequential: %v", elapsed)
-	}
-	for _, name := range []string{"slow-a", "slow-b", "slow-c"} {
+	for _, name := range names {
 		if states[name].Version != "slow-version" {
-			t.Fatalf("%s not probed: %+v", name, states[name])
+			t.Fatalf("%s did not run alongside the other probes: version %q", name, states[name].Version)
 		}
 	}
 }

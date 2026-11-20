@@ -105,7 +105,7 @@ func CheckReviewEvidence(root string, ids []string) (problems []Problem, err err
 					continue
 				}
 				if run.Phase != "finalized" || !allPublished(run) {
-					add(id, reviewError(runID+": incomplete publication"))
+					add(id, incompletePublication(run))
 					continue
 				}
 				if slices.Contains(run.SkippedMembers, id) {
@@ -232,6 +232,9 @@ func checkRunStructure(tx *Transaction, run ReviewRun, runs map[string]ReviewRun
 	seen := map[string]bool{run.RunID: true}
 	for previous.PreviousRunID != "" {
 		p, ok := runs[previous.PreviousRunID]
+		if ok && reviewRunAbandoned(p) {
+			return abandonedRunError(p.RunID)
+		}
 		if !ok || seen[p.RunID] || p.Commit != previous.ReviewedCommit || p.BatchID != run.BatchID || p.Base != run.Base || p.Role != run.Role || !allPublished(p) {
 			return reviewError("predecessor conflict")
 		}
@@ -253,7 +256,7 @@ func checkRunStructure(tx *Transaction, run ReviewRun, runs map[string]ReviewRun
 		return reviewError("sidecar schema")
 	}
 	expected := run
-	expected.Published, expected.SkippedMembers = nil, nil
+	expected.Published, expected.SkippedMembers, expected.Abandonment = nil, nil, nil
 	if !reflect.DeepEqual(expected, archived) {
 		return reviewError("sidecar/intent conflict")
 	}
@@ -347,8 +350,11 @@ func verifyPublishedReview(tx *Transaction, run ReviewRun) error {
 	// one board state names one run.
 	for _, id := range slices.Sorted(maps.Keys(ancestors)) {
 		ancestor := ancestors[id]
+		if reviewRunAbandoned(ancestor) {
+			return abandonedRunError(ancestor.RunID)
+		}
 		if !allPublished(ancestor) {
-			return reviewError(ancestor.RunID + ": incomplete publication")
+			return incompletePublication(ancestor)
 		}
 		if err = checkRunStructure(tx, ancestor, ancestors); err != nil {
 			return err

@@ -15,10 +15,11 @@ import (
 // ReviewPlanExtension appends one batch after the prior closure, seals the
 // cycle, rebinds execution cycles, syncs a drifted plan target to the runtime
 // batch, drops trailing batches no run has reached, corrects the base and target
-// of a batch no run has reached, releases an obligation on a user decision, or
-// resolves an unplanned batch (ResolveReviewBatch). Existing
-// requirements, members and evidence are never replaced. A sealed plan takes a batch
-// only for a rebound cycle that has none, or for a recovery that still owes a review.
+// of a batch no run has reached, adds started members of the plan's group,
+// releases an obligation on a user decision, or resolves an unplanned batch
+// (ResolveReviewBatch). Existing requirements, members and evidence are never
+// replaced. A sealed plan takes a batch only for a rebound cycle that has none, or
+// for a recovery that still owes a review, and takes no member.
 type ReviewPlanExtension struct {
 	RebindCycles      map[string]string             `json:"rebind_cycles,omitempty"`
 	SyncTargets       map[string]string             `json:"sync_targets,omitempty"`
@@ -35,6 +36,10 @@ type ReviewPlanExtension struct {
 
 	// RetargetBatches corrects the base and target of batches no run has reached.
 	RetargetBatches map[string]ReviewBatchRetarget `json:"retarget_batches,omitempty"`
+
+	// AddMembers adds started members of the plan's task group to a plan that is
+	// not sealed. A nil slice is no operation; an empty one is refused.
+	AddMembers []string `json:"add_members,omitempty"`
 }
 
 func ExtendReviewPlanWithTransaction(root string, x ReviewPlanExtension, extensions ...TransactionExtension) error {
@@ -46,8 +51,15 @@ func ExtendReviewPlanWithTransaction(root string, x ReviewPlanExtension, extensi
 	if err := extensionShape(x); err != nil {
 		return err
 	}
+	added, err := normalizedAddMembers(x)
+	if err != nil {
+		return err
+	}
+	if added != nil {
+		x.AddMembers = added
+	}
 	var p ReviewPlan
-	err := WithTransaction(root, reviewScope(nil, true), func(tx *Transaction) error {
+	err = WithTransaction(root, reviewScope(nil, true), func(tx *Transaction) error {
 		ok, e := readReviewJSON(tx, planName(x.PlanID), &p)
 		if e != nil {
 			return e
@@ -60,7 +72,11 @@ func ExtendReviewPlanWithTransaction(root string, x ReviewPlanExtension, extensi
 	if err != nil {
 		return err
 	}
-	return WithTransaction(root, reviewScope(p.TaskIDs, false), func(tx *Transaction) error {
+	scope, err := normalizedReviewTasks(slices.Concat(p.TaskIDs, added))
+	if err != nil {
+		return err
+	}
+	return WithTransaction(root, reviewScope(scope, false), func(tx *Transaction) error {
 		ok, err := readReviewJSON(tx, planName(x.PlanID), &p)
 		if err != nil {
 			return err
@@ -119,6 +135,11 @@ func ExtendReviewPlanWithTransaction(root string, x ReviewPlanExtension, extensi
 		}
 		if len(x.RetargetBatches) > 0 {
 			if err = retargetPlanBatches(tx, pk, &p, x.RetargetBatches); err != nil {
+				return err
+			}
+		}
+		if len(added) > 0 {
+			if err = addPlanMembers(tx, pk, &p, x, added); err != nil {
 				return err
 			}
 		}
@@ -182,13 +203,14 @@ func ExtendReviewPlanWithTransaction(root string, x ReviewPlanExtension, extensi
 // operation, no two exclusive ones, and a decision only with a drop or a release.
 func extensionShape(x ReviewPlanExtension) error {
 	shape := reviewplan.Extend{
-		Rebind:   len(x.RebindCycles) > 0,
-		Sync:     len(x.SyncTargets) > 0,
-		Retarget: len(x.RetargetBatches) > 0,
-		Batch:    x.Batch != nil || x.Seal,
-		Drop:     len(x.DropBatches) > 0,
-		Release:  x.ReleaseObligation != nil,
-		Decision: x.Decision != "",
+		Rebind:     len(x.RebindCycles) > 0,
+		Sync:       len(x.SyncTargets) > 0,
+		Retarget:   len(x.RetargetBatches) > 0,
+		AddMembers: x.AddMembers != nil,
+		Batch:      x.Batch != nil || x.Seal,
+		Drop:       len(x.DropBatches) > 0,
+		Release:    x.ReleaseObligation != nil,
+		Decision:   x.Decision != "",
 	}
 	initial := reviewplan.Initial(reviewplan.Params{})
 	_, accepted := reviewplan.Step(initial, shape, reviewplan.Params{})
@@ -198,7 +220,7 @@ func extensionShape(x ReviewPlanExtension) error {
 	switch {
 	case accepted:
 		return nil
-	case !shape.Rebind && !shape.Sync && !shape.Retarget && !shape.Batch && !shape.Drop && !shape.Release:
+	case !shape.Rebind && !shape.Sync && !shape.Retarget && !shape.AddMembers && !shape.Batch && !shape.Drop && !shape.Release:
 		return reviewError("plan extension provenance")
 	case shape.Decision && !shape.Drop && !shape.Release:
 		return reviewError(t("board.review_decision_unused"))
@@ -238,10 +260,19 @@ func rebindPlanCycles(tx *Transaction, pk *planKernel, p *ReviewPlan, changed, r
 }
 
 // sealFacts computes the seal conditions on the plan as it stands: every member
-// is in a batch, and every drop obligation has a planned batch.
+// that is not excluded is in a batch, and every drop obligation has a planned
+// batch. An excluded member can never be named by a batch again, and the
+// completion gate already exempts it.
 func sealFacts(tx *Transaction, p ReviewPlan) (assigned, noDropOwed bool, refusal error, err error) {
 	assigned = true
 	for _, id := range p.TaskIDs {
+		excluded, e := memberExcluded(tx, id)
+		if e != nil {
+			return false, false, nil, e
+		}
+		if excluded {
+			continue
+		}
 		k, e := loadMemberKernel(tx, p, true, id, kernelBound(p))
 		if e != nil {
 			return false, false, nil, e

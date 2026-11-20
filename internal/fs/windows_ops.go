@@ -107,6 +107,14 @@ func RegularFileExists(root, path string) (bool, error) {
 }
 
 func OpenRegularFileIfExists(root, path string) (*os.File, error) {
+	return openExistingRegular(root, path, windows.GENERIC_READ|windows.FILE_READ_ATTRIBUTES, false)
+}
+
+// openExistingRegular opens a regular file that may be absent through pinned
+// handles and never creates anything. A missing file or parent directory
+// returns (nil, nil). shareWrite decides whether other handles may keep or
+// take write access while this one is open.
+func openExistingRegular(root, path string, access uint32, shareWrite bool) (*os.File, error) {
 	rootAbs, candidate, parts, err := relativeParts(root, path)
 	if err != nil {
 		return nil, err
@@ -122,8 +130,7 @@ func OpenRegularFileIfExists(root, path string) (*os.File, error) {
 		return nil, err
 	}
 	defer cleanup()
-	access := uint32(windows.GENERIC_READ | windows.FILE_READ_ATTRIBUTES)
-	handle, err := tryOpenLeaf(parent, filepath.Base(candidate), candidate, access, kindFile, false, false)
+	handle, err := tryOpenLeaf(parent, filepath.Base(candidate), candidate, access, kindFile, shareWrite, false)
 	if err != nil {
 		if isMissingWin(err) || isNotExist(err) {
 			return nil, nil

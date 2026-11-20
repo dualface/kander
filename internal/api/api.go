@@ -326,12 +326,22 @@ type Handoff struct {
 	Decision       string    `json:"decision"`
 }
 
-// Collaboration request kinds and states.
+// Collaboration request kinds and states. Clients created by notify, by a
+// resume that turns into a notify, and by a non-holder dispatch prepare give a
+// request the kind of its dispatch (fix, sync or wrap-up), or note without one.
+// The server also keeps the other combinations older clients and kander request
+// produce (see checkRequestShape in internal/server).
 const (
 	RequestFix    = "fix"
 	RequestSync   = "sync"
+	RequestWrapUp = "wrap-up"
 	RequestReview = "review"
 	RequestStop   = "stop"
+	RequestNote   = "note"
+
+	// MaxRequestMessage bounds the message of one request in bytes; the server
+	// refuses a longer one and clients check it before they send.
+	MaxRequestMessage = 64 << 10
 
 	RequestOpen       = "open"
 	RequestAccepted   = "accepted"
@@ -358,6 +368,20 @@ type CollabRequest struct {
 	Note             string               `json:"note,omitempty"`
 	CreatedAt        time.Time            `json:"created_at"`
 	UpdatedAt        time.Time            `json:"updated_at"`
+}
+
+// DispatchRequestKind is the request kind that a client gives a new dispatch
+// proposal: the same word as the dispatch kind. Any dispatch kind other than
+// fix, sync and wrap-up is refused, so a proposal never shows a kind such as
+// stop for a dispatch that cannot be prepared. It says nothing about requests
+// without a dispatch: notify makes those notes, and kander request also makes
+// fix, sync, review and stop requests without one.
+func DispatchRequestKind(dispatchKind string) (string, error) {
+	switch dispatchKind {
+	case RequestFix, RequestSync, RequestWrapUp:
+		return dispatchKind, nil
+	}
+	return "", &Error{Code: CodeInvalidRequest, Message: fmt.Sprintf("dispatch kind %q is not fix, sync or wrap-up", dispatchKind)}
 }
 
 // NewCollabRequest is POST .../tasks/{task}/requests.

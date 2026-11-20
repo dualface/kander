@@ -1,6 +1,7 @@
 package board
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"slices"
@@ -176,7 +177,11 @@ func createReviewPlan(root string, p ReviewPlan, restrictNewShape bool, extensio
 			p.DroppedRoles = old.DroppedRoles
 			p.ResolvedBatches = old.ResolvedBatches
 			if !reflect.DeepEqual(old, p) {
-				return reviewError("immutable review plan conflict")
+				fields, err := differingPlanFields(old, p)
+				if err != nil {
+					return err
+				}
+				return planIDConflict("immutable review plan conflict", t("board.review_plan_conflict", p.PlanID, strings.Join(old.TaskIDs, ", "), strings.Join(fields, ", ")))
 			}
 			return verifyPlanCopies(tx, p)
 		}
@@ -206,7 +211,7 @@ func createReviewPlan(root string, p ReviewPlan, restrictNewShape bool, extensio
 				return err
 			}
 			if exists {
-				return reviewError("execution already has a review plan: " + id)
+				return reviewError("execution already has a review plan: " + id + " " + t("board.review_plan_member_planned", pointer.PlanID))
 			}
 		}
 		for _, b := range p.Batches {
@@ -215,14 +220,14 @@ func createReviewPlan(root string, p ReviewPlan, restrictNewShape bool, extensio
 			if err != nil {
 				return err
 			}
-			if exists && (existing.Base != b.Base || existing.TargetCommit != b.TargetCommit || !reflect.DeepEqual(existing.TaskIDs, b.TaskIDs) || !reflect.DeepEqual(existing.Requirements, b.Requirements) || existing.ReportLanguage != p.ReportLanguage) {
-				return reviewError("existing batch/plan mismatch")
+			if fields := differingBatchFields(existing, b, p.ReportLanguage); exists && len(fields) > 0 {
+				return planIDConflict("existing batch/plan mismatch", t("board.review_plan_batch_mismatch", b.BatchID, batchHolder(existing), strings.Join(fields, ", ")))
 			}
 			if !exists {
 				existing = ReviewBatch{Schema: 1, BatchID: b.BatchID, TaskIDs: b.TaskIDs, Base: b.Base, TargetCommit: b.TargetCommit, Requirements: b.Requirements, ReportLanguage: p.ReportLanguage, Revision: 1}
 			}
 			if existing.PlanID != "" {
-				return reviewError("batch already planned")
+				return planIDConflict("batch already planned", t("board.review_plan_batch_planned", b.BatchID, existing.PlanID, strings.Join(existing.TaskIDs, ", ")))
 			}
 			existing.PlanID = p.PlanID
 			existing.PreviousBatchID = b.PreviousBatchID
@@ -244,6 +249,82 @@ func createReviewPlan(root string, p ReviewPlan, restrictNewShape bool, extensio
 		return tx.PutGroup(reviewControlGroup, planName(p.PlanID), reviewJSON(p))
 	}, extensions...)
 }
+
+// planIDConflict refuses a plan whose batch or plan ID an earlier record holds.
+// The prefix stays the English text of the refusal; the detail names only IDs and
+// field names, never a requirement value, an author, a basis, or a path.
+func planIDConflict(prefix, detail string) error {
+	return reviewError(prefix + ": " + detail + " " + t("board.review_plan_id_hint"))
+}
+
+// batchHolder says what holds a batch ID: a plan, or a review run outside any plan.
+func batchHolder(b ReviewBatch) string {
+	members := strings.Join(b.TaskIDs, ", ")
+	if b.PlanID == "" {
+		return t("board.review_plan_holder_run", members)
+	}
+	return t("board.review_plan_holder_plan", b.PlanID, members)
+}
+
+// differingBatchFields names, in a fixed order, the binding fields of the stored
+// batch that the new plan batch does not repeat.
+func differingBatchFields(existing ReviewBatch, b ReviewPlanBatch, reportLanguage string) []string {
+	var fields []string
+	for _, f := range []struct {
+		name string
+		same bool
+	}{
+		{"base", existing.Base == b.Base},
+		{"target_commit", existing.TargetCommit == b.TargetCommit},
+		{"task_ids", reflect.DeepEqual(existing.TaskIDs, b.TaskIDs)},
+		{"requirements", reflect.DeepEqual(existing.Requirements, b.Requirements)},
+		{"report_language", existing.ReportLanguage == reportLanguage},
+	} {
+		if !f.same {
+			fields = append(fields, f.name)
+		}
+	}
+	return fields
+}
+
+// differingPlanFields names the top-level keys of the stored plan record whose
+// value differs from the new plan, in sorted order.
+func differingPlanFields(old, p ReviewPlan) ([]string, error) {
+	oldKeys, err := planRecordKeys(old)
+	if err != nil {
+		return nil, err
+	}
+	newKeys, err := planRecordKeys(p)
+	if err != nil {
+		return nil, err
+	}
+	var fields []string
+	for key, value := range oldKeys {
+		if other, ok := newKeys[key]; !ok || string(other) != string(value) {
+			fields = append(fields, key)
+		}
+	}
+	for key := range newKeys {
+		if _, ok := oldKeys[key]; !ok {
+			fields = append(fields, key)
+		}
+	}
+	slices.Sort(fields)
+	return fields, nil
+}
+
+func planRecordKeys(p ReviewPlan) (map[string]json.RawMessage, error) {
+	raw, err := json.Marshal(p)
+	if err != nil {
+		return nil, err
+	}
+	var keys map[string]json.RawMessage
+	if err = json.Unmarshal(raw, &keys); err != nil {
+		return nil, err
+	}
+	return keys, nil
+}
+
 func readTaskPlan(tx *Transaction, id string) (p ReviewPlan, exists bool, err error) {
 	var pointer struct {
 		PlanID string `json:"plan_id"`

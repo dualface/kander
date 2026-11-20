@@ -52,7 +52,7 @@ func recoverRemoteLaunch(ctx context.Context, service *remote.Session, journal *
 		}
 		return launchError("remote.launch_no_executor_reconciled", journal.Path)
 	}
-	_ = ensureRemoteWorker(service.Home)
+	_ = startRemoteWorker(service.Home)
 	value.Phase = "unresolved"
 	if err := journal.Save(); err != nil {
 		return err

@@ -75,7 +75,10 @@ func gitAncestor(ctx context.Context, dir, source, target string) (bool, error) 
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	result, err := probe.CaptureWithEnvDirLimit(ctx, "git", []string{"merge-base", "--is-ancestor", source, target}, append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never"), dir, 1<<20)
-	if err != nil || result.Overflow {
+	if err != nil {
+		return false, newGitTransportError(err)
+	}
+	if result.Overflow {
 		return false, integrationFailure("remote.git_interrupted")
 	}
 	switch result.Code {

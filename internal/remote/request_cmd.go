@@ -20,7 +20,7 @@ import (
 // NewRequestCommand builds kander request, the collaboration requests of a claimed task in
 // server mode:
 //
-//	kander request <task-id> fix|sync|review|stop <message...>
+//	kander request <task-id> fix|sync|review|stop|note <message...>
 //	kander request list <task-id>
 //	kander request show <task-id> <request-id>
 //	kander request answer <task-id> <request-id> accepted|done|rejected [note...]
@@ -28,12 +28,12 @@ import (
 // Anyone may ask; only the live holder answers, with its execution credential.
 func NewRequestCommand() *cobra.Command {
 	send := command.RequireProject(&cobra.Command{
-		Use: "request <task-id> fix|sync|review|stop <message...>",
+		Use: "request <task-id> fix|sync|review|stop|note <message...>",
 		Args: func(c *cobra.Command, args []string) error {
 			if err := command.Args(3, -1)(c, args); err != nil {
 				return err
 			}
-			if !slices.Contains([]string{api.RequestFix, api.RequestSync, api.RequestReview, api.RequestStop}, args[1]) {
+			if !slices.Contains([]string{api.RequestFix, api.RequestSync, api.RequestReview, api.RequestStop, api.RequestNote}, args[1]) {
 				return command.Usage("remote.request_kind_invalid", command.Escape(args[1]))
 			}
 			return nil
@@ -161,6 +161,11 @@ func runRequestAnswer(task, id, status, note string) error {
 }
 
 func runRequestSend(task, kind, message string) error {
+	// A new request is checked before the server is contacted: the message needs no
+	// server, and the error does not depend on one being reachable.
+	if err := CheckRequestMessage(message); err != nil {
+		return fail(err)
+	}
 	ctx, s, release, err := openRequestSession()
 	if err != nil {
 		return fail(err)

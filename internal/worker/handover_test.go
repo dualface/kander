@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/api"
+	kfs "github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/process"
 	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/version"
@@ -119,6 +120,7 @@ func (f *fakeSuccessor) Exited() bool { return f.exited.Load() }
 type rig struct {
 	*harness
 	exe        string
+	v1         os.FileInfo
 	sink       *logSink
 	identities atomic.Int32
 	probes     atomic.Int32
@@ -130,23 +132,38 @@ type rig struct {
 	delivered  []string
 }
 
-func newRig(t *testing.T) *rig {
-	r := &rig{harness: newHarness(t), sink: &logSink{}, timeout: 2 * time.Second}
+func newRig(t *testing.T) *rig { return newRigOn(t, newHarness(t)) }
+
+// newRigOn builds a rig on a harness the test prepared, for example one with a
+// wrapped server.
+func newRigOn(t *testing.T, h *harness) *rig {
+	r := &rig{harness: h, sink: &logSink{}, timeout: 2 * time.Second}
 	r.exe = filepath.Join(t.TempDir(), "kander")
 	r.writeExecutable("v1")
+	// Renaming a new file over the old one frees the old inode, and a file
+	// system such as ext4 may hand the same number to the next new file, which
+	// os.SameFile would then take for the file the worker started with. A hard
+	// link keeps the inode of v1 taken until the temporary directory is removed.
+	// A running worker holds its own binary open, so this affects tests only.
+	if err := os.Link(r.exe, r.exe+".v1"); err != nil {
+		t.Fatal(err)
+	}
+	var err error
+	if r.v1, err = fileIdentity(r.exe); err != nil {
+		t.Fatal(err)
+	}
 	r.probe = func() error { return nil }
 	r.spawn = func(string, string) (Successor, error) { return nil, errors.New("no spawn expected") }
 	return r
 }
 
 // writeExecutable replaces the file the way an upgrade does: a new file is
-// renamed over the old path.
+// renamed over the old path. The rename goes through internal/fs because the
+// worker opens the path every tick, and on Windows that open does not share
+// DELETE, so a bare os.Rename of the same moment fails with access denied;
+// internal/fs retries that busy rename for a bounded time.
 func (r *rig) writeExecutable(content string) {
-	next := r.exe + ".new"
-	if err := os.WriteFile(next, []byte(content), 0o700); err != nil {
-		r.t.Fatal(err)
-	}
-	if err := os.Rename(next, r.exe); err != nil {
+	if err := kfs.WriteExecutableAtomicInherited(filepath.Dir(r.exe), r.exe, []byte(content), true); err != nil {
 		r.t.Fatal(err)
 	}
 }
@@ -158,11 +175,13 @@ func (r *rig) options() Options {
 		Logger: slog.New(slog.NewJSONHandler(r.sink, nil)),
 		Now:    r.now,
 		Stop:   func(int) error { return nil },
-		Deliver: func(window, session, text string) error {
-			r.mu.Lock()
-			defer r.mu.Unlock()
-			r.delivered = append(r.delivered, text)
-			return nil
+		Resolve: func(window, session string) (Prompt, error) {
+			return func(text string) error {
+				r.mu.Lock()
+				defer r.mu.Unlock()
+				r.delivered = append(r.delivered, text)
+				return nil
+			}, nil
 		},
 		Executable: func() (string, error) { return r.exe, nil },
 		Identity: func(path string) (os.FileInfo, error) {
@@ -237,12 +256,12 @@ func finish(t *testing.T, done <-chan error, cancel context.CancelFunc) {
 }
 
 // homeBytes reads every private file of the client home except the worker's
-// own lock and log.
+// own lock, log and record.
 func homeBytes(t *testing.T, home string) map[string]string {
 	t.Helper()
 	files := map[string]string{}
 	err := filepath.WalkDir(home, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || d.Name() == remote.WorkerLockName || d.Name() == "worker.log" {
+		if err != nil || d.IsDir() || d.Name() == remote.WorkerLockName || d.Name() == remote.WorkerRecordName || d.Name() == "worker.log" {
 			return err
 		}
 		data, err := os.ReadFile(path)
@@ -347,6 +366,9 @@ func TestProbeFailureKeepsServingAndBacksOff(t *testing.T) {
 	done := r.serve(ctx)
 	r.writeExecutable("v2")
 	waitFor(t, "the first probe", func() bool { return r.probes.Load() == 1 })
+	// The worker logs the failure and records the failed identity after the
+	// probe returns; wait for its next check so both have happened.
+	r.ticks(1)
 	if r.sink.find("replaced worker binary is not usable; handover skipped") == nil {
 		t.Fatal("a failed probe is logged")
 	}
@@ -358,7 +380,17 @@ func TestProbeFailureKeepsServingAndBacksOff(t *testing.T) {
 		t.Fatalf("the failed file identity is not probed again within a minute: %d", r.probes.Load())
 	}
 	r.writeExecutable("v3")
+	v3, err := fileIdentity(r.exe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if os.SameFile(r.v1, v3) {
+		t.Fatal("v3 reuses the inode of v1; the file identity check cannot see the replacement")
+	}
 	waitFor(t, "an immediate probe of the new identity", func() bool { return r.probes.Load() == 2 })
+	// The worker reads the clock for the failure time after the probe returns;
+	// wait for its next check before the fake clock moves.
+	r.ticks(1)
 	for range 4 {
 		r.expectRenewal()
 	}

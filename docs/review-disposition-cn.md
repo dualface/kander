@@ -141,6 +141,7 @@ kander review progress <绝对工作目录> <task-id>
 `kander move` 把 plan 成员或任务组成员移入 `archived/` 或 `trash/` 时，在同一事务中写 `exclusions/<task-id>.json`：排除 ID、计划、任务组、来源与目标状态、结果、执行周期、原因、决定引用。只有这个 move 写这份记录，两个状态都没有回路，所以排除无法伪造来逃避复审。从 `done/` 移入 `archived/` 不写记录。从 `done/` 移入 `trash/` 要写，因为这张卡不再算已交付。
 
 - 计划、批次、关闭、分配、解读、历史映射的写入跳过已排除成员与全部已归档成员的副本，校验也不再比对这些副本。已有的副本保持原样。
+- 封存跳过已排除成员：它不需要被任何批次点名（批次再也不能点名它），其余成员仍可封存计划。这既适用于用 `add_members` 加入的成员，也适用于建计划时就在计划里的成员，无论它离开前是否有批次点名过它。
 - 闸门豁免只给已排除成员。它的执行周期不需要重绑，完成校验只覆盖其余成员。`done/` 之后归档的成员保留自身事实，不享受豁免，只是不再欠恢复义务（见「没有计划时的恢复」）。
 - 新 run 只列仍在批次中的成员。排除之前准备的 run 不向已排除成员写副本（`skipped_members`），并为其余成员结算；同 ID 重试保留该 run 自己的成员。没有成员的批次不关闭：批次链跨过它，wrap-up 证据止于最后一个还有成员的批次。它只通过欠缺的 `withdrawn` 记录阻塞其他成员。
 - 已排除成员的已分配 finding 在写 `withdrawn` 记录之前，继续阻塞聚合、推进与关闭（见「状态流转规则」）。没有记录，或者最新状态是 `confirmed` 或 `unverifiable` 的 finding 算作欠缺；最新状态是 `fixed`、`rejected`、`deferred`、`waived` 或 `withdrawn` 的不算。在没有成员的批次中，这样的 finding 阻塞其他成员的 `kander move <id> done`，直到写入记录。写入记录不需要先关闭该批次。卡已在 `done/` 时，其他成员之后才退出不影响这张卡。新的分配拒绝已排除成员，所以这种批次中从未分配的 finding 不需要记录，也不阻塞。
@@ -218,6 +219,27 @@ kander review progress <绝对工作目录> <task-id>
 - 批次已 aggregate 但未关闭时，同一事务重写聚合视图及其卡上副本。批次 revision 变了，旧的 `view_hash` 不能再关闭它：重新运行 `review aggregate`，再用新的哈希 `review close`。所以最小 N/A 序列在 close 时才发现目标写错，也能恢复。
 - 此操作与其他 `extend-plan` 操作互斥。批次已有 run、advance 或关闭记录时失败，不写任何记录。
 
+### 把已启动的成员加入未封存的计划
+
+组计划可以在准备好审核的成员启动后就创建，不必等组里最后一个成员。`add_members` 在计划未封存时，加入后来启动的组成员。它只改变计划成员（计划的 `task_ids`），不改变哪些卡属于这个组；有协调检查点的组仍然不接受新的组成员。依赖组外工作的卡不能这样加入：它进入后续的组，或者用 `coordinator remove-member` 移出，锚点规则保持不变。
+
+```json
+{
+  "plan_id": "implementation-cycle",
+  "expected_revision": 2,
+  "author": "coordinator",
+  "basis": "第三个成员已启动",
+  "add_members": ["20261118-third-member-task"]
+}
+```
+
+- 每个新成员都必须处于 `working/` 或 `review/`，`TASK_GROUP` 与计划成员相同且非空（成员没有共同组的计划，例如一张独立卡的计划，不接受新成员），不属于任何计划，没有成员排除记录，没有计划外批次的运行，并且报告语言与计划的 `report_language` 相同。
+- 计划不能已封存，`expected_revision` 必须等于计划修订号。列表不能为空，且必须是有效的任务 ID。该操作与其他所有 `extend-plan` 操作互斥，包括 `resolve_batch`。
+- 一个请求就是一个决定：有一张卡不满足条件，就什么都不写，错误写出该卡和不满足的条件。
+- 一个事务记录 `task_ids` 中的卡、每个新成员当前的执行周期（写在计划里，也写在 `tracked-cycles/<id>.json`）和计划指针 `task-plans/<id>.json`，并重写每个仍接收副本的成员的计划副本（已排除或已归档的成员保留旧副本）。计划修订号加 1，`plan-history/<plan>/<revision>.json` 保存加入前的计划和这次请求。
+- 新成员不在任何已有批次里，所以没有为它欠下的批次。像其他成员一样，在前一批次关闭后用 `batch` 追加包含它的批次；在每个未被排除的成员（包括新成员）都进入某个批次之前，`seal` 会被拒绝。
+- 服务模式下请求在服务端执行。每个已启动新成员的持有者，和每个已启动计划成员的持有者一样，用 `kander review confirm` 确认同一份发布材料。先升级服务端再升级客户端：旧服务端会拒绝未知字段 `add_members`。
+
 ---
 
 ### 计划外批次的处理
@@ -264,6 +286,8 @@ kander review progress <绝对工作目录> <task-id>
 门禁按当前记录重新验证这些条件。批次新增 run、批次修订号变化或报告变化，都让 `kander check` 与 `kander move <id> done` 再次失败。另一个计划外批次单独失败。
 
 `done/` 的成员与其他计划写入一样接收新的计划副本，已归档成员不接收。被排除的成员不需要在覆盖批次中。执行周期变化不阻止处理，也不能阻止：批次处理之后 `review progress` 才能给出 `rebind_cycles`，所以重绑在处理之后。批次中不属于本计划的成员由它自己的计划处理。带处理记录的看板需要认识 `resolved_batches` 的版本；v1.0.0 把它当作未知字段并拒绝计划。归档清理与其他证据一起删除计划和 `plan-history`。
+
+还没有计划的卡仍能在所有计划之外的批次中运行审核，这个 run 会阻止它进入计划：建一个含该卡的新计划报 `unplanned execution batch: <batch-id>`，`extend-plan` 的 `add_members` 以含 `<task-id> has a run in batch <batch-id>, which no batch of plan <plan-id> names` 的错误拒绝它。批次处理和放弃都解除不了这个拒绝：新计划和新加入的成员不看 `resolved_batches`，准入也计入已放弃的 run。出路是建一个新计划，让它的第一个批次点名这个批次，并与批次记录完全一致：成员相同（只有该卡），`base`、`target_commit`、`requirements` 与报告语言相同；绑定有任何不同都报 `existing batch/plan mismatch`。这样新计划接收该批次，run 是否已放弃都一样，所以被 `add_members` 拒绝的卡可以用这种方式进入自己的计划。
 
 ## 3. 结构化结论与历史报告映射
 

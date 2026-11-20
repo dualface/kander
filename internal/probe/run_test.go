@@ -43,6 +43,13 @@ func TestProbeProcessHelper(t *testing.T) {
 		fmt.Fprint(os.Stdout, cwd)
 		os.Exit(0)
 	case "parent", "parent-exit", "parent-escape":
+		if mode == "parent" {
+			// Publish before starting the child so a cancellation that lands
+			// during startup still finds a complete PID record.
+			if err := publishHelperPID(dir, mode); err != nil {
+				os.Exit(5)
+			}
+		}
 		child := exec.Command(os.Args[0], "-test.run=^TestProbeProcessHelper$", "--", "probe-process-helper", "child", dir)
 		child.Stdout, child.Stderr = os.Stdout, os.Stderr
 		if mode == "parent-escape" {
@@ -63,14 +70,26 @@ func TestProbeProcessHelper(t *testing.T) {
 			os.Exit(3)
 		}
 	case "child":
+		if err := publishHelperPID(dir, mode); err != nil {
+			os.Exit(5)
+		}
 	default:
 		os.Exit(4)
 	}
-	if err := os.WriteFile(filepath.Join(dir, mode), []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
-		os.Exit(5)
-	}
 	time.Sleep(5 * time.Second)
 	os.Exit(0)
+}
+
+// publishHelperPID writes the PID to a temporary file and renames it into
+// place, so a reader sees either no PID file or a complete one, never the
+// empty file os.WriteFile leaves between create and write.
+func publishHelperPID(dir, name string) error {
+	pid := os.Getpid()
+	temp := filepath.Join(dir, fmt.Sprintf(".%s.%d.tmp", name, pid))
+	if err := os.WriteFile(temp, []byte(strconv.Itoa(pid)), 0o600); err != nil {
+		return err
+	}
+	return os.Rename(temp, filepath.Join(dir, name))
 }
 
 func TestCaptureInputClosesStdinAndBoundsOutput(t *testing.T) {
@@ -87,7 +106,9 @@ func TestCaptureInputClosesStdinAndBoundsOutput(t *testing.T) {
 func TestCaptureInputCancellationWhileChildDoesNotRead(t *testing.T) {
 	configureProbeHelpers(t)
 	dir := t.TempDir()
-	ctx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
+	// The deadline must outlast helper startup under load, so both helpers
+	// have published their PID files before the cancellation.
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
 	_, err := CaptureInput(ctx, os.Args[0], helperArgs("parent", dir), strings.Repeat("input", 1<<20), 1024)
 	if !errors.Is(err, context.DeadlineExceeded) {
@@ -174,17 +195,23 @@ func captureWithin(program string, args []string, timeout time.Duration) (Result
 
 func TestAuditDescendantOutputOutlivesProbeDeadline(t *testing.T) {
 	configureProbeHelpers(t)
-	// Invert the original audit: a five-second descendant must not hold a
-	// 300ms probe open after its parent is killed at the deadline.
+	// Invert the original audit: a five-second descendant must not hold the
+	// probe open after its parent is killed at the deadline. The deadline must
+	// outlast the startup of both helpers under load, so both have published
+	// their PID files before it expires. The upper bound stays below the
+	// descendant's five-second lifetime, so a probe that waits for the
+	// descendant to exit still fails.
+	const deadline = 2 * time.Second
+	const cleanupTolerance = 1500 * time.Millisecond
 	dir := t.TempDir()
 	started := time.Now()
-	result, err := captureWithin(os.Args[0], helperArgs("parent", dir), 300*time.Millisecond)
+	result, err := captureWithin(os.Args[0], helperArgs("parent", dir), deadline)
 	elapsed := time.Since(started)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
-	if elapsed < 300*time.Millisecond || elapsed > 600*time.Millisecond {
-		t.Fatalf("elapsed=%s; deadline=300ms, cleanup tolerance=300ms", elapsed)
+	if elapsed < deadline || elapsed > deadline+cleanupTolerance {
+		t.Fatalf("elapsed=%s; deadline=%s, cleanup tolerance=%s", elapsed, deadline, cleanupTolerance)
 	}
 	requireStopped(t, helperPID(t, dir, "parent"))
 	requireStopped(t, helperPID(t, dir, "child"))

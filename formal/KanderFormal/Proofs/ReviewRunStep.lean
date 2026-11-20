@@ -32,26 +32,27 @@ structure Rn where
   originals : Bool
   published : Bool
   skipped : Bool
+  abandoned : Bool
 
 def enc (x : Rn) : State :=
   [("phase", enumV x.phase), ("launch", enumV x.launch), ("exec", enumV x.exec), ("exitZero", boolV x.exitZero),
     ("prompt", boolV x.prompt), ("contract", boolV x.contract), ("evidence", boolV x.evidence),
-    ("originals", boolV x.originals), ("published", boolV x.published), ("skipped", boolV x.skipped)]
+    ("originals", boolV x.originals), ("published", boolV x.published), ("skipped", boolV x.skipped), ("abandoned", boolV x.abandoned)]
 
 theorem enc_inj {x y : Rn} (h : enc x = enc y) : x = y := by
-  obtain ⟨_, _, _, _, _, _, _, _, _, _⟩ := x
-  obtain ⟨_, _, _, _, _, _, _, _, _, _⟩ := y
+  obtain ⟨_, _, _, _, _, _, _, _, _, _, _⟩ := x
+  obtain ⟨_, _, _, _, _, _, _, _, _, _, _⟩ := y
   simp [enc, enumV, boolV] at h
-  obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ := h
+  obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ := h
   rfl
 
 theorem shape {p : Params} {s : State} (h : M.StateConforms p s) :
     ∃ x, s = enc x ∧ x.phase < 8 ∧ x.launch < 4 ∧ x.exec < 6 := by
   obtain ⟨hn, hc⟩ := h
   match s, hn with
-  | [(_, v1), (_, v2), (_, v3), (_, v4), (_, v5), (_, v6), (_, v7), (_, v8), (_, v9), (_, v10)], hn =>
+  | [(_, v1), (_, v2), (_, v3), (_, v4), (_, v5), (_, v6), (_, v7), (_, v8), (_, v9), (_, v10), (_, v11)], hn =>
     simp [reviewRunMachine] at hn
-    obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ := hn
+    obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ := hn
     obtain ⟨t1, ht1, c1⟩ := hc "phase" v1 (by simp [lookup])
     obtain ⟨t2, ht2, c2⟩ := hc "launch" v2 (by simp [lookup])
     obtain ⟨t3, ht3, c3⟩ := hc "exec" v3 (by simp [lookup])
@@ -62,6 +63,7 @@ theorem shape {p : Params} {s : State} (h : M.StateConforms p s) :
     obtain ⟨t8, ht8, c8⟩ := hc "originals" v8 (by simp [lookup])
     obtain ⟨t9, ht9, c9⟩ := hc "published" v9 (by simp [lookup])
     obtain ⟨t10, ht10, c10⟩ := hc "skipped" v10 (by simp [lookup])
+    obtain ⟨t11, ht11, c11⟩ := hc "abandoned" v11 (by simp [lookup])
     cases (rfl : M.fieldTy "phase" = some (.scalar (.enum "phase"))).symm.trans ht1
     cases (rfl : M.fieldTy "launch" = some (.scalar (.enum "launch"))).symm.trans ht2
     cases (rfl : M.fieldTy "exec" = some (.scalar (.enum "exec"))).symm.trans ht3
@@ -72,6 +74,7 @@ theorem shape {p : Params} {s : State} (h : M.StateConforms p s) :
     cases (rfl : M.fieldTy "originals" = some (.scalar .bool)).symm.trans ht8
     cases (rfl : M.fieldTy "published" = some (.scalar .bool)).symm.trans ht9
     cases (rfl : M.fieldTy "skipped" = some (.scalar .bool)).symm.trans ht10
+    cases (rfl : M.fieldTy "abandoned" = some (.scalar .bool)).symm.trans ht11
     obtain ⟨ph, rfl, hph⟩ := conforms_enum (rfl : M.enumSize "phase" = some 8) c1
     obtain ⟨la, rfl, hla⟩ := conforms_enum (rfl : M.enumSize "launch" = some 4) c2
     obtain ⟨ex, rfl, hex⟩ := conforms_enum (rfl : M.enumSize "exec" = some 6) c3
@@ -82,7 +85,8 @@ theorem shape {p : Params} {s : State} (h : M.StateConforms p s) :
     obtain ⟨b8, rfl⟩ := conforms_bool c8
     obtain ⟨b9, rfl⟩ := conforms_bool c9
     obtain ⟨b10, rfl⟩ := conforms_bool c10
-    exact ⟨⟨ph, la, ex, b4, b5, b6, b7, b8, b9, b10⟩, rfl, hph, hla, hex⟩
+    obtain ⟨b11, rfl⟩ := conforms_bool c11
+    exact ⟨⟨ph, la, ex, b4, b5, b6, b7, b8, b9, b10, b11⟩, rfl, hph, hla, hex⟩
 
 /-! ## Events on an encoded state -/
 
@@ -97,6 +101,7 @@ theorem find_stage : M.findEvent "stage" = some stageEvent := rfl
 theorem find_skip : M.findEvent "skip" = some skipEvent := rfl
 theorem find_verify : M.findEvent "verify" = some verifyEvent := rfl
 theorem find_passSkipped : M.findEvent "passSkipped" = some passSkippedEvent := rfl
+theorem find_abandon : M.findEvent "abandon" = some abandonEvent := rfl
 theorem size_phase : M.enumSize "phase" = some 8 := rfl
 theorem size_launch : M.enumSize "launch" = some 4 := rfl
 theorem size_exec : M.enumSize "exec" = some 6 := rfl
@@ -115,14 +120,15 @@ theorem ty_evidence : M.fieldTy "evidence" = some (.scalar .bool) := rfl
 theorem ty_originals : M.fieldTy "originals" = some (.scalar .bool) := rfl
 theorem ty_published : M.fieldTy "published" = some (.scalar .bool) := rfl
 theorem ty_skipped : M.fieldTy "skipped" = some (.scalar .bool) := rfl
+theorem ty_abandoned : M.fieldTy "abandoned" = some (.scalar .bool) := rfl
 
 macro "rr_simp" "[" ts:Lean.Parser.Tactic.simpLemma,* "]" : tactic =>
   `(tactic| simp [step, find_create, find_retry, find_update, find_storePrompt, find_storeContract,
-      find_storeEvidence, find_finalize, find_stage, find_skip, find_verify, find_passSkipped, size_phase,
+      find_storeEvidence, find_finalize, find_stage, find_skip, find_verify, find_passSkipped, find_abandon, size_phase,
       size_launch, size_exec, ty_phase, ty_launch, ty_exec, ty_exitZero, ty_prompt, ty_contract,
-      ty_evidence, ty_originals, ty_published, ty_skipped, ctors_phase, ctors_launch, ctors_exec, lookup, createEvent, retryEvent,
+      ty_evidence, ty_originals, ty_published, ty_skipped, ty_abandoned, ctors_phase, ctors_launch, ctors_exec, lookup, createEvent, retryEvent,
       updateEvent, storePromptEvent, storeContractEvent, storeEvidenceEvent, storeEvent, finalizeEvent,
-      stageEvent, skipEvent, verifyEvent, passSkippedEvent, createFacts, retryFacts, finalizeFacts,
+      stageEvent, skipEvent, verifyEvent, passSkippedEvent, abandonEvent, abandonFacts, createFacts, retryFacts, finalizeFacts,
       phaseArg, launchArg, execArg, phaseIs, execIs, launchIs, exists_, open_, allArgs, boolArgs,
       bindArgs, Ty.conforms, STy.conforms, eval, evalCmp, natAdd, boolAnd, boolOr, boolNot, indexOf,
       enumV, boolV, natV, f, a, tt, ff, andE, orE, notE, eq, evalAssigns, applyUpdates, enc, or_assoc,
@@ -140,7 +146,8 @@ theorem step_create (p : Params) (x : Rn) (i c b r : Bool) :
 
 theorem step_retry (p : Params) (x : Rn) (i c s b r : Bool) :
     step M p (enc x) ⟨"retry", [boolV i, boolV c, boolV s, boolV b, boolV r]⟩ =
-      if x.phase ≠ 0 ∧ i = true ∧ c = true ∧ s = true ∧ b = true ∧ r = true then some (enc x) else none := by
+      if x.phase ≠ 0 ∧ i = true ∧ c = true ∧ s = true ∧ b = true ∧ r = true ∧ x.abandoned = false then
+        some (enc x) else none := by
   by_cases h0 : x.phase = 0 <;> rr_simp [h0] <;> ite_close
 
 
@@ -186,24 +193,34 @@ theorem step_finalize (p : Params) (x : Rn) (l e : Nat) (ez ro rs inv cm si : Bo
 theorem step_stage (p : Params) (x : Rn) (si g ex m ig : Bool) :
     step M p (enc x) ⟨"stage", [boolV si, boolV g, boolV ex, boolV m, boolV ig]⟩ =
       if x.phase = 6 ∧ si = true ∧ g = true ∧ x.skipped = false ∧ x.published = false ∧ ex = false ∧ m = true ∧
-          ig = true then some (enc { x with published := true }) else none := by
+          ig = true ∧ x.abandoned = false then some (enc { x with published := true }) else none := by
   by_cases h6 : x.phase = 6 <;> rr_simp [h6] <;> ite_close
 
 theorem step_skip (p : Params) (x : Rn) (si g ex : Bool) :
     step M p (enc x) ⟨"skip", [boolV si, boolV g, boolV ex]⟩ =
-      if x.phase = 6 ∧ si = true ∧ g = true ∧ x.skipped = false ∧ x.published = false ∧ ex = true then
+      if x.phase = 6 ∧ si = true ∧ g = true ∧ x.skipped = false ∧ x.published = false ∧ ex = true ∧
+          x.abandoned = false then
         some (enc { x with published := true, skipped := true }) else none := by
   by_cases h6 : x.phase = 6 <;> rr_simp [h6] <;> ite_close
 
 theorem step_verify (p : Params) (x : Rn) (si g ig v : Bool) :
     step M p (enc x) ⟨"verify", [boolV si, boolV g, boolV ig, boolV v]⟩ =
-      if x.phase = 6 ∧ si = true ∧ g = true ∧ x.published = true ∧ x.skipped = false ∧ ig = true ∧ v = true then
+      if x.phase = 6 ∧ si = true ∧ g = true ∧ x.published = true ∧ x.skipped = false ∧ ig = true ∧ v = true ∧
+          x.abandoned = false then
         some (enc x) else none := by
   by_cases h6 : x.phase = 6 <;> rr_simp [h6] <;> ite_close
 
 theorem step_passSkipped (p : Params) (x : Rn) (si g : Bool) :
     step M p (enc x) ⟨"passSkipped", [boolV si, boolV g]⟩ =
-      if x.phase = 6 ∧ si = true ∧ g = true ∧ x.skipped = true then some (enc x) else none := by
+      if x.phase = 6 ∧ si = true ∧ g = true ∧ x.skipped = true ∧ x.abandoned = false then
+        some (enc x) else none := by
+  by_cases h6 : x.phase = 6 <;> rr_simp [h6] <;> ite_close
+
+theorem step_abandon (p : Params) (x : Rn) (si g d lv nc bo ns : Bool) :
+    step M p (enc x) ⟨"abandon", [boolV si, boolV g, boolV d, boolV lv, boolV nc, boolV bo, boolV ns]⟩ =
+      if x.phase = 6 ∧ (x.published = false ∨ x.skipped = true) ∧ x.abandoned = false ∧ si = true ∧ g = true ∧
+          d = true ∧ lv = true ∧ nc = true ∧ bo = true ∧ ns = true then
+        some (enc { x with published := true, skipped := true, abandoned := true }) else none := by
   by_cases h6 : x.phase = 6 <;> rr_simp [h6] <;> ite_close
 
 end KanderFormal.Proofs.ReviewRun

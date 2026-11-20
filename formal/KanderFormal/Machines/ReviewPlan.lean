@@ -62,7 +62,7 @@ def createEvent : EventDecl where
 
 /-! ## Plan extension (`ExtendReviewPlanWithTransaction`, `ResolveReviewBatch`) -/
 
-def ops : List String := ["rebind", "sync", "batch", "drop", "release", "resolve", "retarget"]
+def ops : List String := ["rebind", "sync", "batch", "drop", "release", "resolve", "retarget", "addMembers"]
 
 /-- At most one of the Boolean arguments holds. -/
 def atMostOne : List String → Expr
@@ -70,7 +70,8 @@ def atMostOne : List String → Expr
   | x :: xs => andE (notE (andE (a x) (xs.foldr (fun y acc => orE (a y) acc) ff))) (atMostOne xs)
 
 /-- The shape of an extension request: at least one operation, no two of the
-exclusive ones (`batch` stands for a batch, a seal, or both), a decision only
+exclusive ones (`batch` stands for a batch, a seal, or both; `addMembers` adds
+started members of the plan's group), a decision only
 with a drop or a release, and a resolution with nothing else. -/
 def extendEvent : EventDecl where
   name := "extend"
@@ -90,6 +91,22 @@ def admitEvent : EventDecl where
   args := boolArgs ["cas", "otherOp", "batchOnly", "owed"]
   guard := andE (f "planned") (andE (a "cas")
     (orE (notE (f "sealed")) (orE (a "otherOp") (andE (a "batchOnly") (a "owed")))))
+  assigns := []
+
+def addMembersFacts : List String := ["cas", "active", "free", "group", "language", "noUnplannedRuns"]
+
+/-- `add_members` adds started members of the plan's group to a plan that is not
+sealed. The plan CAS matched; every new member is started (`active`), is no
+member of a plan yet and has no exclusion (`free`), belongs to the group of a
+group plan (`group`), reports in the plan's language (`language`), and has no
+run in a batch outside the plan (`noUnplannedRuns`). The plan machine records no
+members: each member's obligations live in the review obligation machine, where
+the new member is the state `create` reaches followed by the plan's batches
+with the member in none of them. -/
+def addMembersEvent : EventDecl where
+  name := "addMembers"
+  args := boolArgs addMembersFacts
+  guard := andE (f "planned") (andE (notE (f "sealed")) (allArgs addMembersFacts))
   assigns := []
 
 def appendFacts : List String :=
@@ -245,7 +262,7 @@ def reviewPlanMachine : Machine where
     { name := "touched", ty := .arr "maxBatch" (.scalar .bool), init := boolV false }
   ]
   events := [createEvent, extendEvent, admitEvent, appendEvent, sealEvent, rebindEvent, syncEvent, retargetEvent,
-    dropEvent, releaseEvent, resolveEvent, runEvent, advanceEvent, aggregateEvent, closeEvent]
+    addMembersEvent, dropEvent, releaseEvent, resolveEvent, runEvent, advanceEvent, aggregateEvent, closeEvent]
   queries := [
     { name := "allClosed", ty := .base .bool,
       body := notE (.any (nat 0) count (notE (.aget (f "closed") (.bvar 0)))) },

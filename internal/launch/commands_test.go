@@ -1,6 +1,9 @@
 package launch
 
-import "github.com/dualface/kander/internal/command/commandtest"
+import (
+	"github.com/dualface/kander/internal/command/commandtest"
+	"github.com/dualface/kander/internal/remote"
+)
 
 // The tests drive each command the way the binary does, with the arguments after its name.
 
@@ -13,3 +16,4 @@ func RunCoordinatorRemote(args []string) int {
 func RunOrchestrateRemote(args []string) int {
 	return commandtest.Run(NewOrchestrateCommand(), args...)
 }
+func runRequest(args []string) int { return commandtest.Run(remote.NewRequestCommand(), args...) }

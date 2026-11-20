@@ -69,7 +69,7 @@ func TestWorkerRenewsIntegrationWithoutTaskObservationOrDelivery(t *testing.T) {
 	}
 	for range 3 {
 		h.advance(16 * time.Second)
-		if live, err := h.loop.pass(t.Context()); err != nil || live != 1 {
+		if live, err := h.pass(t.Context()); err != nil || live != 1 {
 			t.Fatalf("integration renewal: %d %v", live, err)
 		}
 	}
@@ -92,7 +92,7 @@ func TestWorkerRemovesReleasedIntegrationWithoutStoppingCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.advance(16 * time.Second)
-	if live, _ := h.loop.pass(t.Context()); live != 0 {
+	if live, _ := h.pass(t.Context()); live != 0 {
 		t.Fatal("released integration remained live")
 	}
 	all, err := remote.Credentials(h.home)
@@ -117,7 +117,7 @@ func TestWorkerStopsIntegrationCommandOnRevisionConflict(t *testing.T) {
 		h.srv.Handler().ServeHTTP(w, r)
 	})
 	h.advance(16 * time.Second)
-	if live, _ := h.loop.pass(t.Context()); live != 0 {
+	if live, _ := h.pass(t.Context()); live != 0 {
 		t.Fatal("a revision conflict kept the integration command live")
 	}
 	if got := h.credential(); !got.Lost || got.AuthorityExecutionID != c.AuthorityExecutionID || len(h.stopped) != 1 || h.stopped[0] != 4242 {

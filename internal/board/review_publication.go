@@ -99,6 +99,9 @@ func stageReviewRunCard(tx *Transaction, current *ReviewRun, run ReviewRun, id s
 	state := projectReviewRun(*current, true, id)
 	if state.Skipped {
 		if _, ok := stepReviewRun(state, reviewrun.PassSkipped{SameInput: true, GroupOk: true}); !ok {
+			if state.Abandoned {
+				return abandonedRunError(runID)
+			}
 			return reviewError("intent conflict")
 		}
 		return nil

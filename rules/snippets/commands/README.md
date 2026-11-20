@@ -8,14 +8,14 @@ First: `show`, `update`, `move`, `check`.
 
 | Command | Purpose | Users | Contract |
 | --- | --- | --- | --- |
-| `server` | Administer the service | user | `snippets/commands/server.md` |
+| `server` | Administer service | user | `snippets/commands/server.md` |
 | `config` | Print configuration | agents initially | `snippets/commands/config.md` |
 | `doctor` | Repair installation | user | `snippets/commands/doctor.md` |
 | `version` | Print version | user | `snippets/commands/version.md` |
 | `install` | Installer | user | `snippets/commands/install.md` |
 | `uninstall` | Uninstall rules | user | `snippets/commands/uninstall.md` |
 | `terminal` | Test launchers | user | `snippets/commands/terminal.md` |
-| `init` | Initialize board | user, maintenance | `snippets/commands/init.md` |
+| `init` | Initialize board | user | `snippets/commands/init.md` |
 | `list` | List cards by state | creator, user | `snippets/commands/list.md` |
 | `show` | Print card/revision | executors | `snippets/commands/show.md` |
 | `new` | Create backlog card | creator | `snippets/commands/new.md` |
@@ -29,11 +29,11 @@ First: `show`, `update`, `move`, `check`.
 | `dispatch` | Manage dispatches | orchestrator | `snippets/commands/dispatch.md` |
 | `dismiss` | Exit agent/container | orchestrator, user | `snippets/commands/dismiss.md` |
 | `check` | Validate cards/liveness/Git | executor, orchestrator | `snippets/commands/check.md` |
-| `guard-write` | Advisory pre-write check | agent hooks | `snippets/commands/guard-write.md` |
+| `guard-write` | Pre-write check | agent hooks | `snippets/commands/guard-write.md` |
 | `subscribe` | Stream events | orchestrator | `snippets/commands/subscribe.md` |
 | `coordinator` | Group checkpoints | orchestrator | `snippets/commands/coordinator.md` |
-| `review` | Review and manage evidence | main agent, orchestrator | `snippets/commands/review.md` |
-| `issue` | Manage GitHub issues | user, issue session | `snippets/commands/issue.md` |
+| `review` | Review and evidence | main agent, orchestrator | `snippets/commands/review.md` |
+| `issue` | GitHub issues | user, issue session | `snippets/commands/issue.md` |
 
 ```text
 kander config
@@ -85,11 +85,12 @@ kander review assign <absolute-CWD> <absolute-assignment.json>
 kander review disposition <absolute-CWD> <absolute-author-record.json> <expected-card-revision>
 kander review interpret <absolute-CWD> <absolute-interpretation.json>
 kander review map-legacy <absolute-CWD> <absolute-map.json>
+kander review abandon <absolute-CWD> <absolute-abandon.json>
 kander review aggregate <absolute-CWD> <batch-id>
 kander review advance <absolute-CWD> <absolute-advance-request.json>
 kander review close <absolute-CWD> <absolute-close-request.json>
 kander review progress <absolute-CWD> <task-id>
-kander review <plan|extend-plan|assign|disposition|interpret|advance|close> --schema
+kander review <plan|extend-plan|assign|disposition|interpret|advance|close|abandon> --schema
 kander issue repo [--repo HOST/OWNER/REPO]
 kander issue list [--repo HOST/OWNER/REPO] [--state open|closed|all] [--label NAME] [--search TEXT] [--limit N]
 kander issue show NUMBER [--repo HOST/OWNER/REPO] [--comments]

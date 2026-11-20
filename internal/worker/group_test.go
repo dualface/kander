@@ -43,7 +43,7 @@ func TestWorkerRenewsGroupLeaseAndReportsCoordinatorExit(t *testing.T) {
 	}
 	for range 10 {
 		h.advance(16 * time.Second)
-		if live, err := h.loop.pass(t.Context()); err != nil || live != 1 {
+		if live, err := h.pass(t.Context()); err != nil || live != 1 {
 			t.Fatalf("group renewal: %d %v", live, err)
 		}
 	}
@@ -57,7 +57,7 @@ func TestWorkerRenewsGroupLeaseAndReportsCoordinatorExit(t *testing.T) {
 	}
 	status = "stopped"
 	h.advance(16 * time.Second)
-	if live, err := h.loop.pass(t.Context()); err != nil || live != 0 {
+	if live, err := h.pass(t.Context()); err != nil || live != 0 {
 		t.Fatalf("exited coordinator kept its lease: %d %v", live, err)
 	}
 	view, err = project.Group(t.Context(), group)

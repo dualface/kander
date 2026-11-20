@@ -22,6 +22,7 @@ import KanderFormal.Proofs.IssueResult
 import KanderFormal.Proofs.IssueResultDecision
 import KanderFormal.Proofs.IssueResultSave
 import KanderFormal.Alphabets.IssueResult
+import KanderFormal.Alphabets.ReviewRun
 import KanderFormal.Alphabets.ServerIntegration
 import KanderFormal.Alphabets.ServerLeases
 
@@ -109,11 +110,13 @@ def planEvents : List Event :=
   [ ⟨"create", [natV 1, x, t, t, t, t]⟩,
     ⟨"create", [natV 2, t, t, t, t, t]⟩,
     ⟨"create", [natV 1, t, x, t, t, t]⟩,
-    ⟨"extend", [t, x, x, x, x, x, x, x]⟩,
-    ⟨"extend", [t, t, x, x, x, x, x, x]⟩,
-    ⟨"extend", [x, x, x, x, t, x, x, t]⟩,
-    ⟨"extend", [x, x, x, x, x, x, t, x]⟩,
-    ⟨"extend", [x, x, x, x, x, x, t, t]⟩,
+    ⟨"extend", [t, x, x, x, x, x, x, x, x]⟩,
+    ⟨"extend", [t, t, x, x, x, x, x, x, x]⟩,
+    ⟨"extend", [x, x, x, x, t, x, x, x, t]⟩,
+    ⟨"extend", [x, x, x, x, x, x, t, x, x]⟩,
+    ⟨"extend", [x, x, x, x, x, x, t, x, t]⟩,
+    ⟨"extend", [x, x, x, x, x, x, x, t, x]⟩,
+    ⟨"extend", [x, x, t, x, x, x, x, t, x]⟩,
     ⟨"admit", [t, x, t, t]⟩,
     ⟨"admit", [t, x, t, x]⟩,
     ⟨"append", [x, x, t, t, t, t, t, t, t]⟩,
@@ -124,6 +127,8 @@ def planEvents : List Event :=
     ⟨"sync", [t, t, t]⟩,
     ⟨"retarget", [natV 0, t, t, t, t]⟩,
     ⟨"retarget", [natV 0, t, t, t, x]⟩,
+    ⟨"addMembers", [t, t, t, t, t, t]⟩,
+    ⟨"addMembers", [t, t, t, t, t, x]⟩,
     ⟨"drop", [natV 1, t, t]⟩,
     ⟨"release", [t, t, t, t]⟩,
     ⟨"resolve", [t, t, t, t, t]⟩,
@@ -266,32 +271,6 @@ def dispatchEvents : List Event :=
     ⟨"settle", a 1 1 ++ [t, enumV 0, t]⟩, ⟨"settle", a 1 1 ++ [t, enumV 1, t]⟩, ⟨"settle", a 1 1 ++ [t, enumV 2, t]⟩,
     ⟨"terminateSettle", [t, t, t]⟩, ⟨"terminateSettle", [x, t, t]⟩,
     ⟨"takeoverSettle", a 1 1 ++ [t, t, t, t]⟩, ⟨"takeoverSettle", a 1 2 ++ [t, t, t, t]⟩ ]
-
-/-- The review run vector alphabet: each event with every fact holding and with
-one fact failing, the phase updates the driver makes and the odd ones the entrance
-accepts, the finalizations of an `ok` run (valid, invalid report, launch status
-other than started, empty report, missing originals), a failure with and without
-a reason, a launch failure, and an interruption. -/
-def runEvents : List Event :=
-  let t := boolV true
-  let x := boolV false
-  let upd (p l e : Nat) (z s : Bool) : Event := ⟨"update", [enumV p, enumV l, enumV e, boolV z, boolV s]⟩
-  let fin (l e : Nat) (z r why inv cm : Bool) : Event :=
-    ⟨"finalize", [enumV l, enumV e, boolV z, boolV r, boolV why, boolV inv, boolV cm, t]⟩
-  [ ⟨"create", [t, t, t, t]⟩, ⟨"create", [x, t, t, t]⟩, ⟨"create", [t, t, t, x]⟩,
-    ⟨"retry", [t, t, t, t, t]⟩, ⟨"retry", [t, t, x, t, t]⟩, ⟨"retry", [t, t, t, x, t]⟩,
-    upd 1 0 0 true true, upd 2 1 0 true true, upd 3 2 0 true true, upd 4 2 0 true true, upd 6 2 1 true true,
-    upd 0 0 0 true true, upd 7 3 5 false true, upd 3 2 0 true false,
-    ⟨"storePrompt", [t]⟩, ⟨"storePrompt", [x]⟩, ⟨"storeContract", [t]⟩, ⟨"storeEvidence", [t]⟩,
-    fin 2 1 true true false false true, fin 2 1 true true false true true, fin 1 1 true true false false true,
-    fin 2 1 true false false false true, fin 2 3 false false true false true, fin 2 3 false false false false true,
-    fin 0 2 false false true false true, fin 1 4 false false true false true, fin 2 1 true true false false false,
-    ⟨"finalize", [enumV 2, enumV 1, t, t, x, x, t, x]⟩,
-    ⟨"stage", [t, t, x, t, t]⟩, ⟨"stage", [t, t, t, t, t]⟩, ⟨"stage", [t, x, x, t, t]⟩, ⟨"stage", [x, t, x, t, t]⟩,
-    ⟨"stage", [t, t, x, x, t]⟩, ⟨"stage", [t, t, x, t, x]⟩,
-    ⟨"skip", [t, t, t]⟩, ⟨"skip", [t, t, x]⟩, ⟨"skip", [t, x, t]⟩,
-    ⟨"verify", [t, t, t, t]⟩, ⟨"verify", [t, t, t, x]⟩, ⟨"verify", [t, t, x, t]⟩,
-    ⟨"passSkipped", [t, t]⟩, ⟨"passSkipped", [t, x]⟩ ]
 
 /-- The review findings vector alphabet: a read-in of every schema with a
 structured, an unstructured, a block-marked, and an unconsumable report, the
@@ -438,6 +417,8 @@ def entries : List Entry := [
       ``KanderFormal.Proofs.ReviewPlan.sealed_append,
       ``KanderFormal.Proofs.ReviewPlan.sealed_seal,
       ``KanderFormal.Proofs.ReviewPlan.sealed_admit,
+      ``KanderFormal.Proofs.ReviewPlan.sealed_addMembers,
+      ``KanderFormal.Proofs.ReviewPlan.addMembers_refused,
       ``KanderFormal.Proofs.ReviewPlan.reachable_inv
     ] },
   { machine := Machines.CardLifecycle.cardLifecycleMachine
@@ -692,6 +673,13 @@ def entries : List Entry := [
       ``KanderFormal.Proofs.ReviewRun.publish_needs_finalized,
       ``KanderFormal.Proofs.ReviewRun.input_conflict_refused,
       ``KanderFormal.Proofs.ReviewRun.published_frozen,
+      ``KanderFormal.Proofs.ReviewRun.skipped_only_abandon,
+      ``KanderFormal.Proofs.ReviewRun.abandoned_frozen,
+      ``KanderFormal.Proofs.ReviewRun.abandon_spec,
+      ``KanderFormal.Proofs.ReviewRun.abandon_refused,
+      ``KanderFormal.Proofs.ReviewRun.abandoned_terminal,
+      ``KanderFormal.Proofs.ReviewRun.abandoned_not_consumable,
+      ``KanderFormal.Proofs.ReviewRun.reachable_abandoned_settled,
       ``KanderFormal.Proofs.ReviewRun.init,
       ``KanderFormal.Proofs.ReviewRun.step_inv,
       ``KanderFormal.Proofs.ReviewRun.reachable_inv,

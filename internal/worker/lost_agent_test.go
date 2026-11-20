@@ -79,17 +79,19 @@ func TestWorkerDoesNotRepeatAnUncertainRequestDelivery(t *testing.T) {
 		t.Fatal(err)
 	}
 	calls := 0
-	h.loop.o.Deliver = func(window, session, text string) error {
-		calls++
-		saved := h.credential()
-		if !slices.Contains(saved.Delivered, request.ID) {
-			t.Fatal("typed before saving the delivery intent")
-		}
-		return errors.New("transport closed after possible terminal delivery")
+	h.loop.o.Resolve = func(window, session string) (Prompt, error) {
+		return func(text string) error {
+			calls++
+			saved := h.credential()
+			if !slices.Contains(saved.Delivered, request.ID) {
+				t.Fatal("typed before saving the delivery intent")
+			}
+			return errors.New("transport closed after possible terminal delivery")
+		}, nil
 	}
 	for range 2 {
 		h.advance(16 * time.Second)
-		if _, err := h.loop.pass(t.Context()); err != nil {
+		if _, err := h.pass(t.Context()); err != nil {
 			t.Fatal(err)
 		}
 	}

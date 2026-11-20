@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -63,7 +64,7 @@ func remoteLifecycleFixture(t *testing.T, slug string, origin ...string) (*confi
 		t.Fatal(err)
 	}
 	previousWorker := ensureRemoteWorker
-	ensureRemoteWorker = func(string) error { return nil }
+	ensureRemoteWorker = func(string) (string, error) { return "", nil }
 	t.Cleanup(func() { ensureRemoteWorker = previousWorker })
 	return cfg, session, card, forbidden, fakeRoot
 }
@@ -176,15 +177,23 @@ func TestRemoteStartCreatesExecutionWorktreeAndPublishesItsActualHead(t *testing
 	}
 	worktree := filepath.Join(root, "worktrees", card.TaskID, "g1")
 	t.Setenv("KANBAN_LAUNCH_CWD", worktree)
+	const workerNotice = "the background worker runs another kander version"
+	ensureRemoteWorker = func(string) (string, error) { return workerNotice, nil }
 	result, err := StartRemote("claude", "tmux", card.TaskID)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !slices.Contains(result.Warnings, workerNotice+"\n") {
+		t.Fatalf("the start result carries the worker notice as a warning: %q", result.Warnings)
 	}
 	command := lastCommand(t, fakeRoot)
 	assertTaskLanguage(t, command, taskFileFromCommand(t, command), "en")
 	credential, found, err := session.Credential(card.TaskID)
 	if err != nil || !found || credential.Worktree != worktree || credential.Branch == "" || credential.BaseCommit != head {
 		t.Fatalf("managed workspace: %+v %v", credential, err)
+	}
+	if want := api.ExecutionBranch(session.Info.ID, card.TaskID, credential.Generation); credential.Branch != want {
+		t.Fatalf("task branch = %q, want %q", credential.Branch, want)
 	}
 	if result.Outcome.Container == "" {
 		t.Fatal("missing launched container")
@@ -203,6 +212,9 @@ func TestRemoteStartCreatesExecutionWorktreeAndPublishesItsActualHead(t *testing
 	lifecycleGit(t, worktree, "add", "implemented.txt")
 	lifecycleGit(t, worktree, "commit", "-m", "Implement execution work")
 	implemented := lifecycleGit(t, worktree, "rev-parse", "HEAD")
+	// The baseline is already published below refs/heads/kander/<project>/<task>/g1/,
+	// so the task branch must not live at a path that is a prefix of it.
+	lifecycleGit(t, worktree, "push", "origin", credential.Branch)
 	// The invoking view still runs in the main checkout. The shared MoveTask
 	// boundary must publish this execution's worktree HEAD, not that checkout.
 	moved, err := session.MoveTask(t.Context(), card.TaskID, api.Move{State: "review"})

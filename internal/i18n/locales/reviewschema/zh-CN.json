@@ -89,7 +89,7 @@
   "review.schema.extend-plan.expected_revision": "计划的当前修订号。过期的值会被拒绝。",
   "review.schema.extend-plan.plan_id": "已有计划的 ID。",
   "review.schema.extend-plan.rebind_cycles": "任务 ID 到 review progress 返回的周期摘要。必须正好列出周期已变化的成员。不能与 sync_targets、drop_batches 或 batch、seal 同时使用。",
-  "review.schema.extend-plan.seal": "为 true 时，每个计划成员都必须已经属于某个批次。可以与 batch 一起发送。不能与 rebind_cycles 或 sync_targets 同时使用。",
+  "review.schema.extend-plan.seal": "为 true 时，每个未被排除的计划成员都必须已经属于某个批次。可以与 batch 一起发送。不能与 rebind_cycles 或 sync_targets 同时使用。",
   "review.schema.extend-plan.sync_targets": "批次 ID 到该批次当前目标 commit。值必须等于运行中的批次目标，且计划副本仍与它不同。不能与 rebind_cycles、drop_batches 或 batch、seal 同时使用。",
   "review.schema.missing": "schema 字段缺少描述：{{.V0}}",
   "review.schema.plan.author": "创建计划的调用方名称，不能为空。",
@@ -160,5 +160,9 @@
   "review.schema.extend-plan.retarget_batches.key.previous_base": "每个条目必填。批次当前的 base，用作比较并交换。",
   "review.schema.extend-plan.retarget_batches.key.previous_target": "每个条目必填。批次当前的目标 commit，用作比较并交换。",
   "review.schema.extend-plan.retarget_batches.key.base": "每个条目必填。新的 base，完整 commit SHA，且是新 target 的祖先。后续批次必须取它前一批次的 target。",
-  "review.schema.extend-plan.retarget_batches.key.target": "每个条目必填。新的目标 commit，完整 commit SHA。有已规划后继批次的批次保持原 target。无交付批次的 target 必须是 CWD 所在仓库的 HEAD 或其祖先。"
+  "review.schema.extend-plan.retarget_batches.key.target": "每个条目必填。新的目标 commit，完整 commit SHA。有已规划后继批次的批次保持原 target。无交付批次的 target 必须是 CWD 所在仓库的 HEAD 或其祖先。",
+  "review.schema.extend-plan.add_members": "把计划所在任务组中已启动的成员加入未封存的计划：任务 ID 数组。每个任务都必须处于 working 或 review、属于计划全部成员共有的任务组、还不属于任何计划、没有成员排除记录、没有计划外批次的运行，并且报告语言与计划相同。有一个任务不满足条件，整个请求都被拒绝且什么都不写，错误写出该任务和不满足的条件。封存时新成员必须在某个批次里，用 batch 追加。与其他所有操作互斥。分布式模式下，每个已启动新成员的持有者都要用 kander review confirm 确认同一份发布材料。",
+  "review.schema.abandon.run_id": "要放弃的已结束运行的 run ID。它有成员没有副本，没有进程还能发布它，也没有其他运行把它写作 previous_run_id。",
+  "review.schema.abandon.decision": "授权这次放弃的用户决定的引用，不能为空。Kander 只记录它，不核实。",
+  "review.schema.abandon.reason": "这个运行为什么发布不了，不能为空。运行会离开批次：它的发现不再约束批次，角色要求要由新运行满足。"
 }

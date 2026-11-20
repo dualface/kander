@@ -19,7 +19,7 @@ import (
 // replace it, to reach the outcomes real evidence cannot produce on a test board.
 var checkFixProposal = board.CheckDispatchFixProposal
 
-var requestKinds = []string{api.RequestFix, api.RequestSync, api.RequestReview, api.RequestStop}
+var requestKinds = []string{api.RequestFix, api.RequestSync, api.RequestWrapUp, api.RequestReview, api.RequestStop, api.RequestNote}
 
 func requestID(key string) string { return api.CollaborationRequestID(key) }
 
@@ -95,9 +95,31 @@ func (p *project) requestWriteScoped(key, operation, id string, payload any, ext
 		return outcome{status: status, body: request}
 	}, func() (outcome, bool) { return outcome{}, false })
 }
+
+// checkRequestShape refuses a request that is malformed or contradicts its own
+// kind. Only the two kinds that have no older writers are checked against the
+// dispatch: an older client still sends a wrap-up proposal as kind sync.
+func checkRequestShape(input api.NewCollabRequest) error {
+	switch {
+	case !slices.Contains(requestKinds, input.Kind):
+		return apiError(api.CodeInvalidRequest, fmt.Sprintf("unknown request kind %q", input.Kind))
+	case !api.ValidIdentity(input.FromClient):
+		return apiError(api.CodeInvalidRequest, "request needs a valid client identity")
+	case strings.TrimSpace(input.Message) == "":
+		return apiError(api.CodeInvalidRequest, "request needs a message")
+	case len(input.Message) > api.MaxRequestMessage:
+		return apiError(api.CodeInvalidRequest, "request message exceeds 64 KiB")
+	case input.Kind == api.RequestNote && input.Dispatch != nil:
+		return apiError(api.CodeInvalidRequest, "a note request carries no dispatch")
+	case input.Kind == api.RequestWrapUp && (input.Dispatch == nil || input.Dispatch.Kind != "wrap-up"):
+		return apiError(api.CodeInvalidRequest, "a wrap-up request needs a wrap-up dispatch")
+	}
+	return nil
+}
+
 func (p *project) createRequest(key, id string, input api.NewCollabRequest) outcome {
-	if !slices.Contains(requestKinds, input.Kind) || !api.ValidIdentity(input.FromClient) || strings.TrimSpace(input.Message) == "" || len(input.Message) > 64<<10 {
-		return outcome{err: apiError(api.CodeInvalidRequest, "request needs kind, client and a message of at most 64 KiB")}
+	if err := checkRequestShape(input); err != nil {
+		return outcome{err: err}
 	}
 	if input.AcceptWithin != 0 && (input.Dispatch == nil || input.AcceptWithin <= 0 || input.AcceptWithin > api.DurationOf(24*time.Hour) || !input.Dispatch.CreatedAt.IsZero() || !input.Dispatch.ConfirmBy.IsZero()) {
 		return outcome{err: apiError(api.CodeInvalidRequest, "relative acceptance window requires an unstamped dispatch and a duration of at most 24 hours")}

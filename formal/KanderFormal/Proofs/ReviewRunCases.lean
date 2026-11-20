@@ -1,7 +1,7 @@
 import KanderFormal.Proofs.ReviewRunStep
 
 /-
-The events an accepted step of the review run machine ran: one of the eleven
+The events an accepted step of the review run machine ran: one of the twelve
 declared events, with arguments of their declared types.
 -/
 namespace KanderFormal.Proofs.ReviewRun
@@ -11,7 +11,7 @@ open KanderFormal KanderFormal.Machines.ReviewRun KanderFormal.Proofs.Scalar
 theorem events_cases {ev : EventDecl} (h : ev ∈ M.events) :
     ev = createEvent ∨ ev = retryEvent ∨ ev = updateEvent ∨ ev = storePromptEvent ∨ ev = storeContractEvent ∨
       ev = storeEvidenceEvent ∨ ev = finalizeEvent ∨ ev = stageEvent ∨ ev = skipEvent ∨ ev = verifyEvent ∨
-      ev = passSkippedEvent := by
+      ev = passSkippedEvent ∨ ev = abandonEvent := by
   simpa [reviewRunMachine] using h
 
 theorem enum_arg {p : Params} {n : String} {k : Nat} {v : Val} (hk : M.enumSize n = some k)
@@ -25,7 +25,7 @@ theorem bool_list {p : Params} {names : List String} {vs : List Val} {args : Lis
     (by intro d hd; simp [boolArgs] at hd; obtain ⟨n, -, rfl⟩ := hd; rfl) h
   exact ⟨bs, rfl, by simpa [boolArgs] using hl⟩
 
-/-- Every accepted event is one of the eleven, with arguments of its declared
+/-- Every accepted event is one of the twelve, with arguments of its declared
 types. -/
 theorem accepted_cases {p : Params} {s s' : State} {e : Event} (h : step M p s e = some s') :
     (∃ i c b r, e = ⟨"create", [boolV i, boolV c, boolV b, boolV r]⟩) ∨
@@ -38,12 +38,13 @@ theorem accepted_cases {p : Params} {s s' : State} {e : Event} (h : step M p s e
       (∃ si g ex m ig, e = ⟨"stage", [boolV si, boolV g, boolV ex, boolV m, boolV ig]⟩) ∨
       (∃ si g ex, e = ⟨"skip", [boolV si, boolV g, boolV ex]⟩) ∨
       (∃ si g ig v, e = ⟨"verify", [boolV si, boolV g, boolV ig, boolV v]⟩) ∨
-      (∃ si g, e = ⟨"passSkipped", [boolV si, boolV g]⟩) := by
+      (∃ si g, e = ⟨"passSkipped", [boolV si, boolV g]⟩) ∨
+      (∃ si g d lv nc bo ns, e = ⟨"abandon", [boolV si, boolV g, boolV d, boolV lv, boolV nc, boolV bo, boolV ns]⟩) := by
   obtain ⟨ev, args, hmem, hname, hb⟩ := accepted_event h
   obtain ⟨n, vs⟩ := e
   simp only at hname hb
   subst hname
-  rcases events_cases hmem with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+  rcases events_cases hmem with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · obtain ⟨bs, rfl, hl⟩ := bool_list (names := createFacts) hb
     match bs, hl with
     | [i, c, b, r], _ => exact .inl ⟨i, c, b, r, rfl⟩
@@ -88,6 +89,10 @@ theorem accepted_cases {p : Params} {s s' : State} {e : Event} (h : step M p s e
       exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inl ⟨si, g, ig, v, rfl⟩)))))))))
   · obtain ⟨bs, rfl, hl⟩ := bool_list (names := ["sameInput", "groupOk"]) hb
     match bs, hl with
-    | [si, g], _ => exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr ⟨si, g, rfl⟩)))))))))
+    | [si, g], _ => exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inl ⟨si, g, rfl⟩))))))))))
+  · obtain ⟨bs, rfl, hl⟩ := bool_list (names := abandonFacts) hb
+    match bs, hl with
+    | [si, g, d, lv, nc, bo, ns], _ =>
+      exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr ⟨si, g, d, lv, nc, bo, ns, rfl⟩))))))))))
 
 end KanderFormal.Proofs.ReviewRun

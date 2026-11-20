@@ -132,11 +132,15 @@ func TestRemoteOrchestratorUsesServiceCardsAndRetainsItsPrivateIdentity(t *testi
 		t.Fatal(err)
 	}
 	oldWorker := ensureRemoteWorker
-	ensureRemoteWorker = func(string) error { return nil }
+	const workerNotice = "the background worker runs another kander version"
+	ensureRemoteWorker = func(string) (string, error) { return workerNotice, nil }
 	t.Cleanup(func() { ensureRemoteWorker = oldWorker })
-	code, out := captureStdout(t, func() int { return RunCoordinatorRemote([]string{"claim", path}) })
+	code, out, claimDiagnostics := captureBoth(t, func() int { return RunCoordinatorRemote([]string{"claim", path}) })
 	if code != 0 {
 		t.Fatalf("remote claim: %d %s", code, out)
+	}
+	if !strings.Contains(claimDiagnostics, workerNotice) {
+		t.Fatalf("the claim shows the worker notice on stderr: %q", claimDiagnostics)
 	}
 	// show prints the checkpoint as one object with --json, and nothing on stderr.
 	code, shown, diagnostics := commandtest.Capture(func() int { return RunCoordinatorRemote([]string{"show", group, "--json"}) })

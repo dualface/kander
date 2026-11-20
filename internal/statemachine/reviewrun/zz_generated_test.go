@@ -61,6 +61,14 @@ var vectorEvents = []Event{
 	Verify{SameInput: true, GroupOk: true, Integrity: false, Verified: true},
 	PassSkipped{SameInput: true, GroupOk: true},
 	PassSkipped{SameInput: true, GroupOk: false},
+	Abandon{SameInput: true, GroupOk: true, Decision: true, Live: true, NoCopies: true, BatchOpen: true, NoSuccessor: true},
+	Abandon{SameInput: false, GroupOk: true, Decision: true, Live: true, NoCopies: true, BatchOpen: true, NoSuccessor: true},
+	Abandon{SameInput: true, GroupOk: false, Decision: true, Live: true, NoCopies: true, BatchOpen: true, NoSuccessor: true},
+	Abandon{SameInput: true, GroupOk: true, Decision: false, Live: true, NoCopies: true, BatchOpen: true, NoSuccessor: true},
+	Abandon{SameInput: true, GroupOk: true, Decision: true, Live: false, NoCopies: true, BatchOpen: true, NoSuccessor: true},
+	Abandon{SameInput: true, GroupOk: true, Decision: true, Live: true, NoCopies: false, BatchOpen: true, NoSuccessor: true},
+	Abandon{SameInput: true, GroupOk: true, Decision: true, Live: true, NoCopies: true, BatchOpen: false, NoSuccessor: true},
+	Abandon{SameInput: true, GroupOk: true, Decision: true, Live: true, NoCopies: true, BatchOpen: true, NoSuccessor: false},
 }
 
 func encodeParams(p Params) string {
@@ -79,6 +87,7 @@ func encodeState(s State) string {
 		"originals", vectortest.Bool(s.Originals),
 		"published", vectortest.Bool(s.Published),
 		"skipped", vectortest.Bool(s.Skipped),
+		"abandoned", vectortest.Bool(s.Abandoned),
 	)
 }
 
@@ -106,6 +115,8 @@ func encodeEvent(e Event) string {
 		return vectortest.Event("verify", "sameInput", vectortest.Bool(ev.SameInput), "groupOk", vectortest.Bool(ev.GroupOk), "integrity", vectortest.Bool(ev.Integrity), "verified", vectortest.Bool(ev.Verified))
 	case PassSkipped:
 		return vectortest.Event("passSkipped", "sameInput", vectortest.Bool(ev.SameInput), "groupOk", vectortest.Bool(ev.GroupOk))
+	case Abandon:
+		return vectortest.Event("abandon", "sameInput", vectortest.Bool(ev.SameInput), "groupOk", vectortest.Bool(ev.GroupOk), "decision", vectortest.Bool(ev.Decision), "live", vectortest.Bool(ev.Live), "noCopies", vectortest.Bool(ev.NoCopies), "batchOpen", vectortest.Bool(ev.BatchOpen), "noSuccessor", vectortest.Bool(ev.NoSuccessor))
 	}
 	return "null"
 }
@@ -122,11 +133,16 @@ func encodeQueryConsumable(s State, p Params) string {
 	return vectortest.Bool(Consumable(s, p))
 }
 
+func encodeQueryAbandoned(s State, p Params) string {
+	return vectortest.Bool(Abandoned(s, p))
+}
+
 func encodeQueries(s State, p Params) string {
 	return vectortest.Object(
 		"final", encodeQueryFinal(s, p),
 		"complete", encodeQueryComplete(s, p),
 		"consumable", encodeQueryConsumable(s, p),
+		"abandoned", encodeQueryAbandoned(s, p),
 	)
 }
 

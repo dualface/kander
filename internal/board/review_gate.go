@@ -242,6 +242,7 @@ func validateTaskReviewMode(tx *Transaction, id string, completion, importHistor
 			if e != nil {
 				return progress, e
 			}
+			runs = withoutAbandonedRuns(runs)
 			progress.NextActions = append(progress.NextActions, duplicateRunActions(b, runs)...)
 			stale, e := staleRunActions(tx, b, runs)
 			if e != nil {
@@ -381,7 +382,7 @@ func checkPendingDispositions(tx *Transaction, b ReviewBatch) (pending []string,
 	if err != nil {
 		return nil, err
 	}
-	for _, run := range runs {
+	for _, run := range withoutAbandonedRuns(runs) {
 		if run.Phase != "finalized" || !allPublished(run) {
 			continue
 		}
@@ -430,38 +431,31 @@ func CheckReviewGate(root string, ids []string) []Problem {
 	return problems
 }
 
+// checkUnplannedReviewRuns is the admission of a new plan: every run record of a
+// member counts, an abandoned one too.
 func checkUnplannedReviewRuns(tx *Transaction, p ReviewPlan) error {
-	return checkUnplannedReviewRunsMode(tx, p, false)
+	return checkUnplannedReviewRunsGate(tx, p, false, false)
 }
 func checkUnplannedReviewRunsMode(tx *Transaction, p ReviewPlan, importHistory bool) error {
-	planned := map[string]bool{}
-	for _, b := range p.Batches {
-		planned[b.BatchID] = true
-	}
-	entries, err := fs.ListDirectory(tx.root, control(tx.root, "groups", reviewControlGroup, "runs"))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
+	return checkUnplannedReviewRunsGate(tx, p, importHistory, true)
+}
+
+// checkUnplannedReviewRunsGate serves two callers, and skipAbandoned tells them
+// apart. The check and the completion gate of an existing plan pass true: an
+// abandoned run left its batch, so a batch that only an abandoned run named is no
+// unplanned batch any more. The admission of a new plan passes false (through
+// checkUnplannedReviewRuns), and add_members does the same through
+// unplannedReviewRun, so every run record of a card still counts there.
+func checkUnplannedReviewRunsGate(tx *Transaction, p ReviewPlan, importHistory, skipAbandoned bool) error {
+	batch, listed, err := unplannedReviewRun(tx, p, p.TaskIDs, !importHistory, skipAbandoned)
 	if err != nil {
 		return err
 	}
-	for _, entry := range entries {
-		if !ValidReviewID(entry.Name) || entry.Kind != fs.KindDirectory {
-			return reviewError("invalid run entry")
-		}
-		var run ReviewRun
-		ok, e := readReviewJSON(tx, reviewRunName(entry.Name), &run)
-		if e != nil {
-			return e
-		}
-		if !ok {
-			return reviewError("missing run")
-		}
-		for _, id := range p.TaskIDs {
-			if !importHistory && containsID(run.TaskIDs, id) && !planned[run.BatchID] && resolvedBatch(p, run.BatchID) == nil {
-				return reviewError("unplanned execution batch: " + run.BatchID)
-			}
-		}
+	if batch != "" {
+		return reviewError("unplanned execution batch: " + batch)
+	}
+	if !listed {
+		return nil
 	}
 	for _, r := range p.ResolvedBatches {
 		if err = verifyBatchResolution(tx, p, r); err != nil {
@@ -469,4 +463,44 @@ func checkUnplannedReviewRunsMode(tx *Transaction, p ReviewPlan, importHistory b
 		}
 	}
 	return nil
+}
+
+// unplannedReviewRun finds the first run of one of ids in a batch that no batch of
+// p names and no resolution of p covers. listed is false when no run exists at
+// all. With enforce false every run record is still read and validated, but none
+// counts as unplanned; with skipAbandoned an abandoned run does not count either.
+func unplannedReviewRun(tx *Transaction, p ReviewPlan, ids []string, enforce, skipAbandoned bool) (batch string, listed bool, err error) {
+	planned := map[string]bool{}
+	for _, b := range p.Batches {
+		planned[b.BatchID] = true
+	}
+	entries, err := fs.ListDirectory(tx.root, control(tx.root, "groups", reviewControlGroup, "runs"))
+	if errors.Is(err, os.ErrNotExist) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	for _, entry := range entries {
+		if !ValidReviewID(entry.Name) || entry.Kind != fs.KindDirectory {
+			return "", true, reviewError("invalid run entry")
+		}
+		var run ReviewRun
+		ok, e := readReviewJSON(tx, reviewRunName(entry.Name), &run)
+		if e != nil {
+			return "", true, e
+		}
+		if !ok {
+			return "", true, reviewError("missing run")
+		}
+		if skipAbandoned && reviewRunAbandoned(run) {
+			continue
+		}
+		for _, id := range ids {
+			if enforce && containsID(run.TaskIDs, id) && !planned[run.BatchID] && resolvedBatch(p, run.BatchID) == nil {
+				return run.BatchID, true, nil
+			}
+		}
+	}
+	return "", true, nil
 }

@@ -1,7 +1,9 @@
 package board
 
 import (
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -167,19 +169,32 @@ func TestShowDocumentRejectsInvalidUTF8(t *testing.T) {
 	}
 }
 
+// listCardFiles snapshots every entry below dir: mode and modification time,
+// plus size and SHA-256 for regular files. It reads each object with os.Lstat
+// because on Windows DirEntry.Info returns the copy stored in the parent
+// directory listing, which NTFS refreshes lazily, so a directory time can
+// change between two snapshots without any write.
 func listCardFiles(t *testing.T, dir string) []string {
 	t.Helper()
 	var files []string
-	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+	err := filepath.WalkDir(dir, func(path string, _ os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		info, err := d.Info()
+		info, err := os.Lstat(path)
 		if err != nil {
 			return err
 		}
 		rel, _ := filepath.Rel(dir, path)
-		files = append(files, rel+"|"+info.Mode().String()+"|"+info.ModTime().String())
+		line := rel + "|" + info.Mode().String() + "|" + info.ModTime().String()
+		if info.Mode().IsRegular() {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			line += fmt.Sprintf("|%d|%x", info.Size(), sha256.Sum256(data))
+		}
+		files = append(files, line)
 		return nil
 	})
 	if err != nil {

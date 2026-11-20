@@ -46,7 +46,7 @@ func TestMain(m *testing.M) {
 func envWith(home, configPath, path string) []string {
 	env := os.Environ()
 	blocked := map[string]struct{}{
-		"KANDER_LANG": {}, "KANDER_LANG_CLI": {}, "KANDER_CONFIG": {},
+		"KANDER_LANG": {}, "KANDER_LANG_CLI": {}, "KANDER_CONFIG": {}, "KANDER_CLIENT_HOME": {},
 		"HOME": {}, "PATH": {}, "NO_COLOR": {}, "LC_ALL": {}, "LC_MESSAGES": {}, "LANG": {},
 		"HERDR_ENV": {}, "HERDR_WORKSPACE_ID": {}, "HERDR_TAB_ID": {}, "HERDR_PANE_ID": {},
 		"LUVUS_ENV": {}, "LUVUS_PANE_ID": {},

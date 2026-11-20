@@ -60,7 +60,7 @@ func runRemoteIntegration(ctx context.Context, cfg *config.Config, args []string
 	if err := cfg.Rules.CheckTaskGroup(options.GroupID); err != nil {
 		return fail(err)
 	}
-	session.WorkerStarter = ensureRemoteWorker
+	session.WorkerStarter = startRemoteWorker
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	value, err := session.Integrate(ctx, cwd, options)

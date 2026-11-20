@@ -7,9 +7,7 @@ on:
 
 jobs:
   test:
-    # Above the model step's go test timeout, so the test, not the runner, ends a
-    # slow search and prints its goroutine dump.
-    timeout-minutes: 180
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -32,7 +30,7 @@ jobs:
       # The runner temp directory is real on macOS, where the default temp path is
       # a symlink the board refuses, and it is the fast drive on Windows.
       # The process tests come first and run past each other's failure, so one run
-      # reports all of them without waiting for the model test.
+      # reports all of them.
       - name: Process identity tests
         env:
           TMPDIR: ${{ runner.temp }}
@@ -63,14 +61,6 @@ jobs:
           TMP: ${{ runner.temp }}
           TEMP: ${{ runner.temp }}
         run: go test -v ./internal/review -count=1 -run '^(TestProcessTableHasIdentity|TestChildExitingDuringRecheckIsNotLeftover|TestLeftoverIsRejectedCollectedAndAttributed|TestAbnormalEndsSkipTheRecheck|TestWindowsDelayedTamperCollected)$'
-      # Windows takes 60 to 85 minutes here (docs/model-test.md). -v prints each
-      # scenario's size and time as it ends, also in a run that times out.
-      - name: Composite state model, default mode
-        env:
-          TMPDIR: ${{ runner.temp }}
-          TMP: ${{ runner.temp }}
-          TEMP: ${{ runner.temp }}
-        run: go test ./internal/board -count=1 -v -timeout 150m -run TestModel
       - name: Directed dead-end tests
         if: ${{ !cancelled() }}
         env:
@@ -98,14 +88,36 @@ jobs:
         working-directory: integrations/kander-dsh
         run: node --test "test/*.test.mjs"
 
+  # The only full-mode run of the composite state model: its result does not
+  # depend on the platform, and Windows needs over an hour for the default mode
+  # alone. distributed-checks.yml runs the default mode on Linux and macOS. The
+  # step is skipped when no test dependency of the search changed, see
+  # scripts/model-test-scope.sh.
   model-full:
     runs-on: ubuntu-latest
     steps:
+      # The decision needs the history to find the base of the change.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      # Any failure of the decision leaves its output unset, and the search then
+      # runs.
+      - name: Decide whether the model search runs
+        id: model_scope
+        continue-on-error: true
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          FULL_REFS: refs/heads/main refs/heads/develop refs/heads/v2
+          WORKFLOW_FILE: .github/workflows/platform-checks.yml
+        run: bash scripts/model-test-scope.sh
       - name: Composite state model, full mode
+        if: steps.model_scope.outputs.run != 'false'
         env:
           KANDER_MODEL_DEPTH: full
-        run: go test ./internal/board -count=1 -timeout 30m -run TestModelCompositeStates
+        run: go test ./internal/board -count=1 -v -timeout 30m -run TestModel

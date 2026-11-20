@@ -51,6 +51,7 @@ func newCommand(run func(options archiveOptions, args []string) int) *cobra.Comm
 		newEvidenceCommand("disposition", "<absolute-CWD> <absolute-author-record.json> <expected-card-revision>", 3),
 		newEvidenceCommand("interpret", "<absolute-CWD> <absolute-interpretation.json>", 2),
 		newEvidenceCommand("map-legacy", "<absolute-CWD> <absolute-map.json>", 2),
+		newEvidenceCommand("abandon", "<absolute-CWD> <absolute-abandon.json>", 2),
 		newEvidenceCommand("aggregate", "<absolute-CWD> <batch-id>", 2),
 		newEvidenceCommand("advance", "<absolute-CWD> <absolute-advance-request.json>", 2),
 		newEvidenceCommand("close", "<absolute-CWD> <absolute-close-request.json>", 2),

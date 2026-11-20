@@ -480,7 +480,7 @@
   "liveness.reason": "理由={{.V0}}",
   "liveness.refresh_interval_must_be_greater_than_0": "リフレッシュ間隔は有限の正数で、1e-9 秒以上、9223372036.854776 秒未満でなければなりません",
   "liveness.session_identity_mismatch": "セッション ID が一致しません",
-  "liveness.session_identity_was_not_reported_direct_delivery_is_unavailable": "セッション ID が報告されていません; 直投は利用できず notify は resume します; コンテナを開き直して再報告してください",
+  "liveness.session_identity_was_not_reported_direct_delivery_is_unavailable": "セッション ID が報告されていません: ターミナルにこの kander が読めるセッションマーカーがありません (herdr-core ではラベル kander.session); 直投は利用できません; マーカーを確認し、kander doctor でバックグラウンド worker のバージョンを比較してください",
   "liveness.status": "状態={{.V0}}",
   "liveness.suggestion_kander_notify_message_status": "提案=kander notify {{.V0}} --message <現状>",
   "liveness.suggestion_kander_resume_agent_other_message_status": "提案=kander resume [--agent <他>] {{.V0}} --message <現状>",

@@ -125,6 +125,18 @@ func TestSubcommandHelpIsTheCommandHelp(t *testing.T) {
 	}
 }
 
+// The request help is generated from the embedded contract: it lists the note kind and never
+// offers wrap-up as a message kind.
+func TestRequestHelpListsTheNoteKindButNotWrapUp(t *testing.T) {
+	got := runKander(t, "request", "--help")
+	if got.code != 0 || !strings.Contains(got.stdout, "kander request <task-id> fix|sync|review|stop|note <message...>") {
+		t.Fatalf("request help omitted the note kind: exit=%d\n%s", got.code, got.stdout)
+	}
+	if strings.Contains(got.stdout, "wrap-up <message") {
+		t.Fatalf("request help offers wrap-up as a message kind:\n%s", got.stdout)
+	}
+}
+
 // help does not follow --lang.
 func TestHelpIgnoresLangSetting(t *testing.T) {
 	for _, args := range [][]string{{"move", "--help"}, {"help", "move"}, {"--help"}, {"help"}, {"help", "--json", "move"}, {"help", "--json"}} {

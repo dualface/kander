@@ -9,6 +9,7 @@ import (
 
 	"github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/process"
+	"github.com/dualface/kander/internal/version"
 )
 
 // WorkerLockName is the lock one worker per client home holds while it runs.
@@ -80,13 +81,41 @@ func StartWorker(home, executable string) (*WorkerProcess, error) {
 // worker is a detached `kander worker` process, independent of the TUI and
 // of the command that started it; a second worker exits on the lock.
 func EnsureWorker(home string) error {
-	if held, err := WorkerHeld(home); err != nil || held {
-		return err
-	}
-	self, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	_, err = StartWorker(home, self)
+	_, err := EnsureWorkerChecked(home)
 	return err
+}
+
+// EnsureWorkerChecked is EnsureWorker that also compares a running worker with
+// this binary. The notice is a localized warning or hint for the user and is
+// empty when there is nothing to say: when this call started the worker (it is
+// this binary), when the versions are the same, and when the worker record
+// cannot be used (doctor reports that).
+func EnsureWorkerChecked(home string) (notice string, err error) {
+	return ensureWorker(home, func(home, executable string) error {
+		_, err := StartWorker(home, executable)
+		return err
+	})
+}
+
+func ensureWorker(home string, start func(home, executable string) error) (string, error) {
+	held, err := WorkerHeld(home)
+	if err != nil {
+		return "", err
+	}
+	if !held {
+		self, err := os.Executable()
+		if err != nil {
+			return "", err
+		}
+		return "", start(home, self)
+	}
+	status := heldWorkerStatus(home)
+	switch status.Finding(version.String()) {
+	case WorkerFindingMismatch:
+		self, _ := os.Executable()
+		return status.MismatchText(version.String(), self), nil
+	case WorkerFindingUnrecorded:
+		return WorkerUnrecordedText(home), nil
+	}
+	return "", nil
 }

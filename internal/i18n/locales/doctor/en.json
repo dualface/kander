@@ -30,5 +30,8 @@
   "menu.agent_session_file_store_no": "Keep inheriting session.file",
   "menu.modified_rules_backup_replace_prompt": "{{.V0}} rule file(s) listed above were edited locally. Back up each file, then replace it with the embedded version?",
   "menu.backup_and_replace_modified_rules": "Back up and replace",
-  "menu.keep_modified_rules": "Keep the local files"
+  "menu.keep_modified_rules": "Keep the local files",
+  "menu.background_worker_not_running": "Background worker: not running",
+  "menu.background_worker_running": "Background worker: kander {{.V0}}, pid {{.V1}}",
+  "menu.background_worker_version_unrecorded": "Background worker: running without a usable version record (client directory {{.V0}}). It may be an older worker that cannot hand over to this binary. Stop the kander worker process of that directory; the worker started next runs this binary. {{.V1}}"
 }

@@ -8,6 +8,25 @@ import (
 	"testing"
 )
 
+// isolateGitConfig keeps a test away from the developer's own user-level and
+// system-level Git configuration, such as commit signing, global hooks and
+// the default ignore file. The empty ignore file replaces the default one,
+// which Git looks up below XDG_CONFIG_HOME or HOME. Package remote_test
+// reaches it through IsolateGitConfig.
+func isolateGitConfig(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	ignore, config := filepath.Join(dir, "ignore"), filepath.Join(dir, "gitconfig")
+	if err := os.WriteFile(ignore, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(config, []byte("[core]\n\texcludesFile = "+filepath.ToSlash(ignore)+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", config)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+}
+
 func probeGit(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	cmd := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir}, args...)...)
@@ -20,6 +39,7 @@ func probeGit(t *testing.T, dir string, args ...string) string {
 }
 
 func TestRemoteServesAsksTheRemoteThroughTheClonesOwnOrigin(t *testing.T) {
+	isolateGitConfig(t)
 	root := t.TempDir()
 	probeGit(t, root, "init", "-q", "--bare", "common.git")
 	probeGit(t, root, "clone", "-q", "common.git", "work")
@@ -41,6 +61,7 @@ func TestRemoteServesAsksTheRemoteThroughTheClonesOwnOrigin(t *testing.T) {
 }
 
 func TestRemoteServesFallsBackWhenNegotiationIsUnavailable(t *testing.T) {
+	isolateGitConfig(t)
 	// Negotiation needs protocol version 2; version 0 must still prove the remote.
 	t.Setenv("GIT_CONFIG_COUNT", "1")
 	t.Setenv("GIT_CONFIG_KEY_0", "protocol.version")

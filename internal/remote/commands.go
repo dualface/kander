@@ -530,8 +530,10 @@ func claim(ctx context.Context, s *Session, task, owner, decision string) error 
 	if err := s.SaveCredential(credential); err != nil {
 		return fail(err)
 	}
-	if err := EnsureWorker(s.Home); err != nil {
+	if notice, err := EnsureWorkerChecked(s.Home); err != nil {
 		remark("worker_start_failed", config.Text("remote.worker_start_failed", err.Error()))
+	} else if notice != "" {
+		remark("worker_version_warning", notice)
 	}
 	if command.JSON() {
 		return command.Exit(command.Result(claimResult{taskRef: newTaskRef(s, grant.Task), Generation: grant.Claim.Generation, ExecutionID: execution}))

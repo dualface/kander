@@ -30,5 +30,8 @@
   "menu.agent_session_file_store_no": "session.file の継承を維持する",
   "menu.modified_rules_backup_replace_prompt": "上に列挙した {{.V0}} 個のルールファイルはローカルで編集されています。各ファイルをバックアップしてから埋め込み版に置き換えますか?",
   "menu.backup_and_replace_modified_rules": "バックアップして置き換える",
-  "menu.keep_modified_rules": "ローカルファイルを保持"
+  "menu.keep_modified_rules": "ローカルファイルを保持",
+  "menu.background_worker_not_running": "バックグラウンド worker: 実行されていません",
+  "menu.background_worker_running": "バックグラウンド worker: kander {{.V0}}, pid {{.V1}}",
+  "menu.background_worker_version_unrecorded": "バックグラウンド worker: 実行中ですが、使えるバージョン記録がありません (クライアントディレクトリ {{.V0}})。このバイナリへ引き継げない古い worker の可能性があります。そのディレクトリの kander worker プロセスを停止してください。その後に起動する worker はこのバイナリで動きます。{{.V1}}"
 }

@@ -103,6 +103,9 @@ func (s *Server) reviewRuntimeRoutes(mux *http.ServeMux) {
 				return outcome{err: apiError(api.CodeIdempotencyMismatch, "review run identity cannot be reused with different inputs")}
 			}
 			p.mu.Unlock()
+			if err := board.RequireReviewRunNotAbandoned(existing); err != nil {
+				return outcome{err: err}
+			}
 			return outcome{status: http.StatusOK, body: board.ReviewPreparation{Run: existing, Fresh: false}}
 		}
 		p.mu.Unlock()

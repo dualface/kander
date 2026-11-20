@@ -37,9 +37,22 @@ contribute to coverage reported by `-cover`.
 | default | `go test ./...` | explore 3, exit 2 | explore 2, exit 2, focused |
 | full | `KANDER_MODEL_DEPTH=full` | explore 4, exit 3 | explore 3, exit 3, focused |
 
-`platform-checks.yml` runs the default mode on Linux, macOS and Windows and the full mode in the `model-full` job on Linux. The test logs one line per scenario as soon as that scenario ends, with its `states`, `expanded` and `seconds`. The default-mode step runs with `-v`, so the CI log shows these lines at once, also in a run that times out.
+On v2, `distributed-checks.yml` runs the default mode in the `Complete native tests` step of its `ubuntu-latest` and `macos-latest` all jobs (`go test ./...`); the Windows jobs do not run it. The `Complete Windows board tests` step runs the other tests of `internal/board` with `-skip '^TestModel'`: the search and the small searches of `model_*_test.go` have no Windows-specific code path, so their result does not depend on the platform. `platform-checks.yml` runs the model tests only in its `model-full` job, in full mode on Linux; `-run TestModel` there covers the search and the small searches of `model_meta_test.go`. Its `test` jobs on Linux, macOS and Windows do not run them; the platform-specific file, lock and process behavior is covered by their other steps. The test logs one line per scenario as soon as that scenario ends, with its `states`, `expanded` and `seconds`. The `model-full` step runs with `-v`, so the CI log shows these lines at once, also in a run that times out.
 
-Without a memory directory the search is much slower. The four passing `platform-checks` runs after commit 9c4341e (41285615796, 41394355819, 41394364238 and 41399684333) measured these model step times:
+### Skipping the search
+
+The search only exercises the board commands and what they import, so a change outside the test dependencies of `./internal/board` cannot change its result. `scripts/model-test-scope.sh` decides whether the search runs. It runs in the all jobs of `distributed-checks.yml` and in the `model-full` job of `platform-checks.yml`, which check out the full history for it. It writes `run=true` or `run=false` to the step output and one line with the reason to the log and the job summary.
+
+- A push to `v2`, and a dispatch on `v2`, always run the search. `platform-checks.yml` also always runs it on `main` and `develop`. A push prints the files changed since its previous commit for reference only.
+- Elsewhere the script takes the files changed between a base and `HEAD`. The base is the `model_base` input of a dispatch (a full 40-digit commit ID; any other value runs the search), the base of the pull request, or else the merge base of `origin/v2` and `HEAD`.
+- It computes the dependency set at that moment with `go list -test -deps ./internal/board`, so there is no list to maintain. A changed file counts when it is below the directory of a package of that set, including `testdata` and `go:embed` files.
+- `go.mod`, `go.sum`, the workflow file that runs the script, and the script itself always count.
+- When a changed file counts, the search runs. When none does, or nothing changed, the all jobs run `go test ./...` with `-skip '^TestModelCompositeStates$'` in the step `Complete native tests without the model search`, so the small searches still run, and `model-full` skips its step. The job still ends with success.
+- When any step fails (no merge base, too little history, `go list` fails), the search runs and the reason names the failed step.
+
+The dependency set follows the imports, so a change of the runner image does not start the search. That is why `v2` itself always runs it.
+
+Without a memory directory the search is much slower. When the default mode still ran on every platform, the four passing `platform-checks` runs after commit 9c4341e (41285615796, 41394355819, 41394364238 and 41399684333) measured these model step times:
 
 | Job | Mode | Minutes |
 | --- | --- | --- |
@@ -48,9 +61,9 @@ Without a memory directory the search is much slower. The four passing `platform
 | `test (windows-latest)` | default | 61.5 to 83.7 |
 | `model-full` (Linux) | full | 12.8 to 27.6 |
 
-Windows takes 10 to 16 times as long as Linux in the same run, and one commit can vary widely: on commit 66c6b4b, Windows took 61.5 minutes in run 41399684333 and reached the earlier 90-minute limit in run 41399815626. Run 41363725793 also reached that limit. The default-mode step now allows 150 minutes and the `test` job 180, and the later steps of the job run after a model failure. The full mode comes close to its 30-minute limit.
+Windows takes 10 to 16 times as long as Linux in the same run, and one commit can vary widely: on commit 66c6b4b, Windows took 61.5 minutes in run 41399684333 and reached the earlier 90-minute limit in run 41399815626. Run 41363725793 also reached that limit. These times are why the `test` jobs of `platform-checks.yml` no longer run the default mode. On v2, `distributed-checks.yml` still runs it on macOS, and not on Windows. The full mode comes close to its 30-minute limit.
 
-The model steps set `TMPDIR`, `TMP` and `TEMP` to the runner temp directory, because `tempBoard` refuses the symlinked default temp path of macOS. On Linux the search runs in `/dev/shm` when that mount has at least 1 GiB free, because board writes sync every file. The full mode peaks near 310 MiB there. The search keeps few copies on disk: it drops a copy as soon as its state is known and expands at most 64 states between merges.
+`tempBoard` refuses the symlinked default temp path of macOS, so a local run there needs `TMPDIR` to name a real directory. On Linux the search runs in `/dev/shm` when that mount has at least 1 GiB free, because board writes sync every file. The full mode peaks near 310 MiB there. The search keeps few copies on disk: it drops a copy as soon as its state is known and expands at most 64 states between merges.
 
 ## Reading a failure
 
@@ -75,9 +88,11 @@ A failure that says `model infrastructure` is a defect of the test itself, not a
 3. Allocate identifiers with `nextID` and `nextCommit`, so one path gives one set of identifiers in every run.
 4. Add a seed when the new state sits deeper than the bounds.
 5. When the card repairs a dead end, remove its row. When it adds the records an invariant needs, give that row of `modelInvariants` a `check` and drop its `owner`.
-6. Run `go test ./internal/board -v -run TestModel` and `KANDER_MODEL_DEPTH=full go test ./internal/board -v -run TestModelCompositeStates`; without `-v` a passing test hides the scenario lines. Compare the `seconds` of each scenario with the same command before the change. A change that slows the search multiplies the Windows time in "Modes", which already uses most of its 150-minute limit, and the full mode, which is near its 30-minute limit.
+6. Run `go test ./internal/board -v -run TestModel` and `KANDER_MODEL_DEPTH=full go test ./internal/board -v -run TestModelCompositeStates`; without `-v` a passing test hides the scenario lines. Compare the `seconds` of each scenario with the same command before the change. A change that slows the search slows the all jobs of `distributed-checks.yml`, whose complete test step allows 150 minutes, and the full mode, which is near its 30-minute limit.
 
 `R.dropRequired` drops a required batch with no decision, from the seed `dropped-required`, which `R.planChainedRequired` builds. `H.recoverNoPlan` resets a member that has no plan, from the seed `recovered-no-plan`. The seed `dropped-recovered` resets a member after a drop left its plan with no required role. `R.dropBatch` drops an N/A batch and `H.recover` resets a member with a plan.
+
+`R.planOpenPartial` creates an unsealed plan whose first batch names member A only, so member B is in the plan and in no batch. The state key holds `unassigned`: the plan members with no exclusion record that no batch names. A partial plan and a plan that covers every member are two states even when their first batch has the same ID. `settleReview`, the review part of `F.done`, appends an N/A batch that names the unassigned members once no batch can still close (the last batch closed, or every member of it left), and closes the new batch, because a plan seals only when every member left is in a batch and the done gate wants every batch that has a member left closed. The operation needs two members: with one member the plan would name everyone. The seed `excluded-unassigned` builds the state this exists for: the first batch is closed, B is archived while no batch names it, and A has to seal the plan. It is the state that `sealFacts` skips an excluded member for; without that skip A's `F.done` is refused with `seal requires every member assigned` and the search reports a dead end whose path holds `R.planOpenPartial` and `B:T.archive`.
 
 An operation that always strands a card, or that only exists to reach one dead end, sets `narrows`, so the search does not expand everything behind it.
 

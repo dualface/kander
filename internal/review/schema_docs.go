@@ -64,6 +64,7 @@ func evidenceSchemaDocs() map[string]map[string]schemaMeta {
 			"retarget_batches.<key>.previous_target": opt(""),
 			"retarget_batches.<key>.base":            opt(""),
 			"retarget_batches.<key>.target":          opt(""),
+			"add_members":                            opt(""),
 			"drop_batches":                           opt(""),
 			"release_obligation":                     opt(""),
 			"release_obligation.kind":                opt("dropped | recovery"),
@@ -128,6 +129,11 @@ func evidenceSchemaDocs() map[string]map[string]schemaMeta {
 			"findings.NON_BLOCKING[].lineage":            opt(""),
 			"findings.NON_BLOCKING[].lineage.run_id":     req(""),
 			"findings.NON_BLOCKING[].lineage.finding_id": req(""),
+		},
+		"abandon": {
+			"run_id":   req(""),
+			"decision": req(""),
+			"reason":   req(""),
 		},
 		"assign": {
 			"run_id":      req(""),

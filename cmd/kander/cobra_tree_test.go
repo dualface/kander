@@ -99,6 +99,7 @@ var samplePositionals = map[string][]string{
 	"request show":                 {sampleTask, "request-1"},
 	"resume":                       {sampleTask},
 	"review":                       {"/abs/repo", "base", "commit", "PMQA", "goal"},
+	"review abandon":               {"/abs/repo", "/abs/abandon.json"},
 	"review advance":               {"/abs/repo", "/abs/advance.json"},
 	"review aggregate":             {"/abs/repo", "batch-1"},
 	"review assign":                {"/abs/repo", "/abs/assign.json"},

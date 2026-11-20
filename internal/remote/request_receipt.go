@@ -115,6 +115,7 @@ func (s *Session) requestCall(ctx context.Context, logical any, fresh *requestCa
 		return value, true, err
 	}
 	value, sendErr := s.Project.CreateRequest(ctx, fresh.Key, fresh.TaskID, fresh.Input)
+	sendErr = RequestCreateError(fresh.Input.Kind, sendErr)
 	if sendErr == nil && !requestFactsMatch(*fresh, value) {
 		return value, true, errors.New(config.Text("remote.request_recovery_mismatch"))
 	}

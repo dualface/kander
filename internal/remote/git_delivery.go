@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -16,19 +17,33 @@ import (
 )
 
 // gitCommand uses direct argv, bounded streams and an owned process tree. Git
-// diagnostics can contain authenticated URLs, so shared errors omit raw output.
+// diagnostics can contain authenticated URLs, so the error keeps only a
+// sanitized, bounded diagnostic for the local user; text that leaves this
+// machine goes through ServerText, which drops it.
 func gitCommand(ctx context.Context, dir string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	env := append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never")
-	result, err := probe.CaptureWithEnvDirLimit(ctx, "git", args, env, dir, 1<<20)
+	result, err := probe.CaptureWithEnvDirLimit(ctx, "git", gitArgs(runtime.GOOS, args), env, dir, 1<<20)
 	if err != nil {
-		return "", errors.New(config.Text("remote.git_interrupted"))
+		return "", newGitTransportError(err)
 	}
 	if result.Code != 0 || result.Overflow {
-		return "", errors.New(config.Text("remote.git_unverified"))
+		return "", newGitError(result.Stderr)
 	}
 	return strings.TrimSpace(result.Stdout), nil
+}
+
+// gitArgs adds core.longpaths on Windows. Without it Git for Windows cannot
+// check out a file whose path exceeds MAX_PATH, and a worktree below a long user
+// name and task ID holds such files. The option does not relax the length check
+// of GIT_DIR that "git worktree add" makes ("'$GIT_DIR' too big"); that one
+// needs a short worktree path. Other platforms keep their arguments.
+func gitArgs(goos string, args []string) []string {
+	if goos != "windows" {
+		return args
+	}
+	return append([]string{"-c", "core.longpaths=true"}, args...)
 }
 
 func verifiedRemote(ctx context.Context, dir, expected string) error {
