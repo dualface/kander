@@ -111,6 +111,7 @@ var samplePositionals = map[string][]string{
 	"review map-legacy":            {"/abs/repo", "/abs/map.json"},
 	"review plan":                  {"/abs/repo", "/abs/plan.json"},
 	"review progress":              {"/abs/repo", sampleTask},
+	"review publication":           {"/abs/repo", "publication-1"},
 	"server import":                {},
 	"server maintain":              {},
 	"server projects":              {},

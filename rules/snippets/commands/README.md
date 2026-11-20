@@ -2,7 +2,7 @@
 
 Before running any `kander` command in this session, read `<rules root>/snippets/commands/README.md` once. Before the first use of a command, read its contract file.
 
-`--help` prints summary, syntax, arguments, and examples; `kander help --json [<command>]` prints JSON. Global flags: `--lang`, `--json`. The final block matches `KANDER-KANBAN-RULES.md` "Command Contract".
+`--help` prints summary, syntax, arguments, examples; `kander help --json [<command>]` prints JSON. Global flags: `--lang`, `--json`. The final block matches `KANDER-KANBAN-RULES.md` "Command Contract".
 
 First: `show`, `update`, `move`, `check`.
 
@@ -19,11 +19,11 @@ First: `show`, `update`, `move`, `check`.
 | `list` | List cards by state | creator, user | `snippets/commands/list.md` |
 | `show` | Print card/revision | executors | `snippets/commands/show.md` |
 | `new` | Create backlog card | creator | `snippets/commands/new.md` |
-| `move` | Move a card | executor, orchestrator, creator | `snippets/commands/move.md` |
-| `pick` | Pick a backlog card | creator, orchestrator | `snippets/commands/pick.md` |
+| `move` | Move card | executor, orchestrator, creator | `snippets/commands/move.md` |
+| `pick` | Pick backlog card | creator, orchestrator | `snippets/commands/pick.md` |
 | `update` | Publish document | executor, creator | `snippets/commands/update.md` |
-| `start` | Launch an executor | creator, orchestrator | `snippets/commands/start.md` |
-| `orchestrate` | Launch an orchestrator | creator | `snippets/commands/orchestrate.md` |
+| `start` | Launch executor | creator, orchestrator | `snippets/commands/start.md` |
+| `orchestrate` | Launch orchestrator | creator | `snippets/commands/orchestrate.md` |
 | `resume` | Resume execution | orchestrator (via notify), user | `snippets/commands/resume.md` |
 | `notify` | Dispatch to executor | orchestrator | `snippets/commands/notify.md` |
 | `dispatch` | Manage dispatches | orchestrator | `snippets/commands/dispatch.md` |
@@ -90,6 +90,7 @@ kander review aggregate <absolute-CWD> <batch-id>
 kander review advance <absolute-CWD> <absolute-advance-request.json>
 kander review close <absolute-CWD> <absolute-close-request.json>
 kander review progress <absolute-CWD> <task-id>
+kander review publication <absolute-CWD> <publication-id>
 kander review <plan|extend-plan|assign|disposition|interpret|advance|close|abandon> --schema
 kander issue repo [--repo HOST/OWNER/REPO]
 kander issue list [--repo HOST/OWNER/REPO] [--state open|closed|all] [--label NAME] [--search TEXT] [--limit N]

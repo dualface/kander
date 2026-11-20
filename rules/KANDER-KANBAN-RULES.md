@@ -79,6 +79,7 @@ kander review aggregate <absolute-CWD> <batch-id>
 kander review advance <absolute-CWD> <absolute-advance-request.json>
 kander review close <absolute-CWD> <absolute-close-request.json>
 kander review progress <absolute-CWD> <task-id>
+kander review publication <absolute-CWD> <publication-id>
 kander review <plan|extend-plan|assign|disposition|interpret|advance|close|abandon> --schema
 kander issue repo [--repo HOST/OWNER/REPO]
 kander issue list [--repo HOST/OWNER/REPO] [--state open|closed|all] [--label NAME] [--search TEXT] [--limit N]
@@ -88,7 +89,7 @@ kander issue triage NUMBER [--card TASK_ID] [--repo HOST/OWNER/REPO] [--agent NA
 kander issue result NUMBER --card TASK_ID [--repo HOST/OWNER/REPO] [--agent NAME] [--launcher NAME] [--action start|inspect|apply|decide] [--file JSON]
 ```
 
-A group coordinator writes review evidence without confirmation when the conditions of the review command contract hold; otherwise, for distributed holder confirmation, use `kander review confirm <absolute-CWD> <publication-id> <task-id>` as described in the review command contract.
+A group coordinator writes review evidence without confirmation when the conditions of the review command contract hold; otherwise, for distributed holder confirmation, read the material with `kander review publication <absolute-CWD> <publication-id>`, then use `kander review confirm <absolute-CWD> <publication-id> <task-id>` as described in the review command contract.
 
 
 - Commands only do structural and mechanical validation; authorization, dependencies, and termination reasons are judged by the agent per this file.
