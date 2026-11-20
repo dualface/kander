@@ -238,7 +238,7 @@ A group plan can be created once the members that are ready for review have star
 - One request is one decision: when a single card fails, nothing is written and the error names the card and the condition that does not hold.
 - One transaction records the cards in `task_ids`, the current execution cycle of each new member (in the plan and in `tracked-cycles/<id>.json`), and the plan pointer `task-plans/<id>.json`, and rewrites the plan copy of every member that still takes one (an excluded or archived member keeps its old copy). The plan revision rises by one, and `plan-history/<plan>/<revision>.json` keeps the previous plan and the request.
 - A new member is in none of the existing batches, so no batch is owed for it. Append a batch that names it with `batch` once its predecessor closed, as for any member; `seal` is refused until every member that is not excluded, the new ones included, is in a batch.
-- In server mode the request runs on the server. The holder of every started new member confirms the same publication with `kander review confirm`, as the holder of every started plan member does. Upgrade the server before the clients: an older server rejects the unknown field `add_members`.
+- In server mode the request runs on the server. The group coordinator writes it in one command, without confirmation, when the conditions of the coordinator write authority hold for every live member, the new members included (all in `review/` and in the group, none with a dispatch in progress). Otherwise the holder of every started new member confirms the same publication with `kander review confirm`, as the holder of every started plan member does. Upgrade the server before the clients: an older server rejects the unknown field `add_members`.
 
 ---
 
