@@ -60,6 +60,82 @@ kander dispatch settle 20261118-example-task dispatch-1 3
 - An explicit UTF-8 intent for `dispatch prepare` contains `dispatch_id` (optional), `task_id`, `kind`, `message`, `base`, optional `references` (task ID plus card-relative `path`), `created_at`, and `confirm_by`. The default acceptance deadline is 120 seconds after creation (new notify/resume requests use their timeout); it never resets on restart or retry and is not a work-completion deadline. A round that expired with no receipt has no renewal: a retry reports the pending or conflict result, and the only way out is `dispatch fail|cancel`, then a new ID.
 - New fix intents require `evidence.fix`: a batch ID, nonempty run/finding references with exact `previous_run_id`, and references to all existing author originals on those findings with their lineage (author, run/finding ID, record ID, task ID, card-relative path). A disposition not yet written is not required. The current batch target must match base. A reference may name a run at base or at an earlier target on the batch's advance chain (the recorded `previous_target`/`target` links from the initial target to the current target); the check reads batch records only, never Git. The assignment must include the task, and all published originals must verify; superseded rounds, missing or foreign findings, and incomplete publication reject before sending. Legacy prose uses only the review producer's explicit mapping. A refusal lists every problem of the evidence at once, one line each, never only the first: a line of a finding starts with `<run_id>/<finding_id>`, names the field, and gives the provided and the expected value, and every missing author original is its own line with `finding.run_id`, `finding.finding_id`, `record_id`, `author` and `artifact.path`, the originals of earlier rounds on the lineage and superseded records included. The lines carry identifiers, commits, task IDs, author names and card-relative paths, never finding text, evidence or a basis.
 - Pass bindings with `--evidence-file <JSON>` to notify/resume, or as `evidence` in `dispatch prepare`. Same-ID retries retain the frozen binding (omit the evidence file); later author records never rewrite an earlier dispatch; generic `references` never substitute for evidence. Historical unbound intents stay readable but cannot be sent as new fix or wrap-up actions.
+- Fix evidence file. The example is a second round: the finding comes from a run that has a predecessor, and `authors` holds the author original of the first round. Write it to a file and pass it as `--evidence-file`:
+
+  ```json
+  {
+    "fix": {
+      "batch_id": "20261118-example-group-b1",
+      "findings": [
+        {
+          "run_id": "20261118-example-group-pmqa-2",
+          "finding_id": "PMQA-02",
+          "previous_run_id": "20261118-example-group-pmqa-1"
+        }
+      ],
+      "authors": [
+        {
+          "finding": {
+            "run_id": "20261118-example-group-pmqa-1",
+            "finding_id": "PMQA-01"
+          },
+          "record_id": "author-1",
+          "author": "claude",
+          "artifact": {
+            "task_id": "20261118-example-task",
+            "path": "reviews/20261118-example-group-pmqa-1/dispositions/author-1.json"
+          }
+        }
+      ]
+    }
+  }
+  ```
+
+  - The top level of the file is `{"fix": {...}}`. Decoding is strict: an unknown field (for example a `task_id` next to `finding` in an `authors` entry), a repeated key, or text after the object is refused.
+  - `previous_run_id` goes in every finding. It must equal the value of that run's record, and a root run leaves it out. `section` may be left out; the server fills it in from the published report.
+  - `authors` lists every author original that already exists on these findings and on their lineage, including the originals of earlier rounds. For such an original `finding.run_id` is the run of that round. Leave `authors` out while no original exists. `artifact.task_id` is the card the fix is for; `artifact.path` is `reviews/<run_id>/dispositions/<record_id>.json`.
+  - `base` (`--base <full-SHA>`) must equal the current target of the batch. Without it the command takes the `HEAD` of the current directory, so pass it. The card must be a member of the batch and of every run, each finding must be assigned to it, and a run must have no successor that was not abandoned.
+- Fix intent for `dispatch prepare`. It holds the fields of the intent bullet above; the `evidence` field is the object of the evidence file. `dispatch_id`, `references`, and `confirm_by` may be left out. Times are RFC 3339:
+
+  ```json
+  {
+    "dispatch_id": "dispatch-2",
+    "task_id": "20261118-example-task",
+    "kind": "fix",
+    "message": "Fix the findings of round two; PMQA-02 is must-fix",
+    "base": "0123456789abcdef0123456789abcdef01234567",
+    "evidence": {
+      "fix": {
+        "batch_id": "20261118-example-group-b1",
+        "findings": [
+          {
+            "run_id": "20261118-example-group-pmqa-2",
+            "finding_id": "PMQA-02",
+            "previous_run_id": "20261118-example-group-pmqa-1"
+          }
+        ],
+        "authors": [
+          {
+            "finding": {
+              "run_id": "20261118-example-group-pmqa-1",
+              "finding_id": "PMQA-01"
+            },
+            "record_id": "author-1",
+            "author": "claude",
+            "artifact": {
+              "task_id": "20261118-example-task",
+              "path": "reviews/20261118-example-group-pmqa-1/dispositions/author-1.json"
+            }
+          }
+        ]
+      }
+    },
+    "created_at": "2026-11-19T10:00:00Z",
+    "confirm_by": "2026-11-19T10:02:00Z"
+  }
+  ```
+
+  The problem list and the way to send again are under "Distributed authority"; the example does not repeat them.
 - New wrap-up intents require `evidence.wrap_up.git` with absolute CWD, source_commit, target_commit, target_ref (`refs/heads/<mainline branch>` or `refs/remotes/origin/<mainline branch>`, where `git.branch_mode` of the checkout at CWD selects `develop` or `main`), author, and basis.
   - The command binds the base of the first planned batch and the closed final target of the last batch (kept in sync by `review advance` and `--advance-file`, see `snippets/review-evidence-gate.md` "Review Evidence Completion Gate"). It verifies source and target ancestry into the selected mainline reference and rereads that ref.
   - `source_commit` must equal the dispatch base, so pass `--base <source_commit>` whenever it differs from the HEAD of the directory the command runs in. By default source equals that closed final target; include no additional unreviewed commits.
