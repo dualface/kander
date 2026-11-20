@@ -22,6 +22,7 @@ import (
 	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/internal/process"
 )
 
 // Environment variables. EnvExecutionID binds a process to one execution, so
@@ -29,8 +30,8 @@ import (
 // credential of a later one. EnvClientHome relocates the private client
 // directory (tests, several identities on one machine).
 const (
-	EnvExecutionID            = "KANDER_EXECUTION_ID"
-	EnvCoordinatorExecutionID = "KANDER_COORDINATOR_EXECUTION_ID"
+	EnvExecutionID            = process.EnvExecutionID
+	EnvCoordinatorExecutionID = process.EnvCoordinatorExecutionID
 	EnvClientHome             = "KANDER_CLIENT_HOME"
 )
 
@@ -205,6 +206,11 @@ func Open(ctx context.Context, cfg *config.Config, dir string) (*Session, error)
 		fresh, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		ctx = fresh
+	}
+	// Only a reachable server is worth renewing leases for. After a reboot
+	// this is what brings the worker back, with the server above.
+	if err := ensureCredentialWorker(home); err != nil {
+		remark("worker_start_failed", config.Text("remote.worker_start_failed", err.Error()))
 	}
 	repository, err := ResolveGitRemote(ctx, dir)
 	if err != nil {

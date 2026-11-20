@@ -194,6 +194,8 @@
   "server.info": "URL: {{.V0}}\nバージョン: {{.V1}}\nPID: {{.V2}}\nデータディレクトリ: {{.V3}}\nログ: {{.V4}}\nプロジェクト数: {{.V5}}\n待受: {{.V6}}\nTTL: {{.V7}}\n更新間隔: {{.V8}}",
   "remote.server_not_running": "ローカルサーバー {{.V0}} は起動していません。kander server start を実行してください。データディレクトリ: {{.V1}}",
   "remote.server_start_prompt": "サーバー {{.V0}} は起動していません。\nデータディレクトリ: {{.V1}}\nプロジェクトボード: {{.V2}}\nログ: {{.V3}}\nサーバーをバックグラウンドで起動しますか？[Y/n] ",
+  "remote.server_self_started": "ローカルサーバー {{.V0}} をバックグラウンドで起動しました（データディレクトリ {{.V1}}、ログ {{.V2}}）。",
+  "remote.server_lock_held": "データディレクトリのロック {{.V0}} が保持されています。サーバーは動作中だがここから接続できないか、オフラインのサーバーコマンドが実行中です。サーバーは起動しませんでした。",
   "remote.server_version_warning": "警告: ローカルサーバー {{.V0}} とクライアント {{.V1}} のバージョンが異なります。処理を続行します。更新には kander server restart を実行してください。",
   "remote.server_restart_required": "サーバー {{.V0}} とクライアント {{.V1}} のプロトコルに互換性がありません。kander server restart を実行してください。",
   "remote.server_restart_prompt": "ローカルサーバー: {{.V0}}、クライアント: {{.V1}}。サーバーを再起動しますか？[Y/n] ",

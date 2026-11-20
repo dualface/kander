@@ -194,6 +194,8 @@
   "server.info": "URL: {{.V0}}\nVersion: {{.V1}}\nPID: {{.V2}}\nData directory: {{.V3}}\nLog: {{.V4}}\nProjects: {{.V5}}\nListen: {{.V6}}\nTTL: {{.V7}}\nRenew: {{.V8}}",
   "remote.server_not_running": "Local server {{.V0}} is not running. Run kander server start. Data directory: {{.V1}}",
   "remote.server_start_prompt": "Server {{.V0}} is not running.\nData directory: {{.V1}}\nProject board: {{.V2}}\nLog: {{.V3}}\nStart the server in the background now? [Y/n] ",
+  "remote.server_self_started": "Started the local server {{.V0}} in the background (data directory {{.V1}}, log {{.V2}}).",
+  "remote.server_lock_held": "The data directory lock {{.V0}} is held: the server runs but cannot be reached from here, or an offline server command is running. No server was started.",
   "remote.server_version_warning": "Warning: local server version {{.V0}} differs from client {{.V1}}; continuing. Run kander server restart to update.",
   "remote.server_restart_required": "Server {{.V0}} is incompatible with client {{.V1}}. Run kander server restart.",
   "remote.server_restart_prompt": "Local server version: {{.V0}}; client version: {{.V1}}. Restart the server now? [Y/n] ",

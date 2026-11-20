@@ -33,7 +33,9 @@ func serverGateFixture(t *testing.T) (*config.Config, *atomic.Bool, *api.Version
 	oldIn, oldTerm, oldOut := serverPromptInput, serverTerminal, stderr
 	oldStart, oldRestart := startLocalServer, restartLocalServer
 	serverVersionChecks.Clear()
+	serverStarterInjected.Store(true)
 	t.Cleanup(func() {
+		serverStarterInjected.Store(false)
 		serverPromptInput = oldIn
 		serverTerminal = oldTerm
 		stderr = oldOut
@@ -74,7 +76,7 @@ func serverGateFixture(t *testing.T) (*config.Config, *atomic.Bool, *api.Version
 			t.Fatal("startup inherited expired context")
 		}
 		expected, _ := servicectl.DataDir("")
-		if o.DataDir != expected || o.Listen != servicectl.ListenAddress(hs.URL) {
+		if o.DataDir != expected || o.Listen != servicectl.ListenAddress(hs.URL) || o.TTL != api.DefaultTTL || o.Renew != api.DefaultRenewInterval {
 			t.Fatalf("startup=%+v", o)
 		}
 		available.Store(true)

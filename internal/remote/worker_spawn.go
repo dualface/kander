@@ -54,6 +54,17 @@ func (p *WorkerProcess) Exited() bool {
 // WorkerArguments is the command line, after the executable, that starts the worker.
 func WorkerArguments() []string { return []string{"worker"} }
 
+// workerCommand builds the worker command line. The worker is long-lived and
+// independent of whoever starts it, so it runs in its client home, not in the
+// starter's directory (which an agent worktree removal would need), and
+// without the execution variables of the starting agent.
+func workerCommand(home, executable string) *exec.Cmd {
+	cmd := exec.Command(executable, WorkerArguments()...)
+	cmd.Env = process.DaemonEnvironment(EnvClientHome + "=" + home)
+	cmd.Dir = home
+	return cmd
+}
+
 // StartWorker starts `<executable> worker` detached for home. The worker is
 // independent of this process; a second worker exits on the lock.
 func StartWorker(home, executable string) (*WorkerProcess, error) {
@@ -62,8 +73,7 @@ func StartWorker(home, executable string) (*WorkerProcess, error) {
 		return nil, err
 	}
 	defer log.Close()
-	cmd := exec.Command(executable, WorkerArguments()...)
-	cmd.Env = append(os.Environ(), EnvClientHome+"="+home)
+	cmd := workerCommand(home, executable)
 	cmd.Stdout, cmd.Stderr = log.File, log.File
 	process.Detach(cmd)
 	if err := cmd.Start(); err != nil {

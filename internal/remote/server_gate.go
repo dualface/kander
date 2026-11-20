@@ -17,6 +17,7 @@ import (
 	"github.com/dualface/kander/internal/client"
 	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/servicectl"
 	"github.com/dualface/kander/internal/version"
 	"golang.org/x/term"
@@ -70,20 +71,48 @@ func prepareServer(ctx context.Context, c *client.Client, cfg *config.Config) (b
 			return false, pathErr
 		}
 		unavailable := command.Coded(CodeUnreachable, errors.New(config.Text("remote.server_not_running", target, dir)))
-		if !serverInteractive() {
-			return false, unavailable
-		}
 		board := filepath.Join(dir, "projects", api.ProjectDirName(cfg.Project.Name), "board")
-		if !confirmServer(config.Text("remote.server_start_prompt", target, dir, board, filepath.Join(dir, "server.log"))) {
-			return true, unavailable
+		// Only the default data directory is started, so an existing board
+		// there is the sign that this server is the one the project uses. Without
+		// it a start would register an empty project in the wrong directory.
+		selfStart, awaited := false, false
+		if exists, existsErr := fs.DirectoryExists(dir, board); existsErr == nil && exists {
+			selfStart = true
+			if !serverStartAllowed() {
+				return false, unavailable
+			}
+			held, lockErr := dataLockHeld(dir)
+			if lockErr != nil {
+				return false, dataLockUnavailable(unavailable, dir, lockErr)
+			}
+			if held {
+				// A concurrent client's server may still be starting.
+				var reachable bool
+				if v, reachable, err = awaitServer(ctx, c); !reachable {
+					return false, dataLockUnavailable(unavailable, dir, nil)
+				}
+				awaited = true
+			}
+		} else {
+			if !serverInteractive() || !serverStartAllowed() {
+				return false, unavailable
+			}
+			if !confirmServer(config.Text("remote.server_start_prompt", target, dir, board, filepath.Join(dir, "server.log"))) {
+				return true, unavailable
+			}
 		}
-		prompted = true
-		fresh, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if _, err := startLocalServer(fresh, servicectl.StartOptions{DataDir: dir, Listen: servicectl.ListenAddress(target), TTL: api.DefaultTTL, Renew: api.DefaultRenewInterval}); err != nil {
-			return true, err
+		if !awaited {
+			prompted = true
+			fresh, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if _, err := startLocalServer(fresh, servicectl.StartOptions{DataDir: dir, Listen: servicectl.ListenAddress(target), TTL: api.DefaultTTL, Renew: api.DefaultRenewInterval}); err != nil {
+				return true, err
+			}
+			if selfStart {
+				remark("server_self_started", config.Text("remote.server_self_started", target, dir, filepath.Join(dir, "server.log")))
+			}
+			v, err = c.CheckCompatible(fresh)
 		}
-		v, err = c.CheckCompatible(fresh)
 	}
 	incompatible := api.IsCode(err, api.CodeProtocolIncompatible)
 	if err != nil && !incompatible {

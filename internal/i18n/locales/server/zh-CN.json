@@ -194,6 +194,8 @@
   "server.info": "URL：{{.V0}}\n版本：{{.V1}}\n进程号：{{.V2}}\n数据目录：{{.V3}}\n日志：{{.V4}}\n项目数量：{{.V5}}\n监听地址：{{.V6}}\nttl：{{.V7}}\nrenew：{{.V8}}",
   "remote.server_not_running": "本机服务端 {{.V0}} 未运行。请运行 kander server start。数据目录：{{.V1}}",
   "remote.server_start_prompt": "服务端 {{.V0}} 未运行。\n数据目录：{{.V1}}\n本项目看板：{{.V2}}\n日志：{{.V3}}\n现在在后台启动服务端吗？[Y/n] ",
+  "remote.server_self_started": "已在后台启动本机服务端 {{.V0}}（数据目录 {{.V1}}，日志 {{.V2}}）。",
+  "remote.server_lock_held": "数据目录锁 {{.V0}} 被持有：服务端在运行但从这里连不上，或离线服务端命令正在运行。未启动服务端。",
   "remote.server_version_warning": "警告：本机服务端版本 {{.V0}} 与客户端 {{.V1}} 不同；继续执行。可运行 kander server restart 更新。",
   "remote.server_restart_required": "服务端 {{.V0}} 与客户端 {{.V1}} 的协议不兼容。请运行 kander server restart。",
   "remote.server_restart_prompt": "本机服务端版本：{{.V0}}；客户端版本：{{.V1}}。现在重启服务端吗？[Y/n] ",
