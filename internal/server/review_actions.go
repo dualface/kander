@@ -110,7 +110,8 @@ func (s *Server) reviewActionRoutes(mux *http.ServeMux) {
 				return outcome{err: err}
 			}
 			// No writer credential: the abandon is for a run whose writer can no longer
-			// publish it, so the holders of the members confirm it like any review write.
+			// publish it, so it is authorized like any review write: by the holders of the
+			// members, or by the group coordinator under its write authority.
 			return p.reviewWrite(key, "review-abandon", request, p.runTasks(request.RunID), h, func(extension board.TransactionExtension) (any, error) {
 				return map[string]string{"run_id": request.RunID}, board.AbandonReviewRunWithTransaction(p.board, request, extension)
 			})

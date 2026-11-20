@@ -37,7 +37,7 @@ kander review <plan|extend-plan|assign|disposition|interpret|advance|close|aband
 - `--schema`: prints the JSON schema of the input of a subcommand.
 - `batch`: not a subcommand (no documented caller); batches are named in the plan by `plan` and `extend-plan`, advanced by `advance`, and closed by `close`.
 - `resolve_batch`: a field of the `extend-plan` input that accepts an unplanned batch that already ran, on the evidence of one closed planned batch (`snippets/review-evidence-gate.md` "Review Evidence Completion Gate").
-- `add_members`: a field of the `extend-plan` input that adds started cards of the plan's task group as plan members while the plan is not sealed; the whole request is refused when one card fails (the error names the card and the condition), distributed mode needs the confirmation of the holder of each started new member, and it is exclusive with every other operation (`snippets/orchestrate-review.md` "extend-plan").
+- `add_members`: a field of the `extend-plan` input that adds started cards of the plan's task group as plan members while the plan is not sealed; the whole request is refused when one card fails (the error names the card and the condition), distributed mode uses the coordinator write or, when its conditions fail, the confirmation of the holder of every live member of the operation, the new members included (`## Distributed holder confirmation (v2)`), and it is exclusive with every other operation (`snippets/orchestrate-review.md` "extend-plan").
 
 ## Examples
 

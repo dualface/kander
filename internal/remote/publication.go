@@ -231,8 +231,9 @@ func (s *Session) liveReviewMembers(ctx context.Context, tasks []string) ([]api.
 // singleMemberAuthority chooses the proof for a review write with at most one
 // live member. The holder of the member's current generation proves it
 // directly. A group coordinator process holds no credential of that
-// generation, so it prepares a joint publication with that one member and
-// waits for the holder; joint reports that choice. Any other process without a credential for the
+// generation, so it takes the coordinator write authority when it applies
+// (coordinatorAuthority) and otherwise prepares a joint publication with that
+// one member and waits for the holder; joint reports the second choice. Any other process without a credential for the
 // member is refused here with the holder named, because the server refuses
 // every unproven write to a claimed card. A credential of an older generation
 // held by any other process is sent as it is, and the server answers with the
@@ -280,8 +281,9 @@ func (s *Session) singleMemberAuthority(operation string, tasks []string, member
 
 // requireAbandonCaller refuses a review abandon of several live members from a
 // process that holds the credential of the current generation of none of them
-// and coordinates none of their groups. Every holder still confirms the exact
-// material before the server writes; this keeps a stranger from creating that
+// and coordinates none of their groups. Unless the coordinator write authority
+// applies, every holder still confirms the exact material before the server
+// writes; this keeps a stranger from creating that
 // material and one confirmation request per holder, as a single-member abandon
 // already refuses it.
 func (s *Session) requireAbandonCaller(members []api.PublicationMember, shown map[string]api.Task) error {
