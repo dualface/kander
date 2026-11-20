@@ -1,6 +1,7 @@
 package remote
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -10,7 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/internal/servicectl"
 )
 
 // renewable is a live credential of execution id.
@@ -143,6 +146,20 @@ func TestWorkerIsNotStartedWhileOneHoldsTheLock(t *testing.T) {
 	if elapsed := time.Since(began); elapsed > 30*time.Millisecond {
 		t.Fatalf("a held worker.lock took %v", elapsed)
 	}
+	// The probe alone answers within 10 ms. The best of a few tries keeps a
+	// scheduling stall of a loaded machine from failing the bound.
+	best := time.Hour
+	for range 5 {
+		began := time.Now()
+		held, err := lockHeld(home, lockPath(home))
+		if !held || err != nil {
+			t.Fatalf("held=%v err=%v", held, err)
+		}
+		best = min(best, time.Since(began))
+	}
+	if best > 10*time.Millisecond {
+		t.Fatalf("the held worker.lock probe took %v", best)
+	}
 }
 
 func TestOpenSurvivesAWorkerStartFailure(t *testing.T) {
@@ -200,5 +217,23 @@ func TestDetachedChildrenGetNeitherTheExecutionVariablesNorTheCallerDirectory(t 
 		if strings.HasPrefix(entry, EnvExecutionID+"=") || strings.HasPrefix(entry, EnvCoordinatorExecutionID+"=") {
 			t.Fatalf("worker env keeps %q", entry)
 		}
+	}
+}
+
+func TestOpenStartsNothingForACommandCanceledWhileTheServerStarts(t *testing.T) {
+	cfg, available, _, _ := serverGateFixture(t)
+	createBoard(t, cfg)
+	home, starts, _ := workerStartFixture(t)
+	t.Setenv(EnvClientHome, home)
+	writeCredential(t, home, renewable("e1"))
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	next := startLocalServer
+	startLocalServer = func(c context.Context, o servicectl.StartOptions) (api.ServerInfo, error) {
+		cancel()
+		return next(c, o)
+	}
+	if _, err := Open(ctx, cfg, t.TempDir()); !errors.Is(err, context.Canceled) || starts.Load() != 0 || !available.Load() {
+		t.Fatalf("err=%v worker starts=%d", err, starts.Load())
 	}
 }

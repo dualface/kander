@@ -202,6 +202,11 @@ func Open(ctx context.Context, cfg *config.Config, dir string) (*Session, error)
 	if err != nil {
 		return nil, err
 	}
+	// The question or the start replaces the budget below, never an explicit
+	// cancellation: a canceled command starts no worker and registers nothing.
+	if err := ctx.Err(); errors.Is(err, context.Canceled) {
+		return nil, err
+	}
 	if prompted {
 		fresh, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
