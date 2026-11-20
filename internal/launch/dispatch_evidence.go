@@ -28,7 +28,26 @@ func readDispatchEvidence(path string) (board.DispatchEvidence, error) {
 	return evidence, err
 }
 
+// verifyDispatchIntegration verifies an integration into the mainline branch,
+// the target of a card with no target field.
 func verifyDispatchIntegration(ctx context.Context, g board.DispatchIntegration) error {
+	return verifyIntegrationTarget(ctx, g, "")
+}
+
+// integrationTargetOfTask reads the target field of a card from the board.
+func integrationTargetOfTask(root, taskID string) (string, error) {
+	s, err := board.ReadSnapshot(root, taskID)
+	if err != nil {
+		return "", err
+	}
+	return board.IntegrationTargetOf(s.Text)
+}
+
+// verifyIntegrationTarget verifies an integration into the branch a card
+// targets: its target field, or the mainline branch when target is empty. It
+// proves only the one ref the evidence names; the other side of a local and
+// origin pair may not exist, as in a local-only integration.
+func verifyIntegrationTarget(ctx context.Context, g board.DispatchIntegration, target string) error {
 	if !filepath.IsAbs(g.CWD) {
 		return launchError("board.dispatch_evidence_invalid", "integration CWD or target ref")
 	}
@@ -38,8 +57,19 @@ func verifyDispatchIntegration(ctx context.Context, g board.DispatchIntegration)
 	if err != nil {
 		return err
 	}
-	mainline := config.MainlineBranch(cfg)
-	if g.TargetRef != "refs/heads/"+mainline && g.TargetRef != "refs/remotes/origin/"+mainline {
+	branch := config.MainlineBranch(cfg)
+	if target != "" {
+		// `main` only advances from `develop` in main-develop mode, so a card may
+		// not name it as a target there.
+		if target == "main" && branch == "develop" {
+			return launchError("board.dispatch_evidence_invalid", "integration CWD or target ref")
+		}
+		branch = target
+	}
+	if g.TargetRef != "refs/heads/"+branch && g.TargetRef != "refs/remotes/origin/"+branch {
+		return launchError("board.dispatch_evidence_invalid", "integration CWD or target ref")
+	}
+	if target != "" && exec.CommandContext(ctx, "git", "-C", g.CWD, "check-ref-format", "--branch", target).Run() != nil {
 		return launchError("board.dispatch_evidence_invalid", "integration CWD or target ref")
 	}
 	for _, commit := range []string{g.SourceCommit, g.TargetCommit, g.ReviewTarget, g.ReviewBase} {
@@ -140,9 +170,13 @@ func PrepareBoundDispatch(root string, in board.DispatchInput) (board.Dispatch, 
 					w.Git.ReviewBase = reviewRange.Ancestor
 				}
 			}
+			target, err := integrationTargetOfTask(root, in.TaskID)
+			if err != nil {
+				return board.Dispatch{}, err
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			if err := verifyDispatchIntegration(ctx, w.Git); err != nil {
+			if err := verifyIntegrationTarget(ctx, w.Git, target); err != nil {
 				return board.Dispatch{}, err
 			}
 			w.Git.VerifiedAt = time.Now().UTC()
@@ -160,7 +194,11 @@ func ValidateActionEvidence(ctx context.Context, root string, d board.Dispatch) 
 		return err
 	}
 	if w := d.Input.Evidence.WrapUp; w != nil {
-		return verifyDispatchIntegration(ctx, w.Git)
+		target, err := integrationTargetOfTask(root, d.Input.TaskID)
+		if err != nil {
+			return err
+		}
+		return verifyIntegrationTarget(ctx, w.Git, target)
 	}
 	return nil
 }

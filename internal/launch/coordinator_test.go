@@ -57,6 +57,14 @@ func launchCoordinatorRequest(t *testing.T, root, task string, c board.Coordinat
 func launchCompletedWrapUp(t *testing.T, cleanup ...func(board.DispatchInput, func() error)) (root, task string, in board.DispatchInput, d board.Dispatch, c board.CoordinatorCheckpoint) {
 	t.Helper()
 	root, task, in, c = launchCoordinatorFixture(t)
+	d, c = launchFinishWrapUp(t, root, task, in, c, cleanup...)
+	return root, task, in, d, c
+}
+
+// launchFinishWrapUp prepares the wrap-up dispatch of a fixture member, then
+// reconciles it and moves the member through working into done.
+func launchFinishWrapUp(t *testing.T, root, task string, in board.DispatchInput, c board.CoordinatorCheckpoint, cleanup ...func(board.DispatchInput, func() error)) (board.Dispatch, board.CoordinatorCheckpoint) {
+	t.Helper()
 	d, e := PrepareBoundDispatch(root, in)
 	if e != nil {
 		t.Fatal(e)
@@ -95,7 +103,7 @@ func launchCompletedWrapUp(t *testing.T, cleanup ...func(board.DispatchInput, fu
 	if e != nil {
 		t.Fatal(e)
 	}
-	return root, task, in, d, c
+	return d, c
 }
 
 // launchRewriteDevelop points develop at a disjoint history.

@@ -24,7 +24,7 @@ func init() { board.SetWrapUpGitVerifier(verifyWrapUpCompletion) }
 func ReconcileCoordinator(ctx context.Context, root string, r board.CoordinatorReconcile) (board.CoordinatorCheckpoint, error) {
 	return board.ReconcileCoordinator(ctx, root, r, func(ctx context.Context, facts board.CoordinatorGitFacts) error {
 		if d := facts.Delivery; d != nil {
-			if !filepath.IsAbs(r.CWD) || d.Branch == "main" || d.Branch == "develop" || strings.HasPrefix(d.Branch, "group/") {
+			if !filepath.IsAbs(r.CWD) || d.Branch == "main" || d.Branch == "develop" || d.Branch == facts.IntegrationTarget || strings.HasPrefix(d.Branch, "group/") {
 				return launchError("board.coordinator_conflict", "delivery CWD or task branch")
 			}
 			cmd := exec.CommandContext(ctx, "git", "-C", r.CWD, "check-ref-format", "refs/heads/"+d.Branch)
@@ -51,7 +51,7 @@ func verifyWrapUpGit(ctx context.Context, cwd string, facts board.CoordinatorGit
 	if cwd != "" {
 		g.CWD = cwd
 	}
-	if err := verifyDispatchIntegration(ctx, g); err != nil {
+	if err := verifyIntegrationTarget(ctx, g, facts.IntegrationTarget); err != nil {
 		return err
 	}
 	for _, c := range facts.Closures {
@@ -59,7 +59,7 @@ func verifyWrapUpGit(ctx context.Context, cwd string, facts board.CoordinatorGit
 			return err
 		}
 	}
-	return verifyDispatchIntegration(ctx, g)
+	return verifyIntegrationTarget(ctx, g, facts.IntegrationTarget)
 }
 
 // verifyWrapUpCompletion runs for kander move done. Cleanup may already have
