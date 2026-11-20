@@ -136,6 +136,9 @@ func (s *Session) reviewAuthority(ctx context.Context, operation, replay string,
 			return proof, false, err
 		}
 	}
+	if proof, err := s.coordinatorAuthority(ctx, operation, members, shown); err != nil || proof != nil {
+		return proof, false, err
+	}
 	raw, err = s.freezePublicationMaterial(operation, raw, members)
 	if err != nil {
 		return nil, false, err
@@ -235,9 +238,10 @@ func (s *Session) liveReviewMembers(ctx context.Context, tasks []string) ([]api.
 // held by any other process is sent as it is, and the server answers with the
 // takeover.
 //
-// The choice only selects the flow. The server still requires the holder's
-// confirmation of the exact material before it publishes, so a process that
-// claims to be a coordinator gains no authority.
+// The choice only selects the flow. The server decides the authority: the
+// holder's confirmation of the exact material, or, when coordinatorAuthority
+// applies, the group lease and the card state. A process that merely claims to
+// be a coordinator gains none.
 func (s *Session) singleMemberAuthority(operation string, tasks []string, members []api.PublicationMember, shown map[string]api.Task) (proof *client.Claim, joint bool, err error) {
 	ids := tasks
 	if len(tasks) > 1 {

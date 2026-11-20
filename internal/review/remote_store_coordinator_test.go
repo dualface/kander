@@ -27,6 +27,11 @@ const (
 	coordinatedHead  = "2222222222222222222222222222222222222222"
 )
 
+// coordinatedRemote is the Git remote the fixture registers its project with.
+// A test that moves cards to review sets one, because the service accepts
+// delivery facts only for a registered remote.
+var coordinatedRemote string
+
 // coordinatedRun is a group review whose cards are held by a process on host a
 // and whose reviewer runs on host b, the process that coordinates the group.
 type coordinatedRun struct {
@@ -70,7 +75,7 @@ func newCoordinatedRunKeeping(t *testing.T, members, planned int, keepLive bool)
 	a, _ := client.New(httpServer.URL, "host-a")
 	b, _ := client.New(httpServer.URL, "host-b")
 	c, _ := client.New(httpServer.URL, "host-c")
-	info, err := a.Register(t.Context(), "coordinated-run", "")
+	info, err := a.Register(t.Context(), "coordinated-run", coordinatedRemote)
 	if err != nil {
 		t.Fatal(err)
 	}
