@@ -265,7 +265,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 			if !config.SessionDiscoversAfterStart(sessionDef) {
 				return session, nil
 			}
-			ref, err := runSessionDiscoverHook(sessionDef, moved.TaskID, previous, launchStart, program, parentDir(root), plan.launchTimeout)
+			ref, err := runSessionDiscoverHook(sessionDef, moved.TaskID, prompt, previous, launchStart, program, parentDir(root), plan.launchTimeout)
 			if err != nil {
 				return AgentSession{}, err
 			}

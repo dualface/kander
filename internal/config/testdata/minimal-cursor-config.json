@@ -39,6 +39,13 @@
   },
   "models": {
     "kanban": {
+      "agy": {
+        "large_effort": "high",
+        "large_model": "",
+        "model": "",
+        "small_effort": "medium",
+        "small_model": ""
+      },
       "claude": {
         "large_effort": "high",
         "large_model": "opus",
@@ -92,6 +99,10 @@
       }
     },
     "review": {
+      "agy": {
+        "effort": "high",
+        "model": ""
+      },
       "claude": {
         "effort": "high",
         "model": "opus"
@@ -148,6 +159,10 @@
       }
     },
     "chat": {
+      "agy": {
+        "effort": "high",
+        "model": ""
+      },
       "claude": {
         "effort": "high",
         "model": "opus"

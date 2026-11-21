@@ -1,9 +1,11 @@
 package review
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -200,6 +202,9 @@ func TestParseReviewOutputSuccessBeforeExtract(t *testing.T) {
 		{"kimi", `{"role":"assistant","tool_calls":[{"type":"function","id":"1"}]}` + "\n" + `{"role":"assistant","content":"ok"}` + "\n" + `{"role":"meta","type":"session.resume_hint"}` + "\n", true},
 		{"kimi", `{"role":"assistant","content":"ok"}` + "\n", false},
 		{"kimi", `{"role":"tool","tool_call_id":"1","content":"x"}` + "\n" + `{"role":"meta","type":"session.resume_hint"}` + "\n", false},
+		{"agy", `{"status":"SUCCESS","response":"ok"}`, true},
+		{"agy", `{"status":"ERROR","response":"partial"}`, false},
+		{"agy", `{"status":"SUCCESS","response":""}`, false},
 		{"droid", `{"type":"result","subtype":"success","is_error":false,"result":"ok","session_id":"s1"}`, true},
 		{"droid", `{"type":"result","subtype":"failure","is_error":true,"result":"Exec ended early: insufficient permission to proceed."}`, false},
 	}
@@ -453,5 +458,48 @@ func TestReviewOutputParsingUsesProcessEntry(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("review parsing must use the review-subset entry")
+	}
+}
+
+func TestAgyReviewRequestsReadOnlyTools(t *testing.T) {
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "missing.json"))
+	settings, err := agentSettingsFor("agy", "PMQA", "large")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := reviewContext{agent: "agy", settings: settings, root: "/work", rulesDir: "/rules",
+		program: process.AgentProgram{Path: "/bin/agy"}, instruction: "Read /rt/prompt.txt"}
+	inv, _, err := reviewerArguments(ctx, "/rt", "/rt/out", "/rt/prompt.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := inv.Argv[1:]
+	for flag, want := range map[string]string{
+		"--mode": "plan", "--add-dir": "/rt", "--output-format": "json",
+	} {
+		i := slices.Index(args, flag)
+		if i < 0 || i+1 >= len(args) || args[i+1] != want {
+			t.Fatalf("expected %s %s in %q", flag, want, args)
+		}
+	}
+	if !slices.Contains(args, "/rules") {
+		t.Fatalf("missing rules directory: %q", args)
+	}
+	prompt := slices.Index(args, "--print")
+	if prompt < 0 || prompt+1 >= len(args) || !strings.HasPrefix(args[prompt+1], ctx.instruction) {
+		t.Fatalf("missing bootstrap: %q", args)
+	}
+	i := slices.Index(args, "--settings")
+	if i < 0 || i+1 >= len(args) {
+		t.Fatalf("missing settings: %q", args)
+	}
+	var policy struct{ Permissions struct{ Deny []string } }
+	if err := json.Unmarshal([]byte(args[i+1]), &policy); err != nil {
+		t.Fatal(err)
+	}
+	for _, action := range []string{"write_file(*)", "command(*)", "mcp(*)", "read_url(*)", "execute_url(*)"} {
+		if !slices.Contains(policy.Permissions.Deny, action) {
+			t.Errorf("missing deny rule %s", action)
+		}
 	}
 }

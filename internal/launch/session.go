@@ -380,7 +380,7 @@ func runSessionResolveHook(ctx context.Context, mode, taskID string) (string, er
 // ids enumerated before a discovered-mode launch; launchStart is the time
 // recorded right before the agent was launched. budget maps each discovery
 // wait to its launch budget (LaunchPlan.launchTimeout).
-func runSessionDiscoverHook(session *config.AgentSessionDefinition, taskID string, previous map[string]struct{}, launchStart time.Time, program *process.AgentProgram, cwd string, budget func(time.Duration) time.Duration) (string, error) {
+func runSessionDiscoverHook(session *config.AgentSessionDefinition, taskID, prompt string, previous map[string]struct{}, launchStart time.Time, program *process.AgentProgram, cwd string, budget func(time.Duration) time.Duration) (string, error) {
 	if session.Mode == "discovered" {
 		return discoverNewAgentSession(session.Discovery, budget(session.Discovery.Timeout()), taskID, previous, program, cwd)
 	}
@@ -391,6 +391,8 @@ func runSessionDiscoverHook(session *config.AgentSessionDefinition, taskID strin
 	switch name {
 	case "codex-rollout":
 		return discoverNewCodexSession(taskID, launchStart, cwd, budget(sessionDiscoverWait))
+	case "agy-transcript":
+		return discoverAgySession(previous, prompt, budget(30*time.Second))
 	case "droid-sessions":
 		return discoverNewDroidSession(previous, cwd, budget(sessionDiscoverWait))
 	default:
@@ -399,7 +401,7 @@ func runSessionDiscoverHook(session *config.AgentSessionDefinition, taskID strin
 }
 
 // sessionDiscoverSnapshot records the sessions that exist before a
-// discovered-mode or droid-sessions launch. Codex needs no snapshot and
+// discovered-mode or transcript-based launch. Codex needs no snapshot and
 // returns an empty set.
 // budget maps the enumeration wait to its launch budget.
 func sessionDiscoverSnapshot(session *config.AgentSessionDefinition, taskID string, discover bool, program *process.AgentProgram, cwd string, budget func(time.Duration) time.Duration) (map[string]struct{}, error) {
@@ -430,6 +432,8 @@ func sessionDiscoverSnapshot(session *config.AgentSessionDefinition, taskID stri
 		if err := checkCodexSessionsRoot(); err != nil {
 			return nil, err
 		}
+	case "agy-transcript":
+		return agySessionSnapshot()
 	case "droid-sessions":
 		return droidSessionSnapshot(budget(sessionDiscoverWait))
 	}

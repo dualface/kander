@@ -17,6 +17,7 @@ func TestEmbeddedAgentsDeclareProgramStatus(t *testing.T) {
 		"kimi":     {Reports: true, App: "kimi-code"},
 		"devin":    {Reports: true, App: "devin"},
 		"opencode": {Reports: false},
+		"agy":      {Reports: false},
 		"droid":    {Reports: false},
 	}
 	for _, name := range ExecutionAgents {

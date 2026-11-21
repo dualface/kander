@@ -193,6 +193,10 @@ func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os
 		fail(readPromptErr)
 		return exitCode
 	}
+	// An uninstalled binary can use embedded rules without a rules directory on disk.
+	if info, statErr := os.Stat(paths.RulesDir); statErr == nil && info.IsDir() {
+		ctx.rulesDir = paths.RulesDir
+	}
 	ctx.instruction, err = reviewInstruction(paths.RulesDir, ctx.role, promptFile)
 	if err != nil {
 		fail(err)

@@ -85,7 +85,7 @@ func TestDroidDiscoveryPicksTheNewSessionOfTheLaunchDirectory(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "-project", "1a2b-mine.settings.json"), []byte("{}"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got, err := runSessionDiscoverHook(def, "task", previous, time.Now(), nil, cwd, budget)
+	got, err := runSessionDiscoverHook(def, "task", "", previous, time.Now(), nil, cwd, budget)
 	if err != nil || got != "1a2b-mine" {
 		t.Fatalf("got=%q err=%v", got, err)
 	}
