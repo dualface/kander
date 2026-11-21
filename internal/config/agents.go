@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"sort"
@@ -309,7 +310,13 @@ func agentEntries(raw any) (map[string]AgentDefinition, map[string]unusableAgent
 				firstErr = err
 			}
 		case reason != "":
-			unusable[name] = unusableAgent{Reason: reason, Value: obj[name]}
+			entry := unusableAgent{Reason: reason, Value: obj[name]}
+			if _, builtin := embeddedByName(name); builtin {
+				// The install switches are scope policy, not part of what makes the
+				// agent unusable, so they keep applying; see InstallRulesOf.
+				entry.Policy = AgentDefinition{InstallRules: d.InstallRules, ConfigDir: d.ConfigDir}
+			}
+			unusable[name] = entry
 		default:
 			out[name] = d
 		}
@@ -318,7 +325,10 @@ func agentEntries(raw any) (map[string]AgentDefinition, map[string]unusableAgent
 }
 
 // validateAgentEntry checks one agents.<name> entry. A non-empty reason means the
-// entry is unusable in this version without being invalid.
+// entry is unusable in this version without being invalid. Every check of a known
+// field that does not depend on the reason runs first, so a soft reason never hides
+// an invalid value; checks that need the dialect or the session mode run only for
+// an entry that is otherwise usable.
 func validateAgentEntry(name string, value any) (d AgentDefinition, reason string, err error) {
 	if !ValidAgentName(name) {
 		return d, "", agentDefinitionError(name, Text("config.agent_name"))
@@ -328,22 +338,15 @@ func validateAgentEntry(name string, value any) (d AgentDefinition, reason strin
 		return d, "", agentDefinitionError(name, Text("config.agent_object"))
 	}
 	_, builtin := embeddedByName(name)
-	// Entries a newer version wrote for an agent it ships as built-in: the keys
-	// below exist only for built-in names, so on a custom name they mark an agent
-	// this version does not have.
-	if _, exists := fields["install_rules"]; exists && !builtin {
-		return d, Text("config.agent_install_rules_builtin_only"), nil
-	}
-	if _, exists := fields["config_dir"]; exists && !builtin {
-		return d, Text("config.agent_config_dir_builtin_only"), nil
-	}
 	if v, exists := fields["install_rules"]; exists {
 		if _, ok := v.(bool); !ok {
 			return d, "", agentDefinitionError(name, Text("config.agent_install_rules"))
 		}
 	}
-	data, _ := json.Marshal(fields)
-	// Unknown keys are ignored here; scanIgnored reports them.
+	// Decode only the keys the definition declares, matched exactly: the standard
+	// decoder also matches keys that differ in case, which would let a key the scanner
+	// reports as ignored change the definition.
+	data, _ := json.Marshal(pruneToStruct(fields, reflect.TypeOf(AgentDefinition{})))
 	if err := json.NewDecoder(bytes.NewReader(data)).Decode(&d); err != nil {
 		return d, "", agentDefinitionError(name, err.Error())
 	}
@@ -355,23 +358,13 @@ func validateAgentEntry(name string, value any) (d AgentDefinition, reason strin
 			}
 		}
 	}
-	if d.Dialect != "" && !contains(ExecutionAgents, d.Dialect) {
-		return d, Text("config.agent_dialect"), nil
-	}
-	if d.Dialect == "" && d.Args == nil && !contains(ExecutionAgents, name) {
-		return d, Text("config.agent_adapter"), nil
-	}
-	if d.Session != nil && d.Session.Mode != "" && !validDeclaredSessionMode(d.Session.Mode) {
-		return d, Text("config.agent_unusable_session_mode", d.Session.Mode), nil
-	}
 	if v, exists := fields["config_dir"]; exists {
-		emb, _ := embeddedByName(name)
-		if emb.ConfigHome.Fixed {
-			return d, "", agentDefinitionError(name, Text("config.agent_config_dir_fixed"))
-		}
 		s, ok := v.(string)
 		if !ok || !validConfigDirValue(s) {
 			return d, "", agentDefinitionError(name, Text("config.agent_config_dir"))
+		}
+		if emb, ok := embeddedByName(name); ok && emb.ConfigHome.Fixed {
+			return d, "", agentDefinitionError(name, Text("config.agent_config_dir_fixed"))
 		}
 	}
 	for _, key := range []string{"args", "session", "prompt_delivery", "review", "program_status"} {
@@ -411,15 +404,26 @@ func validateAgentEntry(name string, value any) (d AgentDefinition, reason strin
 			return d, "", agentDefinitionError(name, Text("config.agent_exit_command"))
 		}
 	}
+	if d.Session != nil && d.Session.Mode == "" {
+		return d, "", agentDefinitionError(name, Text("config.agent_session"))
+	}
+	// Entries a newer version wrote for an agent it ships as built-in: the keys
+	// below exist only for built-in names, so on a custom name they mark an agent
+	// this version does not have.
+	switch {
+	case !builtin && fields["install_rules"] != nil:
+		return d, Text("config.agent_install_rules_builtin_only"), nil
+	case !builtin && fields["config_dir"] != nil:
+		return d, Text("config.agent_config_dir_builtin_only"), nil
+	case d.Dialect != "" && !contains(ExecutionAgents, d.Dialect):
+		return d, Text("config.agent_dialect"), nil
+	case d.Dialect == "" && d.Args == nil && !contains(ExecutionAgents, name):
+		return d, Text("config.agent_adapter"), nil
+	case d.Session != nil && !validDeclaredSessionMode(d.Session.Mode):
+		return d, Text("config.agent_unusable_session_mode", d.Session.Mode), nil
+	}
 	if d.Session != nil {
 		s := d.Session
-		if hookName, isHook := ParseSessionHook(s.Mode); isHook {
-			if _, ok := LookupSessionHook(s.Mode); !ok {
-				return d, "", agentDefinitionError(name, Text("config.agent_session_hook", name, hookName))
-			}
-		} else if !contains([]string{"generated", "allocated", "none", "discovered"}, s.Mode) {
-			return d, "", agentDefinitionError(name, Text("config.agent_session"))
-		}
 		if err := validateSessionDiscovery(name, s); err != nil {
 			return d, "", err
 		}

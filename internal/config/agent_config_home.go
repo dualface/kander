@@ -103,7 +103,10 @@ func ScopeAgentConfigDir(paths InstallPaths, name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return cfg.Agents[name].ConfigDir, nil
+	if dir := cfg.Agents[name].ConfigDir; dir != "" {
+		return dir, nil
+	}
+	return cfg.UnusablePolicy[name].ConfigDir, nil
 }
 
 // dropOverlayConfigDirs removes agents.<name>.config_dir from an overlay copy

@@ -180,3 +180,89 @@ func TestDoctorRepairKeepsUnknownAgentReferences(t *testing.T) {
 		t.Fatalf("references changed: %+v", cfg)
 	}
 }
+
+// attachProject opens a Project-tab session over an overlay file.
+func attachProject(t *testing.T, cfg *config.Config, overlay map[string]any) (*Session, string) {
+	t.Helper()
+	session, err := NewSessionForTest(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	loc := config.OverlayLocation{ProjectRoot: dir, Path: filepath.Join(dir, config.OverlayFilename), Exists: true}
+	writeDoc(t, loc.Path, overlay)
+	raw, err := config.ReadOverlayFile(loc.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := session.AttachOverlay(config.ModeProject, loc, raw); err != nil {
+		t.Fatal(err)
+	}
+	return session, loc.Path
+}
+
+func TestOptionsEditsDoNotClearUnknownOverlayContent(t *testing.T) {
+	_, cfg := futureScope(t)
+	overlay := map[string]any{
+		"kanban_agents": map[string]any{"large": "newagent"},
+		"models":        map[string]any{"kanban": map[string]any{"newagent": map[string]any{"large_model": "m", "large_effort": "high"}}},
+		"tui":           map[string]any{"refresh": 45},
+	}
+	session, path := attachProject(t, cfg, overlay)
+	// Switching away from the unknown agent must not delete its model overrides.
+	session.SetExecutionAgent("large", "codex")
+	if _, err := session.Save(); err != nil {
+		t.Fatal(err)
+	}
+	saved := readDoc(t, path)
+	if got, _ := config.OverlayGet(saved, "models", "kanban", "newagent", "large_model"); got != "m" {
+		t.Fatalf("switching the agent cleared the unknown agent's overrides: %v", saved)
+	}
+	// Restoring the execution page clears known overrides and keeps the unknown ones.
+	if err := session.RestoreSection("execution"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := session.Save(); err != nil {
+		t.Fatal(err)
+	}
+	saved = readDoc(t, path)
+	if got, _ := config.OverlayGet(saved, "models", "kanban", "newagent", "large_effort"); got != "high" {
+		t.Fatalf("restoring the page cleared unknown content: %v", saved)
+	}
+	if _, ok := config.OverlayGet(saved, "kanban_agents", "large"); ok {
+		t.Fatalf("restoring the page kept a known override: %v", saved)
+	}
+}
+
+func TestOptionsOffersNoModelFieldsForUnknownAgents(t *testing.T) {
+	_, cfg := futureScope(t)
+	session, err := NewSessionForTest(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := session.ExecutionModelFieldsFor("large"); len(got) != 0 {
+		t.Fatalf("execution fields for an unknown agent: %+v", got)
+	}
+	if got := session.ChatModelFieldsFor(); len(got) != 0 {
+		t.Fatalf("chat fields for an unknown agent: %+v", got)
+	}
+	if got := session.ReviewModelFieldsFor("PMQA", "large"); len(got) != 0 {
+		t.Fatalf("review fields for an unknown reviewer: %+v", got)
+	}
+}
+
+func TestEditingTheSmallScaleLeavesKanbanAgentAlone(t *testing.T) {
+	_, cfg := futureScope(t)
+	session, err := NewSessionForTest(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session.SetExecutionAgent("small", "claude")
+	if session.Config.KanbanAgent != "newagent" {
+		t.Fatalf("kanban_agent was overwritten: %q", session.Config.KanbanAgent)
+	}
+	session.SetExecutionAgent("large", "claude")
+	if session.Config.KanbanAgent != "claude" {
+		t.Fatalf("kanban_agent must follow the large scale: %q", session.Config.KanbanAgent)
+	}
+}

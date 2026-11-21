@@ -204,6 +204,30 @@ func ReadOverlayFile(path string) (map[string]any, error) {
 	return cloneRawObjectDeep(obj), nil
 }
 
+// OverlayIgnored lists the keys of overlay that this version ignores, judged
+// against the scope document it is merged over, so an agent the scope file defines
+// counts as known. Options keeps these when it clears an override.
+func OverlayIgnored(scopeRaw, overlay map[string]any) []Ignored {
+	merged := deepMerge(scopeRaw, overlay)
+	var out []Ignored
+	for _, item := range ignoredOfDocument(merged) {
+		if OverlayHas(overlay, item.Path...) {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+// OverlayKeep writes the given ignored items back into overlay where they are
+// missing, for an edit that cleared a whole section.
+func OverlayKeep(overlay map[string]any, items []Ignored) {
+	for _, item := range items {
+		if !OverlayHas(overlay, item.Path...) {
+			OverlaySet(overlay, item.Value, item.Path...)
+		}
+	}
+}
+
 // DocumentFromConfig encodes a filled Config as a JSON object. In-memory
 // sessions use this when no original document exists. Overlay save and Load
 // must use LoadScopeDocument so missing optional sections stay missing.

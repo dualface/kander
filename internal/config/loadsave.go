@@ -159,6 +159,12 @@ func carryIgnored(dst, src *Config) {
 			dst.UnusableAgents = map[string]string{}
 		}
 		dst.UnusableAgents[name] = reason
+		if policy, ok := src.UnusablePolicy[name]; ok {
+			if dst.UnusablePolicy == nil {
+				dst.UnusablePolicy = map[string]AgentDefinition{}
+			}
+			dst.UnusablePolicy[name] = policy
+		}
 	}
 }
 
@@ -323,6 +329,11 @@ func saveConfigAt(path string, cfg *Config) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// Validate rebuilt the config from its serialized copy, which cannot name an
+	// agent this version took out of service; restore that, so the defaults it
+	// filled in for such an agent do not shadow the values the file keeps.
+	carryIgnored(validated, cfg)
+	pruneUnusableModels(&validated.Models, validated)
 	payload, err := encodeConfigKeeping(validated, ignoredOfFile(path))
 	if err != nil {
 		return "", wrapSaveError(path, err)
@@ -428,7 +439,7 @@ func configEditConflicts(current, baseline, target *Config) bool {
 	for i := 0; i < currentValue.NumField(); i++ {
 		// What this version ignores is kept from the file at save time, so a change
 		// to it by another writer is not a conflicting edit.
-		if name := currentValue.Type().Field(i).Name; name == "Ignored" || name == "UnusableAgents" {
+		if name := currentValue.Type().Field(i).Name; name == "Ignored" || name == "UnusableAgents" || name == "UnusablePolicy" {
 			continue
 		}
 		currentField := currentValue.Field(i).Interface()

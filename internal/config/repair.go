@@ -133,6 +133,7 @@ func repairValues(raw any) (*Config, error) {
 		}
 		defaults.Agents = definitions
 		defaults.UnusableAgents = unusableReasons(unusable)
+		defaults.UnusablePolicy = unusablePolicies(unusable)
 		customModelDefaults(definitions, &defaults.Models)
 	}
 	if rawReviewers, ok := asObject(provided["reviewers"]); ok {
@@ -182,7 +183,15 @@ func repairValues(raw any) (*Config, error) {
 	FoldLegacyReviewRoleKeys(provided)
 	recoverConfigFields(root, provided, root)
 	fillMissingChatRaw(root, provided)
-	return Validate(root)
+	cfg, err := Validate(root)
+	if err != nil {
+		return nil, err
+	}
+	// root cannot name an agent this version took out of service; restore that so the
+	// saved document does not carry defaults over the values the file keeps for it.
+	cfg.UnusableAgents, cfg.UnusablePolicy = defaults.UnusableAgents, defaults.UnusablePolicy
+	pruneUnusableModels(&cfg.Models, cfg)
+	return cfg, nil
 }
 
 // fillMissingReviewerScales copies the present scale onto a missing one so

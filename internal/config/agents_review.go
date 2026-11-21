@@ -85,6 +85,12 @@ func userDeclaredReviewTemplate(d AgentDefinition) bool {
 // Built-in names keep the embedded args.review. A custom name must declare
 // args.review or review itself; dialect backfill is not a declaration.
 func HasReviewTemplate(cfg *Config, name string) bool {
+	if cfg != nil {
+		// An unusable entry takes its built-in namesake out of service as a reviewer too.
+		if _, unusable := cfg.UnusableAgents[name]; unusable {
+			return false
+		}
+	}
 	if contains(ExecutionAgents, name) {
 		emb, ok := embeddedByName(name)
 		return ok && emb.Args.Review != nil

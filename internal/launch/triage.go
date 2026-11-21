@@ -211,18 +211,24 @@ func sessionDefaults(cfg *config.Config, scale, agentOverride, launcherOverride 
 	if !config.HasAgent(cfg, agent) {
 		return "", "", unavailableAgentError(cfg, agent)
 	}
+	resolved, err := sessionLauncher(cfg, launcherOverride)
+	if err != nil {
+		return "", "", err
+	}
+	return agent, resolved, nil
+}
+
+// sessionLauncher resolves the launcher of a session that owns no card; an
+// override wins over the configuration.
+func sessionLauncher(cfg *config.Config, launcherOverride string) (string, error) {
 	launcher := strings.TrimSpace(launcherOverride)
 	if launcher == "" {
 		launcher = cfg.Launcher
 	}
 	if !config.ValidLauncherName(launcher) {
-		return "", "", launchError("launch.unknown_launcher", launcher)
+		return "", launchError("launch.unknown_launcher", launcher)
 	}
-	resolved, err := resolveStartLauncher(launcher)
-	if err != nil {
-		return "", "", err
-	}
-	return agent, resolved, nil
+	return resolveStartLauncher(launcher)
 }
 
 // validateTriageEvidence refuses to start a session whose prompt would point at

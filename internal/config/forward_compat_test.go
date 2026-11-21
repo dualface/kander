@@ -530,8 +530,205 @@ func TestOverlayForbiddenKeysStillFail(t *testing.T) {
 }
 
 func TestStrictPlacesStayStrict(t *testing.T) {
-	// The embedded definitions stay strict: they ship with the binary.
-	if _, err := parseEmbeddedAgentFile("x.json", []byte(`{"schema_version":1,"unknown_key":true}`)); err == nil {
-		t.Fatal("an embedded definition accepted an unknown key")
+	// The embedded definitions stay strict: take a valid one and add a single unknown key.
+	data, err := embeddedAgentFS.ReadFile("agents/codex.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parseEmbeddedAgentFile("codex.json", data); err != nil {
+		t.Fatalf("the unmodified embedded definition must parse: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatal(err)
+	}
+	doc["future_key"] = true
+	data, _ = json.Marshal(doc)
+	if _, err := parseEmbeddedAgentFile("codex.json", data); err == nil || !strings.Contains(err.Error(), "future_key") {
+		t.Fatalf("an embedded definition accepted an unknown key: %v", err)
+	}
+}
+
+// A built-in agent whose entry this version cannot use keeps the values the file holds
+// for it, and keeps its install policy.
+func TestUnusableBuiltinKeepsItsModelsAndPolicy(t *testing.T) {
+	setupHome(t)
+	doc := scopeDocument(t)
+	doc["agents"] = map[string]any{"codex": map[string]any{
+		"install_rules": false, "config_dir": "/tmp/codex-home",
+		"args":    map[string]any{"start": []any{}, "resume": []any{}},
+		"session": map[string]any{"mode": "hook:future-hook"},
+	}}
+	OverlaySet(doc, "user-model", "models", "kanban", "codex", "large_model")
+	OverlaySet(doc, "user-review", "models", "review", "codex", "model")
+	OverlaySet(doc, "user-chat", "models", "chat", "codex", "model")
+	path := writeScope(t, doc)
+	cfg, err := Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if HasAgent(cfg, "codex") || HasReviewTemplate(cfg, "codex") {
+		t.Fatal("an unusable built-in agent must be out of service as executor and reviewer")
+	}
+	if InstallRulesOf(cfg).Enabled("codex") {
+		t.Fatal("install_rules=false of an unusable entry must keep applying")
+	}
+	paths, err := CurrentInstallPaths()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dir, err := ScopeAgentConfigDir(paths, "codex"); err != nil || dir != "/tmp/codex-home" {
+		t.Fatalf("config_dir of an unusable entry must keep applying: %q %v", dir, err)
+	}
+	// Options-style switch rewriting must not turn the entry into a different one.
+	SetAgentInstallRules(cfg, "codex", nil)
+	ApplyAgentInstallRules(cfg, InstallRulesOf(cfg))
+	cfg.TUI.Columns = 3
+	if _, err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	saved := readScope(t, path)
+	for _, p := range [][]string{{"models", "kanban", "codex", "large_model"}, {"models", "review", "codex", "model"}, {"models", "chat", "codex", "model"}} {
+		got, _ := jsonPath(saved, p...)
+		if !strings.HasPrefix(got.(string), "user-") {
+			t.Fatalf("%v was replaced by a default: %v", p, got)
+		}
+	}
+	if mode, _ := jsonPath(saved, "agents", "codex", "session", "mode"); mode != "hook:future-hook" {
+		t.Fatalf("the unusable entry changed: %v", mode)
+	}
+	// Repair rewrites a file with a broken known value and keeps the same content.
+	OverlaySet(saved, 99, "tui", "columns")
+	writeJSONFile(t, path, saved)
+	if _, result, err := Repair(nil); err != nil || !result.Changed {
+		t.Fatalf("repair=%+v err=%v", result, err)
+	}
+	repaired := readScope(t, path)
+	if got, _ := jsonPath(repaired, "models", "kanban", "codex", "large_model"); got != "user-model" {
+		t.Fatalf("repair replaced the models of an unusable built-in agent: %v", got)
+	}
+	if mode, _ := jsonPath(repaired, "agents", "codex", "session", "mode"); mode != "hook:future-hook" {
+		t.Fatalf("repair changed the unusable entry: %v", mode)
+	}
+}
+
+// Keys that differ from a declared key only in case are unknown, not the declared key.
+func TestAgentKeysMatchExactly(t *testing.T) {
+	setupHome(t)
+	doc := scopeDocument(t)
+	doc["agents"] = map[string]any{"codex": map[string]any{"Path": "/opt/evil/codex"}}
+	writeScope(t, doc)
+	cfg, err := Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := AgentPath(cfg, "codex"); got != "codex" {
+		t.Fatalf("a key spelled with another case changed the program: %q", got)
+	}
+	if got := ignoredPaths(cfg); !slices.Equal(got, []string{"agents.codex.Path"}) {
+		t.Fatalf("ignored=%v", got)
+	}
+}
+
+func TestKnownValuesStayCheckedBesideADowngradeReason(t *testing.T) {
+	setupHome(t)
+	for name, entry := range map[string]map[string]any{
+		"bad path beside install_rules":      {"path": "bad\tvalue", "dialect": "claude", "install_rules": false},
+		"bad path beside unknown dialect":    {"path": "bad\tvalue", "dialect": "futuredialect"},
+		"bad config_dir beside session mode": {"config_dir": "relative", "args": map[string]any{"start": []any{}, "resume": []any{}}, "session": map[string]any{"mode": "future-mode"}},
+	} {
+		doc := scopeDocument(t)
+		doc["agents"] = map[string]any{"codex": entry}
+		if name == "bad path beside install_rules" || name == "bad path beside unknown dialect" {
+			doc["agents"] = map[string]any{"custom": entry}
+		}
+		writeScope(t, doc)
+		if _, err := Load(false); err == nil {
+			t.Fatalf("%s: an invalid known value was hidden by a downgrade reason", name)
+		}
+	}
+}
+
+func TestReviewRoleExtrasSurviveTheFold(t *testing.T) {
+	setupHome(t)
+	doc := scopeDocument(t)
+	OverlaySet(doc, map[string]any{"model": "m", "future": map[string]any{"a": 1}}, "models", "review_roles", "PMQA")
+	path := writeScope(t, doc)
+	cfg, err := Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ignoredPaths(cfg); !slices.Equal(got, []string{"models.review_roles.PMQA.future"}) {
+		t.Fatalf("ignored=%v", got)
+	}
+	if _, err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := jsonPath(readScope(t, path), "models", "review_roles", "PMQA", "future", "a"); !ok {
+		t.Fatal("an unknown field of a current role was lost on save")
+	}
+	// An unknown field of a legacy role is kept under the current role it folds into.
+	legacy := scopeDocument(t)
+	OverlaySet(legacy, map[string]any{"model": "m", "future": "x"}, "models", "review_roles", "PM")
+	writeJSONFile(t, path, legacy)
+	cfg, err = Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := jsonPath(readScope(t, path), "models", "review_roles", "PMQA", "future"); v != "x" {
+		t.Fatalf("an unknown field of a legacy role was lost on save: %v", v)
+	}
+	// The fold used by the overlay merge and the overlay write keeps it too.
+	raw := map[string]any{"models": map[string]any{"review_roles": map[string]any{
+		"PM": map[string]any{"model": "m", "future": "x"},
+	}}}
+	FoldLegacyReviewRoleKeys(raw)
+	if v, _ := jsonPath(raw, "models", "review_roles", "PMQA", "future"); v != "x" {
+		t.Fatalf("an unknown field of a legacy role must move to the current role: %v", raw)
+	}
+}
+
+func TestFlatLegacyOverlayKeepsUnknownRolePath(t *testing.T) {
+	setupHome(t)
+	root := t.TempDir()
+	main := initGitRepo(t, filepath.Join(root, "repo"))
+	t.Chdir(main)
+	scopePath := filepath.Join(root, "config.json")
+	t.Setenv(EnvConfig, scopePath)
+	writeJSONFile(t, scopePath, scopeDocument(t))
+	overlayPath := filepath.Join(main, OverlayFilename)
+	writeJSONFile(t, overlayPath, map[string]any{"reviewers": map[string]any{"PMQA": "codex", "FutureRole": "codex"}})
+	cfg, err := Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ignoredPaths(cfg); !slices.Equal(got, []string{"reviewers.FutureRole"}) {
+		t.Fatalf("the ignored path must be the one in the file: %v", got)
+	}
+	if cfg.Ignored[0].Source != overlayPath {
+		t.Fatalf("source=%q", cfg.Ignored[0].Source)
+	}
+}
+
+func TestOverlayWithOnlyUnknownTUIKeysOverAScopeWithoutTUI(t *testing.T) {
+	setupHome(t)
+	root := t.TempDir()
+	main := initGitRepo(t, filepath.Join(root, "repo"))
+	t.Chdir(main)
+	scopePath := filepath.Join(root, "config.json")
+	t.Setenv(EnvConfig, scopePath)
+	scope := scopeDocument(t)
+	delete(scope, "tui")
+	writeJSONFile(t, scopePath, scope)
+	writeJSONFile(t, filepath.Join(main, OverlayFilename), map[string]any{"tui": map[string]any{"future": true}})
+	cfg, err := Load(false)
+	if err != nil {
+		t.Fatalf("an overlay section of unknown keys must not fail the merge: %v", err)
+	}
+	if cfg.TUI != DefaultTUI() || !slices.Equal(ignoredPaths(cfg), []string{"tui.future"}) {
+		t.Fatalf("tui=%+v ignored=%v", cfg.TUI, ignoredPaths(cfg))
 	}
 }
