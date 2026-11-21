@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/dualface/kander/internal/fs"
@@ -181,6 +182,7 @@ func repairValues(raw any) (*Config, error) {
 	fillMissingReviewStageScales(provided)
 	fillMissingReviewerScales(provided)
 	FoldLegacyReviewRoleKeys(provided)
+	seedOmittedSections(root, provided)
 	recoverConfigFields(root, provided, root)
 	fillMissingChatRaw(root, provided)
 	cfg, err := Validate(root)
@@ -192,6 +194,40 @@ func repairValues(raw any) (*Config, error) {
 	cfg.UnusableAgents, cfg.UnusablePolicy = defaults.UnusableAgents, defaults.UnusablePolicy
 	pruneUnusableModels(&cfg.Models, cfg)
 	return cfg, nil
+}
+
+// omittedSections lists the JSON names of the Config sections whose encoding drops
+// an empty value, so the encoded defaults carry no key for them. agents is left out:
+// repairValues restores it from its own entries.
+var omittedSections = func() []string {
+	typ := reflect.TypeOf(Config{})
+	var names []string
+	for i := 0; i < typ.NumField(); i++ {
+		name, options, _ := strings.Cut(typ.Field(i).Tag.Get("json"), ",")
+		if name == "" || name == "-" || name == "agents" {
+			continue
+		}
+		if strings.Contains(options, "omitzero") || strings.Contains(options, "omitempty") {
+			names = append(names, name)
+		}
+	}
+	return names
+}()
+
+// seedOmittedSections gives root an empty object for each omitted section that the
+// file holds as an object. recoverConfigFields only revisits keys root already has,
+// so without the seed a valid server or project binding is dropped. The seeded
+// object makes it try the whole section first and then each known sub-key, and an
+// invalid value falls back to the default, which is to omit it.
+func seedOmittedSections(root, provided map[string]any) {
+	for _, name := range omittedSections {
+		if _, present := root[name]; present {
+			continue
+		}
+		if _, ok := asObject(provided[name]); ok {
+			root[name] = map[string]any{}
+		}
+	}
 }
 
 // fillMissingReviewerScales copies the present scale onto a missing one so

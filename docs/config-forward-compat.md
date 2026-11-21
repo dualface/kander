@@ -55,6 +55,7 @@ The v2 branch adds the `server` and `project` sections and the client-server run
 
 - An unknown key inside `server` (known: `url`) or `project` (known: `name`) is ignored, reported by its JSON path (`server.token`), and kept on save, in the scope `config.json` and in the project overlay. A section that holds nothing but unknown keys loads like an absent section and is written back with its keys.
 - The known values stay strict: a `server.url` that is not an `http` or `https` URL, and a `project.name` that breaks the project name rule, fail the load as before.
+- `Repair` keeps a valid `server.url` and `project.name` of the scope `config.json` and drops only the one value that is invalid, so `kander doctor` never removes a binding written there.
 - `kander init` writes `server.url` and `project.name` into the project overlay through the same sparse write as Options, so the unknown keys of the overlay stay in the file.
 - The `overlayAllowedKeys` list of v2 is gone: an unknown overlay key no longer fails the merge (`config.overlay_has_unknown_keys`), as in version 1. The overlay keys it forbids still fail.
 

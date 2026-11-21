@@ -85,9 +85,7 @@ func TestSaveKeepsServerAndProjectUnknownKeys(t *testing.T) {
 						t.Fatalf("%s changed: %s != %s", strings.Join(c.path, "."), have, want)
 					}
 				}
-				// Repair is excluded: it already drops the known server and project values
-				// of a valid file, with or without unknown keys (not part of this change).
-				if withKnown && name != "Repair" {
+				if withKnown {
 					if v, _ := jsonPath(saved, "server", "url"); v != "http://127.0.0.1:7979" {
 						t.Fatalf("server.url changed on save: %v", v)
 					}
