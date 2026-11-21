@@ -327,8 +327,9 @@ func agentEntries(raw any) (map[string]AgentDefinition, map[string]unusableAgent
 // validateAgentEntry checks one agents.<name> entry. A non-empty reason means the
 // entry is unusable in this version without being invalid. Every check of a known
 // field that does not depend on the reason runs first, so a soft reason never hides
-// an invalid value; checks that need the dialect or the session mode run only for
-// an entry that is otherwise usable.
+// an invalid value. A session mode this version registers is checked on its own terms
+// before any reason too; only the checks that need the dialect wait for an entry that
+// is otherwise usable.
 func validateAgentEntry(name string, value any) (d AgentDefinition, reason string, err error) {
 	if !ValidAgentName(name) {
 		return d, "", agentDefinitionError(name, Text("config.agent_name"))
@@ -413,22 +414,10 @@ func validateAgentEntry(name string, value any) (d AgentDefinition, reason strin
 	if err := validateReviewDefinition(name, d); err != nil {
 		return d, "", err
 	}
-	// Entries a newer version wrote for an agent it ships as built-in: the keys
-	// below exist only for built-in names, so on a custom name they mark an agent
-	// this version does not have.
-	switch {
-	case !builtin && fields["install_rules"] != nil:
-		return d, Text("config.agent_install_rules_builtin_only"), nil
-	case !builtin && fields["config_dir"] != nil:
-		return d, Text("config.agent_config_dir_builtin_only"), nil
-	case d.Dialect != "" && !contains(ExecutionAgents, d.Dialect):
-		return d, Text("config.agent_dialect"), nil
-	case d.Dialect == "" && d.Args == nil && !contains(ExecutionAgents, name):
-		return d, Text("config.agent_adapter"), nil
-	case d.Session != nil && !validDeclaredSessionMode(d.Session.Mode):
-		return d, Text("config.agent_unusable_session_mode", d.Session.Mode), nil
-	}
-	if d.Session != nil {
+	// A session mode this version registers is checked on its own terms before any reason
+	// that makes the entry unusable: an unknown dialect must not hide an allocated entry
+	// without a usable command or a malformed discovery.
+	if d.Session != nil && validDeclaredSessionMode(d.Session.Mode) {
 		s := d.Session
 		if err := validateSessionDiscovery(name, s); err != nil {
 			return d, "", err
@@ -448,6 +437,21 @@ func validateAgentEntry(name string, value any) (d AgentDefinition, reason strin
 		} else if len(s.Allocate) != 0 || s.JSONField != "" {
 			return d, "", agentDefinitionError(name, Text("config.agent_allocate_only"))
 		}
+	}
+	// Entries a newer version wrote for an agent it ships as built-in: the keys
+	// below exist only for built-in names, so on a custom name they mark an agent
+	// this version does not have.
+	switch {
+	case !builtin && fields["install_rules"] != nil:
+		return d, Text("config.agent_install_rules_builtin_only"), nil
+	case !builtin && fields["config_dir"] != nil:
+		return d, Text("config.agent_config_dir_builtin_only"), nil
+	case d.Dialect != "" && !contains(ExecutionAgents, d.Dialect):
+		return d, Text("config.agent_dialect"), nil
+	case d.Dialect == "" && d.Args == nil && !contains(ExecutionAgents, name):
+		return d, Text("config.agent_adapter"), nil
+	case d.Session != nil && !validDeclaredSessionMode(d.Session.Mode):
+		return d, Text("config.agent_unusable_session_mode", d.Session.Mode), nil
 	}
 	resolved := AgentFor(&Config{Agents: map[string]AgentDefinition{name: d}}, name)
 	if d.Args == nil && d.Session != nil && d.Session.Mode != "none" {
