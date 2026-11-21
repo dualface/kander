@@ -45,6 +45,7 @@
     ]
   },
   "review": {
+    "last_message_report": true,
     "cwd": "root",
     "home_policy": "optional",
     "output_name": "output.json",

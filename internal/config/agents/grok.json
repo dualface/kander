@@ -70,6 +70,7 @@
     "mode": "argv"
   },
   "review": {
+    "last_message_report": true,
     "env": {
       "GROK_HOME": "{home}"
     },

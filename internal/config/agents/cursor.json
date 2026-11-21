@@ -42,6 +42,7 @@
     "mode": "argv"
   },
   "review": {
+    "last_message_report": true,
     "env": {
       "CURSOR_CONFIG_DIR": "{runtime}",
       "CURSOR_DATA_DIR": "{runtime}"

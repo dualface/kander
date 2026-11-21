@@ -81,6 +81,17 @@ type agentRulesExtension struct {
 	Project string `json:"project"`
 }
 
+// embeddedReview is the review object of a built-in definition: the AgentReview a
+// user definition can declare, plus the fields only built-in definitions can.
+// Keeping them out of AgentReview is what makes a user definition that writes them
+// an ignored key.
+type embeddedReview struct {
+	AgentReview
+	// LastMessageReport marks a reviewer whose final message is the complete report,
+	// so its review contract adds the output convention for that.
+	LastMessageReport bool `json:"last_message_report,omitempty"`
+}
+
 type embeddedAgent struct {
 	SchemaVersion    int                    `json:"schema_version"`
 	Path             string                 `json:"path"`
@@ -92,7 +103,7 @@ type embeddedAgent struct {
 	PromptDelivery   PromptDelivery         `json:"prompt_delivery"`
 	ExitCommand      string                 `json:"exit_command"`
 	ProgramStatus    *ProgramStatus         `json:"program_status"`
-	Review           AgentReview            `json:"review"`
+	Review           embeddedReview         `json:"review"`
 	RulesTarget      agentRulesTarget       `json:"rules_target"`
 	ConfigHome       agentConfigHome        `json:"config_home"`
 	RulesIntegration string                 `json:"rules_integration"`
@@ -269,7 +280,7 @@ func parseEmbeddedAgentFile(fileName string, data []byte) (embeddedAgent, error)
 	if strings.ContainsAny(agent.LargeModel+agent.SmallModel+agent.LargeEffort+agent.SmallEffort+agent.Model+agent.Effort, "\n\r\x00") {
 		return embeddedAgent{}, embedAgentError(fileName, "model")
 	}
-	if err := validateReviewDefinition(fileName, AgentDefinition{Args: &agent.Args, Review: &agent.Review}); err != nil {
+	if err := validateReviewDefinition(fileName, AgentDefinition{Args: &agent.Args, Review: &agent.Review.AgentReview}); err != nil {
 		return embeddedAgent{}, err
 	}
 	return agent, nil
@@ -407,6 +418,15 @@ func ReviewWindowsReadGroups(name string) []string {
 		return nil
 	}
 	return slices.Clone(emb.ReviewReadGroups)
+}
+
+// EmbeddedReviewLastMessageReport reports whether the built-in definition of the
+// named agent declares review.last_message_report. Only the built-in definition of
+// that exact name counts: a user overlay cannot set or remove it, and a custom
+// agent does not inherit it through its dialect.
+func EmbeddedReviewLastMessageReport(name string) bool {
+	emb, ok := embeddedByName(name)
+	return ok && emb.Review.LastMessageReport
 }
 
 func (e embeddedAgent) kanbanFields() map[string]string {

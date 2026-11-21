@@ -396,7 +396,7 @@ func TestDroidReviewDefinitionStaysReadOnly(t *testing.T) {
 			t.Fatalf("review argv carries %s: %q", arg, args)
 		}
 	}
-	if !usesLastMessageReport("droid") {
+	if !config.EmbeddedReviewLastMessageReport("droid") {
 		t.Fatal("droid exec reports its final message")
 	}
 }
