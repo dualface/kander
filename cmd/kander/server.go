@@ -60,11 +60,17 @@ func newServerCommand() *cobra.Command {
 
 // serverTarget loads the effective configuration and returns the server URL it names.
 func serverTarget() (string, error) {
+	_, target, err := serverTargetConfig()
+	return target, err
+}
+
+// serverTargetConfig is serverTarget that also returns the configuration it loaded.
+func serverTargetConfig() (*config.Config, string, error) {
 	cfg, err := config.Load(true)
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
-	return config.ServerURL(cfg), nil
+	return cfg, config.ServerURL(cfg), nil
 }
 
 // failServer reports a failure of a server command with its localized wrapper text.
@@ -120,7 +126,7 @@ func (l *serverLog) Write(p []byte) (int, error) {
 }
 
 func runStart(o servicectl.StartOptions, foreground bool) int {
-	target, err := serverTarget()
+	cfg, target, err := serverTargetConfig()
 	if err != nil {
 		return command.Fail(err)
 	}
@@ -135,6 +141,9 @@ func runStart(o servicectl.StartOptions, foreground bool) int {
 		if err == nil {
 			logs := &serverLog{}
 			options := server.Options{DataDir: dir, TTL: o.TTL, RenewInterval: o.Renew, Version: version.String(), Logger: slog.New(slog.NewJSONHandler(logs, nil))}
+			// The background start runs this path in its child, so the warnings are written
+			// once, by the process that serves. With --json they are server_log notices.
+			config.LogIgnored(options.Logger, cfg)
 			if command.JSON() {
 				options.Ready = func(listen string) {
 					command.Emit(foregroundReady{Listen: listen, DataDir: dir, PID: os.Getpid(), Version: version.String()})

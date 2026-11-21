@@ -131,7 +131,9 @@ func run() int {
 	config.BindEffectiveLanguage()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	err = Serve(ctx, Options{Home: home, Logger: slog.New(slog.NewJSONHandler(os.Stderr, nil))})
+	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	logIgnoredConfig(logger)
+	err = Serve(ctx, Options{Home: home, Logger: logger})
 	if errors.Is(err, ErrRunning) {
 		return 0
 	}
@@ -140,6 +142,19 @@ func run() int {
 		return 1
 	}
 	return 0
+}
+
+// logIgnoredConfig writes the settings of its configuration that this version ignores to the log,
+// once, when the worker starts: a worker lives for hours and would otherwise drop the settings
+// of a newer version silently. It loads the configuration of the client home, where the worker
+// runs, and an unreadable configuration is logged without stopping the worker.
+func logIgnoredConfig(logger *slog.Logger) {
+	cfg, err := config.Load(true)
+	if err != nil {
+		logger.Warn("the configuration could not be loaded; the settings this version ignores are not listed", "error", err)
+		return
+	}
+	config.LogIgnored(logger, cfg)
 }
 
 // ErrRunning reports that another worker holds the lock.
