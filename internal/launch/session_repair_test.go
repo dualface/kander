@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/process"
 	"github.com/dualface/kander/internal/terminal"
 )
@@ -310,4 +311,68 @@ func rewriteRolloutDirectory(t *testing.T, observed process.OpenFile, cwd string
 		t.Fatal(err)
 	}
 	return process.OpenFile{Path: observed.Path, Info: info}
+}
+
+// An agents entry whose session.mode this version does not know takes its
+// built-in namesake out of service. Repair must report that, not inherit the
+// embedded session provider and prove, report and write back a session.
+func TestRepairMissingSessionRefusesAnUnusableBuiltInAgent(t *testing.T) {
+	root, _, _ := setupBoard(t)
+	raw, err := os.ReadFile(os.Getenv("KANDER_CONFIG"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	doc["agents"] = map[string]any{"codex": map[string]any{"session": map[string]any{"mode": "hook:from-a-newer-version"}}}
+	raw, err = json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(os.Getenv("KANDER_CONFIG"), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, unusable := cfg.UnusableAgents["codex"]; !unusable || config.HasAgent(cfg, "codex") {
+		t.Fatalf("the configuration did not downgrade codex: %v", cfg.UnusableAgents)
+	}
+
+	task, _ := makeTodo(t, root, "repair-unusable")
+	snapshot, err := board.ReadSnapshot(root, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, err := board.MoveWithOptions(snapshot.Entry, root, "working", board.MoveOptions{Owner: "codex"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend := &repairBackend{name: "repair-unusable-" + terminal.ProjectKey(root), facts: terminal.PaneFacts{Agent: "codex", AgentStatus: "idle", Container: "tab"}, processes: []terminal.ForegroundProcess{{PID: 42, Name: "codex"}}, readBack: true}
+	terminal.Register(backend)
+	if err := executionFixture(root, entry, "codex", "codex", backend.name+":pane"); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err = board.ReadSnapshot(root, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := process.ProcessFiles{Identity: "42:start", Files: []process.OpenFile{repairRollout(t, task, "target", "target-session", "")}}
+	_, err = repairMissingSession(t.Context(), root, snapshot, "", func(ctx context.Context, _ int) (process.ProcessFiles, error) { return files, ctx.Err() })
+	if want := config.UnavailableAgentError(cfg, "codex").Error(); err == nil || err.Error() != want {
+		t.Fatalf("err=%v, want %q", err, want)
+	}
+	if backend.reports != 0 || backend.observations != 0 {
+		t.Fatalf("an unusable agent was probed or reported: observations=%d reports=%d", backend.observations, backend.reports)
+	}
+	current, err := board.ReadSnapshot(root, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if board.MetadataFrom(current.Text, board.FieldSession) != board.MetadataFrom(snapshot.Text, board.FieldSession) {
+		t.Fatal("repair wrote a session for an unusable agent")
+	}
 }

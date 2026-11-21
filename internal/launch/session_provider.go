@@ -124,9 +124,16 @@ func registerSessionProvider(p sessionProvider) {
 }
 
 // sessionProviderFor is the only place that looks a provider up by session
-// mode. A definition no provider serves is a definition this version cannot
-// use, reported like any unavailable agent.
+// mode. An agent the configuration marked unusable has no provider even when
+// its built-in namesake would supply a session definition, and a definition no
+// provider serves is one this version cannot use; both are reported like any
+// unavailable agent.
 func sessionProviderFor(cfg *config.Config, agent string, def *config.AgentSessionDefinition) (sessionProvider, error) {
+	if cfg != nil {
+		if _, unusable := cfg.UnusableAgents[agent]; unusable {
+			return nil, unavailableAgentError(cfg, agent)
+		}
+	}
 	if def != nil {
 		if p, ok := sessionProviders[def.Mode]; ok {
 			return p, nil
