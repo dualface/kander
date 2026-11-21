@@ -234,6 +234,34 @@ func TestOptionsEditsDoNotClearUnknownOverlayContent(t *testing.T) {
 	}
 }
 
+// Restoring a page keeps unknown overlay content as the overlay holds it, not as the
+// merge with the scope file shows it.
+func TestRestoreKeepsTheOverlaysOwnUnknownValues(t *testing.T) {
+	path, cfg := futureScope(t)
+	scope := readDoc(t, path)
+	config.OverlaySet(scope, "scope-large", "models", "kanban", "newagent", "large_model")
+	writeDoc(t, path, scope)
+	cfg, err := config.Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	overlay := map[string]any{"models": map[string]any{"kanban": map[string]any{"newagent": map[string]any{"small_model": "own"}}}}
+	session, overlayPath := attachProject(t, cfg, overlay)
+	if err := session.RestoreSection("execution"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := session.Save(); err != nil {
+		t.Fatal(err)
+	}
+	saved := readDoc(t, overlayPath)
+	if got, _ := config.OverlayGet(saved, "models", "kanban", "newagent", "small_model"); got != "own" {
+		t.Fatalf("the overlay's own value was lost: %v", saved)
+	}
+	if _, ok := config.OverlayGet(saved, "models", "kanban", "newagent", "large_model"); ok {
+		t.Fatalf("a scope value was copied into the overlay: %v", saved)
+	}
+}
+
 func TestOptionsOffersNoModelFieldsForUnknownAgents(t *testing.T) {
 	_, cfg := futureScope(t)
 	session, err := NewSessionForTest(cfg)
@@ -261,8 +289,16 @@ func TestEditingTheSmallScaleLeavesKanbanAgentAlone(t *testing.T) {
 	if session.Config.KanbanAgent != "newagent" {
 		t.Fatalf("kanban_agent was overwritten: %q", session.Config.KanbanAgent)
 	}
+	// Editing the large scale leaves an independent reference alone too, but a
+	// kanban_agent that mirrors the large scale keeps following it.
+	session.Config.KanbanAgent = "independentagent"
 	session.SetExecutionAgent("large", "claude")
-	if session.Config.KanbanAgent != "claude" {
-		t.Fatalf("kanban_agent must follow the large scale: %q", session.Config.KanbanAgent)
+	if session.Config.KanbanAgent != "independentagent" {
+		t.Fatalf("an independent kanban_agent was overwritten: %q", session.Config.KanbanAgent)
+	}
+	session.Config.KanbanAgent = "claude"
+	session.SetExecutionAgent("large", "codex")
+	if session.Config.KanbanAgent != "codex" {
+		t.Fatalf("a mirroring kanban_agent must follow the large scale: %q", session.Config.KanbanAgent)
 	}
 }

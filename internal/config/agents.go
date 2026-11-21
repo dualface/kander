@@ -407,6 +407,9 @@ func validateAgentEntry(name string, value any) (d AgentDefinition, reason strin
 	if d.Session != nil && d.Session.Mode == "" {
 		return d, "", agentDefinitionError(name, Text("config.agent_session"))
 	}
+	if err := validateSessionFile(name, d.Session); err != nil {
+		return d, "", err
+	}
 	// Entries a newer version wrote for an agent it ships as built-in: the keys
 	// below exist only for built-in names, so on a custom name they mark an agent
 	// this version does not have.
@@ -425,9 +428,6 @@ func validateAgentEntry(name string, value any) (d AgentDefinition, reason strin
 	if d.Session != nil {
 		s := d.Session
 		if err := validateSessionDiscovery(name, s); err != nil {
-			return d, "", err
-		}
-		if err := validateSessionFile(name, s); err != nil {
 			return d, "", err
 		}
 		if s.Mode == "allocated" {

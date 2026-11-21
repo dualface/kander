@@ -301,9 +301,12 @@ func (s *Session) SetExecutionAgent(scale, agent string) {
 		prev = s.Config.KanbanAgents[scale]
 	}
 	s.Config.KanbanAgents[scale] = agent
-	// kanban_agent mirrors the large scale only; editing the small scale leaves it as written.
-	if scale == "large" {
-		s.Config.KanbanAgent = s.Config.KanbanAgents["large"]
+	// kanban_agent is the legacy mirror of the large scale: it follows an edit of the
+	// large scale only while it still equals the value being replaced. A value that
+	// differs, such as a reference to an agent this version does not know, was written
+	// on its own and stays as written.
+	if scale == "large" && (s.Config.KanbanAgent == prev || s.Config.KanbanAgent == "") {
+		s.Config.KanbanAgent = agent
 	}
 	if !s.EditingOverlay() {
 		s.noteOverride([]string{"kanban_agents", scale}, agent)

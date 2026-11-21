@@ -2,7 +2,6 @@ package config
 
 import (
 	"reflect"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -256,17 +255,9 @@ func scanModels(raw any, probe *Config, names []string, add addFunc) {
 			if !ok {
 				continue
 			}
-			// A legacy role folds into its current role, so an unknown field of it is
-			// reported (and kept) under that role.
-			target := role
-			for _, current := range ReviewRoles {
-				if slices.Contains(reviewRoleSources[current], role) {
-					target = current
-				}
-			}
 			for field, value := range entry {
 				if _, ok := schema[field]; !ok {
-					add(IgnoredField, value, "models", "review_roles", target, field)
+					add(IgnoredField, value, "models", "review_roles", role, field)
 				}
 			}
 		}
@@ -406,6 +397,13 @@ func UnknownAgentRefNotices(cfg *Config) []string {
 // declares, matched exactly, through nested structs, pointers, and slices. Free-form
 // maps keep every key. The standard decoder matches keys case-insensitively, so
 // decoding a pruned copy keeps the decoded definition in step with scanStruct.
+func structKind(t reflect.Type) bool {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	return t.Kind() == reflect.Struct
+}
+
 func pruneToStruct(raw any, t reflect.Type) any {
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
@@ -424,9 +422,20 @@ func pruneToStruct(raw any, t reflect.Type) any {
 		}
 		out := make(map[string]any, len(obj))
 		for key, value := range obj {
-			if child, known := fields[key]; known {
-				out[key] = pruneToStruct(value, child)
+			child, known := fields[key]
+			if !known {
+				continue
 			}
+			pruned := pruneToStruct(value, child)
+			// A nested section whose keys were all unknown is the same as no section:
+			// decoding an empty one would fail its required keys. An empty section the
+			// user wrote stays, so its own validation still applies.
+			if sub, ok := pruned.(map[string]any); ok && len(sub) == 0 && structKind(child) {
+				if original, ok := asObject(value); ok && len(original) > 0 {
+					continue
+				}
+			}
+			out[key] = pruned
 		}
 		return out
 	case reflect.Slice:

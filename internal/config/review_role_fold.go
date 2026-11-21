@@ -251,8 +251,9 @@ func foldRawReviewRoleModels(doc map[string]any) {
 	parsed := map[string]map[string]string{}
 	unknownRoles := map[string]any{}
 	schema := reviewRoleFieldSchema()
-	// Fields this version does not know stay with the role they were written for;
-	// a legacy role's extras move to the current role it folds into.
+	// Fields this version does not know stay with the current role they were written
+	// for. A legacy role key is rewritten into its current role, so the unknown fields
+	// of a legacy role go with the key; no version that writes them still writes legacy keys.
 	extras := map[string]map[string]any{}
 	for role, entryRaw := range rolesRaw {
 		if _, ok := allowed[role]; !ok {
@@ -291,17 +292,13 @@ func foldRawReviewRoleModels(doc map[string]any) {
 		out[role] = fields
 	}
 	for _, target := range ReviewRoles {
-		for _, source := range reviewRoleSources[target] {
-			for field, value := range extras[source] {
-				entry, _ := out[target].(map[string]any)
-				if entry == nil {
-					entry = map[string]any{}
-					out[target] = entry
-				}
-				if _, taken := entry[field]; !taken {
-					entry[field] = value
-				}
+		for field, value := range extras[target] {
+			entry, _ := out[target].(map[string]any)
+			if entry == nil {
+				entry = map[string]any{}
+				out[target] = entry
 			}
+			entry[field] = value
 		}
 	}
 	for role, entry := range unknownRoles {
