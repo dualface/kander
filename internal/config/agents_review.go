@@ -45,8 +45,11 @@ type ReviewPromptFile struct {
 	Template string `json:"template"`
 }
 
+// ReviewArgvPlaceholders lists the placeholders args.review accepts. rules_dir
+// is the installed rules directory, empty (so its element and the flag before
+// it are dropped) when that directory does not exist; it is valid only here.
 func ReviewArgvPlaceholders(files []ReviewPromptFile) []string {
-	names := []string{"model", "effort", "root", "runtime", "home", "output", "prompt_file", "instruction"}
+	names := []string{"model", "effort", "root", "runtime", "home", "output", "prompt_file", "instruction", "rules_dir"}
 	for _, file := range files {
 		names = append(names, "prompt_file:"+file.Name)
 	}

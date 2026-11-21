@@ -49,6 +49,7 @@ func reviewerArguments(ctx reviewContext, runtime, outputFile, promptFile string
 		"output":      outputFile,
 		"prompt_file": promptFile,
 		"instruction": ctx.instruction,
+		"rules_dir":   ctx.rulesDir,
 	}
 	for name, path := range ctx.promptFilePaths {
 		values["prompt_file:"+name] = path
