@@ -1,0 +1,70 @@
+== claude-global / symlink to other file
+detect: ok=false detail=<HOME>/.claude/CLAUDE.md 未导入或合并 KANDER-AGENTS.md
+inspect: invalid=0 duplicates=0 files=1 err=false
+ensure: status=2 removed=0 inactive=false disabled=[]
+other: "# Other/n/n@~/.agents/kander/KANDER-AGENTS.md/n"
+uninstall: action=0 path=<HOME>/.claude/other-rules.txt reason="" content="# Other/n"
+== claude-global / symlink escaping the scope
+ensure: status=2 removed=0 inactive=false disabled=[]
+outside: "# Outside/n/n@~/.agents/kander/KANDER-AGENTS.md/n"
+uninstall: action=0 path=<HOME>/outside/rules.md reason="" content="# Outside/n"
+== claude-global / symlink to the rules entry
+detect: ok=true detail=<HOME>/.claude/CLAUDE.md
+ensure: status=0 removed=0 inactive=false disabled=[]
+uninstall: action=2 path=<HOME>/.claude/CLAUDE.md reason="指向 Kander 规则入口的符号链接；规则目录删除后它将失效" content=""
+== claude-project / symlink to other file
+detect: ok=false detail=<HOME>/project/CLAUDE.md 未导入或合并 KANDER-AGENTS.md
+inspect: invalid=0 duplicates=0 files=1 err=false
+ensure: status=2 removed=0 inactive=false disabled=[]
+other: "# Other/n/n@.kander/rules/KANDER-AGENTS.md/n"
+uninstall: action=0 path=<HOME>/project/other-rules.txt reason="" content="# Other/n"
+== claude-project / symlink escaping the scope
+ensure: status=0 removed=0 inactive=false disabled=[] err=拒绝通过指向项目外的符号链接写入: <HOME>/project/CLAUDE.md
+outside: "# Outside/n"
+uninstall: action=2 path=<HOME>/project/CLAUDE.md reason="拒绝通过指向项目外的符号链接写入: <HOME>/project/CLAUDE.md" content=""
+== claude-project / symlink to the rules entry
+detect: ok=true detail=<HOME>/project/CLAUDE.md
+ensure: status=0 removed=0 inactive=false disabled=[]
+uninstall: action=2 path=<HOME>/project/CLAUDE.md reason="指向 Kander 规则入口的符号链接；规则目录删除后它将失效" content=""
+== cursor-global / symlink to other file
+detect: ok=false detail=<HOME>/.cursor/rules/kander.mdc 是符号链接；Kander 不通过链接读写 cursor 规则，请换成普通文件。
+inspect: invalid=0 duplicates=0 files=1 err=false
+ensure: status=0 removed=0 inactive=false disabled=[] err=<HOME>/.cursor/rules/kander.mdc 是符号链接；Kander 不通过链接读写 cursor 规则，请换成普通文件。
+other: "# Other/n"
+uninstall: action=2 path=<HOME>/.cursor/rules/kander.mdc reason="<HOME>/.cursor/rules/kander.mdc 是符号链接；Kander 不通过链接读写 cursor 规则，请换成普通文件。" content=""
+== cursor-global / symlink escaping the scope
+ensure: status=0 removed=0 inactive=false disabled=[] err=<HOME>/.cursor/rules/kander.mdc 是符号链接；Kander 不通过链接读写 cursor 规则，请换成普通文件。
+outside: "# Outside/n"
+uninstall: action=2 path=<HOME>/.cursor/rules/kander.mdc reason="<HOME>/.cursor/rules/kander.mdc 是符号链接；Kander 不通过链接读写 cursor 规则，请换成普通文件。" content=""
+== cursor-global / symlink to the rules entry
+detect: ok=false detail=<HOME>/.cursor/rules/kander.mdc 是符号链接；Kander 不通过链接读写 cursor 规则，请换成普通文件。
+ensure: status=0 removed=0 inactive=false disabled=[] err=<HOME>/.cursor/rules/kander.mdc 是符号链接；Kander 不通过链接读写 cursor 规则，请换成普通文件。
+uninstall: action=2 path=<HOME>/.cursor/rules/kander.mdc reason="<HOME>/.cursor/rules/kander.mdc 是符号链接；Kander 不通过链接读写 cursor 规则，请换成普通文件。" content=""
+== cursor-project / symlink to other file
+detect: ok=false detail=<HOME>/project/AGENTS.md 未指向项目规则入口 <HOME>/project/.kander/rules/KANDER-AGENTS.md
+inspect: invalid=0 duplicates=0 files=1 err=false
+ensure: status=2 removed=0 inactive=false disabled=[]
+other: "# Other/n/n## Kander Rules Entry/n/nAt the start of every session, read `.kander/rules/KANDER-AGENTS.md` and follow it as the Kander workflow rules entry./n"
+uninstall: action=0 path=<HOME>/project/other-rules.txt reason="" content="# Other/n"
+== cursor-project / symlink escaping the scope
+ensure: status=0 removed=0 inactive=false disabled=[] err=拒绝通过指向项目外的符号链接写入: <HOME>/project/AGENTS.md
+outside: "# Outside/n"
+uninstall: action=2 path=<HOME>/project/AGENTS.md reason="拒绝通过指向项目外的符号链接写入: <HOME>/project/AGENTS.md" content=""
+== cursor-project / symlink to the rules entry
+detect: ok=true detail=<HOME>/project/AGENTS.md
+ensure: status=0 removed=0 inactive=false disabled=[]
+uninstall: action=2 path=<HOME>/project/AGENTS.md reason="指向 Kander 规则入口的符号链接；规则目录删除后它将失效" content=""
+== codex-global / symlink to other file
+detect: ok=false detail=<HOME>/.codex/AGENTS.md 未导入或合并 KANDER-AGENTS.md
+inspect: invalid=0 duplicates=0 files=1 err=false
+ensure: status=2 removed=0 inactive=false disabled=[]
+other: "# Other/n/n## Kander Rules Entry/n/nAt the start of every session, read `~/.agents/kander/KANDER-AGENTS.md` and follow it as the Kander workflow rules entry./n"
+uninstall: action=0 path=<HOME>/.codex/other-rules.txt reason="" content="# Other/n"
+== codex-global / symlink escaping the scope
+ensure: status=2 removed=0 inactive=false disabled=[]
+outside: "# Outside/n/n## Kander Rules Entry/n/nAt the start of every session, read `~/.agents/kander/KANDER-AGENTS.md` and follow it as the Kander workflow rules entry./n"
+uninstall: action=0 path=<HOME>/outside/rules.md reason="" content="# Outside/n"
+== codex-global / symlink to the rules entry
+detect: ok=true detail=<HOME>/.codex/AGENTS.md
+ensure: status=0 removed=0 inactive=false disabled=[]
+uninstall: action=2 path=<HOME>/.codex/AGENTS.md reason="指向 Kander 规则入口的符号链接；规则目录删除后它将失效" content=""
