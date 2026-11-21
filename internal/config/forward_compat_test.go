@@ -345,7 +345,7 @@ func TestUnusableAgentEntriesDegradeOneAgent(t *testing.T) {
 		reason string
 	}{
 		{"install_rules on a custom name", map[string]any{"path": "sh", "dialect": "claude", "install_rules": false}, Text("config.agent_install_rules_builtin_only")},
-		{"config_dir on a custom name", map[string]any{"path": "sh", "dialect": "claude", "config_dir": "/tmp/x"}, Text("config.agent_config_dir_builtin_only")},
+		{"config_dir on a custom name", map[string]any{"path": "sh", "dialect": "claude", "config_dir": filepath.Join(t.TempDir(), "x")}, Text("config.agent_config_dir_builtin_only")},
 		{"no dialect and no args", map[string]any{"path": "sh"}, Text("config.agent_adapter")},
 		{"unknown dialect", map[string]any{"path": "sh", "dialect": "futuredialect"}, Text("config.agent_dialect")},
 		{"unregistered hook", map[string]any{"path": "sh", "args": map[string]any{"start": []any{}, "resume": []any{}}, "session": map[string]any{"mode": "hook:future-hook"}}, Text("config.agent_unusable_session_mode", "hook:future-hook")},
@@ -554,8 +554,9 @@ func TestStrictPlacesStayStrict(t *testing.T) {
 func TestUnusableBuiltinKeepsItsModelsAndPolicy(t *testing.T) {
 	setupHome(t)
 	doc := scopeDocument(t)
+	codexHome := filepath.Join(t.TempDir(), "codex-home")
 	doc["agents"] = map[string]any{"codex": map[string]any{
-		"install_rules": false, "config_dir": "/tmp/codex-home",
+		"install_rules": false, "config_dir": codexHome,
 		"args":    map[string]any{"start": []any{}, "resume": []any{}},
 		"session": map[string]any{"mode": "hook:future-hook"},
 	}}
@@ -577,7 +578,7 @@ func TestUnusableBuiltinKeepsItsModelsAndPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if dir, err := ScopeAgentConfigDir(paths, "codex"); err != nil || dir != "/tmp/codex-home" {
+	if dir, err := ScopeAgentConfigDir(paths, "codex"); err != nil || dir != codexHome {
 		t.Fatalf("config_dir of an unusable entry must keep applying: %q %v", dir, err)
 	}
 	// Options-style switch rewriting must not turn the entry into a different one.

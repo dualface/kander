@@ -1,6 +1,7 @@
 package config
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -50,8 +51,8 @@ func TestAgyDefaultModelsAndEfforts(t *testing.T) {
 }
 
 func TestAgyConfigDirIsRejected(t *testing.T) {
-	_, err := validateAgentDefinitions(map[string]any{"agy": map[string]any{"config_dir": "/tmp/agy"}})
-	if err == nil || !strings.Contains(err.Error(), "agy") {
+	_, err := validateAgentDefinitions(map[string]any{"agy": map[string]any{"config_dir": filepath.Join(t.TempDir(), "agy")}})
+	if err == nil || !strings.Contains(err.Error(), "agy") || !strings.Contains(err.Error(), Text("config.agent_config_dir_fixed")) {
 		t.Fatalf("a fixed config directory must be rejected: %v", err)
 	}
 }

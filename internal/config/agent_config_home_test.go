@@ -14,13 +14,14 @@ func TestAgentConfigDirValidation(t *testing.T) {
 	for _, tt := range []struct {
 		name, agent, value string
 		ok                 bool
+		want               string
 	}{
-		{"absolute", "codex", filepath.Join(t.TempDir(), "codex"), true},
-		{"tilde", "claude", "~", true},
-		{"tilde prefix", "pi", "~/.config/pi", true},
-		{"relative", "codex", "codex", false},
-		{"control", "codex", "/tmp/a\nb", false},
-		{"fixed directory", "cursor", "/tmp/cursor", false},
+		{"absolute", "codex", filepath.Join(t.TempDir(), "codex"), true, ""},
+		{"tilde", "claude", "~", true, ""},
+		{"tilde prefix", "pi", "~/.config/pi", true, ""},
+		{"relative", "codex", "codex", false, ""},
+		{"control", "codex", "/tmp/a\nb", false, ""},
+		{"fixed directory", "cursor", filepath.Join(t.TempDir(), "cursor"), false, Text("config.agent_config_dir_fixed")},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			fields := map[string]any{"config_dir": tt.value}
@@ -30,6 +31,9 @@ func TestAgentConfigDirValidation(t *testing.T) {
 			}
 			if err != nil && !strings.Contains(err.Error(), tt.agent) {
 				t.Fatalf("error does not name the agent: %v", err)
+			}
+			if tt.want != "" && !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error does not give the expected reason %q: %v", tt.want, err)
 			}
 		})
 	}
