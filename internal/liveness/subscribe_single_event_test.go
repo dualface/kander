@@ -194,10 +194,11 @@ func TestSingleEventExitsAfterStateChange(t *testing.T) {
 	}
 }
 
-// The wake-up exit joins a probe that is still running. The caller's context
-// stays alive, so only the subscription's own exit can have stopped the probe
-// process and the output worker: the probe process is gone at the moment the
-// call returns, and nothing is written afterwards.
+// The wake-up exit joins a probe that is still running and the output worker
+// that is still writing the last event. The caller's context stays alive, so
+// only the subscription's own exit can have stopped them: at the moment
+// SubscribeContext has joined its workers, the probe batch is collected and
+// cancelled, the output worker is done, and the slow probe process is gone.
 func TestSingleEventExitJoinsRunningProbe(t *testing.T) {
 	root, opts, id := factsMember(t)
 	if _, err := board.MoveEntry(currentEntry(t, root, id), root, "working"); err != nil {
@@ -206,12 +207,30 @@ func TestSingleEventExitJoinsRunningProbe(t *testing.T) {
 	setLocation(t, currentEntry(t, root, id).Document, "codex wanted", "herdr:w1:t1:w1:p0")
 	dir := installBatchFake(t, false)
 	opts.Refresh, opts.Heartbeat = .05, 3600
+	var joined, probeCollected, probeCancelled, outputDone atomic.Bool
+	oldHook := subscribeJoinedHook
+	subscribeJoinedHook = func(probes *subscriptionProbes, output *subscriptionOutputQueue) {
+		joined.Store(true)
+		probeCollected.Store(!probes.running)
+		probeCancelled.Store(probes.ctx.Err() != nil)
+		select {
+		case <-output.done:
+			outputDone.Store(true)
+		default:
+		}
+	}
+	t.Cleanup(func() { subscribeJoinedHook = oldHook })
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	var returned atomic.Bool
 	events, err := singleEventsContext(ctx, root, opts, func(event groupEvent) error {
 		if returned.Load() {
 			t.Errorf("event %q written after the subscription returned", event.Event)
+		}
+		if event.Event == "state-change" {
+			// The worker is still inside the last write when the loop returns.
+			time.Sleep(100 * time.Millisecond)
+			return nil
 		}
 		if event.Event != "snapshot" {
 			return nil
@@ -224,6 +243,10 @@ func TestSingleEventExitJoinsRunningProbe(t *testing.T) {
 	requireEventNames(t, events, err, "snapshot", "state-change")
 	if ctx.Err() != nil {
 		t.Fatalf("caller context ended before the check: %v", ctx.Err())
+	}
+	if !joined.Load() || !probeCollected.Load() || !probeCancelled.Load() || !outputDone.Load() {
+		t.Fatalf("workers at return: joined=%v probe collected=%v probe cancelled=%v output done=%v",
+			joined.Load(), probeCollected.Load(), probeCancelled.Load(), outputDone.Load())
 	}
 	assertBatchPeakAndCleanup(t, dir, 1, 1)
 }
@@ -402,6 +425,18 @@ func TestSingleEventIgnoresDispatchOverdueAtSnapshot(t *testing.T) {
 	openProbe := gatedProbe(t)
 	prepareSubscriptionDispatchID(t, root, id, "overdue-round", "sync", time.Minute)
 	opts.Refresh, opts.Heartbeat = .05, 3600
+	// The clock moves at the start of the first scan after the second attention
+	// event was delivered, so the scan that wrote the probe-completion attention
+	// finds no heartbeat due and has to decide on the attention event alone.
+	var secondDelivered atomic.Bool
+	oldRead := readSubscriptionFacts
+	readSubscriptionFacts = func(s *subscription, ctx context.Context, root string) (subscriptionFacts, error) {
+		if secondDelivered.Load() {
+			advance()
+		}
+		return oldRead(s, ctx, root)
+	}
+	t.Cleanup(func() { readSubscriptionFacts = oldRead })
 	attentions := 0
 	events, err := singleEvents(t, root, opts, func(event groupEvent) error {
 		if event.Event != "dispatch-attention" {
@@ -412,7 +447,7 @@ func TestSingleEventIgnoresDispatchOverdueAtSnapshot(t *testing.T) {
 		case 1:
 			openProbe()
 		case 2:
-			advance()
+			secondDelivered.Store(true)
 		}
 		return nil
 	})
