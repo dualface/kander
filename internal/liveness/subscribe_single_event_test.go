@@ -519,6 +519,44 @@ func TestSingleEventWakesForDispatchOverdueDuringSubscription(t *testing.T) {
 	}
 }
 
+// A dispatch-attention event names every overdue card. One that was overdue at the snapshot comes
+// first, so a check of the first name alone would miss the card that became overdue later.
+func TestSingleEventWakesForOtherCardOverdueDuringSubscription(t *testing.T) {
+	now := time.Now()
+	// The first dispatch is overdue at the snapshot (10 minutes on, deadline 1 minute); the second,
+	// with a deadline of 20 minutes, becomes overdue when the clock jumps.
+	advance := switchClock(t, now.Add(10*time.Minute), 20*time.Minute)
+	root, opts, id := factsMember(t)
+	late, latePath := makeWorking(t, "facts-zlate", "Late member")
+	setTaskGroup(t, latePath, opts.Group)
+	if _, err := board.MoveEntry(currentEntry(t, root, late), root, "review"); err != nil {
+		t.Fatal(err)
+	}
+	opts.Members = append(opts.Members, late)
+	prepareSubscriptionDispatchID(t, root, id, "early-round", "sync", time.Minute)
+	prepareSubscriptionDispatchID(t, root, late, "late-round", "sync", 20*time.Minute)
+	opts.Refresh, opts.Heartbeat = .1, 3600
+	events, err := singleEvents(t, root, opts, func(event groupEvent) error {
+		if event.Event == "snapshot" {
+			advance()
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := eventNames(events)
+	if !reflect.DeepEqual(names, []string{"snapshot", "dispatch-attention", "dispatch-attention"}) {
+		t.Fatalf("events=%v", names)
+	}
+	if !events[0].Dispatches[id].ConfirmationOverdue || events[0].Dispatches[late].ConfirmationOverdue {
+		t.Fatalf("snapshot overdue flags: %+v", events[0].Dispatches)
+	}
+	if !reflect.DeepEqual(events[1].Attention, []string{id}) || !reflect.DeepEqual(events[2].Attention, []string{id, late}) {
+		t.Fatalf("attention: start-up %v, wake-up %v", events[1].Attention, events[2].Attention)
+	}
+}
+
 // A card whose overdue dispatch is replaced during the subscription: the scan
 // that sees the new dispatch writes task-update and the attention event, and
 // the attention event is the one that names a new key.
@@ -529,7 +567,8 @@ func TestSingleEventWakesForNewDispatchOnSameCard(t *testing.T) {
 	first := prepareSubscriptionDispatchID(t, root, id, "first-round", "sync", time.Minute)
 	swapped := make(chan struct{})
 	holdScansUntil(t, swapped)
-	opts.Refresh, opts.Heartbeat = 3600, 3600
+	// A timed scan follows the swap, whichever side takes the start-up probe result.
+	opts.Refresh, opts.Heartbeat = .25, 3600
 	events, err := singleEvents(t, root, opts, func(event groupEvent) error {
 		if event.Event != "snapshot" {
 			return nil
