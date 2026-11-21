@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -634,6 +635,64 @@ func TestSingleEventTerminalEventsMatchFollow(t *testing.T) {
 			last := single[len(single)-1]
 			if last.Event != test.event || last.ReadStatus != test.readStatus || last.MembershipComplete || !last.ReconciliationRequired {
 				t.Fatalf("terminal event: %+v", last)
+			}
+		})
+	}
+}
+
+// An output failure, a cancellation, and a closed stop channel end a single-event subscription as
+// they end a --follow one: the same events, the same result.
+func TestSingleEventOutputFailureCancellationAndStopMatchFollow(t *testing.T) {
+	failure := errors.New("output refused")
+	cases := []struct {
+		name string
+		run  func(t *testing.T, root string, opts subscribeOptions) ([]groupEvent, error)
+		want func(err error) bool
+	}{
+		{"output failure", func(t *testing.T, root string, opts subscribeOptions) ([]groupEvent, error) {
+			writer := &clockEvents{onEvent: func(groupEvent) error { return failure }}
+			err := subscribeContext(t.Context(), root, opts, writer, nil)
+			return writer.events, err
+		}, func(err error) bool { return errors.Is(err, failure) }},
+		{"cancellation", func(t *testing.T, root string, opts subscribeOptions) ([]groupEvent, error) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			writer := &clockEvents{onEvent: func(event groupEvent) error {
+				if event.Event == "snapshot" {
+					cancel()
+				}
+				return nil
+			}}
+			err := subscribeContext(ctx, root, opts, writer, nil)
+			return writer.events, err
+		}, func(err error) bool { return errors.Is(err, context.Canceled) }},
+		{"closed stop channel", func(t *testing.T, root string, opts subscribeOptions) ([]groupEvent, error) {
+			stop := make(chan struct{})
+			writer := &clockEvents{onEvent: func(event groupEvent) error {
+				if event.Event == "snapshot" {
+					close(stop)
+				}
+				return nil
+			}}
+			err := Subscribe(root, opts, writer, stop)
+			return writer.events, err
+		}, func(err error) bool { return err == nil }},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			run := func(follow bool) ([]string, error) {
+				root, opts, _ := factsMember(t)
+				opts.Refresh, opts.Heartbeat, opts.Follow = .25, 3600, follow
+				events, err := test.run(t, root, opts)
+				return eventNames(events), err
+			}
+			followed, followErr := run(true)
+			single, singleErr := run(false)
+			if !test.want(followErr) || !test.want(singleErr) {
+				t.Fatalf("follow err=%v single err=%v", followErr, singleErr)
+			}
+			if !reflect.DeepEqual(followed, single) || len(single) == 0 || single[0] != "snapshot" {
+				t.Fatalf("follow=%v single=%v", followed, single)
 			}
 		})
 	}
