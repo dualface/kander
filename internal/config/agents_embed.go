@@ -20,6 +20,13 @@ const (
 	rulesIntegrationMarkdown   = "markdown-reference"
 )
 
+// RulesIntegrations lists the rules_integration values an embedded definition may declare. The
+// installer registers one reference style provider per name and a test keeps both sides
+// aligned; config itself only knows the names.
+func RulesIntegrations() []string {
+	return []string{rulesIntegrationClaude, rulesIntegrationMarkdown}
+}
+
 // ExecutionAgents is the load order of embedded definition files in agents/index.json.
 var ExecutionAgents []string
 
@@ -234,7 +241,7 @@ func parseEmbeddedAgentFile(fileName string, data []byte) (embeddedAgent, error)
 	if agent.RulesTarget.Project != "" && !validAgentText(agent.RulesTarget.Project) {
 		return embeddedAgent{}, embedAgentError(fileName, "rules_target.project")
 	}
-	if !contains([]string{rulesIntegrationClaude, rulesIntegrationMarkdown}, agent.RulesIntegration) {
+	if !contains(RulesIntegrations(), agent.RulesIntegration) {
 		return embeddedAgent{}, embedAgentError(fileName, "rules_integration")
 	}
 	if ext := agent.RulesExtension; ext != nil {

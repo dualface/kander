@@ -198,8 +198,9 @@ func planReferenceRemoval(target string, override bool, paths config.InstallPath
 		return keep(err.Error())
 	}
 	linked := info.Mode()&os.ModeSymlink != 0
-	if linked && isMDCTarget(target) {
-		return keep(config.Text("menu.mdc_rule_is_symlink", target))
+	format := fileFormatFor(target)
+	if key := format.SymlinkRefusal(); linked && key != "" {
+		return keep(config.Text(key, target))
 	}
 	// The write goes to the real path, as EnsureRulesIntegration's does, so a config directory
 	// the user keeps behind a symlink is edited in place; a project file must stay inside the
@@ -228,7 +229,7 @@ func planReferenceRemoval(target string, override bool, paths config.InstallPath
 		return UninstallItem{}, false
 	}
 	rest := strings.TrimSpace(stripped)
-	kanderOnly := rest == "" || isMDCTarget(target) && rest == strings.TrimSpace(alwaysApplyFrontmatter)
+	kanderOnly := rest == "" || format.OnlyKander(rest)
 	// Deletion never follows a symlink: a file whose directory is reached through one is
 	// emptied of the Kander lines instead.
 	if kanderOnly && !linked && !override && resolved == filepath.Clean(target) {

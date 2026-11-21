@@ -9,15 +9,9 @@ import (
 	"github.com/dualface/kander/internal/config"
 )
 
-// rulesReferenceBlockHeading is the Markdown heading EnsureRulesIntegration writes for
-// markdown-reference agents; a section under it is a Kander load-command block.
-const rulesReferenceBlockHeading = "## Kander Rules Entry"
-
 // rulesEntryTokenRE extracts a path token ending in KANDER-AGENTS.md. The character class is
 // the same set isPathChar accepts, so a token never swallows surrounding prose.
 var rulesEntryTokenRE = regexp.MustCompile(`[A-Za-z0-9._\-/\\~:]*KANDER-AGENTS\.md`)
-
-var claudeImportRE = regexp.MustCompile(`^@(\S+)$`)
 
 // RulesReferenceIssues counts the load commands InspectRulesReferences found that the repair
 // pipeline would drop, aggregated over every rules file the agent's target covers.
@@ -90,7 +84,7 @@ func inspectRulesReferences(target string, paths config.InstallPaths) (FileRefer
 	issues := FileReferenceIssues{Target: target}
 	resolved := target
 	info, err := os.Lstat(target)
-	if err == nil && info.Mode()&os.ModeSymlink != 0 && isMDCTarget(target) {
+	if err == nil && info.Mode()&os.ModeSymlink != 0 && fileFormatFor(target).SymlinkRefusal() != "" {
 		// A symlinked cursor rule is never read or repaired; the integration check reports it.
 		return issues, nil
 	}
@@ -219,19 +213,6 @@ func cleanRulesReferences(text string, paths config.InstallPaths, baseDir string
 		}
 	}
 	return out.String(), issues
-}
-
-// loadCommandToken returns the Kander rules entry path of a whole-line load command: a
-// claude-import `@<path>` line or a bare path line, optionally wrapped in backticks.
-func loadCommandToken(trimmed string) (string, bool) {
-	if match := claudeImportRE.FindStringSubmatch(trimmed); match != nil {
-		return match[1], isEntryPathToken(match[1])
-	}
-	bare := trimmed
-	if len(bare) > 1 && strings.HasPrefix(bare, "`") && strings.HasSuffix(bare, "`") {
-		bare = strings.TrimSpace(bare[1 : len(bare)-1])
-	}
-	return bare, isEntryPathToken(bare)
 }
 
 // firstEntryToken extracts the first KANDER-AGENTS.md path token from a line's live text;
