@@ -9,7 +9,7 @@ First: `show`, `update`, `move`, `check`.
 | Command | Purpose | Users | Contract |
 | --- | --- | --- | --- |
 | `server` | Administer service | user | `snippets/commands/server.md` |
-| `config` | Print configuration | agents initially | `snippets/commands/config.md` |
+| `config` | Print configuration | agents | `snippets/commands/config.md` |
 | `doctor` | Repair installation | user | `snippets/commands/doctor.md` |
 | `version` | Print version | user | `snippets/commands/version.md` |
 | `install` | Installer | user | `snippets/commands/install.md` |
@@ -72,7 +72,7 @@ kander check [--all] [task-id ...]
 kander check delivery --base <ref> [--commit <ref>]
 kander check overlap --source <ref> [--head <ref>]
 kander guard-write <path>
-kander subscribe [--refresh SECONDS] [--heartbeat SECONDS] (<task-group> <task-id>... [--watch <task-id|task-group-id>]... | --watch <task-id|task-group-id> [--watch <task-id|task-group-id>]...)
+kander subscribe [--follow] [--refresh SECONDS] [--heartbeat SECONDS] (<task-group> <task-id>... [--watch <task-id|task-group-id>]... | --watch <task-id|task-group-id> [--watch <task-id|task-group-id>]...)
 kander coordinator show <group-id>
 kander coordinator claim <absolute-claim.json>
 kander coordinator reconcile <absolute-observations.json>

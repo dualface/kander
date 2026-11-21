@@ -60,7 +60,7 @@ A command that makes a remark has to put it through the notice function of `inte
 
 ## Streaming commands
 
-`subscribe` and `server start` (the foreground form) keep running after they started to write. Their standard output is not buffered.
+`subscribe --follow` and `server start` (the foreground form) keep running after they started to write. Their standard output is not buffered.
 
 - A failure before the first line leaves standard output empty and writes one error object to standard error.
 - A failure after output started keeps the lines already written and ends standard error with one error object. The exit status is the same as without `--json`.

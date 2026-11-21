@@ -20,7 +20,7 @@ KANBAN_DIR="$MAIN_WORKTREE/kanban"
 
 ## Command Contract
 
-Creating entries, querying, and moving between states use only `kander`; `mv`, `cp`, or a file manager is forbidden. Body editing and same-state form upgrades follow "Entries and Documents" and "Task Scale and Grouping".
+Creating entries, querying, and moving states use only `kander`; `mv`, `cp`, or a file manager is forbidden. Body editing and same-state form upgrades follow "Entries and Documents" and "Task Scale and Grouping".
 
 Before running any `kander` command in this session, read `<rules root>/snippets/commands/README.md` once. Before the first use of a command, read its contract file. Each contract file states the command's purpose and users, syntax, arguments, preconditions, effects, output, and rejections; `kander <command> --help` prints its summary, syntax lines, examples, and path.
 
@@ -61,7 +61,7 @@ kander check [--all] [task-id ...]
 kander check delivery --base <ref> [--commit <ref>]
 kander check overlap --source <ref> [--head <ref>]
 kander guard-write <path>
-kander subscribe [--refresh SECONDS] [--heartbeat SECONDS] (<task-group> <task-id>... [--watch <task-id|task-group-id>]... | --watch <task-id|task-group-id> [--watch <task-id|task-group-id>]...)
+kander subscribe [--follow] [--refresh SECONDS] [--heartbeat SECONDS] (<task-group> <task-id>... [--watch <task-id|task-group-id>]... | --watch <task-id|task-group-id> [--watch <task-id|task-group-id>]...)
 kander coordinator show <group-id>
 kander coordinator claim <absolute-claim.json>
 kander coordinator reconcile <absolute-observations.json>
