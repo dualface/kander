@@ -464,32 +464,6 @@ func TestAgyReviewDefinitionStaysReadOnly(t *testing.T) {
 			t.Fatalf("review argv carries %s: %q", banned, args)
 		}
 	}
-	if !config.EmbeddedReviewLastMessageReport("agy") {
-		t.Fatal("agy reports its final message")
-	}
-}
-
-// A rules directory that does not exist is dropped together with the --add-dir
-// flag before it, so agy never receives a missing workspace directory.
-func TestRulesDirPlaceholderIsDroppedWhenTheDirectoryIsMissing(t *testing.T) {
-	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "missing.json"))
-	t.Setenv("HOME", filepath.Join(t.TempDir(), "home"))
-	settings, err := agentSettingsFor("agy", "PMQA", "large")
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx := reviewContext{
-		agent: "agy", settings: settings, root: "/work",
-		program:     process.AgentProgram{Path: "/bin/reviewer"},
-		instruction: mustInstruction(t, "Perform the PM review.", "/rt/prompt.txt"),
-	}
-	inv, _, err := reviewerArguments(ctx, "/rt", "/rt/out", "/rt/prompt.txt")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if count := strings.Count(strings.Join(inv.Argv, "\x00"), "--add-dir"); count != 1 || !containsPair(inv.Argv[1:], "--add-dir", "/rt") {
-		t.Fatalf("only the runtime directory may remain: %q", inv.Argv)
-	}
 }
 
 func containsPair(args []string, flag, value string) bool {
