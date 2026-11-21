@@ -92,7 +92,7 @@ func buildReviewContract(ctx reviewContext) (string, error) {
 		return "", err
 	}
 	outputContract := ""
-	if usesLastMessageReport(ctx.agent) {
+	if config.EmbeddedReviewLastMessageReport(ctx.agent) {
 		if outputContract, err = lastMessageOutputContract(); err != nil {
 			return "", err
 		}
@@ -145,15 +145,6 @@ func buildPrompt(ctx reviewContext, evidenceFile, taskContext string) (string, e
 		AutomaticReviewContext: automatic,
 		CallerReviewContext:    caller,
 	})
-}
-
-func usesLastMessageReport(agent string) bool {
-	switch agent {
-	case "claude", "cursor", "grok", "kimi", "droid":
-		return true
-	default:
-		return false
-	}
 }
 
 // reviewPromptContext unwraps the producer framing while preserving every byte

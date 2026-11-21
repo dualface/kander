@@ -143,7 +143,7 @@ func AgentFor(cfg *Config, name string) AgentDefinition {
 	}
 	if d.Review == nil && allowReviewInherit {
 		if emb, ok := embeddedByName(d.Dialect); ok {
-			d.Review = cloneReview(&emb.Review)
+			d.Review = cloneReview(&emb.Review.AgentReview)
 		}
 	}
 	if d.PromptDelivery == nil {

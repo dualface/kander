@@ -55,6 +55,7 @@
     ]
   },
   "review": {
+    "last_message_report": true,
     "cwd": "root",
     "home_env": "KIMI_CODE_HOME",
     "home_policy": "optional",

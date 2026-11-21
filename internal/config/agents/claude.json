@@ -48,6 +48,7 @@
     "mode": "argv"
   },
   "review": {
+    "last_message_report": true,
     "cwd": "runtime",
     "home_env": "CLAUDE_CONFIG_DIR",
     "home_policy": "required",
