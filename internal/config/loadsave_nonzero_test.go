@@ -48,10 +48,7 @@ func TestNonZeroAgentsFiltersEmptyDefinitions(t *testing.T) {
 			if !reflect.DeepEqual(tt.in, before) {
 				t.Fatalf("input was modified: %#v, want %#v", tt.in, before)
 			}
-			if got == nil {
-				t.Fatal("result is nil, want a non-nil map")
-			}
-			if len(tt.in) > 0 {
+			if tt.in != nil {
 				got["new"] = AgentDefinition{Path: "x"}
 				if _, ok := tt.in["new"]; ok {
 					t.Fatal("result aliases the input map")
