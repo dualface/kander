@@ -45,6 +45,7 @@ func reviewerArguments(ctx reviewContext, runtime, outputFile, promptFile string
 		"effort":      settings.effort,
 		"root":        ctx.root,
 		"runtime":     runtime,
+		"rules_dir":   ctx.rulesDir,
 		"home":        home,
 		"output":      outputFile,
 		"prompt_file": promptFile,

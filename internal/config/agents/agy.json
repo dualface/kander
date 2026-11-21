@@ -7,9 +7,9 @@
     "resume": ["--conversation", "{session}", "--model", "{model}", "--effort", "{effort}", "--prompt-interactive"],
     "review": [
       "--model", "{model}", "--effort", "{effort}",
-      "--mode", "plan", "--add-dir", "{runtime}",
+      "--mode", "plan", "--add-dir", "{runtime}", "--add-dir", "{rules_dir}",
       "--settings", "{{\"permissions\":{{\"deny\":[\"write_file(*)\",\"command(*)\",\"mcp(*)\",\"read_url(*)\",\"execute_url(*)\"]}}}}",
-      "--output-format", "json", "--print", "{instruction}"
+      "--output-format", "json", "--print", "{instruction} This is an isolated reviewer session. Use the supplied bootstrap and review contract as your instructions. Read the provided Git evidence and worktree, then return the complete report as your final answer. Skip executor setup, global workflow files, and planning artifacts."
     ]
   },
   "session": {"mode": "hook:agy-transcript"},

@@ -467,7 +467,7 @@ func TestAgyReviewRequestsReadOnlyTools(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := reviewContext{agent: "agy", settings: settings, root: "/work",
+	ctx := reviewContext{agent: "agy", settings: settings, root: "/work", rulesDir: "/rules",
 		program: process.AgentProgram{Path: "/bin/agy"}, instruction: "Read /rt/prompt.txt"}
 	inv, _, err := reviewerArguments(ctx, "/rt", "/rt/out", "/rt/prompt.txt")
 	if err != nil {
@@ -475,12 +475,19 @@ func TestAgyReviewRequestsReadOnlyTools(t *testing.T) {
 	}
 	args := inv.Argv[1:]
 	for flag, want := range map[string]string{
-		"--mode": "plan", "--add-dir": "/rt", "--print": ctx.instruction, "--output-format": "json",
+		"--mode": "plan", "--add-dir": "/rt", "--output-format": "json",
 	} {
 		i := slices.Index(args, flag)
 		if i < 0 || i+1 >= len(args) || args[i+1] != want {
 			t.Fatalf("expected %s %s in %q", flag, want, args)
 		}
+	}
+	if !slices.Contains(args, "/rules") {
+		t.Fatalf("missing rules directory: %q", args)
+	}
+	prompt := slices.Index(args, "--print")
+	if prompt < 0 || prompt+1 >= len(args) || !strings.HasPrefix(args[prompt+1], ctx.instruction) {
+		t.Fatalf("missing bootstrap: %q", args)
 	}
 	i := slices.Index(args, "--settings")
 	if i < 0 || i+1 >= len(args) {

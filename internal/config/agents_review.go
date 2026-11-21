@@ -46,7 +46,7 @@ type ReviewPromptFile struct {
 }
 
 func ReviewArgvPlaceholders(files []ReviewPromptFile) []string {
-	names := []string{"model", "effort", "root", "runtime", "home", "output", "prompt_file", "instruction"}
+	names := []string{"model", "effort", "root", "runtime", "rules_dir", "home", "output", "prompt_file", "instruction"}
 	for _, file := range files {
 		names = append(names, "prompt_file:"+file.Name)
 	}

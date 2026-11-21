@@ -58,6 +58,7 @@ type agentSettings struct {
 }
 
 type reviewContext struct {
+	rulesDir        string
 	archive         *archiveExecution
 	agent           string
 	settings        agentSettings
