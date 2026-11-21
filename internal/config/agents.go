@@ -410,6 +410,9 @@ func validateAgentEntry(name string, value any) (d AgentDefinition, reason strin
 	if err := validateSessionFile(name, d.Session); err != nil {
 		return d, "", err
 	}
+	if err := validateReviewDefinition(name, d); err != nil {
+		return d, "", err
+	}
 	// Entries a newer version wrote for an agent it ships as built-in: the keys
 	// below exist only for built-in names, so on a custom name they mark an agent
 	// this version does not have.
@@ -468,9 +471,6 @@ func validateAgentEntry(name string, value any) (d AgentDefinition, reason strin
 	}
 	if d.Args != nil && resolved.Session.Mode != "none" && d.Args.Resume == nil {
 		return d, "", agentDefinitionError(name, Text("config.agent_resume"))
-	}
-	if err := validateReviewDefinition(name, d); err != nil {
-		return d, "", err
 	}
 	return d, "", nil
 }

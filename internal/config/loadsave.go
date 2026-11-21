@@ -436,8 +436,9 @@ func configEditConflicts(current, baseline, target *Config) bool {
 	targetValue := reflect.ValueOf(*target)
 	for i := 0; i < currentValue.NumField(); i++ {
 		// What this version ignores is kept from the file at save time, so a change
-		// to it by another writer is not a conflicting edit.
-		if name := currentValue.Type().Field(i).Name; name == "Ignored" || name == "UnusableAgents" || name == "UnusablePolicy" {
+		// to it by another writer is not a conflicting edit. The install switches of
+		// an unusable entry are edited, so they take part in the check.
+		if name := currentValue.Type().Field(i).Name; name == "Ignored" || name == "UnusableAgents" {
 			continue
 		}
 		currentField := currentValue.Field(i).Interface()
