@@ -145,7 +145,7 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 	}
 	agentName := choice.Agent
 	if !config.HasAgent(cfg, agentName) {
-		return result, launchError("launch.unsupported_agent", agentName)
+		return result, unavailableAgentError(cfg, agentName)
 	}
 	launcher := launcherOverride
 	if launcher == "" {
