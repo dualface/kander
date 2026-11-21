@@ -29,7 +29,7 @@ Read first: `show`, `update`, `move`, `check`.
 | `dismiss` | Exit an agent and its container | orchestrator, user | `snippets/commands/dismiss.md` |
 | `check` | Validate cards, probe liveness, Git checks | executing agent, orchestrator | `snippets/commands/check.md` |
 | `guard-write` | Advisory pre-write check | agent hooks | `snippets/commands/guard-write.md` |
-| `subscribe` | Stream group events | orchestrator | `snippets/commands/subscribe.md` |
+| `subscribe` | Stream events | orchestrator | `snippets/commands/subscribe.md` |
 | `coordinator` | Durable group checkpoints | orchestrator | `snippets/commands/coordinator.md` |
 | `review` | Run a reviewer, manage evidence | main agent, orchestrator | `snippets/commands/review.md` |
 | `issue` | Import and triage GitHub issues | user, issue session | `snippets/commands/issue.md` |
@@ -64,7 +64,7 @@ kander check [--all] [task-id ...]
 kander check delivery --base <ref> [--commit <ref>] [--json]
 kander check overlap --source <ref> [--head <ref>] [--json]
 kander guard-write <path>
-kander subscribe [--refresh SECONDS] [--heartbeat SECONDS] (<task-group> <task-id>... [--watch <task-id|task-group-id>...] | --watch <task-id|task-group-id>...)
+kander subscribe [--follow] [--refresh SECONDS] [--heartbeat SECONDS] (<task-group> <task-id>... [--watch <task-id|task-group-id>...] | --watch <task-id|task-group-id>...)
 kander coordinator show <group-id>
 kander coordinator claim <absolute-claim.json>
 kander coordinator reconcile <absolute-observations.json>

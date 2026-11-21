@@ -9,11 +9,13 @@ Streams board events for a task group and its watched external cards or groups a
 ## Syntax
 
 ```text
-kander subscribe [--refresh SECONDS] [--heartbeat SECONDS] (<task-group> <task-id>... [--watch <task-id|task-group-id>...] | --watch <task-id|task-group-id>...)
+kander subscribe [--follow] [--refresh SECONDS] [--heartbeat SECONDS] (<task-group> <task-id>... [--watch <task-id|task-group-id>...] | --watch <task-id|task-group-id>...)
 ```
 
 ## Arguments
 
+- Default: the command writes the `snapshot`, then exits with status 0 after the first wake-up event. A wake-up event is `state-change`, `task-update`, `membership-change`, `member-blocked`, `heartbeat`, or a `dispatch-attention` that names a dispatch (ID and epoch) not already `confirmation_overdue` in this subscription's `snapshot`. The command writes every event of that refresh before it exits. A terminal event, an output failure, or a signal ends it as under `--follow`.
+- `--follow`: keep writing events until the command is stopped, a terminal event, or a failure; it never exits because all cards are done.
 - `<task-group> <task-id>...`: the group and its complete member set; the command validates ownership.
 - `--watch <task-id|task-group-id>...`: external cards or groups, repeated per direct reference and re-expanded on each observation; alone it monitors standalone cards without a group.
 - `--refresh SECONDS`: default 1.
@@ -53,7 +55,7 @@ A subscription is a background process plus a file. The loop, in order:
 - `confirmation_pending` is true only for prepared/delivery-unknown; `confirmation_overdue` additionally means the current epoch's deadline elapsed. Accepted work has no inferred completion deadline. The deadline wakes the subscription independently of refresh and heartbeat and never resets on same-epoch retries, unrelated events, or restart. One exception: while the subscription retries after lock wait timeouts, it neither wakes early nor emits `heartbeat` or `dispatch-attention`; the next successful read applies the usual rules. At expiry, `dispatch-attention` carries the overdue task IDs in `attention`, current dispatch facts, available `liveness`, and `reconciliation_required=true`; attention never performs recovery, retry, card mutation, or dependency release. Missing or corrupt dispatch evidence for a monitored card fails the read.
 - `blocked`, keyed by task ID, carries the reason of each member the last coordinator reconcile did not accept, for the subscribed group and the watched groups. A change of the set emits `member-blocked`; an event with no `blocked` field means no member is blocked. Handle it per `snippets/failure-recovery.md` "Blocked Group Members".
 - Heartbeats are independent of state, task-update, and membership events. When monitored `working/` cards or pending-dispatch `review/` cards exist, the heartbeat carries `liveness` items. Each item has `agent`, `status`, `channel`, `detail`, and `revision`, `identity`, `observed_at`, `age_seconds`, `runtime_state`, `observation_valid`, `collection_state` (`pending`, `complete`, `not-observed`), `collecting`, `stale`, optional `new_window`, using the classifier and result set of `snippets/commands/check.md`. Revision or identity mismatch discards the cached result. Pending or uncollected results stay unknown. An observation older than heartbeat plus 10 seconds is stale and unknown. Ordinary review and completed cards get no liveness. Probes run in bounded batches, so a heartbeat may report cards still `pending`.
-- Output is bounded; overflow, oversized lines, broken pipes, or write timeouts terminate the subscription with an explicit error. Consumers discard partial terminal lines and reconcile a new snapshot after reconnecting. Ctrl+C, termination signals, and caller cancellation stop all owned work; the command does not exit automatically when all cards are done.
+- Output is bounded; overflow, oversized lines, broken pipes, or write timeouts terminate the subscription with an explicit error. Consumers discard partial terminal lines and reconcile a new snapshot after reconnecting. Ctrl+C, termination signals, and caller cancellation stop all owned work. A `--follow` subscription does not exit when all cards are done; a default subscription exits after its first wake-up event, and no option exits because all cards are done.
 
 ## Output
 
