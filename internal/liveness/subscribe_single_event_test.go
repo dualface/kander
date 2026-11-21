@@ -172,8 +172,18 @@ func TestRunSubscribeRejectsFollowValueAndUntilEvent(t *testing.T) {
 			if code != 2 {
 				t.Fatalf("exit code=%d want 2", code)
 			}
-			if !strings.HasPrefix(string(diagnostics), "kander subscribe") {
-				t.Fatalf("no usage on stderr: %q", diagnostics)
+			// A notice about a missing rules installation may come before the
+			// usage line, so look for the usage line instead of assuming it is
+			// the first one.
+			usage := false
+			for _, line := range strings.Split(string(diagnostics), "\n") {
+				if strings.HasPrefix(line, "kander subscribe") {
+					usage = true
+					break
+				}
+			}
+			if !usage {
+				t.Fatalf("no usage line on stderr: %q", diagnostics)
 			}
 		})
 	}
@@ -218,23 +228,41 @@ func TestSingleEventExitWaitsForWorkers(t *testing.T) {
 				closeOnce(probeHeld)
 				<-releaseProbe
 			}
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			done := make(chan struct{})
+			// Every exit path, including a t.Fatal on a barrier timeout, runs
+			// this cleanup. The hook is restored only after the subscription
+			// goroutine ended, since that goroutine reads it. When the join
+			// times out the hook stays, which is harmless: both barriers are
+			// open by then.
 			t.Cleanup(func() {
-				probeWorkerTailHook = oldHook
+				cancel()
 				closeOnce(releaseOutput)
 				closeOnce(releaseProbe)
+				select {
+				case <-done:
+					probeWorkerTailHook = oldHook
+				case <-time.After(10 * time.Second):
+					t.Error("the subscription goroutine did not end after cancel and release")
+				}
 			})
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			defer cancel()
-			done := make(chan struct{})
 			var events []groupEvent
 			var err error
 			go func() {
 				defer close(done)
+				// This callback runs outside the test goroutine, so it reports
+				// failures by returning them and never calls a testing.T method.
 				events, err = singleEventsContext(ctx, root, opts, func(event groupEvent) error {
 					switch event.Event {
 					case "snapshot":
-						waitForBatchProbe(t, dir, "w1:p0")
-						_, err := board.MoveEntry(currentEntry(t, root, id), root, "review")
+						if err := batchProbeStarted(dir, "w1:p0"); err != nil {
+							return err
+						}
+						snapshot, err := board.ReadSnapshot(root, id)
+						if err != nil {
+							return err
+						}
+						_, err = board.MoveEntry(snapshot.Entry, root, "review")
 						return err
 					case "state-change":
 						closeOnce(outputHeld)
