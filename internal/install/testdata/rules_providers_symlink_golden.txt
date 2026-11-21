@@ -5,9 +5,9 @@ ensure: status=2 removed=0 inactive=false disabled=[]
 followed: "# Other\n\n@~/.agents/kander/KANDER-AGENTS.md\n"
 uninstall: action=0 path=<HOME>/.claude/other-rules.txt reason="" content="# Other\n"
 == claude-global / symlink to other file / apply uninstall
+apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n配置：在 <HOME>/.config/kander/config.json 中写入 install_rules: false，并删除所有 agents.<name>.install_rules。\n不删除：二进制、config.json、share 目录、缓存和看板。\n"
 apply uninstall: err=false
-apply uninstall output: 已关闭规则注入：<HOME>/.config/kander/config.json
-apply uninstall output: 已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件
+apply uninstall output: "已关闭规则注入：<HOME>/.config/kander/config.json\n已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: install_rules=false true
 apply uninstall file <HOME>/.claude/CLAUDE.md: symlink to <HOME>/.claude/other-rules.txt
 apply uninstall file <HOME>/.claude/other-rules.txt: "# Other\n"
@@ -18,9 +18,9 @@ ensure: status=2 removed=0 inactive=false disabled=[]
 followed: "# Outside\n\n@~/.agents/kander/KANDER-AGENTS.md\n"
 uninstall: action=0 path=<HOME>/outside/rules.md reason="" content="# Outside\n"
 == claude-global / symlink escaping the scope / apply uninstall
+apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n配置：在 <HOME>/.config/kander/config.json 中写入 install_rules: false，并删除所有 agents.<name>.install_rules。\n不删除：二进制、config.json、share 目录、缓存和看板。\n"
 apply uninstall: err=false
-apply uninstall output: 已关闭规则注入：<HOME>/.config/kander/config.json
-apply uninstall output: 已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件
+apply uninstall output: "已关闭规则注入：<HOME>/.config/kander/config.json\n已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: install_rules=false true
 apply uninstall file <HOME>/.claude/CLAUDE.md: symlink to <HOME>/outside/rules.md
 apply uninstall file <HOME>/outside/rules.md: "# Outside\n"
@@ -30,9 +30,9 @@ inspect: invalid=0 duplicates=0 files=1 err=false
 ensure: status=0 removed=0 inactive=false disabled=[]
 uninstall: action=2 path=<HOME>/.claude/CLAUDE.md reason="指向 Kander 规则入口的符号链接；规则目录删除后它将失效" content=""
 == claude-global / symlink to the rules entry / apply uninstall
+apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.claude/CLAUDE.md：指向 Kander 规则入口的符号链接；规则目录删除后它将失效\n配置：在 <HOME>/.config/kander/config.json 中写入 install_rules: false，并删除所有 agents.<name>.install_rules。\n不删除：二进制、config.json、share 目录、缓存和看板。\n"
 apply uninstall: err=false
-apply uninstall output: 已关闭规则注入：<HOME>/.config/kander/config.json
-apply uninstall output: 已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件
+apply uninstall output: "已关闭规则注入：<HOME>/.config/kander/config.json\n已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: install_rules=false true
 apply uninstall file <HOME>/.claude/CLAUDE.md: symlink to <HOME>/.agents/kander/KANDER-AGENTS.md
 == claude-project / symlink to other file
@@ -42,9 +42,9 @@ ensure: status=2 removed=0 inactive=false disabled=[]
 followed: "# Other\n\n@.kander/rules/KANDER-AGENTS.md\n"
 uninstall: action=0 path=<HOME>/project/other-rules.txt reason="" content="# Other\n"
 == claude-project / symlink to other file / apply uninstall
+apply uninstall plan prompt: "kander uninstall 将处理项目范围：<HOME>/project\n  删除  <HOME>/project/.kander/rules 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n配置：在 <HOME>/project/.kander/config.json 中写入 install_rules: false，并删除所有 agents.<name>.install_rules。\n不删除：二进制、config.json、share 目录、缓存和看板。\n"
 apply uninstall: err=false
-apply uninstall output: 已关闭规则注入：<HOME>/project/.kander/config.json
-apply uninstall output: 已删除 <HOME>/project/.kander/rules 中 1 个 Kander 规则文件和状态文件
+apply uninstall output: "已关闭规则注入：<HOME>/project/.kander/config.json\n已删除 <HOME>/project/.kander/rules 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: install_rules=false true
 apply uninstall file <HOME>/project/CLAUDE.md: symlink to <HOME>/project/other-rules.txt
 apply uninstall file <HOME>/project/other-rules.txt: "# Other\n"
@@ -55,9 +55,9 @@ ensure: status=0 removed=0 inactive=false disabled=[] err=拒绝通过指向项�
 followed: "# Outside\n"
 uninstall: action=2 path=<HOME>/project/CLAUDE.md reason="拒绝通过指向项目外的符号链接写入: <HOME>/project/CLAUDE.md" content=""
 == claude-project / symlink escaping the scope / apply uninstall
+apply uninstall plan prompt: "kander uninstall 将处理项目范围：<HOME>/project\n  删除  <HOME>/project/.kander/rules 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/project/CLAUDE.md：拒绝通过指向项目外的符号链接写入: <HOME>/project/CLAUDE.md\n配置：在 <HOME>/project/.kander/config.json 中写入 install_rules: false，并删除所有 agents.<name>.install_rules。\n不删除：二进制、config.json、share 目录、缓存和看板。\n"
 apply uninstall: err=false
-apply uninstall output: 已关闭规则注入：<HOME>/project/.kander/config.json
-apply uninstall output: 已删除 <HOME>/project/.kander/rules 中 1 个 Kander 规则文件和状态文件
+apply uninstall output: "已关闭规则注入：<HOME>/project/.kander/config.json\n已删除 <HOME>/project/.kander/rules 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: install_rules=false true
 apply uninstall file <HOME>/project/CLAUDE.md: symlink to <HOME>/outside/rules.md
 apply uninstall file <HOME>/outside/rules.md: "# Outside\n"
@@ -67,9 +67,9 @@ inspect: invalid=0 duplicates=0 files=1 err=false
 ensure: status=0 removed=0 inactive=false disabled=[]
 uninstall: action=2 path=<HOME>/project/CLAUDE.md reason="指向 Kander 规则入口的符号链接；规则目录删除后它将失效" content=""
 == claude-project / symlink to the rules entry / apply uninstall
+apply uninstall plan prompt: "kander uninstall 将处理项目范围：<HOME>/project\n  删除  <HOME>/project/.kander/rules 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/project/CLAUDE.md：指向 Kander 规则入口的符号链接；规则目录删除后它将失效\n配置：在 <HOME>/project/.kander/config.json 中写入 install_rules: false，并删除所有 agents.<name>.install_rules。\n不删除：二进制、config.json、share 目录、缓存和看板。\n"
 apply uninstall: err=false
-apply uninstall output: 已关闭规则注入：<HOME>/project/.kander/config.json
-apply uninstall output: 已删除 <HOME>/project/.kander/rules 中 1 个 Kander 规则文件和状态文件
+apply uninstall output: "已关闭规则注入：<HOME>/project/.kander/config.json\n已删除 <HOME>/project/.kander/rules 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: install_rules=false true
 apply uninstall file <HOME>/project/CLAUDE.md: symlink to <HOME>/project/.kander/rules/KANDER-AGENTS.md
 == cursor-global / symlink to other file
@@ -79,9 +79,9 @@ ensure: status=0 removed=0 inactive=false disabled=[] err=<HOME>/.cursor/rules/k
 followed: "# Other\n"
 uninstall: action=2 path=<HOME>/.cursor/rules/kander.mdc reason="<HOME>/.cursor/rules/kander.mdc 是符号链接；Kander 不通过链接读写 cursor 规则，请换成普通文件。" content=""
 == cursor-global / symlink to other file / apply uninstall
+apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.cursor/rules/kander.mdc：<HOME>/.cursor/rules/kander.mdc 是符号链接；Kander 不通过链接读写 cursor 规则，请换成普通文件。\n配置：在 <HOME>/.config/kander/config.json 中写入 install_rules: false，并删除所有 agents.<name>.install_rules。\n不删除：二进制、config.json、share 目录、缓存和看板。\n"
 apply uninstall: err=false
-apply uninstall output: 已关闭规则注入：<HOME>/.config/kander/config.json
-apply uninstall output: 已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件
+apply uninstall output: "已关闭规则注入：<HOME>/.config/kander/config.json\n已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: install_rules=false true
 apply uninstall file <HOME>/.cursor/rules/kander.mdc: symlink to <HOME>/.cursor/rules/other-rules.txt
 apply uninstall file <HOME>/.cursor/rules/other-rules.txt: "# Other\n"
@@ -92,9 +92,9 @@ ensure: status=0 removed=0 inactive=false disabled=[] err=<HOME>/.cursor/rules/k
 followed: "# Outside\n"
 uninstall: action=2 path=<HOME>/.cursor/rules/kander.mdc reason="<HOME>/.cursor/rules/kander.mdc 是符号链接；Kander 不通过链接读写 cursor 规则，请换成普通文件。" content=""
 == cursor-global / symlink escaping the scope / apply uninstall
+apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.cursor/rules/kander.mdc：<HOME>/.cursor/rules/kander.mdc 是符号链接；Kander 不通过链接读写 cursor 规则，请换成普通文件。\n配置：在 <HOME>/.config/kander/config.json 中写入 install_rules: false，并删除所有 agents.<name>.install_rules。\n不删除：二进制、config.json、share 目录、缓存和看板。\n"
 apply uninstall: err=false
-apply uninstall output: 已关闭规则注入：<HOME>/.config/kander/config.json
-apply uninstall output: 已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件
+apply uninstall output: "已关闭规则注入：<HOME>/.config/kander/config.json\n已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: install_rules=false true
 apply uninstall file <HOME>/.cursor/rules/kander.mdc: symlink to <HOME>/outside/rules.md
 apply uninstall file <HOME>/outside/rules.md: "# Outside\n"
@@ -104,9 +104,9 @@ inspect: invalid=0 duplicates=0 files=1 err=false
 ensure: status=0 removed=0 inactive=false disabled=[] err=<HOME>/.cursor/rules/kander.mdc 是符号链接；Kander 不通过链接读写 cursor 规则，请换成普通文件。
 uninstall: action=2 path=<HOME>/.cursor/rules/kander.mdc reason="<HOME>/.cursor/rules/kander.mdc 是符号链接；Kander 不通过链接读写 cursor 规则，请换成普通文件。" content=""
 == cursor-global / symlink to the rules entry / apply uninstall
+apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.cursor/rules/kander.mdc：<HOME>/.cursor/rules/kander.mdc 是符号链接；Kander 不通过链接读写 cursor 规则，请换成普通文件。\n配置：在 <HOME>/.config/kander/config.json 中写入 install_rules: false，并删除所有 agents.<name>.install_rules。\n不删除：二进制、config.json、share 目录、缓存和看板。\n"
 apply uninstall: err=false
-apply uninstall output: 已关闭规则注入：<HOME>/.config/kander/config.json
-apply uninstall output: 已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件
+apply uninstall output: "已关闭规则注入：<HOME>/.config/kander/config.json\n已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: install_rules=false true
 apply uninstall file <HOME>/.cursor/rules/kander.mdc: symlink to <HOME>/.agents/kander/KANDER-AGENTS.md
 == cursor-project / symlink to other file
@@ -116,9 +116,9 @@ ensure: status=2 removed=0 inactive=false disabled=[]
 followed: "# Other\n\n## Kander Rules Entry\n\nAt the start of every session, read `.kander/rules/KANDER-AGENTS.md` and follow it as the Kander workflow rules entry.\n"
 uninstall: action=0 path=<HOME>/project/other-rules.txt reason="" content="# Other\n"
 == cursor-project / symlink to other file / apply uninstall
+apply uninstall plan prompt: "kander uninstall 将处理项目范围：<HOME>/project\n  删除  <HOME>/project/.kander/rules 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n配置：在 <HOME>/project/.kander/config.json 中写入 install_rules: false，并删除所有 agents.<name>.install_rules。\n不删除：二进制、config.json、share 目录、缓存和看板。\n"
 apply uninstall: err=false
-apply uninstall output: 已关闭规则注入：<HOME>/project/.kander/config.json
-apply uninstall output: 已删除 <HOME>/project/.kander/rules 中 1 个 Kander 规则文件和状态文件
+apply uninstall output: "已关闭规则注入：<HOME>/project/.kander/config.json\n已删除 <HOME>/project/.kander/rules 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: install_rules=false true
 apply uninstall file <HOME>/project/AGENTS.md: symlink to <HOME>/project/other-rules.txt
 apply uninstall file <HOME>/project/other-rules.txt: "# Other\n"
@@ -129,9 +129,9 @@ ensure: status=0 removed=0 inactive=false disabled=[] err=拒绝通过指向项�
 followed: "# Outside\n"
 uninstall: action=2 path=<HOME>/project/AGENTS.md reason="拒绝通过指向项目外的符号链接写入: <HOME>/project/AGENTS.md" content=""
 == cursor-project / symlink escaping the scope / apply uninstall
+apply uninstall plan prompt: "kander uninstall 将处理项目范围：<HOME>/project\n  删除  <HOME>/project/.kander/rules 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/project/AGENTS.md：拒绝通过指向项目外的符号链接写入: <HOME>/project/AGENTS.md\n配置：在 <HOME>/project/.kander/config.json 中写入 install_rules: false，并删除所有 agents.<name>.install_rules。\n不删除：二进制、config.json、share 目录、缓存和看板。\n"
 apply uninstall: err=false
-apply uninstall output: 已关闭规则注入：<HOME>/project/.kander/config.json
-apply uninstall output: 已删除 <HOME>/project/.kander/rules 中 1 个 Kander 规则文件和状态文件
+apply uninstall output: "已关闭规则注入：<HOME>/project/.kander/config.json\n已删除 <HOME>/project/.kander/rules 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: install_rules=false true
 apply uninstall file <HOME>/project/AGENTS.md: symlink to <HOME>/outside/rules.md
 apply uninstall file <HOME>/outside/rules.md: "# Outside\n"
@@ -141,9 +141,9 @@ inspect: invalid=0 duplicates=0 files=1 err=false
 ensure: status=0 removed=0 inactive=false disabled=[]
 uninstall: action=2 path=<HOME>/project/AGENTS.md reason="指向 Kander 规则入口的符号链接；规则目录删除后它将失效" content=""
 == cursor-project / symlink to the rules entry / apply uninstall
+apply uninstall plan prompt: "kander uninstall 将处理项目范围：<HOME>/project\n  删除  <HOME>/project/.kander/rules 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/project/AGENTS.md：指向 Kander 规则入口的符号链接；规则目录删除后它将失效\n配置：在 <HOME>/project/.kander/config.json 中写入 install_rules: false，并删除所有 agents.<name>.install_rules。\n不删除：二进制、config.json、share 目录、缓存和看板。\n"
 apply uninstall: err=false
-apply uninstall output: 已关闭规则注入：<HOME>/project/.kander/config.json
-apply uninstall output: 已删除 <HOME>/project/.kander/rules 中 1 个 Kander 规则文件和状态文件
+apply uninstall output: "已关闭规则注入：<HOME>/project/.kander/config.json\n已删除 <HOME>/project/.kander/rules 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: install_rules=false true
 apply uninstall file <HOME>/project/AGENTS.md: symlink to <HOME>/project/.kander/rules/KANDER-AGENTS.md
 == codex-global / symlink to other file
@@ -153,9 +153,9 @@ ensure: status=2 removed=0 inactive=false disabled=[]
 followed: "# Other\n\n## Kander Rules Entry\n\nAt the start of every session, read `~/.agents/kander/KANDER-AGENTS.md` and follow it as the Kander workflow rules entry.\n"
 uninstall: action=0 path=<HOME>/.codex/other-rules.txt reason="" content="# Other\n"
 == codex-global / symlink to other file / apply uninstall
+apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n配置：在 <HOME>/.config/kander/config.json 中写入 install_rules: false，并删除所有 agents.<name>.install_rules。\n不删除：二进制、config.json、share 目录、缓存和看板。\n"
 apply uninstall: err=false
-apply uninstall output: 已关闭规则注入：<HOME>/.config/kander/config.json
-apply uninstall output: 已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件
+apply uninstall output: "已关闭规则注入：<HOME>/.config/kander/config.json\n已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: install_rules=false true
 apply uninstall file <HOME>/.codex/AGENTS.md: symlink to <HOME>/.codex/other-rules.txt
 apply uninstall file <HOME>/.codex/other-rules.txt: "# Other\n"
@@ -166,9 +166,9 @@ ensure: status=2 removed=0 inactive=false disabled=[]
 followed: "# Outside\n\n## Kander Rules Entry\n\nAt the start of every session, read `~/.agents/kander/KANDER-AGENTS.md` and follow it as the Kander workflow rules entry.\n"
 uninstall: action=0 path=<HOME>/outside/rules.md reason="" content="# Outside\n"
 == codex-global / symlink escaping the scope / apply uninstall
+apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n配置：在 <HOME>/.config/kander/config.json 中写入 install_rules: false，并删除所有 agents.<name>.install_rules。\n不删除：二进制、config.json、share 目录、缓存和看板。\n"
 apply uninstall: err=false
-apply uninstall output: 已关闭规则注入：<HOME>/.config/kander/config.json
-apply uninstall output: 已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件
+apply uninstall output: "已关闭规则注入：<HOME>/.config/kander/config.json\n已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: install_rules=false true
 apply uninstall file <HOME>/.codex/AGENTS.md: symlink to <HOME>/outside/rules.md
 apply uninstall file <HOME>/outside/rules.md: "# Outside\n"
@@ -178,8 +178,8 @@ inspect: invalid=0 duplicates=0 files=1 err=false
 ensure: status=0 removed=0 inactive=false disabled=[]
 uninstall: action=2 path=<HOME>/.codex/AGENTS.md reason="指向 Kander 规则入口的符号链接；规则目录删除后它将失效" content=""
 == codex-global / symlink to the rules entry / apply uninstall
+apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.codex/AGENTS.md：指向 Kander 规则入口的符号链接；规则目录删除后它将失效\n配置：在 <HOME>/.config/kander/config.json 中写入 install_rules: false，并删除所有 agents.<name>.install_rules。\n不删除：二进制、config.json、share 目录、缓存和看板。\n"
 apply uninstall: err=false
-apply uninstall output: 已关闭规则注入：<HOME>/.config/kander/config.json
-apply uninstall output: 已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件
+apply uninstall output: "已关闭规则注入：<HOME>/.config/kander/config.json\n已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: install_rules=false true
 apply uninstall file <HOME>/.codex/AGENTS.md: symlink to <HOME>/.agents/kander/KANDER-AGENTS.md
