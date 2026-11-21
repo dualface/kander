@@ -39,9 +39,11 @@ func ignoredOfFile(path string) []Ignored {
 // encodeConfigKeeping encodes cfg like encodeConfig and writes the ignored items
 // back into the document, so a save does not lose what a newer version wrote. An
 // item is placed only where its parent object already exists in the encoding, so a
-// section the user removed does not come back; the agents object is the one
-// container created on demand, for an unusable entry. An item whose key the
-// encoding already has is skipped: the current value wins.
+// section the user removed does not come back. The exceptions are parents that exist
+// only for the kept content (see mayCreate): the agents object and the agent entries
+// and sections below it, and the legacy role object of models.review_roles that
+// holds only unknown fields. An item whose key the encoding already has is skipped:
+// the current value wins.
 func encodeConfigKeeping(cfg *Config, items []Ignored) ([]byte, error) {
 	if len(items) == 0 {
 		return encodeConfig(cfg)
@@ -171,20 +173,16 @@ func (n *jsonTree) insertAt(path, trail, full []string, value *jsonTree) {
 }
 
 // mayCreate says whether the missing object at prefix may be created to hold the
-// item at full. Only parents that exist for no reason but the kept content are:
-// the agents object (for an unusable entry), the sections of an agents entry that
-// the encoding omitted because they held only unknown keys, and the legacy role
-// object of models.review_roles that holds only unknown fields.
+// item at full. Only parents that exist for no reason but the kept content are: the
+// agents object, an agents entry, or a section of an entry that the encoding left
+// out (an entry whose known content was cleared, or whose section held only unknown
+// keys), and the legacy role object of models.review_roles that holds only unknown
+// fields.
 func mayCreate(prefix, full []string) bool {
-	switch {
-	case len(full) == 2 && len(prefix) == 1 && prefix[0] == "agents":
-		return true
-	case len(prefix) >= 3 && prefix[0] == "agents":
-		return true
-	case len(full) == 4 && len(prefix) == 3 && prefix[0] == "models" && prefix[1] == "review_roles":
+	if prefix[0] == "agents" {
 		return true
 	}
-	return false
+	return len(full) == 4 && len(prefix) == 3 && prefix[0] == "models" && prefix[1] == "review_roles"
 }
 
 // render writes compact JSON.

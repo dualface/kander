@@ -81,3 +81,21 @@ func TestCursorChatOmitsEffortInput(t *testing.T) {
 		t.Fatalf("chat fields=%d", chatFields)
 	}
 }
+
+// A kanban_agent that names an agent this version does not know has no control of its
+// own, so the execution page shows it as a note.
+func TestExecutionSectionShowsAnUnknownKanbanAgent(t *testing.T) {
+	_, panel := openPanel(t)
+	panel.session.Config.KanbanAgent = "newagent"
+	pumpPanel(panel, panel.openSection(sectionExecution))
+	_, view := panel.view()
+	if plain := ansi.Strip(view); !strings.Contains(plain, "kanban_agent: newagent") {
+		t.Fatalf("the unknown kanban_agent is not shown:\n%s", plain)
+	}
+	panel.session.Config.KanbanAgent = "codex"
+	pumpPanel(panel, panel.openSection(sectionExecution))
+	_, view = panel.view()
+	if plain := ansi.Strip(view); strings.Contains(plain, "newagent") {
+		t.Fatalf("the note stayed for a known agent:\n%s", plain)
+	}
+}

@@ -7,5 +7,6 @@
   "config.ignored_from": "{{.V0}} (位于 {{.V1}})",
   "config.ignored_unusable_agent": "agent 条目 {{.V0}} 不可用: {{.V1}}; 条目仍保留在文件中",
   "config.unknown_agent_reference_notice": "{{.V0}} 指向当前版本不认识的 agent {{.V1}}, 在修改它或升级 Kander 之前, 使用该角色会失败",
-  "menu.doctor_ignored_heading": "当前版本忽略以下设置; 它们可能由更新的版本写入, 保存配置时会原样保留:"
+  "menu.doctor_ignored_heading": "当前版本忽略以下设置; 它们可能由更新的版本写入, 保存配置时会原样保留:",
+  "tui.kanban_agent_unknown_note": "kanban_agent: {{.V0}} (当前版本不认识, 保持原样)"
 }
