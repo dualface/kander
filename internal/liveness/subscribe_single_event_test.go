@@ -536,9 +536,14 @@ func TestSingleEventWakesForOtherCardOverdueDuringSubscription(t *testing.T) {
 	prepareSubscriptionDispatchID(t, root, id, "early-round", "sync", time.Minute)
 	prepareSubscriptionDispatchID(t, root, late, "late-round", "sync", 20*time.Minute)
 	opts.Refresh, opts.Heartbeat = .1, 3600
+	// No scan reads the board before the clock has moved, so a finished start-up probe cannot
+	// cause one more attention event at the old time.
+	moved := make(chan struct{})
+	holdScansUntil(t, moved)
 	events, err := singleEvents(t, root, opts, func(event groupEvent) error {
 		if event.Event == "snapshot" {
 			advance()
+			close(moved)
 		}
 		return nil
 	})
