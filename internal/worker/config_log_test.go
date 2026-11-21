@@ -2,14 +2,18 @@ package worker
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/remote"
 )
 
 func bufferLogger() (*slog.Logger, *bytes.Buffer) {
@@ -105,16 +109,88 @@ func TestWorkerLogsNothingWithoutIgnoredConfiguration(t *testing.T) {
 	}
 }
 
-// A configuration that cannot be loaded is logged and the worker goes on.
-func TestWorkerGoesOnWhenTheConfigurationCannotBeLoaded(t *testing.T) {
+// The worker runs in the client home, which may sit below a directory that holds a project
+// overlay. Its startup report covers the scope configuration only: the overlay's own ignored
+// settings are not logged, and an overlay that does not load does not hide the scope's.
+func TestWorkerLogsOnlyTheScopeConfigurationBelowAProjectOverlay(t *testing.T) {
+	writeWorkerConfig(t, func(doc map[string]any) { doc["future_top"] = true })
+	project := t.TempDir()
+	home := filepath.Join(project, "client")
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(home)
+	overlay := filepath.Join(project, config.OverlayFilename)
+	for name, content := range map[string]string{
+		"an overlay with ignored keys": `{"future_overlay":{"x":1},"server":{"token":"overlay-secret"}}`,
+		"an overlay that is invalid":   `{"tui":"not an object"}`,
+	} {
+		if err := os.WriteFile(overlay, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		logger, buf := bufferLogger()
+		logIgnoredConfig(logger)
+		records := logRecords(t, buf)
+		if len(records) != 1 || records[0]["path"] != "future_top" {
+			t.Fatalf("%s: log=%s", name, buf.String())
+		}
+	}
+}
+
+// A worker that starts with a configuration that cannot be loaded logs one warning and goes on:
+// it takes the worker lock and writes its record, and it ends with status 0 when told to stop.
+func TestWorkerStartsWhenTheConfigurationCannotBeLoaded(t *testing.T) {
 	path := writeWorkerConfig(t, func(map[string]any) {})
 	if err := os.WriteFile(path, []byte("{not json"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	logger, buf := bufferLogger()
-	logIgnoredConfig(logger)
-	records := logRecords(t, buf)
-	if len(records) != 1 || records[0]["level"] != "WARN" {
-		t.Fatalf("log=%s", buf.String())
+	home := filepath.Join(t.TempDir(), "client")
+	var log syncBuffer
+	ctx, stop := context.WithCancel(t.Context())
+	defer stop()
+	status := make(chan int, 1)
+	go func() { status <- runWorker(ctx, home, &log) }()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if _, state, _ := remote.ReadWorkerRecord(home); state == remote.WorkerRecordRecorded {
+			break
+		}
+		if time.Now().After(deadline) {
+			stop()
+			t.Fatalf("the worker did not start: exit=%v log=%s", <-status, log.String())
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
+	stop()
+	if code := <-status; code != 0 {
+		t.Fatalf("exit=%d log=%s", code, log.String())
+	}
+	buf := bytes.NewBufferString(log.String())
+	var warnings int
+	for _, record := range logRecords(t, buf) {
+		if record["level"] == "WARN" && strings.Contains(record["msg"].(string), "could not be loaded") {
+			warnings++
+		}
+	}
+	if warnings != 1 {
+		t.Fatalf("warnings=%d log=%s", warnings, log.String())
+	}
+}
+
+// syncBuffer is a log destination that the worker goroutine writes while the test reads it.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }

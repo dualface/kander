@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -131,9 +132,15 @@ func run() int {
 	config.BindEffectiveLanguage()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	return runWorker(ctx, home, os.Stderr)
+}
+
+// runWorker logs the ignored configuration once and serves until ctx ends or the worker is idle.
+// It returns the exit status of the command.
+func runWorker(ctx context.Context, home string, logOut io.Writer) int {
+	logger := slog.New(slog.NewJSONHandler(logOut, nil))
 	logIgnoredConfig(logger)
-	err = Serve(ctx, Options{Home: home, Logger: logger})
+	err := Serve(ctx, Options{Home: home, Logger: logger})
 	if errors.Is(err, ErrRunning) {
 		return 0
 	}
@@ -146,10 +153,12 @@ func run() int {
 
 // logIgnoredConfig writes the settings of its configuration that this version ignores to the log,
 // once, when the worker starts: a worker lives for hours and would otherwise drop the settings
-// of a newer version silently. It loads the configuration of the client home, where the worker
-// runs, and an unreadable configuration is logged without stopping the worker.
+// of a newer version silently. It reads the scope configuration only: the worker runs in the
+// client home, which may sit below a repository or a directory that holds a project overlay, and
+// that overlay belongs to a project, not to this process. An unreadable configuration is logged
+// without stopping the worker.
 func logIgnoredConfig(logger *slog.Logger) {
-	cfg, err := config.Load(true)
+	cfg, err := config.LoadScope(true)
 	if err != nil {
 		logger.Warn("the configuration could not be loaded; the settings this version ignores are not listed", "error", err)
 		return
