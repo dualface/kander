@@ -679,13 +679,22 @@ func TestReviewRoleExtrasSurviveTheFold(t *testing.T) {
 	if got := ignoredPaths(cfg); !slices.Equal(got, []string{"models.review_roles.PM.future"}) {
 		t.Fatalf("ignored=%v", got)
 	}
+	if _, err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := jsonPath(readScope(t, path), "models", "review_roles", "PM", "future"); v != "x" {
+		t.Fatalf("an unknown field of a legacy role must stay at its own path: %v", v)
+	}
 	// The fold used by the overlay merge and the overlay write keeps it too.
 	raw := map[string]any{"models": map[string]any{"review_roles": map[string]any{
 		"PM": map[string]any{"model": "m", "future": "x"},
 	}}}
 	FoldLegacyReviewRoleKeys(raw)
 	if _, ok := jsonPath(raw, "models", "review_roles", "PMQA", "future"); ok {
-		t.Fatalf("an unknown field of a legacy role must not overwrite or join the current role: %v", raw)
+		t.Fatalf("an unknown field of a legacy role must not join the current role: %v", raw)
+	}
+	if v, _ := jsonPath(raw, "models", "review_roles", "PM", "future"); v != "x" {
+		t.Fatalf("the fold must keep the unknown field of a legacy role at its path: %v", raw)
 	}
 	both := map[string]any{"models": map[string]any{"review_roles": map[string]any{
 		"PM":   map[string]any{"model": "m", "future": "legacy"},
@@ -693,7 +702,10 @@ func TestReviewRoleExtrasSurviveTheFold(t *testing.T) {
 	}}}
 	FoldLegacyReviewRoleKeys(both)
 	if v, _ := jsonPath(both, "models", "review_roles", "PMQA", "future"); v != "current" {
-		t.Fatalf("the current role's own field must win: %v", both)
+		t.Fatalf("the current role's own field must stay: %v", both)
+	}
+	if v, _ := jsonPath(both, "models", "review_roles", "PM", "future"); v != "legacy" {
+		t.Fatalf("the legacy role's own field must stay: %v", both)
 	}
 }
 
@@ -744,7 +756,7 @@ func TestAgentSectionOfOnlyUnknownKeysIsAbsent(t *testing.T) {
 	setupHome(t)
 	doc := scopeDocument(t)
 	doc["agents"] = map[string]any{"claude": map[string]any{"session": map[string]any{"Mode": "generated"}}}
-	writeScope(t, doc)
+	path := writeScope(t, doc)
 	cfg, err := Load(false)
 	if err != nil {
 		t.Fatalf("a misspelled section key must only be reported: %v", err)
@@ -752,11 +764,60 @@ func TestAgentSectionOfOnlyUnknownKeysIsAbsent(t *testing.T) {
 	if !slices.Equal(ignoredPaths(cfg), []string{"agents.claude.session.Mode"}) || cfg.Agents["claude"].Session != nil {
 		t.Fatalf("ignored=%v session=%+v", ignoredPaths(cfg), cfg.Agents["claude"].Session)
 	}
+	// The omitted section is not lost on save.
+	if _, err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := jsonPath(readScope(t, path), "agents", "claude", "session", "Mode"); v != "generated" {
+		t.Fatalf("an omitted section of unknown keys was lost on save: %v", v)
+	}
 	// An empty section the user wrote is still checked.
 	doc["agents"] = map[string]any{"claude": map[string]any{"session": map[string]any{}}}
 	writeScope(t, doc)
 	if _, err := Load(false); err == nil {
 		t.Fatal("an empty session section was accepted")
+	}
+}
+
+func TestReviewDefinitionStaysCheckedBesideAnUnregisteredMode(t *testing.T) {
+	setupHome(t)
+	doc := scopeDocument(t)
+	doc["agents"] = map[string]any{"custom": map[string]any{
+		"path": "sh", "args": map[string]any{"start": []any{}, "resume": []any{}, "review": []any{"{instruction}"}},
+		"session": map[string]any{"mode": "future-mode"},
+		"review":  map[string]any{"cwd": "nowhere", "stdin": "none"},
+	}}
+	writeScope(t, doc)
+	if _, err := Load(false); err == nil {
+		t.Fatal("an invalid review.cwd was hidden by an unregistered mode")
+	}
+}
+
+// A snapshot taken before another writer changed the switch of an unusable entry
+// cannot put the old value back.
+func TestStaleSnapshotCannotRestoreAnInstallSwitch(t *testing.T) {
+	setupHome(t)
+	doc := scopeDocument(t)
+	doc["agents"] = map[string]any{"codex": map[string]any{"install_rules": true, "args": map[string]any{"start": []any{}, "resume": []any{}}, "session": map[string]any{"mode": "hook:future-hook"}}}
+	path := writeScope(t, doc)
+	baseline, err := Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := Clone(baseline)
+	// Another session turns the switch off.
+	other := Clone(baseline)
+	off := false
+	SetAgentInstallRules(other, "codex", &off)
+	if _, err := Save(other); err != nil {
+		t.Fatal(err)
+	}
+	snapshot.Launcher = "tmux"
+	if _, err := SaveIfUnchanged(snapshot, baseline); err == nil {
+		t.Fatal("a stale snapshot was saved over a changed install switch")
+	}
+	if v, _ := jsonPath(readScope(t, path), "agents", "codex", "install_rules"); v != false {
+		t.Fatalf("the switch another session turned off came back: %v", v)
 	}
 }
 

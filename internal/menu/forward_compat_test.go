@@ -289,14 +289,21 @@ func TestEditingTheSmallScaleLeavesKanbanAgentAlone(t *testing.T) {
 	if session.Config.KanbanAgent != "newagent" {
 		t.Fatalf("kanban_agent was overwritten: %q", session.Config.KanbanAgent)
 	}
-	// Editing the large scale leaves an independent reference alone too, but a
-	// kanban_agent that mirrors the large scale keeps following it.
+	// Editing the large scale leaves a kanban_agent that names an unknown agent alone,
+	// whether it equals the replaced value or not.
 	session.Config.KanbanAgent = "independentagent"
 	session.SetExecutionAgent("large", "claude")
 	if session.Config.KanbanAgent != "independentagent" {
 		t.Fatalf("an independent kanban_agent was overwritten: %q", session.Config.KanbanAgent)
 	}
+	session.Config.KanbanAgent = "newagent"
+	session.Config.KanbanAgents["large"] = "newagent"
+	session.SetExecutionAgent("large", "codex")
+	if session.Config.KanbanAgent != "newagent" {
+		t.Fatalf("an unknown kanban_agent was overwritten by a scale edit: %q", session.Config.KanbanAgent)
+	}
 	session.Config.KanbanAgent = "claude"
+	session.Config.KanbanAgents["large"] = "claude"
 	session.SetExecutionAgent("large", "codex")
 	if session.Config.KanbanAgent != "codex" {
 		t.Fatalf("a mirroring kanban_agent must follow the large scale: %q", session.Config.KanbanAgent)

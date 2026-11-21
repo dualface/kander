@@ -129,9 +129,13 @@ func readJSONTree(dec *json.Decoder) (*jsonTree, error) {
 	return &jsonTree{leaf: leaf}, err
 }
 
-// insert places value at path. Missing parents are not created, except that a
-// missing agents object is.
+// insert places value at path. Missing parents are not created, except where the
+// parent exists only because of what is kept: see mayCreate.
 func (n *jsonTree) insert(path []string, value *jsonTree) {
+	n.insertAt(path, nil, path, value)
+}
+
+func (n *jsonTree) insertAt(path, trail, full []string, value *jsonTree) {
 	if len(path) == 0 {
 		return
 	}
@@ -145,24 +149,42 @@ func (n *jsonTree) insert(path []string, value *jsonTree) {
 			}
 			return
 		}
+		next := append(append([]string(nil), trail...), head)
 		child, exists := n.attrs[head]
 		if !exists {
-			if head != "agents" || len(path) != 2 {
+			if !mayCreate(next, full) {
 				return
 			}
 			child = &jsonTree{kind: '{', attrs: map[string]*jsonTree{}}
 			n.keys = append(n.keys, head)
 			n.attrs[head] = child
 		}
-		child.insert(path[1:], value)
+		child.insertAt(path[1:], next, full, value)
 	case '[':
 		// An array element has no key to add; only descend into it.
 		index, err := strconv.Atoi(head)
 		if err != nil || index < 0 || index >= len(n.elems) || len(path) == 1 {
 			return
 		}
-		n.elems[index].insert(path[1:], value)
+		n.elems[index].insertAt(path[1:], append(append([]string(nil), trail...), head), full, value)
 	}
+}
+
+// mayCreate says whether the missing object at prefix may be created to hold the
+// item at full. Only parents that exist for no reason but the kept content are:
+// the agents object (for an unusable entry), the sections of an agents entry that
+// the encoding omitted because they held only unknown keys, and the legacy role
+// object of models.review_roles that holds only unknown fields.
+func mayCreate(prefix, full []string) bool {
+	switch {
+	case len(full) == 2 && len(prefix) == 1 && prefix[0] == "agents":
+		return true
+	case len(prefix) >= 3 && prefix[0] == "agents":
+		return true
+	case len(full) == 4 && len(prefix) == 3 && prefix[0] == "models" && prefix[1] == "review_roles":
+		return true
+	}
+	return false
 }
 
 // render writes compact JSON.
