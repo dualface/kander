@@ -221,6 +221,27 @@ The embedded definitions also carry fields a user `agents.<name>` overlay cannot
 
 Each entry is a plain group name without `\`, `/`, or `@`, unique case-insensitively. At review time a name must resolve to a local group of this machine's account domain; builtin and well-known groups fail the review and an unresolved name is skipped. On Windows such a reviewer also gets the task spec snapshotted into the runtime regardless of `review.snapshot_spec`. Only the embedded `codex.json` declares it; POSIX ignores it. See [Review runtime isolation](review-runtime-isolation.md#runtime-directory-contract).
 
+### Rules integration providers
+
+`rules_integration` selects a reference style provider, and the target file selects a file format provider. `internal/install` branches on neither a style name nor a file extension; callers ask the provider, and the providers only decide what is written, never whether or where a file may be written (the `install_rules` gate, the shared-file check, the symlink and project-escape checks, and the atomic write stay with the callers). Providers are named after the mechanism, not the agent, so several definitions share one.
+
+| Kind | Provider | Selected by | What it owns |
+| ---- | -------- | ----------- | ------------ |
+| Reference style | `markdown-reference` | `rules_integration` | the `## Kander Rules Entry` block, detection by entry path or embedded entry content, bare path load commands |
+| Reference style | `claude-import` | `rules_integration` | the `@<path>` import line and its detection, `@<path>` load commands, written first in project scope, a project rules file that is a symlink not pointing at the entry is read as a file |
+| File format | `markdown` | any target without a registered extension | nothing: no prefix, symlinks allowed |
+| File format | `mdc-rule` | the `.mdc` extension | the `alwaysApply: true` frontmatter check and prefix, no symlinks, and the frontmatter alone counts as only Kander content on uninstall |
+
+The built-in definitions produce three combinations: `claude-import` with `markdown` (Claude), `markdown-reference` with `mdc-rule` (Cursor's global `.cursor/rules/kander.mdc`), and `markdown-reference` with `markdown` (every other agent, and Cursor's project `AGENTS.md`).
+
+The reference style names are registered twice: `config.RulesIntegrations` lists the values `internal/config` accepts, and `referenceStyles` in `internal/install` holds the implementations. A consistency test fails when the two differ. To add a way of referencing the entry:
+
+1. Add the name to `config.RulesIntegrations` and use it as `rules_integration` in the embedded definition.
+2. Add `rules_style_<mechanism>.go` in `internal/install` with a type that implements `referenceStyle` (`Block`, `Present`, `LoadCommand`, `ProjectWriteFirst`, `ProjectSymlinkMayDiffer`) and register it in `referenceStyles`.
+3. Add scenarios for the new style to the golden transcripts under `internal/install/testdata/`; the existing transcripts must stay byte for byte unchanged unless the written output changes on purpose.
+
+To add a file format, implement `fileFormat` (`SymlinkRefusal`, `Inspect`, `Prefix`, `OnlyKander`) in `rules_format_<name>.go` and register its extension in `fileFormatsByExtension`, the only place a target is matched by extension. See [Installation and permission boundaries](install-and-permissions.md#rules-integration-providers).
+
 ## Hook Catalog
 
 These hooks are registered twice, and the two registrations must agree. `internal/config/session_hooks.go` lists each name with its capability flags (`DiscoverAfterStart`, `ResolveEmptyReference`, `AllocateBeforeStart`, `PersistAfterStart`) so configuration loading can validate a definition without importing launch. `internal/launch` holds the implementation as a session provider, one `session_provider_<mechanism>.go` file per mechanism, registered by its `session.mode` value. A definition may only reference a registered name, and a consistency test in `internal/launch` fails when a hook has no provider, a provider names an unregistered hook, or its capabilities differ from the flags. `ResolveEmptyReference` is the exception: only `internal/liveness` consumes it, and no provider implements it.
