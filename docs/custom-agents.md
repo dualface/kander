@@ -223,7 +223,7 @@ Each entry is a plain group name without `\`, `/`, or `@`, unique case-insensiti
 
 ## Hook Catalog
 
-These hooks live in one Go registry (`internal/config/session_hooks.go`). A definition may only reference a registered name.
+These hooks are registered twice, and the two registrations must agree. `internal/config/session_hooks.go` lists each name with its capability flags (`DiscoverAfterStart`, `ResolveEmptyReference`, `AllocateBeforeStart`, `PersistAfterStart`) so configuration loading can validate a definition without importing launch. `internal/launch` holds the implementation as a session provider, one `session_provider_<mechanism>.go` file per mechanism, registered by its `session.mode` value. A definition may only reference a registered name, and a consistency test in `internal/launch` fails when a hook has no provider, a provider names an unregistered hook, or its capabilities differ from the flags. `ResolveEmptyReference` is the exception: only `internal/liveness` consumes it, and no provider implements it.
 
 | Name | Purpose | Built-in |
 | ---- | ------- | -------- |
@@ -233,7 +233,12 @@ These hooks live in one Go registry (`internal/config/session_hooks.go`). A defi
 
 The following changes still require Go code:
 
-- A new session identity source that cannot be expressed as `generated`, `allocated`, `none`, or `discovered` (add a named hook and list it here).
+- A new session identity source that cannot be expressed as `generated`, `allocated`, `none`, or `discovered`. Add a session provider and a hook:
+  1. In `internal/config/session_hooks.go`, add the hook to `registeredSessionHooks` with its capability flags.
+  2. In `internal/launch`, add `session_provider_<mechanism>.go` with a type that implements `sessionProvider` (`Mode()` returns `hook:<name>`, `Resumable()` says whether a later launch can resume the session) and registers itself from `init` through `registerSessionProvider`. Name the provider after the mechanism, not the agent, so several definitions can share it.
+  3. Implement only the capabilities the mechanism has: `sessionAllocator` (an id before the agent starts; `sessionAllocatorChecker` adds a check, run before the allocation is recorded, that the allocator can start) and `sessionDiscoverer` (`Snapshot` before the launch, `Scan` of the candidates after it, the wait, the poll interval, the two localized error keys, and whether the id is written back to the card). `sessionMarkerRepairer` marks a provider whose launch session can be found again from static facts. A provider without a capability gets the behavior of an agent that never had it. This branch has no local resume, adoption or session repair, so the resolver, adopter and prover capabilities of the develop branch do not exist here.
+  4. Do not write a polling loop: a discoverer only supplies the scan, and `waitForSessionCandidates` runs the one loop (exactly one candidate returns, several fail at once, none retries until the wait ends). The `sessionLaunch` a provider receives carries the task, the launch directory, the launch time, the agent program, the definition, the launch budget, and the instruction text this launch sends to the agent, for providers that match a session by its first prompt.
+  5. List the hook in the table above.
 - A new interactive exit sequence that is not a single `exit_command` string.
 - Merging agent hooks with terminal-side hooks (herdr socket and similar) into one registry.
 
