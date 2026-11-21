@@ -209,6 +209,19 @@ func TestConfigOutputEqualsThatWithoutTheIgnoredContent(t *testing.T) {
 				return withReviewers(t, map[string]any{"PM": "futureagent", "QA": "codex"})
 			},
 			clean: func(t *testing.T) map[string]any { return withReviewers(t, map[string]any{"QA": "codex"}) }},
+		// Two removals in one scope file need opposite treatment of the emptied parent: the
+		// optional tui section disappears, the required reviewers object stays.
+		{name: "a legacy reviewer and a tui section of only unknown keys", notices: 3,
+			dirty: func(t *testing.T) map[string]any {
+				doc := withReviewers(t, map[string]any{"PM": "futureagent"})
+				doc["tui"] = map[string]any{"future": 1}
+				return doc
+			},
+			clean: func(t *testing.T) map[string]any {
+				doc := withReviewers(t, map[string]any{})
+				delete(doc, "tui")
+				return doc
+			}},
 		// Both layers name an unknown agent for small; the overlay's wins, and removing it must
 		// not show the scope's.
 		{name: "unknown agents in both layers", notices: 1,

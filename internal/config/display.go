@@ -19,13 +19,8 @@ func DisplayConfig(cfg *Config) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Removing a leaf normally leaves its parent object in place, since some objects are
-	// required; one that must disappear with its last key (a section of only unknown keys) is
-	// found by trying again with empty parents pruned.
-	for _, prune := range []bool{false, true} {
-		if display, ok := displayWithout(cfg, scope, overlay, prune); ok {
-			return display, nil
-		}
+	if display, ok := displayWithout(cfg, scope, overlay); ok {
+		return display, nil
 	}
 	return cfg, nil
 }
@@ -46,7 +41,7 @@ func displayLayers() (scope, overlay map[string]any, err error) {
 }
 
 // displayWithout removes the ignored content from copies of the layers and merges them.
-func displayWithout(cfg *Config, scope, overlay map[string]any, prune bool) (*Config, bool) {
+func displayWithout(cfg *Config, scope, overlay map[string]any) (*Config, bool) {
 	scope = cloneRawObjectDeep(scope)
 	if overlay != nil {
 		overlay = cloneRawObjectDeep(overlay)
@@ -56,11 +51,7 @@ func displayWithout(cfg *Config, scope, overlay map[string]any, prune bool) (*Co
 			if layer == nil {
 				continue
 			}
-			if prune {
-				OverlayDelete(layer, path...)
-			} else {
-				deleteLeaf(layer, path)
-			}
+			deleteAndTidy(layer, path)
 		}
 	}
 	merge := func() (*Config, error) {
@@ -119,10 +110,8 @@ func displayWithout(cfg *Config, scope, overlay map[string]any, prune bool) (*Co
 						if i == 0 && len(key) == 1 && key[0] == "kanban_agent" {
 							// The scope file requires kanban_agent: the default agent stands in for it.
 							layer[key[0]] = defaultAgentName()
-						} else if prune {
-							OverlayDelete(layer, key...)
 						} else {
-							deleteLeaf(layer, key)
+							deleteAndTidy(layer, key)
 						}
 					}
 				}
@@ -135,16 +124,52 @@ func displayWithout(cfg *Config, scope, overlay map[string]any, prune bool) (*Co
 	return display, true
 }
 
-// deleteLeaf removes the key the path names and leaves every parent object in place.
-func deleteLeaf(obj map[string]any, path []string) {
+// deleteAndTidy removes the key the path names. A parent object that this leaves empty stays
+// when the configuration accepts it empty (the required reviewers object) and goes when it needs
+// content or may be absent (a tui section of only unknown keys, an agents entry).
+func deleteAndTidy(obj map[string]any, path []string) {
+	chain := []map[string]any{obj}
 	for _, key := range path[:len(path)-1] {
-		next, ok := obj[key].(map[string]any)
+		next, ok := chain[len(chain)-1][key].(map[string]any)
 		if !ok {
 			return
 		}
-		obj = next
+		chain = append(chain, next)
 	}
-	delete(obj, path[len(path)-1])
+	delete(chain[len(chain)-1], path[len(path)-1])
+	for depth := len(chain) - 1; depth > 0 && len(chain[depth]) == 0; depth-- {
+		if !acceptsEmptyObject(path[:depth]) {
+			delete(chain[depth-1], path[depth-1])
+		}
+	}
+}
+
+// acceptsEmptyObject reports whether the default configuration stays valid with the object at
+// path emptied. When it does not, the object is removed instead when the default configuration
+// stays valid without it; when neither holds, it is kept.
+func acceptsEmptyObject(path []string) bool {
+	doc, err := DocumentFromConfig(DefaultConfig())
+	if err != nil {
+		return true
+	}
+	parent := doc
+	for _, key := range path[:len(path)-1] {
+		next, ok := parent[key].(map[string]any)
+		if !ok {
+			// The default configuration has no such parent: an empty object here is a
+			// stranger to it, so it goes.
+			return false
+		}
+		parent = next
+	}
+	last := path[len(path)-1]
+	parent[last] = map[string]any{}
+	if _, err := Validate(doc); err == nil {
+		return true
+	}
+	delete(parent, last)
+	_, err = Validate(doc)
+	return err != nil
 }
 
 // roleKeys lists the keys a layer can hold the role at the path under. A reviewer role is read
