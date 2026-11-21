@@ -34,7 +34,8 @@ func remoteOrchestrateBoard(ctx context.Context, cfg *config.Config) (board.Boar
 
 // bindRemoteOrchestrator preserves one fixed process identity for every group
 // the session later claims. Separate task executors clear that coordinator ID.
-func bindRemoteOrchestrator(plan *LaunchPlan, inv process.ProcessInvocation, session *AgentSession, service *remote.Session, program *process.AgentProgram, task, project string, journal *remote.ActionJournal) (process.ProcessInvocation, func(LaunchOutcome) error, func() (AgentSession, error), error) {
+// prompt is the instruction the launch sends to the agent.
+func bindRemoteOrchestrator(plan *LaunchPlan, inv process.ProcessInvocation, session *AgentSession, service *remote.Session, program *process.AgentProgram, task, project, prompt string, journal *remote.ActionJournal) (process.ProcessInvocation, func(LaunchOutcome) error, func() (AgentSession, error), error) {
 	execution := journal.Value.ExecutionID
 	inv = withInvocationEnvironment(*plan, inv, map[string]string{remote.EnvExecutionID: execution, remote.EnvCoordinatorExecutionID: execution})
 	value := remote.ExecutionContext{ServerURL: service.ServerURL, ClientID: service.Client.ClientID(), ProjectID: service.Info.ID, ExecutionID: execution}
@@ -59,7 +60,15 @@ func bindRemoteOrchestrator(plan *LaunchPlan, inv process.ProcessInvocation, ses
 		return inv, nil, nil, err
 	}
 	definition := config.AgentFor(cfg, session.Agent).Session
-	previous, err := sessionDiscoverSnapshot(definition, task, session.Reference == "" && config.SessionDiscoversAfterStart(definition), program, project, plan.launchTimeout)
+	provider, err := sessionProviderFor(cfg, session.Agent, definition)
+	if err != nil {
+		return inv, nil, nil, err
+	}
+	launchFacts := sessionLaunch{
+		TaskID: task, Prompt: prompt, CWD: project, Program: program,
+		Definition: definition, Budget: plan.launchTimeout,
+	}
+	previous, err := snapshotSessions(provider, launchFacts, session.Reference == "" && sessionDiscovers(provider))
 	if err != nil {
 		return inv, nil, nil, err
 	}
@@ -90,10 +99,11 @@ func bindRemoteOrchestrator(plan *LaunchPlan, inv process.ProcessInvocation, ses
 	}
 	location := func(outcome LaunchOutcome) error { value.Window = locationOf(*plan, outcome); return save() }
 	paneSession := func() (AgentSession, error) {
-		if session.Reference != "" || !config.SessionDiscoversAfterStart(definition) {
+		if session.Reference != "" || !sessionDiscovers(provider) {
 			return *session, nil
 		}
-		reference, err := runSessionDiscoverHook(definition, task, previous, started, program, project, plan.launchTimeout)
+		launchFacts.Start = started
+		reference, err := discoverLaunchSession(provider, launchFacts, previous)
 		return AgentSession{Agent: session.Agent, Reference: reference}, err
 	}
 	return inv, location, paneSession, nil

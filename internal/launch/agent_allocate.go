@@ -11,21 +11,6 @@ import (
 	"github.com/dualface/kander/internal/terminal/direct"
 )
 
-// requireSessionAllocator resolves the allocator of an allocated session
-// without running it. Config loading accepts an allocator that does not
-// resolve, so a caller that records the allocation as an external effect checks
-// it first and leaves a missing allocator as a plain, retryable refusal.
-func requireSessionAllocator(agent string, cfg *config.Config) error {
-	definition := config.AgentFor(cfg, agent)
-	if definition.Session == nil || definition.Session.Mode != "allocated" {
-		return nil
-	}
-	if resolveAgent(definition.Session.Allocate[0]) == nil {
-		return launchError("launch.agent_is_not_in_path", definition.Session.Allocate[0])
-	}
-	return nil
-}
-
 func allocateAgentSession(definition *config.AgentSessionDefinition) (string, error) {
 	program := resolveAgent(definition.Allocate[0])
 	if program == nil {

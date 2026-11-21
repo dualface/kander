@@ -192,7 +192,7 @@ func startOrchestrator(request OrchestrateRequest, cfg *config.Config, loaded bo
 	var location func(LaunchOutcome) error
 	var paneSession func() (AgentSession, error)
 	if service != nil {
-		inv, location, paneSession, err = bindRemoteOrchestrator(&plan, inv, &session, service, program, tasks[0].TaskID, parentDir(request.Root), journal)
+		inv, location, paneSession, err = bindRemoteOrchestrator(&plan, inv, &session, service, program, tasks[0].TaskID, parentDir(request.Root), prompt, journal)
 		if err != nil {
 			return result, err
 		}

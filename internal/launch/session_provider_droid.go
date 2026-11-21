@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +19,44 @@ import (
 // droidSessionHeaderLimit bounds the session_start line read from one Droid
 // session file; a longer first line is never a session header.
 const droidSessionHeaderLimit = 64 << 10
+
+// droidSessionProvider finds the session Droid created for a launch: a new
+// <id>.jsonl below ~/.factory/sessions whose session_start header names the
+// launch directory.
+type droidSessionProvider struct{}
+
+func init() { registerSessionProvider(droidSessionProvider{}) }
+
+func (droidSessionProvider) Mode() string    { return "hook:droid-sessions" }
+func (droidSessionProvider) Resumable() bool { return true }
+func (droidSessionProvider) Persists() bool  { return true }
+
+func (droidSessionProvider) Failures() discoveryFailures {
+	return discoveryFailures{
+		None:    "launch.the_newly_started_session_has_not_appeared_yet",
+		Several: "launch.multiple_new_sessions_appeared_during_launch",
+	}
+}
+
+func (droidSessionProvider) Wait(l sessionLaunch) time.Duration {
+	return l.budget(sessionDiscoverWait)
+}
+
+func (droidSessionProvider) Interval(sessionLaunch) time.Duration { return notifyPollInterval }
+
+func (droidSessionProvider) Snapshot(l sessionLaunch) (map[string]struct{}, error) {
+	return droidSessionSnapshot(l.budget(sessionDiscoverWait))
+}
+
+// Scan reads only sessions absent from previous; several new sessions for the
+// launch directory fail at once instead of guessing.
+func (droidSessionProvider) Scan(l sessionLaunch, previous map[string]struct{}) (sessionScan, error) {
+	root, err := filepath.Abs(droidSessionsRoot())
+	if err != nil {
+		return nil, err
+	}
+	return &droidSessionScan{root: root, previous: previous, cwd: l.CWD, settled: map[string]struct{}{}}, nil
+}
 
 // droidSessionsRoot is where Droid keeps one directory per launch directory and
 // one <id>.jsonl file per session inside it.
@@ -125,7 +162,7 @@ type droidSessionScan struct {
 	settled  map[string]struct{}
 }
 
-func (s *droidSessionScan) candidates(ctx context.Context) ([]string, error) {
+func (s *droidSessionScan) Candidates(ctx context.Context) ([]string, error) {
 	files, err := droidSessionFiles(ctx, s.root)
 	if err != nil {
 		return nil, err
@@ -155,43 +192,4 @@ func (s *droidSessionScan) candidates(ctx context.Context) ([]string, error) {
 	}
 	slices.Sort(sessions)
 	return sessions, nil
-}
-
-// discoverNewDroidSession polls until exactly one session absent from previous
-// names cwd as its launch directory, for at most wait. Several such sessions
-// fail at once instead of guessing.
-func discoverNewDroidSession(previous map[string]struct{}, cwd string, wait time.Duration) (string, error) {
-	root, err := filepath.Abs(droidSessionsRoot())
-	if err != nil {
-		return "", err
-	}
-	scan := &droidSessionScan{root: root, previous: previous, cwd: cwd, settled: map[string]struct{}{}}
-	deadline := nowFn().Add(wait)
-	var last error
-	for {
-		remaining := deadline.Sub(nowFn())
-		if remaining <= 0 {
-			if last == nil {
-				last = launchError("launch.the_newly_started_session_has_not_appeared_yet")
-			}
-			return "", last
-		}
-		ctx, cancel := probe.TimeoutContext(remaining)
-		candidates, err := scan.candidates(ctx)
-		cancel()
-		switch {
-		case err != nil:
-			last = err
-		case len(candidates) == 1:
-			return candidates[0], nil
-		case len(candidates) > 1:
-			return "", launchError("launch.multiple_new_sessions_appeared_during_launch", strconv.Itoa(len(candidates)))
-		default:
-			last = launchError("launch.the_newly_started_session_has_not_appeared_yet")
-		}
-		if !nowFn().Before(deadline) {
-			return "", last
-		}
-		sleepFn(notifyPollInterval)
-	}
 }

@@ -123,7 +123,7 @@ func TestDroidScanRetriesAHeaderStillBeingWritten(t *testing.T) {
 	header := droidHeader("cccc", cwd)
 	path := writeDroidSession(t, root, "-project", "cccc", strings.TrimSuffix(header, "\n"))
 	scan := &droidSessionScan{root: root, previous: map[string]struct{}{}, cwd: cwd, settled: map[string]struct{}{}}
-	got, err := scan.candidates(t.Context())
+	got, err := scan.Candidates(t.Context())
 	if err != nil || len(got) != 0 {
 		t.Fatalf("partial header: got=%q err=%v", got, err)
 	}
@@ -133,7 +133,7 @@ func TestDroidScanRetriesAHeaderStillBeingWritten(t *testing.T) {
 	if err := os.WriteFile(path, []byte(header), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got, err = scan.candidates(t.Context())
+	got, err = scan.Candidates(t.Context())
 	if err != nil || !reflect.DeepEqual(got, []string{"cccc"}) {
 		t.Fatalf("complete header: got=%q err=%v", got, err)
 	}
@@ -183,7 +183,7 @@ func TestDroidScanSettlesSessionsOfOtherDirectories(t *testing.T) {
 	cwd := t.TempDir()
 	writeDroidSession(t, root, "-other", "dddd", droidHeader("dddd", t.TempDir()))
 	scan := &droidSessionScan{root: root, previous: map[string]struct{}{}, cwd: cwd, settled: map[string]struct{}{}}
-	got, err := scan.candidates(t.Context())
+	got, err := scan.Candidates(t.Context())
 	if err != nil || len(got) != 0 {
 		t.Fatalf("got=%q err=%v", got, err)
 	}

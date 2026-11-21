@@ -176,10 +176,18 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 		return result, err
 	}
 	sessionDef := config.AgentFor(cfg, agentName).Session
+	provider, err := sessionProviderFor(cfg, agentName, sessionDef)
+	if err != nil {
+		return result, err
+	}
 	initialSession := agentSession.Render()
-	persistSession := !input.Native && (config.SessionPersistsAfterStart(sessionDef) || (plan.capabilities().SessionReport && config.SessionDiscoversAfterStart(sessionDef)))
+	persistSession := !input.Native && (sessionPersists(provider) || (plan.capabilities().SessionReport && sessionDiscovers(provider)))
 	discoverSession := plan.capabilities().PaneMetadata || persistSession
-	previous, err := sessionDiscoverSnapshot(sessionDef, task.TaskID, discoverSession, program, project, plan.launchTimeout)
+	launchFacts := sessionLaunch{
+		TaskID: task.TaskID, CWD: project, Program: program,
+		Definition: sessionDef, Budget: plan.launchTimeout,
+	}
+	previous, err := snapshotSessions(provider, launchFacts, discoverSession)
 	if err != nil {
 		return result, err
 	}
@@ -234,7 +242,8 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 	if err != nil {
 		return result, err
 	}
-	args, err := execArguments(choice, agentSession, input.Native && sessionDef.Mode != "none", cfg)
+	launchFacts.Prompt = prompt
+	args, err := execArguments(choice, agentSession, input.Native && provider.Resumable(), cfg)
 	if err != nil {
 		return result, err
 	}
@@ -347,7 +356,8 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 			workspaceErr = executionUpdate(api.ExecutionUpdate{Action: api.ExecutionWorkspace, Branch: workspace.Branch, ExpectedRevision: grant.Task.Revision})
 		}
 		if workspaceErr == nil {
-			previous, workspaceErr = sessionDiscoverSnapshot(sessionDef, task.TaskID, discoverSession, program, project, plan.launchTimeout)
+			launchFacts.CWD, launchFacts.Budget = project, plan.launchTimeout
+			previous, workspaceErr = snapshotSessions(provider, launchFacts, discoverSession)
 		}
 		if workspaceErr != nil {
 			ctx, cancel := call()
@@ -403,10 +413,11 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 	var paneCB func() (AgentSession, error)
 	if discoverSession {
 		paneCB = func() (AgentSession, error) {
-			if agentSession.Reference != "" || !config.SessionDiscoversAfterStart(sessionDef) {
+			if agentSession.Reference != "" || !sessionDiscovers(provider) {
 				return agentSession, nil
 			}
-			ref, err := runSessionDiscoverHook(sessionDef, task.TaskID, previous, launchStart, program, project, plan.launchTimeout)
+			launchFacts.Start = launchStart
+			ref, err := discoverLaunchSession(provider, launchFacts, previous)
 			if err != nil {
 				return AgentSession{}, err
 			}
