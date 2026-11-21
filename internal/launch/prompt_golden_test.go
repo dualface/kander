@@ -242,6 +242,31 @@ func TestInstalledPromptTemplateOverridesEmbedded(t *testing.T) {
 	}
 }
 
+// An installation from before the waiting reminder has no waiting.md: the prompt still builds and
+// carries the embedded sentence, while the installed templates keep winning.
+func TestOldInstallWithoutWaitingTemplateUsesEmbedded(t *testing.T) {
+	goldenConfig(t, false)
+	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: t.TempDir()}
+	dir := filepath.Join(paths.RulesDir, "templates", "prompt")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "size.md"), []byte("OLD SIZE {{.Size}}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	embedded, err := config.ReadRulesFile(config.InstallPaths{Mode: config.ModeGlobal, RulesDir: t.TempDir()}, "templates/prompt/waiting.md", nil)
+	if err != nil || len(embedded) == 0 {
+		t.Fatalf("embedded waiting template: %q %v", embedded, err)
+	}
+	start, err := startAgentPrompt("20260101-golden-task", paths, "", "- LANGUAGE: en\n- SIZE: small\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(start, string(embedded)+" OLD SIZE small") {
+		t.Fatalf("embedded waiting reminder missing before the installed size sentence: %s", start)
+	}
+}
+
 // A broken installed template fails the prompt instead of silently dropping the fragment.
 func TestBrokenInstalledTemplateFailsPrompt(t *testing.T) {
 	goldenConfig(t, false)

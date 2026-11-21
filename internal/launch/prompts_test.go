@@ -285,8 +285,9 @@ func TestPromptReportingDirectiveFollowsRule(t *testing.T) {
 	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(t.TempDir(), "rules")}
 	card := "- LANGUAGE: en\n- SIZE: small\n"
 	preamble, _ := rulesAndLanguage(paths, "en")
+	waiting, _ := render(paths, "waiting.md", nil)
 	sizeText, _ := render(paths, "size.md", map[string]string{"Size": "small"})
-	legacy := preamble + " " + sizeText
+	legacy := preamble + " " + waiting + " " + sizeText
 	for _, enabled := range []bool{true, false} {
 		cfg := config.DefaultConfig()
 		cfg.Rules[config.RuleReporting] = enabled
