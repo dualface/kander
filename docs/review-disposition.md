@@ -412,6 +412,19 @@ The task `OWNER` resolves assigned findings by submitting disposition records:
 }
 ```
 
+### Fix Commits Must Stay in the Batch History
+
+A `fixed` record names a `fix_commit`, and closing binds it to the history of the batch. For the latest record of each `(run_id, finding_id, task_id)` chain in every successful run of a closed role, `kander review close` needs these Git relations:
+
+- The `fix_commit` is a strict descendant of the reviewed commit of the run. A `fix_commit` equal to that commit is listed as an affected record too.
+- The `fix_commit` is an ancestor of the batch target.
+- For a must-fix finding of a run that is not the conclusion run, the `fix_commit` is an ancestor of the reviewed commit of the conclusion run.
+- For a mechanical fix in the conclusion run, the `fix_commit` is an ancestor of `passed_at`.
+
+A rebase of the task branch after the record was submitted breaks them: the old commit is no longer in the history. The author then appends a *correction record*. It has a new `record_id`, a `previous_record_id` that names the old record, the same `status`, and a `fix_commit` that is the rewritten commit carrying the same fix. `basis` and `verification` state the old and the new commit and the result of `git patch-id --stable`. The default mapping is the commit with the same patch ID. When the commits do not map one to one, or the record named another commit, the author verifies the finding again on the new delivery commit and writes the evidence. Steps and the lookup of the records are in `rules/snippets/execute-group-member.md` "Author Records After a Rebase". The correction is an ordinary append-only record: the old record stays, and the formats of the record, the dispatch records, `closed.json`, and the Git evidence do not change.
+
+The orchestrator carries the correction in a `--kind sync` dispatch without evidence, which authorizes the current `OWNER` to append records for that round ([Durable Dispatch](durable-dispatch.md)). In server mode the round starts as a collaboration proposal that the holder prepares with `kander dispatch prepare` first, and the holder appends the records through the service with the `authorization` of the prepared round. A round for corrections only needs no rebase and no new commit: the author appends the records and runs `move review` with the unchanged delivery commit. In server mode that move publishes the unchanged commit again to the immutable reference of the new execution generation, which is expected. A fix dispatch cannot carry it, because it rejects a round that already has a successor run (`superseded review round`). Before it receives a delivery, the orchestrator checks the fix commits of the card's latest `fixed` records with `git merge-base --is-ancestor`. It does not advance the batch target or close the batch until the corrections are verified. `review advance` does not check fix commits, so a stale record is found at the latest when the batch closes.
+
 ### Status Lifecycle
 
 | Finding Status | Permitted On | Blocks Batch Close? | Notes |
@@ -504,6 +517,8 @@ kander review close <CWD> <close-request.json>
   "opinions": []
 }
 ```
+
+Before it checks any single Git edge, `review close` checks the fixed records of [Fix Commits Must Stay in the Batch History](#fix-commits-must-stay-in-the-batch-history). When a record fails a relation, or its `fix_commit` is not a commit of the repository, the command writes no closure and fails with one error. The error opens with the literal `Git ancestry` in every language, lists every affected record with `task_id`, `run_id`, `finding_id`, `record_id`, `fix_commit`, and the failed relation (or that the commit does not exist), and ends with a next step in the configured language. In server mode the client runs this check in its own repository at the CWD it was given, before it sends the closure to the service. After the author appended the corrections, run `kander review aggregate` again, because the view hash changes, and close. When a listed record is correct and the failed relation is one the author cannot change (for example a mechanical fix that comes after `passed_at`), the cause is in the close request: correct it, or run an incremental review that covers the fix.
 
 A batch with a delivery closes only at its exact target `HEAD` on a clean worktree. A batch with no delivery commit closes at any `HEAD` that still holds its target, with a dirty worktree; see [Batches With No Delivery Commit](#batches-with-no-delivery-commit).
 
