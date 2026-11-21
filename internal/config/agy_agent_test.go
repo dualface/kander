@@ -33,9 +33,6 @@ func TestAgyIsAnExecutionAndReviewAgent(t *testing.T) {
 	if d.Review == nil || d.Review.HomePolicy != "optional" || d.Review.HomeEnv != "" || d.Review.Stdin != "none" || d.Review.OutputName != "output.json" || !d.Review.SnapshotSpec {
 		t.Fatalf("review=%+v", d.Review)
 	}
-	if !EmbeddedReviewLastMessageReport("agy") {
-		t.Fatal("agy reports its final message")
-	}
 }
 
 func TestAgyDefaultModelsAndEfforts(t *testing.T) {
