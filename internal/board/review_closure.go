@@ -347,7 +347,9 @@ func fixedRecordEdges(prior ReviewRunView, d ReviewDisposition, mustFixItem bool
 
 // ReviewFixCommitClaims returns the fixed records a closure request binds to Git,
 // each with the edges it adds. It covers the same records and edges as
-// ReviewClosureEdges and fails with the same errors.
+// ReviewClosureEdges and fails with the same errors, with one exception: a fix
+// commit equal to the reviewed commit of its run is kept as a claim here, because
+// ReviewClosureEdges refuses it as one error and the review layer lists it per record.
 func ReviewFixCommitClaims(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewFixCommitClaim, error) {
 	_, _, claims, err := reviewClosureEdges(v, r, true)
 	return claims, err
