@@ -23,7 +23,7 @@ Legacy keys this version still folds (`PM`, `QA`, `CSA`, `Hacker`, the flat `rev
 ## What Stays Strict
 
 - The embedded agent definitions, the user terminal definitions, the board and card data, and review results reject unknown fields as before.
-- An invalid value of a known field (wrong type, bad format, out of range) fails the load as before. This includes every other enumerated value: `launcher`, `tui.theme*`, `git.branch_mode`, `issue.result_on_done`, `review_stages` values, `language`, and `agent_language`.
+- An invalid value of a known field (wrong type, bad format, out of range) fails the load as before, also when the entry it sits in is unusable for another reason: the `allocate` command and the `discovery` block of a session mode this version registers are checked before any reason, so an unknown `dialect` does not hide them. This includes every other enumerated value: `launcher`, `tui.theme*`, `git.branch_mode`, `issue.result_on_done`, `review_stages` values, `language`, and `agent_language`.
 - A misspelled key is now ignored instead of rejected. It shows up only in the warnings below. This is the accepted cost of forward compatibility.
 
 ## Where It Is Reported
@@ -40,7 +40,7 @@ Legacy keys this version still folds (`PM`, `QA`, `CSA`, `Hacker`, the flat `rev
 - A legacy review role key (`PM`, `QA`, `CSA`, `Hacker`) is folded into its current role as before. What remains under the legacy key is only the fields this version does not know, which stay at their own path; the current role keeps its own unknown fields.
 - `Repair` repairs the known settings only. It keeps unknown keys, role references to unknown agents, and unusable agent entries, and a valid file that holds only such content is not rewritten.
 - The overlay write is sparse and works on the overlay's own map, which now keeps unknown keys. Options edits the keys it owns and leaves the others in place.
-- In the Options panel a role that names an unknown agent shows that name as its current value, and a `kanban_agent` that names an unknown agent is shown as a note on the execution page; saving without editing that field keeps it. Editing the large scale rewrites the legacy `kanban_agent` mirror only while it names a known agent equal to the replaced value.
+- In the Options panel a role that names an unknown agent shows that name as its current value, and a `kanban_agent` that names an unknown agent is shown as a note on the execution page; saving without editing that field keeps it, also before the first-run welcome completes (the preparation that picks installed agents for missing roles leaves such a role alone). After a save of the Global tab the Project tab works from the document that was written, so restoring a page keeps the overlay's models of a built-in agent the scope made unusable. Editing the large scale rewrites the legacy `kanban_agent` mirror only while it names a known agent equal to the replaced value.
 - The `install_rules` switch of an unusable built-in entry stays in force and can be edited; the edit is patched into the otherwise untouched entry. An edit conflict check covers it, so a stale Options snapshot is refused instead of restoring a revoked switch.
 
 ## Limits
@@ -67,14 +67,14 @@ The v2 branch adds the `server` and `project` sections and the client-server run
 | `config_ignored` | each ignored item that is not an unusable agent: an unknown key, or a `models.*` entry for an agent this version does not know |
 | `agent_unusable` | each unusable `agents.<name>` entry, and each role (`kanban_agent`, `kanban_agents.<scale>`, `chat_agent`, `reviewers.<scale>.<role>`) that names an agent this version does not know |
 
-The `agent_warning` notice of an agent whose session mode is `none` is unchanged. Apart from the `notices` field, the object equals the one of the same configuration without the ignored content. `kander doctor --json` lists the same items in `lines` (`info` for an ignored key, `warn` for an unusable entry and for an unknown role reference), and they never set `healthy` to false.
+The `agent_warning` notice of an agent whose session mode is `none` is unchanged. Apart from the `notices` field, the object equals the one of the same configuration without the ignored content (and the text output equals it too). `kander config` shows that configuration: an unusable `agents` entry is left out, so a built-in agent it took out of service shows again with its models, and a role that names an agent this version does not know shows the value it has when the key is absent (`kanban_agent` and the reviewers the default agent, a task scale `kanban_agent`, Chat the large scale). The notices name the role and the agent, and the files keep what they hold. `kander doctor --json` lists the same items in `lines` (`info` for an ignored key, `warn` for an unusable entry and for an unknown role reference), and they never set `healthy` to false.
 
 ### Startup logs of the server and the worker
 
 A server or worker runs for hours and would otherwise drop the settings of a newer version without a trace. Each of them writes one `WARN` log line per ignored item (`Config.Ignored`, which includes unusable agents entries) when it starts, with the fields `path` and `kind` and never the value, which may be a sensitive setting of a newer version. Unknown agent references are not in that list.
 
 - **Server.** `kander server start --foreground` writes the lines after its logger exists and before it serves. `kander server start` without `--foreground` runs that path in its child process, so the lines are in `server.log` once and the parent writes none. With `--json` the lines of this phase are `server_log` notices, as every other line before the server can serve.
-- **Worker.** `kander worker` loads the configuration of its client home (the scope configuration, since it runs there and holds no project overlay) once at startup. A configuration that cannot be loaded is logged as one warning and the worker starts anyway.
+- **Worker.** `kander worker` reads the scope configuration once at startup and never a project overlay: it runs in the client home, which can sit below a repository or a directory that holds one, and an overlay that does not load must not hide the ignored settings of the scope. A configuration that cannot be loaded is logged as one warning and the worker starts anyway.
 
 ### Deployment
 
