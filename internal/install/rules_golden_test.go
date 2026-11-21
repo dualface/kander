@@ -1,6 +1,7 @@
 package install
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -89,16 +90,27 @@ func goldenScenarios() []goldenScenario {
 }
 
 // goldenEnvironment builds the isolated scope of one combination and returns its paths and
-// the rules file the agent reads there.
+// the rules file the agent reads there. The temporary home is resolved first, so a TMPDIR that
+// is an alias for another directory cannot make the spelling of a target differ from the real
+// path an uninstall edit uses; the symlink scenarios create their own links below this home.
 func goldenEnvironment(t *testing.T, c goldenCombo) (config.InstallPaths, string, string) {
 	t.Helper()
 	home := setupInstallHome(t)
+	real, err := filepath.EvalSymlinks(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if real != home {
+		home = real
+		t.Setenv("HOME", home)
+		t.Setenv("USERPROFILE", home)
+	}
 	var paths config.InstallPaths
 	if c.project {
 		root := filepath.Join(home, "project")
-		paths = config.InstallPaths{Mode: config.ModeProject, ProjectRoot: root, RulesDir: filepath.Join(root, ".kander", "rules")}
+		paths = config.InstallPaths{Mode: config.ModeProject, ProjectRoot: root, RulesDir: filepath.Join(root, ".kander", "rules"), ConfigPath: filepath.Join(root, ".kander", "config.json")}
 	} else {
-		paths = config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander")}
+		paths = config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander"), ConfigPath: filepath.Join(home, ".config", "kander", "config.json")}
 	}
 	writeIntegrateFile(t, RulesEntry(paths), "# Kander entry\n")
 	target, err := AgentRulesTarget(c.agent, paths)
@@ -109,36 +121,50 @@ func goldenEnvironment(t *testing.T, c goldenCombo) (config.InstallPaths, string
 }
 
 // goldenTranscript renders paths and bytes with the temporary home abstracted away, so the
-// transcript is identical on every machine and platform.
+// transcript is identical on every machine and platform. Only paths and the messages that
+// quote them are normalized; file bytes are written with %q and never altered, so a newline
+// and a literal "\n" stay distinct.
 type goldenTranscript struct {
 	strings.Builder
 	home string
 }
 
+// path renders a filesystem path.
+func (g *goldenTranscript) path(path string) string {
+	return filepath.ToSlash(strings.ReplaceAll(path, g.home, "<HOME>"))
+}
+
+// msg renders a message that quotes paths: the home goes first, then the slash style.
+func (g *goldenTranscript) msg(text string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(text, g.home, "<HOME>"), "\\", "/")
+}
+
+// bytes renders file content losslessly.
+func (g *goldenTranscript) bytes(data []byte) string {
+	return fmt.Sprintf("%q", strings.ReplaceAll(string(data), g.home, "<HOME>"))
+}
+
 func (g *goldenTranscript) line(format string, args ...any) {
-	text := fmt.Sprintf(format, args...)
-	text = strings.ReplaceAll(text, g.home, "<HOME>")
-	text = strings.ReplaceAll(text, "\\", "/")
-	g.WriteString(text)
+	g.WriteString(fmt.Sprintf(format, args...))
 	g.WriteByte('\n')
 }
 
 func (g *goldenTranscript) file(label, path string) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		g.line("%s: unreadable (%v)", label, err != nil)
+		g.line("%s: unreadable (%t)", label, err != nil)
 		return
 	}
-	g.line("%s: %q", label, string(data))
+	g.line("%s: %s", label, g.bytes(data))
 }
 
-func goldenOutcome(o IntegrationOutcome, err error) string {
+func (g *goldenTranscript) outcome(o IntegrationOutcome, err error) string {
 	text := fmt.Sprintf("status=%d removed=%d inactive=%t disabled=%v", o.Status, o.Removed, o.Inactive, o.DisabledBy)
 	if o.Override != nil {
 		text += fmt.Sprintf(" override={status=%d removed=%d inactive=%t}", o.Override.Status, o.Override.Removed, o.Override.Inactive)
 	}
 	if err != nil {
-		text += " err=" + err.Error()
+		text += " err=" + g.msg(err.Error())
 	}
 	return text
 }
@@ -150,7 +176,40 @@ func goldenUninstall(g *goldenTranscript, paths config.InstallPaths, files ...st
 			if item.Path != file {
 				continue
 			}
-			g.line("uninstall: action=%d path=%s reason=%q content=%q", item.Action, item.Path, item.Reason, string(item.content))
+			g.line("uninstall: action=%d path=%s reason=%q content=%s", item.Action, g.path(item.Path), g.msg(item.Reason), g.bytes(item.content))
+		}
+	}
+}
+
+// goldenApplyUninstall runs the real ApplyUninstall in the isolated scope and records the
+// printed lines, the error, the install_rules switch it writes, and what is left of each file.
+func goldenApplyUninstall(g *goldenTranscript, paths config.InstallPaths, files ...string) {
+	plan := PlanUninstall(paths)
+	var out bytes.Buffer
+	err := ApplyUninstall(plan, &out)
+	g.line("apply uninstall: err=%t", err != nil)
+	if err != nil {
+		g.line("apply uninstall error: %s", g.msg(err.Error()))
+	}
+	for _, line := range strings.Split(strings.TrimRight(out.String(), "\n"), "\n") {
+		g.line("apply uninstall output: %s", g.msg(line))
+	}
+	// Only the switch is recorded: the rest of the file is the default configuration, which
+	// other changes own.
+	if data, err := os.ReadFile(plan.ConfigFile); err == nil {
+		g.line("apply uninstall config: install_rules=false %t", strings.Contains(string(data), `"install_rules": false`))
+	}
+	for _, file := range files {
+		info, err := os.Lstat(file)
+		switch {
+		case err != nil:
+			g.line("apply uninstall file %s: absent", g.path(file))
+		case info.Mode()&os.ModeSymlink != 0:
+			link, _ := os.Readlink(file)
+			g.line("apply uninstall file %s: symlink to %s", g.path(file), g.path(link))
+		default:
+			data, _ := os.ReadFile(file)
+			g.line("apply uninstall file %s: %s", g.path(file), g.bytes(data))
 		}
 	}
 }
@@ -168,7 +227,7 @@ func runGoldenScenario(t *testing.T, g *goldenTranscript, c goldenCombo, s golde
 		writeIntegrateFile(t, target, text)
 	}
 	ok, detail := RulesIntegration(c.agent, paths)
-	g.line("detect: ok=%t detail=%s", ok, detail)
+	g.line("detect: ok=%t detail=%s", ok, g.msg(detail))
 	if exists {
 		issues, err := InspectRulesReferences(c.agent, paths)
 		g.line("inspect: invalid=%d duplicates=%d files=%d err=%v", issues.Invalid, issues.Duplicates, len(issues.Files), err != nil)
@@ -176,12 +235,23 @@ func runGoldenScenario(t *testing.T, g *goldenTranscript, c goldenCombo, s golde
 	}
 	for pass := 1; pass <= 2; pass++ {
 		outcome, err := EnsureRulesIntegration(c.agent, paths)
-		g.line("ensure %d: %s target=%s", pass, goldenOutcome(outcome, err), outcome.Target)
+		g.line("ensure %d: %s target=%s", pass, g.outcome(outcome, err), g.path(outcome.Target))
 		g.file(fmt.Sprintf("file after ensure %d", pass), target)
 	}
 	ok, detail = RulesIntegration(c.agent, paths)
-	g.line("detect after ensure: ok=%t detail=%s", ok, detail)
+	g.line("detect after ensure: ok=%t detail=%s", ok, g.msg(detail))
 	goldenUninstall(g, paths, target)
+}
+
+// runGoldenApply records what a real uninstall does to the initial content of one scenario.
+func runGoldenApply(t *testing.T, g *goldenTranscript, c goldenCombo, s goldenScenario) {
+	paths, target, home := goldenEnvironment(t, c)
+	g.home = home
+	g.line("== %s / %s / apply uninstall", c.name, s.name)
+	if text, exists := s.content(c, referenceBlock(c.agent, paths)); exists {
+		writeIntegrateFile(t, target, text)
+	}
+	goldenApplyUninstall(g, paths, target)
 }
 
 func TestRulesProvidersGolden(t *testing.T) {
@@ -190,6 +260,9 @@ func TestRulesProvidersGolden(t *testing.T) {
 		for _, s := range goldenScenarios() {
 			t.Run(c.name+"/"+s.name, func(t *testing.T) {
 				runGoldenScenario(t, g, c, s)
+			})
+			t.Run(c.name+"/"+s.name+"/apply-uninstall", func(t *testing.T) {
+				runGoldenApply(t, g, c, s)
 			})
 		}
 	}
@@ -203,22 +276,69 @@ func TestRulesProvidersGolden(t *testing.T) {
 			writeIntegrateFile(t, target, "# Main\n")
 			writeIntegrateFile(t, override, "# Override\n\n@/nowhere/KANDER-AGENTS.md\n")
 			ok, detail := RulesIntegration(c.agent, paths)
-			g.line("detect: ok=%t detail=%s", ok, detail)
+			g.line("detect: ok=%t detail=%s", ok, g.msg(detail))
 			outcome, err := EnsureRulesIntegration(c.agent, paths)
-			g.line("ensure: %s", goldenOutcome(outcome, err))
+			g.line("ensure: %s", g.outcome(outcome, err))
 			g.file("main", target)
 			g.file("override", override)
 			goldenUninstall(g, paths, target, override)
+		})
+		t.Run(c.name+"/override/apply-uninstall", func(t *testing.T) {
+			paths, target, home := goldenEnvironment(t, c)
+			g.home = home
+			g.line("== %s / override / apply uninstall", c.name)
+			override := filepath.Join(filepath.Dir(target), "AGENTS.override.md")
+			writeIntegrateFile(t, target, "# Main\n\n"+referenceBlock(c.agent, paths))
+			writeIntegrateFile(t, override, "# Override\n\n@/nowhere/KANDER-AGENTS.md\n")
+			goldenApplyUninstall(g, paths, target, override)
 		})
 	}
 	// Coverage order: a project install writes claude-import agents first.
 	t.Run("project-coverage-order", func(t *testing.T) {
 		_, _, home := goldenEnvironment(t, goldenCombos[1])
 		g.home = home
-		paths := config.InstallPaths{Mode: config.ModeProject, ProjectRoot: filepath.Join(home, "project"), RulesDir: filepath.Join(home, "project", ".kander", "rules")}
+		paths := config.InstallPaths{Mode: config.ModeProject, ProjectRoot: filepath.Join(home, "project"), RulesDir: filepath.Join(home, "project", ".kander", "rules"), ConfigPath: filepath.Join(home, "project", ".kander", "config.json")}
 		g.line("== project-coverage-order: %v", IntegrationAgents(paths))
 	})
 	compareGolden(t, rulesGoldenFile, g.String())
+}
+
+// goldenLink builds one symlink arrangement below the target and returns the files the
+// transcript follows afterwards.
+type goldenLink struct {
+	name  string
+	build func(t *testing.T, paths config.InstallPaths, target, home string) []string
+}
+
+var goldenLinks = []goldenLink{
+	{"symlink to other file", func(t *testing.T, _ config.InstallPaths, target, _ string) []string {
+		other := filepath.Join(filepath.Dir(target), "other-rules.txt")
+		writeIntegrateFile(t, other, "# Other\n")
+		if err := os.Symlink(other, target); err != nil {
+			t.Fatal(err)
+		}
+		return []string{target, other}
+	}},
+	{"symlink escaping the scope", func(t *testing.T, _ config.InstallPaths, target, home string) []string {
+		outside := filepath.Join(home, "outside", "rules.md")
+		writeIntegrateFile(t, outside, "# Outside\n")
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(outside, target); err != nil {
+			t.Fatal(err)
+		}
+		return []string{target, outside}
+	}},
+	{"symlink to the rules entry", func(t *testing.T, paths config.InstallPaths, target, _ string) []string {
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(RulesEntry(paths), target); err != nil {
+			t.Fatal(err)
+		}
+		return []string{target}
+	}},
 }
 
 func TestRulesProvidersGoldenSymlinks(t *testing.T) {
@@ -227,57 +347,31 @@ func TestRulesProvidersGoldenSymlinks(t *testing.T) {
 	}
 	g := &goldenTranscript{}
 	for _, c := range goldenCombos {
-		t.Run(c.name, func(t *testing.T) {
-			paths, target, home := goldenEnvironment(t, c)
-			g.home = home
-			g.line("== %s / symlink to other file", c.name)
-			other := filepath.Join(filepath.Dir(target), "other-rules.txt")
-			writeIntegrateFile(t, other, "# Other\n")
-			if err := os.Symlink(other, target); err != nil {
-				t.Fatal(err)
-			}
-			ok, detail := RulesIntegration(c.agent, paths)
-			g.line("detect: ok=%t detail=%s", ok, detail)
-			issues, err := InspectRulesReferences(c.agent, paths)
-			g.line("inspect: invalid=%d duplicates=%d files=%d err=%v", issues.Invalid, issues.Duplicates, len(issues.Files), err != nil)
-			outcome, err := EnsureRulesIntegration(c.agent, paths)
-			g.line("ensure: %s", goldenOutcome(outcome, err))
-			g.file("other", other)
-			goldenUninstall(g, paths, target, other)
-		})
-		t.Run(c.name+"/escape", func(t *testing.T) {
-			paths, target, home := goldenEnvironment(t, c)
-			g.home = home
-			g.line("== %s / symlink escaping the scope", c.name)
-			outside := filepath.Join(home, "outside", "rules.md")
-			writeIntegrateFile(t, outside, "# Outside\n")
-			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.Symlink(outside, target); err != nil {
-				t.Fatal(err)
-			}
-			outcome, err := EnsureRulesIntegration(c.agent, paths)
-			g.line("ensure: %s", goldenOutcome(outcome, err))
-			g.file("outside", outside)
-			goldenUninstall(g, paths, target, outside)
-		})
-		t.Run(c.name+"/entry", func(t *testing.T) {
-			paths, target, home := goldenEnvironment(t, c)
-			g.home = home
-			g.line("== %s / symlink to the rules entry", c.name)
-			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.Symlink(RulesEntry(paths), target); err != nil {
-				t.Fatal(err)
-			}
-			ok, detail := RulesIntegration(c.agent, paths)
-			g.line("detect: ok=%t detail=%s", ok, detail)
-			outcome, err := EnsureRulesIntegration(c.agent, paths)
-			g.line("ensure: %s", goldenOutcome(outcome, err))
-			goldenUninstall(g, paths, target)
-		})
+		for _, link := range goldenLinks {
+			t.Run(c.name+"/"+link.name, func(t *testing.T) {
+				paths, target, home := goldenEnvironment(t, c)
+				g.home = home
+				g.line("== %s / %s", c.name, link.name)
+				files := link.build(t, paths, target, home)
+				ok, detail := RulesIntegration(c.agent, paths)
+				g.line("detect: ok=%t detail=%s", ok, g.msg(detail))
+				issues, err := InspectRulesReferences(c.agent, paths)
+				g.line("inspect: invalid=%d duplicates=%d files=%d err=%v", issues.Invalid, issues.Duplicates, len(issues.Files), err != nil)
+				outcome, err := EnsureRulesIntegration(c.agent, paths)
+				g.line("ensure: %s", g.outcome(outcome, err))
+				for _, file := range files[1:] {
+					g.file("followed", file)
+				}
+				goldenUninstall(g, paths, files...)
+			})
+			t.Run(c.name+"/"+link.name+"/apply-uninstall", func(t *testing.T) {
+				paths, target, home := goldenEnvironment(t, c)
+				g.home = home
+				g.line("== %s / %s / apply uninstall", c.name, link.name)
+				files := link.build(t, paths, target, home)
+				goldenApplyUninstall(g, paths, files...)
+			})
+		}
 	}
 	compareGolden(t, rulesGoldenSymlinkFile, g.String())
 }
