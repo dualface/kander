@@ -215,7 +215,8 @@ func Subscribe(root string, opts subscribeOptions, w io.Writer, stop <-chan stru
 // bytes.Buffer, strings.Builder and io.Discard are adapted internally.
 //
 // Without opts.Follow it returns nil after the scan that wrote the first
-// wake-up event; see wakesSubscription.
+// wake-up event: a membership, state, task, blocked or heartbeat event, or a
+// dispatch-attention event that dispatchAttention reports as a wake-up.
 func SubscribeContext(ctx context.Context, root string, opts subscribeOptions, w io.Writer) (result error) {
 	refresh, valid := subscriptionInterval(opts.Refresh)
 	if !valid {

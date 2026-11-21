@@ -1,11 +1,13 @@
 package liveness
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -50,6 +52,64 @@ func requireEventNames(t *testing.T, events []groupEvent, err error, want ...str
 	}
 }
 
+// holdScansUntil blocks every facts read after the snapshot until ready is
+// closed, so that a test can make several board writes without a scan seeing
+// the board between them.
+func holdScansUntil(t *testing.T, ready <-chan struct{}) {
+	t.Helper()
+	oldRead := readSubscriptionFacts
+	var reads atomic.Int32
+	readSubscriptionFacts = func(s *subscription, ctx context.Context, root string) (subscriptionFacts, error) {
+		if reads.Add(1) > 1 {
+			select {
+			case <-ready:
+			case <-ctx.Done():
+			}
+		}
+		return oldRead(s, ctx, root)
+	}
+	t.Cleanup(func() { readSubscriptionFacts = oldRead })
+}
+
+// switchClock replaces nowFn with a clock that reads `at` until the returned
+// function is called and `at + jump` afterwards.
+func switchClock(t *testing.T, at time.Time, jump time.Duration) (advance func()) {
+	t.Helper()
+	var advanced atomic.Bool
+	oldNow := nowFn
+	nowFn = func() time.Time {
+		if advanced.Load() {
+			return at.Add(jump)
+		}
+		return at
+	}
+	t.Cleanup(func() { nowFn = oldNow })
+	return func() { advanced.Store(true) }
+}
+
+// attentionSession returns a subscription that can call dispatchAttention
+// directly, with the facts read of the board's current state.
+func attentionSession(t *testing.T, opts subscribeOptions, root string) (*subscription, func() subscriptionFacts) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	session, err := newSubscription(opts)
+	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+	session.probes = newSubscriptionProbes(ctx)
+	session.heartbeat = time.Hour
+	t.Cleanup(func() { session.probes.finish(); cancel() })
+	return session, func() subscriptionFacts {
+		t.Helper()
+		facts, err := session.readContext(ctx, root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return facts
+	}
+}
+
 func TestParseSubscribeFollow(t *testing.T) {
 	const group, member = "20260907-clock-group", "20260907-clock-task"
 	cases := []struct {
@@ -84,11 +144,29 @@ func TestRunSubscribeRejectsFollowValueAndUntilEvent(t *testing.T) {
 	tempBoard(t)
 	for _, arg := range []string{"--follow=1", "--follow=", "--until-event"} {
 		t.Run(arg, func(t *testing.T) {
-			if _, errText := parseSubscribeArgs([]string{arg, "--watch", "20260907-clock-task"}); errText == "" || errText == "usage" {
+			args := []string{arg, "--watch", "20260907-clock-task"}
+			if _, errText := parseSubscribeArgs(args); errText == "" || errText == "usage" {
 				t.Fatalf("parse accepted %s: %q", arg, errText)
 			}
-			if code := RunSubscribe([]string{arg, "--watch", "20260907-clock-task"}); code != 2 {
+			reader, writer, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			oldStderr := os.Stderr
+			os.Stderr = writer
+			code := RunSubscribe(args)
+			os.Stderr = oldStderr
+			writer.Close()
+			diagnostics, err := io.ReadAll(reader)
+			reader.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if code != 2 {
 				t.Fatalf("exit code=%d want 2", code)
+			}
+			if !strings.HasPrefix(string(diagnostics), "kander subscribe") {
+				t.Fatalf("no usage on stderr: %q", diagnostics)
 			}
 		})
 	}
@@ -97,7 +175,6 @@ func TestRunSubscribeRejectsFollowValueAndUntilEvent(t *testing.T) {
 func TestSingleEventExitsAfterStateChange(t *testing.T) {
 	root, opts, id := factsMember(t)
 	opts.Refresh, opts.Heartbeat = .25, 3600
-	baseline := runtime.NumGoroutine()
 	events, err := singleEvents(t, root, opts, func(event groupEvent) error {
 		if event.Event == "snapshot" {
 			_, err := board.MoveEntry(currentEntry(t, root, id), root, "working")
@@ -109,13 +186,28 @@ func TestSingleEventExitsAfterStateChange(t *testing.T) {
 	if events[1].Tasks[id] != "working" || len(events[1].Changed) != 1 {
 		t.Fatalf("state-change: %+v", events[1])
 	}
-	// The probe task and the output worker are joined before the call returns.
-	for deadline := time.Now().Add(300 * time.Millisecond); runtime.NumGoroutine() > baseline && time.Now().Before(deadline); {
-		time.Sleep(time.Millisecond)
+}
+
+// The wake-up exit joins a probe that is still running: the slow probe
+// process is gone when the call returns.
+func TestSingleEventExitJoinsRunningProbe(t *testing.T) {
+	root, opts, id := factsMember(t)
+	if _, err := board.MoveEntry(currentEntry(t, root, id), root, "working"); err != nil {
+		t.Fatal(err)
 	}
-	if n := runtime.NumGoroutine(); n > baseline {
-		t.Fatalf("goroutines before=%d after=%d", baseline, n)
-	}
+	setLocation(t, currentEntry(t, root, id).Document, "codex wanted", "herdr:w1:t1:w1:p0")
+	dir := installBatchFake(t, false)
+	opts.Refresh, opts.Heartbeat = .05, 3600
+	events, err := singleEvents(t, root, opts, func(event groupEvent) error {
+		if event.Event != "snapshot" {
+			return nil
+		}
+		waitForBatchProbe(t, dir, "w1:p0")
+		_, err := board.MoveEntry(currentEntry(t, root, id), root, "review")
+		return err
+	})
+	requireEventNames(t, events, err, "snapshot", "state-change")
+	assertBatchPeakAndCleanup(t, dir, 1, 1)
 }
 
 func TestSingleEventExitsAfterEachWakeEvent(t *testing.T) {
@@ -200,10 +292,15 @@ func TestSingleEventWritesWholeScanBeforeExit(t *testing.T) {
 	addFactsExternal(t, root, "whole-first", group)
 	opts.Watch = []string{group}
 	opts.Refresh, opts.Heartbeat = .25, 3600
+	// Both writes finish before any scan reads the board, so the first scan
+	// carries both changes.
+	written := make(chan struct{})
+	holdScansUntil(t, written)
 	events, err := singleEvents(t, root, opts, func(event groupEvent) error {
 		if event.Event != "snapshot" {
 			return nil
 		}
+		defer close(written)
 		addFactsExternal(t, root, "whole-added", group)
 		_, err := board.MoveEntry(currentEntry(t, root, id), root, "working")
 		return err
@@ -211,70 +308,142 @@ func TestSingleEventWritesWholeScanBeforeExit(t *testing.T) {
 	requireEventNames(t, events, err, "snapshot", "membership-change", "state-change")
 }
 
-// prepareDispatchWithID prepares a sync dispatch whose deadline lies `deadline`
-// from now; a negative deadline value is not accepted by the board, so callers
-// that need an overdue dispatch wait for it to pass.
-func prepareDispatchWithID(t *testing.T, root, taskID, dispatchID string, deadline time.Duration) board.Dispatch {
-	t.Helper()
-	now := time.Now().UTC()
-	dispatch, err := board.PrepareDispatch(root, board.DispatchInput{ID: dispatchID, TaskID: taskID, Kind: "sync",
-		Message: "private dispatch payload", Base: strings.Repeat("a", 40), CreatedAt: now.Add(-time.Minute), ConfirmBy: now.Add(deadline)})
-	if err != nil {
+// The key of a dispatch is its ID and epoch, never the card: only an overdue
+// dispatch the snapshot did not report wakes a single-event subscription.
+func TestDispatchAttentionWakesOnlyForNewOverdueKeys(t *testing.T) {
+	// Every dispatch below counts as overdue at this observation time.
+	switchClock(t, time.Now().Add(10*time.Minute), 0)
+	root, opts, id := factsMember(t)
+	session, read := attentionSession(t, opts, root)
+	attention := func(facts subscriptionFacts, probeCompleted bool) (written, woke bool) {
+		t.Helper()
+		var out bytes.Buffer
+		woke, err := session.dispatchAttention(&out, facts, probeCompleted)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out.Len() > 0, woke
+	}
+
+	first := prepareSubscriptionDispatchID(t, root, id, "first-round", "sync", time.Minute)
+	atSnapshot := read()
+	if !atSnapshot.dispatches[id].ConfirmationOverdue {
+		t.Fatalf("fixture dispatch is not overdue: %+v", atSnapshot.dispatches[id])
+	}
+	session.recordOverdueBaseline(atSnapshot)
+	if written, woke := attention(atSnapshot, false); !written || woke {
+		t.Fatalf("start-up attention written=%v woke=%v", written, woke)
+	}
+	// The probe-completion attention names the same dispatch key.
+	if written, woke := attention(atSnapshot, true); !written || woke {
+		t.Fatalf("probe-completion attention written=%v woke=%v", written, woke)
+	}
+
+	// The same card gets a new overdue dispatch: a new key.
+	if err := board.EndDispatch(root, id, first.Input.ID, first.Revision, board.DispatchCancelled, "replaced in test"); err != nil {
 		t.Fatal(err)
 	}
-	return dispatch
+	prepareSubscriptionDispatchID(t, root, id, "second-round", "sync", time.Minute)
+	replaced := read()
+	if replaced.dispatches[id].ID != "second-round" || !replaced.dispatches[id].ConfirmationOverdue {
+		t.Fatalf("replacement dispatch: %+v", replaced.dispatches[id])
+	}
+	if written, woke := attention(replaced, false); !written || !woke {
+		t.Fatalf("new dispatch on the same card written=%v woke=%v", written, woke)
+	}
 }
 
-func TestSingleEventIgnoresDispatchOverdueAtSnapshot(t *testing.T) {
+func TestDispatchAttentionWakesForNewlyOverdueCard(t *testing.T) {
+	advance := switchClock(t, time.Now(), 10*time.Minute)
 	root, opts, id := factsMember(t)
-	prepareDispatchWithID(t, root, id, "overdue-round", 60*time.Millisecond)
-	time.Sleep(150 * time.Millisecond)
-	opts.Refresh, opts.Heartbeat = 3600, 1
-	events, err := singleEvents(t, root, opts, nil)
+	prepareSubscriptionDispatchID(t, root, id, "late-round", "sync", time.Minute)
+	session, read := attentionSession(t, opts, root)
+	atSnapshot := read()
+	if atSnapshot.dispatches[id].ConfirmationOverdue {
+		t.Fatalf("snapshot must not be overdue: %+v", atSnapshot.dispatches[id])
+	}
+	session.recordOverdueBaseline(atSnapshot)
+	advance()
+	overdue := read()
+	if !overdue.dispatches[id].ConfirmationOverdue {
+		t.Fatalf("later read must be overdue: %+v", overdue.dispatches[id])
+	}
+	var out bytes.Buffer
+	if woke, err := session.dispatchAttention(&out, overdue, false); err != nil || !woke || out.Len() == 0 {
+		t.Fatalf("woke=%v written=%d err=%v", woke, out.Len(), err)
+	}
+}
+
+// Overdue at the snapshot: the start-up attention event does not end the
+// subscription; the later membership change does.
+func TestSingleEventIgnoresDispatchOverdueAtSnapshot(t *testing.T) {
+	const group = "20260908-overdue-group"
+	switchClock(t, time.Now().Add(10*time.Minute), 0)
+	root, opts, id := factsMember(t)
+	addFactsExternal(t, root, "overdue-first", group)
+	opts.Watch = []string{group}
+	prepareSubscriptionDispatchID(t, root, id, "overdue-round", "sync", time.Minute)
+	opts.Refresh, opts.Heartbeat = .05, 3600
+	added := false
+	events, err := singleEvents(t, root, opts, func(event groupEvent) error {
+		if event.Event == "dispatch-attention" && !added {
+			added = true
+			addFactsExternal(t, root, "overdue-added", group)
+		}
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	names := eventNames(events)
-	if len(names) < 3 || names[0] != "snapshot" || names[len(names)-1] != "heartbeat" {
+	wake := -1
+	for i, name := range names {
+		if name == "membership-change" {
+			wake = i
+		}
+	}
+	// The scan that wrote the membership change may also write an attention
+	// event for the baseline dispatch; nothing else follows it.
+	if wake < 2 || names[0] != "snapshot" || !onlyAttention(names[wake+1:]) {
 		t.Fatalf("events=%v", names)
 	}
-	attention := 0
-	for _, name := range names[1 : len(names)-1] {
-		if name != "dispatch-attention" {
-			t.Fatalf("events=%v", names)
+	for i, event := range events[1:wake] {
+		if event.Event != "dispatch-attention" || event.Dispatches[id].ID != "overdue-round" {
+			t.Fatalf("event %d before the membership change woke the subscription: %v", i+1, names)
 		}
-		attention++
-	}
-	// One at start-up and one after the deadline probe finished.
-	if attention < 2 {
-		t.Fatalf("dispatch-attention written %d times: %v", attention, names)
 	}
 	if !events[0].Dispatches[id].ConfirmationOverdue {
 		t.Fatalf("snapshot did not carry an overdue dispatch: %+v", events[0].Dispatches[id])
 	}
 }
 
-func TestSingleEventWakesForNewDispatchOnSameCard(t *testing.T) {
+func TestSingleEventWakesForDispatchOverdueDuringSubscription(t *testing.T) {
+	advance := switchClock(t, time.Now(), 10*time.Minute)
 	root, opts, id := factsMember(t)
-	first := prepareDispatchWithID(t, root, id, "first-round", time.Minute)
-	// Both dispatches count as overdue at the fixed observation time.
-	fixed := time.Now().Add(10 * time.Minute)
-	oldNow, oldRead := nowFn, readSubscriptionFacts
-	nowFn = func() time.Time { return fixed }
-	// Hold every scan after the snapshot until the dispatch swap is complete, so
-	// that no scan sees the card between the two board writes.
-	swapped := make(chan struct{})
-	var reads atomic.Int32
-	readSubscriptionFacts = func(s *subscription, ctx context.Context, root string) (subscriptionFacts, error) {
-		if reads.Add(1) > 1 {
-			select {
-			case <-swapped:
-			case <-ctx.Done():
-			}
+	prepareSubscriptionDispatchID(t, root, id, "late-round", "sync", time.Minute)
+	opts.Refresh, opts.Heartbeat = .1, 3600
+	events, err := singleEvents(t, root, opts, func(event groupEvent) error {
+		if event.Event == "snapshot" {
+			advance()
 		}
-		return oldRead(s, ctx, root)
+		return nil
+	})
+	requireEventNames(t, events, err, "snapshot", "dispatch-attention")
+	if events[0].Dispatches[id].ConfirmationOverdue || !events[1].Dispatches[id].ConfirmationOverdue {
+		t.Fatalf("overdue flags: %+v / %+v", events[0].Dispatches[id], events[1].Dispatches[id])
 	}
-	t.Cleanup(func() { nowFn, readSubscriptionFacts = oldNow, oldRead })
+}
+
+// A card whose overdue dispatch is replaced during the subscription: the scan
+// that sees the new dispatch writes task-update and the attention event, and
+// the attention event is the one that names a new key.
+func TestSingleEventWakesForNewDispatchOnSameCard(t *testing.T) {
+	// Both dispatches count as overdue at the fixed observation time.
+	switchClock(t, time.Now().Add(10*time.Minute), 0)
+	root, opts, id := factsMember(t)
+	first := prepareSubscriptionDispatchID(t, root, id, "first-round", "sync", time.Minute)
+	swapped := make(chan struct{})
+	holdScansUntil(t, swapped)
 	opts.Refresh, opts.Heartbeat = 3600, 3600
 	events, err := singleEvents(t, root, opts, func(event groupEvent) error {
 		if event.Event != "snapshot" {
@@ -284,7 +453,7 @@ func TestSingleEventWakesForNewDispatchOnSameCard(t *testing.T) {
 		if err := board.EndDispatch(root, id, first.Input.ID, first.Revision, board.DispatchCancelled, "replaced in test"); err != nil {
 			return err
 		}
-		prepareDispatchWithID(t, root, id, "second-round", time.Minute)
+		prepareSubscriptionDispatchID(t, root, id, "second-round", "sync", time.Minute)
 		return nil
 	})
 	if err != nil {
@@ -295,41 +464,44 @@ func TestSingleEventWakesForNewDispatchOnSameCard(t *testing.T) {
 	if len(names) < 3 || names[0] != "snapshot" || names[len(names)-2] != "task-update" || last.Event != "dispatch-attention" {
 		t.Fatalf("events=%v", names)
 	}
-	if events[0].Dispatches[id].ID != "first-round" || !events[0].Dispatches[id].ConfirmationOverdue {
-		t.Fatalf("snapshot dispatch: %+v", events[0].Dispatches[id])
-	}
 	if last.Dispatches[id].ID != "second-round" || !last.Dispatches[id].ConfirmationOverdue {
 		t.Fatalf("last dispatch: %+v", last.Dispatches[id])
 	}
-	for _, event := range events[1 : len(events)-2] {
-		if event.Event != "dispatch-attention" || event.Dispatches[id].ID != "first-round" {
-			t.Fatalf("event before the swap woke the subscription: %v", names)
-		}
-	}
 }
 
-func TestSingleEventWakesForDispatchOverdueDuringSubscription(t *testing.T) {
-	root, opts, id := factsMember(t)
-	prepareDispatchWithID(t, root, id, "late-round", 300*time.Millisecond)
-	opts.Refresh, opts.Heartbeat = 3600, 3600
-	events, err := singleEvents(t, root, opts, nil)
-	requireEventNames(t, events, err, "snapshot", "dispatch-attention")
-	if events[0].Dispatches[id].ConfirmationOverdue || !events[1].Dispatches[id].ConfirmationOverdue {
-		t.Fatalf("overdue flags: %+v / %+v", events[0].Dispatches[id], events[1].Dispatches[id])
+// writePreparedOperation leaves a prepared, uncommitted board transaction, the
+// state a recoverable read error reports.
+func writePreparedOperation(t *testing.T, root, id string) {
+	t.Helper()
+	snapshot, err := board.ReadSnapshot(root, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	operation := "abcdefabcdefabcdefabcdefabcdefab"
+	text := snapshot.Text
+	record := board.OperationRecord{Schema: 1, ID: operation, Phase: "prepared", Revisions: map[string]uint64{id: snapshot.Revision + 1},
+		Files: []board.FileChange{{Path: filepath.Join("review", id, "spec.md"), Before: &text, After: text + "\nnot committed\n"}}}
+	data, err := json.Marshal(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(root, ".kander", "operations", operation+".json"), data, 0600); err != nil {
+		t.Fatal(err)
 	}
 }
 
 // Terminal events behave as under --follow: the same events, the same error.
 func TestSingleEventTerminalEventsMatchFollow(t *testing.T) {
-	cases := map[string]func(t *testing.T, root string, opts *subscribeOptions, id string) func(groupEvent) error{
-		"read-error": func(t *testing.T, root string, _ *subscribeOptions, id string) func(groupEvent) error {
-			prepareDispatchWithID(t, root, id, "broken-round", time.Minute)
-			if err := os.Remove(filepath.Join(currentEntry(t, root, id).Path, "dispatches", "broken-round", "state.json")); err != nil {
-				t.Fatal(err)
-			}
+	cases := []struct {
+		event      string
+		readStatus string
+		arrange    func(t *testing.T, root string, opts *subscribeOptions, id string) func(groupEvent) error
+	}{
+		{"read-error", "recoverable", func(t *testing.T, root string, _ *subscribeOptions, id string) func(groupEvent) error {
+			writePreparedOperation(t, root, id)
 			return nil
-		},
-		"membership-unknown": func(t *testing.T, root string, opts *subscribeOptions, _ string) func(groupEvent) error {
+		}},
+		{"membership-unknown", "invalid", func(t *testing.T, root string, opts *subscribeOptions, _ string) func(groupEvent) error {
 			const group = "20260908-terminal-group"
 			addFactsExternal(t, root, "terminal-readable", group)
 			bad := addFactsExternal(t, root, "terminal-unreadable", group)
@@ -340,14 +512,14 @@ func TestSingleEventTerminalEventsMatchFollow(t *testing.T) {
 				}
 				return nil
 			}
-		},
+		}},
 	}
-	for name, arrange := range cases {
-		t.Run(name, func(t *testing.T) {
+	for _, test := range cases {
+		t.Run(test.event, func(t *testing.T) {
 			run := func(follow bool) ([]groupEvent, string) {
 				root, opts, id := factsMember(t)
 				opts.Refresh, opts.Heartbeat = .25, 3600
-				onEvent := arrange(t, root, &opts, id)
+				onEvent := test.arrange(t, root, &opts, id)
 				opts.Follow = follow
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
@@ -372,8 +544,11 @@ func TestSingleEventTerminalEventsMatchFollow(t *testing.T) {
 			if !reflect.DeepEqual(eventNames(followed), eventNames(single)) {
 				t.Fatalf("follow=%v single=%v", eventNames(followed), eventNames(single))
 			}
+			if len(single) == 0 {
+				t.Fatal("no terminal event written")
+			}
 			last := single[len(single)-1]
-			if last.ReadStatus != "invalid" || last.MembershipComplete {
+			if last.Event != test.event || last.ReadStatus != test.readStatus || last.MembershipComplete || !last.ReconciliationRequired {
 				t.Fatalf("terminal event: %+v", last)
 			}
 		})
@@ -405,4 +580,13 @@ func TestFollowSurvivesAllCardsDone(t *testing.T) {
 	if err := <-done; err != context.Canceled {
 		t.Fatalf("cancel=%v", err)
 	}
+}
+
+func onlyAttention(names []string) bool {
+	for _, name := range names {
+		if name != "dispatch-attention" {
+			return false
+		}
+	}
+	return true
 }
