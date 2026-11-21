@@ -309,7 +309,9 @@ func foldRawReviewRoleModels(doc map[string]any) {
 }
 
 // FoldLegacyReviewRoleKeys rewrites review_stages, reviewers, and
-// models.review_roles in a raw document so only current roles remain.
+// models.review_roles in a raw document: the known settings of a legacy role move
+// into its current role. A legacy role object that still holds fields this version
+// does not know stays, with only those fields, at its own path.
 // Mixed scale/role objects and invalid stage values are left for Validate.
 func FoldLegacyReviewRoleKeys(doc map[string]any) {
 	if doc == nil {

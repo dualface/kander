@@ -667,8 +667,8 @@ func TestReviewRoleExtrasSurviveTheFold(t *testing.T) {
 	if _, ok := jsonPath(readScope(t, path), "models", "review_roles", "PMQA", "future", "a"); !ok {
 		t.Fatal("an unknown field of a current role was lost on save")
 	}
-	// A legacy role key is rewritten into its current role, and its unknown fields go
-	// with the key; they are still reported, at the path they have in the file.
+	// The known settings of a legacy role move into its current role; its unknown
+	// fields stay in the legacy role object, reported and kept at their own path.
 	legacy := scopeDocument(t)
 	OverlaySet(legacy, map[string]any{"model": "m", "future": "x"}, "models", "review_roles", "PM")
 	writeJSONFile(t, path, legacy)

@@ -309,3 +309,48 @@ func TestEditingTheSmallScaleLeavesKanbanAgentAlone(t *testing.T) {
 		t.Fatalf("a mirroring kanban_agent must follow the large scale: %q", session.Config.KanbanAgent)
 	}
 }
+
+// Turning an agent's own switch on again removes its only known key and leaves an
+// entry of unknown content; a second save in the same session must not see that as
+// someone else's edit.
+func TestOptionsSwitchThenSecondSaveInOneSession(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	t.Setenv(config.EnvConfig, path)
+	base := config.DefaultConfig()
+	base.WelcomeComplete = true
+	base.Language = "en"
+	data, err := json.Marshal(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatal(err)
+	}
+	doc["agents"] = map[string]any{
+		"codex":  map[string]any{"path": "codex"},
+		"claude": map[string]any{"install_rules": false, "session": map[string]any{"Mode": "generated"}},
+	}
+	writeDoc(t, path, doc)
+	cfg, err := config.Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := NewSessionForTest(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := session.SetAgentInstallRules("claude", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := session.Save(); err != nil {
+		t.Fatalf("the first save: %v", err)
+	}
+	if got, _ := config.OverlayGet(readDoc(t, path), "agents", "claude", "session", "Mode"); got != "generated" {
+		t.Fatalf("the unknown content of the entry was lost: %v", got)
+	}
+	session.SetTUIField("theme", "dark")
+	if _, err := session.Save(); err != nil {
+		t.Fatalf("the second save in the same session was refused: %v", err)
+	}
+}
