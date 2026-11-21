@@ -353,21 +353,21 @@ func TestUnusableAgentEntriesDegradeOneAgent(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := scopeDocument(t)
-			doc["agents"] = map[string]any{"agy": tc.entry, "custom": customAgent()}
-			doc["kanban_agent"] = "agy"
+			doc["agents"] = map[string]any{"future-agent": tc.entry, "custom": customAgent()}
+			doc["kanban_agent"] = "future-agent"
 			path := writeScope(t, doc)
 			cfg, err := Load(false)
 			if err != nil {
 				t.Fatalf("an unusable agents entry must not fail the load: %v", err)
 			}
-			if HasAgent(cfg, "agy") || cfg.UnusableAgents["agy"] != tc.reason {
-				t.Fatalf("agy must be unusable with %q: has=%v %v", tc.reason, HasAgent(cfg, "agy"), cfg.UnusableAgents)
+			if HasAgent(cfg, "future-agent") || cfg.UnusableAgents["future-agent"] != tc.reason {
+				t.Fatalf("future-agent must be unusable with %q: has=%v %v", tc.reason, HasAgent(cfg, "future-agent"), cfg.UnusableAgents)
 			}
 			if !HasAgent(cfg, "custom") || !HasAgent(cfg, "codex") {
 				t.Fatal("the rest of the configuration must stay usable")
 			}
-			err = UnavailableAgentError(cfg, "agy")
-			if err == nil || !strings.Contains(err.Error(), "agy") || !strings.Contains(err.Error(), tc.reason) {
+			err = UnavailableAgentError(cfg, "future-agent")
+			if err == nil || !strings.Contains(err.Error(), "future-agent") || !strings.Contains(err.Error(), tc.reason) {
 				t.Fatalf("the error must name the agent and the reason: %v", err)
 			}
 			var kinds []string
@@ -376,7 +376,7 @@ func TestUnusableAgentEntriesDegradeOneAgent(t *testing.T) {
 					kinds = append(kinds, item.PathString())
 				}
 			}
-			if !slices.Equal(kinds, []string{"agents.agy"}) {
+			if !slices.Equal(kinds, []string{"agents.future-agent"}) {
 				t.Fatalf("unusable entries=%v", kinds)
 			}
 			// Save and Repair keep the entry whole.
@@ -387,13 +387,13 @@ func TestUnusableAgentEntriesDegradeOneAgent(t *testing.T) {
 				t.Fatal(err)
 			}
 			saved := readScope(t, path)
-			got, _ := jsonPath(saved, "agents", "agy")
+			got, _ := jsonPath(saved, "agents", "future-agent")
 			want, _ := json.Marshal(tc.entry)
 			have, _ := json.Marshal(got)
 			if string(want) != string(have) {
 				t.Fatalf("the unusable entry changed: %s != %s", have, want)
 			}
-			if v, _ := jsonPath(saved, "kanban_agent"); v != "agy" {
+			if v, _ := jsonPath(saved, "kanban_agent"); v != "future-agent" {
 				t.Fatalf("the reference to the unusable agent changed: %v", v)
 			}
 		})

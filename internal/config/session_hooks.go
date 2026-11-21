@@ -23,6 +23,7 @@ var registeredSessionHooks = []SessionHook{
 	{Name: "codex-rollout", DiscoverAfterStart: true, ResolveEmptyReference: true},
 	{Name: "cursor-create-chat", AllocateBeforeStart: true},
 	{Name: "droid-sessions", DiscoverAfterStart: true, PersistAfterStart: true},
+	{Name: "agy-transcript", DiscoverAfterStart: true, PersistAfterStart: true},
 }
 
 // RegisteredSessionHooks returns the built-in hook list in registration order.
@@ -67,7 +68,7 @@ func validDeclaredSessionMode(mode string) bool {
 // SessionDiscoversAfterStart reports whether launch must identify the new
 // session after start. Discovered mode snapshots the existing sessions before
 // start; a hook selects the new session by its own rule, and a hook such as
-// droid-sessions also snapshots the existing sessions first.
+// droid-sessions or agy-transcript also snapshots the existing sessions first.
 func SessionDiscoversAfterStart(s *AgentSessionDefinition) bool {
 	if s == nil {
 		return false
