@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -207,7 +209,7 @@ func TestSingleEventExitJoinsRunningProbe(t *testing.T) {
 	setLocation(t, currentEntry(t, root, id).Document, "codex wanted", "herdr:w1:t1:w1:p0")
 	dir := installBatchFake(t, false)
 	opts.Refresh, opts.Heartbeat = .05, 3600
-	var joined, probeCollected, probeCancelled, outputDone atomic.Bool
+	var joined, probeCollected, probeCancelled, outputDone, workersGone atomic.Bool
 	oldHook := subscribeJoinedHook
 	subscribeJoinedHook = func(probes *subscriptionProbes, output *subscriptionOutputQueue) {
 		joined.Store(true)
@@ -218,6 +220,12 @@ func TestSingleEventExitJoinsRunningProbe(t *testing.T) {
 			outputDone.Store(true)
 		default:
 		}
+		// Neither worker goroutine may still exist: the stacks hold no frame of
+		// the probe task or of the output worker.
+		stacks := make([]byte, 1<<20)
+		stacks = stacks[:runtime.Stack(stacks, true)]
+		workersGone.Store(!bytes.Contains(stacks, []byte("(*subscriptionProbes).start.func1")) &&
+			!bytes.Contains(stacks, []byte("newSubscriptionOutput.func1")))
 	}
 	t.Cleanup(func() { subscribeJoinedHook = oldHook })
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -229,7 +237,7 @@ func TestSingleEventExitJoinsRunningProbe(t *testing.T) {
 		}
 		if event.Event == "state-change" {
 			// The worker is still inside the last write when the loop returns.
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(300 * time.Millisecond)
 			return nil
 		}
 		if event.Event != "snapshot" {
@@ -244,9 +252,9 @@ func TestSingleEventExitJoinsRunningProbe(t *testing.T) {
 	if ctx.Err() != nil {
 		t.Fatalf("caller context ended before the check: %v", ctx.Err())
 	}
-	if !joined.Load() || !probeCollected.Load() || !probeCancelled.Load() || !outputDone.Load() {
-		t.Fatalf("workers at return: joined=%v probe collected=%v probe cancelled=%v output done=%v",
-			joined.Load(), probeCollected.Load(), probeCancelled.Load(), outputDone.Load())
+	if !joined.Load() || !probeCollected.Load() || !probeCancelled.Load() || !outputDone.Load() || !workersGone.Load() {
+		t.Fatalf("workers at return: joined=%v probe collected=%v probe cancelled=%v output done=%v goroutines gone=%v",
+			joined.Load(), probeCollected.Load(), probeCancelled.Load(), outputDone.Load(), workersGone.Load())
 	}
 	assertBatchPeakAndCleanup(t, dir, 1, 1)
 }
@@ -394,77 +402,83 @@ func TestDispatchAttentionWakesOnlyForNewOverdueKeys(t *testing.T) {
 	}
 }
 
-// gatedProbe installs a herdr fake whose pane query answers only after the
-// returned gate file exists, so a test decides when a probe completes.
-func gatedProbe(t *testing.T) (open func()) {
+// gatedProbes installs a herdr fake that answers the n-th pane query only when
+// the file gate<n> exists, so a test decides when each probe batch completes.
+func gatedProbes(t *testing.T) (open func(n int)) {
 	t.Helper()
 	installPOSIXFakes(t, true)
-	gate := filepath.Join(t.TempDir(), "gate")
-	t.Setenv("SUBSCRIBE_PROBE_GATE", gate)
+	dir := t.TempDir()
+	t.Setenv("SUBSCRIBE_PROBE_DIR", dir)
 	script := `#!/bin/sh
-while [ ! -f "$SUBSCRIBE_PROBE_GATE" ]; do /bin/sleep 0.01; done
+n=$(cat "$SUBSCRIBE_PROBE_DIR/count" 2>/dev/null || echo 0)
+n=$((n + 1))
+echo $n > "$SUBSCRIBE_PROBE_DIR/count"
+while [ ! -f "$SUBSCRIBE_PROBE_DIR/gate$n" ]; do /bin/sleep 0.01; done
 echo '{"result":{"pane":{"pane_id":"w1:p0","agent":"codex","agent_status":"working","agent_session":{"value":"wanted"}}}}'
 `
 	if err := os.WriteFile(filepath.Join(os.Getenv("PATH"), "herdr"), []byte(script), 0700); err != nil {
 		t.Fatal(err)
 	}
-	return func() {
-		if err := os.WriteFile(gate, nil, 0600); err != nil {
+	return func(n int) {
+		if err := os.WriteFile(filepath.Join(dir, "gate"+strconv.Itoa(n)), nil, 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
 }
 
 // Overdue at the snapshot: neither the start-up attention event nor the one
-// that reports the finished deadline probe ends the subscription. Only the
-// heartbeat does, after the clock passes its due time.
+// written when the first deadline probe finishes ends the subscription. The
+// refresh interval is far longer than the test, so the only scan before the
+// heartbeat is the one the probe result channel starts: the second attention
+// event comes from the loop's own probe-completion branch, not from a timed
+// scan. The second probe stays blocked; the heartbeat, which falls due on the
+// real clock long after that scan, ends the subscription.
 func TestSingleEventIgnoresDispatchOverdueAtSnapshot(t *testing.T) {
-	advance := switchClock(t, time.Now().Add(10*time.Minute), 2*time.Hour)
+	// Every dispatch counts as overdue; the clock keeps running so that the
+	// heartbeat becomes due.
+	start := time.Now()
+	oldNow := nowFn
+	nowFn = func() time.Time { return start.Add(10*time.Minute + time.Since(start)) }
+	t.Cleanup(func() { nowFn = oldNow })
 	root, opts, id := factsMember(t)
 	setLocation(t, currentEntry(t, root, id).Document, "codex wanted", "herdr:w1:t1:w1:p0")
-	openProbe := gatedProbe(t)
+	open := gatedProbes(t)
 	prepareSubscriptionDispatchID(t, root, id, "overdue-round", "sync", time.Minute)
-	opts.Refresh, opts.Heartbeat = .05, 3600
-	// The clock moves at the start of the first scan after the second attention
-	// event was delivered, so the scan that wrote the probe-completion attention
-	// finds no heartbeat due and has to decide on the attention event alone.
-	var secondDelivered atomic.Bool
-	oldRead := readSubscriptionFacts
-	readSubscriptionFacts = func(s *subscription, ctx context.Context, root string) (subscriptionFacts, error) {
-		if secondDelivered.Load() {
-			advance()
-		}
-		return oldRead(s, ctx, root)
-	}
-	t.Cleanup(func() { readSubscriptionFacts = oldRead })
+	opts.Refresh, opts.Heartbeat = 3600, 1.5
 	attentions := 0
 	events, err := singleEvents(t, root, opts, func(event groupEvent) error {
-		if event.Event != "dispatch-attention" {
-			return nil
-		}
-		attentions++
-		switch attentions {
-		case 1:
-			openProbe()
-		case 2:
-			secondDelivered.Store(true)
+		if event.Event == "dispatch-attention" {
+			attentions++
+			if attentions == 1 {
+				open(1)
+			}
 		}
 		return nil
 	})
 	if err != nil {
 		t.Fatalf("subscription ended with %v after %v", err, eventNames(events))
 	}
-	// A finished deadline probe starts the next one, so a third attention event
-	// can follow the second; all of them name only the baseline dispatch.
+	// The first finished probe starts the next one, whose result may arrive as a
+	// third attention event; every attention event names only the baseline
+	// dispatch and none of them ends the subscription.
 	names := eventNames(events)
-	if len(names) < 4 || names[0] != "snapshot" || names[len(names)-1] != "heartbeat" || !onlyAttention(names[1:len(names)-1]) {
+	last := len(events) - 1
+	if last < 3 || last > 4 || names[0] != "snapshot" || names[last] != "heartbeat" {
 		t.Fatalf("events=%v", names)
+	}
+	for _, name := range names[1:last] {
+		if name != "dispatch-attention" {
+			t.Fatalf("events=%v", names)
+		}
 	}
 	if !events[0].Dispatches[id].ConfirmationOverdue {
 		t.Fatalf("snapshot did not carry an overdue dispatch: %+v", events[0].Dispatches[id])
 	}
 	if events[1].Liveness[id].CollectionState != "pending" || events[2].Liveness[id].CollectionState != "complete" {
 		t.Fatalf("probe states: %+v / %+v", events[1].Liveness[id], events[2].Liveness[id])
+	}
+	if !events[last].ObservedAt.After(events[last-1].ObservedAt.Add(time.Second)) {
+		t.Fatalf("heartbeat was not a later scan: %v after %v", events[last].ObservedAt, events[last-1].ObservedAt)
 	}
 }
 
@@ -631,13 +645,4 @@ func TestFollowSurvivesAllCardsDone(t *testing.T) {
 	if err := <-done; err != context.Canceled {
 		t.Fatalf("cancel=%v", err)
 	}
-}
-
-func onlyAttention(names []string) bool {
-	for _, name := range names {
-		if name != "dispatch-attention" {
-			return false
-		}
-	}
-	return true
 }
