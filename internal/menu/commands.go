@@ -93,13 +93,19 @@ func runConfig() int {
 		return command.Fail(err)
 	}
 	notifyForwardCompat(cfg)
+	// What was reported above stays out of the output itself, so the output is the one of the
+	// same configuration without that content.
+	shown, err := config.DisplayConfig(cfg)
+	if err != nil {
+		return command.Fail(err)
+	}
 	if command.JSON() {
-		for _, warning := range config.AgentWarnings(cfg) {
+		for _, warning := range config.AgentWarnings(shown) {
 			command.Notify("agent_warning", warning)
 		}
-		return command.Result(cfg)
+		return command.Result(shown)
 	}
-	if err := printConfig(cfg); err != nil {
+	if err := printConfig(shown); err != nil {
 		return command.Fail(err)
 	}
 	return 0

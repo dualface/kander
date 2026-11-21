@@ -94,31 +94,38 @@ func loadScopeRawAt(path string, missingOK bool) (*Config, map[string]any, error
 }
 
 func loadEffective(cwd string, missingOK bool) (*Config, error) {
+	cfg, _, err := loadEffectiveRaw(cwd, missingOK)
+	return cfg, err
+}
+
+// loadEffectiveRaw is loadEffective that also returns the merged raw document the
+// configuration was validated from.
+func loadEffectiveRaw(cwd string, missingOK bool) (*Config, map[string]any, error) {
 	path, err := ConfigPath()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	cfg, raw, err := loadScopeRawAt(path, missingOK)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	overlayPath, overlayRaw, err := readOverlay(cwd)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if overlayRaw == nil {
-		return cfg, nil
+		return cfg, raw, nil
 	}
 	merged, err := mergeOverlayRaw(raw, overlayRaw)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	effective, err := Validate(merged)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	markOverlayIgnored(effective, cfg, overlayPath, overlayRaw)
-	return effective, nil
+	return effective, merged, nil
 }
 
 // markOverlayIgnored names the overlay as the source of the ignored items that
