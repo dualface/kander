@@ -136,6 +136,20 @@ func unusableBuiltinDocument(t *testing.T, unusable bool) map[string]any {
 	return doc
 }
 
+func withReviewers(t *testing.T, reviewers map[string]any) map[string]any {
+	t.Helper()
+	doc := cleanTwin(t)
+	doc["reviewers"] = reviewers
+	return doc
+}
+
+func withSmallAgent(t *testing.T, agent string) map[string]any {
+	t.Helper()
+	doc := cleanTwin(t)
+	doc["kanban_agents"] = map[string]any{"large": "codex", "small": agent}
+	return doc
+}
+
 // With ignored content the output of kander config is the output of the same configuration
 // without that content, apart from the notices: unknown keys, an unusable custom agent, an
 // unusable built-in agent (whose models stay in the output), and roles that name unknown agents
@@ -145,18 +159,57 @@ func TestConfigOutputEqualsThatWithoutTheIgnoredContent(t *testing.T) {
 		name         string
 		dirty, clean func(t *testing.T) map[string]any
 		notices      int
+		// The project overlay of each side; nil means the file is absent. The twins of a case
+		// with an overlay both have one, so the printed overlay path is the same.
+		dirtyOverlay, cleanOverlay map[string]any
 	}{
-		{"unknown keys and an unusable custom agent", func(t *testing.T) map[string]any { return forwardCompatDocument(t, false) }, cleanTwin, ignoredFieldCount + ignoredAgentCount + unusableEntryCount},
+		{name: "unknown keys and an unusable custom agent", dirty: func(t *testing.T) map[string]any { return forwardCompatDocument(t, false) }, clean: cleanTwin, notices: ignoredFieldCount + ignoredAgentCount + unusableEntryCount},
 		// The entry, the three models.* entries of codex it takes out, and the eight roles that name codex.
-		{"an unusable built-in agent", func(t *testing.T) map[string]any { return unusableBuiltinDocument(t, true) }, func(t *testing.T) map[string]any { return unusableBuiltinDocument(t, false) }, 12},
-		{"unknown agent references and the rest", func(t *testing.T) map[string]any { return forwardCompatDocument(t, true) }, cleanTwin, ignoredFieldCount + ignoredAgentCount + unusableEntryCount + unknownRefCount},
+		{name: "an unusable built-in agent", dirty: func(t *testing.T) map[string]any { return unusableBuiltinDocument(t, true) }, clean: func(t *testing.T) map[string]any { return unusableBuiltinDocument(t, false) }, notices: 12},
+		{name: "unknown agent references and the rest", dirty: func(t *testing.T) map[string]any { return forwardCompatDocument(t, true) }, clean: cleanTwin, notices: ignoredFieldCount + ignoredAgentCount + unusableEntryCount + unknownRefCount},
+		// A scope reviewers object that holds only roles of a newer version stays a reviewers
+		// object: the twin has empty role objects.
+		{name: "reviewers with only roles of a newer version", notices: 1,
+			dirty: func(t *testing.T) map[string]any {
+				return withReviewers(t, map[string]any{"large": map[string]any{"FutureRole": "codex"}})
+			},
+			clean: func(t *testing.T) map[string]any { return withReviewers(t, map[string]any{"large": map[string]any{}}) }},
+		// A section that holds only unknown keys is the same as no section; the required tui
+		// section cannot stay as an empty object.
+		{name: "a tui section of only unknown keys", notices: 1,
+			dirty: func(t *testing.T) map[string]any {
+				doc := cleanTwin(t)
+				doc["tui"] = map[string]any{"future": 1}
+				return doc
+			},
+			clean: func(t *testing.T) map[string]any {
+				doc := cleanTwin(t)
+				delete(doc, "tui")
+				return doc
+			}},
+		// The project overlay moves small to an agent this version does not know: the output shows
+		// what the scope gives small, as the twin without that overlay value does.
+		{name: "an unknown agent in the project overlay", notices: 1,
+			dirty:        func(t *testing.T) map[string]any { return withSmallAgent(t, "claude") },
+			clean:        func(t *testing.T) map[string]any { return withSmallAgent(t, "claude") },
+			dirtyOverlay: map[string]any{"kanban_agents": map[string]any{"small": "futureagent"}, "tui": map[string]any{"refresh": 45}},
+			cleanOverlay: map[string]any{"tui": map[string]any{"refresh": 45}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config.json")
 			t.Setenv(config.EnvConfig, path)
+			project := t.TempDir()
+			t.Chdir(project)
+			overlayPath := filepath.Join(project, config.OverlayFilename)
 			writeDoc(t, path, tc.dirty(t))
+			if tc.dirtyOverlay != nil {
+				writeDoc(t, overlayPath, tc.dirtyOverlay)
+			}
 			dirtyJSON, dirtyText := runConfigCommand(t, "--json"), runConfigCommand(t)
 			writeDoc(t, path, tc.clean(t))
+			if tc.cleanOverlay != nil {
+				writeDoc(t, overlayPath, tc.cleanOverlay)
+			}
 			cleanJSON, cleanText := runConfigCommand(t, "--json"), runConfigCommand(t)
 			for name, run := range map[string]configRun{"dirty --json": dirtyJSON, "clean --json": cleanJSON, "clean": cleanText, "dirty": dirtyText} {
 				if run.code != 0 {
