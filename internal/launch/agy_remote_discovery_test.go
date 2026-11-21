@@ -38,7 +38,9 @@ func (w agyConversationWriter) Scan(l sessionLaunch, previous map[string]struct{
 }
 
 // launchedAgyRequest returns the instruction a launch command passes to agy as
-// the value of --prompt-interactive.
+// the value of --prompt-interactive, decoded from its POSIX quoting: a single
+// quote inside the value, such as one in the temporary directory of the task
+// file, is written as '"'"'.
 func launchedAgyRequest(t *testing.T, command string) string {
 	t.Helper()
 	const flag = " --prompt-interactive '"
@@ -46,7 +48,7 @@ func launchedAgyRequest(t *testing.T, command string) string {
 	if i < 0 || !strings.HasSuffix(command, "'\n") {
 		t.Fatalf("the launch command does not end with a quoted --prompt-interactive value: %q", command)
 	}
-	request := command[i+len(flag) : len(command)-2]
+	request := strings.ReplaceAll(command[i+len(flag):len(command)-2], `'"'"'`, "'")
 	if !strings.Contains(request, "task file at ") || !strings.HasSuffix(request, "follow it exactly.") {
 		t.Fatalf("request=%q is not the full launch instruction", request)
 	}
@@ -68,6 +70,15 @@ func fakeAgyConversations(t *testing.T, command func() string) *int {
 	sessionProviders[mode] = agyConversationWriter{sessionDiscoverer: wrapped, t: t, root: agyBrainDir(t), command: command, scans: scans}
 	t.Cleanup(func() { sessionProviders[mode] = wrapped })
 	return scans
+}
+
+func TestLaunchedAgyRequestDecodesQuotedSingleQuotes(t *testing.T) {
+	command := "cd -- /work && exec env X=1 /bin/agy --effort medium --prompt-interactive " +
+		`'Execute Kanban task t; full instructions are in the UTF-8 task file at /tmp/it'"'"'s/task.md; read the complete file first and follow it exactly.'` + "\n"
+	want := "Execute Kanban task t; full instructions are in the UTF-8 task file at /tmp/it's/task.md; read the complete file first and follow it exactly."
+	if got := launchedAgyRequest(t, command); got != want {
+		t.Fatalf("request=%q, want %q", got, want)
+	}
 }
 
 func requireOneAgyScan(t *testing.T, scans *int) {
