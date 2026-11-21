@@ -169,41 +169,18 @@ func runLocalDisposition(_ *config.Config, args []string) int {
 	return 0
 }
 
+// closeWithGit closes the batch on a board directory. The Git half is closureEvidence, the one
+// the client of a server runs, so these tests cover that path.
 func closeWithGit(root, cwd string, r board.ReviewCloseRequest) (board.ReviewClosure, error) {
-	var c board.ReviewClosure
 	v, err := board.ReadReviewBatchView(root, r.BatchID)
 	if err != nil {
-		return c, err
+		return board.ReviewClosure{}, err
 	}
-	if !board.ReviewNeedsGit(board.ReviewPlanBatch{Base: v.Batch.Base, TargetCommit: v.Batch.TargetCommit, Requirements: v.Batch.Requirements}) {
-		edges, _, e := board.ReviewClosureEdges(v, r)
-		if e != nil {
-			return c, e
-		}
-		return board.CloseReviewBatch(root, r, board.ReviewGitEvidence{CWD: cwd, Head: "N/A", NotApplicable: "review-plan: all roles explicitly N/A; no Git target", VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano), Edges: edges})
-	}
-	if _, err = verifyBatchHead(cwd, v.Batch); err != nil {
-		return c, err
-	}
-	edges, _, err := board.ReviewClosureEdges(v, r)
+	evidence, err := closureEvidence(cwd, v, r)
 	if err != nil {
-		return c, err
+		return board.ReviewClosure{}, err
 	}
-	for _, edge := range edges {
-		if err = verifyGitEdge(cwd, edge); err != nil {
-			return c, err
-		}
-	}
-	mechanical, err := verifyMechanicalGit(cwd, v, r)
-	if err != nil {
-		return c, err
-	}
-	// Recheck after the potentially long Git work; board then CASes the exact view.
-	observed, err := verifyBatchHead(cwd, v.Batch)
-	if err != nil {
-		return c, err
-	}
-	return board.CloseReviewBatch(root, r, closureGitEvidence(cwd, v.Batch, mechanical, edges, observed))
+	return board.CloseReviewBatch(root, r, evidence)
 }
 
 // resolveBatchWithGit verifies the claims of a resolution the way closeWithGit does:

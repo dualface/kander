@@ -164,17 +164,26 @@ func remoteBatchView(ctx context.Context, session *remote.Session, batch string)
 	return v, err
 }
 
-// closureEvidence is the Git half of closeWithGit, run on this host.
+// closureEvidence is the Git half of closing a batch, run on this host.
 func closureEvidence(cwd string, v board.ReviewBatchView, r board.ReviewCloseRequest) (board.ReviewGitEvidence, error) {
 	now := func() string { return time.Now().UTC().Format(time.RFC3339Nano) }
-	edges, _, err := board.ReviewClosureEdges(v, r)
-	if err != nil {
-		return board.ReviewGitEvidence{}, err
-	}
 	if !board.ReviewNeedsGit(board.ReviewPlanBatch{Base: v.Batch.Base, TargetCommit: v.Batch.TargetCommit, Requirements: v.Batch.Requirements}) {
+		edges, _, err := board.ReviewClosureEdges(v, r)
+		if err != nil {
+			return board.ReviewGitEvidence{}, err
+		}
 		return board.ReviewGitEvidence{CWD: cwd, Head: "N/A", NotApplicable: "review-plan: all roles explicitly N/A; no Git target", VerifiedAt: now(), Edges: edges}, nil
 	}
 	if _, err := verifyBatchHead(cwd, v.Batch); err != nil {
+		return board.ReviewGitEvidence{}, err
+	}
+	// Before ReviewClosureEdges, which refuses a fix commit equal to the reviewed commit as one error
+	// for the whole batch: the claim check lists every affected record instead.
+	if err := verifyFixCommitClaims(cwd, v, r); err != nil {
+		return board.ReviewGitEvidence{}, err
+	}
+	edges, _, err := board.ReviewClosureEdges(v, r)
+	if err != nil {
 		return board.ReviewGitEvidence{}, err
 	}
 	for _, edge := range edges {

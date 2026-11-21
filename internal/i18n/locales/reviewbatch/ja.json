@@ -83,5 +83,10 @@
   "board.review_abandon_conflict": "この run はすでに別の決定または理由で放棄されています。異なる値で 2 回記録することはできません",
   "board.review_abandon_missing_run": "この ID の run は存在しないため、放棄できません",
   "board.review_abandon_input_changed": "放棄の準備中に run が変化しました。読み直してから再試行してください",
-  "board.review_abandon_group_mismatch": "この run のメンバーカードが run と異なるタスクグループに属しているため、run を放棄できません"
+  "board.review_abandon_group_mismatch": "この run のメンバーカードが run と異なるタスクグループに属しているため、run を放棄できません",
+  "review.fix_commit_history": "{{.V0}} 件の fixed 記録の fix_commit がこのバッチの履歴にありません",
+  "review.fix_commit_not_found": "fix_commit はこのリポジトリのコミットではありません",
+  "review.fix_commit_not_ancestor": "{{.V0}} は {{.V1}} の祖先ではありません",
+  "review.fix_commit_next": "次の手順：rebase が修正コミットを書き換えた場合、作者は一覧の各記録に対して訂正記録を追加します。previous_record_id は一覧の記録を指し、status は変えず、fix_commit は同じ修正を担う書き換え後のコミットにします（git patch-id --stable で比較）。依頼は kander notify --kind sync で送り、訂正後は kander review aggregate をやり直してから閉じます。snippets/execute-group-member.md \"Author Records After a Rebase\" を参照してください。",
+  "review.fix_commit_not_later": "fix_commit は所属する実行のレビュー対象コミット {{.V0}} と同じです。修正は後のコミットでなければなりません"
 }

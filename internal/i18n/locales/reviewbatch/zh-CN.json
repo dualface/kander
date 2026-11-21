@@ -83,5 +83,10 @@
   "board.review_abandon_conflict": "该运行已用另一个决定或理由放弃；不能用不同的值记录两次放弃",
   "board.review_abandon_missing_run": "没有这个 ID 的运行，无从放弃",
   "board.review_abandon_input_changed": "准备放弃时运行已变化：请重新读取后再试",
-  "board.review_abandon_group_mismatch": "该运行的某张成员卡与运行不属于同一个任务组，不能放弃运行"
+  "board.review_abandon_group_mismatch": "该运行的某张成员卡与运行不属于同一个任务组，不能放弃运行",
+  "review.fix_commit_history": "{{.V0}} 条 fixed 记录的 fix_commit 不在本批次的历史中",
+  "review.fix_commit_not_found": "fix_commit 不是本仓库中的提交",
+  "review.fix_commit_not_ancestor": "{{.V0}} 不是 {{.V1}} 的祖先",
+  "review.fix_commit_next": "下一步：若 rebase 改写了修复提交，由作者为所列的每条记录追加更正记录：previous_record_id 指向所列记录，status 不变，fix_commit 改为承载同一修复的改写后提交（用 git patch-id --stable 比较）。用 kander notify --kind sync 派发该请求，更正后先重新运行 kander review aggregate，再关闭。参见 snippets/execute-group-member.md \"Author Records After a Rebase\"。",
+  "review.fix_commit_not_later": "fix_commit 就是所属运行的审核提交 {{.V0}}；修复必须是之后的提交"
 }

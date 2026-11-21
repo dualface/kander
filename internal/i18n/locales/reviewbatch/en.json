@@ -83,5 +83,10 @@
   "board.review_abandon_conflict": "the run is already abandoned with another decision or reason; the abandon cannot be recorded twice with different values",
   "board.review_abandon_missing_run": "no run with this ID exists, so there is nothing to abandon",
   "board.review_abandon_input_changed": "the run changed while the abandon was prepared: read it again and retry",
-  "board.review_abandon_group_mismatch": "a member card of this run belongs to another task group than the run, so the run cannot be abandoned"
+  "board.review_abandon_group_mismatch": "a member card of this run belongs to another task group than the run, so the run cannot be abandoned",
+  "review.fix_commit_history": "{{.V0}} fixed record(s) name a fix_commit that is not in the history of this batch",
+  "review.fix_commit_not_found": "fix_commit is not a commit in this repository",
+  "review.fix_commit_not_ancestor": "{{.V0}} is not an ancestor of {{.V1}}",
+  "review.fix_commit_next": "Next step: when a rebase rewrote a fix commit, its author appends a correction record for each listed record. previous_record_id names the listed record, the status stays, and fix_commit becomes the rewritten commit that carries the same fix (compare with git patch-id --stable). Ask for it with kander notify --kind sync, then run kander review aggregate again before closing. See snippets/execute-group-member.md \"Author Records After a Rebase\".",
+  "review.fix_commit_not_later": "fix_commit is the reviewed commit {{.V0}} of its run; the fix must be a later commit"
 }
