@@ -25,7 +25,7 @@ A rebase rewrites commits. An author record with status `fixed` names a `fix_com
 - A batch is not closed when `kander show --document reviews/batches/<batch_id>/closed.json <task-id>` fails with `board.document_not_found`. Keep only the runs of those batches.
 - Take the record IDs from the card-relative record paths that `IMPLEMENTATION` holds (`snippets/fix-round.md` requires them). When a path is missing, stop the correction and report the gap to the orchestrator, who decides from the review records of the batch. Never guess a record ID. Never list a directory through the path that `kander show` prints.
 - Read each record with `kander show --document reviews/<run_id>/dispositions/<record_id>.json <task-id>`. For each `(run_id, finding_id)`, follow `previous_record_id` to the last record of the chain, and keep it when its `status` is `fixed`. `kander review progress` lists no author records and cannot replace this step.
-- For each kept record, run `git merge-base --is-ancestor <fix_commit> <new delivery commit>`. The record is invalid when the exit code is not 0, or when the commit no longer exists in the repository.
+- For each kept record, run `git merge-base --is-ancestor <fix_commit> <new delivery commit>`. The record is invalid when the exit code is not 0, or when the commit no longer exists in the repository. When the orchestrator's message names a record with a failed relation from `kander review close`, check that relation too, with the commit it names in place of the delivery commit. A record that passes every check needs no correction.
 
 **Appending the Correction Record**
 
@@ -36,4 +36,4 @@ A rebase rewrites commits. An author record with status `fixed` names a `fix_com
 
 **A Sync Round for Corrections Only**
 
-- Use these steps when the sync message asks only for correction records, because the task branch needs no rebase. Do not rebase, commit, or push. Append the correction records. Write one `IMPLEMENTATION` entry with the card-relative paths of the records and the unchanged delivery commit. Then run `kander move <task-id> review` with the unchanged delivery commit as the delivery commit.
+- Use these steps when the sync message asks only for correction records, because the task branch needs no rebase. Do not rebase, commit, or push. Append the correction records. Write one `IMPLEMENTATION` entry with the card-relative paths of the records and the unchanged delivery commit. Then run `kander move <task-id> review` with the unchanged delivery commit as the delivery commit. When a record the orchestrator named passes every check, correct nothing for it and say so in the `IMPLEMENTATION` entry: the cause is then in the close request, not in the record.

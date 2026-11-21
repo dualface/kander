@@ -389,7 +389,7 @@ The task `OWNER` resolves assigned findings by submitting disposition records:
 
 A `fixed` record names a `fix_commit`, and closing binds it to the history of the batch. For the latest record of each `(run_id, finding_id, task_id)` chain in every successful run of a closed role, `kander review close` needs these Git relations:
 
-- The reviewed commit of the run is an ancestor of the `fix_commit`.
+- The `fix_commit` is a strict descendant of the reviewed commit of the run. A `fix_commit` equal to that commit is listed as an affected record too.
 - The `fix_commit` is an ancestor of the batch target.
 - For a must-fix finding of a run that is not the conclusion run, the `fix_commit` is an ancestor of the reviewed commit of the conclusion run.
 - For a mechanical fix in the conclusion run, the `fix_commit` is an ancestor of `passed_at`.
@@ -491,7 +491,7 @@ kander review close <CWD> <close-request.json>
 }
 ```
 
-Before it checks any single Git edge, `review close` checks the fixed records of [Fix Commits Must Stay in the Batch History](#fix-commits-must-stay-in-the-batch-history). When a record fails a relation, or its `fix_commit` is not a commit of the repository, the command writes no closure and fails with one error. The error opens with the literal `Git ancestry` in every language, lists every affected record with `task_id`, `run_id`, `finding_id`, `record_id`, `fix_commit`, and the failed relation (or that the commit does not exist), and ends with a next step in the configured language. After the author appended the corrections, run `kander review aggregate` again, because the view hash changes, and close.
+Before it checks any single Git edge, `review close` checks the fixed records of [Fix Commits Must Stay in the Batch History](#fix-commits-must-stay-in-the-batch-history). When a record fails a relation, or its `fix_commit` is not a commit of the repository, the command writes no closure and fails with one error. The error opens with the literal `Git ancestry` in every language, lists every affected record with `task_id`, `run_id`, `finding_id`, `record_id`, `fix_commit`, and the failed relation (or that the commit does not exist), and ends with a next step in the configured language. After the author appended the corrections, run `kander review aggregate` again, because the view hash changes, and close. When a listed record is correct and the failed relation is one the author cannot change (for example a mechanical fix that comes after `passed_at`), the cause is in the close request: correct it, or run an incremental review that covers the fix.
 
 A batch with a delivery closes only at its exact target `HEAD` on a clean worktree. A batch with no delivery commit closes at any `HEAD` that still holds its target, with a dirty worktree; see [Batches With No Delivery Commit](#batches-with-no-delivery-commit).
 
