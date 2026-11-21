@@ -73,6 +73,9 @@ type reviewContext struct {
 	tempRoot        string
 	instruction     string
 	promptFilePaths map[string]string
+	// rulesDir is the installed rules directory for the {rules_dir} placeholder of args.review. It stays empty when
+	// that directory does not exist, which drops the element and the flag before it.
+	rulesDir string
 	// reportLanguage is the config agent_language; the reviewer writes its report in it. Empty leaves the language unspecified.
 	reportLanguage string
 	// resolved is the REVIEW_<ROLE>_RESOLVED record of a task-bound run; empty when no bound card pins anything.

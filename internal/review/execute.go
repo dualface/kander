@@ -43,6 +43,15 @@ func executeReview(ctx reviewContext, abort <-chan os.Signal) int {
 	return code
 }
 
+// existingDir returns dir when it names an existing directory and "" otherwise,
+// so an argv element built from it is dropped when the directory is missing.
+func existingDir(dir string) string {
+	if info, err := os.Stat(dir); dir != "" && err == nil && info.IsDir() {
+		return dir
+	}
+	return ""
+}
+
 // reviewReadGroups returns the local groups the embedded definition of agent grants read access to the review
 // runtime. They apply only on Windows; other platforms get nil.
 func reviewReadGroups(agent string) []string {
@@ -185,6 +194,7 @@ func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os
 	if err != nil {
 		paths = config.InstallPaths{}
 	}
+	ctx.rulesDir = existingDir(paths.RulesDir)
 	if err := process.WriteTaskFile(runtime, promptFile, promptBody, process.TaskFileTrailerFor(paths.RulesDir)); err != nil {
 		fail(err)
 		return exitCode
