@@ -47,10 +47,9 @@ func TestCustomAgentProgramStatus(t *testing.T) {
 		{"reports": true},
 		{"reports": true, "app": " "},
 		{"reports": false, "app": "x"},
-		{"reports": true, "app": "x", "kind": "y"},
 	} {
 		_, err := validateAgentDefinitions(map[string]any{"claude": map[string]any{"program_status": invalid}})
-		if err == nil || !strings.Contains(err.Error(), "program_status") && !strings.Contains(err.Error(), `unknown field "kind"`) {
+		if err == nil || !strings.Contains(err.Error(), "program_status") {
 			t.Fatalf("program_status %v accepted: %v", invalid, err)
 		}
 	}

@@ -53,6 +53,12 @@ func repairAt(path string, adjust func(*Config)) (*Config, RepairResult, error) 
 	if !json.Valid(data) {
 		raw = nil
 	}
+	// Repair works on the settings this version knows. What it ignores stays in the
+	// file: saveConfigAt writes it back, and the comparison below counts it as kept.
+	var kept []Ignored
+	if obj, ok := raw.(map[string]any); ok {
+		kept = ignoredOfDocument(obj)
+	}
 	cfg, err := repairValues(raw)
 	if err != nil {
 		return nil, result, err
@@ -60,7 +66,7 @@ func repairAt(path string, adjust func(*Config)) (*Config, RepairResult, error) 
 	if adjust != nil {
 		adjust(cfg)
 	}
-	payload, err := encodeConfig(cfg)
+	payload, err := encodeConfigKeeping(cfg, kept)
 	if err != nil {
 		return nil, result, err
 	}
@@ -121,11 +127,12 @@ func repairValues(raw any) (*Config, error) {
 		}
 	}
 	if raw, ok := provided["agents"]; ok {
-		definitions, err := validateAgentDefinitions(raw)
+		definitions, unusable, err := agentEntries(raw)
 		if err != nil {
 			return nil, err
 		}
 		defaults.Agents = definitions
+		defaults.UnusableAgents = unusableReasons(unusable)
 		customModelDefaults(definitions, &defaults.Models)
 	}
 	if rawReviewers, ok := asObject(provided["reviewers"]); ok {
@@ -155,7 +162,7 @@ func repairValues(raw any) (*Config, error) {
 			}
 		}
 	}
-	if agent, err := validateChoice(provided["kanban_agent"], AgentNames(defaults), "kanban_agent"); err == nil {
+	if agent, err := validateAgentRef(provided["kanban_agent"], AgentNames(defaults), "kanban_agent"); err == nil {
 		defaults.KanbanAgent = agent
 		for _, scale := range TaskScales {
 			defaults.KanbanAgents[scale] = agent

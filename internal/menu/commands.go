@@ -92,6 +92,7 @@ func runConfig() int {
 	if err != nil {
 		return command.Fail(err)
 	}
+	notifyForwardCompat(cfg)
 	if command.JSON() {
 		for _, warning := range config.AgentWarnings(cfg) {
 			command.Notify("agent_warning", warning)
@@ -102,6 +103,27 @@ func runConfig() int {
 		return command.Fail(err)
 	}
 	return 0
+}
+
+// notifyForwardCompat reports what this version ignored in the configuration and the roles that
+// name an agent it cannot use. Each item is one notice: unusable agents and unknown agent
+// references carry agent_unusable, every other ignored item config_ignored. Without --json the
+// notices go to stderr, with --json into the notices field, so stdout stays what the settings
+// alone produce.
+func notifyForwardCompat(cfg *config.Config) {
+	if cfg == nil {
+		return
+	}
+	for _, item := range cfg.Ignored {
+		code := "config_ignored"
+		if item.Kind == config.IgnoredUnusableAgent {
+			code = "agent_unusable"
+		}
+		command.Notify(code, config.IgnoredNotice(item))
+	}
+	for _, notice := range config.UnknownAgentRefNotices(cfg) {
+		command.Notify("agent_unusable", notice)
+	}
 }
 
 // doctorLine is one report line of the result of kander doctor.

@@ -1,0 +1,11 @@
+{
+  "config.agent_unknown_reference": "このバージョンの Kander は agent {{.V0}} を認識しません。新しいバージョンが書き込んだ可能性があります。既知の agent を使うか、Kander を更新してください",
+  "config.agent_unusable": "agent {{.V0}} は利用できません: {{.V1}}",
+  "config.agent_unusable_session_mode": "session.mode {{printf \"%q\" .V0}} はこのバージョンでは登録されていません",
+  "config.ignored_agent": "{{.V0}} を無視しました: このバージョンはその agent を認識しません。エントリはファイルに残ります",
+  "config.ignored_field": "{{.V0}} を無視しました: このバージョンでは定義されていません。値はファイルに残ります",
+  "config.ignored_from": "{{.V0}} ({{.V1}} 内)",
+  "config.ignored_unusable_agent": "agent エントリ {{.V0}} は利用できません: {{.V1}}。エントリはファイルに残ります",
+  "config.unknown_agent_reference_notice": "{{.V0}} はこのバージョンが認識しない agent {{.V1}} を指しています。変更するか Kander を更新するまで、そのロールの利用は失敗します",
+  "menu.doctor_ignored_heading": "このバージョンは次の設定を無視します。新しいバージョンが書き込んだ可能性があり、保存してもそのまま残ります:"
+}

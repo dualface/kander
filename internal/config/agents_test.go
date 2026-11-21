@@ -73,8 +73,8 @@ func TestAgentDefinitionValidation(t *testing.T) {
 		{"control", map[string]any{"path": "bad\tvalue"}, true},
 		{"process-control", map[string]any{"process_name": "node\x7f"}, true},
 		{"process-empty", map[string]any{"process_name": ""}, true},
-		{"unknown", map[string]any{"typo": "x"}, true},
-		{"dialect", map[string]any{"dialect": "other"}, true},
+		{"unknown", map[string]any{"typo": "x"}, false},
+		{"dialect", map[string]any{"dialect": "other"}, false},
 		{"null-args", map[string]any{"args": nil}, true},
 		{"bad-args", map[string]any{"args": map[string]any{"start": []string{}, "typo": true}}, true},
 		{"missing-start", map[string]any{"args": map[string]any{"resume": []string{}}}, true},
@@ -86,13 +86,13 @@ func TestAgentDefinitionValidation(t *testing.T) {
 		{"discovered", map[string]any{"session": map[string]any{"mode": "discovered"}}, true},
 		{"hook-codex", map[string]any{"args": map[string]any{"start": []string{}, "resume": []string{}}, "session": map[string]any{"mode": "hook:codex-rollout"}}, false},
 		{"hook-cursor", map[string]any{"args": map[string]any{"start": []string{}, "resume": []string{}}, "session": map[string]any{"mode": "hook:cursor-create-chat"}}, false},
-		{"hook-devin", map[string]any{"args": map[string]any{"start": []string{}, "resume": []string{}}, "session": map[string]any{"mode": "hook:devin-session"}}, true},
-		{"hook-unknown", map[string]any{"args": map[string]any{"start": []string{}, "resume": []string{}}, "session": map[string]any{"mode": "hook:not-registered"}}, true},
+		{"hook-devin", map[string]any{"args": map[string]any{"start": []string{}, "resume": []string{}}, "session": map[string]any{"mode": "hook:devin-session"}}, false},
+		{"hook-unknown", map[string]any{"args": map[string]any{"start": []string{}, "resume": []string{}}, "session": map[string]any{"mode": "hook:not-registered"}}, false},
 		{"exit-ok", map[string]any{"exit_command": "/bye"}, false},
 		{"exit-empty", map[string]any{"exit_command": ""}, false},
 		{"exit-multiline", map[string]any{"exit_command": "/bye\n/extra"}, true},
 		{"exit-control", map[string]any{"exit_command": "/bye\t"}, true},
-		{"unknown-session", map[string]any{"session": map[string]any{"mode": "generated", "typo": 1}}, true},
+		{"unknown-session", map[string]any{"session": map[string]any{"mode": "generated", "typo": 1}}, false},
 		{"allocate", map[string]any{"session": map[string]any{"mode": "allocated", "allocate": []string{executable, "allocate"}, "json_field": "id"}}, false},
 		{"bad-allocate", map[string]any{"session": map[string]any{"mode": "allocated", "allocate": []string{executable, "bad\narg"}}}, true},
 		{"missing-allocate", map[string]any{"session": map[string]any{"mode": "allocated", "allocate": []string{filepath.Join(t.TempDir(), "missing"), "allocate"}}}, false},
@@ -174,8 +174,12 @@ func TestCustomAgentsModelsAndRepair(t *testing.T) {
 	}
 	cfg.Agents["plain"] = AgentDefinition{}
 	data, _ = json.Marshal(cfg)
-	if _, err := ValidateJSON(data); err == nil {
-		t.Fatal("missing adapter accepted")
+	loaded, err := ValidateJSON(data)
+	if err != nil {
+		t.Fatalf("an entry without an adapter fails the configuration: %v", err)
+	}
+	if HasAgent(loaded, "plain") || loaded.UnusableAgents["plain"] == "" {
+		t.Fatalf("an entry without an adapter must be an unusable agent: %v", loaded.UnusableAgents)
 	}
 }
 
@@ -211,8 +215,12 @@ func TestUnregisteredSessionHookNamesAgentAndHook(t *testing.T) {
 		"session": map[string]any{"mode": "hook:missing-hook"},
 	}}
 	data, _ := json.Marshal(root)
-	_, err := ValidateJSON(data)
-	if err == nil || !strings.Contains(err.Error(), "helper") || !strings.Contains(err.Error(), "missing-hook") {
+	cfg, err := ValidateJSON(data)
+	if err != nil {
+		t.Fatalf("an unregistered session hook fails the configuration: %v", err)
+	}
+	err = UnavailableAgentError(cfg, "helper")
+	if err == nil || !strings.Contains(err.Error(), "helper") || !strings.Contains(err.Error(), "hook:missing-hook") {
 		t.Fatalf("err=%v", err)
 	}
 }

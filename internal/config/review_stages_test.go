@@ -38,16 +38,13 @@ func TestValidateReviewStagesScaledAndFlat(t *testing.T) {
 	}
 }
 
-func TestValidateReviewStagesRejectsUnknownAndMixed(t *testing.T) {
+func TestValidateReviewStagesRejectsInvalidAndMixed(t *testing.T) {
 	setupHome(t)
 	cases := []struct {
 		name     string
 		stages   any
 		fragment string
 	}{
-		{"unknown scale", map[string]any{"medium": map[string]any{"PM": "auto"}}, "未知档名"},
-		{"unknown role flat", map[string]any{"Owner": "auto"}, "未知角色"},
-		{"unknown role scaled", map[string]any{"large": map[string]any{"Owner": "auto"}}, "未知角色"},
 		{"invalid mode", map[string]any{"PM": "always"}, "review_stages.large.PM"},
 		{"mixed", map[string]any{"large": map[string]any{"PM": "auto"}, "PM": "auto"}, "PM, large"},
 		{"not object", "auto", "必须是 JSON object"},

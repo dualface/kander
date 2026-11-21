@@ -114,11 +114,13 @@ func planToolReplacements(cfg *config.Config, agents map[string]agentState, chat
 	execution := usableAgentNames(config.AgentNames(cfg), agents, false)
 	reviewers := usableAgentNames(config.ReviewAgentNames(cfg), agents, true)
 	var plans []toolReplacement
-	if !agentUsable(agents[cfg.KanbanAgent]) {
+	// An agent this version does not know is a reference a newer version wrote;
+	// repair never replaces it, since the agent may be fine where it was written.
+	if config.HasAgent(cfg, cfg.KanbanAgent) && !agentUsable(agents[cfg.KanbanAgent]) {
 		plans = append(plans, toolReplacement{field: "kanban_agent", current: cfg.KanbanAgent, candidates: execution})
 	}
 	for _, scale := range config.TaskScales {
-		if selected := cfg.KanbanAgents[scale]; !agentUsable(agents[selected]) {
+		if selected := cfg.KanbanAgents[scale]; config.HasAgent(cfg, selected) && !agentUsable(agents[selected]) {
 			plans = append(plans, toolReplacement{
 				field: "kanban_agents." + scale, current: selected, candidates: execution,
 				defaultFrom: "kanban_agent", fallback: cfg.KanbanAgent,
@@ -127,7 +129,7 @@ func planToolReplacements(cfg *config.Config, agents map[string]agentState, chat
 	}
 	// A chat_agent absent from the document inherits the repaired large-scale
 	// agent at apply time, so only an explicitly configured value prompts.
-	if chatExplicit && cfg.ChatAgent != "" && !agentUsable(agents[cfg.ChatAgent]) {
+	if chatExplicit && cfg.ChatAgent != "" && config.HasAgent(cfg, cfg.ChatAgent) && !agentUsable(agents[cfg.ChatAgent]) {
 		plans = append(plans, toolReplacement{
 			field: "chat_agent", current: cfg.ChatAgent, candidates: execution,
 			defaultFrom: "kanban_agents.large",
@@ -135,7 +137,7 @@ func planToolReplacements(cfg *config.Config, agents map[string]agentState, chat
 	}
 	for _, scale := range config.TaskScales {
 		for _, role := range config.ReviewRoles {
-			if selected := cfg.Reviewers[scale][role]; !reviewerUsable(agents[selected]) {
+			if selected := cfg.Reviewers[scale][role]; config.HasAgent(cfg, selected) && !reviewerUsable(agents[selected]) {
 				plans = append(plans, toolReplacement{
 					field: "reviewers." + scale + "." + role, current: selected, candidates: reviewers,
 				})
@@ -253,7 +255,7 @@ func repairConfiguredTools(cfg, policy *config.Config, agents map[string]agentSt
 	noCandidate := func(field, current string) {
 		warnings = append(warnings, text("menu.no_usable_agent_replacement_for_keeping", field, current))
 	}
-	if !agentUsable(agents[cfg.KanbanAgent]) {
+	if config.HasAgent(cfg, cfg.KanbanAgent) && !agentUsable(agents[cfg.KanbanAgent]) {
 		replacement := pick("kanban_agent", execution, "")
 		if replacement == "" {
 			noCandidate("kanban_agent", cfg.KanbanAgent)
@@ -262,7 +264,7 @@ func repairConfiguredTools(cfg, policy *config.Config, agents map[string]agentSt
 	}
 	for _, scale := range config.TaskScales {
 		selected := cfg.KanbanAgents[scale]
-		if agentUsable(agents[selected]) {
+		if agentUsable(agents[selected]) || !config.HasAgent(cfg, selected) {
 			continue
 		}
 		replacement := pick("kanban_agents."+scale, execution, cfg.KanbanAgent)
@@ -276,7 +278,7 @@ func repairConfiguredTools(cfg, policy *config.Config, agents map[string]agentSt
 	if cfg.ChatAgent == "" {
 		cfg.ChatAgent = cfg.KanbanAgents["large"]
 	}
-	if !agentUsable(agents[cfg.ChatAgent]) {
+	if config.HasAgent(cfg, cfg.ChatAgent) && !agentUsable(agents[cfg.ChatAgent]) {
 		preferred := ""
 		if !decisions.chatExplicit {
 			// A derived chat_agent follows the repaired large-scale agent.
@@ -294,7 +296,7 @@ func repairConfiguredTools(cfg, policy *config.Config, agents map[string]agentSt
 		}
 		for _, role := range config.ReviewRoles {
 			selected := cfg.Reviewers[scale][role]
-			if reviewerUsable(agents[selected]) {
+			if reviewerUsable(agents[selected]) || !config.HasAgent(cfg, selected) {
 				continue
 			}
 			replacement := pick("reviewers."+scale+"."+role, reviewers, "")

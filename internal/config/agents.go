@@ -99,6 +99,9 @@ func AgentNames(cfg *Config) []string {
 				custom = append(custom, name)
 			}
 		}
+		// An unusable entry also takes its built-in namesake out of service: running
+		// the embedded definition would silently ignore what the user declared.
+		names = slices.DeleteFunc(names, func(name string) bool { _, bad := cfg.UnusableAgents[name]; return bad })
 	}
 	sort.Strings(custom)
 	return append(names, custom...)
@@ -192,7 +195,7 @@ func LoadAgent(name string) (AgentDefinition, error) {
 		return AgentDefinition{}, err
 	}
 	if !HasAgent(cfg, name) {
-		return AgentDefinition{}, choiceError("agent", strings.Join(AgentNames(cfg), ", "))
+		return AgentDefinition{}, UnavailableAgentError(cfg, name)
 	}
 	return AgentFor(cfg, name), nil
 }
@@ -272,159 +275,200 @@ func validateAgentProgram(path string) bool {
 	return !strings.ContainsAny(path, `/\`) || filepath.IsAbs(path)
 }
 
+// validateAgentDefinitions validates the agents section. An entry this version
+// cannot turn into a usable agent is not an error; see agentEntries.
 func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
+	defs, _, err := agentEntries(raw)
+	return defs, err
+}
+
+// agentEntries validates every agents.<name> entry. Entries that are valid become
+// definitions. Entries that only a newer version can make sense of (a built-in-only
+// key on a custom name, an unknown dialect, a missing adapter, an unregistered
+// session.mode) are returned as unusable and never fail the configuration. Any
+// other problem is a hard error; the first one in name order is returned, and the
+// valid entries are still returned for tolerant callers.
+func agentEntries(raw any) (map[string]AgentDefinition, map[string]unusableAgent, error) {
 	obj, ok := asObject(raw)
 	if !ok {
-		return nil, agentDefinitionError("agents", Text("config.agent_object"))
+		return nil, nil, agentDefinitionError("agents", Text("config.agent_object"))
 	}
 	out := map[string]AgentDefinition{}
-	for name, value := range obj {
-		if !ValidAgentName(name) {
-			return nil, agentDefinitionError(name, Text("config.agent_name"))
-		}
-		fields, ok := asObject(value)
-		if !ok {
-			return nil, agentDefinitionError(name, Text("config.agent_object"))
-		}
-		if v, exists := fields["install_rules"]; exists {
-			if _, builtin := embeddedByName(name); !builtin {
-				return nil, agentDefinitionError(name, Text("config.agent_install_rules_builtin_only"))
-			}
-			if _, ok := v.(bool); !ok {
-				return nil, agentDefinitionError(name, Text("config.agent_install_rules"))
-			}
-		}
-		data, _ := json.Marshal(fields)
-		var d AgentDefinition
-		dec := json.NewDecoder(bytes.NewReader(data))
-		dec.DisallowUnknownFields()
-		if err := dec.Decode(&d); err != nil {
-			return nil, agentDefinitionError(name, err.Error())
-		}
-		for _, key := range []string{"path", "process_name", "dialect"} {
-			if v, exists := fields[key]; exists {
-				s, ok := v.(string)
-				if !ok || !validAgentText(s) {
-					return nil, agentDefinitionError(name, Text("config.agent_text", key))
-				}
-			}
-		}
-		if v, exists := fields["config_dir"]; exists {
-			emb, builtin := embeddedByName(name)
-			if !builtin {
-				return nil, agentDefinitionError(name, Text("config.agent_config_dir_builtin_only"))
-			}
-			if emb.ConfigHome.Fixed {
-				return nil, agentDefinitionError(name, Text("config.agent_config_dir_fixed"))
-			}
-			s, ok := v.(string)
-			if !ok || !validConfigDirValue(s) {
-				return nil, agentDefinitionError(name, Text("config.agent_config_dir"))
-			}
-		}
-		for _, key := range []string{"args", "session", "prompt_delivery", "review", "program_status"} {
-			if v, exists := fields[key]; exists {
-				if _, ok := asObject(v); !ok {
-					return nil, agentDefinitionError(name, Text("config.agent_object"))
-				}
-			}
-		}
-		if d.SchemaVersion != 0 && d.SchemaVersion != embeddedAgentSchemaVersion {
-			return nil, agentDefinitionError(name, Text("config.agent_schema_version"))
-		}
-		if err := validatePromptDelivery(name, d.PromptDelivery); err != nil {
-			return nil, err
-		}
-		if !validProgramStatus(d.ProgramStatus) {
-			return nil, agentDefinitionError(name, Text("program_status.agent_definition_invalid"))
-		}
-		if d.Path != "" && !validateAgentProgram(d.Path) {
-			return nil, agentDefinitionError(name, Text("config.agent_path", d.Path))
-		}
-		if d.Dialect != "" && !contains(ExecutionAgents, d.Dialect) {
-			return nil, agentDefinitionError(name, Text("config.agent_dialect"))
-		}
-		if d.Dialect == "" && d.Args == nil && !contains(ExecutionAgents, name) {
-			return nil, agentDefinitionError(name, Text("config.agent_adapter"))
-		}
-		if d.Args != nil {
-			if d.Args.Start == nil {
-				return nil, agentDefinitionError(name, Text("config.agent_start"))
-			}
-			for _, args := range [][]string{d.Args.Start, d.Args.Resume} {
-				for _, arg := range args {
-					if !validAgentText(arg) || invalidPlaceholder(arg) {
-						return nil, agentDefinitionError(name, Text("config.agent_template"))
-					}
-				}
-			}
-		}
-		if v, exists := fields["exit_command"]; exists {
-			s, ok := v.(string)
-			if !ok || !validExitCommandText(s) {
-				return nil, agentDefinitionError(name, Text("config.agent_exit_command"))
-			}
-		}
-		if d.Session != nil {
-			s := d.Session
-			if hookName, isHook := ParseSessionHook(s.Mode); isHook {
-				if _, ok := LookupSessionHook(s.Mode); !ok {
-					return nil, agentDefinitionError(name, Text("config.agent_session_hook", name, hookName))
-				}
-			} else if !contains([]string{"generated", "allocated", "none", "discovered"}, s.Mode) {
-				return nil, agentDefinitionError(name, Text("config.agent_session"))
-			}
-			if err := validateSessionDiscovery(name, s); err != nil {
-				return nil, err
-			}
-			if err := validateSessionFile(name, s); err != nil {
-				return nil, err
-			}
-			if s.Mode == "allocated" {
-				if len(s.Allocate) == 0 || !validateAgentProgram(s.Allocate[0]) {
-					return nil, agentDefinitionError(name, Text("config.agent_allocate"))
-				}
-				for _, arg := range s.Allocate {
-					if !validAgentText(arg) {
-						return nil, agentDefinitionError(name, Text("config.agent_allocate"))
-					}
-				}
-				if s.JSONField != "" && !validAgentText(s.JSONField) {
-					return nil, agentDefinitionError(name, Text("config.agent_allocate"))
-				}
-			} else if len(s.Allocate) != 0 || s.JSONField != "" {
-				return nil, agentDefinitionError(name, Text("config.agent_allocate_only"))
-			}
-		}
-		resolved := AgentFor(&Config{Agents: map[string]AgentDefinition{name: d}}, name)
-		if d.Args == nil && d.Session != nil && d.Session.Mode != "none" {
-			inherited := ""
-			if emb, ok := embeddedByName(resolved.Dialect); ok {
-				inherited = emb.Session.Mode
-			}
-			// An allocation hook and an explicit allocator both supply the ID
-			// consumed by the inherited resume arguments.
-			compatibleAllocator := d.Session.Mode == "allocated" && SessionAllocatesBeforeStart(&AgentSessionDefinition{Mode: inherited})
-			if inherited != "" && d.Session.Mode != inherited && !compatibleAllocator {
-				// Hook and discovery modes produce an agent-native id; a foreign
-				// mode would feed an incompatible value into the inherited argv.
-				if _, isHook := LookupSessionHook(inherited); isHook || inherited == "discovered" {
-					return nil, agentDefinitionError(name, Text("config.agent_session_dialect", resolved.Dialect, d.Session.Mode))
-				}
-			}
-		}
-		if d.Args != nil && d.Dialect == "" && d.Session == nil && !contains(ExecutionAgents, name) {
-			return nil, agentDefinitionError(name, Text("config.agent_session_required"))
-		}
-		if d.Args != nil && resolved.Session.Mode != "none" && d.Args.Resume == nil {
-			return nil, agentDefinitionError(name, Text("config.agent_resume"))
-		}
-		if err := validateReviewDefinition(name, d); err != nil {
-			return nil, err
-		}
-		out[name] = d
+	unusable := map[string]unusableAgent{}
+	var firstErr error
+	names := make([]string, 0, len(obj))
+	for name := range obj {
+		names = append(names, name)
 	}
-	return out, nil
+	sort.Strings(names)
+	for _, name := range names {
+		d, reason, err := validateAgentEntry(name, obj[name])
+		switch {
+		case err != nil:
+			if firstErr == nil {
+				firstErr = err
+			}
+		case reason != "":
+			unusable[name] = unusableAgent{Reason: reason, Value: obj[name]}
+		default:
+			out[name] = d
+		}
+	}
+	return out, unusable, firstErr
+}
+
+// validateAgentEntry checks one agents.<name> entry. A non-empty reason means the
+// entry is unusable in this version without being invalid.
+func validateAgentEntry(name string, value any) (d AgentDefinition, reason string, err error) {
+	if !ValidAgentName(name) {
+		return d, "", agentDefinitionError(name, Text("config.agent_name"))
+	}
+	fields, ok := asObject(value)
+	if !ok {
+		return d, "", agentDefinitionError(name, Text("config.agent_object"))
+	}
+	_, builtin := embeddedByName(name)
+	// Entries a newer version wrote for an agent it ships as built-in: the keys
+	// below exist only for built-in names, so on a custom name they mark an agent
+	// this version does not have.
+	if _, exists := fields["install_rules"]; exists && !builtin {
+		return d, Text("config.agent_install_rules_builtin_only"), nil
+	}
+	if _, exists := fields["config_dir"]; exists && !builtin {
+		return d, Text("config.agent_config_dir_builtin_only"), nil
+	}
+	if v, exists := fields["install_rules"]; exists {
+		if _, ok := v.(bool); !ok {
+			return d, "", agentDefinitionError(name, Text("config.agent_install_rules"))
+		}
+	}
+	data, _ := json.Marshal(fields)
+	// Unknown keys are ignored here; scanIgnored reports them.
+	if err := json.NewDecoder(bytes.NewReader(data)).Decode(&d); err != nil {
+		return d, "", agentDefinitionError(name, err.Error())
+	}
+	for _, key := range []string{"path", "process_name", "dialect"} {
+		if v, exists := fields[key]; exists {
+			s, ok := v.(string)
+			if !ok || !validAgentText(s) {
+				return d, "", agentDefinitionError(name, Text("config.agent_text", key))
+			}
+		}
+	}
+	if d.Dialect != "" && !contains(ExecutionAgents, d.Dialect) {
+		return d, Text("config.agent_dialect"), nil
+	}
+	if d.Dialect == "" && d.Args == nil && !contains(ExecutionAgents, name) {
+		return d, Text("config.agent_adapter"), nil
+	}
+	if d.Session != nil && d.Session.Mode != "" && !validDeclaredSessionMode(d.Session.Mode) {
+		return d, Text("config.agent_unusable_session_mode", d.Session.Mode), nil
+	}
+	if v, exists := fields["config_dir"]; exists {
+		emb, _ := embeddedByName(name)
+		if emb.ConfigHome.Fixed {
+			return d, "", agentDefinitionError(name, Text("config.agent_config_dir_fixed"))
+		}
+		s, ok := v.(string)
+		if !ok || !validConfigDirValue(s) {
+			return d, "", agentDefinitionError(name, Text("config.agent_config_dir"))
+		}
+	}
+	for _, key := range []string{"args", "session", "prompt_delivery", "review", "program_status"} {
+		if v, exists := fields[key]; exists {
+			if _, ok := asObject(v); !ok {
+				return d, "", agentDefinitionError(name, Text("config.agent_object"))
+			}
+		}
+	}
+	if d.SchemaVersion != 0 && d.SchemaVersion != embeddedAgentSchemaVersion {
+		return d, "", agentDefinitionError(name, Text("config.agent_schema_version"))
+	}
+	if err := validatePromptDelivery(name, d.PromptDelivery); err != nil {
+		return d, "", err
+	}
+	if !validProgramStatus(d.ProgramStatus) {
+		return d, "", agentDefinitionError(name, Text("program_status.agent_definition_invalid"))
+	}
+	if d.Path != "" && !validateAgentProgram(d.Path) {
+		return d, "", agentDefinitionError(name, Text("config.agent_path", d.Path))
+	}
+	if d.Args != nil {
+		if d.Args.Start == nil {
+			return d, "", agentDefinitionError(name, Text("config.agent_start"))
+		}
+		for _, args := range [][]string{d.Args.Start, d.Args.Resume} {
+			for _, arg := range args {
+				if !validAgentText(arg) || invalidPlaceholder(arg) {
+					return d, "", agentDefinitionError(name, Text("config.agent_template"))
+				}
+			}
+		}
+	}
+	if v, exists := fields["exit_command"]; exists {
+		s, ok := v.(string)
+		if !ok || !validExitCommandText(s) {
+			return d, "", agentDefinitionError(name, Text("config.agent_exit_command"))
+		}
+	}
+	if d.Session != nil {
+		s := d.Session
+		if hookName, isHook := ParseSessionHook(s.Mode); isHook {
+			if _, ok := LookupSessionHook(s.Mode); !ok {
+				return d, "", agentDefinitionError(name, Text("config.agent_session_hook", name, hookName))
+			}
+		} else if !contains([]string{"generated", "allocated", "none", "discovered"}, s.Mode) {
+			return d, "", agentDefinitionError(name, Text("config.agent_session"))
+		}
+		if err := validateSessionDiscovery(name, s); err != nil {
+			return d, "", err
+		}
+		if err := validateSessionFile(name, s); err != nil {
+			return d, "", err
+		}
+		if s.Mode == "allocated" {
+			if len(s.Allocate) == 0 || !validateAgentProgram(s.Allocate[0]) {
+				return d, "", agentDefinitionError(name, Text("config.agent_allocate"))
+			}
+			for _, arg := range s.Allocate {
+				if !validAgentText(arg) {
+					return d, "", agentDefinitionError(name, Text("config.agent_allocate"))
+				}
+			}
+			if s.JSONField != "" && !validAgentText(s.JSONField) {
+				return d, "", agentDefinitionError(name, Text("config.agent_allocate"))
+			}
+		} else if len(s.Allocate) != 0 || s.JSONField != "" {
+			return d, "", agentDefinitionError(name, Text("config.agent_allocate_only"))
+		}
+	}
+	resolved := AgentFor(&Config{Agents: map[string]AgentDefinition{name: d}}, name)
+	if d.Args == nil && d.Session != nil && d.Session.Mode != "none" {
+		inherited := ""
+		if emb, ok := embeddedByName(resolved.Dialect); ok {
+			inherited = emb.Session.Mode
+		}
+		// An allocation hook and an explicit allocator both supply the ID
+		// consumed by the inherited resume arguments.
+		compatibleAllocator := d.Session.Mode == "allocated" && SessionAllocatesBeforeStart(&AgentSessionDefinition{Mode: inherited})
+		if inherited != "" && d.Session.Mode != inherited && !compatibleAllocator {
+			// Hook and discovery modes produce an agent-native id; a foreign
+			// mode would feed an incompatible value into the inherited argv.
+			if _, isHook := LookupSessionHook(inherited); isHook || inherited == "discovered" {
+				return d, "", agentDefinitionError(name, Text("config.agent_session_dialect", resolved.Dialect, d.Session.Mode))
+			}
+		}
+	}
+	if d.Args != nil && d.Dialect == "" && d.Session == nil && !contains(ExecutionAgents, name) {
+		return d, "", agentDefinitionError(name, Text("config.agent_session_required"))
+	}
+	if d.Args != nil && resolved.Session.Mode != "none" && d.Args.Resume == nil {
+		return d, "", agentDefinitionError(name, Text("config.agent_resume"))
+	}
+	if err := validateReviewDefinition(name, d); err != nil {
+		return d, "", err
+	}
+	return d, "", nil
 }
 
 func invalidPlaceholder(arg string) bool {

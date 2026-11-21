@@ -37,13 +37,22 @@ func TestReviewWindowsReadGroupsSurviveUserOverlay(t *testing.T) {
 	if got := ReviewWindowsReadGroups("codex"); !slices.Equal(got, []string{"CodexSandboxUsers"}) {
 		t.Fatalf("overlay changed the groups: %v", got)
 	}
+	// The key is ignored, never applied: the groups below stay the embedded ones.
+	top := map[string]any{"review_windows_read_groups": []string{"Users"}}
+	defs, err := validateAgentDefinitions(map[string]any{"codex": top})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := scanIgnored(map[string]any{"agents": map[string]any{"codex": top}}, defs, nil); len(got) != 1 {
+		t.Fatalf("a user declaration of review read groups must be reported as ignored: %v", got)
+	}
+	// Inside review the declaration is still rejected: review needs args.review beside it.
 	for _, overlay := range []map[string]any{
-		{"review_windows_read_groups": []string{"Users"}},
 		{"review": map[string]any{"review_windows_read_groups": []string{"Users"}}},
 		{"review": map[string]any{"windows_read_groups": []string{"Users"}}},
 	} {
 		if _, err := validateAgentDefinitions(map[string]any{"codex": overlay}); err == nil {
-			t.Fatalf("a user overlay must not declare review read groups: %v", overlay)
+			t.Fatalf("an incomplete review declaration was accepted: %v", overlay)
 		}
 	}
 	returned := ReviewWindowsReadGroups("codex")

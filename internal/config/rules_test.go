@@ -83,7 +83,7 @@ func TestRulesRejectInvalidSelectionsWithoutOverwriting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, raw := range []any{nil, true, map[string]any{"git": "true"}, map[string]any{"unknown": true}, map[string]any{"task_groups": true}} {
+	for _, raw := range []any{nil, true, map[string]any{"git": "true"}, map[string]any{"task_groups": true}} {
 		if _, err := Validate(minimalPayload(map[string]any{"rules": raw})); err == nil {
 			t.Fatalf("invalid rules accepted: %#v", raw)
 		}

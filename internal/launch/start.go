@@ -60,7 +60,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	}
 	agentName := choice.Agent
 	if !config.HasAgent(cfg, agentName) {
-		return result, launchError("launch.unsupported_agent", agentName)
+		return result, unavailableAgentError(cfg, agentName)
 	}
 	launcher := launcherOverride
 	if launcher == "" {

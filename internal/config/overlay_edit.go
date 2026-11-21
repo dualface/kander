@@ -264,7 +264,12 @@ func MergeScopeAndOverlay(scope *Config, overlay map[string]any) (*Config, error
 	if err != nil {
 		return nil, err
 	}
-	return MergeOverlayOnRaw(raw, overlay)
+	merged, err := MergeOverlayOnRaw(raw, overlay)
+	if err != nil {
+		return nil, err
+	}
+	carryIgnored(merged, scope)
+	return merged, nil
 }
 
 func encodeOverlay(obj map[string]any) ([]byte, error) {

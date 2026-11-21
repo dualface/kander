@@ -102,7 +102,7 @@ func loadEffective(cwd string, missingOK bool) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, overlayRaw, err := readOverlay(cwd)
+	overlayPath, overlayRaw, err := readOverlay(cwd)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,53 @@ func loadEffective(cwd string, missingOK bool) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	return Validate(merged)
+	effective, err := Validate(merged)
+	if err != nil {
+		return nil, err
+	}
+	markOverlayIgnored(effective, cfg, overlayPath, overlayRaw)
+	return effective, nil
+}
+
+// markOverlayIgnored names the overlay as the source of the ignored items that
+// the scope file does not carry, or that the overlay carries itself.
+func markOverlayIgnored(effective, scope *Config, overlayPath string, overlay map[string]any) {
+	inScope := make(map[string]struct{}, len(scope.Ignored))
+	for _, item := range scope.Ignored {
+		inScope[item.PathString()] = struct{}{}
+	}
+	for i := range effective.Ignored {
+		item := &effective.Ignored[i]
+		if _, ok := inScope[item.PathString()]; !ok || OverlayHas(overlay, item.Path...) {
+			item.Source = overlayPath
+		}
+	}
+}
+
+// carryIgnored keeps what the source configuration ignored when dst was built
+// again from a serialized copy of it, which cannot hold that content.
+func carryIgnored(dst, src *Config) {
+	if src == nil || dst == nil {
+		return
+	}
+	known := make(map[string]struct{}, len(dst.Ignored))
+	for _, item := range dst.Ignored {
+		known[item.PathString()] = struct{}{}
+	}
+	for _, item := range src.Ignored {
+		if _, ok := known[item.PathString()]; !ok {
+			dst.Ignored = append(dst.Ignored, item)
+		}
+	}
+	for name, reason := range src.UnusableAgents {
+		if _, usable := dst.Agents[name]; usable {
+			continue
+		}
+		if dst.UnusableAgents == nil {
+			dst.UnusableAgents = map[string]string{}
+		}
+		dst.UnusableAgents[name] = reason
+	}
 }
 
 // Load reads the scope config, merges a project overlay when present, and validates the result.
@@ -182,6 +228,7 @@ func Effective(cfg *Config) (*Config, error) {
 		if err != nil {
 			return nil, err
 		}
+		carryIgnored(validated, cfg)
 		cfg = validated
 	}
 	if cfg.WelcomeComplete {
@@ -260,6 +307,9 @@ func withConfigLockFile(dataPath, lockPath string, fn func() error) error {
 }
 
 // saveConfigAt validates and then atomically writes the given config.json.
+//
+// The file's current content is read inside the caller's lock, and what this version
+// ignores in it (see Ignored) is written back into the new document unchanged.
 func saveConfigAt(path string, cfg *Config) (string, error) {
 	encoded, err := json.Marshal(cfg)
 	if err != nil {
@@ -273,7 +323,7 @@ func saveConfigAt(path string, cfg *Config) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	payload, err := encodeConfig(validated)
+	payload, err := encodeConfigKeeping(validated, ignoredOfFile(path))
 	if err != nil {
 		return "", wrapSaveError(path, err)
 	}
@@ -376,6 +426,11 @@ func configEditConflicts(current, baseline, target *Config) bool {
 	baselineValue := reflect.ValueOf(*baseline)
 	targetValue := reflect.ValueOf(*target)
 	for i := 0; i < currentValue.NumField(); i++ {
+		// What this version ignores is kept from the file at save time, so a change
+		// to it by another writer is not a conflicting edit.
+		if name := currentValue.Type().Field(i).Name; name == "Ignored" || name == "UnusableAgents" {
+			continue
+		}
 		currentField := currentValue.Field(i).Interface()
 		baselineField := baselineValue.Field(i).Interface()
 		targetField := targetValue.Field(i).Interface()

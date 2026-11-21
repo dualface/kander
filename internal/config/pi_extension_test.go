@@ -60,10 +60,18 @@ func TestAgentExtensionSurvivesUserOverlay(t *testing.T) {
 	if !againOK || again != spec || len(data) == 0 {
 		t.Fatalf("overlay changed the extension spec: %+v %v", again, againOK)
 	}
-	if _, err := validateAgentDefinitions(map[string]any{
-		"pi": map[string]any{"rules_extension": map[string]any{"source": "x.ts", "global": "g", "project": "p"}},
-	}); err == nil {
-		t.Fatal("a user overlay must not declare rules_extension")
+	// A user overlay cannot declare rules_extension: the key is ignored and
+	// scanIgnored reports it, so it never reaches the installer.
+	overlay := map[string]any{"pi": map[string]any{"rules_extension": map[string]any{"source": "x.ts", "global": "g", "project": "p"}}}
+	defs, err := validateAgentDefinitions(overlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := scanIgnored(map[string]any{"agents": overlay}, defs, nil); len(got) != 1 || got[0].PathString() != "agents.pi.rules_extension" {
+		t.Fatalf("rules_extension not reported as ignored: %v", got)
+	}
+	if after, data, ok := AgentExtension("pi"); !ok || after != spec || len(data) == 0 {
+		t.Fatalf("a user overlay changed the extension spec: %+v", after)
 	}
 }
 

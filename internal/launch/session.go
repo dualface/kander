@@ -488,6 +488,9 @@ func requireAgentProgram(agentName string, configs ...*config.Config) (*process.
 	if len(configs) > 0 {
 		cfg = configs[0]
 	}
+	if cfg != nil && !config.HasAgent(cfg, agentName) {
+		return nil, unavailableAgentError(cfg, agentName)
+	}
 	executable := config.AgentPath(cfg, agentName)
 	program := resolveAgent(executable)
 	if program != nil {

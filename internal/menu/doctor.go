@@ -210,6 +210,7 @@ func printDoctorWithBinaries(tools TerminalTools, repair bool, interactive bool,
 		warning(loadErr.Error())
 		healthy = false
 	} else {
+		reportIgnoredConfig(loaded)
 		cfgPath, _ := config.ConfigPath()
 		if loaded.WelcomeComplete {
 			success(config.Text("menu.config", cfgPath))
@@ -231,6 +232,34 @@ func printDoctorWithBinaries(tools TerminalTools, repair bool, interactive bool,
 		}
 	}
 	return healthy
+}
+
+// reportIgnoredConfig lists what this version ignores in the configuration: keys it
+// does not define, agents entries it cannot use, and roles that name an agent it does
+// not know. Such content usually comes from a newer version and is kept on save, so it
+// is only reported and never counts as a problem to repair.
+func reportIgnoredConfig(cfg *config.Config) {
+	var ignored []string
+	var unusable []string
+	for _, item := range cfg.Ignored {
+		if item.Kind == config.IgnoredUnusableAgent {
+			unusable = append(unusable, config.IgnoredNotice(item))
+			continue
+		}
+		ignored = append(ignored, config.IgnoredNotice(item))
+	}
+	if len(ignored) > 0 {
+		hint(config.Text("menu.doctor_ignored_heading"))
+		for _, notice := range ignored {
+			hint(notice)
+		}
+	}
+	for _, notice := range unusable {
+		warning(notice)
+	}
+	for _, notice := range config.UnknownAgentRefNotices(cfg) {
+		warning(notice)
+	}
 }
 
 // reportOverlayConfigDirs warns about agents.<name>.config_dir in the project
@@ -480,7 +509,8 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 		return false
 	}
 	for _, selected := range config.ExecutionAgentsInUse(effective) {
-		if !agentUsable(agents[selected]) {
+		// An agent this version does not know is listed by reportIgnoredConfig, not as a missing install.
+		if config.HasAgent(effective, selected) && !agentUsable(agents[selected]) {
 			healthy = false
 			warning(config.Text(
 				"menu.configured_execution_agent_is_unavailable_install_it_then_run", selected,
@@ -500,7 +530,7 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 				continue
 			}
 			seenReviewers[key] = struct{}{}
-			if !reviewerUsable(agents[reviewer]) {
+			if config.HasAgent(effective, reviewer) && !reviewerUsable(agents[reviewer]) {
 				healthy = false
 				warning(config.Text(
 					"menu.configured_reviewer_is_unavailable_install_it_then_run_kander", role, reviewer,

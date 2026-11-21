@@ -209,7 +209,7 @@ func sessionDefaults(cfg *config.Config, scale, agentOverride, launcherOverride 
 		}
 	}
 	if !config.HasAgent(cfg, agent) {
-		return "", "", launchError("launch.unsupported_agent", agent)
+		return "", "", unavailableAgentError(cfg, agent)
 	}
 	launcher := strings.TrimSpace(launcherOverride)
 	if launcher == "" {

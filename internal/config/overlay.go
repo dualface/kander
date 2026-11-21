@@ -18,30 +18,6 @@ var overlayForbiddenKeys = map[string]struct{}{
 	"welcome_complete": {},
 }
 
-var overlayAllowedKeys = map[string]struct{}{
-	"kanban_agent":   {},
-	"kanban_agents":  {},
-	"chat_agent":     {},
-	"launcher":       {},
-	"reviewers":      {},
-	"review_stages":  {},
-	"rules":          {},
-	"models":         {},
-	"tui":            {},
-	"issue":          {},
-	"server":         {},
-	"project":        {},
-	"git":            {},
-	"language":       {},
-	"agent_language": {},
-	"agents":         {},
-
-	"extended_launch_timeouts": {},
-	// install_rules is accepted so a shared overlay still loads; the merge drops
-	// it and doctor warns, since only the scope config file may set it.
-	"install_rules": {},
-}
-
 func cloneRawValue(v any) any {
 	switch typed := v.(type) {
 	case map[string]any:
@@ -95,22 +71,18 @@ func normalizeReviewStagesField(raw map[string]any) error {
 }
 
 func validateOverlayKeys(path string, obj map[string]any) error {
-	var forbidden, unknown []string
+	var forbidden []string
 	for key := range obj {
 		if _, ok := overlayForbiddenKeys[key]; ok {
 			forbidden = append(forbidden, key)
-			continue
-		}
-		if _, ok := overlayAllowedKeys[key]; !ok {
-			unknown = append(unknown, key)
 		}
 	}
 	if len(forbidden) > 0 {
 		return configErrorf("config.overlay_has_forbidden_keys", path, strings.Join(sorted(forbidden), ", "))
 	}
-	if len(unknown) > 0 {
-		return configErrorf("config.overlay_has_unknown_keys", path, strings.Join(sorted(unknown), ", "))
-	}
+	// Other keys the overlay does not allow are not rejected: a newer version may
+	// have written them. They flow into the merged document, which reports them as
+	// ignored, and an overlay write keeps them.
 	return nil
 }
 
@@ -236,7 +208,12 @@ func ApplyOverlay(scope *Config, overlay map[string]any) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	return Validate(merged)
+	applied, err := Validate(merged)
+	if err != nil {
+		return nil, err
+	}
+	carryIgnored(applied, scope)
+	return applied, nil
 }
 
 func readOverlay(cwd string) (string, map[string]any, error) {

@@ -217,11 +217,11 @@ func foldRawReviewSection(doc map[string]any, key string, foldMap func(map[strin
 	if !ok {
 		return
 	}
-	scales, roles, unknown := classifyReviewStages(obj)
+	scales, roles, _ := classifyReviewStages(obj)
 	if len(scales) > 0 && len(roles) > 0 {
 		return
 	}
-	if len(scales) > 0 && len(unknown) == 0 {
+	if len(scales) > 0 {
 		out := cloneRawObject(obj)
 		for _, scale := range scales {
 			nested, ok := out[scale].(map[string]any)
@@ -249,9 +249,12 @@ func foldRawReviewRoleModels(doc map[string]any) {
 	}
 	allowed := historicalReviewRoleSet()
 	parsed := map[string]map[string]string{}
+	unknownRoles := map[string]any{}
 	for role, entryRaw := range rolesRaw {
 		if _, ok := allowed[role]; !ok {
-			return
+			// A role this version does not know passes through untouched.
+			unknownRoles[role] = entryRaw
+			continue
 		}
 		entry, ok := entryRaw.(map[string]any)
 		if !ok {
@@ -276,6 +279,9 @@ func foldRawReviewRoleModels(doc map[string]any) {
 		}
 		out[role] = fields
 	}
+	for role, entry := range unknownRoles {
+		out[role] = entry
+	}
 	modelsRaw["review_roles"] = out
 }
 
@@ -291,17 +297,6 @@ func FoldLegacyReviewRoleKeys(doc map[string]any) {
 	foldRawReviewRoleModels(doc)
 }
 
-func unknownHistoricalRoles(obj map[string]any) []string {
-	allowed := historicalReviewRoleSet()
-	var unknown []string
-	for key := range obj {
-		if _, ok := allowed[key]; !ok {
-			unknown = append(unknown, key)
-		}
-	}
-	return sorted(unknown)
-}
-
 func reviewRoleFieldSchema() map[string]string {
 	return map[string]string{
 		"model": "", "effort": "",
@@ -312,32 +307,22 @@ func reviewRoleFieldSchema() map[string]string {
 }
 
 func validateAndFoldReviewRoleModels(provided map[string]any) (map[string]map[string]string, error) {
-	unknown := unknownHistoricalRoles(provided)
-	if len(unknown) > 0 {
-		return nil, configErrorf(
-			"config.models_has_unknown_agents", "review_roles", strings.Join(unknown, ", "),
-		)
-	}
 	schema := reviewRoleFieldSchema()
 	parsed := make(map[string]map[string]string, len(provided))
 	for role, entryRaw := range provided {
+		// A role this version does not know is ignored; see scanIgnored.
+		if _, known := historicalReviewRoleSet()[role]; !known {
+			continue
+		}
 		entry, ok := entryRaw.(map[string]any)
 		if !ok {
 			return nil, configErrorf("config.models_must_be_a_json_object_3", "review_roles", role)
 		}
-		var unknownFields []string
-		for field := range entry {
-			if _, ok := schema[field]; !ok {
-				unknownFields = append(unknownFields, field)
-			}
-		}
-		if len(unknownFields) > 0 {
-			return nil, configErrorf(
-				"config.models_has_unknown_fields", "review_roles", role, strings.Join(sorted(unknownFields), ", "),
-			)
-		}
 		fields := map[string]string{}
 		for field, value := range entry {
+			if _, known := schema[field]; !known {
+				continue
+			}
 			text, ok := value.(string)
 			if !ok {
 				return nil, configErrorf(

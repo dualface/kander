@@ -46,9 +46,6 @@ func TestInstallRulesValidation(t *testing.T) {
 		{"agent string", func(raw map[string]any) {
 			raw["agents"] = map[string]any{"codex": map[string]any{"install_rules": "no"}}
 		}},
-		{"custom agent", func(raw map[string]any) {
-			raw["agents"] = map[string]any{"wrapper": map[string]any{"path": "sh", "dialect": "codex", "install_rules": false}}
-		}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			raw := defaultRaw(t)
