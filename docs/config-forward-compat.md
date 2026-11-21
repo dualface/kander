@@ -5,7 +5,7 @@ A user can move back to an older Kander for a while after a newer one has writte
 ## What Is Ignored
 
 - **An unknown key**, at any object level: the top level, the sections (`models`, `tui`, `rules`, `git`, `issue`, `reviewers`, `review_stages`, `kanban_agents`), an agent or a role inside `models.*`, and a field of an `agents.<name>` definition, nested objects included. The key has no effect: it never reaches an argument list, an environment variable, or a path. `schema_version` and `welcome_complete` keep their rules, and the overlay keys it forbids (`overlayForbiddenKeys`) still fail the load.
-- **A `models.*` entry for an agent this version does not know**, for example `models.kanban.agy` that a newer release writes for its new built-in agent.
+- **A `models.*` entry for an agent this version does not know**, for example `models.kanban.future-agent` that a newer release writes for its new built-in agent.
 - **An `agents.<name>` entry this version cannot turn into a usable agent.** Only that agent becomes unavailable; the rest of the configuration applies. The entry is unusable when it
   - uses `install_rules` or `config_dir` on a custom name (both exist only for built-in names),
   - names a `dialect` this version does not know,
