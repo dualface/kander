@@ -43,7 +43,6 @@
   "config.agent_schema_version": "schema_version must be 1.",
   "config.agent_embed_invalid": "Invalid embedded agent definition {{.V0}}: {{.V1}}",
   "config.agent_session": "session.mode must be generated, allocated, none, discovered, or hook:<registered-name>.",
-  "config.agent_session_hook": "Agent {{.V0}} references unregistered session hook {{.V1}}.",
   "config.agent_exit_command": "exit_command must be a single line without control characters; an empty string is allowed.",
   "config.agent_allocate": "allocated requires session.allocate argv whose first item is a command name or an absolute path; arguments and json_field must have no control characters.",
   "config.agent_allocate_only": "allocate/json_field are only valid for allocated sessions.",

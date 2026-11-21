@@ -33,3 +33,22 @@ func TestUnavailableAgentsFailOnUse(t *testing.T) {
 		t.Fatalf("an explicit unusable agent: %v", err)
 	}
 }
+
+// Each role is judged on its own: an unusable large-scale agent does not block a
+// usable Chat Agent, and the other way round. Start-side preflights refuse first.
+func TestChatAndStartPreflightJudgeTheirOwnAgent(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.KanbanAgents["large"] = "newagent"
+	cfg.ChatAgent = "codex"
+	if _, _, err := chatDefaults(cfg); err != nil && strings.Contains(err.Error(), "newagent") {
+		t.Fatalf("an unknown large-scale agent blocked the Chat Agent: %v", err)
+	}
+	cfg.KanbanAgents["large"] = "codex"
+	cfg.ChatAgent = "newagent"
+	if _, _, err := chatDefaults(cfg); err == nil || !strings.Contains(err.Error(), "newagent") {
+		t.Fatalf("an unknown Chat Agent must be refused: %v", err)
+	}
+	if err := programStatusPreflight(cfg, "foreground", "newagent"); err == nil || !strings.Contains(err.Error(), "newagent") {
+		t.Fatalf("the shared preflight must refuse an unknown agent first: %v", err)
+	}
+}

@@ -152,6 +152,7 @@ func (s *Session) prepare(configValid bool) error {
 	cfg.Agents = config.CloneAgents(s.existing.Agents)
 	cfg.Ignored = s.existing.Ignored
 	cfg.UnusableAgents = s.existing.UnusableAgents
+	cfg.UnusablePolicy = s.existing.UnusablePolicy
 	cfg.Models = copyModels(s.existing.Models)
 	cfg.KanbanAgent = s.existing.KanbanAgent
 	cfg.AgentLanguage = s.existing.AgentLanguage
@@ -300,13 +301,17 @@ func (s *Session) SetExecutionAgent(scale, agent string) {
 		prev = s.Config.KanbanAgents[scale]
 	}
 	s.Config.KanbanAgents[scale] = agent
-	s.Config.KanbanAgent = s.Config.KanbanAgents["large"]
+	// kanban_agent mirrors the large scale only; editing the small scale leaves it as written.
+	if scale == "large" {
+		s.Config.KanbanAgent = s.Config.KanbanAgents["large"]
+	}
 	if !s.EditingOverlay() {
 		s.noteOverride([]string{"kanban_agents", scale}, agent)
 		return
 	}
 	_ = s.applyOverlayEdit(func(candidate map[string]any) {
-		if prev != "" && prev != agent {
+		// An agent this version does not know keeps its model overrides.
+		if prev != "" && prev != agent && config.HasAgent(s.Config, prev) {
 			deleteKanbanScaleModelKeys(candidate, prev, scale)
 		}
 		config.OverlaySet(candidate, agent, "kanban_agents", scale)
@@ -462,7 +467,9 @@ func (s *Session) kanbanModelField(agent, field, label, short, prompt string) Mo
 // takes no {model} has no model field.
 func (s *Session) ExecutionModelFieldsFor(scale string) []ModelField {
 	agent := s.Config.KanbanAgents[scale]
-	if agent == "" {
+	// An agent this version does not know has no model settings to edit here; its
+	// entry stays in the file as written.
+	if agent == "" || !config.HasAgent(s.Config, agent) {
 		return nil
 	}
 	// When a legacy config only has the shared model key, the scale models are filled in with the same concrete value,
@@ -543,7 +550,7 @@ func (s *Session) ChatModelFieldsFor() []ModelField {
 	if agent == "" {
 		agent = s.Config.KanbanAgents["large"]
 	}
-	if agent == "" {
+	if agent == "" || !config.HasAgent(s.Config, agent) {
 		return nil
 	}
 	s.materializeChatEntry(agent)
@@ -582,7 +589,7 @@ func (s *Session) ChatModelFieldsFor() []ModelField {
 // owned by another agent remain unchanged until the selection is edited.
 func (s *Session) ReviewModelFieldsFor(role, scale string) []ModelField {
 	reviewer := config.ReviewerFor(s.Config, scale, role)
-	if reviewer == "" {
+	if reviewer == "" || !config.HasAgent(s.Config, reviewer) {
 		return nil
 	}
 	entry := s.seedReviewRole(role, scale, reviewer)
@@ -782,6 +789,7 @@ func NewSessionForTest(existing *config.Config) (*Session, error) {
 	cfg.Agents = config.CloneAgents(existing.Agents)
 	cfg.Ignored = existing.Ignored
 	cfg.UnusableAgents = existing.UnusableAgents
+	cfg.UnusablePolicy = existing.UnusablePolicy
 	cfg.Models = copyModels(existing.Models)
 	cfg.KanbanAgent = existing.KanbanAgent
 	cfg.KanbanAgents = cloneStrings(existing.KanbanAgents)

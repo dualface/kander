@@ -16,6 +16,11 @@ import (
 // dispatch attempt). launcher is the configured or chosen launcher; an auto
 // that does not resolve is left to the launch itself to report.
 func programStatusPreflight(cfg *config.Config, launcher, agent string) error {
+	// An agent this version cannot use is refused first, with the reason, before
+	// any launcher-specific check reads its definition.
+	if !config.HasAgent(cfg, agent) {
+		return unavailableAgentError(cfg, agent)
+	}
 	if launcher == "" {
 		launcher = cfg.Launcher
 	}

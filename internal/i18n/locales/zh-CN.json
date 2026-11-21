@@ -43,7 +43,6 @@
   "config.agent_schema_version": "schema_version 必须为 1。",
   "config.agent_embed_invalid": "嵌入的 agent 定义 {{.V0}} 无效：{{.V1}}",
   "config.agent_session": "session.mode 仅接受 generated、allocated、none、discovered 或 hook:<已注册名>。",
-  "config.agent_session_hook": "Agent {{.V0}} 引用了未注册的会话钩子 {{.V1}}。",
   "config.agent_exit_command": "exit_command 须为单行且不含控制字符；允许空字符串。",
   "config.agent_allocate": "allocated 需要 session.allocate argv，首项为命令名或绝对路径；参数与 json_field 不得含控制字符。",
   "config.agent_allocate_only": "allocate/json_field 仅适用于 allocated 会话。",

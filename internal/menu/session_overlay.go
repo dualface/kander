@@ -288,6 +288,7 @@ func (s *Session) RestoreSection(section string) error {
 		return err
 	}
 	candidate := config.CloneOverlay(s.overlayRaw)
+	ignored := config.OverlayIgnored(s.scopeRaw, s.overlayRaw)
 	for _, path := range roots {
 		if len(path) > 0 && path[0] == "review_stages" {
 			expandReviewStagesOverlay(candidate)
@@ -297,6 +298,8 @@ func (s *Session) RestoreSection(section string) error {
 		}
 		config.OverlayDelete(candidate, path...)
 	}
+	// Clearing the page's overrides must not clear what this version does not know.
+	config.OverlayKeep(candidate, ignored)
 	merged, err := config.MergeOverlayOnRaw(s.scopeRaw, candidate)
 	if err != nil {
 		if !s.overlayDraft {
@@ -329,6 +332,7 @@ func (s *Session) RestoreInherit(path ...string) error {
 		return err
 	}
 	candidate := config.CloneOverlay(s.overlayRaw)
+	ignored := config.OverlayIgnored(s.scopeRaw, s.overlayRaw)
 	if len(path) == 3 && path[0] == "review_stages" {
 		expandReviewStagesOverlay(candidate)
 		config.OverlayDeleteReviewRole(candidate, "review_stages", path[1], path[2])
@@ -351,12 +355,14 @@ func (s *Session) RestoreInherit(path ...string) error {
 	if len(path) == 2 && path[0] == "kanban_agents" {
 		agent, _ := overlayStringAt(candidate, path...)
 		config.OverlayDelete(candidate, path...)
-		if agent != "" {
+		// An agent this version does not know keeps its model overrides.
+		if agent != "" && config.HasAgent(s.Config, agent) {
 			deleteKanbanScaleModelKeys(candidate, agent, path[1])
 		}
 	} else if !(len(path) == 3 && (path[0] == "review_stages" || path[0] == "reviewers") || len(path) >= 3 && path[0] == "models" && path[1] == "review_roles") {
 		config.OverlayDelete(candidate, path...)
 	}
+	config.OverlayKeep(candidate, ignored)
 	merged, err := config.MergeOverlayOnRaw(s.scopeRaw, candidate)
 	if err != nil {
 		if !s.overlayDraft {

@@ -43,7 +43,6 @@
   "config.agent_schema_version": "schema_version は 1 である必要があります。",
   "config.agent_embed_invalid": "埋め込み agent 定義 {{.V0}} が無効です: {{.V1}}",
   "config.agent_session": "session.mode は generated、allocated、none、discovered、または hook:<登録名> です。",
-  "config.agent_session_hook": "Agent {{.V0}} は未登録のセッションフック {{.V1}} を参照しています。",
   "config.agent_exit_command": "exit_command は制御文字を含まない単一行にしてください。空文字は可です。",
   "config.agent_allocate": "allocated には先頭がコマンド名か絶対パスの session.allocate argv が必要です。引数と json_field に制御文字は不可です。",
   "config.agent_allocate_only": "allocate/json_field は allocated セッション専用です。",

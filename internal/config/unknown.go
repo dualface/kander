@@ -2,6 +2,7 @@ package config
 
 import (
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -86,6 +87,9 @@ func UnavailableAgentError(cfg *Config, name string) error {
 type unusableAgent struct {
 	Reason string
 	Value  any
+	// Policy carries the install switches (install_rules, config_dir) of an
+	// unusable built-in entry; both keep applying.
+	Policy AgentDefinition
 }
 
 // scanIgnored walks a raw configuration object and lists everything this version
@@ -127,6 +131,20 @@ func moduleSet() map[string]struct{} {
 		set[module] = struct{}{}
 	}
 	return set
+}
+
+func unusablePolicies(unusable map[string]unusableAgent) map[string]AgentDefinition {
+	var out map[string]AgentDefinition
+	for name, entry := range unusable {
+		if entry.Policy == (AgentDefinition{}) {
+			continue
+		}
+		if out == nil {
+			out = map[string]AgentDefinition{}
+		}
+		out[name] = entry.Policy
+	}
+	return out
 }
 
 func unusableReasons(unusable map[string]unusableAgent) map[string]string {
@@ -238,9 +256,17 @@ func scanModels(raw any, probe *Config, names []string, add addFunc) {
 			if !ok {
 				continue
 			}
+			// A legacy role folds into its current role, so an unknown field of it is
+			// reported (and kept) under that role.
+			target := role
+			for _, current := range ReviewRoles {
+				if slices.Contains(reviewRoleSources[current], role) {
+					target = current
+				}
+			}
 			for field, value := range entry {
 				if _, ok := schema[field]; !ok {
-					add(IgnoredField, value, "models", "review_roles", role, field)
+					add(IgnoredField, value, "models", "review_roles", target, field)
 				}
 			}
 		}
@@ -374,4 +400,45 @@ func UnknownAgentRefNotices(cfg *Config) []string {
 		out = append(out, Text("config.unknown_agent_reference_notice", ref.Field, ref.Agent))
 	}
 	return out
+}
+
+// pruneToStruct returns a copy of raw that keeps only the keys the struct type
+// declares, matched exactly, through nested structs, pointers, and slices. Free-form
+// maps keep every key. The standard decoder matches keys case-insensitively, so
+// decoding a pruned copy keeps the decoded definition in step with scanStruct.
+func pruneToStruct(raw any, t reflect.Type) any {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	switch t.Kind() {
+	case reflect.Struct:
+		obj, ok := asObject(raw)
+		if !ok {
+			return raw
+		}
+		fields := map[string]reflect.Type{}
+		for i := 0; i < t.NumField(); i++ {
+			if name, ok := jsonName(t.Field(i)); ok {
+				fields[name] = t.Field(i).Type
+			}
+		}
+		out := make(map[string]any, len(obj))
+		for key, value := range obj {
+			if child, known := fields[key]; known {
+				out[key] = pruneToStruct(value, child)
+			}
+		}
+		return out
+	case reflect.Slice:
+		items, ok := raw.([]any)
+		if !ok {
+			return raw
+		}
+		out := make([]any, len(items))
+		for i, item := range items {
+			out[i] = pruneToStruct(item, t.Elem())
+		}
+		return out
+	}
+	return raw
 }

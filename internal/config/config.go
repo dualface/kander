@@ -5,7 +5,9 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
+	"reflect"
 	"runtime"
 	"slices"
 	"strings"
@@ -170,6 +172,9 @@ type Config struct {
 	// UnusableAgents maps the name of an agents entry that cannot become an agent
 	// in this version to the reason. Such an agent is absent from AgentNames.
 	UnusableAgents map[string]string `json:"-"`
+	// UnusablePolicy holds the install_rules and config_dir values of unusable
+	// built-in entries. They are scope policy and keep applying; see InstallRulesOf.
+	UnusablePolicy map[string]AgentDefinition `json:"-"`
 }
 
 // Clone deep-copies the config so a long-lived editing session can keep its baseline.
@@ -183,6 +188,7 @@ func Clone(src *Config) *Config {
 	if src.UnusableAgents != nil {
 		out.UnusableAgents = cloneStringMap(src.UnusableAgents)
 	}
+	out.UnusablePolicy = CloneAgents(src.UnusablePolicy)
 	out.KanbanAgents = cloneStringMap(src.KanbanAgents)
 	out.ChatAgent = src.ChatAgent
 	out.Reviewers = cloneNested(src.Reviewers)
@@ -597,6 +603,17 @@ func validateModels(raw any, probe *Config) (Models, error) {
 	return models, nil
 }
 
+// pruneUnusableModels drops the default entries of built-in agents an unusable
+// agents entry took out of service. The file keeps the user's own values for them
+// (see scanIgnored), and a default left here would shadow those on save.
+func pruneUnusableModels(models *Models, probe *Config) {
+	for name := range probe.UnusableAgents {
+		delete(models.Kanban, name)
+		delete(models.Review, name)
+		delete(models.Chat, name)
+	}
+}
+
 func validateInteger(value any, name string, min, max int) (int, error) {
 	number, ok := value.(json.Number)
 	if !ok {
@@ -615,6 +632,12 @@ func validateTUI(raw any) (TUI, error) {
 	obj, ok := asObject(raw)
 	if !ok {
 		return TUI{}, configErrorf("config.tui_must_be_a_json_object")
+	}
+	// A section that holds only keys this version does not know, such as a project
+	// overlay that sets a newer tui key over a scope file without a tui section, is
+	// the same as no section: it must not fail on the missing required keys.
+	if known := jsonKeys(reflect.TypeOf(TUI{})); len(obj) > 0 && !slices.ContainsFunc(slices.Collect(maps.Keys(obj)), func(key string) bool { return containsKey(known, key) }) {
+		return DefaultTUI(), nil
 	}
 	columns, err := validateInteger(obj["columns"], "tui.columns", MinTUIColumns, MaxTUIColumns)
 	if err != nil {
@@ -716,7 +739,7 @@ func Validate(raw any) (*Config, error) {
 			return nil, err
 		}
 	}
-	probe := &Config{Agents: definitions, UnusableAgents: unusableReasons(unusable)}
+	probe := &Config{Agents: definitions, UnusableAgents: unusableReasons(unusable), UnusablePolicy: unusablePolicies(unusable)}
 	names := AgentNames(probe)
 	kanbanAgent, err := validateAgentRef(obj["kanban_agent"], names, "kanban_agent")
 	if err != nil {
@@ -825,6 +848,7 @@ func Validate(raw any) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	pruneUnusableModels(&models, probe)
 	cfg := &Config{
 		SchemaVersion:   SchemaVersion,
 		WelcomeComplete: welcome,
@@ -847,6 +871,7 @@ func Validate(raw any) (*Config, error) {
 		InstallRules:           installRules,
 
 		UnusableAgents: probe.UnusableAgents,
+		UnusablePolicy: probe.UnusablePolicy,
 	}
 	cfg.Ignored = scanIgnored(obj, definitions, unusable)
 	applyChatFallbacks(cfg, obj)

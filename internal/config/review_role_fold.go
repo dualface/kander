@@ -250,6 +250,10 @@ func foldRawReviewRoleModels(doc map[string]any) {
 	allowed := historicalReviewRoleSet()
 	parsed := map[string]map[string]string{}
 	unknownRoles := map[string]any{}
+	schema := reviewRoleFieldSchema()
+	// Fields this version does not know stay with the role they were written for;
+	// a legacy role's extras move to the current role it folds into.
+	extras := map[string]map[string]any{}
 	for role, entryRaw := range rolesRaw {
 		if _, ok := allowed[role]; !ok {
 			// A role this version does not know passes through untouched.
@@ -262,6 +266,13 @@ func foldRawReviewRoleModels(doc map[string]any) {
 		}
 		fields := map[string]string{}
 		for field, value := range entry {
+			if _, known := schema[field]; !known {
+				if extras[role] == nil {
+					extras[role] = map[string]any{}
+				}
+				extras[role][field] = value
+				continue
+			}
 			text, ok := value.(string)
 			if !ok {
 				return
@@ -278,6 +289,20 @@ func foldRawReviewRoleModels(doc map[string]any) {
 			fields[field] = value
 		}
 		out[role] = fields
+	}
+	for _, target := range ReviewRoles {
+		for _, source := range reviewRoleSources[target] {
+			for field, value := range extras[source] {
+				entry, _ := out[target].(map[string]any)
+				if entry == nil {
+					entry = map[string]any{}
+					out[target] = entry
+				}
+				if _, taken := entry[field]; !taken {
+					entry[field] = value
+				}
+			}
+		}
 	}
 	for role, entry := range unknownRoles {
 		out[role] = entry
