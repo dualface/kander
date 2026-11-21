@@ -274,8 +274,9 @@ func TestStartPromptNeverCarriesCardBodies(t *testing.T) {
 }
 
 // TestPromptReportingDirectiveFollowsRule covers every prompt built on ruleLoadingWithLanguage:
-// start, resume, takeover, and notify direct or dispatch delivery. With reporting off the
-// instruction keeps its previous bytes.
+// start, resume, takeover, and notify direct or dispatch delivery. The reporting switch decides
+// only the report reminder: with it off the instruction is the preamble, the waiting reminder,
+// and the SIZE sentence, and the waiting reminder never depends on the switch.
 func TestPromptReportingDirectiveFollowsRule(t *testing.T) {
 	config.ApplyLanguageArgument(nil)
 	config.BindConfigLanguage(nil)
@@ -287,7 +288,7 @@ func TestPromptReportingDirectiveFollowsRule(t *testing.T) {
 	preamble, _ := rulesAndLanguage(paths, "en")
 	waiting, _ := render(paths, "waiting.md", nil)
 	sizeText, _ := render(paths, "size.md", map[string]string{"Size": "small"})
-	legacy := preamble + " " + waiting + " " + sizeText
+	withoutReport := preamble + " " + waiting + " " + sizeText
 	for _, enabled := range []bool{true, false} {
 		cfg := config.DefaultConfig()
 		cfg.Rules[config.RuleReporting] = enabled
@@ -298,7 +299,7 @@ func TestPromptReportingDirectiveFollowsRule(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if enabled == (instruction == legacy) {
+		if enabled == (instruction == withoutReport) {
 			t.Fatalf("reporting %v: %q", enabled, instruction)
 		}
 		if enabled && !strings.Contains(instruction, "KANDER-REPORTING-RULES.md") {
