@@ -179,9 +179,15 @@ func (s *Session) prepare(configValid bool) error {
 		if replaceable(cfg.KanbanAgent, executionUsable) {
 			cfg.KanbanAgent = firstExecution
 		}
+		// A scale that falls back takes an installed agent. kanban_agent may be the unknown
+		// agent kept above, which no scale can start with.
+		fallback := cfg.KanbanAgent
+		if !executionUsable(fallback) {
+			fallback = firstExecution
+		}
 		for _, scale := range config.TaskScales {
 			if replaceable(cfg.KanbanAgents[scale], executionUsable) {
-				cfg.KanbanAgents[scale] = cfg.KanbanAgent
+				cfg.KanbanAgents[scale] = fallback
 			}
 		}
 	}
