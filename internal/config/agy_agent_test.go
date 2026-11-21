@@ -70,11 +70,10 @@ func TestAgyArgvExpansion(t *testing.T) {
 	}
 }
 
-func TestReviewArgvPlaceholdersIncludeRulesDirOnlyForArgv(t *testing.T) {
-	if !contains(ReviewArgvPlaceholders(nil), "rules_dir") {
-		t.Fatal("rules_dir must be an args.review placeholder")
-	}
-	if contains(ReviewEnvPlaceholders(), "rules_dir") || contains(ReviewPromptFilePlaceholders(), "rules_dir") {
-		t.Fatal("rules_dir must not reach review.env or review.prompt_files")
+// Accepting {rules_dir} in args.review and refusing it in review.env are
+// covered by TestReviewTemplateValidation; the prompt file templates are not.
+func TestReviewPromptFilesRefuseTheRulesDirPlaceholder(t *testing.T) {
+	if contains(ReviewPromptFilePlaceholders(), "rules_dir") {
+		t.Fatal("rules_dir must not reach review.prompt_files")
 	}
 }
