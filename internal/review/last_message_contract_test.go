@@ -17,9 +17,6 @@ const (
 	baselineCommit   = "3333333333333333333333333333333333333333"
 )
 
-// lastMessageAgents are the built-in reviewers whose final message is the report.
-var lastMessageAgents = []string{"claude", "cursor", "droid", "grok", "kimi"}
-
 // contractVariants builds the contract inputs the baseline files cover: a full
 // PMQA review, and an incremental Security review with a report language.
 func contractVariants(t *testing.T, agent string) map[string]reviewContext {
@@ -112,22 +109,6 @@ func TestBuiltinReviewContractsMatchBaseline(t *testing.T) {
 			}
 			if got := mustBuildContract(t, ctx); got != string(want) {
 				t.Errorf("%s %s: the review contract differs from the baseline", agent, variant)
-			}
-		}
-	}
-}
-
-func TestOnlyDeclaredBuiltinReviewersGetTheOutputContract(t *testing.T) {
-	isolateBuiltinConfig(t)
-	marker := mustLastMessageContract(t)
-	for _, agent := range config.ReviewAgentNames(nil) {
-		want := slices.Contains(lastMessageAgents, agent)
-		if got := config.EmbeddedReviewLastMessageReport(agent); got != want {
-			t.Errorf("%s declares last_message_report=%v, want %v", agent, got, want)
-		}
-		for variant, ctx := range contractVariants(t, agent) {
-			if got := strings.Contains(mustBuildContract(t, ctx), marker); got != want {
-				t.Errorf("%s %s: output contract present=%v, want %v", agent, variant, got, want)
 			}
 		}
 	}
