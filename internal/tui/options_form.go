@@ -566,6 +566,11 @@ func (p *optionsPanel) executionGroup(bind *formBinding) *huh.Group {
 	bind.launcher = cfg.Launcher
 	bind.prevLaunch = cfg.Launcher
 	bind.reset()
+	// The legacy kanban_agent has no control of its own. When it names an agent this
+	// version does not know, show it, so the page does not hide a value it keeps.
+	if name := cfg.KanbanAgent; name != "" && !config.HasAgent(cfg, name) {
+		bind.formFields = append(bind.formFields, huh.NewNote().Title(t("tui.kanban_agent_unknown_note", name)))
+	}
 
 	titles := map[string]string{
 		"large": "tui.titles.large",

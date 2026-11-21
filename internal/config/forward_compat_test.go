@@ -877,3 +877,51 @@ func TestInstallSwitchOfAnUnusableEntryIsEditable(t *testing.T) {
 		t.Fatalf("an explicit switch must be written into the entry: %v", v)
 	}
 }
+
+// Clearing the only known key of an agents entry removes the entry from the encoding;
+// the kept unknown content below it still comes back.
+func TestClearingAnEntrysSwitchKeepsItsUnknownSections(t *testing.T) {
+	setupHome(t)
+	doc := scopeDocument(t)
+	doc["agents"] = map[string]any{"claude": map[string]any{"install_rules": false, "session": map[string]any{"Mode": "generated"}}}
+	path := writeScope(t, doc)
+	cfg, err := Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	SetAgentInstallRules(cfg, "claude", nil)
+	if _, err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	saved := readScope(t, path)
+	if v, _ := jsonPath(saved, "agents", "claude", "session", "Mode"); v != "generated" {
+		t.Fatalf("the unknown content of a cleared entry was lost: %v", saved["agents"])
+	}
+	if _, ok := jsonPath(saved, "agents", "claude", "install_rules"); ok {
+		t.Fatal("the cleared switch is still in the file")
+	}
+}
+
+// A switch cleared in memory leaves an empty policy entry; the file has none. The
+// two are the same state for the edit conflict check.
+func TestClearedPolicyIsNotAConflict(t *testing.T) {
+	setupHome(t)
+	doc := scopeDocument(t)
+	doc["agents"] = map[string]any{"codex": map[string]any{"install_rules": true, "args": map[string]any{"start": []any{}, "resume": []any{}}, "session": map[string]any{"mode": "hook:future-hook"}}}
+	writeScope(t, doc)
+	baseline, err := Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := Clone(baseline)
+	SetAgentInstallRules(edited, "codex", nil)
+	if _, err := SaveIfUnchanged(edited, baseline); err != nil {
+		t.Fatal(err)
+	}
+	// The session now holds the saved state as its baseline; the next edit must pass.
+	next := Clone(edited)
+	next.Launcher = "tmux"
+	if _, err := SaveIfUnchanged(next, Clone(edited)); err != nil {
+		t.Fatalf("a cleared switch was reported as a conflicting edit: %v", err)
+	}
+}

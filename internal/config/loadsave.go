@@ -429,6 +429,18 @@ func SetLanguageIfPresent(path, lang string) error {
 	})
 }
 
+// nonZeroPolicies drops the empty entries of an UnusablePolicy map: a cleared switch
+// leaves one in memory and none in the file.
+func nonZeroPolicies(m map[string]AgentDefinition) map[string]AgentDefinition {
+	out := map[string]AgentDefinition{}
+	for name, def := range m {
+		if def != (AgentDefinition{}) {
+			out[name] = def
+		}
+	}
+	return out
+}
+
 func configEditConflicts(current, baseline, target *Config) bool {
 	if current == nil || baseline == nil || target == nil {
 		return true
@@ -446,6 +458,10 @@ func configEditConflicts(current, baseline, target *Config) bool {
 		currentField := currentValue.Field(i).Interface()
 		baselineField := baselineValue.Field(i).Interface()
 		targetField := targetValue.Field(i).Interface()
+		if currentValue.Type().Field(i).Name == "UnusablePolicy" {
+			// An entry whose switch was cleared reads back as absent.
+			currentField, baselineField, targetField = nonZeroPolicies(current.UnusablePolicy), nonZeroPolicies(baseline.UnusablePolicy), nonZeroPolicies(target.UnusablePolicy)
+		}
 		if !reflect.DeepEqual(currentField, baselineField) && !reflect.DeepEqual(currentField, targetField) {
 			return true
 		}

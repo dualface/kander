@@ -36,10 +36,12 @@ Legacy keys this version still folds (`PM`, `QA`, `CSA`, `Hacker`, the flat `rev
 `internal/config` keeps what it ignored (`Config.Ignored`, `Config.UnusableAgents`; neither is serialized from the struct) and writes it back on every write of the scope file:
 
 - `Save`, `SaveIfUnchanged`, `Update`, `UpdateAt`, `SetLanguageIfPresent`, and `Repair` read the file inside the write lock, find the ignored items in that content, and place each one back at its JSON path in the new document, after the keys Kander writes. The base is the scope file only, so overlay content never enters `config.json`.
-- An ignored item is placed only where its parent object exists in the new document, so a section the user removed does not return. The `agents` object is created on demand for an unusable entry. When the new document already holds the key, the current value wins.
+- An ignored item is placed only where its parent object exists in the new document, so a section the user removed does not return. Parents that exist only for the kept content are created: the `agents` object, an `agents.<name>` entry, and a section of an entry that the encoding left out (because it was cleared, or held only unknown keys), and the legacy role object of `models.review_roles` that holds only unknown fields. When the new document already holds the key, the current value wins.
+- A legacy review role key (`PM`, `QA`, `CSA`, `Hacker`) is folded into its current role as before. What remains under the legacy key is only the fields this version does not know, which stay at their own path; the current role keeps its own unknown fields.
 - `Repair` repairs the known settings only. It keeps unknown keys, role references to unknown agents, and unusable agent entries, and a valid file that holds only such content is not rewritten.
 - The overlay write is sparse and works on the overlay's own map, which now keeps unknown keys. Options edits the keys it owns and leaves the others in place.
-- In the Options panel a role that names an unknown agent shows that name as its current value; saving without editing that field keeps it.
+- In the Options panel a role that names an unknown agent shows that name as its current value, and a `kanban_agent` that names an unknown agent is shown as a note on the execution page; saving without editing that field keeps it. Editing the large scale rewrites the legacy `kanban_agent` mirror only while it names a known agent equal to the replaced value.
+- The `install_rules` switch of an unusable built-in entry stays in force and can be edited; the edit is patched into the otherwise untouched entry. An edit conflict check covers it, so a stale Options snapshot is refused instead of restoring a revoked switch.
 
 ## Limits
 

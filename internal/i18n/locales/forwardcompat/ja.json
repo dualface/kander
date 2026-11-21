@@ -7,5 +7,6 @@
   "config.ignored_from": "{{.V0}} ({{.V1}} 内)",
   "config.ignored_unusable_agent": "agent エントリ {{.V0}} は利用できません: {{.V1}}。エントリはファイルに残ります",
   "config.unknown_agent_reference_notice": "{{.V0}} はこのバージョンが認識しない agent {{.V1}} を指しています。変更するか Kander を更新するまで、そのロールの利用は失敗します",
-  "menu.doctor_ignored_heading": "このバージョンは次の設定を無視します。新しいバージョンが書き込んだ可能性があり、保存してもそのまま残ります:"
+  "menu.doctor_ignored_heading": "このバージョンは次の設定を無視します。新しいバージョンが書き込んだ可能性があり、保存してもそのまま残ります:",
+  "tui.kanban_agent_unknown_note": "kanban_agent: {{.V0}} (このバージョンでは認識されません。そのまま保持されます)"
 }
