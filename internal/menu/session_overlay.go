@@ -643,7 +643,12 @@ func (s *Session) saveScope() (string, error) {
 		s.existing = config.Clone(cfg)
 		s.scopeExisting = config.Clone(cfg)
 		s.scopeConfig = cfg
-		if raw, rawErr := config.DocumentFromConfig(cfg); rawErr == nil {
+		// The persisted document is the base of the Project tab, not the encoding of cfg: it
+		// holds the content this version ignores (an unusable built-in agent's entry among it),
+		// which decides what the overlay may keep.
+		if raw, rawErr := config.LoadScopeDocument(true); rawErr == nil {
+			s.scopeRaw = raw
+		} else if raw, rawErr := config.DocumentFromConfig(cfg); rawErr == nil {
 			s.scopeRaw = raw
 		}
 		if s.EditingOverlay() {

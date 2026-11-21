@@ -167,12 +167,20 @@ func (s *Session) prepare(configValid bool) error {
 			cfg.ChatAgent = s.existing.KanbanAgent
 		}
 	}
+	// Before the welcome completes, a role whose agent is missing or known but not installed is
+	// pointed at one that works. A role that names an agent this version does not know is
+	// kept: a newer version wrote it, and only the user's own edit may replace it.
+	replaceable := func(name string, usable func(string) bool) bool {
+		return name == "" || (config.HasAgent(s.existing, name) && !usable(name))
+	}
+	executionUsable := func(name string) bool { return agentUsable(s.agents[name]) }
+	reviewerUsableByName := func(name string) bool { return reviewerUsable(s.agents[name]) }
 	if !s.existing.WelcomeComplete {
-		if !agentUsable(s.agents[cfg.KanbanAgent]) {
+		if replaceable(cfg.KanbanAgent, executionUsable) {
 			cfg.KanbanAgent = firstExecution
 		}
 		for _, scale := range config.TaskScales {
-			if !agentUsable(s.agents[cfg.KanbanAgents[scale]]) {
+			if replaceable(cfg.KanbanAgents[scale], executionUsable) {
 				cfg.KanbanAgents[scale] = cfg.KanbanAgent
 			}
 		}
@@ -184,7 +192,7 @@ func (s *Session) prepare(configValid bool) error {
 		}
 		for _, role := range config.ReviewRoles {
 			previous := cfg.Reviewers[scale][role]
-			if !s.existing.WelcomeComplete && !reviewerUsable(s.agents[previous]) {
+			if !s.existing.WelcomeComplete && replaceable(previous, reviewerUsableByName) {
 				cfg.Reviewers[scale][role] = s.review[0].Value
 			}
 		}
