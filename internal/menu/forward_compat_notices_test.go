@@ -257,6 +257,48 @@ func TestConfigOutputEqualsThatWithoutTheIgnoredContent(t *testing.T) {
 			clean:        func(t *testing.T) map[string]any { return withSmallAgent(t, "claude") },
 			dirtyOverlay: map[string]any{"kanban_agents": map[string]any{"small": "futureagent"}, "tui": map[string]any{"refresh": 45}},
 			cleanOverlay: map[string]any{"tui": map[string]any{"refresh": 45}}},
+		// The scope's tui holds only an unknown key and an unknown agent stands in for small; the
+		// overlay's empty tui is no part of the reference once the scope has none either, and the
+		// output has neither section nor the agent.
+		{name: "an unknown tui key and an unknown small agent under an empty overlay tui", notices: 2,
+			dirty: func(t *testing.T) map[string]any {
+				doc := withSmallAgent(t, "futureagent")
+				doc["tui"] = map[string]any{"future": 1}
+				return doc
+			},
+			clean: func(t *testing.T) map[string]any {
+				doc := withSmallAgent(t, "codex")
+				delete(doc, "tui")
+				config.OverlayDelete(doc, "kanban_agents", "small")
+				return doc
+			},
+			dirtyOverlay: map[string]any{"tui": map[string]any{}, "language": "en"},
+			cleanOverlay: map[string]any{"language": "en"}},
+		// A built-in agent entry of only unknown keys is no entry of its layer.
+		{name: "a built-in agents entry of only unknown keys", notices: 1,
+			dirty: func(t *testing.T) map[string]any {
+				doc := cleanTwin(t)
+				doc["agents"] = map[string]any{"codex": map[string]any{"future_key": 1}}
+				return doc
+			},
+			clean: func(t *testing.T) map[string]any {
+				doc := cleanTwin(t)
+				delete(doc, "agents")
+				return doc
+			}},
+		// The same layer declares an empty program_status next to an unknown key: the entry is
+		// not empty and keeps the declaration.
+		{name: "an unknown key next to an empty program_status in one entry", notices: 1,
+			dirty: func(t *testing.T) map[string]any {
+				doc := cleanTwin(t)
+				doc["agents"] = map[string]any{"codex": map[string]any{"program_status": map[string]any{}, "future_key": 1}}
+				return doc
+			},
+			clean: func(t *testing.T) map[string]any {
+				doc := cleanTwin(t)
+				doc["agents"] = map[string]any{"codex": map[string]any{"program_status": map[string]any{}}}
+				return doc
+			}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config.json")

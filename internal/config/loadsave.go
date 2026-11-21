@@ -101,26 +101,52 @@ func loadEffective(cwd string, missingOK bool) (*Config, error) {
 // loadEffectiveRaw is loadEffective that also returns the merged raw document the
 // configuration was validated from.
 func loadEffectiveRaw(cwd string, missingOK bool) (*Config, map[string]any, error) {
-	path, err := ConfigPath()
+	layers, err := readLayers(cwd, missingOK)
 	if err != nil {
 		return nil, nil, err
+	}
+	return layers.effective()
+}
+
+// layerDocuments are the raw documents of the two layers of one read: the scope file, already
+// validated on its own, and the project overlay (nil when there is none). Load and the display
+// of kander config both start from one value, so a run reads each file once.
+type layerDocuments struct {
+	scopeConfig *Config
+	scope       map[string]any
+	overlayPath string
+	overlay     map[string]any
+}
+
+// readLayers reads the scope file and the project overlay of cwd (the process working
+// directory when empty).
+func readLayers(cwd string, missingOK bool) (layerDocuments, error) {
+	path, err := ConfigPath()
+	if err != nil {
+		return layerDocuments{}, err
 	}
 	cfg, raw, err := loadScopeRawAt(path, missingOK)
 	if err != nil {
-		return nil, nil, err
+		return layerDocuments{}, err
 	}
 	overlayPath, overlayRaw, err := readOverlay(cwd)
 	if err != nil {
-		return nil, nil, err
+		return layerDocuments{}, err
 	}
-	if overlayRaw == nil {
-		return cfg, raw, nil
+	return layerDocuments{scopeConfig: cfg, scope: raw, overlayPath: overlayPath, overlay: overlayRaw}, nil
+}
+
+// effective merges the layers and validates the result: the configuration in force, with the
+// merged raw document it was validated from.
+func (l layerDocuments) effective() (*Config, map[string]any, error) {
+	if l.overlay == nil {
+		return l.scopeConfig, l.scope, nil
 	}
-	effective, merged, err := validateLayers(raw, overlayRaw)
+	effective, merged, err := validateLayers(l.scope, l.overlay)
 	if err != nil {
 		return nil, nil, err
 	}
-	markOverlayIgnored(effective, cfg, overlayPath, overlayRaw)
+	markOverlayIgnored(effective, l.scopeConfig, l.overlayPath, l.overlay)
 	return effective, merged, nil
 }
 
