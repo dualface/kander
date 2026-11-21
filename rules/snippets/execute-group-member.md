@@ -14,3 +14,26 @@ This snippet extends `snippets/execute-single.md`: read that one first, then thi
 **Delivering a Task Branch to the Group Branch**
 
 - After implementing, verifying, and committing by concern, the executing agent rebases its task branch onto the latest group branch, re-verifies, and updates the task branch per the Git rule file. Between deliveries it keeps the branch current per `snippets/git-sync.md` "Keeping a Task Branch Current" with the group branch as `SOURCE`, which also fixes the re-verification scope; the final delivery commit carries the full verification. Record in `IMPLEMENTATION` the task branch's final full SHA, the group branch SHA it is based on, and the verification result. Tick each met acceptance criterion as `- [x]` through update and leave an unmet one as `- [ ]` with the reason in `IMPLEMENTATION` (`snippets/card-content.md` "Contract and Records"), then `move review` and end the current response turn. The executing agent never updates the group branch.
+
+## Author Records After a Rebase
+
+A rebase rewrites commits. An author record with status `fixed` names a `fix_commit`, and `kander review close` needs that commit in the history of the batch. This section applies when both of these hold: this card has a latest `fixed` record in a batch that is not closed, and a rebase in this round rewrote commits of the task branch. A sync round, a fix round, and a self-executed group all meet it. Do the steps below after the last rebase of the round and before `kander move <task-id> review`.
+
+**Finding the Records to Check**
+
+- Read the `REVIEWS` index of the card with `kander show <task-id>`. Each line gives a run ID and its `batch_id`.
+- A batch is not closed when `kander show --document reviews/batches/<batch_id>/closed.json <task-id>` fails with `board.document_not_found`. Keep only the runs of those batches.
+- Take the record IDs from the card-relative record paths that `IMPLEMENTATION` holds (`snippets/fix-round.md` requires them). When a path is missing, stop the correction and report the gap to the orchestrator, who decides from the review records of the batch. Never guess a record ID. Never list a directory through the path that `kander show` prints.
+- Read each record with `kander show --document reviews/<run_id>/dispositions/<record_id>.json <task-id>`. For each `(run_id, finding_id)`, follow `previous_record_id` to the last record of the chain, and keep it when its `status` is `fixed`. `kander review progress` lists no author records and cannot replace this step.
+- For each kept record, run `git merge-base --is-ancestor <fix_commit> <new delivery commit>`. The record is invalid when the exit code is not 0, or when the commit no longer exists in the repository.
+
+**Appending the Correction Record**
+
+- Append one correction record for each invalid record through `kander review disposition` (`snippets/orchestrate-review.md` "disposition"). Use a new `record_id`. Set `previous_record_id` to the invalid record. Keep the `status`. Set `fix_commit` to the rewritten commit that carries the same fix. In `basis` and `verification`, write the old commit, the new commit, the result of the `git patch-id --stable` comparison, and the ancestry check. Add the `authorization` of this round when the card has an active dispatch. Only the current `OWNER` appends records, and an earlier record is never edited.
+- Default mapping: the new `fix_commit` is the commit whose `git patch-id --stable` equals that of the old `fix_commit`.
+- Re-check path: use it when the correction names another commit (for example the old record named the branch head, and another commit carries the fix), or when the commits do not map one to one (a conflict resolution changed the patch, a commit was split or merged, or a commit was dropped because the source branch already holds the fix). Verify the finding again on the new delivery commit per `snippets/fix-round.md` "Main Agent Verification Duty", and write the evidence that the chosen commit carries the fix in `basis`.
+- The new `fix_commit` must satisfy every Git relation that closing needs. It is a strict descendant of the reviewed commit of its run. It is an ancestor of the batch target. For a must-fix finding of a run that is not the conclusion run, it is an ancestor of the reviewed commit of the conclusion run. For a mechanical fix of the conclusion run, it is an ancestor of `passed_at`. Never name a commit outside the batch history. The new delivery commit stands for the batch target here: the orchestrator receives it onto the group branch, and `kander review close` checks the relations again.
+
+**A Sync Round for Corrections Only**
+
+- Use these steps when the sync message asks only for correction records, because the task branch needs no rebase. Do not rebase, commit, or push. Append the correction records. Write one `IMPLEMENTATION` entry with the card-relative paths of the records and the unchanged delivery commit. Then run `kander move <task-id> review` with the unchanged delivery commit as the delivery commit.
