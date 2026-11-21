@@ -203,10 +203,11 @@ var omittedSections = func() []string {
 	typ := reflect.TypeOf(Config{})
 	var names []string
 	for i := 0; i < typ.NumField(); i++ {
-		name, options, _ := strings.Cut(typ.Field(i).Tag.Get("json"), ",")
-		if name == "" || name == "-" || name == "agents" {
+		name, ok := jsonName(typ.Field(i))
+		if !ok || name == "agents" {
 			continue
 		}
+		_, options, _ := strings.Cut(typ.Field(i).Tag.Get("json"), ",")
 		if strings.Contains(options, "omitzero") || strings.Contains(options, "omitempty") {
 			names = append(names, name)
 		}
@@ -216,9 +217,10 @@ var omittedSections = func() []string {
 
 // seedOmittedSections gives root an empty object for each omitted section that the
 // file holds as an object. recoverConfigFields only revisits keys root already has,
-// so without the seed a valid server or project binding is dropped. The seeded
-// object makes it try the whole section first and then each known sub-key, and an
-// invalid value falls back to the default, which is to omit it.
+// so without the seed a valid server or project binding is dropped. With the seed
+// it first tries the file's whole section; when that fails validation the section
+// falls back to the empty object, which the encoding omits. A section with several
+// known keys therefore keeps its valid keys only if every key is valid.
 func seedOmittedSections(root, provided map[string]any) {
 	for _, name := range omittedSections {
 		if _, present := root[name]; present {

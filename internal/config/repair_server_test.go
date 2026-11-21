@@ -131,8 +131,10 @@ func TestRepairKeepsEveryOmittableSection(t *testing.T) {
 	checked := 0
 	for i := 0; i < typ.NumField(); i++ {
 		field := typ.Field(i)
-		name, options, _ := strings.Cut(field.Tag.Get("json"), ",")
-		if name == "" || name == "-" || (!strings.Contains(options, "omitzero") && !strings.Contains(options, "omitempty")) {
+		// jsonName falls back to the Go field name, as encoding/json does for a tag like ",omitzero".
+		name, ok := jsonName(field)
+		_, options, _ := strings.Cut(field.Tag.Get("json"), ",")
+		if !ok || (!strings.Contains(options, "omitzero") && !strings.Contains(options, "omitempty")) {
 			continue
 		}
 		// agents has its own recovery path in repairValues and its own tests.
