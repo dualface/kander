@@ -99,8 +99,7 @@ func IntegrationAgents(paths config.InstallPaths) []string {
 			continue
 		}
 		if paths.Mode == config.ModeProject {
-			spec, _ := config.RulesSpec(agent)
-			if spec.Integration == "claude-import" {
+			if referenceStyleFor(agent).ProjectWriteFirst() {
 				importFirst = append(importFirst, agent)
 			} else {
 				rest = append(rest, agent)
@@ -183,9 +182,11 @@ func rulesFileIntegration(agent, target, entry string, paths config.InstallPaths
 	if err != nil {
 		return false, config.Text("menu.not_found", target)
 	}
-	if isMDCTarget(target) && info.Mode()&os.ModeSymlink != 0 {
-		return false, config.Text("menu.mdc_rule_is_symlink", target)
+	format := fileFormatFor(target)
+	if key := format.SymlinkRefusal(); key != "" && info.Mode()&os.ModeSymlink != 0 {
+		return false, config.Text(key, target)
 	}
+	style := referenceStyleFor(agent)
 	if info.Mode()&os.ModeSymlink != 0 {
 		linked, err := filepath.EvalSymlinks(target)
 		if err == nil {
@@ -196,8 +197,7 @@ func rulesFileIntegration(agent, target, entry string, paths config.InstallPaths
 			if linked == expected {
 				return true, target
 			}
-			spec, _ := config.RulesSpec(agent)
-			if paths.Mode == config.ModeProject && spec.Integration != "claude-import" {
+			if paths.Mode == config.ModeProject && !style.ProjectSymlinkMayDiffer() {
 				return false, config.Text(
 					"menu.does_not_point_to_the_project_rules_entry", target, entry,
 				)
@@ -208,23 +208,10 @@ func rulesFileIntegration(agent, target, entry string, paths config.InstallPaths
 	if err != nil {
 		return false, config.Text("menu.cannot_read", target)
 	}
-	if isMDCTarget(target) {
-		switch classifyMDCFrontmatter(string(text)) {
-		case mdcNoFrontmatter:
-			return false, config.Text("menu.mdc_rule_missing_frontmatter", target)
-		case mdcOtherFrontmatter:
-			return false, config.Text("menu.mdc_rule_not_always_applied", target)
-		}
+	if state, problem := format.Inspect(string(text)); state != formatReady {
+		return false, config.Text(problem, target)
 	}
-	var integrated bool
-	spec, _ := config.RulesSpec(agent)
-	if spec.Integration == "claude-import" {
-		integrated = claudeRulesImportPresent(string(text), entry, filepath.Dir(target))
-	} else {
-		integrated = mergedRulesPresent(string(text), entry) ||
-			entryReferencePresent(string(text), entry, filepath.Dir(target))
-	}
-	if integrated {
+	if style.Present(string(text), entry, filepath.Dir(target)) {
 		return true, target
 	}
 	return false, config.Text(
@@ -342,15 +329,13 @@ type targetEdit struct {
 func planTargetIntegration(agent, target string, create bool, paths config.InstallPaths, legacyRetired bool) (targetEdit, error) {
 	edit := targetEdit{outcome: IntegrationOutcome{Agent: agent, Target: target}}
 	block := referenceBlock(agent, paths)
-	mdc := isMDCTarget(target)
+	format := fileFormatFor(target)
 	info, err := os.Lstat(target)
 	if os.IsNotExist(err) {
 		if !create {
 			return edit, err
 		}
-		if mdc {
-			block = alwaysApplyFrontmatter + block
-		}
+		block = format.Prefix() + block
 		edit.path = target
 		edit.content = []byte(block)
 		edit.created = true
@@ -361,8 +346,8 @@ func planTargetIntegration(agent, target string, create bool, paths config.Insta
 	if err != nil {
 		return edit, err
 	}
-	if mdc && info.Mode()&os.ModeSymlink != 0 {
-		return edit, fmt.Errorf("%s", config.Text("menu.mdc_rule_is_symlink", target))
+	if key := format.SymlinkRefusal(); key != "" && info.Mode()&os.ModeSymlink != 0 {
+		return edit, fmt.Errorf("%s", config.Text(key, target))
 	}
 	resolved := target
 	if info.Mode()&os.ModeSymlink != 0 {
@@ -389,13 +374,11 @@ func planTargetIntegration(agent, target string, create bool, paths config.Insta
 	// the current one next to the stale one, and the stale one must not survive.
 	text := string(existing)
 	needFrontmatter := false
-	if mdc {
-		switch classifyMDCFrontmatter(text) {
-		case mdcOtherFrontmatter:
-			return edit, fmt.Errorf("%s", config.Text("menu.mdc_rule_not_always_applied", target))
-		case mdcNoFrontmatter:
-			needFrontmatter = true
-		}
+	switch state, problem := format.Inspect(text); state {
+	case formatForeign:
+		return edit, fmt.Errorf("%s", config.Text(problem, target))
+	case formatMissingPrefix:
+		needFrontmatter = true
 	}
 	legacyChanged := false
 	if rewritten, changed := rewriteLegacyReferenceIf(text, paths, filepath.Dir(target), legacyRetired); changed {
@@ -424,7 +407,7 @@ func planTargetIntegration(agent, target string, create bool, paths config.Insta
 		edit.appended = true
 	}
 	if needFrontmatter {
-		final = alwaysApplyFrontmatter + final
+		final = format.Prefix() + final
 	}
 	edit.path = resolved
 	if real, err := filepath.EvalSymlinks(resolved); err == nil {
@@ -471,14 +454,7 @@ func entrySpelling(paths config.InstallPaths) string {
 }
 
 func referenceBlock(agent string, paths config.InstallPaths) string {
-	spelling := entrySpelling(paths)
-	spec, _ := config.RulesSpec(agent)
-	if spec.Integration == "claude-import" {
-		return "@" + spelling + "\n"
-	}
-	return "## Kander Rules Entry\n\n" +
-		"At the start of every session, read `" + spelling +
-		"` and follow it as the Kander workflow rules entry.\n"
+	return referenceStyleFor(agent).Block(entrySpelling(paths))
 }
 
 func stripCommentsAndFences(text string) string {
@@ -604,51 +580,6 @@ func sameResolved(a, b string) bool {
 		return false
 	}
 	return ra == rb
-}
-
-func claudeRulesImportPresent(text, entry, baseDir string) bool {
-	candidates := ruleEntryCandidates(entry)
-	body := stripCommentsAndFences(text)
-	offset := 0
-	atLine := regexp.MustCompile(`^@([^\s]+)$`)
-	for _, raw := range splitKeepEnds(body) {
-		line := strings.TrimSpace(raw)
-		lineStart := offset
-		offset += len(raw)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		match := atLine.FindStringSubmatch(line)
-		if match == nil {
-			continue
-		}
-		ref := strings.TrimSpace(match[1])
-		accepted := false
-		if _, ok := candidates[ref]; ok {
-			accepted = true
-		}
-		if !accepted {
-			expanded := ref
-			if strings.HasPrefix(ref, "~") {
-				if home, err := os.UserHomeDir(); err == nil {
-					expanded = home + ref[1:]
-				}
-			}
-			if !filepath.IsAbs(expanded) {
-				expanded = filepath.Join(baseDir, expanded)
-			}
-			accepted = sameResolved(expanded, entry)
-		}
-		if !accepted {
-			continue
-		}
-		context := candidateContext(body, lineStart, offset, true)
-		if negationRE.MatchString(context) {
-			continue
-		}
-		return true
-	}
-	return false
 }
 
 func splitKeepEnds(text string) []string {

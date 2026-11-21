@@ -3,6 +3,7 @@ package install
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/dualface/kander/internal/config"
@@ -65,7 +66,7 @@ func TestBuiltinIntegrationPreservesTargetsAndBytes(t *testing.T) {
 						want = "# Personal rules\n\n" + want
 						status = IntegrationUpdated
 					}
-					if isMDCTarget(target) {
+					if strings.HasSuffix(target, ".mdc") {
 						want = alwaysApplyFrontmatter + want
 					}
 					for attempt := 0; attempt < 3; attempt++ {

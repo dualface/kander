@@ -1,9 +1,6 @@
 package install
 
-import (
-	"path/filepath"
-	"strings"
-)
+import "strings"
 
 // alwaysApplyFrontmatter makes a cursor .mdc rule apply to every session; a
 // rule without it is only attached on demand and would not load the entry.
@@ -19,10 +16,6 @@ const (
 	// one that is never closed; it belongs to the user and is not rewritten.
 	mdcOtherFrontmatter
 )
-
-func isMDCTarget(target string) bool {
-	return strings.EqualFold(filepath.Ext(target), ".mdc")
-}
 
 func classifyMDCFrontmatter(text string) mdcFrontmatter {
 	lines := strings.Split(strings.TrimPrefix(text, "\uFEFF"), "\n")
@@ -44,4 +37,30 @@ func classifyMDCFrontmatter(text string) mdcFrontmatter {
 		}
 	}
 	return mdcOtherFrontmatter
+}
+
+// mdcRule is a cursor rule file. It must carry alwaysApply frontmatter to load in every
+// session, so Kander adds the frontmatter to a file without one and never rewrites a
+// frontmatter block the user owns. It is never read or written through a symlink.
+type mdcRule struct{}
+
+func (mdcRule) Name() string { return "mdc-rule" }
+
+func (mdcRule) SymlinkRefusal() string { return "menu.mdc_rule_is_symlink" }
+
+func (mdcRule) Inspect(text string) (formatState, string) {
+	switch classifyMDCFrontmatter(text) {
+	case mdcNoFrontmatter:
+		return formatMissingPrefix, "menu.mdc_rule_missing_frontmatter"
+	case mdcOtherFrontmatter:
+		return formatForeign, "menu.mdc_rule_not_always_applied"
+	}
+	return formatReady, ""
+}
+
+func (mdcRule) Prefix() string { return alwaysApplyFrontmatter }
+
+// OnlyKander is true for the frontmatter Kander wrote and nothing else.
+func (mdcRule) OnlyKander(rest string) bool {
+	return rest == strings.TrimSpace(alwaysApplyFrontmatter)
 }
