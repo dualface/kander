@@ -28,6 +28,9 @@ type subscribeOptions struct {
 	Watch     []string
 	Refresh   float64
 	Heartbeat float64
+	// Follow keeps the subscription writing events until it is stopped. The
+	// zero value ends it after the first wake-up event.
+	Follow bool
 }
 
 type changeEvent struct {
@@ -105,6 +108,8 @@ func parseSubscribeArgs(args []string) (subscribeOptions, string) {
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
+		case arg == "--follow":
+			opts.Follow = true
 		case arg == "--refresh" || strings.HasPrefix(arg, "--refresh="):
 			raw := strings.TrimPrefix(arg, "--refresh=")
 			if arg == "--refresh" {
@@ -208,8 +213,10 @@ func Subscribe(root string, opts subscribeOptions, w io.Writer, stop <-chan stru
 // SubscribeContext owns one probe batch and one bounded output worker. It joins
 // both before returning. Custom writers must implement ContextWriter; files,
 // bytes.Buffer, strings.Builder and io.Discard are adapted internally.
+//
+// Without opts.Follow it returns nil after the scan that wrote the first
+// wake-up event; see wakesSubscription.
 func SubscribeContext(ctx context.Context, root string, opts subscribeOptions, w io.Writer) (result error) {
-
 	refresh, valid := subscriptionInterval(opts.Refresh)
 	if !valid {
 		return fmt.Errorf("%s", t("liveness.refresh_interval_must_be_greater_than_0"))
@@ -245,7 +252,9 @@ func SubscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 		return err
 	}
 	probes.start(snapshot)
-	if err := session.dispatchAttention(w, snapshot, false); err != nil {
+	session.recordOverdueBaseline(snapshot)
+	// Every overdue dispatch here is in the baseline, so this write never wakes.
+	if _, err := session.dispatchAttention(w, snapshot, false); err != nil {
 		return err
 	}
 	heartbeatDue := nowFn().Add(heartbeat)
@@ -289,6 +298,7 @@ func SubscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 		if err != nil {
 			return err
 		}
+		woke := false
 		var changed []changeEvent
 		var updated []string
 		for _, taskID := range current.monitored {
@@ -309,31 +319,43 @@ func SubscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 			if err := session.emit(w, "membership-change", current, nil, nil, removed); err != nil {
 				return err
 			}
+			woke = true
 		}
 		if len(changed) > 0 {
 			if err := session.emit(w, "state-change", current, changed, updated, nil); err != nil {
 				return err
 			}
+			woke = true
 		} else if len(updated) > 0 {
 			if err := session.emit(w, "task-update", current, nil, updated, nil); err != nil {
 				return err
 			}
+			woke = true
 		}
 		if !maps.Equal(snapshot.blocked, current.blocked) {
 			if err := session.emit(w, "member-blocked", current, nil, nil, nil); err != nil {
 				return err
 			}
+			woke = true
 		}
-		if err := session.dispatchAttention(w, current, probeCompleted); err != nil {
+		attentionWoke, err := session.dispatchAttention(w, current, probeCompleted)
+		if err != nil {
 			return err
 		}
+		woke = woke || attentionWoke
 		snapshot = current
 		if !nowFn().Before(heartbeatDue) {
 			if err := session.emit(w, "heartbeat", current, nil, nil, nil); err != nil {
 				return err
 			}
+			woke = true
 			probes.start(current)
 			heartbeatDue = nowFn().Add(heartbeat)
+		}
+		// The scan wrote all of its events above; the deferred output.finish
+		// then waits for the queue, so the last line is complete on return.
+		if woke && !opts.Follow {
+			return nil
 		}
 	}
 }

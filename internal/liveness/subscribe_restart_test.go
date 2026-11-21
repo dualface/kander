@@ -22,7 +22,7 @@ func TestSubscribeRestartProcess(t *testing.T) {
 			close(stop)
 			return nil
 		}}
-		opts := subscribeOptions{Group: os.Getenv("KANDER_FACTS_GROUP"), Members: []string{os.Getenv("KANDER_FACTS_MEMBER")}, Refresh: .001, Heartbeat: 1}
+		opts := subscribeOptions{Group: os.Getenv("KANDER_FACTS_GROUP"), Members: []string{os.Getenv("KANDER_FACTS_MEMBER")}, Refresh: .001, Heartbeat: 1, Follow: true}
 		if err := Subscribe(os.Getenv("KANDER_FACTS_ROOT"), opts, writer, stop); err != nil {
 			t.Fatal(err)
 		}

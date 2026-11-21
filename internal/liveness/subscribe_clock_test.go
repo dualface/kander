@@ -61,7 +61,7 @@ func TestAuditChangesSuppressLiveness(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				opts := subscribeOptions{Group: group, Members: []string{idleID}, Refresh: .000001, Heartbeat: .1}
+				opts := subscribeOptions{Group: group, Members: []string{idleID}, Refresh: .000001, Heartbeat: .1, Follow: true}
 				if watched {
 					opts.Watch = []string{movingID}
 				} else {
@@ -154,7 +154,7 @@ func TestSubscribePureHeartbeatBeforeRefresh(t *testing.T) {
 		}
 		return nil
 	}}
-	if err := Subscribe(root, subscribeOptions{Group: group, Members: []string{id}, Refresh: 3600, Heartbeat: .002}, writer, stop); err != nil {
+	if err := Subscribe(root, subscribeOptions{Group: group, Members: []string{id}, Refresh: 3600, Heartbeat: .002, Follow: true}, writer, stop); err != nil {
 		t.Fatal(err)
 	}
 	if len(writer.events) != 2 || writer.events[1].Event != "heartbeat" || writer.events[1].Liveness != nil {

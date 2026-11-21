@@ -22,7 +22,7 @@ func factsMember(t *testing.T) (string, subscribeOptions, string) {
 	if _, err := board.MoveEntry(currentEntry(t, root, id), root, "review"); err != nil {
 		t.Fatal(err)
 	}
-	return root, subscribeOptions{Group: group, Members: []string{id}, Refresh: .001, Heartbeat: .02}, id
+	return root, subscribeOptions{Group: group, Members: []string{id}, Refresh: .001, Heartbeat: .02, Follow: true}, id
 }
 
 func factsUpdate(root, id string, change func(string) string) error {
