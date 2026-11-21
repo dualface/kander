@@ -15,8 +15,13 @@ import (
 
 func prepareSubscriptionDispatch(t *testing.T, root, id, kind string, deadline time.Duration) board.Dispatch {
 	t.Helper()
+	return prepareSubscriptionDispatchID(t, root, id, "subscription-round", kind, deadline)
+}
+
+func prepareSubscriptionDispatchID(t *testing.T, root, id, dispatchID, kind string, deadline time.Duration) board.Dispatch {
+	t.Helper()
 	now := time.Now().UTC()
-	in := board.DispatchInput{ID: "subscription-round", TaskID: id,
+	in := board.DispatchInput{ID: dispatchID, TaskID: id,
 		Kind: kind, Message: "private dispatch payload", Base: strings.Repeat("a", 40),
 		CreatedAt: now.Add(-time.Minute), ConfirmBy: now.Add(deadline)}
 	if kind == "wrap-up" {

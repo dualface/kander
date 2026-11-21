@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -22,11 +23,18 @@ import (
 
 func remoteSubscriptionService(t *testing.T) (*remote.Session, *client.Project) {
 	t.Helper()
+	return remoteSubscriptionServiceBehind(t, func(h http.Handler) http.Handler { return h })
+}
+
+// remoteSubscriptionServiceBehind serves the project through wrap(handler), so a test can
+// change what the observer's requests reach.
+func remoteSubscriptionServiceBehind(t *testing.T, wrap func(http.Handler) http.Handler) (*remote.Session, *client.Project) {
+	t.Helper()
 	srv, err := server.Open(server.Options{DataDir: filepath.Join(t.TempDir(), "service"), Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if err != nil {
 		t.Fatal(err)
 	}
-	httpServer := httptest.NewServer(srv.Handler())
+	httpServer := httptest.NewServer(wrap(srv.Handler()))
 	t.Cleanup(func() { httpServer.Close(); _ = srv.Close() })
 	clients := make([]*client.Client, 2)
 	var info api.Project
@@ -70,7 +78,7 @@ func TestRemoteSubscriptionWatchesGroupsThroughTheService(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
 	go func() {
-		done <- subscribeContext(ctx, service.Location(""), subscribeOptions{Watch: []string{group}, Refresh: 0.01, Heartbeat: 0.05}, events, service)
+		done <- subscribeContext(ctx, service.Location(""), subscribeOptions{Watch: []string{group}, Refresh: 0.01, Heartbeat: 0.05, Follow: true}, events, service)
 	}()
 	t.Cleanup(func() {
 		cancel()
@@ -180,7 +188,7 @@ func TestRemoteSubscriptionWakesForCoordinatorAuthorityChanges(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
 	go func() {
-		done <- subscribeContext(ctx, service.Location(""), subscribeOptions{Watch: []string{group}, Refresh: 0.01, Heartbeat: 1}, events, service)
+		done <- subscribeContext(ctx, service.Location(""), subscribeOptions{Watch: []string{group}, Refresh: 0.01, Heartbeat: 1, Follow: true}, events, service)
 	}()
 	t.Cleanup(func() {
 		cancel()

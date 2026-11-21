@@ -303,6 +303,8 @@ func startTestSubscription(t *testing.T, root string, opts subscribeOptions) (*s
 	stop := make(chan struct{})
 	done := make(chan struct{})
 	var runErr error
+	// These tests read events until they stop the subscription themselves.
+	opts.Follow = true
 	go func() {
 		runErr = Subscribe(root, opts, buf, stop)
 		close(done)

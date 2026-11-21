@@ -47,6 +47,7 @@ type subscription struct {
 	heartbeat            time.Duration
 	attention            map[string]dispatchAttentionKey
 	dispatchProbePending bool
+	overdueBaseline      map[dispatchAttentionKey]struct{}
 }
 
 func newSubscription(opts subscribeOptions) (*subscription, error) {

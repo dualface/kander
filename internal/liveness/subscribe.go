@@ -30,6 +30,9 @@ type subscribeOptions struct {
 	Watch     []string
 	Refresh   float64
 	Heartbeat float64
+	// Follow keeps the subscription writing events until it is stopped. The
+	// zero value ends it after the scan that wrote the first wake-up event.
+	Follow bool
 }
 
 type changeEvent struct {
@@ -129,6 +132,7 @@ func newSubscribeCommand(run func(subscribeOptions) int) *cobra.Command {
 	command.Float(c.Flags(), &opts.Refresh, "refresh", defaultRefresh, validInterval, "", "liveness.refresh_interval_must_be_greater_than_0")
 	command.Float(c.Flags(), &opts.Heartbeat, "heartbeat", defaultHeartbeat, validInterval, "", "liveness.heartbeat_interval_must_be_greater_than_0")
 	c.Flags().StringArrayVar(&opts.Watch, "watch", nil, "")
+	c.Flags().BoolVar(&opts.Follow, "follow", false, "")
 	return c
 }
 
@@ -175,8 +179,11 @@ func Subscribe(root string, opts subscribeOptions, w io.Writer, stop <-chan stru
 	return err
 }
 
+// subscribeContext runs one subscription. Without opts.Follow it returns nil
+// after the scan that wrote the first wake-up event: a membership, state, task,
+// blocked, coordinator, claim, reset or heartbeat event, or a dispatch-attention
+// event that dispatchAttention reports as a wake-up.
 func subscribeContext(ctx context.Context, root string, opts subscribeOptions, w io.Writer, service *remote.Session) (result error) {
-
 	refresh, valid := subscriptionInterval(opts.Refresh)
 	if !valid {
 		return fmt.Errorf("%s", t("liveness.refresh_interval_must_be_greater_than_0"))
@@ -213,7 +220,9 @@ func subscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 		return err
 	}
 	probes.start(snapshot)
-	if err := session.dispatchAttention(w, snapshot, false); err != nil {
+	session.recordOverdueBaseline(snapshot)
+	// Every overdue dispatch here is in the baseline, so this write never wakes.
+	if _, err := session.dispatchAttention(w, snapshot, false); err != nil {
 		return err
 	}
 	heartbeatDue := nowFn().Add(heartbeat)
@@ -275,10 +284,12 @@ func subscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 		if service != nil {
 			probes.start(current)
 		}
+		woke := false
 		if reset {
 			if err := session.emit(w, "snapshot-reset", current, nil, nil, nil); err != nil {
 				return err
 			}
+			woke = true
 		}
 
 		var changed []changeEvent
@@ -301,42 +312,56 @@ func subscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 			if err := session.emit(w, "membership-change", current, nil, nil, removed); err != nil {
 				return err
 			}
+			woke = true
 		}
 		if len(changed) > 0 {
 			if err := session.emit(w, "state-change", current, changed, updated, nil); err != nil {
 				return err
 			}
+			woke = true
 		} else if len(updated) > 0 {
 			if err := session.emit(w, "task-update", current, nil, updated, nil); err != nil {
 				return err
 			}
+			woke = true
 		}
 		if changed, takenOver := changedCoordinators(snapshot, current); changed {
 			session.reconciliation = session.reconciliation || takenOver
 			if err := session.emit(w, "coordinator-change", current, nil, nil, nil); err != nil {
 				return err
 			}
+			woke = true
 		}
 		if ids := changedClaims(snapshot, current); len(ids) > 0 {
 			if err := session.emit(w, "claim-change", current, nil, ids, nil); err != nil {
 				return err
 			}
+			woke = true
 		}
 		if !maps.Equal(snapshot.blocked, current.blocked) {
 			if err := session.emit(w, "member-blocked", current, nil, nil, nil); err != nil {
 				return err
 			}
+			woke = true
 		}
-		if err := session.dispatchAttention(w, current, probeCompleted); err != nil {
+		attentionWoke, err := session.dispatchAttention(w, current, probeCompleted)
+		if err != nil {
 			return err
 		}
+		woke = woke || attentionWoke
 		snapshot = current
 		if !nowFn().Before(heartbeatDue) {
 			if err := session.emit(w, "heartbeat", current, nil, nil, nil); err != nil {
 				return err
 			}
+			woke = true
 			probes.start(current)
 			heartbeatDue = nowFn().Add(heartbeat)
+		}
+		// The scan wrote all of its events above; the deferred output.finish
+		// then waits for the queue, so the last line is complete on return.
+		if woke && !opts.Follow {
+			return nil
 		}
 	}
 }

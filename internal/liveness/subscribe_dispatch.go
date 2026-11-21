@@ -41,7 +41,24 @@ func (s *subscription) dispatchWait(facts subscriptionFacts, now time.Time, wait
 	return wait
 }
 
-func (s *subscription) dispatchAttention(w io.Writer, facts subscriptionFacts, probeCompleted bool) error {
+// recordOverdueBaseline remembers the overdue dispatches the snapshot already
+// reported. Single-event subscriptions do not wake for them, otherwise every
+// restart would end at once on the same overdue dispatch. The key is the
+// dispatch ID and epoch, not the card: a card that gets a new overdue dispatch
+// is a new fact.
+func (s *subscription) recordOverdueBaseline(facts subscriptionFacts) {
+	s.overdueBaseline = map[dispatchAttentionKey]struct{}{}
+	for _, id := range facts.monitored {
+		if dispatch := facts.dispatches[id]; dispatch.ConfirmationOverdue {
+			s.overdueBaseline[dispatchAttentionKey{dispatch.ID, dispatch.Epoch}] = struct{}{}
+		}
+	}
+}
+
+// dispatchAttention writes a dispatch-attention event when one is due. It
+// reports whether the event is a wake-up event: it names an overdue dispatch
+// that was not overdue in the snapshot.
+func (s *subscription) dispatchAttention(w io.Writer, facts subscriptionFacts, probeCompleted bool) (bool, error) {
 	if s.probes.poll() {
 		probeCompleted = true
 	}
@@ -67,7 +84,7 @@ func (s *subscription) dispatchAttention(w io.Writer, facts subscriptionFacts, p
 	}
 	if len(overdue) == 0 {
 		s.dispatchProbePending = false
-		return nil
+		return false, nil
 	}
 	// If another bounded batch owns the worker, defer the deadline probe until
 	// it joins. No additional worker or unbounded retry queue is created.
@@ -76,7 +93,7 @@ func (s *subscription) dispatchAttention(w io.Writer, facts subscriptionFacts, p
 		s.dispatchProbePending = false
 	}
 	if !newAttention && !probeCompleted {
-		return nil
+		return false, nil
 	}
 	payload := s.payload("dispatch-attention", facts)
 	payload.Attention = overdue
@@ -84,8 +101,14 @@ func (s *subscription) dispatchAttention(w io.Writer, facts subscriptionFacts, p
 	payload.Detail = t("liveness.subscription_dispatch_overdue")
 	payload.Liveness = s.probes.liveness(facts, s.heartbeat)
 	if err := emitEvent(w, payload); err != nil {
-		return err
+		return false, err
 	}
 	s.last = facts
-	return nil
+	for _, id := range overdue {
+		dispatch := facts.dispatches[id]
+		if _, known := s.overdueBaseline[dispatchAttentionKey{dispatch.ID, dispatch.Epoch}]; !known {
+			return true, nil
+		}
+	}
+	return false, nil
 }

@@ -53,20 +53,30 @@ fi
 	return dir
 }
 
-// waitForBatchProbe returns after the fake command for pane has logged its start
-// and recorded its PID, so a later kill cannot erase the concurrency evidence.
-func waitForBatchProbe(t *testing.T, dir, pane string) {
-	t.Helper()
+// batchProbeStarted returns nil after the fake command for pane has logged its
+// start and recorded its PID, and an error when that does not happen in time.
+// It never touches a testing.T, so goroutines other than the test's own can
+// call it.
+func batchProbeStarted(dir, pane string) error {
 	path := filepath.Join(dir, pane)
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		if data, err := os.ReadFile(path); err == nil && len(data) > 0 {
-			return
+			return nil
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("probe never started")
+			return errors.New("probe never started")
 		}
 		time.Sleep(time.Millisecond)
+	}
+}
+
+// waitForBatchProbe fails the test when the probe never starts, so a later kill
+// cannot erase the concurrency evidence. Call it from the test goroutine only.
+func waitForBatchProbe(t *testing.T, dir, pane string) {
+	t.Helper()
+	if err := batchProbeStarted(dir, pane); err != nil {
+		t.Fatal(err)
 	}
 }
 
