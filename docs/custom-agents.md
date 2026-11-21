@@ -221,6 +221,16 @@ The embedded definitions also carry fields a user `agents.<name>` overlay cannot
 
 Each entry is a plain group name without `\`, `/`, or `@`, unique case-insensitively. At review time a name must resolve to a local group of this machine's account domain; builtin and well-known groups fail the review and an unresolved name is skipped. On Windows such a reviewer also gets the task spec snapshotted into the runtime regardless of `review.snapshot_spec`. Only the embedded `codex.json` declares it; POSIX ignores it. See [Review runtime isolation](review-runtime-isolation.md#runtime-directory-contract).
 
+`review.last_message_report` is a boolean inside the embedded `review` object. When it is `true`, the generated `review-contract.md` of that reviewer adds the output contract that makes the final message the complete report (`rules/templates/review/last-message-output.md`). The built-in `claude`, `cursor`, `grok`, `kimi`, and `droid` definitions declare it; the others do not, and an absent field means `false`:
+
+```json
+"review": {
+  "last_message_report": true
+}
+```
+
+The value is read from the built-in definition of the agent with exactly that name, through `config.EmbeddedReviewLastMessageReport`. It never comes from a user overlay and is not inherited through `dialect`. A user definition that overrides `agents.claude.review` therefore keeps the output contract, and a custom agent with `dialect: claude` does not get it; such an agent that needs the convention writes it in its own prompt text. The field lives only on the embedded wrapper of the review object, not on `AgentReview`, so a user `agents.<name>.review.last_message_report` is an ignored key: the configuration stays valid, `kander config` and `kander doctor` list the key as ignored, and the contract does not change. Opening the field to user definitions is a separate decision that needs a minimum-version note in `CHANGELOG.md`.
+
 ### Rules integration providers
 
 `rules_integration` selects a reference style provider, and the target file selects a file format provider. `internal/install` branches on neither a style name nor a file extension; callers ask the provider, and the providers only decide what is written, never whether or where a file may be written (the `install_rules` gate, the shared-file check, the symlink and project-escape checks, and the atomic write stay with the callers). Providers are named after the mechanism, not the agent, so several definitions share one.
