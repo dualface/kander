@@ -427,25 +427,15 @@ func SetLanguageIfPresent(path, lang string) error {
 	})
 }
 
-// nonZeroAgents drops the empty definitions of an Agents map: an entry that holds
-// only content this version ignores reads back as an empty definition, and the same
-// state before it was written is no entry at all.
+// nonZeroAgents drops the empty definitions of an Agents or UnusablePolicy map. In
+// Agents, an entry that holds only content this version ignores reads back as an
+// empty definition, and the same state before it was written is no entry at all. In
+// UnusablePolicy, a cleared switch leaves an empty entry in memory and none in the
+// file. It returns a new map and never modifies its input.
 func nonZeroAgents(m map[string]AgentDefinition) map[string]AgentDefinition {
 	out := map[string]AgentDefinition{}
 	for name, def := range m {
 		if !isZeroAgentDefinition(def) {
-			out[name] = def
-		}
-	}
-	return out
-}
-
-// nonZeroPolicies drops the empty entries of an UnusablePolicy map: a cleared switch
-// leaves one in memory and none in the file.
-func nonZeroPolicies(m map[string]AgentDefinition) map[string]AgentDefinition {
-	out := map[string]AgentDefinition{}
-	for name, def := range m {
-		if def != (AgentDefinition{}) {
 			out[name] = def
 		}
 	}
@@ -472,7 +462,7 @@ func configEditConflicts(current, baseline, target *Config) bool {
 		switch currentValue.Type().Field(i).Name {
 		case "UnusablePolicy":
 			// An entry whose switch was cleared reads back as absent.
-			currentField, baselineField, targetField = nonZeroPolicies(current.UnusablePolicy), nonZeroPolicies(baseline.UnusablePolicy), nonZeroPolicies(target.UnusablePolicy)
+			currentField, baselineField, targetField = nonZeroAgents(current.UnusablePolicy), nonZeroAgents(baseline.UnusablePolicy), nonZeroAgents(target.UnusablePolicy)
 		case "Agents":
 			currentField, baselineField, targetField = nonZeroAgents(current.Agents), nonZeroAgents(baseline.Agents), nonZeroAgents(target.Agents)
 		}
