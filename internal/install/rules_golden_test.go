@@ -181,19 +181,26 @@ func goldenUninstall(g *goldenTranscript, paths config.InstallPaths, files ...st
 	}
 }
 
-// goldenApplyUninstall runs the real ApplyUninstall in the isolated scope and records the
-// printed lines, the error, the install_rules switch it writes, and what is left of each file.
+// text renders printed output as one quoted value. Only the home and the slash style of paths
+// are normalized, and the normalization runs on the raw text, so every newline, including
+// trailing ones, stays visible in the transcript.
+func (g *goldenTranscript) text(raw string) string {
+	return fmt.Sprintf("%q", g.msg(raw))
+}
+
+// goldenApplyUninstall runs the real uninstall in the isolated scope and records the plan
+// prompt shown before the confirmation, the printed output, the error, the install_rules switch
+// it writes, and what is left of each file.
 func goldenApplyUninstall(g *goldenTranscript, paths config.InstallPaths, files ...string) {
 	plan := PlanUninstall(paths)
+	g.line("apply uninstall plan prompt: %s", g.text(planText(plan)))
 	var out bytes.Buffer
 	err := ApplyUninstall(plan, &out)
 	g.line("apply uninstall: err=%t", err != nil)
 	if err != nil {
-		g.line("apply uninstall error: %s", g.msg(err.Error()))
+		g.line("apply uninstall error: %s", g.text(err.Error()))
 	}
-	for _, line := range strings.Split(strings.TrimRight(out.String(), "\n"), "\n") {
-		g.line("apply uninstall output: %s", g.msg(line))
-	}
+	g.line("apply uninstall output: %s", g.text(out.String()))
 	// Only the switch is recorded: the rest of the file is the default configuration, which
 	// other changes own.
 	if data, err := os.ReadFile(plan.ConfigFile); err == nil {
