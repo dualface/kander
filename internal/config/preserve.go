@@ -46,6 +46,7 @@ func encodeConfigKeeping(cfg *Config, items []Ignored) ([]byte, error) {
 	if len(items) == 0 {
 		return encodeConfig(cfg)
 	}
+	items = withCurrentSwitches(cfg, items)
 	compact, err := json.Marshal(cfg)
 	if err != nil {
 		return nil, err
@@ -190,4 +191,31 @@ func (n *jsonTree) render(buf []byte) []byte {
 		return append(buf, ']')
 	}
 	return append(buf, n.leaf...)
+}
+
+// withCurrentSwitches applies the install_rules value cfg holds for each unusable
+// built-in entry to the copy that is written back, so an edit of that switch (an
+// uninstall, the installer, Options) reaches the file while the rest of the entry
+// stays as written. Other entries are untouched.
+func withCurrentSwitches(cfg *Config, items []Ignored) []Ignored {
+	out := make([]Ignored, len(items))
+	copy(out, items)
+	for i, item := range out {
+		if item.Kind != IgnoredUnusableAgent || len(item.Path) != 2 {
+			continue
+		}
+		policy, tracked := cfg.UnusablePolicy[item.Path[1]]
+		entry, ok := asObject(item.Value)
+		if !tracked || !ok {
+			continue
+		}
+		patched := cloneRawObject(entry)
+		if policy.InstallRules != nil {
+			patched["install_rules"] = *policy.InstallRules
+		} else {
+			delete(patched, "install_rules")
+		}
+		out[i].Value = patched
+	}
+	return out
 }

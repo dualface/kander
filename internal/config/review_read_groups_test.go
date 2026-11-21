@@ -46,13 +46,17 @@ func TestReviewWindowsReadGroupsSurviveUserOverlay(t *testing.T) {
 	if got := scanIgnored(map[string]any{"agents": map[string]any{"codex": top}}, defs, nil); len(got) != 1 {
 		t.Fatalf("a user declaration of review read groups must be reported as ignored: %v", got)
 	}
-	// Inside review the declaration is still rejected: review needs args.review beside it.
+	// Inside review it is ignored the same way, and the section it leaves empty is absent.
 	for _, overlay := range []map[string]any{
 		{"review": map[string]any{"review_windows_read_groups": []string{"Users"}}},
 		{"review": map[string]any{"windows_read_groups": []string{"Users"}}},
 	} {
-		if _, err := validateAgentDefinitions(map[string]any{"codex": overlay}); err == nil {
-			t.Fatalf("an incomplete review declaration was accepted: %v", overlay)
+		defs, err := validateAgentDefinitions(map[string]any{"codex": overlay})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := scanIgnored(map[string]any{"agents": map[string]any{"codex": overlay}}, defs, nil); len(got) != 1 {
+			t.Fatalf("a user declaration of review read groups must be reported as ignored: %v %v", overlay, got)
 		}
 	}
 	returned := ReviewWindowsReadGroups("codex")

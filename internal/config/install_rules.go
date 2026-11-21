@@ -71,8 +71,22 @@ func ScopeConfigFile(paths InstallPaths) string {
 // SetAgentInstallRules stores one agent's own switch; nil removes it so the
 // agent follows the global value again. An agent entry left empty goes too.
 func SetAgentInstallRules(cfg *Config, agent string, value *bool) {
-	// An unusable entry stays as written in the file; its switch is not edited here.
+	// An unusable entry stays as written in the file except for this switch, which is
+	// kept in UnusablePolicy and patched into the entry when the file is written.
 	if _, unusable := cfg.UnusableAgents[agent]; unusable {
+		if value == nil && cfg.UnusablePolicy[agent].InstallRules == nil {
+			return
+		}
+		if cfg.UnusablePolicy == nil {
+			cfg.UnusablePolicy = map[string]AgentDefinition{}
+		}
+		policy := cfg.UnusablePolicy[agent]
+		policy.InstallRules = nil
+		if value != nil {
+			v := *value
+			policy.InstallRules = &v
+		}
+		cfg.UnusablePolicy[agent] = policy
 		return
 	}
 	def, exists := cfg.Agents[agent]
@@ -108,6 +122,9 @@ func ApplyAgentInstallRules(cfg *Config, switches InstallRules) {
 // follow the global value.
 func ClearAgentInstallRules(cfg *Config) {
 	for _, name := range slices.Collect(maps.Keys(cfg.Agents)) {
+		SetAgentInstallRules(cfg, name, nil)
+	}
+	for _, name := range slices.Collect(maps.Keys(cfg.UnusablePolicy)) {
 		SetAgentInstallRules(cfg, name, nil)
 	}
 }

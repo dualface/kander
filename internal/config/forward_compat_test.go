@@ -667,7 +667,8 @@ func TestReviewRoleExtrasSurviveTheFold(t *testing.T) {
 	if _, ok := jsonPath(readScope(t, path), "models", "review_roles", "PMQA", "future", "a"); !ok {
 		t.Fatal("an unknown field of a current role was lost on save")
 	}
-	// An unknown field of a legacy role is kept under the current role it folds into.
+	// A legacy role key is rewritten into its current role, and its unknown fields go
+	// with the key; they are still reported, at the path they have in the file.
 	legacy := scopeDocument(t)
 	OverlaySet(legacy, map[string]any{"model": "m", "future": "x"}, "models", "review_roles", "PM")
 	writeJSONFile(t, path, legacy)
@@ -675,19 +676,24 @@ func TestReviewRoleExtrasSurviveTheFold(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Save(cfg); err != nil {
-		t.Fatal(err)
-	}
-	if v, _ := jsonPath(readScope(t, path), "models", "review_roles", "PMQA", "future"); v != "x" {
-		t.Fatalf("an unknown field of a legacy role was lost on save: %v", v)
+	if got := ignoredPaths(cfg); !slices.Equal(got, []string{"models.review_roles.PM.future"}) {
+		t.Fatalf("ignored=%v", got)
 	}
 	// The fold used by the overlay merge and the overlay write keeps it too.
 	raw := map[string]any{"models": map[string]any{"review_roles": map[string]any{
 		"PM": map[string]any{"model": "m", "future": "x"},
 	}}}
 	FoldLegacyReviewRoleKeys(raw)
-	if v, _ := jsonPath(raw, "models", "review_roles", "PMQA", "future"); v != "x" {
-		t.Fatalf("an unknown field of a legacy role must move to the current role: %v", raw)
+	if _, ok := jsonPath(raw, "models", "review_roles", "PMQA", "future"); ok {
+		t.Fatalf("an unknown field of a legacy role must not overwrite or join the current role: %v", raw)
+	}
+	both := map[string]any{"models": map[string]any{"review_roles": map[string]any{
+		"PM":   map[string]any{"model": "m", "future": "legacy"},
+		"PMQA": map[string]any{"future": "current"},
+	}}}
+	FoldLegacyReviewRoleKeys(both)
+	if v, _ := jsonPath(both, "models", "review_roles", "PMQA", "future"); v != "current" {
+		t.Fatalf("the current role's own field must win: %v", both)
 	}
 }
 
@@ -730,5 +736,83 @@ func TestOverlayWithOnlyUnknownTUIKeysOverAScopeWithoutTUI(t *testing.T) {
 	}
 	if cfg.TUI != DefaultTUI() || !slices.Equal(ignoredPaths(cfg), []string{"tui.future"}) {
 		t.Fatalf("tui=%+v ignored=%v", cfg.TUI, ignoredPaths(cfg))
+	}
+}
+
+// A section whose keys are all unknown is absent, not an empty section that fails.
+func TestAgentSectionOfOnlyUnknownKeysIsAbsent(t *testing.T) {
+	setupHome(t)
+	doc := scopeDocument(t)
+	doc["agents"] = map[string]any{"claude": map[string]any{"session": map[string]any{"Mode": "generated"}}}
+	writeScope(t, doc)
+	cfg, err := Load(false)
+	if err != nil {
+		t.Fatalf("a misspelled section key must only be reported: %v", err)
+	}
+	if !slices.Equal(ignoredPaths(cfg), []string{"agents.claude.session.Mode"}) || cfg.Agents["claude"].Session != nil {
+		t.Fatalf("ignored=%v session=%+v", ignoredPaths(cfg), cfg.Agents["claude"].Session)
+	}
+	// An empty section the user wrote is still checked.
+	doc["agents"] = map[string]any{"claude": map[string]any{"session": map[string]any{}}}
+	writeScope(t, doc)
+	if _, err := Load(false); err == nil {
+		t.Fatal("an empty session section was accepted")
+	}
+}
+
+func TestSessionFileStaysCheckedBesideAnUnregisteredMode(t *testing.T) {
+	setupHome(t)
+	doc := scopeDocument(t)
+	doc["agents"] = map[string]any{"custom": map[string]any{
+		"path": "sh", "args": map[string]any{"start": []any{}, "resume": []any{}},
+		"session": map[string]any{"mode": "future-mode", "file": map[string]any{"format": "jsonl_header", "id_field": "id", "max_bytes": -1}},
+	}}
+	writeScope(t, doc)
+	if _, err := Load(false); err == nil {
+		t.Fatal("an invalid session.file was hidden by an unregistered mode")
+	}
+}
+
+// The install switch of an unusable built-in entry can be turned off and on again
+// (uninstall, the installer, Options) while the rest of the entry stays as written.
+func TestInstallSwitchOfAnUnusableEntryIsEditable(t *testing.T) {
+	setupHome(t)
+	doc := scopeDocument(t)
+	entry := map[string]any{"install_rules": true, "args": map[string]any{"start": []any{}, "resume": []any{}}, "session": map[string]any{"mode": "hook:future-hook"}}
+	doc["agents"] = map[string]any{"codex": entry}
+	path := writeScope(t, doc)
+	cfg, err := Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !InstallRulesOf(cfg).Enabled("codex") {
+		t.Fatal("the switch of the entry is on")
+	}
+	ClearAgentInstallRules(cfg)
+	cfg.InstallRules = false
+	if _, err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	saved := readScope(t, path)
+	if _, ok := jsonPath(saved, "agents", "codex", "install_rules"); ok {
+		t.Fatal("clearing the switches left install_rules in the unusable entry")
+	}
+	if mode, _ := jsonPath(saved, "agents", "codex", "session", "mode"); mode != "hook:future-hook" {
+		t.Fatalf("the rest of the entry changed: %v", mode)
+	}
+	reloaded, err := Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if InstallRulesOf(reloaded).Enabled("codex") {
+		t.Fatal("the global switch is off, so the agent must follow it")
+	}
+	off := false
+	SetAgentInstallRules(reloaded, "codex", &off)
+	if _, err := Save(reloaded); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := jsonPath(readScope(t, path), "agents", "codex", "install_rules"); v != false {
+		t.Fatalf("an explicit switch must be written into the entry: %v", v)
 	}
 }

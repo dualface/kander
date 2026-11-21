@@ -86,23 +86,28 @@ func NormalizeReviewStages(raw any) (map[string]any, error) {
 	// Keys that are neither a scale nor a role are kept as they are; they stay out
 	// of the validated values and scanIgnored reports them.
 	if len(roles) > 0 || (len(scales) == 0 && reviewStagesLooksFlat(obj)) {
-		// Only the known roles move into the scales; a key this version does not
-		// know stays where it was written, so its path and its source stay true.
-		flat := map[string]any{}
-		out := make(map[string]any, len(TaskScales))
-		for key, value := range obj {
-			if containsKey(reviewRoleSet(), key) {
-				flat[key] = value
-			} else {
-				out[key] = value
-			}
-		}
-		for _, scale := range TaskScales {
-			out[scale] = cloneRawObject(flat)
-		}
-		return out, nil
+		return expandFlatRoles(obj), nil
 	}
 	return cloneRawObject(obj), nil
+}
+
+// expandFlatRoles rewrites a legacy flat {role: value} object into the two-scale
+// form. Only the known roles move into the scales; a key this version does not know
+// stays where it was written, so its path and its source stay true.
+func expandFlatRoles(obj map[string]any) map[string]any {
+	flat := map[string]any{}
+	out := make(map[string]any, len(TaskScales))
+	for key, value := range obj {
+		if containsKey(reviewRoleSet(), key) {
+			flat[key] = value
+		} else {
+			out[key] = value
+		}
+	}
+	for _, scale := range TaskScales {
+		out[scale] = cloneRawObject(flat)
+	}
+	return out
 }
 
 func reviewStagesLooksFlat(obj map[string]any) bool {

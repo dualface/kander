@@ -211,7 +211,10 @@ func OverlayIgnored(scopeRaw, overlay map[string]any) []Ignored {
 	merged := deepMerge(scopeRaw, overlay)
 	var out []Ignored
 	for _, item := range ignoredOfDocument(merged) {
-		if OverlayHas(overlay, item.Path...) {
+		// The value is the overlay's own: the merged one may hold scope values the
+		// overlay only inherits.
+		if value, ok := OverlayGet(overlay, item.Path...); ok {
+			item.Value = value
 			out = append(out, item)
 		}
 	}
