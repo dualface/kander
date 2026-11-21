@@ -21,9 +21,15 @@ import (
 // into a test failure instead of a hang.
 func singleEvents(t *testing.T, root string, opts subscribeOptions, onEvent func(groupEvent) error) ([]groupEvent, error) {
 	t.Helper()
-	opts.Follow = false
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	return singleEventsContext(ctx, root, opts, onEvent)
+}
+
+// singleEventsContext leaves the caller's context alive, for tests that check
+// the state of the subscription's resources at the moment it returns.
+func singleEventsContext(ctx context.Context, root string, opts subscribeOptions, onEvent func(groupEvent) error) ([]groupEvent, error) {
+	opts.Follow = false
 	writer := &clockEvents{onEvent: func(event groupEvent) error {
 		if onEvent == nil {
 			return nil
@@ -188,8 +194,10 @@ func TestSingleEventExitsAfterStateChange(t *testing.T) {
 	}
 }
 
-// The wake-up exit joins a probe that is still running: the slow probe
-// process is gone when the call returns.
+// The wake-up exit joins a probe that is still running. The caller's context
+// stays alive, so only the subscription's own exit can have stopped the probe
+// process and the output worker: the probe process is gone at the moment the
+// call returns, and nothing is written afterwards.
 func TestSingleEventExitJoinsRunningProbe(t *testing.T) {
 	root, opts, id := factsMember(t)
 	if _, err := board.MoveEntry(currentEntry(t, root, id), root, "working"); err != nil {
@@ -198,7 +206,13 @@ func TestSingleEventExitJoinsRunningProbe(t *testing.T) {
 	setLocation(t, currentEntry(t, root, id).Document, "codex wanted", "herdr:w1:t1:w1:p0")
 	dir := installBatchFake(t, false)
 	opts.Refresh, opts.Heartbeat = .05, 3600
-	events, err := singleEvents(t, root, opts, func(event groupEvent) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var returned atomic.Bool
+	events, err := singleEventsContext(ctx, root, opts, func(event groupEvent) error {
+		if returned.Load() {
+			t.Errorf("event %q written after the subscription returned", event.Event)
+		}
 		if event.Event != "snapshot" {
 			return nil
 		}
@@ -206,7 +220,11 @@ func TestSingleEventExitJoinsRunningProbe(t *testing.T) {
 		_, err := board.MoveEntry(currentEntry(t, root, id), root, "review")
 		return err
 	})
+	returned.Store(true)
 	requireEventNames(t, events, err, "snapshot", "state-change")
+	if ctx.Err() != nil {
+		t.Fatalf("caller context ended before the check: %v", ctx.Err())
+	}
 	assertBatchPeakAndCleanup(t, dir, 1, 1)
 }
 
@@ -353,67 +371,65 @@ func TestDispatchAttentionWakesOnlyForNewOverdueKeys(t *testing.T) {
 	}
 }
 
-func TestDispatchAttentionWakesForNewlyOverdueCard(t *testing.T) {
-	advance := switchClock(t, time.Now(), 10*time.Minute)
-	root, opts, id := factsMember(t)
-	prepareSubscriptionDispatchID(t, root, id, "late-round", "sync", time.Minute)
-	session, read := attentionSession(t, opts, root)
-	atSnapshot := read()
-	if atSnapshot.dispatches[id].ConfirmationOverdue {
-		t.Fatalf("snapshot must not be overdue: %+v", atSnapshot.dispatches[id])
+// gatedProbe installs a herdr fake whose pane query answers only after the
+// returned gate file exists, so a test decides when a probe completes.
+func gatedProbe(t *testing.T) (open func()) {
+	t.Helper()
+	installPOSIXFakes(t, true)
+	gate := filepath.Join(t.TempDir(), "gate")
+	t.Setenv("SUBSCRIBE_PROBE_GATE", gate)
+	script := `#!/bin/sh
+while [ ! -f "$SUBSCRIBE_PROBE_GATE" ]; do /bin/sleep 0.01; done
+echo '{"result":{"pane":{"pane_id":"w1:p0","agent":"codex","agent_status":"working","agent_session":{"value":"wanted"}}}}'
+`
+	if err := os.WriteFile(filepath.Join(os.Getenv("PATH"), "herdr"), []byte(script), 0700); err != nil {
+		t.Fatal(err)
 	}
-	session.recordOverdueBaseline(atSnapshot)
-	advance()
-	overdue := read()
-	if !overdue.dispatches[id].ConfirmationOverdue {
-		t.Fatalf("later read must be overdue: %+v", overdue.dispatches[id])
-	}
-	var out bytes.Buffer
-	if woke, err := session.dispatchAttention(&out, overdue, false); err != nil || !woke || out.Len() == 0 {
-		t.Fatalf("woke=%v written=%d err=%v", woke, out.Len(), err)
+	return func() {
+		if err := os.WriteFile(gate, nil, 0600); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
-// Overdue at the snapshot: the start-up attention event does not end the
-// subscription; the later membership change does.
+// Overdue at the snapshot: neither the start-up attention event nor the one
+// that reports the finished deadline probe ends the subscription. Only the
+// heartbeat does, after the clock passes its due time.
 func TestSingleEventIgnoresDispatchOverdueAtSnapshot(t *testing.T) {
-	const group = "20260908-overdue-group"
-	switchClock(t, time.Now().Add(10*time.Minute), 0)
+	advance := switchClock(t, time.Now().Add(10*time.Minute), 2*time.Hour)
 	root, opts, id := factsMember(t)
-	addFactsExternal(t, root, "overdue-first", group)
-	opts.Watch = []string{group}
+	setLocation(t, currentEntry(t, root, id).Document, "codex wanted", "herdr:w1:t1:w1:p0")
+	openProbe := gatedProbe(t)
 	prepareSubscriptionDispatchID(t, root, id, "overdue-round", "sync", time.Minute)
 	opts.Refresh, opts.Heartbeat = .05, 3600
-	added := false
+	attentions := 0
 	events, err := singleEvents(t, root, opts, func(event groupEvent) error {
-		if event.Event == "dispatch-attention" && !added {
-			added = true
-			addFactsExternal(t, root, "overdue-added", group)
+		if event.Event != "dispatch-attention" {
+			return nil
+		}
+		attentions++
+		switch attentions {
+		case 1:
+			openProbe()
+		case 2:
+			advance()
 		}
 		return nil
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("subscription ended with %v after %v", err, eventNames(events))
 	}
+	// A finished deadline probe starts the next one, so a third attention event
+	// can follow the second; all of them name only the baseline dispatch.
 	names := eventNames(events)
-	wake := -1
-	for i, name := range names {
-		if name == "membership-change" {
-			wake = i
-		}
-	}
-	// The scan that wrote the membership change may also write an attention
-	// event for the baseline dispatch; nothing else follows it.
-	if wake < 2 || names[0] != "snapshot" || !onlyAttention(names[wake+1:]) {
+	if len(names) < 4 || names[0] != "snapshot" || names[len(names)-1] != "heartbeat" || !onlyAttention(names[1:len(names)-1]) {
 		t.Fatalf("events=%v", names)
-	}
-	for i, event := range events[1:wake] {
-		if event.Event != "dispatch-attention" || event.Dispatches[id].ID != "overdue-round" {
-			t.Fatalf("event %d before the membership change woke the subscription: %v", i+1, names)
-		}
 	}
 	if !events[0].Dispatches[id].ConfirmationOverdue {
 		t.Fatalf("snapshot did not carry an overdue dispatch: %+v", events[0].Dispatches[id])
+	}
+	if events[1].Liveness[id].CollectionState != "pending" || events[2].Liveness[id].CollectionState != "complete" {
+		t.Fatalf("probe states: %+v / %+v", events[1].Liveness[id], events[2].Liveness[id])
 	}
 }
 

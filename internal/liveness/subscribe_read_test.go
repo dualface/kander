@@ -2,7 +2,6 @@ package liveness
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -22,16 +21,7 @@ func TestSubscribeUnavailableCommittedFacts(t *testing.T) {
 			}
 			switch mode {
 			case "prepared":
-				operation := "abcdefabcdefabcdefabcdefabcdefab"
-				text := snapshot.Text
-				record := board.OperationRecord{Schema: 1, ID: operation, Phase: "prepared", Revisions: map[string]uint64{id: snapshot.Revision + 1}, Files: []board.FileChange{{Path: filepath.Join("review", id, "spec.md"), Before: &text, After: text + "\nnot committed\n"}}}
-				data, err := json.Marshal(record)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err = os.WriteFile(filepath.Join(root, ".kander", "operations", operation+".json"), data, 0600); err != nil {
-					t.Fatal(err)
-				}
+				writePreparedOperation(t, root, id)
 			case "maintenance":
 				file, err := fs.OpenLockFile(root, filepath.Join(root, ".kander", "locks", "board.lock"))
 				if err != nil {
