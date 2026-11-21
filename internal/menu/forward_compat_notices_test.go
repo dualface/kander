@@ -143,6 +143,15 @@ func withReviewers(t *testing.T, reviewers map[string]any) map[string]any {
 	return doc
 }
 
+// withClaudeMirror sets kanban_agent to claude and leaves the scales to derive from it.
+func withClaudeMirror(t *testing.T) map[string]any {
+	t.Helper()
+	doc := cleanTwin(t)
+	doc["kanban_agent"] = "claude"
+	delete(doc, "kanban_agents")
+	return doc
+}
+
 func withSmallAgent(t *testing.T, agent string) map[string]any {
 	t.Helper()
 	doc := cleanTwin(t)
@@ -187,6 +196,33 @@ func TestConfigOutputEqualsThatWithoutTheIgnoredContent(t *testing.T) {
 				delete(doc, "tui")
 				return doc
 			}},
+		// The overlay names an unknown agent for the legacy mirror kanban_agent while the scope
+		// sets none for the scales: both scales show what the scope gives, not a default.
+		{name: "an unknown kanban_agent in the project overlay", notices: 3,
+			dirty:        withClaudeMirror,
+			clean:        withClaudeMirror,
+			dirtyOverlay: map[string]any{"kanban_agent": "futureagent", "tui": map[string]any{"refresh": 45}},
+			cleanOverlay: map[string]any{"tui": map[string]any{"refresh": 45}}},
+		// A legacy flat reviewers object names the unknown agent under PM, which folds into PMQA.
+		{name: "an unknown agent under a legacy reviewer role", notices: 2,
+			dirty: func(t *testing.T) map[string]any {
+				return withReviewers(t, map[string]any{"PM": "futureagent", "QA": "codex"})
+			},
+			clean: func(t *testing.T) map[string]any { return withReviewers(t, map[string]any{"QA": "codex"}) }},
+		// Both layers name an unknown agent for small; the overlay's wins, and removing it must
+		// not show the scope's.
+		{name: "unknown agents in both layers", notices: 1,
+			dirty: func(t *testing.T) map[string]any {
+				doc := withSmallAgent(t, "oldfuture")
+				return doc
+			},
+			clean: func(t *testing.T) map[string]any {
+				doc := cleanTwin(t)
+				doc["kanban_agents"] = map[string]any{"large": "codex"}
+				return doc
+			},
+			dirtyOverlay: map[string]any{"kanban_agents": map[string]any{"small": "futureagent"}, "tui": map[string]any{"refresh": 45}},
+			cleanOverlay: map[string]any{"tui": map[string]any{"refresh": 45}}},
 		// The project overlay moves small to an agent this version does not know: the output shows
 		// what the scope gives small, as the twin without that overlay value does.
 		{name: "an unknown agent in the project overlay", notices: 1,

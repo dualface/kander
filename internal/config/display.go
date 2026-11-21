@@ -94,39 +94,45 @@ func displayWithout(cfg *Config, scope, overlay map[string]any, prune bool) (*Co
 		return nil, false
 	}
 	// A role that names an agent this version does not know goes out of the layer that names it
-	// before the merge, so the role takes the value the other layer or the defaults give it.
-	refs := UnknownAgentRefs(display)
-	if len(refs) == 0 {
-		return display, true
-	}
-	if scope["reviewers"] != nil {
-		_ = normalizeReviewersField(scope)
-	}
-	if overlay != nil && overlay["reviewers"] != nil {
-		_ = normalizeReviewersField(overlay)
-	}
-	for _, ref := range refs {
-		path := strings.Split(ref.Field, ".")
-		for _, layer := range []map[string]any{scope, overlay} {
-			if layer == nil {
-				continue
-			}
-			if value, ok := OverlayGet(layer, path...); ok && value == ref.Agent {
-				if len(path) == 1 && path[0] == "kanban_agent" {
-					// A required key: the default agent stands in for it.
-					layer[path[0]] = defaultAgentName()
+	// before the merge, so the role takes the value the other layer or the defaults give it. A
+	// layer that held an unknown agent the other layer overrode shows it after the first round,
+	// so the rounds repeat until no role names one.
+	for range 4 {
+		refs := UnknownAgentRefs(display)
+		if len(refs) == 0 {
+			return display, true
+		}
+		if scope["reviewers"] != nil {
+			_ = normalizeReviewersField(scope)
+		}
+		if overlay != nil && overlay["reviewers"] != nil {
+			_ = normalizeReviewersField(overlay)
+		}
+		for _, ref := range refs {
+			path := strings.Split(ref.Field, ".")
+			for i, layer := range []map[string]any{scope, overlay} {
+				if layer == nil {
 					continue
 				}
-				if prune {
-					OverlayDelete(layer, path...)
-				} else {
-					deleteLeaf(layer, path)
+				for _, key := range roleKeys(path) {
+					if value, ok := OverlayGet(layer, key...); ok && value == ref.Agent {
+						if i == 0 && len(key) == 1 && key[0] == "kanban_agent" {
+							// The scope file requires kanban_agent: the default agent stands in for it.
+							layer[key[0]] = defaultAgentName()
+						} else if prune {
+							OverlayDelete(layer, key...)
+						} else {
+							deleteLeaf(layer, key)
+						}
+					}
 				}
 			}
 		}
+		if display, err = merge(); err != nil {
+			return nil, false
+		}
 	}
-	display, err = merge()
-	return display, err == nil
+	return display, true
 }
 
 // deleteLeaf removes the key the path names and leaves every parent object in place.
@@ -139,4 +145,18 @@ func deleteLeaf(obj map[string]any, path []string) {
 		obj = next
 	}
 	delete(obj, path[len(path)-1])
+}
+
+// roleKeys lists the keys a layer can hold the role at the path under. A reviewer role is read
+// from its historical names too (PM and QA fold into PMQA, CSA and Hacker into Security), and the
+// raw layer still has them under those names.
+func roleKeys(path []string) [][]string {
+	if len(path) != 3 || path[0] != "reviewers" {
+		return [][]string{path}
+	}
+	var keys [][]string
+	for _, role := range ReviewRoleSourceNames(path[2]) {
+		keys = append(keys, []string{path[0], path[1], role})
+	}
+	return keys
 }
