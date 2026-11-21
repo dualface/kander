@@ -80,7 +80,7 @@ kander dispatch show <task-id> <id>
 | Kind | Target Transition | Required Evidence Binding |
 |---|---|---|
 | `fix` | `working` $\to$ `review` | Binds batch ID, finding IDs, and prior author disposition records. |
-| `sync` | `working` $\to$ `review` | Used for branch/rebase synchronization. Does not accept review finding bindings. |
+| `sync` | `working` $\to$ `review` | Used for branch/rebase synchronization. Does not accept review finding bindings. An accepted sync round still authorizes the current `OWNER` to append author records with the `authorization` of that round. The owner uses this to correct records whose `fix_commit` a rebase rewrote, and a round for corrections only needs no rebase ([Review Disposition](review-disposition.md#fix-commits-must-stay-in-the-batch-history)). |
 | `wrap-up` | `working` $\to$ `done` | Binds closed review target SHA, Git integration commit, and the integration target ref. |
 
 ---
@@ -117,6 +117,7 @@ Fix dispatches enforce that the executor receives exact, structured review findi
 
 - **Lineage Verification**: The system verifies that `findings` exist in the specified batch and are assigned to the target task.
 - **Idempotency**: Retrying with the same `dispatch_id` inherits the existing bindings. Modifying bindings under the same ID triggers a conflict error.
+- **Superseded Rounds**: A fix dispatch rejects a run that already has a successor run (`superseded review round`), so the dispatch carries only the findings of the current round. This is not a path for correcting author records whose `fix_commit` a rebase rewrote. That correction travels in a `sync` dispatch (see [Dispatch Kinds](#2-dispatch-kinds--evidence-bindings) and [Review Disposition](review-disposition.md#fix-commits-must-stay-in-the-batch-history)).
 
 ---
 
