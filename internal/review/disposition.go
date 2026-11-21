@@ -306,6 +306,9 @@ func closeWithGit(root, cwd string, r board.ReviewCloseRequest) (board.ReviewClo
 	if err != nil {
 		return c, err
 	}
+	if err = verifyFixCommitClaims(cwd, v, r); err != nil {
+		return c, err
+	}
 	for _, edge := range edges {
 		if err = verifyGitEdge(cwd, edge); err != nil {
 			return c, err

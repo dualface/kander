@@ -315,23 +315,64 @@ func latestViewRecords(rv ReviewRunView) []ReviewDisposition {
 	return latestDispositions(dispositionLedger{Records: rv.Records})
 }
 
+// ReviewFixCommitClaim is one latest fixed record that closure binds to Git: the
+// record and the edges its fix commit must satisfy. A review layer that finds an
+// edge unsatisfied can then name the record instead of only the two commits.
+type ReviewFixCommitClaim struct {
+	TaskID    string
+	RunID     string
+	FindingID string
+	RecordID  string
+	FixCommit string
+	Edges     []ReviewGitEdge
+}
+
+// fixedRecordEdges lists the Git edges one latest fixed record adds to a closure:
+// the fix follows the reviewed commit and precedes the batch target. A must-fix
+// finding of the conclusion run is a mechanical fix and precedes passed_at; one of
+// an earlier run precedes the conclusion run's commit.
+func fixedRecordEdges(prior ReviewRunView, d ReviewDisposition, mustFixItem bool, conclusion ReviewRunView, passedAt, target string) []ReviewGitEdge {
+	edges := []ReviewGitEdge{{prior.Run.Commit, d.FixCommit}, {d.FixCommit, target}}
+	switch {
+	case !mustFixItem:
+	case prior.Run.RunID == conclusion.Run.RunID:
+		edges = append(edges, ReviewGitEdge{d.FixCommit, passedAt})
+	default:
+		edges = append(edges, ReviewGitEdge{d.FixCommit, conclusion.Run.Commit})
+	}
+	return edges
+}
+
+// ReviewFixCommitClaims returns the fixed records a closure request binds to Git,
+// each with the edges it adds. It covers the same records and edges as
+// ReviewClosureEdges and fails with the same errors.
+func ReviewFixCommitClaims(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewFixCommitClaim, error) {
+	_, _, claims, err := reviewClosureEdges(v, r)
+	return claims, err
+}
+
 // ReviewClosureEdges validates semantic coverage and returns the exact Git claims
 // which the review layer must verify. Structural validation makes no Git calls.
 func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdge, map[string]string, error) {
+	edges, statuses, _, err := reviewClosureEdges(v, r)
+	return edges, statuses, err
+}
+
+func reviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdge, map[string]string, []ReviewFixCommitClaim, error) {
 	b := v.Batch
 	for _, run := range v.Runs {
 		if run.FindingsStatus == "pending" {
-			return nil, nil, reviewError("report needs review interpret: " + run.Run.RunID)
+			return nil, nil, nil, reviewError("report needs review interpret: " + run.Run.RunID)
 		}
 	}
 	if _, err := ReviewMechanicalClaims(v, r); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if r.BatchID != b.BatchID || r.ExpectedRevision != b.Revision || r.ViewHash != ReviewViewDigest(v) || strings.TrimSpace(r.Author) == "" {
-		return nil, nil, reviewError("close target/revision/view CAS")
+		return nil, nil, nil, reviewError("close target/revision/view CAS")
 	}
 	if err := validateRequirements(b.Requirements); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	statuses := map[string]string{}
 	runs := map[string]ReviewRunView{}
@@ -343,10 +384,11 @@ func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdg
 		}
 	}
 	var edges []ReviewGitEdge
+	var claims []ReviewFixCommitClaim
 	add := func(a, d string) { edges = append(edges, ReviewGitEdge{a, d}) }
 	if noGitReviewBatch(b.Base, b.TargetCommit, b.Requirements) {
 		if len(v.Runs) > 0 {
-			return nil, nil, reviewError("non-Git N/A batch cannot contain reviewer runs")
+			return nil, nil, nil, reviewError("non-Git N/A batch cannot contain reviewer runs")
 		}
 	} else {
 		add(b.Base, b.TargetCommit)
@@ -357,7 +399,7 @@ func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdg
 		if b.Requirements[role] != "required" {
 			statuses[role] = b.Requirements[role]
 			if _, ok := r.Roles[role]; ok {
-				return nil, nil, reviewError("N/A role conclusion")
+				return nil, nil, nil, reviewError("N/A role conclusion")
 			}
 			continue
 		}
@@ -365,19 +407,19 @@ func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdg
 		c, ok := r.Roles[role]
 		rv, found := runs[c.RunID]
 		if !ok || !found || rv.Run.Role != role || rv.Run.ExecutionStatus != "ok" || strings.TrimSpace(c.Basis) == "" {
-			return nil, nil, reviewError("required successful role conclusion: " + role)
+			return nil, nil, nil, reviewError("required successful role conclusion: " + role)
 		}
 		if !validCommit(c.PassedAt) {
-			return nil, nil, reviewError("role " + role + " passed_at must be a 40 or 64 character lowercase hex commit, not a timestamp")
+			return nil, nil, nil, reviewError("role " + role + " passed_at must be a 40 or 64 character lowercase hex commit, not a timestamp")
 		}
 		if referenced[c.RunID] {
-			return nil, nil, reviewError("old role conclusion selected")
+			return nil, nil, nil, reviewError("old role conclusion selected")
 		}
 		chain := map[string]bool{}
 		current := rv.Run
 		for {
 			if chain[current.RunID] {
-				return nil, nil, reviewError("role cycle")
+				return nil, nil, nil, reviewError("role cycle")
 			}
 			chain[current.RunID] = true
 			if current.PreviousRunID == "" {
@@ -385,7 +427,7 @@ func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdg
 			}
 			next, ok := runs[current.PreviousRunID]
 			if !ok {
-				return nil, nil, reviewError("missing role predecessor")
+				return nil, nil, nil, reviewError("missing role predecessor")
 			}
 			current = next.Run
 		}
@@ -396,7 +438,7 @@ func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdg
 			if other.Run.ExecutionStatus == "ok" && !chain[other.Run.RunID] {
 				replacement, e := supersededReplacement(runs, chain, rv.Run, other.Run, r.SupersededRuns)
 				if e != nil {
-					return nil, nil, e
+					return nil, nil, nil, e
 				}
 				superseded[other.Run.RunID] = true
 				add(other.Run.Commit, replacement)
@@ -405,7 +447,7 @@ func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdg
 			if other.Run.ExecutionStatus != "ok" {
 				replacement, ok := runs[r.ResolvedFailures[other.Run.RunID]]
 				if !ok || !chain[replacement.Run.RunID] || replacement.Run.ExecutionStatus != "ok" {
-					return nil, nil, reviewError("failed run requires explicit successful replacement")
+					return nil, nil, nil, reviewError("failed run requires explicit successful replacement")
 				}
 				add(other.Run.Commit, replacement.Run.Commit)
 			}
@@ -419,7 +461,7 @@ func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdg
 				continue
 			}
 			if prior.Findings == nil || prior.Assignment == nil {
-				return nil, nil, reviewError("missing parsed findings and assignment")
+				return nil, nil, nil, reviewError("missing parsed findings and assignment")
 			}
 			items := map[string]ReviewFinding{}
 			for _, f := range prior.Findings.all() {
@@ -428,7 +470,7 @@ func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdg
 			for _, d := range latestViewRecords(prior) {
 				item := items[d.FindingID]
 				if d.Status == "confirmed" || d.Status == "unverifiable" {
-					return nil, nil, reviewError("unresolved must-fix: " + d.RunID + "/" + d.FindingID)
+					return nil, nil, nil, reviewError("unresolved must-fix: " + d.RunID + "/" + d.FindingID)
 				}
 				if d.Status == "waived" {
 					statuses[role] = d.Waiver.Policy
@@ -437,45 +479,41 @@ func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdg
 					continue
 				}
 				if d.FixCommit == prior.Run.Commit {
-					return nil, nil, reviewError("fix must follow reviewed commit")
+					return nil, nil, nil, reviewError("fix must follow reviewed commit")
 				}
-				add(prior.Run.Commit, d.FixCommit)
-				add(d.FixCommit, b.TargetCommit)
-				if !mustFix(item.Tier) {
-					continue
-				}
-				if prior.Run.RunID == c.RunID {
+				must := mustFix(item.Tier)
+				if must && prior.Run.RunID == c.RunID {
 					if d.Mechanical == "" {
-						return nil, nil, reviewError("same-run must-fix " + d.FindingID + " needs disposition.mechanical or a new review run")
+						return nil, nil, nil, reviewError("same-run must-fix " + d.FindingID + " needs disposition.mechanical or a new review run")
 					}
 					mechanicalFix = true
-					add(d.FixCommit, c.PassedAt)
-				} else {
-					add(d.FixCommit, rv.Run.Commit)
 				}
+				recordEdges := fixedRecordEdges(prior, d, must, rv, c.PassedAt, b.TargetCommit)
+				edges = append(edges, recordEdges...)
+				claims = append(claims, ReviewFixCommitClaim{TaskID: d.TaskID, RunID: d.RunID, FindingID: d.FindingID, RecordID: d.RecordID, FixCommit: d.FixCommit, Edges: recordEdges})
 			}
 		}
 		if !mechanicalFix && c.PassedAt != rv.Run.Commit {
-			return nil, nil, reviewError("PASSED_AT advance requires mechanical fixes")
+			return nil, nil, nil, reviewError("PASSED_AT advance requires mechanical fixes")
 		}
 	}
 	if len(r.Roles) != required {
-		return nil, nil, reviewError("unexpected role conclusions")
+		return nil, nil, nil, reviewError("unexpected role conclusions")
 	}
 	for id := range r.SupersededRuns {
 		if !superseded[id] {
-			return nil, nil, reviewError("superseded_runs entry is not a successful run outside its role's conclusion chain: " + id)
+			return nil, nil, nil, reviewError("superseded_runs entry is not a successful run outside its role's conclusion chain: " + id)
 		}
 	}
 	for id, replacement := range r.ResolvedFailures {
 		rv, ok := runs[id]
 		if !ok || rv.Run.ExecutionStatus == "ok" || replacement == "" {
-			return nil, nil, reviewError("invalid failure resolution")
+			return nil, nil, nil, reviewError("invalid failure resolution")
 		}
 	}
 	for _, op := range r.Opinions {
 		if strings.TrimSpace(op.Author) == "" || strings.TrimSpace(op.Basis) == "" {
-			return nil, nil, reviewError("opinion author and basis required")
+			return nil, nil, nil, reviewError("opinion author and basis required")
 		}
 		if op.Finding != nil {
 			rv, ok := runs[op.Finding.RunID]
@@ -488,7 +526,7 @@ func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdg
 				}
 			}
 			if !found {
-				return nil, nil, reviewError("opinion finding reference")
+				return nil, nil, nil, reviewError("opinion finding reference")
 			}
 		}
 	}
@@ -498,10 +536,10 @@ func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdg
 	edges = slices.Compact(edges)
 	for _, edge := range edges {
 		if !validCommit(edge.Ancestor) || !validCommit(edge.Descendant) {
-			return nil, nil, reviewError("full commit required")
+			return nil, nil, nil, reviewError("full commit required")
 		}
 	}
-	return edges, statuses, nil
+	return edges, statuses, claims, nil
 }
 func CloseReviewBatch(root string, r ReviewCloseRequest, evidence ReviewGitEvidence) (c ReviewClosure, err error) {
 	b, err := ReadReviewBatch(root, r.BatchID)

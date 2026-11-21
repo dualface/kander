@@ -54,5 +54,9 @@
   "board.review_retarget_same": "retarget_batches for batch {{.V0}} changes nothing: the new base and target equal the current ones",
   "board.review_retarget_ran": "batch {{.V0}} already has a run, an advance or a closure, so its base and target are evidence and retarget_batches cannot change them",
   "board.review_retarget_successor": "batch {{.V0}} has planned successor batches ({{.V1}}), and the base of each one is the target of its predecessor. Change the base only, or drop the successors first with drop_batches",
-  "review.no_delivery_target_not_in_head": "target {{.V0}} of a batch with no delivery is not in the history of HEAD {{.V1}} of the plan CWD. Correct the target with kander review extend-plan and retarget_batches, or run the command in the plan's worktree"
+  "review.no_delivery_target_not_in_head": "target {{.V0}} of a batch with no delivery is not in the history of HEAD {{.V1}} of the plan CWD. Correct the target with kander review extend-plan and retarget_batches, or run the command in the plan's worktree",
+  "review.fix_commit_history": "{{.V0}} fixed record(s) name a fix_commit that is not in the history of this batch",
+  "review.fix_commit_not_found": "fix_commit is not a commit in this repository",
+  "review.fix_commit_not_ancestor": "{{.V0}} is not an ancestor of {{.V1}}",
+  "review.fix_commit_next": "Next step: when a rebase rewrote a fix commit, its author appends a correction record for each listed record. previous_record_id names the listed record, the status stays, and fix_commit becomes the rewritten commit that carries the same fix (compare with git patch-id --stable). Ask for it with kander notify --kind sync, then run kander review aggregate again before closing. See snippets/execute-group-member.md \"Author Records After a Rebase\"."
 }

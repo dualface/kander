@@ -54,5 +54,9 @@
   "board.review_retarget_same": "バッチ {{.V0}} の retarget_batches は何も変えません：新しい base と target が現在の値と同じです",
   "board.review_retarget_ran": "バッチ {{.V0}} には run、前進、またはクローズの記録があり、base と target は証拠です。retarget_batches では変更できません",
   "board.review_retarget_successor": "バッチ {{.V0}} には計画済みの後続バッチ（{{.V1}}）があり、後続の base はこのバッチの target です。base だけを変えるか、先に drop_batches で後続を外してください",
-  "review.no_delivery_target_not_in_head": "配信なしバッチのターゲット {{.V0}} は、計画 CWD の現在の HEAD {{.V1}} の履歴にありません。kander review extend-plan の retarget_batches でターゲットを修正するか、計画のワークツリーでコマンドを実行してください"
+  "review.no_delivery_target_not_in_head": "配信なしバッチのターゲット {{.V0}} は、計画 CWD の現在の HEAD {{.V1}} の履歴にありません。kander review extend-plan の retarget_batches でターゲットを修正するか、計画のワークツリーでコマンドを実行してください",
+  "review.fix_commit_history": "{{.V0}} 件の fixed 記録の fix_commit がこのバッチの履歴にありません",
+  "review.fix_commit_not_found": "fix_commit はこのリポジトリのコミットではありません",
+  "review.fix_commit_not_ancestor": "{{.V0}} は {{.V1}} の祖先ではありません",
+  "review.fix_commit_next": "次の手順：rebase が修正コミットを書き換えた場合、作者は一覧の各記録に対して訂正記録を追加します。previous_record_id は一覧の記録を指し、status は変えず、fix_commit は同じ修正を担う書き換え後のコミットにします（git patch-id --stable で比較）。依頼は kander notify --kind sync で送り、訂正後は kander review aggregate をやり直してから閉じます。snippets/execute-group-member.md \"Author Records After a Rebase\" を参照してください。"
 }
