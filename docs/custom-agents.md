@@ -237,10 +237,10 @@ The built-in definitions produce three combinations: `claude-import` with `markd
 The reference style names are registered twice: `config.RulesIntegrations` lists the values `internal/config` accepts, and `referenceStyles` in `internal/install` holds the implementations. A consistency test fails when the two differ. To add a way of referencing the entry:
 
 1. Add the name to `config.RulesIntegrations` and use it as `rules_integration` in the embedded definition.
-2. Add `rules_style_<mechanism>.go` in `internal/install` with a type that implements `referenceStyle` (`Block`, `Present`, `LoadCommand`, `ProjectWriteFirst`, `ProjectSymlinkMayDiffer`) and register it in `referenceStyles`.
+2. Add `rules_style_<mechanism>.go` in `internal/install` with a type that implements `referenceStyle` (`Name`, `Block`, `Present`, `LoadCommand`, `ProjectWriteFirst`, `ProjectSymlinkMayDiffer`) and register it in `referenceStyles`. `Name()` must return exactly the value added to `config.RulesIntegrations` in step 1: `referenceStyleFor` selects the style by comparing it with the definition's `rules_integration`, and the consistency test compares the two lists.
 3. Add scenarios for the new style to the golden transcripts under `internal/install/testdata/`; the existing transcripts must stay byte for byte unchanged unless the written output changes on purpose.
 
-To add a file format, implement `fileFormat` (`SymlinkRefusal`, `Inspect`, `Prefix`, `OnlyKander`) in `rules_format_<name>.go` and register its extension in `fileFormatsByExtension`, the only place a target is matched by extension. See [Installation and permission boundaries](install-and-permissions.md#rules-integration-providers).
+To add a file format, implement `fileFormat` (`Name`, `SymlinkRefusal`, `Inspect`, `Prefix`, `OnlyKander`; `Name()` only identifies the format and is not matched against any configuration value) in `rules_format_<name>.go` and register its extension in `fileFormatsByExtension`, the only place a target is matched by extension. See [Installation and permission boundaries](install-and-permissions.md#rules-integration-providers).
 
 ## Hook Catalog
 
