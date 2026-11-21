@@ -201,7 +201,12 @@ func ResolveLanguage() string {
 
 // BindEffectiveLanguage binds the language from the on-disk config, clearing it when invalid.
 func BindEffectiveLanguage() {
-	language := ConfiguredLanguage()
+	bindLanguage(ConfiguredLanguage())
+}
+
+// bindLanguage binds a language already read from the layers, clearing the binding when it is
+// empty.
+func bindLanguage(language string) {
 	if language == "" {
 		BindConfigLanguage(nil)
 		return

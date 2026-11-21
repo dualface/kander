@@ -258,8 +258,8 @@ func TestConfigOutputEqualsThatWithoutTheIgnoredContent(t *testing.T) {
 			dirtyOverlay: map[string]any{"kanban_agents": map[string]any{"small": "futureagent"}, "tui": map[string]any{"refresh": 45}},
 			cleanOverlay: map[string]any{"tui": map[string]any{"refresh": 45}}},
 		// The scope's tui holds only an unknown key and an unknown agent stands in for small; the
-		// overlay's empty tui is no part of the reference once the scope has none either, and the
-		// output has neither section nor the agent.
+		// overlay's empty tui is no part of the reference once the scope has none either, so both
+		// reference layers omit tui and the output shows the default tui. The agent is not shown.
 		{name: "an unknown tui key and an unknown small agent under an empty overlay tui", notices: 2,
 			dirty: func(t *testing.T) map[string]any {
 				doc := withSmallAgent(t, "futureagent")

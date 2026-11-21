@@ -5,28 +5,55 @@ import (
 	"slices"
 )
 
-// LoadWithDisplay reads the scope file and the project overlay once and returns the
-// configuration as Load gives it and the configuration kander config shows. The display is the
-// reference configuration of docs/config-forward-compat.md: the same layers without the content
-// this version ignores. An unusable agents entry and the keys of a newer version stay out of
-// what is shown, so the built-in agent the entry took out of service shows with its models
-// again, and a role that names an agent this version does not know shows what the other layer
-// or the default gives it. loaded itself stays as Load returns it, because saving keeps all of
-// that; kander config reports what it hid as notices.
-func LoadWithDisplay(missingOK bool) (loaded, display *Config, err error) {
+// LayeredConfig is what one read of the layers gives kander config.
+type LayeredConfig struct {
+	// Loaded is the configuration as Load returns it.
+	Loaded *Config
+	// Display is the configuration kander config shows: the reference configuration of
+	// docs/config-forward-compat.md, the same layers without the content this version ignores.
+	Display *Config
+	// Language is the language the merged layers save explicitly, or "" when they save none.
+	Language string
+}
+
+// LoadWithDisplay reads the scope file and the project overlay once and returns the loaded
+// configuration, the one to show and the saved language. An unusable agents entry and the keys of
+// a newer version stay out of what is shown, so the built-in agent the entry took out of service
+// shows with its models again, and a role that names an agent this version does not know shows
+// what the other layer or the default gives it. Loaded stays as Load returns it, because saving
+// keeps all of that; kander config reports what it hid as notices.
+//
+// The reference configuration has no definition for layers whose restored settings the loader
+// rejects: a built-in agent that an unusable entry took out of service comes back with models
+// values this version cannot read. Those layers load, so the command shows the loaded
+// configuration instead of failing. No combination of the generated test reaches this branch.
+// The saved language is bound for the messages of this process, as BindEffectiveLanguage does.
+func LoadWithDisplay(missingOK bool) (LayeredConfig, error) {
 	layers, err := readLayers("", missingOK)
 	if err != nil {
-		return nil, nil, err
+		return LayeredConfig{}, err
 	}
-	loaded, _, err = layers.effective()
+	_, merged, err := layers.effective()
 	if err != nil {
-		return nil, nil, err
+		return LayeredConfig{}, err
 	}
-	display, err = layers.reference(loaded)
+	// The messages that validation renders (the reason of an unusable entry) use the bound
+	// language, so the layers are validated once more after the saved language is bound; the
+	// files are not read again.
+	language := explicitConfigLanguage(merged)
+	bindLanguage(language)
+	if layers.scopeConfig, err = Validate(cloneRawObjectDeep(layers.scope)); err != nil {
+		return LayeredConfig{}, err
+	}
+	loaded, merged, err := layers.effective()
 	if err != nil {
-		return nil, nil, err
+		return LayeredConfig{}, err
 	}
-	return loaded, display, nil
+	display, err := layers.reference(loaded)
+	if err != nil {
+		display = loaded
+	}
+	return LayeredConfig{Loaded: loaded, Display: display, Language: language}, nil
 }
 
 // reference builds the reference configuration of the layers. The loader already ignores the
@@ -141,25 +168,52 @@ func pruneAgentEntries(layer map[string]any) {
 	}
 }
 
+// emptyDeclarations are the sections of an agents entry that the loader takes as {}: a
+// program_status declares that the agent reports no status, and an empty prompt_delivery is
+// valid. Every other section of an entry requires keys.
+var emptyDeclarations = map[string]bool{"program_status": true, "prompt_delivery": true}
+
+// section is a section of the layers the loader does not accept empty, with the keys it knows.
+type section struct {
+	path  []string
+	known map[string]struct{}
+}
+
+// entrySections lists the sections of the agents entry name that require keys (args, session,
+// session.file, and so on): every struct section of AgentDefinition except emptyDeclarations.
+func entrySections(name string) []section {
+	var out []section
+	var walk func(path []string, t reflect.Type)
+	walk = func(path []string, t reflect.Type) {
+		for i := range t.NumField() {
+			field := t.Field(i)
+			key, ok := jsonName(field)
+			if !ok || field.Type.Kind() != reflect.Pointer || field.Type.Elem().Kind() != reflect.Struct || (len(path) == 2 && emptyDeclarations[key]) {
+				continue
+			}
+			child := append(slices.Clone(path), key)
+			out = append(out, section{child, jsonKeys(field.Type.Elem())})
+			walk(child, field.Type.Elem())
+		}
+	}
+	walk([]string{"agents", name}, reflect.TypeFor[AgentDefinition]())
+	return out
+}
+
 // dropUnfilledSections removes from the layers the sections the loader does not accept empty
-// (tui, and the session of an agents entry, whose keys are required) when no layer holds one of
-// their keys. Such a section is only empty here because the unknown keys that were in it, or a
-// {} that another layer wrote next to them, are not part of the reference; the loader reads the
+// (tui, and the sections of an agents entry that are not declarations) when no layer holds one of
+// their keys. Such a section is only empty here because the unknown keys that were in it, or a {}
+// that another layer wrote next to them, are not part of the reference; the loader reads the
 // section as absent then.
 func dropUnfilledSections(layers []map[string]any) {
-	type section struct {
-		path  []string
-		known map[string]struct{}
-	}
 	sections := []section{{[]string{"tui"}, jsonKeys(reflect.TypeFor[TUI]())}}
-	session := jsonKeys(reflect.TypeFor[AgentSessionDefinition]())
 	seen := map[string]bool{}
 	for _, layer := range layers {
 		agents, _ := layer["agents"].(map[string]any)
 		for name := range agents {
 			if !seen[name] {
 				seen[name] = true
-				sections = append(sections, section{[]string{"agents", name, "session"}, session})
+				sections = append(sections, entrySections(name)...)
 			}
 		}
 	}

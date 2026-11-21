@@ -73,14 +73,12 @@ type parentSpec struct {
 	partialOverlay bool
 	// scopeRequired: the scope file cannot omit P.
 	scopeRequired bool
-	// scopeNoOnly: the scope file cannot hold P with only unknown content.
-	scopeNoOnly bool
 }
 
 var unusableEntry = map[string]any{"path": "sh", "dialect": "futuredialect"}
 
 var parents = map[string]parentSpec{
-	"":      {known: map[bool]map[string]any{false: {"language": "en"}}, scopeRequired: true, scopeNoOnly: true},
+	"":      {known: map[bool]map[string]any{false: {"language": "en"}}, scopeRequired: true},
 	"tui":   {known: map[bool]map[string]any{false: {"refresh": 45}}, requiresKeys: true, partialOverlay: true},
 	"rules": {known: map[bool]map[string]any{false: {"reporting": false}}},
 	"git":   {known: map[bool]map[string]any{false: {"branch_mode": "main-only"}}},
@@ -106,9 +104,12 @@ var parents = map[string]parentSpec{
 		known: map[bool]map[string]any{true: {"helper": customAgent()}, false: {"helper2": customAgent()}},
 		other: map[string]any{"otherbad": unusableEntry},
 	},
-	"agents.custom":         {known: map[bool]map[string]any{true: customAgent(), false: {"process_name": "p"}}},
-	"agents.custom.session": {known: map[bool]map[string]any{true: {"mode": "generated"}, false: {"mode": "generated"}}, dropOnlyUnknown: true, requiresKeys: true},
-	"agents.codex":          {known: map[bool]map[string]any{true: {"process_name": "codex"}, false: {"process_name": "codex"}}, dropOnlyUnknown: true},
+	"agents.custom":                 {known: map[bool]map[string]any{true: customAgent(), false: {"process_name": "p"}}},
+	"agents.custom.session":         {known: map[bool]map[string]any{true: {"mode": "generated"}, false: {"mode": "generated"}}, dropOnlyUnknown: true, requiresKeys: true},
+	"agents.custom.session.file":    {known: map[bool]map[string]any{true: {"format": "jsonl_header", "id_field": "id"}, false: {"format": "jsonl_header", "id_field": "id"}}, dropOnlyUnknown: true, requiresKeys: true},
+	"agents.custom.args":            {known: map[bool]map[string]any{true: {"start": []any{}, "resume": []any{}}, false: {"start": []any{}, "resume": []any{}}}, dropOnlyUnknown: true, requiresKeys: true},
+	"agents.custom.prompt_delivery": {known: map[bool]map[string]any{true: {"mode": "argv"}, false: {"mode": "argv"}}, dropOnlyUnknown: true},
+	"agents.codex":                  {known: map[bool]map[string]any{true: {"process_name": "codex"}, false: {"process_name": "codex"}}, dropOnlyUnknown: true},
 	"agents.claude.program_status": {
 		known:           map[bool]map[string]any{true: {"reports": true, "app": "claude-code"}, false: {"reports": true, "app": "claude-code"}},
 		dropOnlyUnknown: true,
@@ -192,6 +193,9 @@ func kinds() []kind {
 		kindAt("an unknown field in models.review_roles.PMQA", "models.review_roles.PMQA", map[string]any{"future_field": "x"}),
 		withCustom(kindAt("an unknown key in a custom agent", "agents.custom", map[string]any{"future_key": "x"})),
 		withCustom(kindAt("an unknown key in the session of a custom agent", "agents.custom.session", map[string]any{"future_session_key": "x"})),
+		withCustom(kindAt("an unknown key in the session file of a custom agent", "agents.custom.session.file", map[string]any{"future_format": "transcript-v2"})),
+		withCustom(kindAt("an unknown key in the args of a custom agent", "agents.custom.args", map[string]any{"future_arg": 1})),
+		withCustom(kindAt("an unknown key in the prompt delivery of a custom agent", "agents.custom.prompt_delivery", map[string]any{"future_key": 1})),
 		emptyStatus,
 		kindAt("an unknown key in program_status", "agents.claude.program_status", map[string]any{"future_key": 1}),
 		kindAt("an unknown key in server", "server", map[string]any{"token": "t"}),
@@ -352,24 +356,23 @@ func place(dirty, ref *layers, base baseScope, k kind, scope bool, st shape) {
 			held = cloneMap(k.known)
 		}
 	}
-	// A kind that makes P hold nothing but its content replaces what P held before.
-	replaced := k.only || st == only
+	// P holds nothing but the content, so what P held before is gone.
+	replaced := st == only
 	dirtyP, refP := parentObject(dl, k.parent), parentObject(rl, k.parent)
 	if len(k.parent) == 0 {
-		if replaced && !scope {
-			clear(dl)
-			clear(rl)
-		}
 		if st == withKnown && !scope {
 			setParent(dl, nil, held)
 			setParent(rl, nil, held)
 		}
 		dirtyP, refP = dl, rl
 	} else {
-		if dirtyP == nil || replaced {
+		// A kind with its own known content (the flat reviewers object) replaces the P of the
+		// scope document, which holds the other form.
+		fresh := replaced || k.known != nil
+		if dirtyP == nil || fresh {
 			dirtyP = cloneMap(held)
 		}
-		if refP == nil || replaced {
+		if refP == nil || fresh {
 			refP = cloneMap(held)
 		}
 	}
@@ -534,9 +537,6 @@ func parentCombinations(base baseScope, p placement) []combination {
 	top := len(k.parent) == 0
 	var out []combination
 	for _, this := range []shape{only, withKnown} {
-		if k.only && this == withKnown {
-			continue
-		}
 		if !slices.ContainsFunc(p.at.layers(), func(scope bool) bool { return !expressible(sp, top, scope, this) }) {
 			others := []shape{absent, empty, otherOnly, known}
 			if p.at == inBoth {
@@ -561,7 +561,7 @@ func parentStateCount(p placement) int {
 	top := len(k.parent) == 0
 	count := 0
 	for _, this := range []shape{only, withKnown} {
-		if (k.only && this == withKnown) || slices.ContainsFunc(p.at.layers(), func(scope bool) bool { return !expressible(sp, top, scope, this) }) {
+		if slices.ContainsFunc(p.at.layers(), func(scope bool) bool { return !expressible(sp, top, scope, this) }) {
 			continue
 		}
 		if p.at == inBoth {
@@ -781,7 +781,7 @@ var unloadables = []unloadable{
 		match: func(c combination) bool {
 			return c.part == "parent states" && parents[c.parent].requiresKeys && c.scope == empty
 		},
-		count: 5,
+		count: 10,
 	},
 	{
 		name: "the overlay holds part of a section the scope file does not hold",
@@ -789,16 +789,16 @@ var unloadables = []unloadable{
 			sp := parents[c.parent]
 			return c.part == "parent states" && sp.partialOverlay && slices.Contains([]shape{absent, otherOnly, only}, c.scope) && slices.Contains([]shape{known, withKnown}, c.overlay)
 		},
-		count: 4,
+		count: 6,
 	},
 }
 
 // The size of the matrix. The generator computes each number; the constants keep it from
 // shrinking unnoticed.
 const (
-	wantPlacements = 102
-	wantPairs      = 5253
-	wantParents    = 536
+	wantPlacements = 111
+	wantPairs      = 6216
+	wantParents    = 633
 	wantFixed      = 8
 )
 

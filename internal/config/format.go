@@ -128,6 +128,12 @@ func FormatReviewStagesSummary(stages map[string]map[string]string) []string {
 // config. boardPath is the board path the server reported for the bound
 // project; an empty path prints as unavailable.
 func FormatConfigLines(cfg *Config, boardPath string) ([]string, error) {
+	return FormatConfigLinesFor(cfg, boardPath, ConfiguredLanguage())
+}
+
+// FormatConfigLinesFor is FormatConfigLines with the language the layers save explicitly (""
+// when they save none) already read by the caller, so the files are not read again.
+func FormatConfigLinesFor(cfg *Config, boardPath, stored string) ([]string, error) {
 	effective, err := Effective(cfg)
 	if err != nil {
 		return nil, err
@@ -184,7 +190,6 @@ func FormatConfigLines(cfg *Config, boardPath string) ([]string, error) {
 	lines = append(lines, Text("config.project_name")+": "+cmp.Or(binding.Project.Name, "-"))
 	lines = append(lines, Text("config.server_board_path")+": "+cmp.Or(boardPath, Text("config.server_board_unavailable")))
 	lines = append(lines, Text("config.git_branch_mode")+": "+effective.Git.BranchMode)
-	stored := ConfiguredLanguage()
 	language := stored
 	if language == "" {
 		language = ResolveLanguage()

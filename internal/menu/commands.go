@@ -43,8 +43,8 @@ func serverBoardPath(cfg *config.Config) string {
 	return info.BoardPath
 }
 
-func printConfig(cfg *config.Config) error {
-	lines, err := config.FormatConfigLines(cfg, serverBoardPath(cfg))
+func printConfig(cfg *config.Config, language string) error {
+	lines, err := config.FormatConfigLinesFor(cfg, serverBoardPath(cfg), language)
 	if err != nil {
 		return err
 	}
@@ -87,13 +87,14 @@ func Doctor() int {
 }
 
 func runConfig() int {
-	prepareLanguage()
-	// One read of the layers gives the loaded configuration and the one shown: what the notices
-	// report stays out of the output, so the output is the one of the same layers without it.
-	cfg, shown, err := config.LoadWithDisplay(false)
+	// One read of the layers gives the loaded configuration, the one shown and the saved
+	// language: what the notices report stays out of the output, so the output is the one of the
+	// same layers without it.
+	layered, err := config.LoadWithDisplay(false)
 	if err != nil {
 		return command.Fail(err)
 	}
+	cfg, shown := layered.Loaded, layered.Display
 	notifyForwardCompat(cfg)
 	if command.JSON() {
 		for _, warning := range config.AgentWarnings(shown) {
@@ -101,7 +102,7 @@ func runConfig() int {
 		}
 		return command.Result(shown)
 	}
-	if err := printConfig(shown); err != nil {
+	if err := printConfig(shown, layered.Language); err != nil {
 		return command.Fail(err)
 	}
 	return 0
