@@ -28,6 +28,7 @@ func TestMarkerRepairableByProviderCapability(t *testing.T) {
 		{"claude", false},
 		{"devin", false},
 		{"droid", false},
+		{"agy", false},
 		{"cursor", false},
 		{"opencode", false},
 		{"claude 7b2c2e93-6f7e-4e5b-8c50-1f1f4f2a9d11", true},
