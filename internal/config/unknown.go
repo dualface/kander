@@ -355,19 +355,6 @@ func scanStruct(raw any, t reflect.Type, add addFunc, path ...string) {
 	}
 }
 
-// IgnoredNotices renders one localized line per ignored item, for kander config
-// and kander doctor. An item that came from the project overlay names that file.
-func IgnoredNotices(cfg *Config) []string {
-	if cfg == nil {
-		return nil
-	}
-	var out []string
-	for _, item := range cfg.Ignored {
-		out = append(out, IgnoredNotice(item))
-	}
-	return out
-}
-
 // IgnoredNotice renders the localized line for one ignored item.
 func IgnoredNotice(item Ignored) string {
 	var line string
@@ -395,10 +382,7 @@ func UnknownAgentRefNotices(cfg *Config) []string {
 	return out
 }
 
-// pruneToStruct returns a copy of raw that keeps only the keys the struct type
-// declares, matched exactly, through nested structs, pointers, and slices. Free-form
-// maps keep every key. The standard decoder matches keys case-insensitively, so
-// decoding a pruned copy keeps the decoded definition in step with scanStruct.
+// structKind reports whether t, after pointers, is a struct type.
 func structKind(t reflect.Type) bool {
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
@@ -406,6 +390,10 @@ func structKind(t reflect.Type) bool {
 	return t.Kind() == reflect.Struct
 }
 
+// pruneToStruct returns a copy of raw that keeps only the keys the struct type
+// declares, matched exactly, through nested structs, pointers, and slices. Free-form
+// maps keep every key. The standard decoder matches keys case-insensitively, so
+// decoding a pruned copy keeps the decoded definition in step with scanStruct.
 func pruneToStruct(raw any, t reflect.Type) any {
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
