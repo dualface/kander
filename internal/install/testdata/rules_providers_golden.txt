@@ -2421,4 +2421,4 @@ apply uninstall output: "已关闭规则注入：<HOME>/.config/kander/config.js
 apply uninstall config: install_rules=false true
 apply uninstall file <HOME>/.codex/AGENTS.md: "# Main\n"
 apply uninstall file <HOME>/.codex/AGENTS.override.md: "# Override\n"
-== project-coverage-order: [claude codex grok cursor pi devin opencode kimi droid]
+== project-coverage-order: [claude codex grok cursor pi devin opencode kimi droid agy]

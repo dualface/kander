@@ -1,9 +1,11 @@
 package review
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -202,6 +204,9 @@ func TestParseReviewOutputSuccessBeforeExtract(t *testing.T) {
 		{"kimi", `{"role":"tool","tool_call_id":"1","content":"x"}` + "\n" + `{"role":"meta","type":"session.resume_hint"}` + "\n", false},
 		{"droid", `{"type":"result","subtype":"success","is_error":false,"result":"ok","session_id":"s1"}`, true},
 		{"droid", `{"type":"result","subtype":"failure","is_error":true,"result":"Exec ended early: insufficient permission to proceed."}`, false},
+		{"agy", `{"status":"SUCCESS","response":"ok"}`, true},
+		{"agy", `{"status":"ERROR","response":"ok"}`, false},
+		{"agy", `{"status":"SUCCESS","response":""}`, false},
 	}
 	for _, item := range rows {
 		t.Run(item.agent+"/"+item.body[:min(12, len(item.body))], func(t *testing.T) {
@@ -399,6 +404,101 @@ func TestDroidReviewDefinitionStaysReadOnly(t *testing.T) {
 	if !config.EmbeddedReviewLastMessageReport("droid") {
 		t.Fatal("droid exec reports its final message")
 	}
+}
+
+// Antigravity reviews run in plan mode with write, shell, MCP, and network tools
+// denied by --settings. The installed rules directory is added to the workspace
+// only when it exists.
+func TestAgyReviewDefinitionStaysReadOnly(t *testing.T) {
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "missing.json"))
+	t.Setenv("HOME", filepath.Join(t.TempDir(), "home"))
+	settings, err := agentSettingsFor("agy", "PMQA", "large")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.stdin != config.ReviewStdinNone || settings.cwd != "root" || settings.outputName != "output.json" ||
+		!settings.spawnsHelperProcesses || !settings.snapshotSpec || settings.homePolicy != config.ReviewHomeOptional {
+		t.Fatalf("settings %+v", settings)
+	}
+	rulesDir := t.TempDir()
+	ctx := reviewContext{
+		agent: "agy", settings: settings, root: "/work", rulesDir: rulesDir,
+		program:     process.AgentProgram{Path: "/bin/reviewer"},
+		instruction: mustInstruction(t, "Perform the PM review.", "/rt/prompt.txt"),
+	}
+	inv, cwd, err := reviewerArguments(ctx, "/rt", "/rt/out", "/rt/prompt.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cwd != "/work" {
+		t.Fatalf("cwd %s", cwd)
+	}
+	args := inv.Argv[1:]
+	for _, pair := range [][]string{{"--mode", "plan"}, {"--add-dir", "/rt"}, {"--add-dir", rulesDir}, {"--output-format", "json"}} {
+		if !containsPair(args, pair[0], pair[1]) {
+			t.Fatalf("argv lacks %v: %q", pair, args)
+		}
+	}
+	last := args[len(args)-1]
+	if args[len(args)-2] != "--print" || !strings.HasPrefix(last, ctx.instruction+" ") {
+		t.Fatalf("--print text must start with the instruction: %q", args)
+	}
+	i := slices.Index(args, "--settings")
+	if i < 0 {
+		t.Fatalf("argv lacks --settings: %q", args)
+	}
+	var policy struct {
+		Permissions struct {
+			Deny []string `json:"deny"`
+		} `json:"permissions"`
+	}
+	if err := json.Unmarshal([]byte(args[i+1]), &policy); err != nil {
+		t.Fatalf("--settings is not JSON: %q: %v", args[i+1], err)
+	}
+	wantDeny := []string{"write_file(*)", "command(*)", "mcp(*)", "read_url(*)", "execute_url(*)"}
+	if !slices.Equal(policy.Permissions.Deny, wantDeny) {
+		t.Fatalf("deny rules %v, want %v", policy.Permissions.Deny, wantDeny)
+	}
+	for _, banned := range []string{"--yolo", "--mode=edit", "--dangerously-skip-permissions"} {
+		if slices.Contains(args, banned) {
+			t.Fatalf("review argv carries %s: %q", banned, args)
+		}
+	}
+	if !config.EmbeddedReviewLastMessageReport("agy") {
+		t.Fatal("agy reports its final message")
+	}
+}
+
+// A rules directory that does not exist is dropped together with the --add-dir
+// flag before it, so agy never receives a missing workspace directory.
+func TestRulesDirPlaceholderIsDroppedWhenTheDirectoryIsMissing(t *testing.T) {
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "missing.json"))
+	t.Setenv("HOME", filepath.Join(t.TempDir(), "home"))
+	settings, err := agentSettingsFor("agy", "PMQA", "large")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := reviewContext{
+		agent: "agy", settings: settings, root: "/work",
+		program:     process.AgentProgram{Path: "/bin/reviewer"},
+		instruction: mustInstruction(t, "Perform the PM review.", "/rt/prompt.txt"),
+	}
+	inv, _, err := reviewerArguments(ctx, "/rt", "/rt/out", "/rt/prompt.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count := strings.Count(strings.Join(inv.Argv, "\x00"), "--add-dir"); count != 1 || !containsPair(inv.Argv[1:], "--add-dir", "/rt") {
+		t.Fatalf("only the runtime directory may remain: %q", inv.Argv)
+	}
+}
+
+func containsPair(args []string, flag, value string) bool {
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == flag && args[i+1] == value {
+			return true
+		}
+	}
+	return false
 }
 
 func TestBuiltinReviewStdinMatchesPreviousInstruction(t *testing.T) {

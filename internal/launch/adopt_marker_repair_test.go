@@ -261,7 +261,7 @@ func TestAdoptRefusesCodexSessionsOfAnotherTaskOrDirectory(t *testing.T) {
 // v1.1.1, and adoption runs no discovery for them.
 func TestAdoptRefusesAgentsWithoutProvableSessions(t *testing.T) {
 	skipOnWindows(t)
-	for _, agent := range []string{"droid", "devin"} {
+	for _, agent := range []string{"droid", "devin", "agy"} {
 		t.Run(agent, func(t *testing.T) {
 			root, _, _ := setupBoard(t)
 			task, _ := makeTodo(t, root, "adopt-"+agent)

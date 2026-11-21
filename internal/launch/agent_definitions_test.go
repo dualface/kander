@@ -26,6 +26,7 @@ func TestCustomDialectArguments(t *testing.T) {
 		{"opencode", []string{"--model", "model", "--auto", "--prompt"}, []string{"--model", "model", "--session", "session-id", "--auto", "--prompt"}},
 		{"kimi", []string{"--auto", "--model", "model"}, []string{"--auto", "--model", "model", "--session", "session-id"}},
 		{"droid", []string{"--auto", "high"}, []string{"--auto", "high", "--resume", "session-id"}},
+		{"agy", []string{"--model", "model", "--effort", "high", "--prompt-interactive"}, []string{"--conversation", "session-id", "--model", "model", "--effort", "high", "--prompt-interactive"}},
 	} {
 		t.Run(test.dialect, func(t *testing.T) {
 			cfg := config.DefaultConfig()

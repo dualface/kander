@@ -154,7 +154,7 @@ func TestSessionConfirmationAppliesBySessionDefinition(t *testing.T) {
 			applies[name] = true
 		}
 	}
-	for _, name := range []string{"devin", "droid", "kimi", "opencode"} {
+	for _, name := range []string{"agy", "devin", "droid", "kimi", "opencode"} {
 		if !applies[name] {
 			t.Errorf("%s no longer writes its session back after start: review DE-02 for it", name)
 		}

@@ -14,7 +14,7 @@ func TestEmbeddedReviewLastMessageReportDeclarations(t *testing.T) {
 		}
 	}
 	slices.Sort(declared)
-	if want := []string{"claude", "cursor", "droid", "grok", "kimi"}; !slices.Equal(declared, want) {
+	if want := []string{"agy", "claude", "cursor", "droid", "grok", "kimi"}; !slices.Equal(declared, want) {
 		t.Fatalf("built-in definitions declaring last_message_report: %v, want %v", declared, want)
 	}
 	for _, name := range declared {

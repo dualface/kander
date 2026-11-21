@@ -18,6 +18,7 @@ func TestEmbeddedAgentsDeclareProgramStatus(t *testing.T) {
 		"devin":    {Reports: true, App: "devin"},
 		"opencode": {Reports: false},
 		"droid":    {Reports: false},
+		"agy":      {Reports: false},
 	}
 	for _, name := range ExecutionAgents {
 		got := AgentFor(nil, name).ProgramStatus
