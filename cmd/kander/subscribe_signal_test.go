@@ -3,21 +3,113 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
+	"encoding/json"
+	"io"
 	"os"
-	"os/signal"
+	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/internal/cli"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 )
 
+const subscribeSignalChildArgs = "KANDER_SUBSCRIBE_SIGNAL_CHILD_ARGS"
+
+// TestSubscribeSignalChild is the child process of TestSubscribeSignalExitsZeroInBothModes: it runs
+// the real command tree with the arguments in the environment and exits with its status. Without
+// that variable it does nothing.
+func TestSubscribeSignalChild(t *testing.T) {
+	args := os.Getenv(subscribeSignalChildArgs)
+	if args == "" {
+		t.Skip("child of TestSubscribeSignalExitsZeroInBothModes")
+	}
+	os.Exit(cli.Run(append([]string{"kander", "--lang", "en"}, strings.Fields(args)...)))
+}
+
+// runSubscribeUntilSignal runs `kander subscribe` in a child process, waits until its complete
+// snapshot line is on standard output, sends SIGTERM to the child only, and returns the exit
+// error (nil for status 0), the standard error text, and the JSON lines. The child is always reaped and killed when
+// it does not end in time, so no signal or process outlives the call.
+func runSubscribeUntilSignal(t *testing.T, args string) (waitErr error, stderr string, lines []map[string]any) {
+	t.Helper()
+	cmd := exec.Command(os.Args[0], "-test.run=^TestSubscribeSignalChild$")
+	cmd.Env = append(os.Environ(), subscribeSignalChildArgs+"="+args)
+	var errText bytes.Buffer
+	cmd.Stderr = &errText
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	reader := bufio.NewReader(out)
+	first := make(chan string, 1)
+	go func() {
+		line, _ := reader.ReadString('\n')
+		first <- line
+	}()
+	// Reads of the child's output end when the child ends, so Wait below runs after them.
+	defer func() {
+		if cmd.ProcessState == nil {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+		}
+	}()
+	var snapshot string
+	select {
+	case snapshot = <-first:
+	case <-time.After(30 * time.Second):
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		t.Fatalf("%s: no snapshot line in 30s; stderr=%s", args, errText.String())
+	}
+	if !strings.HasSuffix(snapshot, "\n") {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		t.Fatalf("%s: the first line is incomplete: %q; stderr=%s", args, snapshot, errText.String())
+	}
+	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	rest := make(chan []byte, 1)
+	go func() {
+		data, _ := io.ReadAll(reader)
+		rest <- data
+	}()
+	var tail []byte
+	select {
+	case tail = <-rest:
+	case <-time.After(15 * time.Second):
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		t.Fatalf("%s: the child did not end after SIGTERM; stderr=%s", args, errText.String())
+	}
+	waitErr = cmd.Wait()
+	for line := range strings.SplitSeq(strings.TrimSuffix(snapshot+string(tail), "\n"), "\n") {
+		var object map[string]any
+		if json.Unmarshal([]byte(line), &object) != nil {
+			t.Fatalf("%s: line is not a JSON object: %q", args, line)
+		}
+		lines = append(lines, object)
+	}
+	return waitErr, errText.String(), lines
+}
+
 // A termination signal ends `kander subscribe` with status 0 and the lines already written, with
-// and without --follow: the default single-event mode must not change what the signal does.
+// and without --follow: the default single-event mode must not change what the signal does. The
+// command runs in a child process, so the signal never reaches the test binary; each child gets
+// the signal after its complete snapshot line, and the two outputs are compared whole, without
+// the values every subscription draws for itself.
 func TestSubscribeSignalExitsZeroInBothModes(t *testing.T) {
 	t.Chdir(t.TempDir())
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
@@ -32,40 +124,33 @@ func TestSubscribeSignalExitsZeroInBothModes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The test process keeps a handler of its own, so a signal that arrives before the command
-	// installed its handler does not end the test binary.
-	sink := make(chan os.Signal, 64)
-	signal.Notify(sink, syscall.SIGTERM)
-	t.Cleanup(func() { signal.Stop(sink) })
-	run := func(args ...string) ([]string, commandResult) {
-		finished := make(chan struct{})
-		go func() {
-			// Long enough for the first snapshot on a loaded machine; the signal repeats until the
-			// command has ended, since the command installs its handler after the test starts it.
-			time.Sleep(3 * time.Second)
-			for {
-				_ = syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
-				select {
-				case <-finished:
-					return
-				case <-time.After(500 * time.Millisecond):
-				}
+	normalized := func(args string) []map[string]any {
+		t.Helper()
+		waitErr, stderr, lines := runSubscribeUntilSignal(t, args)
+		if waitErr != nil {
+			t.Fatalf("%s: the child did not exit with status 0: %v; stderr=%q", args, waitErr, stderr)
+		}
+		// With --json every diagnostic is one object; a notice (such as the server version
+		// remark) is fine, an error object is not.
+		for line := range strings.SplitSeq(strings.TrimSpace(stderr), "\n") {
+			var object map[string]any
+			if line != "" && (json.Unmarshal([]byte(line), &object) != nil || object["error"] != nil) {
+				t.Fatalf("%s: unexpected diagnostic %q", args, line)
 			}
-		}()
-		result := runKander(t, append([]string{"subscribe", "--json", "--refresh", "1"}, append(args, "--watch", task.TaskID)...)...)
-		close(finished)
-		if result.code != 0 || result.stderr != "" {
-			t.Fatalf("%v: exit=%d\nstdout=%s\nstderr=%s", args, result.code, result.stdout, result.stderr)
 		}
-		var names []string
-		for _, line := range jsonStreamLines(t, result.stdout) {
-			names = append(names, line["event"].(string))
+		if len(lines) == 0 || lines[0]["event"] != "snapshot" {
+			t.Fatalf("%s: lines=%v", args, lines)
 		}
-		return names, result
+		for _, line := range lines {
+			delete(line, "subscription_id")
+			delete(line, "observed_at")
+		}
+		return lines
 	}
-	followed, _ := run("--follow")
-	single, _ := run()
-	if len(single) == 0 || single[0] != "snapshot" || !reflect.DeepEqual(followed, single) {
-		t.Fatalf("follow=%v single=%v", followed, single)
+	base := "subscribe --json --refresh 1 --watch " + task.TaskID
+	followed := normalized(base + " --follow")
+	single := normalized(base)
+	if !reflect.DeepEqual(followed, single) {
+		t.Fatalf("follow=%v\nsingle=%v", followed, single)
 	}
 }
