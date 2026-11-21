@@ -116,16 +116,34 @@ func loadEffectiveRaw(cwd string, missingOK bool) (*Config, map[string]any, erro
 	if overlayRaw == nil {
 		return cfg, raw, nil
 	}
-	merged, err := mergeOverlayRaw(raw, overlayRaw)
-	if err != nil {
-		return nil, nil, err
-	}
-	effective, err := Validate(merged)
+	effective, merged, err := validateLayers(raw, overlayRaw)
 	if err != nil {
 		return nil, nil, err
 	}
 	markOverlayIgnored(effective, cfg, overlayPath, overlayRaw)
 	return effective, merged, nil
+}
+
+// validateLayers merges the raw scope document with the project overlay (none when empty) and
+// validates the result, returning it with the merged document. It is the one place that turns
+// layers into a Config: Load, the Options preview and the display of kander config all call it,
+// so a configuration is merged, defaulted and checked for ignored content the same way wherever
+// it comes from. The arguments are not modified.
+func validateLayers(scope, overlay map[string]any) (*Config, map[string]any, error) {
+	if scope == nil {
+		scope = map[string]any{}
+	}
+	base := cloneRawObjectDeep(scope)
+	if len(overlay) == 0 {
+		cfg, err := Validate(base)
+		return cfg, base, err
+	}
+	merged, err := mergeOverlayRaw(base, overlay)
+	if err != nil {
+		return nil, nil, err
+	}
+	cfg, err := Validate(merged)
+	return cfg, merged, err
 }
 
 // markOverlayIgnored names the overlay as the source of the ignored items that

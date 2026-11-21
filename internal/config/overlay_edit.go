@@ -270,18 +270,8 @@ func LoadScopeDocument(missingOK bool) (map[string]any, error) {
 // matching Load. Do not pass a filled Config: missing optional sections would
 // be filled and then accept overlays that Load rejects.
 func MergeOverlayOnRaw(scopeRaw, overlay map[string]any) (*Config, error) {
-	if scopeRaw == nil {
-		scopeRaw = map[string]any{}
-	}
-	base := cloneRawObjectDeep(scopeRaw)
-	if len(overlay) == 0 {
-		return Validate(base)
-	}
-	merged, err := mergeOverlayRaw(base, overlay)
-	if err != nil {
-		return nil, err
-	}
-	return Validate(merged)
+	cfg, _, err := validateLayers(scopeRaw, overlay)
+	return cfg, err
 }
 
 // MergeScopeAndOverlay validates a filled Config plus sparse overlay keys.

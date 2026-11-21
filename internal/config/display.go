@@ -55,10 +55,8 @@ func displayWithout(cfg *Config, scope, overlay map[string]any) (*Config, bool) 
 		}
 	}
 	merge := func() (*Config, error) {
-		if overlay == nil {
-			return Validate(cloneRawObjectDeep(scope))
-		}
-		return MergeOverlayOnRaw(scope, overlay)
+		cfg, _, err := validateLayers(scope, overlay)
+		return cfg, err
 	}
 	// An unusable entry goes first: with it gone, a built-in agent is known again and its
 	// models.* entries are settings, not ignored content. What is still ignored after that is
