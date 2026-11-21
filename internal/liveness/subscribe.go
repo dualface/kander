@@ -84,11 +84,6 @@ type groupEvent struct {
 
 var nowFn = time.Now
 
-// subscribeJoinedHook lets a test observe the subscription's workers at the
-// moment SubscribeContext has joined them. It is nil outside tests and changes
-// no behavior, output, or exit status.
-var subscribeJoinedHook func(*subscriptionProbes, *subscriptionOutputQueue)
-
 func parsePositiveFloat(raw, id string, args ...any) (float64, error) {
 	value, err := strconv.ParseFloat(raw, 64)
 	if _, valid := subscriptionInterval(value); err != nil || !valid {
@@ -246,13 +241,7 @@ func SubscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 	}()
 	output := newSubscriptionOutput(ctx, writer)
 	probes := newSubscriptionProbes(ctx)
-	defer func() {
-		probes.finish()
-		result = subscriptionResult(ctx, result, output.finish())
-		if subscribeJoinedHook != nil {
-			subscribeJoinedHook(probes, output)
-		}
-	}()
+	defer func() { probes.finish(); result = subscriptionResult(ctx, result, output.finish()) }()
 	session.probes = probes
 	session.heartbeat = heartbeat
 	w = output

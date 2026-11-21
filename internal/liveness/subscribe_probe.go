@@ -6,6 +6,11 @@ import (
 	"time"
 )
 
+// probeWorkerTailHook is called by the probe task after it has sent its result
+// and before it signals completion, so that a test can hold the task there.
+// It is nil outside tests and changes no behavior, output, or exit status.
+var probeWorkerTailHook func()
+
 type subscriptionBatch struct {
 	revisions map[string]uint64
 	reports   []Report
@@ -53,6 +58,9 @@ func (p *subscriptionProbes) start(facts subscriptionFacts) {
 		defer p.workers.Done()
 		reports := ClassifyTasksContext(p.ctx, inputs, BatchOptions{})
 		p.results <- subscriptionBatch{revisions: revisions, reports: reports}
+		if probeWorkerTailHook != nil {
+			probeWorkerTailHook()
+		}
 	}()
 }
 
