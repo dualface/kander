@@ -69,10 +69,15 @@ func repairMissingSession(ctx context.Context, root string, snapshot board.Snaps
 		return snapshot, err
 	}
 	definition := config.AgentFor(cfg, session.Agent)
-	if definition.Session != nil && definition.Session.Mode == "none" {
+	provider, err := sessionProviderFor(cfg, session.Agent, definition.Session)
+	if err != nil {
+		return snapshot, err
+	}
+	if !provider.Resumable() {
 		return snapshot, nil
 	}
-	if definition.Session == nil || definition.Session.Mode != "hook:codex-rollout" || !backend.Capabilities().SessionReport {
+	prover, ok := provider.(sessionProver)
+	if !ok || !backend.Capabilities().SessionReport {
 		if facts.AgentSession != "" {
 			return snapshot, nil
 		}
@@ -87,7 +92,7 @@ func repairMissingSession(ctx context.Context, root string, snapshot board.Snaps
 		reference = facts.AgentSession
 	}
 	cwd := filepath.Dir(root)
-	proof, err := observeBoundSession(ctx, inspector, conn, address.Pane, definition.ProcessName, snapshot.Entry.TaskID, reference, cwd, observe)
+	proof, err := observeBoundSession(ctx, inspector, prover, conn, address.Pane, definition.ProcessName, snapshot.Entry.TaskID, reference, cwd, observe)
 	if err != nil {
 		return snapshot, err
 	}
@@ -95,7 +100,7 @@ func repairMissingSession(ctx context.Context, root string, snapshot board.Snaps
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		current, err := observeBoundSession(ctx, inspector, conn, address.Pane, definition.ProcessName, snapshot.Entry.TaskID, proof.reference, cwd, observe)
+		current, err := observeBoundSession(ctx, inspector, prover, conn, address.Pane, definition.ProcessName, snapshot.Entry.TaskID, proof.reference, cwd, observe)
 		if err != nil {
 			return err
 		}
@@ -167,7 +172,7 @@ func repairError(id string, args ...any) error {
 	return launchError(id, args...)
 }
 
-func observeBoundSession(ctx context.Context, inspector terminal.ProcessInspector, conn terminal.Conn, pane, name, task, reference, cwd string, observe func(context.Context, int) (process.ProcessFiles, error)) (sessionProof, error) {
+func observeBoundSession(ctx context.Context, inspector terminal.ProcessInspector, prover sessionProver, conn terminal.Conn, pane, name, task, reference, cwd string, observe func(context.Context, int) (process.ProcessFiles, error)) (sessionProof, error) {
 	processes, err := inspector.ProcessFacts(ctx, conn, pane)
 	if err != nil {
 		if errors.Is(err, terminal.ErrUnsupported) {
@@ -191,7 +196,7 @@ func observeBoundSession(ctx context.Context, inspector terminal.ProcessInspecto
 	if err != nil {
 		return sessionProof{}, repairError("launch.session_repair_process_unavailable", err.Error())
 	}
-	return proveOpenSession(ctx, files, task, reference, cwd)
+	return prover.Prove(ctx, files, task, reference, cwd)
 }
 
 type sessionProof struct {

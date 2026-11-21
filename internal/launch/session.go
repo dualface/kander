@@ -1,33 +1,18 @@
 package launch
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
-	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/probe"
 	"github.com/dualface/kander/internal/process"
-	"github.com/dualface/kander/internal/terminal/direct"
 )
 
 var sessionReferenceRe = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
-
-// enumerateSessionsFn runs the declared enumerate command and returns the
-// validated session ids that satisfy every declared match. It is a var so
-// tests can stub the agent CLI boundary.
-var enumerateSessionsFn = enumerateAgentSessions
 
 func randomUUID() string {
 	var buf [16]byte
@@ -40,71 +25,20 @@ func randomUUID() string {
 	return h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:32]
 }
 
-func cursorCreateChat(program *process.AgentProgram) (string, error) {
-	inv, err := newInvocation(*program, []string{"create-chat"}, nil)
-	if err != nil {
-		return "", launchError("launch.cursor_agent_create_chat_failed", err.Error())
-	}
-	cmd := exec.Command(inv.Argv[0], inv.Argv[1:]...)
-	cmd.Env = envSlice(inv.Env)
-	var stdoutBuf, stderrBuf bytes.Buffer
-	cmd.Stdout = &stdoutBuf
-	cmd.Stderr = &stderrBuf
-	runErr := cmd.Run()
-	stdout, stderr := stdoutBuf.String(), stderrBuf.String()
-	lines := []string{}
-	for _, line := range strings.Split(stdout, "\n") {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			lines = append(lines, line)
-		}
-	}
-	chatID := ""
-	if len(lines) > 0 {
-		chatID = lines[len(lines)-1]
-	}
-	code := 0
-	if runErr != nil {
-		if ee, ok := runErr.(interface{ ExitCode() int }); ok {
-			code = ee.ExitCode()
-		} else {
-			code = 1
-		}
-	}
-	if code != 0 || !sessionReferenceRe.MatchString(chatID) {
-		detail := strings.TrimSpace(stderr)
-		if detail == "" {
-			detail = strings.TrimSpace(stdout)
-		}
-		if detail == "" {
-			detail = "exit " + strconv.Itoa(code)
-		}
-		return "", launchError(
-			"launch.cursor_agent_create_chat_did_not_return_a_usable", detail,
-		)
-	}
-	return chatID, nil
-}
-
+// newAgentSession gives a new launch its session: the id the provider allocates
+// before the agent starts, or an empty reference the launch fills in later.
 func newAgentSession(agent string, program *process.AgentProgram, configs ...*config.Config) (AgentSession, error) {
 	var cfg *config.Config
 	if len(configs) > 0 {
 		cfg = configs[0]
 	}
 	definition := config.AgentFor(cfg, agent)
-	if config.SessionAllocatesBeforeStart(definition.Session) {
-		id, err := runSessionAllocateHook(definition.Session.Mode, program)
-		return AgentSession{Agent: agent, Reference: id}, err
+	provider, err := sessionProviderFor(cfg, agent, definition.Session)
+	if err != nil {
+		return AgentSession{}, err
 	}
-	switch definition.Session.Mode {
-	case "generated", "none":
-		return AgentSession{Agent: agent, Reference: newUUID()}, nil
-	case "allocated":
-		id, err := allocateAgentSession(definition.Session)
-		return AgentSession{Agent: agent, Reference: id}, err
-	default:
-		return AgentSession{Agent: agent}, nil
-	}
+	id, err := allocateSession(provider, sessionLaunch{Program: program, Definition: definition.Session})
+	return AgentSession{Agent: agent, Reference: id}, err
 }
 
 func parseTaskSession(text string) *AgentSession {
@@ -167,16 +101,21 @@ func resolveTaskIdentity(ctx context.Context, taskID, text string, requireResume
 	if !config.HasAgent(cfg, session.Agent) {
 		return AgentSession{}, unavailableAgentError(cfg, session.Agent)
 	}
-	definition := config.AgentFor(cfg, session.Agent)
-	if requireResume && definition.Session.Mode == "none" {
+	provider, err := sessionProviderOf(cfg, session.Agent)
+	if err != nil {
+		return AgentSession{}, err
+	}
+	if requireResume && !provider.Resumable() {
 		return AgentSession{}, config.AgentResumeError(session.Agent)
 	}
-	if config.SessionResolvesEmptyReference(definition.Session) && session.Reference == "" {
-		id, err := runSessionResolveHook(ctx, definition.Session.Mode, taskID)
+	if session.Reference == "" {
+		id, resolved, err := resolveSession(ctx, provider, taskID)
 		if err != nil {
 			return AgentSession{}, err
 		}
-		return AgentSession{Agent: session.Agent, Reference: id}, nil
+		if resolved {
+			return AgentSession{Agent: session.Agent, Reference: id}, nil
+		}
 	}
 	if session.Reference == "" {
 		return AgentSession{}, launchError(
@@ -184,442 +123,6 @@ func resolveTaskIdentity(ctx context.Context, taskID, text string, requireResume
 		)
 	}
 	return session, nil
-}
-
-func codexSessionsRoot() string {
-	home := strings.TrimSpace(os.Getenv("CODEX_HOME"))
-	if home == "" {
-		userHome, _ := os.UserHomeDir()
-		home = filepath.Join(userHome, ".codex")
-	}
-	return filepath.Join(home, "sessions")
-}
-
-// legacyPromptHeads are the localized heads earlier releases wrote into Codex rollouts; the
-// current head comes from the English prompt template, but sessions created before the
-// templates existed still start with one of these.
-var legacyPromptHeads = map[string][]string{
-	"start":    {"执行 Kanban 任务 %s", "Kanban タスク %s を実行します"},
-	"resume":   {"继续 Kanban 任务 %s", "Kanban タスク %s を再開します"},
-	"takeover": {"接管 Kanban 任务 %s", "Kanban タスク %s を引き継ぎます"},
-}
-
-// promptPrefixes lists every head a rollout of the given kinds may start with: the current
-// template head, rendered from the same installed template the launch wrote with, and the
-// legacy localized heads. A head that fails to render leaves only the legacy heads.
-func promptPrefixes(taskID string, kinds ...string) []string {
-	paths, err := currentInstallPaths()
-	if err != nil {
-		paths = config.InstallPaths{}
-	}
-	var out []string
-	for _, kind := range kinds {
-		var heads []string
-		if head, err := promptHead(paths, kind, taskID, "", 0); err == nil {
-			heads = append(heads, strings.TrimSuffix(head, "."))
-		}
-		for _, legacy := range legacyPromptHeads[kind] {
-			heads = append(heads, fmt.Sprintf(legacy, taskID))
-		}
-		for _, head := range heads {
-			out = append(out, head+";", head+".")
-		}
-	}
-	return out
-}
-
-func takeoverPromptPrefixes(taskID string) []string {
-	return promptPrefixes(taskID, "takeover")
-}
-
-func codexPromptPrefixes(taskID string) []string {
-	return promptPrefixes(taskID, "start", "resume", "takeover")
-}
-
-func startsWithAny(text string, prefixes []string) bool {
-	for _, p := range prefixes {
-		if strings.HasPrefix(text, p) {
-			return true
-		}
-	}
-	return false
-}
-
-func codexRolloutMentionsTask(path string, prefixes []string) string {
-	f, err := os.Open(path)
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-	dec := json.NewDecoder(f)
-	dec.UseNumber()
-	sessionID := ""
-	mentioned := false
-	for i := 0; i < 64; i++ {
-		var rec map[string]any
-		if err := dec.Decode(&rec); err != nil {
-			break
-		}
-		payload, _ := rec["payload"].(map[string]any)
-		if payload == nil {
-			continue
-		}
-		typ, _ := rec["type"].(string)
-		if typ == "session_meta" {
-			if id, ok := payload["id"].(string); ok {
-				sessionID = id
-			}
-		} else if typ == "response_item" {
-			if role, _ := payload["role"].(string); role == "user" {
-				content, _ := payload["content"].([]any)
-				for _, item := range content {
-					obj, _ := item.(map[string]any)
-					text, _ := obj["text"].(string)
-					if startsWithAny(text, prefixes) {
-						mentioned = true
-					}
-				}
-			}
-		} else if typ == "event_msg" {
-			if ptype, _ := payload["type"].(string); ptype == "user_message" {
-				msg, _ := payload["message"].(string)
-				if startsWithAny(msg, prefixes) {
-					mentioned = true
-				}
-			}
-		}
-		if sessionID != "" && mentioned {
-			return sessionID
-		}
-	}
-	return ""
-}
-
-type fileInfo struct {
-	path string
-	mod  time.Time
-}
-
-// codexSessionsForTask lists the sessions of every rollout whose user prompt
-// starts with this task's prompt, newest rollout first. A canceled ctx ends the scan
-// with its error, because a partial scan proves no session.
-func codexSessionsForTask(ctx context.Context, taskID string) ([]string, error) {
-	root, err := filepath.Abs(codexSessionsRoot())
-	if err != nil {
-		return nil, err
-	}
-	info, err := os.Stat(root)
-	if err != nil || !info.IsDir() {
-		return nil, launchError(
-			"launch.codex_sessions_directory_not_found_cannot_resume_with_context", root,
-		)
-	}
-	var files []fileInfo
-	_ = filepath.Walk(root, func(path string, fi os.FileInfo, err error) error {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if err != nil || fi.IsDir() {
-			return nil
-		}
-		base := filepath.Base(path)
-		if strings.HasPrefix(base, "rollout-") && strings.HasSuffix(base, ".jsonl") {
-			files = append(files, fileInfo{path: path, mod: fi.ModTime()})
-		}
-		return nil
-	})
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	slices.SortFunc(files, func(a, b fileInfo) int { return b.mod.Compare(a.mod) })
-	prefixes := codexPromptPrefixes(taskID)
-	var sessions []string
-	seen := map[string]struct{}{}
-	for _, f := range files {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		id := codexRolloutMentionsTask(f.path, prefixes)
-		if id != "" && sessionReferenceRe.MatchString(id) {
-			if _, ok := seen[id]; !ok {
-				seen[id] = struct{}{}
-				sessions = append(sessions, id)
-			}
-		}
-	}
-	return sessions, nil
-}
-
-func runSessionAllocateHook(mode string, program *process.AgentProgram) (string, error) {
-	name, ok := config.ParseSessionHook(mode)
-	if !ok {
-		return "", launchError("launch.unsupported_agent", mode)
-	}
-	switch name {
-	case "cursor-create-chat":
-		return cursorCreateChat(program)
-	default:
-		return "", launchError("launch.unsupported_agent", name)
-	}
-}
-
-func runSessionResolveHook(ctx context.Context, mode, taskID string) (string, error) {
-	name, ok := config.ParseSessionHook(mode)
-	if !ok {
-		return "", launchError("launch.unsupported_agent", mode)
-	}
-	switch name {
-	case "codex-rollout":
-		return findCodexSession(ctx, taskID)
-	default:
-		return "", launchError("launch.unsupported_agent", name)
-	}
-}
-
-// runSessionDiscoverHook finds the session a launch created. previous holds the
-// ids enumerated before a discovered-mode launch; launchStart is the time
-// recorded right before the agent was launched. budget maps each discovery
-// wait to its launch budget (LaunchPlan.launchTimeout).
-func runSessionDiscoverHook(session *config.AgentSessionDefinition, taskID string, previous map[string]struct{}, launchStart time.Time, program *process.AgentProgram, cwd string, budget func(time.Duration) time.Duration) (string, error) {
-	if session.Mode == "discovered" {
-		return discoverNewAgentSession(session.Discovery, budget(session.Discovery.Timeout()), taskID, previous, program, cwd)
-	}
-	name, ok := config.ParseSessionHook(session.Mode)
-	if !ok {
-		return "", launchError("launch.unsupported_agent", session.Mode)
-	}
-	switch name {
-	case "codex-rollout":
-		return discoverNewCodexSession(taskID, launchStart, cwd, budget(sessionDiscoverWait))
-	case "droid-sessions":
-		return discoverNewDroidSession(previous, cwd, budget(sessionDiscoverWait))
-	default:
-		return "", launchError("launch.unsupported_agent", name)
-	}
-}
-
-// sessionDiscoverSnapshot records the sessions that exist before a
-// discovered-mode or droid-sessions launch. Codex needs no snapshot and
-// returns an empty set.
-// budget maps the enumeration wait to its launch budget.
-func sessionDiscoverSnapshot(session *config.AgentSessionDefinition, taskID string, discover bool, program *process.AgentProgram, cwd string, budget func(time.Duration) time.Duration) (map[string]struct{}, error) {
-	previous := map[string]struct{}{}
-	if !config.SessionDiscoversAfterStart(session) || !discover {
-		return previous, nil
-	}
-	if session.Mode == "discovered" {
-		ctx, cancel := probe.TimeoutContext(budget(session.Discovery.Timeout()))
-		sessions, err := enumerateSessionsFn(ctx, session.Discovery, program, cwd, taskID)
-		cancel()
-		if err != nil {
-			return nil, err
-		}
-		for _, id := range sessions {
-			previous[id] = struct{}{}
-		}
-		return previous, nil
-	}
-	name, ok := config.ParseSessionHook(session.Mode)
-	if !ok {
-		return previous, nil
-	}
-	switch name {
-	case "codex-rollout":
-		// Codex discovery selects new sessions by creation time, so no rollout is
-		// read before launch; only an unusable sessions root fails early.
-		if err := checkCodexSessionsRoot(); err != nil {
-			return nil, err
-		}
-	case "droid-sessions":
-		return droidSessionSnapshot(budget(sessionDiscoverWait))
-	}
-	return previous, nil
-}
-
-func findCodexSession(ctx context.Context, taskID string) (string, error) {
-	sessions, err := codexSessionsForTask(ctx, taskID)
-	if err != nil {
-		return "", err
-	}
-	if len(sessions) > 0 {
-		return sessions[0], nil
-	}
-	root := codexSessionsRoot()
-	return "", launchError(
-		"launch.no_codex_execution_session_started_for_was_found_under", root, taskID,
-	)
-}
-
-// enumerateAgentSessions runs the declared enumerate command directly (no
-// shell) in the launch project directory and returns the validated ids of the
-// records that satisfy every declared match.
-func enumerateAgentSessions(ctx context.Context, disc *config.SessionDiscovery, program *process.AgentProgram, cwd, taskID string) ([]string, error) {
-	if program == nil {
-		return nil, launchError("launch.session_list_failed", "agent program is unavailable")
-	}
-	inv, err := launchInvocation(LaunchPlan{Launcher: direct.Foreground}, *program, disc.Args)
-	if err != nil {
-		return nil, launchError("launch.session_list_failed", err.Error())
-	}
-	result, err := probe.CaptureWithEnvDirLimit(ctx, inv.Argv[0], inv.Argv[1:], envSlice(inv.Env), cwd, disc.OutputLimit())
-	if err != nil {
-		return nil, launchError("launch.session_list_failed", err.Error())
-	}
-	if result.Overflow {
-		return nil, launchError("launch.session_list_output_limit")
-	}
-	if result.Code != 0 {
-		detail := strings.TrimSpace(result.Stderr)
-		if detail == "" {
-			detail = strings.TrimSpace(result.Stdout)
-		}
-		if detail == "" {
-			detail = "exit " + strconv.Itoa(result.Code)
-		}
-		return nil, launchError("launch.session_list_failed", detail)
-	}
-	return parseSessionList(disc, result.Stdout, cwd, taskID)
-}
-
-// canonicalSessionDir normalizes a directory for the {cwd} match on
-// untrusted CLI output: both sides are cleaned and symlink-resolved so a
-// different spelling of the same directory still binds.
-func canonicalSessionDir(p string) string {
-	abs, err := filepath.Abs(p)
-	if err == nil {
-		p = abs
-	}
-	if resolved, err := filepath.EvalSymlinks(p); err == nil {
-		p = resolved
-	}
-	return filepath.Clean(p)
-}
-
-func discoveryMatchEquals(template, cwd, taskID string) string {
-	return strings.NewReplacer("{cwd}", canonicalSessionDir(cwd), "{task_id}", taskID).Replace(template)
-}
-
-// recordMatches reports whether one enumerated record satisfies every declared
-// match. A missing or non-string field never matches.
-func recordMatches(match []config.DiscoveryMatch, record map[string]any, cwd, taskID string) bool {
-	for _, m := range match {
-		value, ok := record[m.Field].(string)
-		if !ok {
-			return false
-		}
-		want := m.Equals
-		if strings.Contains(want, "{cwd}") {
-			if canonicalSessionDir(value) != discoveryMatchEquals(want, cwd, taskID) {
-				return false
-			}
-			continue
-		}
-		if value != discoveryMatchEquals(want, cwd, taskID) {
-			return false
-		}
-	}
-	return true
-}
-
-// parseSessionList decodes one enumerate output into validated session ids.
-// Malformed output, a missing id field, and an invalid id all fail closed.
-func parseSessionList(disc *config.SessionDiscovery, stdout, cwd, taskID string) ([]string, error) {
-	var records []map[string]any
-	switch disc.Format {
-	case "json":
-		if err := json.Unmarshal([]byte(stdout), &records); err != nil {
-			return nil, launchError("launch.session_list_invalid")
-		}
-	case "jsonl":
-		for _, line := range strings.Split(stdout, "\n") {
-			line = strings.TrimSpace(line)
-			if line == "" {
-				continue
-			}
-			var record map[string]any
-			if err := json.Unmarshal([]byte(line), &record); err != nil || record == nil {
-				return nil, launchError("launch.session_list_invalid")
-			}
-			records = append(records, record)
-		}
-	case "lines":
-		seen := map[string]struct{}{}
-		var sessions []string
-		for _, line := range strings.Split(stdout, "\n") {
-			id := strings.TrimSpace(line)
-			if id == "" {
-				continue
-			}
-			if !sessionReferenceRe.MatchString(id) {
-				return nil, launchError("launch.session_list_invalid")
-			}
-			if _, ok := seen[id]; !ok {
-				seen[id] = struct{}{}
-				sessions = append(sessions, id)
-			}
-		}
-		return sessions, nil
-	}
-	if disc.Format == "json" && records == nil {
-		return nil, launchError("launch.session_list_invalid")
-	}
-	seen := map[string]struct{}{}
-	var sessions []string
-	for _, record := range records {
-		if !recordMatches(disc.Match, record, cwd, taskID) {
-			continue
-		}
-		id, ok := record[disc.IDField].(string)
-		if !ok || !sessionReferenceRe.MatchString(id) {
-			return nil, launchError("launch.session_list_invalid")
-		}
-		if _, dup := seen[id]; !dup {
-			seen[id] = struct{}{}
-			sessions = append(sessions, id)
-		}
-	}
-	return sessions, nil
-}
-
-// discoverNewAgentSession polls the declared enumerate command until exactly
-// one session id is new relative to the pre-launch snapshot. Zero candidates
-// retry until timeout elapses; several candidates fail immediately.
-func discoverNewAgentSession(disc *config.SessionDiscovery, timeout time.Duration, taskID string, previous map[string]struct{}, program *process.AgentProgram, cwd string) (string, error) {
-	deadline := nowFn().Add(timeout)
-	var last error
-	for {
-		remaining := deadline.Sub(nowFn())
-		if remaining <= 0 {
-			if last == nil {
-				last = launchError("launch.the_newly_started_session_has_not_appeared_yet")
-			}
-			return "", last
-		}
-		ctx, cancel := probe.TimeoutContext(remaining)
-		candidates, err := enumerateSessionsFn(ctx, disc, program, cwd, taskID)
-		cancel()
-		if err != nil {
-			last = err
-		} else {
-			var neu []string
-			for _, id := range candidates {
-				if _, ok := previous[id]; !ok {
-					neu = append(neu, id)
-				}
-			}
-			if len(neu) == 1 {
-				return neu[0], nil
-			}
-			if len(neu) > 1 {
-				return "", launchError("launch.multiple_new_sessions_appeared_during_launch", strconv.Itoa(len(neu)))
-			}
-			last = launchError("launch.the_newly_started_session_has_not_appeared_yet")
-		}
-		if !nowFn().Before(deadline) {
-			return "", last
-		}
-		sleepFn(disc.Interval())
-	}
 }
 
 func agentArguments(agent string, model map[string]string, kind string, session AgentSession, resume bool, configs ...*config.Config) ([]string, error) {
@@ -638,7 +141,11 @@ func agentArguments(agent string, model map[string]string, kind string, session 
 
 func expandAgentInvocation(agent, modelID, effort string, session AgentSession, resume bool, cfg *config.Config) ([]string, error) {
 	definition := config.AgentFor(cfg, agent)
-	if resume && definition.Session.Mode == "none" {
+	provider, err := sessionProviderFor(cfg, agent, definition.Session)
+	if err != nil {
+		return nil, err
+	}
+	if resume && !provider.Resumable() {
 		return nil, config.AgentResumeError(agent)
 	}
 	if definition.Args == nil {
@@ -649,7 +156,7 @@ func expandAgentInvocation(agent, modelID, effort string, session AgentSession, 
 		template = definition.Args.Resume
 	}
 	reference := session.Reference
-	if definition.Session.Mode == "none" {
+	if !provider.Resumable() {
 		reference = ""
 		template = config.RewriteKeepSession(template, true)
 	}

@@ -1,21 +1,13 @@
 package launch
 
 import (
-	"context"
 	"fmt"
-	"path/filepath"
 	"strconv"
-	"time"
 
 	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/probe"
 	"github.com/dualface/kander/internal/terminal"
 )
-
-// codexRolloutHook is the session mode whose sessions adoption can find again:
-// a rollout names its task, its launch directory and its creation time.
-const codexRolloutHook = "hook:codex-rollout"
 
 // markerRepairable reports from static facts alone whether adoption can write
 // the session marker a launch left out: the card names the session, or the
@@ -34,8 +26,12 @@ func markerRepairable(session string) bool {
 	if err != nil {
 		return false
 	}
-	definition := config.AgentFor(cfg, parsed.Agent)
-	return definition.Session != nil && definition.Session.Mode == codexRolloutHook
+	provider, err := sessionProviderOf(cfg, parsed.Agent)
+	if err != nil {
+		return false
+	}
+	_, ok := provider.(sessionAdopter)
+	return ok
 }
 
 // repairSessionMarker writes the session marker of an unmarked pane that runs
@@ -73,8 +69,9 @@ func repairSessionMarker(root string, observed board.Snapshot, record board.Exec
 
 // provableReference returns the session the unmarked pane runs. A card that
 // names its session gives it directly. Otherwise markerRepairable admitted only
-// a Codex agent, whose rollouts are scanned once: exactly one created since this
-// attempt began, for this task and launch directory, proves the session.
+// an agent whose provider can list the sessions of a launch, which is scanned
+// once: exactly one created since this attempt began, for this task and launch
+// directory, proves the session.
 // A floor or a scan that fails proves nothing either, and refuses with the same
 // way out.
 func provableReference(root string, observed board.Snapshot, record board.ExecutionRecord) (string, error) {
@@ -87,7 +84,11 @@ func provableReference(root string, observed board.Snapshot, record board.Execut
 	if err != nil {
 		return "", launchError("launch.adopt_session_scan_failed", task, err.Error(), stop)
 	}
-	candidates, err := findAdoptSessionsFn(task, floor, parentDir(root))
+	adopter, err := adoptingProvider(observed.Text)
+	if err != nil {
+		return "", launchError("launch.adopt_session_scan_failed", task, err.Error(), stop)
+	}
+	candidates, err := findAdoptSessionsFn(adopter, task, floor, parentDir(root))
 	if err != nil {
 		return "", launchError("launch.adopt_session_scan_failed", task, err.Error(), stop)
 	}
@@ -97,16 +98,23 @@ func provableReference(root string, observed board.Snapshot, record board.Execut
 	return candidates[0], nil
 }
 
-// findCodexAdoptSessions lists the Codex sessions a launch of task could have
-// created since floor in cwd, in one scan with the conditions of discovery.
-func findCodexAdoptSessions(task string, floor time.Time, cwd string) ([]string, error) {
-	root, err := filepath.Abs(codexSessionsRoot())
+// adoptingProvider returns the provider that lists the sessions of the card's
+// agent, or nil when its sessions cannot be found again.
+func adoptingProvider(cardText string) (sessionAdopter, error) {
+	parsed := parseTaskSession(cardText)
+	if parsed == nil {
+		return nil, nil
+	}
+	cfg, err := loadEffective()
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := probe.WithDefaultTimeout(context.Background())
-	defer cancel()
-	return newCodexRolloutScan(root, codexPromptPrefixes(task), floor, cwd).candidates(ctx, nowFn())
+	provider, err := sessionProviderOf(cfg, parsed.Agent)
+	if err != nil {
+		return nil, err
+	}
+	adopter, _ := provider.(sessionAdopter)
+	return adopter, nil
 }
 
 // requireAdoptTarget refuses when the attempt or the card changed after the

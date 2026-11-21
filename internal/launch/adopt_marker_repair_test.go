@@ -44,7 +44,7 @@ func forbidSessionScan(t *testing.T) {
 	t.Helper()
 	previous := findAdoptSessionsFn
 	t.Cleanup(func() { findAdoptSessionsFn = previous })
-	findAdoptSessionsFn = func(string, time.Time, string) ([]string, error) {
+	findAdoptSessionsFn = func(sessionAdopter, string, time.Time, string) ([]string, error) {
 		t.Error("adoption scanned for a session")
 		return nil, errors.New("unexpected session scan")
 	}
@@ -218,7 +218,7 @@ func TestAdoptRefusesAFailedCodexScan(t *testing.T) {
 	unresolved := unmarkedStart(t, root, "codex", task, nil)
 	previous := findAdoptSessionsFn
 	t.Cleanup(func() { findAdoptSessionsFn = previous })
-	findAdoptSessionsFn = func(string, time.Time, string) ([]string, error) {
+	findAdoptSessionsFn = func(sessionAdopter, string, time.Time, string) ([]string, error) {
 		return nil, errors.New("rollout directory unreadable")
 	}
 	record := requireRecord(t, root, task, board.ExecutionUnresolved)

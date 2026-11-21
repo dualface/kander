@@ -82,10 +82,18 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 		return result, err
 	}
 	sessionDef := config.AgentFor(cfg, agentName).Session
+	provider, err := sessionProviderFor(cfg, agentName, sessionDef)
+	if err != nil {
+		return result, err
+	}
 	initialSession := session.Render()
-	persistSession := config.SessionPersistsAfterStart(sessionDef) || (plan.capabilities().SessionReport && config.SessionDiscoversAfterStart(sessionDef))
+	persistSession := sessionPersists(provider) || (plan.capabilities().SessionReport && sessionDiscovers(provider))
 	discoverSession := plan.capabilities().PaneMetadata || persistSession
-	previous, err := sessionDiscoverSnapshot(sessionDef, entry.TaskID, discoverSession, program, parentDir(root), plan.launchTimeout)
+	launchFacts := sessionLaunch{
+		TaskID: entry.TaskID, CWD: parentDir(root), Program: program,
+		Definition: sessionDef, Budget: plan.launchTimeout,
+	}
+	previous, err := snapshotSessions(provider, launchFacts, discoverSession)
 	if err != nil {
 		return result, err
 	}
@@ -115,6 +123,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if err != nil {
 		return result, err
 	}
+	launchFacts.Prompt = prompt
 	args, err := execArguments(choice, session, false, cfg)
 	if err != nil {
 		return result, err
@@ -139,10 +148,11 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 			if session.Reference != "" {
 				return session, nil
 			}
-			if !config.SessionDiscoversAfterStart(sessionDef) {
+			if !sessionDiscovers(provider) {
 				return session, nil
 			}
-			ref, err := runSessionDiscoverHook(sessionDef, moved.TaskID, previous, launchStart, program, parentDir(root), plan.launchTimeout)
+			launchFacts.TaskID, launchFacts.Start = moved.TaskID, launchStart
+			ref, err := discoverLaunchSession(provider, launchFacts, previous)
 			if err != nil {
 				return AgentSession{}, err
 			}

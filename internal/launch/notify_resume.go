@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/window"
 )
 
@@ -89,8 +88,11 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 	if err != nil {
 		return ResumeLaunch{}, err
 	}
-	definition := config.AgentFor(cfg, originalSession.Agent)
-	resume := definition.Session.Mode != "none"
+	provider, err := sessionProviderOf(cfg, originalSession.Agent)
+	if err != nil {
+		return ResumeLaunch{}, err
+	}
+	resume := provider.Resumable()
 	var session AgentSession
 	if resume {
 		session, err = resolvedTaskSession(entry.TaskID, originalText, cfg)

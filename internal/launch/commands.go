@@ -199,9 +199,17 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	}
 	previous := map[string]struct{}{}
 	sessionDef := config.AgentFor(cfg, session.Agent).Session
-	discoverSession := plan.capabilities().PaneMetadata || plan.capabilities().SessionReport || config.SessionPersistsAfterStart(sessionDef)
+	provider, err := sessionProviderFor(cfg, session.Agent, sessionDef)
+	if err != nil {
+		return err
+	}
+	discoverSession := plan.capabilities().PaneMetadata || plan.capabilities().SessionReport || sessionPersists(provider)
+	launchFacts := sessionLaunch{
+		TaskID: entry.TaskID, CWD: parentDir(root), Program: program,
+		Definition: sessionDef, Budget: plan.launchTimeout,
+	}
 	if takeover {
-		previous, err = sessionDiscoverSnapshot(sessionDef, entry.TaskID, discoverSession, program, parentDir(root), plan.launchTimeout)
+		previous, err = snapshotSessions(provider, launchFacts, discoverSession)
 		if err != nil {
 			return err
 		}
@@ -241,6 +249,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	if err != nil {
 		return err
 	}
+	launchFacts.Prompt = prompt
 	args, err := execArguments(choice, session, !takeover, cfg)
 	if err != nil {
 		return err
@@ -262,15 +271,16 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 			if session.Reference != "" {
 				return session, nil
 			}
-			if !config.SessionDiscoversAfterStart(sessionDef) {
+			if !sessionDiscovers(provider) {
 				return session, nil
 			}
-			ref, err := runSessionDiscoverHook(sessionDef, moved.TaskID, previous, launchStart, program, parentDir(root), plan.launchTimeout)
+			launchFacts.TaskID, launchFacts.Start = moved.TaskID, launchStart
+			ref, err := discoverLaunchSession(provider, launchFacts, previous)
 			if err != nil {
 				return AgentSession{}, err
 			}
 			effective = AgentSession{Agent: session.Agent, Reference: ref}
-			if takeover || config.SessionPersistsAfterStart(sessionDef) {
+			if takeover || sessionPersists(provider) {
 				before := session.Render()
 				if !takeover {
 					before = metadataFrom(text, sessionField)

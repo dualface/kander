@@ -223,5 +223,5 @@ var (
 	confirmStartFn      = board.ConfirmTaskStart
 	readStandingFn      = board.ReadExecutionStanding
 	adoptExecutionFn    = board.AdoptExecution
-	findAdoptSessionsFn = findCodexAdoptSessions
+	findAdoptSessionsFn = listAdoptSessions
 )
