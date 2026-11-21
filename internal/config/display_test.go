@@ -107,6 +107,8 @@ var parents = map[string]parentSpec{
 	"agents.custom":                 {known: map[bool]map[string]any{true: customAgent(), false: {"process_name": "p"}}},
 	"agents.custom.session":         {known: map[bool]map[string]any{true: {"mode": "generated"}, false: {"mode": "generated"}}, dropOnlyUnknown: true, requiresKeys: true},
 	"agents.custom.session.file":    {known: map[bool]map[string]any{true: {"format": "jsonl_header", "id_field": "id"}, false: {"format": "jsonl_header", "id_field": "id"}}, dropOnlyUnknown: true, requiresKeys: true},
+	"agents.codex.session":          {requiresKeys: true},
+	"agents.codex.session.file":     {known: map[bool]map[string]any{true: {"format": "jsonl_header", "id_field": "id"}, false: {"format": "jsonl_header", "id_field": "id"}}, dropOnlyUnknown: true, requiresKeys: true},
 	"agents.custom.args":            {known: map[bool]map[string]any{true: {"start": []any{}, "resume": []any{}}, false: {"start": []any{}, "resume": []any{}}}, dropOnlyUnknown: true, requiresKeys: true},
 	"agents.custom.prompt_delivery": {known: map[bool]map[string]any{true: {"mode": "argv"}, false: {"mode": "argv"}}, dropOnlyUnknown: true},
 	"agents.codex":                  {known: map[bool]map[string]any{true: {"process_name": "codex"}, false: {"process_name": "codex"}}, dropOnlyUnknown: true},
@@ -135,11 +137,19 @@ type kind struct {
 	setting bool
 	// known replaces the known content of P in both layers (the flat form of reviewers).
 	known map[string]any
-	// setup adds what the kind needs in the scope document of both sides of a combination.
-	setup func(scope map[string]any)
+	// setup adds what the kind needs in the scope document of both sides of a combination; kinds
+	// with the same setupKey share one setup, which runs once.
+	setup    func(scope map[string]any)
+	setupKey string
+	// unusable names the agents entry the content makes unusable: the reference holds that entry
+	// in no layer.
+	unusable string
 	// reviewers names the form of the reviewers object the kind writes: "flat" (a legacy role
 	// object) or "scale" (a scale object); a flat and a scale form cannot share a layer.
 	reviewers string
+	// scaleInScope: the kind writes next to the scale object of the scope document only (an
+	// unknown key of reviewers, which is no scale and no role in the overlay).
+	scaleInScope bool
 }
 
 func (k kind) parentKey() string { return strings.Join(k.parent, ".") }
@@ -156,9 +166,22 @@ func withReviewers(k kind, form string) kind { k.reviewers = form; return k }
 
 func kinds() []kind {
 	withCustom := func(k kind) kind {
+		k.setupKey = "custom"
 		k.setup = func(scope map[string]any) { OverlaySet(scope, customAgent(), "agents", "custom") }
 		return k
 	}
+	// The scope file holds the entry of the built-in agent next to which the content sits.
+	withBuiltin := func(k kind) kind {
+		k.setupKey = "builtin"
+		k.setup = func(scope map[string]any) {
+			if _, ok := OverlayGet(scope, "agents", "codex"); !ok {
+				OverlaySet(scope, map[string]any{"process_name": "codex"}, "agents", "codex")
+			}
+		}
+		return k
+	}
+	scaleInScope := func(k kind) kind { k.scaleInScope = true; return k }
+	unusableKind := func(k kind, name string) kind { k.unusable = name; return k }
 	only := func(k kind) kind { k.only = true; return k }
 	roleDefault := func(scope bool) map[string]any {
 		if scope {
@@ -184,7 +207,7 @@ func kinds() []kind {
 		kindAt("an unknown key in issue", "issue", map[string]any{"future": "x"}),
 		kindAt("an unknown scale in kanban_agents", "kanban_agents", map[string]any{"future_scale": "codex"}),
 		withReviewers(kindAt("an unknown role in reviewers.large", "reviewers.large", map[string]any{"FutureRole": "codex"}), "scale"),
-		kindAt("an unknown scale in reviewers", "reviewers", map[string]any{"future_scale": map[string]any{"PMQA": "codex"}}),
+		scaleInScope(kindAt("an unknown scale in reviewers", "reviewers", map[string]any{"future_scale": map[string]any{"PMQA": "codex"}})),
 		kindAt("an unknown role in review_stages.small", "review_stages.small", map[string]any{"FutureRole": "auto"}),
 		kindAt("an unknown section in models", "models", map[string]any{"future_section": map[string]any{"a": "b"}}),
 		kindAt("an unknown field in models.kanban.codex", "models.kanban.codex", map[string]any{"future_field": "x"}),
@@ -194,6 +217,7 @@ func kinds() []kind {
 		withCustom(kindAt("an unknown key in a custom agent", "agents.custom", map[string]any{"future_key": "x"})),
 		withCustom(kindAt("an unknown key in the session of a custom agent", "agents.custom.session", map[string]any{"future_session_key": "x"})),
 		withCustom(kindAt("an unknown key in the session file of a custom agent", "agents.custom.session.file", map[string]any{"future_format": "transcript-v2"})),
+		only(withBuiltin(kindAt("an unknown key in the session file of a built-in agent", "agents.codex.session.file", map[string]any{"future_format": "transcript-v2"}))),
 		withCustom(kindAt("an unknown key in the args of a custom agent", "agents.custom.args", map[string]any{"future_arg": 1})),
 		withCustom(kindAt("an unknown key in the prompt delivery of a custom agent", "agents.custom.prompt_delivery", map[string]any{"future_key": 1})),
 		emptyStatus,
@@ -203,10 +227,10 @@ func kinds() []kind {
 		kindAt("a models.kanban entry of an unknown agent", "models.kanban", map[string]any{"future_agent": map[string]any{"large_model": "m"}}),
 		kindAt("a models.review entry of an unknown agent", "models.review", map[string]any{"future_agent": map[string]any{"model": "m"}}),
 		kindAt("a models.chat entry of an unknown agent", "models.chat", map[string]any{"future_agent": map[string]any{"model": "m"}}),
-		kindAt("an agents entry this version cannot use", "agents", map[string]any{"badagent": unusableEntry}),
-		kindAt("an unusable agents entry of a built-in agent", "agents", map[string]any{"codex": map[string]any{
+		unusableKind(kindAt("an agents entry this version cannot use", "agents", map[string]any{"badagent": unusableEntry}), "badagent"),
+		unusableKind(kindAt("an unusable agents entry of a built-in agent", "agents", map[string]any{"codex": map[string]any{
 			"args": map[string]any{"start": []any{}, "resume": []any{}}, "session": map[string]any{"mode": "hook:future-hook"},
-		}}),
+		}}), "codex"),
 		kanbanAgent,
 		kindAt("kanban_agents.small names an unknown agent", "kanban_agents", map[string]any{"small": "futureagent"}),
 		kindAt("chat_agent names an unknown agent", "", map[string]any{"chat_agent": "futureagent"}),
@@ -339,13 +363,11 @@ func cloneMap(m map[string]any) map[string]any { return cloneRawObjectDeep(m) }
 
 // place puts the content of the kind into P of one layer of both sides, in the given shape. The
 // dirty side holds the content, the reference side what the rules of the page leave of it.
-func place(dirty, ref *layers, base baseScope, k kind, scope bool, st shape) {
+func place(c *combination, base baseScope, k kind, scope bool, st shape) {
 	sp := parents[k.parentKey()]
+	dirty, ref := &c.dirty, &c.ref
 	dl, rl := dirty.object(scope), ref.object(scope)
-	if k.setup != nil {
-		k.setup(dirty.scope)
-		k.setup(ref.scope)
-	}
+	c.setUp(k)
 	var held map[string]any
 	switch st {
 	case only:
@@ -356,8 +378,15 @@ func place(dirty, ref *layers, base baseScope, k kind, scope bool, st shape) {
 			held = cloneMap(k.known)
 		}
 	}
-	// P holds nothing but the content, so what P held before is gone.
-	replaced := st == only
+	// P holds nothing but the content, so what the scope document held there is gone. A later
+	// placement in the same P of the same layer, or in an object below it, adds to what the earlier
+	// ones put there.
+	touch := fmt.Sprint(scope, k.parentKey())
+	first := !c.touched[touch]
+	for i := 1; i <= len(k.parent); i++ {
+		c.touched[fmt.Sprint(scope, strings.Join(k.parent[:i], "."))] = true
+	}
+	replaced := st == only && first
 	dirtyP, refP := parentObject(dl, k.parent), parentObject(rl, k.parent)
 	if len(k.parent) == 0 {
 		if st == withKnown && !scope {
@@ -368,7 +397,7 @@ func place(dirty, ref *layers, base baseScope, k kind, scope bool, st shape) {
 	} else {
 		// A kind with its own known content (the flat reviewers object) replaces the P of the
 		// scope document, which holds the other form.
-		fresh := replaced || k.known != nil
+		fresh := replaced || (k.known != nil && first)
 		if dirtyP == nil || fresh {
 			dirtyP = cloneMap(held)
 		}
@@ -377,7 +406,16 @@ func place(dirty, ref *layers, base baseScope, k kind, scope bool, st shape) {
 		}
 	}
 	for key, value := range k.add {
-		dirtyP[key] = cloneRawValue(value)
+		// Content that lands on an object an earlier placement wrote below adds to it.
+		if existing, ok := dirtyP[key].(map[string]any); ok {
+			if added, ok := value.(map[string]any); ok {
+				dirtyP[key] = deepMerge(existing, added)
+			} else {
+				dirtyP[key] = cloneRawValue(value)
+			}
+		} else {
+			dirtyP[key] = cloneRawValue(value)
+		}
 		if !k.setting {
 			delete(refP, key)
 		} else {
@@ -455,6 +493,13 @@ func placeOther(dirty, ref *layers, base baseScope, k kind, scope bool, st shape
 // settle applies the rule of a section the loader does not accept empty: when no layer of the
 // reference holds a known key of it, the section is absent from both layers.
 func settle(ref *layers, k kind) {
+	if k.unusable != "" {
+		for _, layer := range []map[string]any{ref.scope, ref.overlay} {
+			if layer != nil {
+				deleteParent(layer, []string{"agents", k.unusable})
+			}
+		}
+	}
 	sp := parents[k.parentKey()]
 	if !sp.requiresKeys {
 		return
@@ -468,8 +513,17 @@ func settle(ref *layers, k kind) {
 		}
 	}
 	for _, layer := range []map[string]any{ref.scope, ref.overlay} {
-		if layer != nil {
-			deleteParent(layer, k.parent)
+		if layer == nil {
+			continue
+		}
+		deleteParent(layer, k.parent)
+		// A section that held nothing but the one that went out is empty too, and goes when it
+		// requires keys itself (the session of an agent).
+		for i := len(k.parent) - 1; i > 0; i-- {
+			path := k.parent[:i]
+			if p := parentObject(layer, path); p != nil && len(p) == 0 && parents[strings.Join(path, ".")].requiresKeys {
+				deleteParent(layer, path)
+			}
 		}
 	}
 }
@@ -482,13 +536,27 @@ type combination struct {
 	dirty, ref layers
 	// items are the placements of a pairwise combination.
 	items []placement
+	// kind is the placement of a parent-state combination.
+	kind kind
 	// parent, scope and overlay describe a parent-state combination: P and its shape in each layer.
 	parent         string
 	scope, overlay shape
+	// touched lists the P of each layer a placement has written to.
+	touched map[string]bool
+}
+
+// setUp adds what a kind needs in the scope document of both sides, once, before any placement of
+// the combination writes next to it.
+func (c *combination) setUp(k kind) {
+	if key := "setup " + k.setupKey; k.setup != nil && !c.touched[key] {
+		c.touched[key] = true
+		k.setup(c.dirty.scope)
+		k.setup(c.ref.scope)
+	}
 }
 
 func newCombination(base baseScope, part, name string) combination {
-	return combination{name: name, part: part, dirty: layers{scope: cloneMap(base.doc)}, ref: layers{scope: cloneMap(base.doc)}}
+	return combination{name: name, part: part, dirty: layers{scope: cloneMap(base.doc)}, ref: layers{scope: cloneMap(base.doc)}, touched: map[string]bool{}}
 }
 
 // shapeOf is the shape a placement in a layer takes in the pairwise part: the scope file holds
@@ -507,7 +575,7 @@ func pairCombination(base baseScope, a, b placement) combination {
 	c.items = []placement{a, b}
 	for _, p := range c.items {
 		for _, scope := range p.at.layers() {
-			place(&c.dirty, &c.ref, base, p.kind, scope, shapeOf(p.kind, scope))
+			place(&c, base, p.kind, scope, shapeOf(p.kind, scope))
 		}
 		settle(&c.ref, p.kind)
 	}
@@ -528,73 +596,54 @@ func expressible(sp parentSpec, topLevel, scope bool, st shape) bool {
 	return true
 }
 
-// parentCombinations: for one placement, P of the other layer takes every shape that layer can
-// express, and P of the layer that holds the content holds only the content, or the content
-// next to known settings. A placement in both layers has no other layer: both take the shape.
+// layerShapes are the shapes P can take in one layer that the layer can express: the layer that
+// holds the content of the placement holds only the content or the content next to known
+// settings; a layer that holds none holds nothing, an empty object, another unknown content, or
+// known settings.
+func layerShapes(p placement, scope bool) []shape {
+	sp := parents[p.kind.parentKey()]
+	top := len(p.kind.parent) == 0
+	candidates := []shape{absent, empty, otherOnly, known}
+	if slices.Contains(p.at.layers(), scope) {
+		candidates = []shape{only, withKnown}
+	}
+	return slices.DeleteFunc(candidates, func(st shape) bool { return !expressible(sp, top, scope, st) })
+}
+
+// parentCombinations: for one placement, every shape of P in the scope file times every shape of
+// P in the overlay. A placement in both layers takes its two own-layer shapes independently, so a
+// content that sits next to known settings in one layer can sit alone in the other.
 func parentCombinations(base baseScope, p placement) []combination {
-	k := p.kind
-	sp := parents[k.parentKey()]
-	top := len(k.parent) == 0
 	var out []combination
-	for _, this := range []shape{only, withKnown} {
-		if !slices.ContainsFunc(p.at.layers(), func(scope bool) bool { return !expressible(sp, top, scope, this) }) {
-			others := []shape{absent, empty, otherOnly, known}
-			if p.at == inBoth {
-				others = []shape{-1}
-			}
-			for _, other := range others {
-				if other >= 0 && !expressible(sp, top, p.at == inOverlay, other) {
-					continue
-				}
-				out = append(out, parentCombination(base, p, this, other))
-			}
+	for _, scopeShape := range layerShapes(p, true) {
+		for _, overlayShape := range layerShapes(p, false) {
+			out = append(out, parentCombination(base, p, scopeShape, overlayShape))
 		}
 	}
 	return out
 }
 
 // parentStateCount is the number of parent-state combinations of a placement, counted from the
-// shapes alone: the shapes of the layer that holds the content, times the shapes of the other.
+// number of shapes each layer can express.
 func parentStateCount(p placement) int {
-	k := p.kind
-	sp := parents[k.parentKey()]
-	top := len(k.parent) == 0
-	count := 0
-	for _, this := range []shape{only, withKnown} {
-		if slices.ContainsFunc(p.at.layers(), func(scope bool) bool { return !expressible(sp, top, scope, this) }) {
-			continue
-		}
-		if p.at == inBoth {
-			count++
-			continue
-		}
-		for _, other := range []shape{absent, empty, otherOnly, known} {
-			if expressible(sp, top, p.at == inOverlay, other) {
-				count++
-			}
-		}
-	}
-	return count
+	return len(layerShapes(p, true)) * len(layerShapes(p, false))
 }
 
-func parentCombination(base baseScope, p placement, this, other shape) combination {
-	name := fmt.Sprintf("%s | this=%s", p, this)
-	if other >= 0 {
-		name += " | other=" + other.String()
-	}
-	c := newCombination(base, "parent states", name)
+func parentCombination(base baseScope, p placement, scopeShape, overlayShape shape) combination {
+	c := newCombination(base, "parent states", fmt.Sprintf("%s | scope=%s | overlay=%s", p, scopeShape, overlayShape))
 	c.parent = p.kind.parentKey()
-	c.scope, c.overlay = this, this
-	for _, scope := range p.at.layers() {
-		place(&c.dirty, &c.ref, base, p.kind, scope, this)
-	}
-	if other >= 0 {
-		otherScope := p.at == inOverlay
-		placeOther(&c.dirty, &c.ref, base, p.kind, otherScope, other)
-		if otherScope {
-			c.scope = other
+	c.kind, c.items = p.kind, []placement{p}
+	c.setUp(p.kind)
+	c.scope, c.overlay = scopeShape, overlayShape
+	for _, scope := range []bool{true, false} {
+		st := overlayShape
+		if scope {
+			st = scopeShape
+		}
+		if slices.Contains(p.at.layers(), scope) {
+			place(&c, base, p.kind, scope, st)
 		} else {
-			c.overlay = other
+			placeOther(&c.dirty, &c.ref, base, p.kind, scope, st)
 		}
 	}
 	settle(&c.ref, p.kind)
@@ -733,6 +782,89 @@ func firstDifference(got, want string) string {
 	return fmt.Sprintf("...%s\n want ...%s", got[from:min(i+120, len(got))], want[from:min(i+120, len(want))])
 }
 
+// declared returns what the dirty layers of a combination do not hold of what the combination
+// states about itself: the content of every placement, and the shape of P in each layer.
+func declared(c combination, base baseScope) string {
+	holds := func(l layers, scope bool, k kind, content map[string]any) bool {
+		layer := l.scope
+		if !scope {
+			layer = l.overlay
+		}
+		if layer == nil {
+			return len(content) == 0
+		}
+		p := parentObject(layer, k.parent)
+		if p == nil {
+			return false
+		}
+		for key := range content {
+			if _, ok := p[key]; !ok {
+				return false
+			}
+		}
+		return true
+	}
+	for _, p := range c.items {
+		for _, scope := range p.at.layers() {
+			if !holds(c.dirty, scope, p.kind, p.kind.add) {
+				return fmt.Sprintf("the dirty %s does not hold the content of %s", layerName(scope), p)
+			}
+		}
+	}
+	if c.part != "parent states" {
+		return ""
+	}
+	k, sp := c.kind, parents[c.kind.parentKey()]
+	for _, scope := range []bool{true, false} {
+		st := c.overlay
+		if scope {
+			st = c.scope
+		}
+		layer := c.dirty.scope
+		if !scope {
+			layer = c.dirty.overlay
+		}
+		var p map[string]any
+		if layer != nil {
+			p = parentObject(layer, k.parent)
+		}
+		ok := true
+		switch st {
+		case absent:
+			ok = len(k.parent) == 0 && !scope && layer == nil || len(k.parent) > 0 && p == nil
+		case empty:
+			ok = p != nil && len(p) == 0 && (len(k.parent) > 0 || !scope)
+		case otherOnly:
+			other := sp.other
+			if other == nil {
+				other = map[string]any{"other_future": 1}
+			}
+			ok = holds(c.dirty, scope, k, other)
+		case known:
+			ok = holds(c.dirty, scope, k, base.known(sp, k.parent, scope))
+		case only:
+			ok = holds(c.dirty, scope, k, k.add)
+		case withKnown:
+			known := base.known(sp, k.parent, scope)
+			if k.known != nil {
+				known = k.known
+			}
+			ok = holds(c.dirty, scope, k, k.add) && holds(c.dirty, scope, k, known)
+		}
+		if !ok {
+			return fmt.Sprintf("the dirty %s does not hold P in the shape %s", layerName(scope), st)
+		}
+	}
+	return ""
+}
+
+func layerName(scope bool) string {
+	if scope {
+		return "scope"
+	}
+	return "overlay"
+}
+
 // check runs one combination: it returns the error of the loader when the dirty layers do not
 // load, and otherwise a description of what differs between the display and the reference.
 func check(t *testing.T, c combination) (loadErr error, problem string) {
@@ -764,24 +896,53 @@ type unloadable struct {
 	count int
 }
 
-func sharesLayer(a, b placement) bool {
-	return slices.ContainsFunc(a.at.layers(), func(scope bool) bool { return slices.Contains(b.at.layers(), scope) })
+// form is the form of the reviewers object a placement writes into one layer.
+func form(p placement, scope bool) string {
+	if p.kind.scaleInScope {
+		if scope {
+			return "scale"
+		}
+		return ""
+	}
+	return p.kind.reviewers
+}
+
+// mixesReviewers: one layer receives a flat and a scale form of the reviewers object.
+func mixesReviewers(a, b placement) bool {
+	for _, scope := range a.at.layers() {
+		if !slices.Contains(b.at.layers(), scope) {
+			continue
+		}
+		forms := []string{form(a, scope), form(b, scope)}
+		if slices.Contains(forms, "flat") && slices.Contains(forms, "scale") {
+			return true
+		}
+	}
+	return false
 }
 
 var unloadables = []unloadable{
 	{
-		name: "a scale object of reviewers written into the layer of a flat legacy reviewers object",
+		name: "the session of a built-in agent holds a file and no mode",
 		match: func(c combination) bool {
-			return c.part == "pairs" && c.items[0].kind.reviewers == "flat" && c.items[1].kind.reviewers == "scale" && sharesLayer(c.items[0], c.items[1])
+			known := func(st shape) bool { return st == known || st == withKnown }
+			return c.part == "parent states" && c.parent == "agents.codex.session.file" && (known(c.scope) || known(c.overlay))
 		},
-		count: 28,
+		count: 13,
+	},
+	{
+		name: "a scale object and a flat legacy object of reviewers written into one layer",
+		match: func(c combination) bool {
+			return c.part == "pairs" && mixesReviewers(c.items[0], c.items[1])
+		},
+		count: 50,
 	},
 	{
 		name: "the scope file holds an empty section the loader requires keys of",
 		match: func(c combination) bool {
 			return c.part == "parent states" && parents[c.parent].requiresKeys && c.scope == empty
 		},
-		count: 10,
+		count: 11,
 	},
 	{
 		name: "the overlay holds part of a section the scope file does not hold",
@@ -789,16 +950,16 @@ var unloadables = []unloadable{
 			sp := parents[c.parent]
 			return c.part == "parent states" && sp.partialOverlay && slices.Contains([]shape{absent, otherOnly, only}, c.scope) && slices.Contains([]shape{known, withKnown}, c.overlay)
 		},
-		count: 6,
+		count: 8,
 	},
 }
 
 // The size of the matrix. The generator computes each number; the constants keep it from
 // shrinking unnoticed.
 const (
-	wantPlacements = 111
-	wantPairs      = 6216
-	wantParents    = 633
+	wantPlacements = 114
+	wantPairs      = 6555
+	wantParents    = 724
 	wantFixed      = 8
 )
 
@@ -829,6 +990,9 @@ func TestDisplayEqualsTheReferenceConfiguration(t *testing.T) {
 	hits := make([]int, len(unloadables))
 	failures := 0
 	for _, c := range combinations {
+		if missing := declared(c, base); missing != "" {
+			t.Fatalf("%s: %s", c.name, missing)
+		}
 		loadErr, problem := check(t, c)
 		matched := -1
 		for i, u := range unloadables {

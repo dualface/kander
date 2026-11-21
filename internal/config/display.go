@@ -217,7 +217,9 @@ func dropUnfilledSections(layers []map[string]any) {
 			}
 		}
 	}
-	for _, s := range sections {
+	// The children come after their parent in the list, so walking it backwards judges a section
+	// after the sections inside it: a session whose only key was a section that went out is empty.
+	for _, s := range slices.Backward(sections) {
 		filled := slices.ContainsFunc(layers, func(layer map[string]any) bool {
 			value, _ := OverlayGet(layer, s.path...)
 			obj, _ := value.(map[string]any)
