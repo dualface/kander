@@ -4,7 +4,7 @@ A user can move back to an older Kander for a while after a newer one has writte
 
 ## What Is Ignored
 
-- **An unknown key**, at any object level: the top level, the sections (`models`, `tui`, `rules`, `git`, `issue`, `reviewers`, `review_stages`, `kanban_agents`), an agent or a role inside `models.*`, and a field of an `agents.<name>` definition, nested objects included. The key has no effect: it never reaches an argument list, an environment variable, or a path. `schema_version` and `welcome_complete` keep their rules, and the overlay keys it forbids (`overlayForbiddenKeys`) still fail the load.
+- **An unknown key**, at any object level: the top level, the sections (`models`, `tui`, `rules`, `git`, `issue`, `server`, `project`, `reviewers`, `review_stages`, `kanban_agents`), an agent or a role inside `models.*`, and a field of an `agents.<name>` definition, nested objects included. The key has no effect: it never reaches an argument list, an environment variable, or a path. `schema_version` and `welcome_complete` keep their rules, and the overlay keys it forbids (`overlayForbiddenKeys`) still fail the load.
 - **A `models.*` entry for an agent this version does not know**, for example `models.kanban.agy` that a newer release writes for its new built-in agent.
 - **An `agents.<name>` entry this version cannot turn into a usable agent.** Only that agent becomes unavailable; the rest of the configuration applies. The entry is unusable when it
   - uses `install_rules` or `config_dir` on a custom name (both exist only for built-in names),
@@ -29,14 +29,14 @@ Legacy keys this version still folds (`PM`, `QA`, `CSA`, `Hacker`, the flat `rev
 ## Where It Is Reported
 
 - `kander doctor` lists each ignored key with its JSON path (and the overlay file when the key came from there), each unusable agent entry with its reason, and each role that names an unknown agent. These lines are reports, not problems to repair: they never make `doctor` unhealthy, and the repair never rewrites them.
-- `kander config` and `kander config --json` print the same notices on stderr. Stdout is what the known settings alone produce.
+- `kander config` prints the same notices on stderr; with `--json` they are the `notices` of the result object and stderr stays empty (see "Version 2" below). Stdout is what the known settings alone produce.
 
 ## Saving
 
 `internal/config` keeps what it ignored (`Config.Ignored`, `Config.UnusableAgents`; neither is serialized from the struct) and writes it back on every write of the scope file:
 
 - `Save`, `SaveIfUnchanged`, `Update`, `UpdateAt`, `SetLanguageIfPresent`, and `Repair` read the file inside the write lock, find the ignored items in that content, and place each one back at its JSON path in the new document, after the keys Kander writes. The base is the scope file only, so overlay content never enters `config.json`.
-- An ignored item is placed only where its parent object exists in the new document, so a section the user removed does not return. Parents that exist only for the kept content are created: the `agents` object, an `agents.<name>` entry, and a section of an entry that the encoding left out (because it was cleared, or held only unknown keys), and the legacy role object of `models.review_roles` that holds only unknown fields. When the new document already holds the key, the current value wins.
+- An ignored item is placed only where its parent object exists in the new document, so a section the user removed does not return. Parents that exist only for the kept content are created: the `agents` object, an `agents.<name>` entry, and a section of an entry that the encoding left out (because it was cleared, or held only unknown keys), the `server` and `project` sections (the encoding omits them while their known keys are empty), and the legacy role object of `models.review_roles` that holds only unknown fields. When the new document already holds the key, the current value wins.
 - A legacy review role key (`PM`, `QA`, `CSA`, `Hacker`) is folded into its current role as before. What remains under the legacy key is only the fields this version does not know, which stay at their own path; the current role keeps its own unknown fields.
 - `Repair` repairs the known settings only. It keeps unknown keys, role references to unknown agents, and unusable agent entries, and a valid file that holds only such content is not rewritten.
 - The overlay write is sparse and works on the overlay's own map, which now keeps unknown keys. Options edits the keys it owns and leaves the others in place.
@@ -46,3 +46,36 @@ Legacy keys this version still folds (`PM`, `QA`, `CSA`, `Hacker`, the flat `rev
 ## Limits
 
 Releases up to 1.5.0 validate strictly. The rollback target must be a release that contains this behavior; the change does not alter versions already published.
+
+## Version 2
+
+The v2 branch adds the `server` and `project` sections and the client-server runtime. The rules above apply to them as follows.
+
+### The `server` and `project` sections
+
+- An unknown key inside `server` (known: `url`) or `project` (known: `name`) is ignored, reported by its JSON path (`server.token`), and kept on save, in the scope `config.json` and in the project overlay. A section that holds nothing but unknown keys loads like an absent section and is written back with its keys.
+- The known values stay strict: a `server.url` that is not an `http` or `https` URL, and a `project.name` that breaks the project name rule, fail the load as before.
+- `kander init` writes `server.url` and `project.name` into the project overlay through the same sparse write as Options, so the unknown keys of the overlay stay in the file.
+- The `overlayAllowedKeys` list of v2 is gone: an unknown overlay key no longer fails the merge (`config.overlay_has_unknown_keys`), as in version 1. The overlay keys it forbids still fail.
+
+### Notices with `--json`
+
+`kander config --json` puts what it ignores into the `notices` of its result object, one notice per item, and writes nothing to stderr (see [JSON output](json-output.md)):
+
+| Code | Item |
+| --- | --- |
+| `config_ignored` | each ignored item that is not an unusable agent: an unknown key, or a `models.*` entry for an agent this version does not know |
+| `agent_unusable` | each unusable `agents.<name>` entry, and each role (`kanban_agent`, `kanban_agents.<scale>`, `chat_agent`, `reviewers.<scale>.<role>`) that names an agent this version does not know |
+
+The `agent_warning` notice of an agent whose session mode is `none` is unchanged. Apart from the `notices` field, the object equals the one of the same configuration without the ignored content. `kander doctor --json` lists the same items in `lines` (`info` for an ignored key, `warn` for an unusable entry and for an unknown role reference), and they never set `healthy` to false.
+
+### Startup logs of the server and the worker
+
+A server or worker runs for hours and would otherwise drop the settings of a newer version without a trace. Each of them writes one `WARN` log line per ignored item (`Config.Ignored`, which includes unusable agents entries) when it starts, with the fields `path` and `kind` and never the value, which may be a sensitive setting of a newer version. Unknown agent references are not in that list.
+
+- **Server.** `kander server start --foreground` writes the lines after its logger exists and before it serves. `kander server start` without `--foreground` runs that path in its child process, so the lines are in `server.log` once and the parent writes none. With `--json` the lines of this phase are `server_log` notices, as every other line before the server can serve.
+- **Worker.** `kander worker` loads the configuration of its client home (the scope configuration, since it runs there and holds no project overlay) once at startup. A configuration that cannot be loaded is logged as one warning and the worker starts anyway.
+
+### Deployment
+
+Releases of version 1 before 1.5.1 are strict. A v1.5.0 or older client rejects a `.kander-config.json` that holds `server` or `project` (`config.overlay_has_unknown_keys`), and saving its `config.json` removes the two sections. Every version 1 client that reads or writes the configuration a v2 client uses must be v1.5.1 or newer.

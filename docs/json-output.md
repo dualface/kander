@@ -46,12 +46,15 @@ The code of a failure is the first of these that applies:
 | `code` | Where | Meaning |
 | --- | --- | --- |
 | `agent_warning` | `config`, `check` | An agent of the configuration is unusable |
+| `config_ignored` | `config` | The configuration holds a key or a `models.*` agent entry that this version ignores; one notice per item |
+| `agent_unusable` | `config` | An `agents.<name>` entry this version cannot use, or a role that names an agent it does not know; one notice per item |
 | `check_diagnostic` | `check` | A diagnostic line of the structural check |
 | `launch_warning` | `start`, `resume`, `orchestrate`, `issue triage` | A warning of the launch |
 | `rules_embedded_fallback` | any command that renders a rules template | The installed copy of a template is missing and the embedded one was used; run `kander doctor` |
 | `worker_start_failed` | `move --owner`, `coordinator claim` | The renewal worker did not start |
 | `coordinator_release_final` | `coordinator release` | The release ended the coordinator execution; the text names the execution, the group, and the generation |
 | `server_version_warning` | any command that opens the service | The service runs another version than the client |
+| `server_log` | `server start --foreground` | A log line written before the server can serve, among them one warning per setting the configuration holds that this version ignores |
 | `issue_result_handoff` | `move` | The move made the work set of a GitHub issue ready for its result |
 | `reconcile_blocked` | `coordinator reconcile` | Every member was blocked; the text is the error |
 | `review_archive_identity`, `review_card_published`, `review_interpretation_pending`, `review_process_evidence`, `review_output`, `review_error` | `review` | The remarks of a review run |
