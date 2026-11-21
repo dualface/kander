@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "path": "agy",
+  "process_name": "agy",
+  "args": {
+    "start": ["--model", "{model}", "--effort", "{effort}", "--prompt-interactive"],
+    "resume": ["--conversation", "{session}", "--model", "{model}", "--effort", "{effort}", "--prompt-interactive"],
+    "review": [
+      "--model", "{model}", "--effort", "{effort}",
+      "--mode", "plan", "--add-dir", "{runtime}",
+      "--settings", "{{\"permissions\":{{\"deny\":[\"write_file(*)\",\"command(*)\",\"mcp(*)\",\"read_url(*)\",\"execute_url(*)\"]}}}}",
+      "--output-format", "json", "--print", "{instruction}"
+    ]
+  },
+  "session": {"mode": "hook:agy-transcript"},
+  "exit_command": "/exit",
+  "program_status": {"reports": false},
+  "display_name": "Antigravity CLI",
+  "supports_effort": true,
+  "prompt_delivery": {"mode": "argv"},
+  "review": {
+    "cwd": "root",
+    "home_policy": "optional",
+    "output_name": "output.json",
+    "inspection": "Read the supplied Git evidence and source files using read and search tools only.",
+    "spawns_helpers": true,
+    "snapshot_spec": true,
+    "stdin": "none",
+    "output": {
+      "source": "stdout",
+      "parse": "json_field:response",
+      "success": [{"json_field": "status", "equals": "SUCCESS"}]
+    }
+  },
+  "rules_target": {"global": ".gemini/AGENTS.md", "project": "AGENTS.md"},
+  "config_home": {"default": ".gemini", "fixed": true},
+  "rules_integration": "markdown-reference",
+  "large_model": "",
+  "small_model": "",
+  "large_effort": "high",
+  "small_effort": "medium",
+  "model": "",
+  "effort": "high"
+}

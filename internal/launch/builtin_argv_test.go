@@ -149,9 +149,14 @@ func TestBuiltinStartKeepsPromptOnArgvAndDoesNotDeliverToPane(t *testing.T) {
 	root, _, bin := setupBoard(t)
 	herdrLog := installHerdr(t, root, bin)
 	var captured []string
+	var agyID string
 	previous := newShellInvocation
 	newShellInvocation = func(p process.AgentProgram, args []string, env map[string]string) (process.ProcessInvocation, error) {
 		captured = append([]string{}, args...)
+		if len(args) >= 2 && args[len(args)-2] == "--prompt-interactive" {
+			agyID = newUUID()
+			writeAgyTranscript(t, agyID, args[len(args)-1])
+		}
 		return previous(p, args, env)
 	}
 	t.Cleanup(func() { newShellInvocation = previous })
@@ -191,12 +196,16 @@ func TestBuiltinStartKeepsPromptOnArgvAndDoesNotDeliverToPane(t *testing.T) {
 				if _, err := os.Stat(herdrLog + ".prompt"); !os.IsNotExist(err) {
 					t.Fatalf("argv path used agent prompt: %v", err)
 				}
-				if discovered {
+				if discovered || agent == "agy" {
 					snapshot, err := board.ReadSnapshot(root, id)
 					if err != nil {
 						t.Fatal(err)
 					}
-					if !strings.Contains(snapshot.Text, "- SESSION: "+agent+" "+agent+"-session\n") {
+					wantSession := agent + "-session"
+					if agent == "agy" {
+						wantSession = agyID
+					}
+					if !strings.Contains(snapshot.Text, "- SESSION: "+agent+" "+wantSession+"\n") {
 						t.Fatalf("card session was not persisted: %s", snapshot.Text)
 					}
 				}

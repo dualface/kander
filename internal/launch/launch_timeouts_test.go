@@ -106,7 +106,7 @@ func TestExtendedLaunchTimeoutsRaiseSessionDiscovery(t *testing.T) {
 			}
 			freezeClock(t)
 			start := nowFn()
-			if _, err := runSessionDiscoverHook(session, "task", map[string]struct{}{"existing": {}}, start, &process.AgentProgram{}, t.TempDir(), plan.launchTimeout); err == nil {
+			if _, err := runSessionDiscoverHook(session, "task", "", map[string]struct{}{"existing": {}}, start, &process.AgentProgram{}, t.TempDir(), plan.launchTimeout); err == nil {
 				t.Fatal("discovery without a new session succeeded")
 			}
 			if elapsed := nowFn().Sub(start); elapsed < tc.want || elapsed >= tc.want+time.Second {
@@ -131,7 +131,7 @@ func TestExtendedLaunchTimeoutsRaiseCodexDiscovery(t *testing.T) {
 			plan := LaunchPlan{extendedTimeouts: tc.extended}
 			freezeClock(t)
 			start := nowFn()
-			if _, err := runSessionDiscoverHook(session, "task", nil, start, nil, cwd, plan.launchTimeout); err == nil {
+			if _, err := runSessionDiscoverHook(session, "task", "", nil, start, nil, cwd, plan.launchTimeout); err == nil {
 				t.Fatal("discovery without a rollout succeeded")
 			}
 			if elapsed := nowFn().Sub(start); elapsed < tc.want || elapsed >= tc.want+time.Second {

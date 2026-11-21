@@ -166,6 +166,10 @@ func discoverNewDroidSession(previous map[string]struct{}, cwd string, wait time
 		return "", err
 	}
 	scan := &droidSessionScan{root: root, previous: previous, cwd: cwd, settled: map[string]struct{}{}}
+	return waitForSessionCandidates(wait, scan.candidates)
+}
+
+func waitForSessionCandidates(wait time.Duration, candidatesFor func(context.Context) ([]string, error)) (string, error) {
 	deadline := nowFn().Add(wait)
 	var last error
 	for {
@@ -177,7 +181,7 @@ func discoverNewDroidSession(previous map[string]struct{}, cwd string, wait time
 			return "", last
 		}
 		ctx, cancel := probe.TimeoutContext(remaining)
-		candidates, err := scan.candidates(ctx)
+		candidates, err := candidatesFor(ctx)
 		cancel()
 		switch {
 		case err != nil:
