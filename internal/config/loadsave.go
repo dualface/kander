@@ -430,8 +430,9 @@ func SetLanguageIfPresent(path, lang string) error {
 // nonZeroAgents drops the empty definitions of an Agents or UnusablePolicy map. In
 // Agents, an entry that holds only content this version ignores reads back as an
 // empty definition, and the same state before it was written is no entry at all. In
-// UnusablePolicy, a cleared switch leaves an empty entry in memory and none in the
-// file. It returns a new map and never modifies its input.
+// UnusablePolicy, clearing the last policy field of an entry (the install switch,
+// when no config_dir is set) leaves an empty entry in memory and none in the file.
+// It returns a new map and never modifies its input.
 func nonZeroAgents(m map[string]AgentDefinition) map[string]AgentDefinition {
 	out := map[string]AgentDefinition{}
 	for name, def := range m {
