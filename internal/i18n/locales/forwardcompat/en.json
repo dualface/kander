@@ -1,0 +1,11 @@
+{
+  "config.agent_unknown_reference": "Agent {{.V0}} is not recognized by this version of Kander; a newer version may have written it. Use a known agent or update Kander",
+  "config.agent_unusable": "Agent {{.V0}} is unavailable: {{.V1}}",
+  "config.agent_unusable_session_mode": "session.mode {{printf \"%q\" .V0}} is not registered in this version",
+  "config.ignored_agent": "ignored {{.V0}}: this version does not know that agent; the entry stays in the file",
+  "config.ignored_field": "ignored {{.V0}}: this version does not define it; the value stays in the file",
+  "config.ignored_from": "{{.V0}} (in {{.V1}})",
+  "config.ignored_unusable_agent": "agent entry {{.V0}} is unavailable: {{.V1}}; the entry stays in the file",
+  "config.unknown_agent_reference_notice": "{{.V0}} names agent {{.V1}}, which this version does not know; using that role fails until it is changed or Kander is updated",
+  "menu.doctor_ignored_heading": "This version ignores the following settings; they were probably written by a newer version, and saving keeps them as they are:"
+}

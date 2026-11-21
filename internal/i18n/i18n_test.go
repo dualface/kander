@@ -55,6 +55,7 @@ var testCatalogFiles = []string{
 	"locales/rulesinjection/%s.json",
 	"locales/document/%s.json",
 	"locales/integrationtarget/%s.json",
+	"locales/forwardcompat/%s.json",
 }
 
 func readCatalog(t *testing.T, name string) map[string]string {

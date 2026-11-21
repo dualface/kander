@@ -162,6 +162,14 @@ type Config struct {
 	// InstallRules is the global rules-injection switch; agents.<name>.install_rules
 	// overrides it per agent. Only the scope config file sets it; see ScopeInstallRules.
 	InstallRules bool `json:"install_rules"`
+
+	// Ignored lists what this version skipped while loading: keys it does not
+	// define, models entries of unknown agents, and unusable agents entries.
+	// Save writes them back unchanged. It is never serialized from the struct.
+	Ignored []Ignored `json:"-"`
+	// UnusableAgents maps the name of an agents entry that cannot become an agent
+	// in this version to the reason. Such an agent is absent from AgentNames.
+	UnusableAgents map[string]string `json:"-"`
 }
 
 // Clone deep-copies the config so a long-lived editing session can keep its baseline.
@@ -171,6 +179,10 @@ func Clone(src *Config) *Config {
 	}
 	out := *src
 	out.Agents = CloneAgents(src.Agents)
+	out.Ignored = slices.Clone(src.Ignored)
+	if src.UnusableAgents != nil {
+		out.UnusableAgents = cloneStringMap(src.UnusableAgents)
+	}
 	out.KanbanAgents = cloneStringMap(src.KanbanAgents)
 	out.ChatAgent = src.ChatAgent
 	out.Reviewers = cloneNested(src.Reviewers)
@@ -366,6 +378,17 @@ func validateChoice(value any, choices []string, name string) (string, error) {
 	return text, nil
 }
 
+// validateAgentRef accepts a role's agent name: a known agent, or a well-formed name
+// this version does not know, which a newer version may have written. The unknown
+// name stays in the configuration and only fails when the role is used.
+func validateAgentRef(value any, names []string, field string) (string, error) {
+	text, ok := value.(string)
+	if !ok || (!contains(names, text) && !ValidAgentName(text)) {
+		return "", choiceError(field, strings.Join(names, ", "))
+	}
+	return text, nil
+}
+
 // launcherPlatformError now covers a single platform conflict: console is
 // Windows-only. tmux's platform limit is reported by launch at start time, and
 // herdr/auto work on both sides.
@@ -399,21 +422,6 @@ func validateKanbanAgents(raw any, defaultAgent string, choices ...[]string) (ma
 	if !ok {
 		return nil, configErrorf("config.kanban_agents_must_be_a_json_object")
 	}
-	allowed := map[string]struct{}{}
-	for _, scale := range TaskScales {
-		allowed[scale] = struct{}{}
-	}
-	var unknown []string
-	for key := range obj {
-		if _, ok := allowed[key]; !ok {
-			unknown = append(unknown, key)
-		}
-	}
-	if len(unknown) > 0 {
-		return nil, configErrorf(
-			"config.kanban_agents_has_unknown_scales_only_are_allowed", strings.Join(sorted(unknown), ", "), strings.Join(TaskScales, ", "),
-		)
-	}
 	agents := make(map[string]string, len(TaskScales))
 	for _, scale := range TaskScales {
 		agents[scale] = defaultAgent
@@ -426,7 +434,7 @@ func validateKanbanAgents(raw any, defaultAgent string, choices ...[]string) (ma
 		if len(choices) > 0 {
 			names = choices[0]
 		}
-		agent, err := validateChoice(obj[scale], names, "kanban_agents."+scale)
+		agent, err := validateAgentRef(obj[scale], names, "kanban_agents."+scale)
 		if err != nil {
 			return nil, err
 		}
@@ -483,32 +491,16 @@ func ExecutionAgentsInUse(cfg *Config) []string {
 	return out
 }
 
-func validateModels(raw any, definitions ...map[string]AgentDefinition) (Models, error) {
+func validateModels(raw any, probe *Config) (Models, error) {
 	models := DefaultModels()
-	names := ExecutionAgents
-	reviewNames := ReviewAgentNames(nil)
-	if len(definitions) > 0 {
-		customModelDefaults(definitions[0], &models)
-		probe := &Config{Agents: definitions[0]}
-		names = AgentNames(probe)
-		reviewNames = ReviewAgentNames(probe)
-	}
+	customModelDefaults(probe.Agents, &models)
+	names := AgentNames(probe)
+	reviewNames := ReviewAgentNames(probe)
 	obj, ok := raw.(map[string]any)
 	if !ok {
 		return Models{}, configErrorf("config.models_must_be_a_json_object")
 	}
 	models.Chat = map[string]map[string]string{}
-	var unknown []string
-	for key := range obj {
-		if key != "kanban" && key != "review" && key != "review_roles" && key != "chat" {
-			unknown = append(unknown, key)
-		}
-	}
-	if len(unknown) > 0 {
-		return Models{}, configErrorf(
-			"config.models_has_unknown_keys", strings.Join(sorted(unknown), ", "),
-		)
-	}
 	sections := []struct {
 		name string
 		// agents lists the keys allowed in this section: the first two sections use agent names, review_roles uses review role names.
@@ -549,18 +541,11 @@ func validateModels(raw any, definitions ...map[string]AgentDefinition) (Models,
 		for _, agent := range section.agents {
 			allowed[agent] = struct{}{}
 		}
-		var unknownAgents []string
-		for agent := range provided {
-			if _, ok := allowed[agent]; !ok {
-				unknownAgents = append(unknownAgents, agent)
-			}
-		}
-		if len(unknownAgents) > 0 {
-			return Models{}, configErrorf(
-				"config.models_has_unknown_agents", section.name, strings.Join(sorted(unknownAgents), ", "),
-			)
-		}
 		for agent, entryRaw := range provided {
+			// An agent this version does not know keeps its entry in the file; see scanIgnored.
+			if _, ok := allowed[agent]; !ok {
+				continue
+			}
 			entry, ok := entryRaw.(map[string]any)
 			if !ok {
 				return Models{}, configErrorf(
@@ -568,18 +553,10 @@ func validateModels(raw any, definitions ...map[string]AgentDefinition) (Models,
 				)
 			}
 			fields := section.dest[agent]
-			var unknownFields []string
-			for field := range entry {
-				if _, ok := fields[field]; !ok {
-					unknownFields = append(unknownFields, field)
-				}
-			}
-			if len(unknownFields) > 0 {
-				return Models{}, configErrorf(
-					"config.models_has_unknown_fields", section.name, agent, strings.Join(sorted(unknownFields), ", "),
-				)
-			}
 			for field, value := range entry {
+				if _, known := fields[field]; !known {
+					continue
+				}
 				text, ok := value.(string)
 				_, modelID := modelIDFields[field]
 				if section.allowEmpty {
@@ -611,11 +588,7 @@ func validateModels(raw any, definitions ...map[string]AgentDefinition) (Models,
 		if !ok {
 			return Models{}, configErrorf("config.models_must_be_a_json_object_2", "chat")
 		}
-		var defs map[string]AgentDefinition
-		if len(definitions) > 0 {
-			defs = definitions[0]
-		}
-		chat, err := validateChatModels(provided, names, defs)
+		chat, err := validateChatModels(provided, names, probe)
 		if err != nil {
 			return Models{}, err
 		}
@@ -642,21 +615,6 @@ func validateTUI(raw any) (TUI, error) {
 	obj, ok := asObject(raw)
 	if !ok {
 		return TUI{}, configErrorf("config.tui_must_be_a_json_object")
-	}
-	allowed := map[string]struct{}{
-		"compact": {}, "columns": {}, "min_column_width": {}, "refresh": {}, "single": {}, "theme": {},
-		"theme_light": {}, "theme_dark": {},
-	}
-	var unknown []string
-	for key := range obj {
-		if _, ok := allowed[key]; !ok {
-			unknown = append(unknown, key)
-		}
-	}
-	if len(unknown) > 0 {
-		return TUI{}, configErrorf(
-			"config.tui_has_unknown_fields", strings.Join(sorted(unknown), ", "),
-		)
 	}
 	columns, err := validateInteger(obj["columns"], "tui.columns", MinTUIColumns, MaxTUIColumns)
 	if err != nil {
@@ -750,15 +708,17 @@ func Validate(raw any) (*Config, error) {
 		return nil, configErrorf("config.welcome_complete_must_be_a_boolean")
 	}
 	var definitions map[string]AgentDefinition
+	var unusable map[string]unusableAgent
 	var err error
 	if raw, exists := obj["agents"]; exists {
-		definitions, err = validateAgentDefinitions(raw)
+		definitions, unusable, err = agentEntries(raw)
 		if err != nil {
 			return nil, err
 		}
 	}
-	names := AgentNames(&Config{Agents: definitions})
-	kanbanAgent, err := validateChoice(obj["kanban_agent"], names, "kanban_agent")
+	probe := &Config{Agents: definitions, UnusableAgents: unusableReasons(unusable)}
+	names := AgentNames(probe)
+	kanbanAgent, err := validateAgentRef(obj["kanban_agent"], names, "kanban_agent")
 	if err != nil {
 		return nil, err
 	}
@@ -776,7 +736,7 @@ func Validate(raw any) (*Config, error) {
 	}
 	chatAgent := ""
 	if _, exists := obj["chat_agent"]; exists {
-		chatAgent, err = validateChoice(obj["chat_agent"], names, "chat_agent")
+		chatAgent, err = validateAgentRef(obj["chat_agent"], names, "chat_agent")
 		if err != nil {
 			return nil, err
 		}
@@ -797,9 +757,8 @@ func Validate(raw any) (*Config, error) {
 	if !ok {
 		return nil, configErrorf("config.reviewers_must_be_a_json_object")
 	}
-	reviewable := &Config{Agents: definitions}
-	reviewNames := ReviewAgentNames(reviewable)
-	reviewers, err := validateReviewers(reviewersRaw, reviewable, reviewNames)
+	reviewNames := ReviewAgentNames(probe)
+	reviewers, err := validateReviewers(reviewersRaw, probe, reviewNames)
 	if err != nil {
 		return nil, err
 	}
@@ -821,7 +780,7 @@ func Validate(raw any) (*Config, error) {
 	}
 	var models Models
 	if _, exists := obj["models"]; exists {
-		models, err = validateModels(obj["models"], definitions)
+		models, err = validateModels(obj["models"], probe)
 		if err != nil {
 			return nil, err
 		}
@@ -886,7 +845,10 @@ func Validate(raw any) (*Config, error) {
 
 		ExtendedLaunchTimeouts: extendedTimeouts,
 		InstallRules:           installRules,
+
+		UnusableAgents: probe.UnusableAgents,
 	}
+	cfg.Ignored = scanIgnored(obj, definitions, unusable)
 	applyChatFallbacks(cfg, obj)
 	return cfg, nil
 }

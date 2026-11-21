@@ -141,6 +141,9 @@ func chatDefaults(cfg *config.Config) (config.ChatSettings, string, error) {
 		return config.ChatSettings{}, "", err
 	}
 	settings := config.ChatSettingsFor(cfg)
+	if !config.HasAgent(cfg, settings.Agent) {
+		return config.ChatSettings{}, "", unavailableAgentError(cfg, settings.Agent)
+	}
 	if !terminal.HasCapability(launcher, func(c terminal.Capabilities) bool { return c.Container }) {
 		return config.ChatSettings{}, "", launchError("launch.chat_requires_container_launcher", launcher)
 	}

@@ -1,0 +1,182 @@
+package menu
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/dualface/kander/internal/config"
+)
+
+// futureScope writes a scope config that a newer Kander could have written: an
+// unknown key, an entry for an agent this version does not know, and roles that name it.
+func futureScope(t *testing.T) (string, *config.Config) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "config.json")
+	t.Setenv(config.EnvConfig, path)
+	base := config.DefaultConfig()
+	base.WelcomeComplete = true
+	base.Language = "en"
+	data, err := json.Marshal(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatal(err)
+	}
+	doc["future_top"] = map[string]any{"enabled": true}
+	doc["kanban_agent"] = "newagent"
+	doc["kanban_agents"] = map[string]any{"large": "newagent", "small": "codex"}
+	doc["chat_agent"] = "newagent"
+	reviewers := doc["reviewers"].(map[string]any)
+	reviewers["large"].(map[string]any)["PMQA"] = "newagent"
+	config.OverlaySet(doc, map[string]any{"large_model": "m"}, "models", "kanban", "newagent")
+	config.OverlaySet(doc, "x", "tui", "future")
+	writeDoc(t, path, doc)
+	cfg, err := config.Load(false)
+	if err != nil {
+		t.Fatalf("a configuration with unknown content must load: %v", err)
+	}
+	return path, cfg
+}
+
+func writeDoc(t *testing.T, path string, doc map[string]any) {
+	t.Helper()
+	data, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func readDoc(t *testing.T, path string) map[string]any {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatal(err)
+	}
+	return doc
+}
+
+func TestOptionsShowAndKeepUnknownAgentReferences(t *testing.T) {
+	path, cfg := futureScope(t)
+	session, err := NewSessionForTest(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, choices := range map[string][]Choice{
+		"execution": session.ExecutionChoicesFor("newagent"),
+		"reviewer":  session.ReviewerChoicesFor("newagent"),
+	} {
+		var current *Choice
+		for i := range choices {
+			if choices[i].Value == "newagent" {
+				current = &choices[i]
+			}
+		}
+		if current == nil || current.Label == "" {
+			t.Fatalf("%s: the unknown agent must stay selectable under its own name: %+v", name, choices)
+		}
+	}
+	// Editing another field must not touch the unknown references.
+	session.SetTUIField("theme", "dark")
+	if _, err := session.Save(); err != nil {
+		t.Fatal(err)
+	}
+	saved := readDoc(t, path)
+	if saved["kanban_agent"] != "newagent" || saved["chat_agent"] != "newagent" {
+		t.Fatalf("unknown references changed: %v %v", saved["kanban_agent"], saved["chat_agent"])
+	}
+	if got, _ := config.OverlayGet(saved, "kanban_agents", "large"); got != "newagent" {
+		t.Fatalf("kanban_agents.large=%v", got)
+	}
+	if got, _ := config.OverlayGet(saved, "reviewers", "large", "PMQA"); got != "newagent" {
+		t.Fatalf("reviewers.large.PMQA=%v", got)
+	}
+	for _, p := range [][]string{{"future_top", "enabled"}, {"tui", "future"}, {"models", "kanban", "newagent", "large_model"}} {
+		if _, ok := config.OverlayGet(saved, p...); !ok {
+			t.Fatalf("Options save lost %v", p)
+		}
+	}
+	if got, _ := config.OverlayGet(saved, "tui", "theme"); got != "dark" {
+		t.Fatalf("the edit was not saved: %v", got)
+	}
+}
+
+func TestOptionsProjectSaveKeepsUnknownOverlayKeys(t *testing.T) {
+	_, cfg := futureScope(t)
+	session, err := NewSessionForTest(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	loc := config.OverlayLocation{ProjectRoot: dir, Path: filepath.Join(dir, config.OverlayFilename), Exists: true}
+	overlay := map[string]any{
+		"future_overlay": map[string]any{"a": 1},
+		"tui":            map[string]any{"refresh": 45, "future": "y"},
+		"kanban_agents":  map[string]any{"small": "otheragent"},
+	}
+	writeDoc(t, loc.Path, overlay)
+	raw, err := config.ReadOverlayFile(loc.Path)
+	if err != nil {
+		t.Fatalf("an overlay with unknown keys must read: %v", err)
+	}
+	if err := session.AttachOverlay(config.ModeProject, loc, raw); err != nil {
+		t.Fatalf("an overlay with unknown keys must attach: %v", err)
+	}
+	session.SetTUIField("theme", "dark")
+	if _, err := session.Save(); err != nil {
+		t.Fatalf("an overlay with unknown keys must be saveable: %v", err)
+	}
+	saved := readDoc(t, loc.Path)
+	for _, p := range [][]string{{"future_overlay", "a"}, {"tui", "future"}, {"tui", "refresh"}, {"kanban_agents", "small"}} {
+		if _, ok := config.OverlayGet(saved, p...); !ok {
+			t.Fatalf("overlay save lost %v: %v", p, saved)
+		}
+	}
+	if got, _ := config.OverlayGet(saved, "kanban_agents", "small"); got != "otheragent" {
+		t.Fatalf("an unknown agent reference in the overlay changed: %v", got)
+	}
+	if got, _ := config.OverlayGet(saved, "tui", "theme"); got != "dark" {
+		t.Fatalf("the edit was not saved: %v", got)
+	}
+}
+
+func TestDoctorReportsIgnoredContent(t *testing.T) {
+	_, cfg := futureScope(t)
+	text := reportText(CaptureReport(func() { reportIgnoredConfig(cfg) }))
+	for _, want := range []string{"future_top", "tui.future", "models.kanban.newagent", "kanban_agent", "reviewers.large.PMQA", "newagent"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("doctor output misses %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestDoctorRepairKeepsUnknownAgentReferences(t *testing.T) {
+	_, cfg := futureScope(t)
+	// With no agent installed every known agent probes unavailable; the unknown
+	// references still must not be offered a replacement.
+	for _, plan := range planToolReplacements(cfg, map[string]agentState{}, true) {
+		if plan.current == "newagent" {
+			t.Fatalf("repair plans to replace an unknown agent reference: %+v", plan)
+		}
+	}
+	changes, _ := repairConfiguredTools(cfg, cfg, map[string]agentState{}, TerminalTools{}, toolRepairDecisions{}, nil)
+	for _, change := range changes {
+		if strings.Contains(change, "newagent") {
+			t.Fatalf("repair changed an unknown agent reference: %s", change)
+		}
+	}
+	if cfg.KanbanAgent != "newagent" || cfg.ChatAgent != "newagent" || cfg.Reviewers["large"]["PMQA"] != "newagent" {
+		t.Fatalf("references changed: %+v", cfg)
+	}
+}

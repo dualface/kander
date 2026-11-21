@@ -179,7 +179,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 		return err
 	}
 	if !config.HasAgent(cfg, agentName) {
-		return launchError("launch.unsupported_agent", agentName)
+		return unavailableAgentError(cfg, agentName)
 	}
 	if err := applyAgentDelivery(&plan, cfg, agentName); err != nil {
 		return err

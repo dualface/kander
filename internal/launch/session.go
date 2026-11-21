@@ -165,7 +165,7 @@ func resolveTaskIdentity(ctx context.Context, taskID, text string, requireResume
 		}
 	}
 	if !config.HasAgent(cfg, session.Agent) {
-		return AgentSession{}, launchError("launch.unsupported_agent", session.Agent)
+		return AgentSession{}, unavailableAgentError(cfg, session.Agent)
 	}
 	definition := config.AgentFor(cfg, session.Agent)
 	if requireResume && definition.Session.Mode == "none" {
@@ -660,6 +660,9 @@ func requireAgentProgram(agentName string, configs ...*config.Config) (*process.
 	var cfg *config.Config
 	if len(configs) > 0 {
 		cfg = configs[0]
+	}
+	if cfg != nil && !config.HasAgent(cfg, agentName) {
+		return nil, unavailableAgentError(cfg, agentName)
 	}
 	executable := config.AgentPath(cfg, agentName)
 	program := resolveAgent(executable)

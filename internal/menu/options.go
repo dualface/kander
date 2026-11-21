@@ -150,6 +150,8 @@ func (s *Session) prepare(configValid bool) error {
 
 	cfg := config.DefaultConfig()
 	cfg.Agents = config.CloneAgents(s.existing.Agents)
+	cfg.Ignored = s.existing.Ignored
+	cfg.UnusableAgents = s.existing.UnusableAgents
 	cfg.Models = copyModels(s.existing.Models)
 	cfg.KanbanAgent = s.existing.KanbanAgent
 	cfg.AgentLanguage = s.existing.AgentLanguage
@@ -778,6 +780,8 @@ func NewSessionForTest(existing *config.Config) (*Session, error) {
 	}
 	cfg := config.DefaultConfig()
 	cfg.Agents = config.CloneAgents(existing.Agents)
+	cfg.Ignored = existing.Ignored
+	cfg.UnusableAgents = existing.UnusableAgents
 	cfg.Models = copyModels(existing.Models)
 	cfg.KanbanAgent = existing.KanbanAgent
 	cfg.KanbanAgents = cloneStrings(existing.KanbanAgents)

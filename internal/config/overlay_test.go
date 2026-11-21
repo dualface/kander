@@ -237,9 +237,8 @@ func TestOverlayRejectsForbiddenUnknownInvalidAndUnsafeFiles(t *testing.T) {
 	}
 
 	writeJSONFile(t, overlay, map[string]any{"retired_feature": true})
-	_, err = Load(true)
-	if err == nil || !strings.Contains(err.Error(), overlay) || !strings.Contains(err.Error(), "retired_feature") {
-		t.Fatalf("unknown key: %v", err)
+	if _, err = Load(true); err != nil {
+		t.Fatalf("an unknown overlay key must not fail the load: %v", err)
 	}
 
 	if err := os.WriteFile(overlay, []byte("{"), 0o600); err != nil {

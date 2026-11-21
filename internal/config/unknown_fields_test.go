@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestLoadSaveDropsUnknownTopLevelFields(t *testing.T) {
+func TestLoadSaveKeepsUnknownTopLevelFields(t *testing.T) {
 	root := setupHome(t)
 	path := filepath.Join(root, "config.json")
 	t.Setenv(EnvConfig, path)
@@ -48,8 +48,8 @@ func TestLoadSaveDropsUnknownTopLevelFields(t *testing.T) {
 	if err := json.Unmarshal(data, &saved); err != nil {
 		t.Fatal(err)
 	}
-	if _, exists := saved["retired_feature"]; exists {
-		t.Fatal("unknown field was written back")
+	if got, exists := saved["retired_feature"].(map[string]any); !exists || got["enabled"] != true {
+		t.Fatalf("unknown field was not written back unchanged: %v", saved["retired_feature"])
 	}
 	if saved["welcome_complete"] != true || saved["language"] != "en" {
 		t.Fatalf("saved settings changed: %v", saved)

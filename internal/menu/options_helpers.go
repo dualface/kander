@@ -17,8 +17,12 @@ func choicesWithCurrent(choices []Choice, current string) []Choice {
 		}
 	}
 	unavailable := config.Text("menu.currently_unavailable")
-	labels := agentLabels()
-	return append([]Choice{{Value: current, Label: labels[current] + " (" + unavailable + ")"}}, choices...)
+	label := agentLabels()[current]
+	if label == "" {
+		// An agent this version does not know has no label; show its name as written.
+		label = current
+	}
+	return append([]Choice{{Value: current, Label: label + " (" + unavailable + ")"}}, choices...)
 }
 
 func reviewStageChoices() []Choice {

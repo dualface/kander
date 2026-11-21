@@ -76,6 +76,13 @@ func Config(args []string) int {
 		fmt.Fprintln(os.Stderr, "kander:", err)
 		return 1
 	}
+	// Notices go to stderr in both modes, so stdout stays what the settings alone produce.
+	for _, notice := range config.IgnoredNotices(cfg) {
+		fmt.Fprintln(os.Stderr, notice)
+	}
+	for _, notice := range config.UnknownAgentRefNotices(cfg) {
+		fmt.Fprintln(os.Stderr, notice)
+	}
 	if jsonOut {
 		for _, warning := range config.AgentWarnings(cfg) {
 			fmt.Fprintln(os.Stderr, warning)

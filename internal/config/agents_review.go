@@ -69,7 +69,9 @@ func validateReviewerChoice(value any, cfg *Config, field string, reviewNames []
 	if HasAgent(cfg, text) && !HasReviewTemplate(cfg, text) {
 		return "", configErrorf("config.reviewer_missing_template", field, text)
 	}
-	if !contains(reviewNames, text) {
+	// A well-formed name this version does not know may come from a newer version;
+	// it is kept and only fails when the role is used.
+	if !contains(reviewNames, text) && !ValidAgentName(text) {
 		return "", choiceError(field, strings.Join(reviewNames, ", "))
 	}
 	return text, nil

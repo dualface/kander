@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -306,7 +307,6 @@ func TestValidateTUI(t *testing.T) {
 		"columns range": map[string]any{"columns": 8, "min_column_width": 40, "refresh": 30, "single": false, "theme": "auto"},
 		"refresh type":  map[string]any{"columns": 3, "min_column_width": 40, "refresh": "fast", "single": false, "theme": "auto"},
 		"unknown theme": map[string]any{"columns": 3, "min_column_width": 40, "refresh": 30, "single": false, "theme": "blue"},
-		"unknown field": map[string]any{"columns": 3, "min_column_width": 40, "refresh": 30, "single": false, "theme": "auto", "extra": true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			raw := minimalPayload(map[string]any{"tui": tui})
@@ -626,11 +626,10 @@ func TestKanbanAgentsSelectTheAgentByScale(t *testing.T) {
 	}
 }
 
-func TestKanbanAgentsRejectUnknownScalesAndAgents(t *testing.T) {
+func TestKanbanAgentsRejectMalformedValues(t *testing.T) {
 	setupHome(t)
 	bads := []any{
-		map[string]any{"medium": "codex"},
-		map[string]any{"large": "vim"},
+		map[string]any{"large": "Not A Name"},
 		[]any{"codex"},
 		map[string]any{"small": nil},
 	}
@@ -643,19 +642,25 @@ func TestKanbanAgentsRejectUnknownScalesAndAgents(t *testing.T) {
 	}
 }
 
-func TestCursorRejectsUnknownModelFields(t *testing.T) {
+func TestCursorIgnoresEffortFields(t *testing.T) {
 	setupHome(t)
-	_, err := Validate(minimalPayload(map[string]any{
-		"models": map[string]any{"kanban": map[string]any{"cursor": map[string]any{"large_effort": "high"}}},
+	cfg, err := Validate(minimalPayload(map[string]any{
+		"models": map[string]any{
+			"kanban": map[string]any{"cursor": map[string]any{"large_effort": "high"}},
+			"review": map[string]any{"cursor": map[string]any{"effort": "xhigh"}},
+		},
 	}))
-	if err == nil || !strings.Contains(err.Error(), "models.kanban.cursor 含未知字段") {
+	if err != nil {
 		t.Fatalf("got %v", err)
 	}
-	_, err = Validate(minimalPayload(map[string]any{
-		"models": map[string]any{"review": map[string]any{"cursor": map[string]any{"effort": "xhigh"}}},
-	}))
-	if err == nil || !strings.Contains(err.Error(), "models.review.cursor 含未知字段") {
-		t.Fatalf("got %v", err)
+	if _, ok := cfg.Models.Kanban["cursor"]["large_effort"]; ok {
+		t.Fatalf("an ignored field entered the models: %v", cfg.Models.Kanban["cursor"])
+	}
+	if _, ok := cfg.Models.Review["cursor"]["effort"]; ok {
+		t.Fatalf("an ignored field entered the models: %v", cfg.Models.Review["cursor"])
+	}
+	if got := ignoredPaths(cfg); !slices.Equal(got, []string{"models.kanban.cursor.large_effort", "models.review.cursor.effort"}) {
+		t.Fatalf("ignored=%v", got)
 	}
 }
 
@@ -709,8 +714,6 @@ func TestConfigRejectsInvalidModelsSection(t *testing.T) {
 		{map[string]any{"kanban": map[string]any{"codex": map[string]any{"large_effort": "hi\x00gh"}}}, "models.kanban.codex.large_effort"},
 		{nil, "models 必须是 JSON object"},
 		{map[string]any{"review": nil}, "models.review 必须是 JSON object"},
-		{map[string]any{"review": map[string]any{"other": map[string]any{}}}, "models.review 含未知 agent"},
-		{map[string]any{"extra": map[string]any{}}, "models 含未知键"},
 	}
 	for _, tc := range cases {
 		payload := map[string]any{}

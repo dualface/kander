@@ -76,30 +76,22 @@ func NormalizeReviewStages(raw any) (map[string]any, error) {
 	if !ok {
 		return nil, configErrorf("config.review_stages_must_be_a_json_object")
 	}
-	scales, roles, unknown := classifyReviewStages(obj)
+	scales, roles, _ := classifyReviewStages(obj)
 	if len(scales) > 0 && len(roles) > 0 {
 		conflict := append(append([]string{}, scales...), roles...)
 		return nil, configErrorf(
 			"config.review_stages_mixes_scale_and_role_keys", strings.Join(sorted(conflict), ", "),
 		)
 	}
+	// Keys that are neither a scale nor a role are kept as they are; they stay out
+	// of the validated values and scanIgnored reports them.
 	if len(roles) > 0 || (len(scales) == 0 && reviewStagesLooksFlat(obj)) {
-		if len(unknown) > 0 {
-			return nil, configErrorf(
-				"config.review_stages_has_unknown_roles", strings.Join(unknown, ", "),
-			)
-		}
 		flat := cloneRawObject(obj)
 		out := make(map[string]any, len(TaskScales))
 		for _, scale := range TaskScales {
 			out[scale] = cloneRawObject(flat)
 		}
 		return out, nil
-	}
-	if len(unknown) > 0 {
-		return nil, configErrorf(
-			"config.review_stages_has_unknown_scales", strings.Join(unknown, ", "), strings.Join(TaskScales, ", "),
-		)
 	}
 	return cloneRawObject(obj), nil
 }
@@ -121,14 +113,11 @@ func validateReviewStageRoles(raw any, path string) (map[string]string, error) {
 	if !ok {
 		return nil, configErrorf("config.review_stages_scale_must_be_a_json_object", path)
 	}
-	unknown := unknownHistoricalRoles(obj)
-	if len(unknown) > 0 {
-		return nil, configErrorf(
-			"config.review_stages_has_unknown_roles", strings.Join(unknown, ", "),
-		)
-	}
 	modes := map[string]string{}
 	for key := range obj {
+		if _, known := historicalReviewRoleSet()[key]; !known {
+			continue
+		}
 		mode, err := validateChoice(obj[key], ReviewStageModes, path+"."+key)
 		if err != nil {
 			return nil, err

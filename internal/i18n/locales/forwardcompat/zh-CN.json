@@ -1,0 +1,11 @@
+{
+  "config.agent_unknown_reference": "当前版本的 Kander 不认识 agent {{.V0}}, 可能由更新的版本写入. 请改用已知 agent, 或升级 Kander",
+  "config.agent_unusable": "agent {{.V0}} 不可用: {{.V1}}",
+  "config.agent_unusable_session_mode": "session.mode {{printf \"%q\" .V0}} 在当前版本中未登记",
+  "config.ignored_agent": "已忽略 {{.V0}}: 当前版本不认识该 agent, 条目仍保留在文件中",
+  "config.ignored_field": "已忽略 {{.V0}}: 当前版本没有定义该字段, 值仍保留在文件中",
+  "config.ignored_from": "{{.V0}} (位于 {{.V1}})",
+  "config.ignored_unusable_agent": "agent 条目 {{.V0}} 不可用: {{.V1}}; 条目仍保留在文件中",
+  "config.unknown_agent_reference_notice": "{{.V0}} 指向当前版本不认识的 agent {{.V1}}, 在修改它或升级 Kander 之前, 使用该角色会失败",
+  "menu.doctor_ignored_heading": "当前版本忽略以下设置; 它们可能由更新的版本写入, 保存配置时会原样保留:"
+}

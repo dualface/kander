@@ -79,7 +79,7 @@ func processNotifyTarget(plan LaunchPlan, pane string, session AgentSession, tim
 		return err
 	}
 	if !config.HasAgent(cfg, session.Agent) {
-		return launchError("launch.unsupported_agent", session.Agent)
+		return unavailableAgentError(cfg, session.Agent)
 	}
 	expected := config.AgentFor(cfg, session.Agent).ProcessName
 	if facts.Command != expected {

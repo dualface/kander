@@ -272,6 +272,11 @@ func splitAgentArgs(args []string) (agent string, rest []string, err error) {
 	if containsAgent(args[0]) {
 		return args[0], args[1:], nil
 	}
+	if cfg, err := config.Effective(nil); err == nil {
+		if _, unusable := cfg.UnusableAgents[args[0]]; unusable {
+			return "", nil, newGateMsg(2, config.UnavailableAgentError(cfg, args[0]).Error())
+		}
+	}
 	if looksLikeAbsolutePath(args[0]) {
 		return "", args, nil
 	}
@@ -303,6 +308,10 @@ func reviewerFromConfig(role, scale string) (string, error) {
 		scale = "large"
 	}
 	agent := config.ReviewerFor(cfg, scale, role)
+	if !config.HasAgent(cfg, agent) && !containsAgent(agent) {
+		// The role names an agent this version cannot use, such as one a newer version added.
+		return "", newGateMsg(1, config.UnavailableAgentError(cfg, agent).Error())
+	}
 	if !containsAgent(agent) {
 		return "", newGate(1, "review.unsupported_reviewer_agent", agent)
 	}

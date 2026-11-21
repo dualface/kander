@@ -73,6 +73,10 @@ func validateRules(raw any) (Rules, error) {
 	}
 	rules := DefaultRules(false)
 	for key, value := range obj {
+		// A module this version does not know is ignored, whatever its value; see scanIgnored.
+		if !contains(RuleModules, key) {
+			continue
+		}
 		enabled, ok := value.(bool)
 		if !ok {
 			return nil, configErrorf("rules.boolean_required", key)

@@ -34,43 +34,27 @@ func chatModelDefaults() map[string]map[string]string {
 	return out
 }
 
-func validateChatModels(provided map[string]any, names []string, definitions map[string]AgentDefinition) (map[string]map[string]string, error) {
-	probe := &Config{Agents: definitions}
+func validateChatModels(provided map[string]any, names []string, probe *Config) (map[string]map[string]string, error) {
 	allowedAgents := map[string]struct{}{}
 	for _, name := range names {
 		allowedAgents[name] = struct{}{}
 	}
-	var unknownAgents []string
-	for agent := range provided {
-		if _, ok := allowedAgents[agent]; !ok {
-			unknownAgents = append(unknownAgents, agent)
-		}
-	}
-	if len(unknownAgents) > 0 {
-		return nil, configErrorf(
-			"config.models_has_unknown_agents", "chat", strings.Join(sorted(unknownAgents), ", "),
-		)
-	}
 	out := make(map[string]map[string]string, len(provided))
 	for agent, entryRaw := range provided {
+		// An agent this version does not know keeps its entry in the file; see scanIgnored.
+		if _, ok := allowedAgents[agent]; !ok {
+			continue
+		}
 		entry, ok := entryRaw.(map[string]any)
 		if !ok {
 			return nil, configErrorf("config.models_must_be_a_json_object_3", "chat", agent)
 		}
 		allowedFields := chatAllowedFields(probe, agent)
-		var unknownFields []string
-		for field := range entry {
-			if _, ok := allowedFields[field]; !ok {
-				unknownFields = append(unknownFields, field)
-			}
-		}
-		if len(unknownFields) > 0 {
-			return nil, configErrorf(
-				"config.models_has_unknown_fields", "chat", agent, strings.Join(sorted(unknownFields), ", "),
-			)
-		}
 		fields := map[string]string{}
 		for field, value := range entry {
+			if _, known := allowedFields[field]; !known {
+				continue
+			}
 			text, ok := value.(string)
 			_, modelID := modelIDFields[field]
 			if !ok || (!modelID && strings.TrimSpace(text) == "") {
@@ -93,7 +77,9 @@ func validateChatModels(provided map[string]any, names []string, definitions map
 }
 
 func fillChatAgentFromKanban(cfg *Config, agent string) {
-	if cfg == nil || agent == "" {
+	// An agent this version does not know has no Chat entry to fill; creating one
+	// would shadow the entry a newer version wrote for it.
+	if cfg == nil || agent == "" || !HasAgent(cfg, agent) {
 		return
 	}
 	if cfg.Models.Chat == nil {
@@ -196,8 +182,9 @@ func fillMissingChatRaw(root, provided map[string]any) {
 	}
 	kanban, _ := asObject(modelsRoot["kanban"])
 	probe := &Config{}
-	if agents, err := validateAgentDefinitions(root["agents"]); err == nil {
+	if agents, unusable, err := agentEntries(root["agents"]); err == nil {
 		probe.Agents = agents
+		probe.UnusableAgents = unusableReasons(unusable)
 	}
 	modelsRoot["chat"] = derivedChatObject(probe, kanban)
 }

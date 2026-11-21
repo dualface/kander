@@ -70,19 +70,15 @@ func TestMissingChatFieldsFallBackToLarge(t *testing.T) {
 	}
 }
 
-func TestChatRejectsUnknownAgentFieldsAndUnsupportedEffort(t *testing.T) {
+func TestChatRejectsInvalidValuesAndIgnoresUnknownContent(t *testing.T) {
 	setupHome(t)
 	cases := []struct {
 		models   any
 		fragment string
 	}{
-		{map[string]any{"chat": map[string]any{"vim": map[string]any{"model": "x"}}}, "models.chat 含未知 agent"},
-		{map[string]any{"chat": map[string]any{"codex": map[string]any{"temperature": "1"}}}, "models.chat.codex 含未知字段"},
 		{map[string]any{"chat": map[string]any{"codex": map[string]any{"model": 1}}}, "models.chat.codex.model"},
 		{map[string]any{"chat": map[string]any{"codex": map[string]any{"model": "a\nb"}}}, "models.chat.codex.model"},
 		{map[string]any{"chat": map[string]any{"codex": map[string]any{"effort": "hi\x00gh"}}}, "models.chat.codex.effort"},
-		{map[string]any{"chat": map[string]any{"cursor": map[string]any{"effort": "high"}}}, "models.chat.cursor 含未知字段"},
-		{map[string]any{"chat": map[string]any{"devin": map[string]any{"effort": "high"}}}, "models.chat.devin 含未知字段"},
 	}
 	for _, tc := range cases {
 		payload := minimalPayload(nil)

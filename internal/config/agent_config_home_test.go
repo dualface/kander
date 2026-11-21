@@ -20,14 +20,10 @@ func TestAgentConfigDirValidation(t *testing.T) {
 		{"tilde prefix", "pi", "~/.config/pi", true},
 		{"relative", "codex", "codex", false},
 		{"control", "codex", "/tmp/a\nb", false},
-		{"custom agent", "wrapper", "/tmp/wrapper", false},
 		{"fixed directory", "cursor", "/tmp/cursor", false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			fields := map[string]any{"config_dir": tt.value}
-			if tt.agent == "wrapper" {
-				fields["path"], fields["dialect"] = "sh", "codex"
-			}
 			_, err := validateAgentDefinitions(map[string]any{tt.agent: fields})
 			if tt.ok != (err == nil) {
 				t.Fatalf("err=%v want ok=%v", err, tt.ok)
