@@ -60,6 +60,89 @@ func TestInstalledPromptTemplateOverridesEmbedded(t *testing.T) {
 	}
 }
 
+// waitingReminder is the embedded text of templates/prompt/waiting.md, which every execution
+// prompt carries whatever the module switches say.
+func waitingReminder(t *testing.T) string {
+	t.Helper()
+	data, err := config.ReadRulesFile(goldenPaths, "templates/prompt/waiting.md", nil)
+	if err != nil || len(data) == 0 {
+		t.Fatalf("embedded waiting template: %q %v", data, err)
+	}
+	return string(data)
+}
+
+// The waiting reminder follows the report reminder (when rules.reporting is on) and comes before the
+// SIZE sentence in the start and takeover prompts, with the reporting switch on and off.
+func TestExecutionPromptsCarryTheWaitingReminder(t *testing.T) {
+	waiting := waitingReminder(t)
+	card := "- LANGUAGE: en\n- SIZE: small\n"
+	for _, reporting := range []bool{true, false} {
+		goldenConfig(t, reporting)
+		sizeText, err := render(goldenPaths, "size.md", map[string]string{"Size": "small"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		prompts := map[string]func() (string, error){
+			"start": func() (string, error) { return startAgentPrompt("20260101-golden-task", goldenPaths, "", card) },
+			"takeover": func() (string, error) {
+				return takeoverAgentPrompt("20260101-golden-task", "continue", goldenPaths, "codex", "working", card)
+			},
+		}
+		for name, build := range prompts {
+			text, err := build()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(text, waiting+" "+sizeText) {
+				t.Fatalf("%s prompt (reporting=%v) lacks the waiting reminder before the SIZE sentence: %s", name, reporting, text)
+			}
+			if reportingIndex := strings.Index(text, "KANDER-REPORTING-RULES.md"); reporting != (reportingIndex >= 0) || reporting && reportingIndex > strings.Index(text, waiting) {
+				t.Fatalf("%s prompt (reporting=%v) orders the report and waiting reminders wrongly: %s", name, reporting, text)
+			}
+		}
+	}
+}
+
+// The orchestrate prompt carries its own reminder: the wake-up rule of subscribe.md, the way each
+// kind of subscription wakes the session, and the long-command rule.
+func TestOrchestratePromptCarriesTheWaitingReminder(t *testing.T) {
+	goldenConfig(t, false)
+	text, err := orchestratorAgentPrompt([]OrchestrateTask{{TaskID: "20260101-golden-task", State: "todo"}}, []string{"- LANGUAGE: en\n- SIZE: small\n"}, "plan notes", goldenPaths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`Never end a turn without a wake-up source per ` + "`snippets/commands/subscribe.md`" + ` "Waking Up"`,
+		"its exit by default, each output line under `--follow`",
+		"Run long commands such as `kander review` in the foreground or in a background mode whose completion the runner reports; never detach them with & or nohup.",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("orchestrate prompt lacks %q: %s", want, text)
+		}
+	}
+}
+
+// An installation from before the waiting reminder has no waiting.md: the prompt still builds and
+// carries the embedded sentence, while the installed templates keep winning.
+func TestOldInstallWithoutWaitingTemplateUsesEmbedded(t *testing.T) {
+	goldenConfig(t, false)
+	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: t.TempDir()}
+	dir := filepath.Join(paths.RulesDir, "templates", "prompt")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "size.md"), []byte("OLD SIZE {{.Size}}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	start, err := startAgentPrompt("20260101-golden-task", paths, "", "- LANGUAGE: en\n- SIZE: small\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(start, waitingReminder(t)+" OLD SIZE small") {
+		t.Fatalf("embedded waiting reminder missing before the installed size sentence: %s", start)
+	}
+}
+
 // The rollout prefixes used to find a Codex session come from the same installed head template
 // the launch wrote with, so a customized head still matches.
 func TestPromptPrefixesFollowInstalledHead(t *testing.T) {

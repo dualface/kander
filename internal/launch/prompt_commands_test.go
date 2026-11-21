@@ -30,7 +30,10 @@ var promptProse = map[string]bool{"move prints it prefilled": true}
 // argument validation however short it is. Each phrase is removed before the command lines are
 // read, and a phrase that no prompt contains any more fails the test, so the list cannot
 // outlive the text it excuses.
-var promptReferences = []string{"controlled `kander update` commands"}
+//
+// The orchestrate prompt names `kander subscribe` and `kander review` while it explains how a
+// session is woken, which tells the agent nothing to run.
+var promptReferences = []string{"controlled `kander update` commands", "a background `kander subscribe`", "such as `kander review`"}
 
 // promptActions finds the actions the result prompt lists after its command line.
 var promptActions = regexp.MustCompile(`--action ([a-z]+)`)
@@ -166,7 +169,7 @@ func TestRenderedPromptCommandLinesAreAccepted(t *testing.T) {
 func TestEveryPromptTemplateThatNamesACommandIsRendered(t *testing.T) {
 	rendered := map[string]bool{
 		"dispatch.md": true, "refine.md": true, "reporting.md": true, "result.md": true, "rule-loading.md": true,
-		"self-move-review.md": true, "start.md": true, "takeover.md": true, "triage.md": true,
+		"self-move-review.md": true, "start.md": true, "takeover.md": true, "triage.md": true, "orchestrate.md": true,
 	}
 	unrendered := map[string]bool{"resume.md": true}
 	files, err := filepath.Glob(filepath.Join("..", "..", "rules", "templates", "prompt", "*.md"))

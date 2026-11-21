@@ -1,0 +1,1 @@
+Run long commands in the foreground or in a background mode whose completion the runner reports to you; never detach them with & or nohup, and never end a turn while waiting on a process the runner will not report.

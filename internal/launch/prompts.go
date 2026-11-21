@@ -117,7 +117,8 @@ func rulesAndLanguage(paths config.InstallPaths, language string) (string, error
 }
 
 // ruleLoadingWithLanguage joins the preamble fragments: rule loading, language directive, the
-// reporting reminder while rules.reporting is enabled, and the SIZE sentence.
+// reporting reminder while rules.reporting is enabled, the waiting reminder (always, since a stalled
+// wait has nothing to do with the optional modules), and the SIZE sentence.
 func ruleLoadingWithLanguage(paths config.InstallPaths, cardText string) (string, error) {
 	lang, err := resolvePromptLanguage(cardText, paths)
 	if err != nil {
@@ -142,6 +143,11 @@ func ruleLoadingWithLanguage(paths config.InstallPaths, cardText string) (string
 		}
 		parts = append(parts, reporting)
 	}
+	waiting, err := render(paths, "waiting.md", nil)
+	if err != nil {
+		return "", err
+	}
+	parts = append(parts, waiting)
 	sizeText, err := render(paths, "size.md", map[string]string{"Size": size})
 	if err != nil {
 		return "", err
