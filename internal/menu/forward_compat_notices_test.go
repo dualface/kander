@@ -143,6 +143,13 @@ func withReviewers(t *testing.T, reviewers map[string]any) map[string]any {
 	return doc
 }
 
+func withEmptyProgramStatus(t *testing.T) map[string]any {
+	t.Helper()
+	doc := cleanTwin(t)
+	doc["agents"] = map[string]any{"codex": map[string]any{"path": "codex", "program_status": map[string]any{}}}
+	return doc
+}
+
 // withClaudeMirror sets kanban_agent to claude and leaves the scales to derive from it.
 func withClaudeMirror(t *testing.T) map[string]any {
 	t.Helper()
@@ -222,6 +229,13 @@ func TestConfigOutputEqualsThatWithoutTheIgnoredContent(t *testing.T) {
 				delete(doc, "tui")
 				return doc
 			}},
+		// An empty program_status declares that the agent reports no status, so it is a setting:
+		// removing the overlay's unknown key inside it must leave the scope's declaration alone.
+		{name: "an unknown key in a program_status the scope declares empty", notices: 1,
+			dirty:        func(t *testing.T) map[string]any { return withEmptyProgramStatus(t) },
+			clean:        func(t *testing.T) map[string]any { return withEmptyProgramStatus(t) },
+			dirtyOverlay: map[string]any{"agents": map[string]any{"codex": map[string]any{"program_status": map[string]any{"future_key": 1}}}, "tui": map[string]any{"refresh": 45}},
+			cleanOverlay: map[string]any{"tui": map[string]any{"refresh": 45}}},
 		// Both layers name an unknown agent for small; the overlay's wins, and removing it must
 		// not show the scope's.
 		{name: "unknown agents in both layers", notices: 1,

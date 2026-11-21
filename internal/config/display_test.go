@@ -36,10 +36,10 @@ func displayShapes() []displayShape {
 			name:      fmt.Sprint(path),
 			scopeOnly: true,
 			inject: func(layer map[string]any) {
-				layer["agents"] = map[string]any{"custom": customAgent()}
+				OverlaySet(layer, customAgent(), "agents", "custom")
 				OverlaySet(layer, "x", path...)
 			},
-			twin: func(layer map[string]any) { layer["agents"] = map[string]any{"custom": customAgent()} },
+			twin: func(layer map[string]any) { OverlaySet(layer, customAgent(), "agents", "custom") },
 		}
 	}
 	return []displayShape{
@@ -61,6 +61,21 @@ func displayShapes() []displayShape {
 		unknownAt("x", "models", "review_roles", "PMQA", "future_field"),
 		customWith("agents", "custom", "future_key"),
 		customWith("agents", "custom", "session", "future_session_key"),
+		// An empty program_status declares that the agent reports no status: a setting that an
+		// unknown key inside it, in the other layer, must not remove.
+		{
+			name:      "an empty program_status",
+			scopeOnly: true,
+			inject:    func(layer map[string]any) { OverlaySet(layer, map[string]any{}, "agents", "claude", "program_status") },
+			twin:      func(layer map[string]any) { OverlaySet(layer, map[string]any{}, "agents", "claude", "program_status") },
+		},
+		{
+			name: "an unknown key in program_status",
+			inject: func(layer map[string]any) {
+				OverlaySet(layer, map[string]any{"future_key": 1}, "agents", "claude", "program_status")
+			},
+			twin: func(layer map[string]any) { OverlaySet(layer, map[string]any{}, "agents", "claude", "program_status") },
+		},
 		// An unknown key under server and project.
 		unknownAt("t", "server", "token"),
 		unknownAt(true, "project", "extra"),

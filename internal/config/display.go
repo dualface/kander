@@ -1,6 +1,9 @@
 package config
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
 
 // DisplayConfig returns the configuration as kander config shows it: cfg as it would load
 // without the content this version ignores. An unusable agents entry and the keys of a newer
@@ -41,22 +44,59 @@ func displayLayers() (scope, overlay map[string]any, err error) {
 }
 
 // displayWithout removes the ignored content from copies of the layers and merges them.
-func displayWithout(cfg *Config, scope, overlay map[string]any) (*Config, bool) {
-	scope = cloneRawObjectDeep(scope)
-	if overlay != nil {
-		overlay = cloneRawObjectDeep(overlay)
+func displayWithout(cfg *Config, loadedScope, loadedOverlay map[string]any) (*Config, bool) {
+	scope := cloneRawObjectDeep(loadedScope)
+	var overlay map[string]any
+	if loadedOverlay != nil {
+		overlay = cloneRawObjectDeep(loadedOverlay)
 	}
+	// acceptsEmpty asks the loader, on the layers as they were loaded, whether the object at path
+	// may be empty in the given layer (0 the scope file, 1 the overlay).
+	acceptsEmpty := func(index int, path []string) bool {
+		probeScope, probeOverlay := cloneRawObjectDeep(loadedScope), loadedOverlay
+		if loadedOverlay != nil {
+			probeOverlay = cloneRawObjectDeep(loadedOverlay)
+		}
+		probe := probeScope
+		if index == 1 {
+			probe = probeOverlay
+		}
+		OverlaySet(probe, map[string]any{}, path...)
+		_, _, err := validateLayers(probeScope, probeOverlay)
+		return err == nil
+	}
+	// kept lists the objects a removal left empty because the loader takes them empty in their
+	// own layer. The merge of two layers can still be empty where each alone was not (a tui
+	// section of only unknown keys in both), so mergeTidy prunes them if the merge fails.
+	var kept []keptEmpty
+	layers := []map[string]any{scope, overlay}
 	remove := func(path ...string) {
-		for _, layer := range []map[string]any{scope, overlay} {
+		for i, layer := range layers {
 			if layer == nil {
 				continue
 			}
-			deleteAndTidy(layer, path)
+			for _, parent := range deleteAndTidy(layer, path, func(parent []string) bool { return acceptsEmpty(i, parent) }) {
+				kept = append(kept, keptEmpty{layer: i, path: parent})
+			}
 		}
 	}
 	merge := func() (*Config, error) {
 		cfg, _, err := validateLayers(scope, overlay)
 		return cfg, err
+	}
+	mergeTidy := func() (*Config, error) {
+		cfg, err := merge()
+		if err == nil {
+			return cfg, nil
+		}
+		for _, group := range keptGroups(kept) {
+			undo := pruneEmpty(layers, group)
+			if pruned, mergeErr := merge(); mergeErr == nil {
+				return pruned, nil
+			}
+			undo()
+		}
+		return nil, err
 	}
 	// An unusable entry goes first: with it gone, a built-in agent is known again and its
 	// models.* entries are settings, not ignored content. What is still ignored after that is
@@ -66,7 +106,7 @@ func displayWithout(cfg *Config, scope, overlay map[string]any) (*Config, bool) 
 			remove(item.Path...)
 		}
 	}
-	display, err := merge()
+	display, err := mergeTidy()
 	for range 8 {
 		if err != nil {
 			return nil, false
@@ -77,7 +117,7 @@ func displayWithout(cfg *Config, scope, overlay map[string]any) (*Config, bool) 
 		for _, item := range display.Ignored {
 			remove(item.Path...)
 		}
-		display, err = merge()
+		display, err = mergeTidy()
 	}
 	if err != nil {
 		return nil, false
@@ -109,65 +149,96 @@ func displayWithout(cfg *Config, scope, overlay map[string]any) (*Config, bool) 
 							// The scope file requires kanban_agent: the default agent stands in for it.
 							layer[key[0]] = defaultAgentName()
 						} else {
-							deleteAndTidy(layer, key)
+							deleteAndTidy(layer, key, func(parent []string) bool { return acceptsEmpty(i, parent) })
 						}
 					}
 				}
 			}
 		}
-		if display, err = merge(); err != nil {
+		if display, err = mergeTidy(); err != nil {
 			return nil, false
 		}
 	}
 	return display, true
 }
 
-// deleteAndTidy removes the key the path names. A parent object that this leaves empty stays
-// when the configuration accepts it empty (the required reviewers object) and goes when it needs
-// content or may be absent (a tui section of only unknown keys, an agents entry).
-func deleteAndTidy(obj map[string]any, path []string) {
-	chain := []map[string]any{obj}
-	for _, key := range path[:len(path)-1] {
-		next, ok := chain[len(chain)-1][key].(map[string]any)
-		if !ok {
-			return
+// keptEmpty is an object a removal left empty in one layer (0 the scope file, 1 the overlay).
+type keptEmpty struct {
+	layer int
+	path  []string
+}
+
+// keptGroups lists the distinct paths of the kept objects, deepest first.
+func keptGroups(kept []keptEmpty) [][]string {
+	var groups [][]string
+	seen := map[string]bool{}
+	for _, item := range kept {
+		if key := strings.Join(item.path, "\x00"); !seen[key] {
+			seen[key] = true
+			groups = append(groups, item.path)
 		}
-		chain = append(chain, next)
 	}
-	delete(chain[len(chain)-1], path[len(path)-1])
-	for depth := len(chain) - 1; depth > 0 && len(chain[depth]) == 0; depth-- {
-		if !acceptsEmptyObject(path[:depth]) {
-			delete(chain[depth-1], path[depth-1])
+	sort.SliceStable(groups, func(i, j int) bool { return len(groups[i]) > len(groups[j]) })
+	return groups
+}
+
+// pruneEmpty removes the object at path from every layer where it is empty, and returns the
+// function that puts them back.
+func pruneEmpty(layers []map[string]any, path []string) (undo func()) {
+	var restore []func()
+	for _, layer := range layers {
+		if layer == nil {
+			continue
+		}
+		parent := layer
+		for _, key := range path[:len(path)-1] {
+			next, ok := parent[key].(map[string]any)
+			if !ok {
+				parent = nil
+				break
+			}
+			parent = next
+		}
+		last := path[len(path)-1]
+		if object, ok := parent[last].(map[string]any); parent != nil && ok && len(object) == 0 {
+			delete(parent, last)
+			restore = append(restore, func() { parent[last] = map[string]any{} })
+		}
+	}
+	return func() {
+		for _, put := range restore {
+			put()
 		}
 	}
 }
 
-// acceptsEmptyObject reports whether the default configuration stays valid with the object at
-// path emptied. When it does not, the object is removed instead when the default configuration
-// stays valid without it; when neither holds, it is kept.
-func acceptsEmptyObject(path []string) bool {
-	doc, err := DocumentFromConfig(DefaultConfig())
-	if err != nil {
-		return true
-	}
-	parent := doc
+// deleteAndTidy removes the key the path names, when the layer has it, and returns the parent
+// objects it left empty and kept. A parent that this leaves empty stays when accepts says the
+// loader takes it empty (the required reviewers object, an empty program_status that declares no
+// status reports) and goes when it does not (a tui section of only unknown keys). A layer that
+// did not hold the key is left as it is.
+func deleteAndTidy(obj map[string]any, path []string, accepts func(parent []string) bool) (kept [][]string) {
+	chain := []map[string]any{obj}
 	for _, key := range path[:len(path)-1] {
-		next, ok := parent[key].(map[string]any)
+		next, ok := chain[len(chain)-1][key].(map[string]any)
 		if !ok {
-			// The default configuration has no such parent: an empty object here is a
-			// stranger to it, so it goes.
-			return false
+			return nil
 		}
-		parent = next
+		chain = append(chain, next)
 	}
 	last := path[len(path)-1]
-	parent[last] = map[string]any{}
-	if _, err := Validate(doc); err == nil {
-		return true
+	if _, ok := chain[len(chain)-1][last]; !ok {
+		return nil
 	}
-	delete(parent, last)
-	_, err = Validate(doc)
-	return err != nil
+	delete(chain[len(chain)-1], last)
+	for depth := len(chain) - 1; depth > 0 && len(chain[depth]) == 0; depth-- {
+		if !accepts(path[:depth]) {
+			delete(chain[depth-1], path[depth-1])
+			continue
+		}
+		kept = append(kept, append([]string(nil), path[:depth]...))
+	}
+	return kept
 }
 
 // roleKeys lists the keys a layer can hold the role at the path under. A reviewer role is read
