@@ -41,7 +41,8 @@ func ignoredOfFile(path string) []Ignored {
 // item is placed only where its parent object already exists in the encoding, so a
 // section the user removed does not come back. The exceptions are parents that exist
 // only for the kept content (see mayCreate): the agents object and the agent entries
-// and sections below it, and the legacy role object of models.review_roles that
+// and sections below it, the server and project sections whose known keys are empty
+// (the encoding omits them), and the legacy role object of models.review_roles that
 // holds only unknown fields. An item whose key the encoding already has is skipped:
 // the current value wins.
 func encodeConfigKeeping(cfg *Config, items []Ignored) ([]byte, error) {
@@ -176,10 +177,14 @@ func (n *jsonTree) insertAt(path, trail, full []string, value *jsonTree) {
 // item at full. Only parents that exist for no reason but the kept content are: the
 // agents object, an agents entry, or a section of an entry that the encoding left
 // out (an entry whose known content was cleared, or whose section held only unknown
-// keys), and the legacy role object of models.review_roles that holds only unknown
-// fields.
+// keys), the server and project sections, which the encoding omits while their known
+// keys are empty, and the legacy role object of models.review_roles that holds only
+// unknown fields.
 func mayCreate(prefix, full []string) bool {
 	if prefix[0] == "agents" {
+		return true
+	}
+	if len(prefix) == 1 && (prefix[0] == "server" || prefix[0] == "project") {
 		return true
 	}
 	return len(full) == 4 && len(prefix) == 3 && prefix[0] == "models" && prefix[1] == "review_roles"
