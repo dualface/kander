@@ -302,11 +302,13 @@ func closeWithGit(root, cwd string, r board.ReviewCloseRequest) (board.ReviewClo
 	if _, err = verifyHead(); err != nil {
 		return c, err
 	}
-	edges, _, err := board.ReviewClosureEdges(v, r)
-	if err != nil {
+	// Before ReviewClosureEdges, which refuses a fix commit equal to the reviewed commit as one error
+	// for the whole batch: the claim check lists every affected record instead.
+	if err = verifyFixCommitClaims(cwd, v, r); err != nil {
 		return c, err
 	}
-	if err = verifyFixCommitClaims(cwd, v, r); err != nil {
+	edges, _, err := board.ReviewClosureEdges(v, r)
+	if err != nil {
 		return c, err
 	}
 	for _, edge := range edges {

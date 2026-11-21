@@ -324,7 +324,9 @@ type ReviewFixCommitClaim struct {
 	FindingID string
 	RecordID  string
 	FixCommit string
-	Edges     []ReviewGitEdge
+	// Reviewed is the reviewed commit of the run. A fix commit equal to it is no fix: the fix must follow it.
+	Reviewed string
+	Edges    []ReviewGitEdge
 }
 
 // fixedRecordEdges lists the Git edges one latest fixed record adds to a closure:
@@ -347,18 +349,20 @@ func fixedRecordEdges(prior ReviewRunView, d ReviewDisposition, mustFixItem bool
 // each with the edges it adds. It covers the same records and edges as
 // ReviewClosureEdges and fails with the same errors.
 func ReviewFixCommitClaims(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewFixCommitClaim, error) {
-	_, _, claims, err := reviewClosureEdges(v, r)
+	_, _, claims, err := reviewClosureEdges(v, r, true)
 	return claims, err
 }
 
 // ReviewClosureEdges validates semantic coverage and returns the exact Git claims
 // which the review layer must verify. Structural validation makes no Git calls.
 func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdge, map[string]string, error) {
-	edges, statuses, _, err := reviewClosureEdges(v, r)
+	edges, statuses, _, err := reviewClosureEdges(v, r, false)
 	return edges, statuses, err
 }
 
-func reviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdge, map[string]string, []ReviewFixCommitClaim, error) {
+// reviewClosureEdges also collects the fixed-record claims. With keepEqualFix, a fix commit equal to
+// the reviewed commit stays in the claims instead of failing here, so the claim check lists it.
+func reviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest, keepEqualFix bool) ([]ReviewGitEdge, map[string]string, []ReviewFixCommitClaim, error) {
 	b := v.Batch
 	for _, run := range v.Runs {
 		if run.FindingsStatus == "pending" {
@@ -478,7 +482,7 @@ func reviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdg
 				if d.Status != "fixed" {
 					continue
 				}
-				if d.FixCommit == prior.Run.Commit {
+				if d.FixCommit == prior.Run.Commit && !keepEqualFix {
 					return nil, nil, nil, reviewError("fix must follow reviewed commit")
 				}
 				must := mustFix(item.Tier)
@@ -490,7 +494,7 @@ func reviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdg
 				}
 				recordEdges := fixedRecordEdges(prior, d, must, rv, c.PassedAt, b.TargetCommit)
 				edges = append(edges, recordEdges...)
-				claims = append(claims, ReviewFixCommitClaim{TaskID: d.TaskID, RunID: d.RunID, FindingID: d.FindingID, RecordID: d.RecordID, FixCommit: d.FixCommit, Edges: recordEdges})
+				claims = append(claims, ReviewFixCommitClaim{TaskID: d.TaskID, RunID: d.RunID, FindingID: d.FindingID, RecordID: d.RecordID, FixCommit: d.FixCommit, Reviewed: prior.Run.Commit, Edges: recordEdges})
 			}
 		}
 		if !mechanicalFix && c.PassedAt != rv.Run.Commit {

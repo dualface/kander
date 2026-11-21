@@ -33,7 +33,8 @@ func verifyFixCommitClaims(cwd string, v board.ReviewBatchView, r board.ReviewCl
 }
 
 // fixCommitProblems lists why a fixed record's commit breaks the closure edges. A
-// commit that does not exist is the only problem listed for it. An edge with
+// commit that does not exist is the only problem listed for it, and a fix commit equal to the
+// reviewed commit of its run is listed as such: no fix follows that commit. An edge with
 // another missing endpoint is left to the edge check that follows.
 func fixCommitProblems(cwd string, claim board.ReviewFixCommitClaim) ([]string, error) {
 	out, _, code, err := gitCommand([]string{"cat-file", "-t", claim.FixCommit}, cwd, "")
@@ -44,6 +45,9 @@ func fixCommitProblems(cwd string, claim board.ReviewFixCommitClaim) ([]string, 
 		return []string{config.Text("review.fix_commit_not_found")}, nil
 	}
 	var problems []string
+	if claim.FixCommit == claim.Reviewed {
+		problems = append(problems, config.Text("review.fix_commit_not_later", claim.Reviewed))
+	}
 	for _, edge := range claim.Edges {
 		_, _, code, err = gitCommand([]string{"merge-base", "--is-ancestor", edge.Ancestor, edge.Descendant}, cwd, "")
 		if err != nil {

@@ -120,3 +120,28 @@ func TestCloseListsAMustFixCommitMissingFromTheConclusionRun(t *testing.T) {
 		t.Errorf("the batch target edge holds and must not be listed: %s", stderr)
 	}
 }
+
+// A fix commit equal to the reviewed commit is listed with the other affected records,
+// and it does not hide a record whose fix commit a rebase rewrote.
+func TestCloseListsAFixCommitEqualToTheReviewedCommitWithTheOthers(t *testing.T) {
+	f := newMechanicalFixture(t, map[string]string{"fixture.txt": "old\n"}, lowItem("L-1"), lowItem("L-2"))
+	reviewed := f.h.head
+	gitRepo(t, f.h.repo, "checkout", "-q", "-b", "before-rebase")
+	before := commitFile(t, f.h.repo, "fix.txt", "fixed\n", "fix")
+	gitRepo(t, f.h.repo, "checkout", "-q", "-")
+	after := commitFile(t, f.h.repo, "fix.txt", "fixed\n", "fix, rebased")
+	f.record(t, "stable", f.items[0], "fix-l-1", "", reviewed)
+	f.record(t, "stable", f.items[1], "fix-l-2", "", before)
+	f.advance(t, after, after)
+	_, r := f.request(t, "stable", reviewed)
+
+	stderr := f.closeRefused(t, r)
+	for _, want := range []string{"Git ancestry", "2 fixed record", "fix-l-1", "fix-l-2", "must be a later commit", before} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("missing %q in %s", want, stderr)
+		}
+	}
+	if strings.Contains(stderr, "fix must follow reviewed commit") {
+		t.Errorf("the early return hid the record list: %s", stderr)
+	}
+}
