@@ -49,8 +49,8 @@ func TestHerdrCoreDefinitionShape(t *testing.T) {
 	if launcher.Requires.Platform != "posix" || !herdrCoreBackendForTest(t, nil).Capabilities().POSIXOnly {
 		t.Fatalf("platform=%q", launcher.Requires.Platform)
 	}
-	if launcher.AutoPriority <= 100 || launcher.AutoPriority >= 150 {
-		t.Fatalf("auto_priority=%d, want between tmux (100) and luvus (150)", launcher.AutoPriority)
+	if launcher.AutoPriority != 250 {
+		t.Fatalf("auto_priority=%d, want 250, above herdr (200)", launcher.AutoPriority)
 	}
 	if len(launcher.Requires.Env) != 1 || launcher.Requires.Env[0].Name != "HC_TERMINAL_ID" || !launcher.Requires.Env[0].AutoOnly {
 		t.Fatalf("env=%+v", launcher.Requires.Env)
@@ -283,9 +283,8 @@ func TestHerdrCoreDefinitionLookupWithoutReference(t *testing.T) {
 	}
 }
 
-// auto prefers the innermost terminal environment: herdr and luvus panes may
-// run inside a herdr-core terminal, while TMUX can leak into every terminal of
-// a core started from tmux.
+// auto prefers herdr-core whenever HC_TERMINAL_ID is present, also for a
+// herdr, luvus or tmux that runs inside an hc terminal.
 func TestHerdrCoreAutoResolution(t *testing.T) {
 	inHC := map[string]string{"HC_TERMINAL_ID": "t3"}
 	with := func(extra map[string]string) map[string]string {
@@ -301,9 +300,10 @@ func TestHerdrCoreAutoResolution(t *testing.T) {
 		want string
 	}{
 		{"herdr-core only", inHC, HerdrCore},
-		{"herdr too", with(map[string]string{"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w1"}), Herdr},
-		{"luvus too", with(map[string]string{"LUVUS_ENV": "1", "LUVUS_PANE_ID": "3"}), Luvus},
+		{"herdr too", with(map[string]string{"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w1"}), HerdrCore},
+		{"luvus too", with(map[string]string{"LUVUS_ENV": "1", "LUVUS_PANE_ID": "3"}), HerdrCore},
 		{"tmux too", with(map[string]string{"TMUX": "/tmp/tmux-1/default,1,0"}), HerdrCore},
+		{"all four", with(map[string]string{"HERDR_ENV": "1", "LUVUS_ENV": "1", "TMUX": "/tmp/tmux-1/default,1,0"}), HerdrCore},
 		{"none", map[string]string{}, ""},
 	}
 	for _, tc := range cases {
