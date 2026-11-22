@@ -26,11 +26,12 @@ func TestAgentObservableHerdrCoreCard(t *testing.T) {
 }
 
 func TestOptionsLauncherOffersHerdrCore(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("herdr-core is POSIX only")
-	}
 	bin := t.TempDir()
-	if err := os.WriteFile(filepath.Join(bin, "hc"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+	name := "hc"
+	if runtime.GOOS == "windows" {
+		name += ".cmd"
+	}
+	if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))

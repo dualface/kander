@@ -261,8 +261,10 @@ func (s *Session) normalizeLauncher(cfg *config.Config) {
 			"menu.tmux_is_not_installed_using_foreground_the_launcher_menu",
 		))
 	// On POSIX auto holds as long as tmux exists, so a missing herdr must not
-	// rewrite it; on Windows auto can only land on herdr, so a missing herdr does.
-	case (cfg.Launcher == builtin.Herdr || (cfg.Launcher == "auto" && isWindowsOS())) && lookPath(builtin.HerdrExecutable) == "":
+	// rewrite it; on Windows auto lands only on herdr-core or herdr, so it is
+	// rewritten when both are missing.
+	case lookPath(builtin.HerdrExecutable) == "" && (cfg.Launcher == builtin.Herdr ||
+		(cfg.Launcher == "auto" && isWindowsOS() && lookPath(builtin.HerdrCoreExecutable) == "")):
 		switch {
 		case isWindowsOS():
 			cfg.Launcher = direct.Console

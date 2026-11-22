@@ -147,6 +147,11 @@ func paneCommand(inv process.ProcessInvocation) (string, error) {
 	if !runtimeWindows() {
 		return posixJoin(inv.Argv), nil
 	}
+	for _, name := range terminal.ForwardedEnv() {
+		if err := reject(os.Getenv(name)); err != nil {
+			return "", err
+		}
+	}
 	return powershellJoin(inv.Argv, inv.ShellEnv), nil
 }
 

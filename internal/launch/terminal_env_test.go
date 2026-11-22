@@ -8,6 +8,8 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	serveLineAgent()
+	terminaltest.Main()
 	terminaltest.ClearEnv()
 	os.Exit(m.Run())
 }

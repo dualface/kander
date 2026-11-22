@@ -31,9 +31,9 @@ var stepMessageNames = []string{"detail", "error", "output"}
 // method arguments.
 var opInputs = map[string][]string{
 	OpPrepare:          {"project", "project_key", "command"},
-	OpCreateContainer:  {"session", "session_exists", "workspace", "project", "project_key", "cwd", "cwd_resolved", "label", "label_name", "title"},
+	OpCreateContainer:  {"session", "session_exists", "workspace", "project", "project_key", "cwd", "cwd_resolved", "label", "label_name", "title", "posix"},
 	OpWaitReady:        {"pane", "timeout_ms"},
-	OpRunCommand:       {"pane", "cwd_quoted", "command", "posix"},
+	OpRunCommand:       {"pane", "cwd_quoted", "command", "posix", "powershell_env"},
 	OpSetSessionMarker: {"pane", "value"},
 	OpPaneFacts:        {"pane"},
 	OpProcessFacts:     {"pane"},

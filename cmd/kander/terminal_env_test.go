@@ -8,6 +8,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	serveFakeHC()
 	terminaltest.ClearEnv()
 	os.Exit(m.Run())
 }

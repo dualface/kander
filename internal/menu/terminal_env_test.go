@@ -10,6 +10,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	terminaltest.Main()
 	terminaltest.ClearEnv()
 	os.Exit(m.Run())
 }

@@ -31,6 +31,8 @@
   "program_status.pane_unreported": "terminal {{.V0}} has not reported its agent status (OSC 7501) yet",
   "herdr_core.doctor_socket_unreadable": "cannot read the socket setting of {{.V0}}; Kander cannot tell whether herdr-core is running",
   "herdr_core.doctor_no_core": "no core listens at {{.V0}}: {{.V1}}",
+  "herdr_core.doctor_status_unavailable": "hc reports the core as unavailable: {{.V0}}",
+  "herdr_core.doctor_status_undecidable": "cannot tell whether herdr-core is running: hc server status --json did not answer as expected: {{.V0}}",
   "herdr_core.place_failed": "could not place the new terminal in the caller's layout: {{.V0}}",
   "herdr_core.tab_missing": "the new tab did not appear in the Herdr App layout within {{.V0}}; Herdr App may not be connected to the core",
   "herdr_core.tab_name_failed": "could not name the new tab: {{.V0}}"

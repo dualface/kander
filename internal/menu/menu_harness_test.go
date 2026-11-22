@@ -23,6 +23,7 @@ var testKander string
 var repoRoot string
 
 func TestMain(m *testing.M) {
+	terminaltest.Main()
 	terminaltest.ClearEnv()
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {

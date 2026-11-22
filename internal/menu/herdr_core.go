@@ -11,15 +11,15 @@ import (
 // PATH, a running core, and execution agents that report their status through
 // OSC 7501, because herdr-core identifies agents only by those reports.
 func validateHerdrCoreLauncher(cfg *config.Config, tools TerminalTools) bool {
-	if isWindowsOS() {
-		warning(config.Text("menu.the_configured_launcher_is_but_native_windows_does_not", builtin.HerdrCore))
-		return false
-	}
 	if !tools.HerdrCore.Available() {
 		warning(config.Text("herdr_core.doctor_not_in_path"))
 		return false
 	}
 	healthy := true
+	if tools.HerdrCoreUnknown != "" {
+		healthy = false
+		warning(tools.HerdrCoreUnknown)
+	}
 	if tools.HerdrCoreDown != "" {
 		healthy = false
 		warning(config.Text("herdr_core.doctor_launcher_not_running", tools.HerdrCoreDown))

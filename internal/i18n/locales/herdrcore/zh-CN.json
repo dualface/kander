@@ -31,6 +31,8 @@
   "program_status.pane_unreported": "终端 {{.V0}} 尚未上报 Agent 状态 (OSC 7501)",
   "herdr_core.doctor_socket_unreadable": "无法读取 {{.V0}} 中的 socket 设置; Kander 无法判断 herdr-core 是否在运行",
   "herdr_core.doctor_no_core": "{{.V0}} 上没有 core 在监听: {{.V1}}",
+  "herdr_core.doctor_status_unavailable": "hc 报告 core 不可用: {{.V0}}",
+  "herdr_core.doctor_status_undecidable": "无法判断 herdr-core 是否在运行: hc server status --json 未按预期应答: {{.V0}}",
   "herdr_core.place_failed": "无法把新终端放进调用方的布局: {{.V0}}",
   "herdr_core.tab_missing": "新 tab 在 {{.V0}} 内没有出现在 Herdr App 布局中; Herdr App 可能没有连接到 core",
   "herdr_core.tab_name_failed": "无法给新 tab 命名: {{.V0}}"

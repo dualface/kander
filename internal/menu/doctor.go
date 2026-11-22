@@ -617,7 +617,7 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 				// the path beats telling the user to install what they already have.
 				warning(config.Text("menu.herdr_installed_at_reopen_terminal", tools.Herdr.OffPath))
 			} else {
-				// Native Windows never probes tmux and auto can only land on herdr, so the hint must not mention tmux.
+				// Native Windows never probes tmux or luvus and auto lands only on herdr-core or herdr, so the hint must not mention them.
 				key := "menu.the_configured_launcher_is_auto_but_neither_herdr_nor"
 				if isWindowsOS() {
 					key = "menu.the_configured_launcher_is_auto_but_herdr_is_not_available"

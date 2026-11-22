@@ -379,7 +379,7 @@ func doctorLauncherAvailable(launcher string, tools TerminalTools) bool {
 	case builtin.Luvus:
 		return !isWindowsOS() && tools.Luvus.Available()
 	case builtin.HerdrCore:
-		return !isWindowsOS() && tools.HerdrCore.Available()
+		return tools.HerdrCore.Available()
 	case builtin.Tmux, builtin.TmuxSession:
 		return tools.Tmux.Available()
 	}

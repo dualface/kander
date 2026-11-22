@@ -40,7 +40,7 @@ func plainAgent(bin string) config.AgentDefinition {
 func programStatusFixture(t *testing.T, launcher string) (root, bin, hcLog string, cfg *config.Config) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
-		t.Skip("herdr-core is POSIX only")
+		t.Skip("the fake hc of this fixture is a POSIX shell script")
 	}
 	root, _, bin = setupBoard(t)
 	hcLog = writeFakeHC(t, bin, root)

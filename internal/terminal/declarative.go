@@ -309,7 +309,7 @@ func (b *DeclarativeBackend) PrepareWithRunner(request PrepareRequest, runner Ru
 	if err := checkEnv(false); err != nil {
 		return Target{}, err
 	}
-	target := Target{Program: program, Project: request.Project}
+	target := Target{Program: program, Project: request.Project, Windows: request.Windows}
 	op, ok := b.op(OpPrepare)
 	if !ok {
 		return target, nil
@@ -355,6 +355,7 @@ func (b *DeclarativeBackend) CreateContainer(conn Conn, target Target, cwd, labe
 		"session": target.Session, "session_exists": strconv.FormatBool(target.SessionExists), "workspace": target.Workspace,
 		"project": target.Project, "project_key": ProjectKey(target.Project), "cwd": cwd, "cwd_resolved": resolvedPath(cwd), "label": label,
 		"label_name": LabelName(label), "title": containerTitle(target, label),
+		"posix": strconv.FormatBool(!target.Windows),
 	})
 	if err != nil {
 		return Address{}, err
@@ -389,7 +390,13 @@ func (b *DeclarativeBackend) WaitReady(conn Conn, pane string, timeoutMS int) er
 }
 
 func (b *DeclarativeBackend) RunCommand(conn Conn, pane, cwdQuoted, command string, posix bool) error {
-	_, err := b.launchOp(OpRunCommand, conn, map[string]string{"pane": pane, "cwd_quoted": cwdQuoted, "command": command, "posix": strconv.FormatBool(posix)})
+	var env string
+	if !posix {
+		env = powerShellEnv(b.getenv)
+	}
+	_, err := b.launchOp(OpRunCommand, conn, map[string]string{
+		"pane": pane, "cwd_quoted": cwdQuoted, "command": command, "posix": strconv.FormatBool(posix), "powershell_env": env,
+	})
 	return err
 }
 
