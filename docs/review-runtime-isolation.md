@@ -51,12 +51,21 @@ The final message remains the complete report. A `kander-findings` JSON fence is
 
 ### Recheck
 
-On POSIX, a leader that exited with 0 and left a live group member gets a recheck before `SIGKILL`. The recheck polls the process table every 50 ms until no counted member is alive. Its total time, process snapshots included, never exceeds 1 second; each snapshot has at most 500 ms of that. The window is short because a counted child keeps running through it, and the worktree verification after collection still sees what such a child changed.
+On POSIX, a leader that exited with 0 and left a live group member gets a recheck before `SIGKILL`. The recheck observes the process table (one snapshot each) until no counted member is alive. Every snapshot has a budget: the smaller of 500 ms and the time left of the 1 second limit, and a snapshot that does not finish inside its budget is canceled. So no snapshot runs past 1 second after the recheck started, and a slow `ps` cannot extend it. The window is short because a counted child keeps running through it, and the worktree verification after collection still sees what such a child changed.
 
-- A member alive in the last observation is a leftover and rejects the result, also when it appeared after the first observation. Group membership alone decides: a member with a reused PID is a leftover when it is in the group, and a process with a reused PID outside the group is not one.
-- A member that exits during the recheck is not a leftover. When the group is empty at the end, Kander sends no `SIGKILL`.
-- A failed or late process snapshot rejects the result, and the evidence names the failure.
+The schedule has two parts:
+
+- The original schedule waits 50 ms after an observation and continues only while the next observation could still have the full 500 ms. It is the schedule of versions 1.1.0 to 1.5.2 and stays unchanged as the first part.
+- The extension continues where the original schedule would stop. Before it starts another observation, it reserves the measured duration of the last one plus 50 ms at the end of the limit, so a slow snapshot is not followed by a read that the limit would cut off. The 50 ms only decides whether to start one more observation. It never shortens the budget of an observation. A first snapshot of 465 ms or 480 ms therefore gets a second observation, and with fast snapshots the recheck keeps observing until about 950 ms.
+
+An observation that the 1 second limit cancels with less than its full 500 ms budget is a truncation. When an earlier observation completed, the last completed observation decides, and the truncation is not an observation failure.
+
+- A member alive in the last completed observation is a leftover and rejects the result, also when it appeared after the first observation. Group membership alone decides: a member with a reused PID is a leftover when it is in the group, and a process with a reused PID outside the group is not one.
+- A member seen as exited by a completed observation is not a leftover. When the group is empty at the end, Kander sends no `SIGKILL`.
+- A snapshot that fails, or that is canceled while it still had the full 500 ms, rejects the result, and the evidence names the failure. A truncation after a completed observation also rejects the result, because that observation still shows a live member, but the evidence records no failure. Nothing in the recheck turns an error, a timeout, or a truncation into a pass.
 - Reviewer text is never evidence of cleanup. A clean report does not remove a leftover.
+
+Versions 1.1.0 to 1.5.2 reserved the worst case of 550 ms for every round: once an observation finished after about 450 ms, no new observation started. The last observation began at about 500 ms at the latest, and with slow snapshots it could end close to 1 second. When the first snapshot took more than about 450 ms, only one observation was made. A child that exited by itself after that last observation began was recorded as a `leftover` although the group would have been empty a moment later. A `leftover` from those versions therefore does not show that a process survives indefinitely.
 
 A timeout, an interrupt, or a non-zero exit has no result to protect, so Kander skips the recheck, records the members once, and sends `SIGKILL` at once.
 
@@ -81,7 +90,7 @@ Windows produces no member records. A job object reports only an active process 
 Do not rerun the review with the same input to clear a rejection. Rerunning does not answer why a process stayed. A retry of the same run ID never starts the reviewer; it only verifies the stored evidence.
 
 1. Read `reviews/<run_id>/process-evidence.json` of that run from the card.
-2. `leftover` records with `cleanup.collected: true` are real survivors: they outlived the recheck and Kander killed them. The `executable`, `ppid`, and `start_time` identify what the reviewer left. Fix that cause in the reviewer setup.
+2. A `leftover` record says only that the member was alive when the last completed observation sampled the process table, and that Kander then killed it (`cleanup.collected: true`). It does not prove that the process would have stayed: one that exits shortly after that sample is recorded the same way, and so is one that was alive when the schedule ended with time left, for example because a snapshot was slow or the limit truncated the next one. `observed_at` is taken after the snapshot returned, so it can be up to about 500 ms later than the sample. To judge the cause, read `recheck.duration_ms` and the `executable`, `ppid`, and `start_time` of each record, and check what the reviewer started. A member that keeps running well beyond the 1 second limit is a cause to fix in the reviewer setup. A member that only needed a little more time is a timing case.
 3. `observation.failed: true` means no conclusion exists about the members. Fix the snapshot failure named in `reason`.
 4. Run the role again with a new run ID only after a cause changed, per [Review evidence and recovery](review-evidence.md).
 
