@@ -1,7 +1,6 @@
 package menu
 
 import (
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/terminal"
 	"github.com/dualface/kander/internal/terminal/builtin"
 	"github.com/dualface/kander/internal/terminal/terminaltest"
 )
@@ -24,6 +24,20 @@ func useWindowsMenu(t *testing.T, windows bool) {
 	t.Setenv("HOME", home)
 	t.Setenv("KANDER_CONFIG", filepath.Join(home, "config.json"))
 	t.Setenv("KANDER_LANG", "en")
+	// Only the embedded definitions: on Windows HOME does not move the share
+	// directory, and a user's definition could name the real hc.
+	useDefinitionDirs(t)
+}
+
+func useDefinitionDirs(t *testing.T, dirs ...terminal.DefinitionDir) {
+	t.Helper()
+	saved := terminal.DefinitionDirs
+	terminal.DefinitionDirs = func() []terminal.DefinitionDir { return dirs }
+	terminal.ReloadDefinitions()
+	t.Cleanup(func() {
+		terminal.DefinitionDirs = saved
+		terminal.ReloadDefinitions()
+	})
 }
 
 // installFakeHC copies the test binary onto an otherwise empty PATH as hc.
@@ -35,36 +49,14 @@ func installFakeHC(t *testing.T, replies ...terminaltest.Reply) *terminaltest.Fa
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
-	source, err := os.Open(fake.Program)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer source.Close()
-	copied, err := os.OpenFile(filepath.Join(bin, name), os.O_CREATE|os.O_WRONLY, 0o755)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := io.Copy(copied, source); err != nil {
-		t.Fatal(err)
-	}
-	if err := copied.Close(); err != nil {
-		t.Fatal(err)
-	}
+	terminaltest.CopyExecutable(t, filepath.Join(bin, name))
 	t.Setenv("PATH", bin)
 	return fake
 }
 
-func captureReport(t *testing.T) *[]ReportLine {
-	t.Helper()
-	saved, lines := reportSink, &[]ReportLine{}
-	reportSink = lines
-	t.Cleanup(func() { reportSink = saved })
-	return lines
-}
-
-func sinkText(lines *[]ReportLine) string {
+func sinkText(lines []ReportLine) string {
 	var text strings.Builder
-	for _, line := range *lines {
+	for _, line := range lines {
 		text.WriteString(line.Text + "\n")
 	}
 	return text.String()
@@ -108,9 +100,7 @@ func TestWindowsHerdrCoreDoctor(t *testing.T) {
 			if !tools.HerdrCore.Available() || got != tc.want {
 				t.Fatalf("state=%s, want %s: %+v", got, tc.want, tools)
 			}
-			lines := captureReport(t)
-			reportTerminalTools(tools)
-			text := sinkText(lines)
+			text := sinkText(CaptureReport(func() { reportTerminalTools(tools) }))
 			if !strings.Contains(text, "hc: ") {
 				t.Fatalf("doctor does not report hc:\n%s", text)
 			}
@@ -132,10 +122,9 @@ func TestWindowsHerdrCoreDoctor(t *testing.T) {
 	t.Run("missing hc", func(t *testing.T) {
 		useWindowsMenu(t, true)
 		t.Setenv("PATH", t.TempDir())
-		lines := captureReport(t)
-		reportTerminalTools(CheckTerminalTools())
-		if !strings.Contains(sinkText(lines), config.Text("menu.not_installed", "hc")) {
-			t.Fatalf("a missing hc is not reported:\n%s", sinkText(lines))
+		text := sinkText(CaptureReport(func() { reportTerminalTools(CheckTerminalTools()) }))
+		if !strings.Contains(text, config.Text("menu.not_installed", "hc")) {
+			t.Fatalf("a missing hc is not reported:\n%s", text)
 		}
 	})
 	t.Run("POSIX never asks hc", func(t *testing.T) {
@@ -154,10 +143,15 @@ func TestWindowsHerdrCoreDoctor(t *testing.T) {
 		tools := TerminalTools{HerdrCore: TerminalTool{Path: `C:\hc.exe`}}
 		cfg := config.DefaultConfig()
 		cfg.Launcher, cfg.WelcomeComplete = "auto", true
-		lines := captureReport(t)
-		validateConfiguredResources(cfg, map[string]agentState{}, config.InstallPaths{}, tools)
-		if text := sinkText(lines); strings.Contains(text, config.Text("menu.the_configured_launcher_is_auto_but_herdr_is_not_available")) {
+		text := sinkText(CaptureReport(func() {
+			validateConfiguredResources(cfg, map[string]agentState{}, config.InstallPaths{}, tools)
+		}))
+		if strings.Contains(text, config.Text("menu.the_configured_launcher_is_auto_but_herdr_is_not_available")) {
 			t.Fatalf("auto reported unavailable:\n%s", text)
+		}
+		ready := config.Text("menu.launcher_auto_chooses_at_start_on_windows")
+		if !strings.Contains(text, ready) || strings.Contains(ready, "tmux") || strings.Contains(ready, "luvus") {
+			t.Fatalf("the Windows auto hint is wrong:\n%s", text)
 		}
 	})
 	for _, launcher := range []string{"auto", builtin.HerdrCore} {
@@ -190,5 +184,64 @@ func TestWindowsHerdrCoreOptions(t *testing.T) {
 	}
 	if got := launcherValues(session.LauncherChoices()); !slices.Contains(got, builtin.HerdrCore) {
 		t.Fatalf("choices lack herdr-core: %v", got)
+	}
+}
+
+// A user definition that still says posix replaces the built-in one: the menus
+// must refuse what auto skips and start refuses.
+func TestWindowsHerdrCorePOSIXOverride(t *testing.T) {
+	useWindowsMenu(t, true)
+	data, err := os.ReadFile(filepath.Join("..", "terminal", "builtin", "definitions", "herdr-core.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := strings.Replace(string(data), `"platform": "any"`, `"platform": "posix"`, 1)
+	if old == string(data) {
+		t.Fatal("the embedded platform was not found")
+	}
+	share := t.TempDir()
+	dir := filepath.Join(share, terminal.DefinitionsDirName)
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "herdr-core.json"), []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	useDefinitionDirs(t, terminal.DefinitionDir{Source: terminal.SourceGlobal, Root: share, Path: dir})
+	if backend, ok := terminal.Lookup(builtin.HerdrCore); !ok || !backend.Capabilities().POSIXOnly {
+		t.Fatal("the override is not active")
+	}
+	fake := installFakeHC(t, terminaltest.Reply{Args: []string{"--version"}, Stdout: "hc 0.1.21\n"})
+
+	tools := CheckTerminalTools()
+	if tools.HerdrCore.Available() || len(fake.Calls(t)) != 0 {
+		t.Fatalf("an unsupported definition was probed as available: %+v", tools)
+	}
+	unsupported := config.Text("terminal.platform_unsupported_posix", builtin.HerdrCore)
+	if text := sinkText(CaptureReport(func() { reportTerminalTools(tools) })); !strings.Contains(text, unsupported) {
+		t.Fatalf("doctor does not explain the override:\n%s", text)
+	}
+	if text := sinkText(CaptureReport(func() {
+		if validateHerdrCoreLauncher(config.DefaultConfig(), tools) {
+			t.Error("the configured launcher is healthy")
+		}
+	})); !strings.Contains(text, unsupported) {
+		t.Fatalf("the configured launcher is not explained:\n%s", text)
+	}
+	for _, launcher := range []string{"auto", builtin.HerdrCore} {
+		if doctorLauncherAvailable(launcher, tools) {
+			t.Errorf("doctor repair keeps %s", launcher)
+		}
+	}
+	cfg := config.DefaultConfig()
+	cfg.Launcher = "auto"
+	session := &Session{Config: cfg, existing: config.DefaultConfig()}
+	session.existing.WelcomeComplete = false
+	CaptureReport(func() { session.normalizeLauncher(cfg) })
+	if cfg.Launcher != "console" {
+		t.Errorf("normalization kept %s", cfg.Launcher)
+	}
+	if got := launcherValues(session.LauncherChoices()); slices.Contains(got, builtin.HerdrCore) {
+		t.Errorf("options offer herdr-core: %v", got)
 	}
 }

@@ -576,6 +576,7 @@
   "menu.large_task": "大規模タスク",
   "menu.launcher": "起動方式",
   "menu.launcher_auto_chooses_at_start_a_herdr_tab_if": "[-] launcher=auto は起動時に選択します: herdr-core ターミナル内なら herdr-core ターミナル、それ以外で herdr 内なら herdr tab、それ以外で luvus 内なら luvus tab、それ以外で tmux 内なら tmux window",
+  "menu.launcher_auto_chooses_at_start_on_windows": "[-] launcher=auto はネイティブ Windows では起動時に選択します: herdr-core ターミナル内なら herdr-core ターミナル、それ以外で herdr 内なら herdr tab",
   "menu.launcher_console_starts_the_agent_in_a_separate_windows": "[-] launcher=console は別の Windows コンソールで Agent を起動し、その PID を返します",
   "menu.launcher_foreground_requires_an_interactive_terminal_stdin_stdout_stderr": "[-] launcher=foreground には対話型ターミナルが必要です (stdin/stdout/stderr がすべて TTY); TTY がない場合は {{.V0}} を使うか、実際のターミナルで実行してください.",
   "menu.launcher_herdr_creates_a_tab_in_the_current_workspace": "[-] launcher=herdr は現在の workspace に tab を作成して Agent を起動します",

@@ -576,6 +576,7 @@
   "menu.large_task": "large-task",
   "menu.launcher": "Launcher",
   "menu.launcher_auto_chooses_at_start_a_herdr_tab_if": "[-] launcher=auto chooses at start: a herdr-core terminal if inside one, otherwise a herdr tab if inside herdr, otherwise a luvus tab if inside luvus, otherwise a tmux window if inside tmux",
+  "menu.launcher_auto_chooses_at_start_on_windows": "[-] launcher=auto chooses at start on native Windows: a herdr-core terminal if inside one, otherwise a herdr tab if inside herdr",
   "menu.launcher_console_starts_the_agent_in_a_separate_windows": "[-] launcher=console starts the Agent in a separate Windows console and returns its PID",
   "menu.launcher_foreground_requires_an_interactive_terminal_stdin_stdout_stderr": "[-] launcher=foreground requires an interactive terminal (stdin/stdout/stderr must be TTYs); use {{.V0}} without a TTY or run in a real terminal.",
   "menu.launcher_herdr_creates_a_tab_in_the_current_workspace": "[-] launcher=herdr creates a tab in the current workspace and starts the Agent",

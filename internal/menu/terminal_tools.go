@@ -87,7 +87,9 @@ func CheckTerminalTools() TerminalTools {
 		tools.Tmux = probeTerminalTool(tmuxBackend())
 		tools.Luvus = probeTerminalTool(luvusBackend())
 	}
-	tools.HerdrCore = probeTerminalTool(herdrCoreBackend())
+	if !herdrCoreUnsupported() {
+		tools.HerdrCore = probeTerminalTool(herdrCoreBackend())
+	}
 	if tools.HerdrCore.Available() {
 		if isWindowsOS() {
 			tools.HerdrCoreDown, tools.HerdrCoreUnknown = probeHerdrCoreStatus(tools.HerdrCore.Path)
@@ -228,7 +230,11 @@ func reportTerminalTools(tools TerminalTools) {
 	if tools.Luvus.Path != "" {
 		report(builtin.LuvusExecutable, tools.Luvus)
 	}
-	report(builtin.HerdrCoreExecutable, tools.HerdrCore)
+	if herdrCoreUnsupported() {
+		hint(config.Text("terminal.platform_unsupported_posix", builtin.HerdrCore))
+	} else {
+		report(builtin.HerdrCoreExecutable, tools.HerdrCore)
+	}
 	if tools.HerdrCore.Available() {
 		switch {
 		case tools.HerdrCoreUnknown != "":

@@ -4,13 +4,32 @@ import (
 	"strings"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/terminal"
 	"github.com/dualface/kander/internal/terminal/builtin"
 )
+
+// herdrCoreUnsupported reports whether the active definition, which a user
+// file may replace, cannot run on this platform; a launch refuses it then.
+func herdrCoreUnsupported() bool {
+	backend, ok := terminal.Lookup(builtin.HerdrCore)
+	return ok && isWindowsOS() && backend.Capabilities().POSIXOnly
+}
+
+// herdrCoreInstalled reports whether the active definition can run here and
+// its program is on PATH.
+func herdrCoreInstalled() bool {
+	backend, ok := terminal.Lookup(builtin.HerdrCore)
+	return ok && !herdrCoreUnsupported() && lookPath(backend.Executable()) != ""
+}
 
 // validateHerdrCoreLauncher checks the configured herdr-core launcher: hc on
 // PATH, a running core, and execution agents that report their status through
 // OSC 7501, because herdr-core identifies agents only by those reports.
 func validateHerdrCoreLauncher(cfg *config.Config, tools TerminalTools) bool {
+	if herdrCoreUnsupported() {
+		warning(config.Text("terminal.platform_unsupported_posix", builtin.HerdrCore))
+		return false
+	}
 	if !tools.HerdrCore.Available() {
 		warning(config.Text("herdr_core.doctor_not_in_path"))
 		return false
@@ -49,12 +68,15 @@ func agentsWithoutProgramStatus(cfg *config.Config) []string {
 // herdrCoreLauncherChoices offers herdr-core once hc is installed, or keeps a
 // configured herdr-core visible with the not-installed note.
 func herdrCoreLauncherChoices(cfg *config.Config) []Choice {
-	installed := lookPath(builtin.HerdrCoreExecutable) != ""
+	installed := herdrCoreInstalled()
 	if !installed && cfg.Launcher != builtin.HerdrCore {
 		return nil
 	}
 	label := config.Text("herdr_core.menu_choice")
-	if !installed {
+	switch {
+	case herdrCoreUnsupported():
+		label = config.Text("terminal.platform_unsupported_posix", builtin.HerdrCore)
+	case !installed:
 		label += config.Text("menu.not_currently_installed")
 	}
 	return []Choice{{Value: builtin.HerdrCore, Label: label}}

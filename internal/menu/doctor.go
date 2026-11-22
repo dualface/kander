@@ -625,9 +625,11 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 				warning(config.Text(key))
 			}
 		} else {
-			hint(config.Text(
-				"menu.launcher_auto_chooses_at_start_a_herdr_tab_if",
-			))
+			key := "menu.launcher_auto_chooses_at_start_a_herdr_tab_if"
+			if isWindowsOS() {
+				key = "menu.launcher_auto_chooses_at_start_on_windows"
+			}
+			hint(config.Text(key))
 		}
 	default:
 		if !checkDefinitionLauncher(launcher) {

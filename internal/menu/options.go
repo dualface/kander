@@ -264,7 +264,7 @@ func (s *Session) normalizeLauncher(cfg *config.Config) {
 	// rewrite it; on Windows auto lands only on herdr-core or herdr, so it is
 	// rewritten when both are missing.
 	case lookPath(builtin.HerdrExecutable) == "" && (cfg.Launcher == builtin.Herdr ||
-		(cfg.Launcher == "auto" && isWindowsOS() && lookPath(builtin.HerdrCoreExecutable) == "")):
+		(cfg.Launcher == "auto" && isWindowsOS() && !herdrCoreInstalled())):
 		switch {
 		case isWindowsOS():
 			cfg.Launcher = direct.Console
