@@ -28,7 +28,7 @@ const (
 type recheckClock struct {
 	now   func() time.Time
 	sleep func(time.Duration)
-	table func(limit time.Duration) (map[int]procInfo, error)
+	table func(limit time.Duration, hard time.Time) (map[int]procInfo, error)
 }
 
 var clock = recheckClock{now: time.Now, sleep: time.Sleep, table: boundedProcessTable}
@@ -65,8 +65,12 @@ func (o *groupObserver) attributed(key memberKey) bool {
 
 // observe records one bounded snapshot and returns the live members it holds. Group membership decides alone:
 // a reused PID outside the group is a stranger, and a new incarnation inside it is a member.
-func (o *groupObserver) observe(limit time.Duration) (map[memberKey]bool, error) {
-	table, err := clock.table(limit)
+//
+// The read ends after limit, or at hard when that comes first; a zero hard sets no absolute end. The recheck
+// passes its own end as hard, because a delay before the read starts would otherwise move the end of a short
+// budget past the end of the recheck.
+func (o *groupObserver) observe(limit time.Duration, hard time.Time) (map[memberKey]bool, error) {
+	table, err := clock.table(limit, hard)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +113,7 @@ func (o *groupObserver) recheck() (map[memberKey]bool, error) {
 			// A sleep overshot the limit. The last completed observation decides.
 			return last, nil
 		}
-		live, err := o.observe(budget)
+		live, err := o.observe(budget, deadline)
 		if err != nil {
 			// A read cut off by the limit before it got its full budget is not a failure when an earlier
 			// observation completed: that one decides, and its unattributed member still rejects the result.
@@ -205,7 +209,7 @@ func observeReviewerGroup(lp *launchedProcess, recheck bool) (processCollection,
 	if recheck {
 		live, err = o.recheck()
 	} else {
-		live, err = o.observe(recheckSnapshotLimit)
+		live, err = o.observe(recheckSnapshotLimit, time.Time{})
 	}
 	evidence := &processEvidence{Schema: 1, LeaderPID: o.leader, Cleanup: processCleanup{Sigkill: sigkillPending}}
 	if recheck {
@@ -221,8 +225,12 @@ func observeReviewerGroup(lp *launchedProcess, recheck bool) (processCollection,
 
 // boundedProcessTable keeps a snapshot inside its budget even when the read ignores cancellation, which the
 // /proc walk does.
-func boundedProcessTable(limit time.Duration) (map[int]procInfo, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), limit)
+func boundedProcessTable(limit time.Duration, hard time.Time) (map[int]procInfo, error) {
+	end := time.Now().Add(limit)
+	if !hard.IsZero() && hard.Before(end) {
+		end = hard
+	}
+	ctx, cancel := context.WithDeadline(context.Background(), end)
 	defer cancel()
 	type result struct {
 		table    map[int]procInfo

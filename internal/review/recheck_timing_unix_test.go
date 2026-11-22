@@ -27,6 +27,7 @@ type recheckSim struct {
 	exitAt    time.Duration
 	overshoot time.Duration
 	failAt    map[int]error
+	readDelay time.Duration // scheduling delay before a read creates its context
 	reads     []simRead
 }
 
@@ -50,9 +51,13 @@ func (s *recheckSim) clock() recheckClock {
 	}
 }
 
-func (s *recheckSim) table(limit time.Duration) (map[int]procInfo, error) {
+func (s *recheckSim) table(limit time.Duration, hard time.Time) (map[int]procInfo, error) {
 	call := len(s.reads)
+	s.at += s.readDelay
 	start := s.at
+	if !hard.IsZero() {
+		limit = min(limit, hard.Sub(simBase.Add(start)))
+	}
 	if err := s.failAt[call]; err != nil {
 		s.reads = append(s.reads, simRead{start: start, budget: limit})
 		return nil, err
@@ -103,7 +108,7 @@ func useClock(t *testing.T, c recheckClock) {
 func baselineRecheck(c recheckClock) bool {
 	deadline := c.now().Add(reviewerRecheckLimit)
 	for {
-		table, err := c.table(min(recheckSnapshotLimit, deadline.Sub(c.now())))
+		table, err := c.table(min(recheckSnapshotLimit, deadline.Sub(c.now())), time.Time{})
 		if err != nil {
 			return true
 		}
@@ -318,6 +323,31 @@ func TestExtendedScheduleKeepsTheBaselinePrefix(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// TestDelayBeforeAReadDoesNotMoveTheEndOfTheRecheck delays every read by 1 ms before it creates its context.
+// The planned last read starts at 897 ms with 5 ms snapshots behind it, but this one takes 103.5 ms. Counted
+// from the delayed start, its budget would end at 1001 ms, so it would finish at 1000.5 ms and report the
+// member gone from a table taken after the 1 second limit. The absolute end of the recheck cancels it, and the
+// last completed observation still decides.
+func TestDelayBeforeAReadDoesNotMoveTheEndOfTheRecheck(t *testing.T) {
+	s := newSim(ms(5), ms(890))
+	s.readDelay = ms(1)
+	s.snapshot = func(start time.Duration, _ int) time.Duration {
+		if start >= ms(890) {
+			return ms(103.5)
+		}
+		return ms(5)
+	}
+	collection, empty := runRecheck(t, s)
+	got := outcomes(collection.evidence)
+	last := s.reads[len(s.reads)-1]
+	if !collection.lingering || empty || collection.evidence.Observation.Failed || got["100/a"] != memberLeftover {
+		t.Fatalf("%+v %v reads=%+v", collection, got, s.reads)
+	}
+	if last.completed || last.start < ms(890) || last.start+last.budget != reviewerRecheckLimit {
+		t.Fatalf("the last read must start late and be canceled at the limit: %+v", s.reads)
 	}
 }
 
