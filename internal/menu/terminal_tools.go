@@ -231,7 +231,7 @@ func reportTerminalTools(tools TerminalTools) {
 		report(builtin.LuvusExecutable, tools.Luvus)
 	}
 	if herdrCoreUnsupported() {
-		hint(config.Text("terminal.platform_unsupported_posix", builtin.HerdrCore))
+		hint(herdrCoreUnsupportedText())
 	} else {
 		report(builtin.HerdrCoreExecutable, tools.HerdrCore)
 	}

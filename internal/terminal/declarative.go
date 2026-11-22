@@ -272,12 +272,22 @@ func (b *DeclarativeBackend) Prepare(request PrepareRequest) (Target, error) {
 	return b.PrepareWithRunner(request, SpawnRunner)
 }
 
+func (b *DeclarativeBackend) supportsPlatform(windows bool) bool {
+	switch b.spec.Requires.Platform {
+	case "posix":
+		return !windows
+	case "windows":
+		return windows
+	}
+	return true
+}
+
 // PrepareWithRunner keeps preflight commands observable and bounded for the
 // conformance checker. Ordinary launch preparation retains SpawnRunner.
 func (b *DeclarativeBackend) PrepareWithRunner(request PrepareRequest, runner Runner) (Target, error) {
 	requires := b.spec.Requires
 	names := map[string]string{"launcher": b.launcher, "binary": b.def.Binary, "platform": requires.Platform}
-	if (requires.Platform == "posix" && request.Windows) || (requires.Platform == "windows" && !request.Windows) {
+	if !b.supportsPlatform(request.Windows) {
 		return Target{}, b.requireMessage(requires.Messages.Platform, names, "terminal.platform_unsupported_"+requires.Platform, b.launcher)
 	}
 	getenv := b.launcherGetenv(request.Getenv)

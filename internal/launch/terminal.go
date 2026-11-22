@@ -12,6 +12,7 @@ import (
 	"github.com/dualface/kander/internal/probe"
 	"github.com/dualface/kander/internal/process"
 	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/internal/terminal/builtin"
 )
 
 func resolveStartLauncher(launcher string) (string, error) {
@@ -22,6 +23,11 @@ func resolveStartLauncher(launcher string) (string, error) {
 		return backend.Name(), nil
 	}
 	if runtimeWindows() {
+		// A user definition may keep herdr-core POSIX-only; auto skipped it, so
+		// advising to enter one of its terminals would not help.
+		if backend, ok := terminal.Lookup(builtin.HerdrCore); ok && !terminal.SupportsPlatform(backend, true) {
+			return "", launchError("launch.auto_cannot_be_resolved_only_herdr_on_windows")
+		}
 		return "", launchError(
 			"launch.auto_cannot_be_resolved_not_in_herdr_on_windows",
 		)
@@ -33,6 +39,10 @@ func resolveStartLauncher(launcher string) (string, error) {
 
 func prepareLaunch(launcher, project, command string) (LaunchPlan, error) {
 	if runtimeWindows() && terminal.HasCapability(launcher, func(c terminal.Capabilities) bool { return c.POSIXOnly }) {
+		if launcher == builtin.HerdrCore {
+			// The general message would recommend the launcher it refuses.
+			return LaunchPlan{}, launchError("terminal.platform_unsupported_posix", launcher)
+		}
 		return LaunchPlan{}, launchError(
 			"launch.windows_does_not_support_the_launcher_use_console_or", launcher,
 		)

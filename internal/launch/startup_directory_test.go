@@ -121,6 +121,9 @@ func (scriptedPane) Name() string { return "pane-entry-test" }
 // A registered backend stays for the test binary, so ParseWindow reaches it later.
 func (scriptedPane) Capabilities() terminal.Capabilities { return terminal.Capabilities{} }
 
+// For the same reason auto resolution reaches it later.
+func (scriptedPane) AutoDetect(func(string) string) bool { return false }
+
 func (scriptedPane) PaneDirectory(ctx context.Context, _ terminal.Conn, _ string) (string, error) {
 	script := &paneEntryScript
 	if script.blocked {

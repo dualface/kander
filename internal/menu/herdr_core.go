@@ -12,7 +12,16 @@ import (
 // file may replace, cannot run on this platform; a launch refuses it then.
 func herdrCoreUnsupported() bool {
 	backend, ok := terminal.Lookup(builtin.HerdrCore)
-	return ok && isWindowsOS() && backend.Capabilities().POSIXOnly
+	return ok && !terminal.SupportsPlatform(backend, isWindowsOS())
+}
+
+// herdrCoreUnsupportedText says which platform the active definition lacks.
+func herdrCoreUnsupportedText() string {
+	key := "terminal.platform_unsupported_windows"
+	if isWindowsOS() {
+		key = "terminal.platform_unsupported_posix"
+	}
+	return config.Text(key, builtin.HerdrCore)
 }
 
 // herdrCoreInstalled reports whether the active definition can run here and
@@ -27,7 +36,7 @@ func herdrCoreInstalled() bool {
 // OSC 7501, because herdr-core identifies agents only by those reports.
 func validateHerdrCoreLauncher(cfg *config.Config, tools TerminalTools) bool {
 	if herdrCoreUnsupported() {
-		warning(config.Text("terminal.platform_unsupported_posix", builtin.HerdrCore))
+		warning(herdrCoreUnsupportedText())
 		return false
 	}
 	if !tools.HerdrCore.Available() {
@@ -65,8 +74,10 @@ func agentsWithoutProgramStatus(cfg *config.Config) []string {
 	return missing
 }
 
-// herdrCoreLauncherChoices offers herdr-core once hc is installed, or keeps a
-// configured herdr-core visible with the not-installed note.
+// herdrCoreLauncherChoices offers herdr-core when the active definition runs
+// on this platform and its program is installed. A configured herdr-core stays
+// visible otherwise: labelled with the unsupported platform when the definition
+// cannot run here, else with the not-installed note.
 func herdrCoreLauncherChoices(cfg *config.Config) []Choice {
 	installed := herdrCoreInstalled()
 	if !installed && cfg.Launcher != builtin.HerdrCore {
@@ -75,7 +86,7 @@ func herdrCoreLauncherChoices(cfg *config.Config) []Choice {
 	label := config.Text("herdr_core.menu_choice")
 	switch {
 	case herdrCoreUnsupported():
-		label = config.Text("terminal.platform_unsupported_posix", builtin.HerdrCore)
+		label = herdrCoreUnsupportedText()
 	case !installed:
 		label += config.Text("menu.not_currently_installed")
 	}

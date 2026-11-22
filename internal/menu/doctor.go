@@ -621,6 +621,9 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 				key := "menu.the_configured_launcher_is_auto_but_neither_herdr_nor"
 				if isWindowsOS() {
 					key = "menu.the_configured_launcher_is_auto_but_herdr_is_not_available"
+					if herdrCoreUnsupported() {
+						key = "menu.the_configured_launcher_is_auto_but_only_herdr_can_run"
+					}
 				}
 				warning(config.Text(key))
 			}
@@ -628,6 +631,9 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 			key := "menu.launcher_auto_chooses_at_start_a_herdr_tab_if"
 			if isWindowsOS() {
 				key = "menu.launcher_auto_chooses_at_start_on_windows"
+				if herdrCoreUnsupported() {
+					key = "menu.launcher_auto_chooses_at_start_on_windows_only_herdr"
+				}
 			}
 			hint(config.Text(key))
 		}
