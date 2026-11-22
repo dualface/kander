@@ -78,7 +78,7 @@ Backends declare supported features via `terminal.Capabilities`:
 | `ProgramStatus` | Identity and status come from OSC 7501 reports | No | No | Yes | No | No | No |
 | `SessionReport` | Supports bidirectional session handshake | No | Yes | No | No | No | No |
 | `WaitOutput` | Native output pattern matching | No *(polled)* | Yes | No *(polled)* | No *(polled)* | No *(polled)* | No |
-| `POSIXOnly` | Restricted to POSIX platforms | Yes | No | Yes | Yes | Yes | No |
+| `POSIXOnly` | Restricted to POSIX platforms | Yes | No | No | Yes | Yes | No |
 | `Detached` | Runs as an unmanaged detached process | No | No | No | No | No | console only |
 
 `ProgramStatus` refines `AgentIdentity`: the pane names no agent, only the `status.app` its program reported through OSC 7501 (`PaneFacts.AgentApp`). Callers compare a pane with the expected agent through `PaneFacts.MatchAgent`, which is tri-state: a match, another agent, or undecided while the pane has not reported (or the agent's declaration cannot be read). Undecided is never a stopped observation. `terminal.AddressFreeBackend` (the backend of a `--pane` override or a card without `WINDOW`) skips program status backends, because their terminals carry the session only in the marker Kander wrote at launch.
