@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/terminal"
 )
 
 // A herdr-core card is observed like a herdr or luvus card: its terminal
@@ -26,29 +27,48 @@ func TestAgentObservableHerdrCoreCard(t *testing.T) {
 }
 
 func TestOptionsLauncherOffersHerdrCore(t *testing.T) {
+	savedDirs := terminal.DefinitionDirs
+	terminal.DefinitionDirs = func() []terminal.DefinitionDir { return nil }
+	terminal.ReloadDefinitions()
+	t.Cleanup(func() {
+		terminal.DefinitionDirs = savedDirs
+		terminal.ReloadDefinitions()
+	})
 	bin := t.TempDir()
 	name := "hc"
 	if runtime.GOOS == "windows" {
 		name += ".cmd"
 	}
+	t.Setenv("PATH", bin)
+	offered := func(panel *optionsPanel) (string, bool) {
+		for _, choice := range panel.session.LauncherChoices() {
+			if choice.Value == "herdr-core" {
+				return choice.Label, true
+			}
+		}
+		return "", false
+	}
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	// Another launcher is configured, so only detection can offer herdr-core:
+	// a configured launcher stays listed whether it is installed or not.
+	cfg.Launcher = "foreground"
+	_, panel := openPanel(t, cfg)
+	if label, ok := offered(panel); ok {
+		t.Fatalf("herdr-core offered without hc: %q", label)
+	}
 	if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	cfg := config.DefaultConfig()
-	cfg.WelcomeComplete = true
+	if label, ok := offered(panel); !ok || label != uiText("herdr_core.menu_choice") {
+		t.Fatalf("installed hc is not offered: %q %t", label, ok)
+	}
+
 	cfg.Launcher = "herdr-core"
-	_, panel := openPanel(t, cfg)
+	_, panel = openPanel(t, cfg)
 	pumpPanel(panel, panel.openSection(sectionExecution))
 	if panel.bind == nil || panel.bind.launcher != "herdr-core" {
 		t.Fatalf("launcher field: %+v", panel.bind)
-	}
-	values := map[string]bool{}
-	for _, choice := range panel.session.LauncherChoices() {
-		values[choice.Value] = true
-	}
-	if !values["herdr-core"] {
-		t.Fatalf("launcher choices lack herdr-core: %v", values)
 	}
 	_, view := panel.view()
 	if plain := ansi.Strip(view); !strings.Contains(plain, uiText("herdr_core.menu_choice")) {

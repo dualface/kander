@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,12 +11,17 @@ import (
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/internal/terminal/terminaltest"
 )
 
-const fakeHCEnv = "KANDER_FAKE_HC_DIR"
+const (
+	fakeHCEnv      = "KANDER_FAKE_HC_DIR"
+	fakeHCAgentEnv = "KANDER_FAKE_HC_AGENT"
+)
 
 // serveFakeHC turns the test binary into an hc with one terminal, t8, whose
-// agent reports idle. The terminal disappears when it gets /exit, as a --rm
+// agent reports idle once the line that starts it was sent there; before that
+// the terminal has reported nothing. The terminal disappears when it gets /exit, as a --rm
 // terminal does once its shell exits, or when it is killed.
 func serveFakeHC() {
 	dir := os.Getenv(fakeHCEnv)
@@ -55,11 +59,15 @@ func fakeHC(dir string, args []string) int {
 		return 3
 	}
 	session, _ := os.ReadFile(filepath.Join(dir, "session")) // absent until labelled
+	started := filepath.Join(dir, "started")
 	row := map[string]any{
 		"address": "t8",
 		"state":   "live",
 		"labels":  map[string]string{"kander.session": string(session)},
-		"status":  map[string]string{"app": "claude-code", "state": "idle"},
+		"status":  nil,
+	}
+	if _, err := os.Stat(started); err == nil {
+		row["status"] = map[string]string{"app": "claude-code", "state": "idle"}
 	}
 	rows := []any{}
 	if live {
@@ -78,8 +86,17 @@ func fakeHC(dir string, args []string) int {
 			}
 		}
 	case "send":
-		if args[len(args)-1] == "/exit" {
+		if len(args) != 4 || args[2] != "t8" {
+			return missing()
+		}
+		text, agent := args[3], os.Getenv(fakeHCAgentEnv)
+		if text == "/exit" {
 			return end()
+		}
+		if agent != "" && strings.Contains(text, agent) {
+			if os.WriteFile(started, nil, 0o600) != nil {
+				return 97
+			}
 		}
 	case "kill", "rm":
 		if !live {
@@ -119,24 +136,31 @@ func TestWindowsHerdrCoreLifecycle(t *testing.T) {
 	t.Setenv("TMPDIR", t.TempDir())
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	// Only the embedded definitions: on Windows HOME does not move the share
+	// directory, and a user's definition could name the real hc.
+	savedDirs := terminal.DefinitionDirs
+	terminal.DefinitionDirs = func() []terminal.DefinitionDir { return nil }
 	terminal.ReloadDefinitions()
-	t.Cleanup(terminal.ReloadDefinitions)
+	t.Cleanup(func() {
+		terminal.DefinitionDirs = savedDirs
+		terminal.ReloadDefinitions()
+	})
 
 	bin, state := t.TempDir(), t.TempDir()
-	self, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
 	hc, claude, body := "hc", "claude", "#!/bin/sh\nexit 0\n"
 	if runtime.GOOS == "windows" {
 		hc, claude, body = "hc.exe", "claude.cmd", "@exit /b 0\r\n"
 	}
-	copyExecutable(t, self, filepath.Join(bin, hc))
-	if err := os.WriteFile(filepath.Join(bin, claude), []byte(body), 0o755); err != nil {
+	terminaltest.CopyExecutable(t, filepath.Join(bin, hc))
+	agent := filepath.Join(bin, claude)
+	if err := os.WriteFile(agent, []byte(body), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	// Nothing of the host is reachable, and the agent is named by path because
+	// Windows prefers any claude.exe on PATH over a claude.cmd before it.
+	t.Setenv("PATH", bin)
 	t.Setenv(fakeHCEnv, state)
+	t.Setenv(fakeHCAgentEnv, agent)
 
 	root := t.TempDir()
 	for _, name := range board.States {
@@ -152,6 +176,7 @@ func TestWindowsHerdrCoreLifecycle(t *testing.T) {
 	cfg.KanbanAgent = "claude"
 	cfg.KanbanAgents = map[string]string{"large": "claude", "small": "claude"}
 	cfg.Launcher = "herdr-core"
+	cfg.Agents = map[string]config.AgentDefinition{"claude": {Path: agent}}
 	if _, err := config.Save(cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -160,6 +185,9 @@ func TestWindowsHerdrCoreLifecycle(t *testing.T) {
 	runKander(t, "start", id).require(t, "start")
 	if window := cardField(t, root, id, board.FieldWindow); window != "herdr-core:t8" {
 		t.Fatalf("WINDOW=%q", window)
+	}
+	if _, err := os.Stat(filepath.Join(state, "started")); err != nil {
+		t.Fatalf("the line that starts the agent was not sent to t8: %v", err)
 	}
 	calls, err := os.ReadFile(filepath.Join(state, "calls"))
 	if err != nil {
@@ -196,24 +224,5 @@ func TestWindowsHerdrCoreLifecycle(t *testing.T) {
 	runKander(t, "dismiss", id).require(t, "dismiss")
 	if _, err := os.Stat(gone); err != nil {
 		t.Fatalf("dismiss did not close the terminal: %v", err)
-	}
-}
-
-func copyExecutable(t *testing.T, from, to string) {
-	t.Helper()
-	source, err := os.Open(from)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer source.Close()
-	target, err := os.OpenFile(to, os.O_CREATE|os.O_WRONLY, 0o755)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := io.Copy(target, source); err != nil {
-		t.Fatal(err)
-	}
-	if err := target.Close(); err != nil {
-		t.Fatal(err)
 	}
 }

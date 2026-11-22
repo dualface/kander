@@ -18,6 +18,13 @@ func TestWindowsHerdrCoreControlChars(t *testing.T) {
 	saved := runtimeWindows
 	runtimeWindows = func() bool { return true }
 	t.Cleanup(func() { runtimeWindows = saved })
+	savedDirs := terminal.DefinitionDirs
+	terminal.DefinitionDirs = func() []terminal.DefinitionDir { return nil }
+	terminal.ReloadDefinitions()
+	t.Cleanup(func() {
+		terminal.DefinitionDirs = savedDirs
+		terminal.ReloadDefinitions()
+	})
 	root := filepath.Join(t.TempDir(), "kanban")
 	for _, where := range append([]string{"argv", "cmd variable"}, terminal.ForwardedEnv()...) {
 		t.Run(where, func(t *testing.T) {

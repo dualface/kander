@@ -105,9 +105,7 @@ func typedLine(t *testing.T, invocation process.ProcessInvocation, env map[strin
 }
 
 type openShell struct {
-	stdin io.WriteCloser
-	done  chan error
-	cmd   *exec.Cmd
+	done chan error
 }
 
 // startShell types line into a shell whose stdin stays open, as in a terminal.
@@ -125,7 +123,7 @@ func startShell(t *testing.T, shell, line string) *openShell {
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	s := &openShell{stdin: stdin, done: make(chan error, 1), cmd: cmd}
+	s := &openShell{done: make(chan error, 1)}
 	go func() { s.done <- cmd.Wait() }()
 	t.Cleanup(func() {
 		_ = cmd.Process.Kill()
