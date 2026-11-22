@@ -6,7 +6,7 @@
 //
 // Every test package that uses it must call Main first in TestMain:
 //
-//	func TestMain(m *testing.M) { terminaltest.Main(); os.Exit(m.Run()) }
+//	func TestMain(m *testing.M) { terminaltest.Main(); terminaltest.ClearEnv(); os.Exit(m.Run()) }
 package terminaltest
 
 import (

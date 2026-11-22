@@ -229,6 +229,7 @@ func TestTmuxDefinitionDeliverTextWaitsBeforeEnter(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	terminaltest.Main()
+	terminaltest.ClearEnv()
 	os.Exit(m.Run())
 }
 

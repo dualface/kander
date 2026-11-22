@@ -12,6 +12,7 @@ import (
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/internal/terminal/terminaltest"
 )
 
 const fixtureEnv = "KANDER_CONFORMANCE_FAKE"
@@ -22,6 +23,7 @@ func TestMain(m *testing.M) {
 	if root := os.Getenv(fixtureEnv); root != "" && len(os.Args) > 1 && !strings.HasPrefix(os.Args[1], "-test.") {
 		os.Exit(serveFake(root, os.Args[1:]))
 	}
+	terminaltest.ClearEnv()
 	os.Exit(m.Run())
 }
 func serveFake(root string, args []string) int {

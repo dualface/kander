@@ -1,6 +1,7 @@
 package terminaltest
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"testing"
@@ -8,6 +9,7 @@ import (
 
 func TestMain(m *testing.M) {
 	Main()
+	ClearEnv()
 	os.Exit(m.Run())
 }
 
@@ -37,5 +39,21 @@ func TestReplyEnvSetMatchesOnlyWhileVariableIsSet(t *testing.T) {
 		if got != tc.want {
 			t.Fatalf("%s: exit=%d want %d", tc.name, got, tc.want)
 		}
+	}
+}
+
+// A fake started by a test still sees a terminal variable the test gave it.
+func TestClearEnvKeepsExplicitValuesOfFakes(t *testing.T) {
+	for _, name := range terminalEnv {
+		if value, ok := os.LookupEnv(name); ok {
+			t.Fatalf("%s=%q reached the tests", name, value)
+		}
+	}
+	fake := New(t, Reply{Args: []string{"send"}, EnvSet: "HC_TERMINAL_ID", Code: 7})
+	cmd := exec.Command(fake.Program, "send")
+	cmd.Env = append(os.Environ(), "HC_TERMINAL_ID=t2b")
+	var exit *exec.ExitError
+	if err := cmd.Run(); !errors.As(err, &exit) || exit.ExitCode() != 7 {
+		t.Fatalf("the fake lost its variable: %v", err)
 	}
 }
