@@ -344,6 +344,7 @@
   "launch.auto_cannot_be_resolved_not_in_herdr_on_windows": "auto 无法解析: 当前不在 herdr 中. 请先启动 herdr, 或改用 console 启动方式.",
   "launch.board_root_is_required": "缺少看板根目录",
   "launch.agent_command_contains_a_control_character": "Agent 命令含换行或 NUL, 无法交给终端容器执行",
+  "launch.agent_command_contains_a_typed_control_character": "Agent 命令或其环境含控制字符 (如 Esc 或 Tab), Windows 终端会把它当作按键, 无法交给终端容器执行",
   "launch.cannot_determine_the_current_session": "无法确定当前 session",
   "launch.cleaned_old_container_channel_closed_container": "已清理原容器: {{.V0}}\t通道={{.V1}}\t关闭容器={{.V2}}",
   "launch.cleanup_after_failed_resume_failed_the_new_agent_may": "恢复失败后的清理失败, 新 Agent 可能仍存活: {{.V0}}",

@@ -795,6 +795,28 @@ func TestPaneCommandRejectsControlCharacters(t *testing.T) {
 	}
 }
 
+// A Windows line goes through a line editor, so it refuses every control
+// character; a POSIX line keeps refusing only CR, LF and NUL.
+func TestWindowsHerdrCoreControlCharsInPaneCommand(t *testing.T) {
+	t.Cleanup(func() { runtimeWindows = func() bool { return isWindowsGOOS() } })
+	for _, value := range []string{"a\x1bb", "a\tb", "a\bb", "a\x03b", "a\x7fb", "a\u009bb"} {
+		invocations := []process.ProcessInvocation{
+			{Argv: []string{"codex", value}},
+			{Argv: []string{"cmd.exe"}, ShellEnv: map[string]string{"KDR_0": value}},
+		}
+		for _, invocation := range invocations {
+			runtimeWindows = func() bool { return true }
+			if _, err := paneCommand(invocation); err == nil {
+				t.Errorf("windows accepted %q", value)
+			}
+			runtimeWindows = func() bool { return false }
+			if _, err := paneCommand(invocation); err != nil {
+				t.Errorf("posix refused %q: %v", value, err)
+			}
+		}
+	}
+}
+
 // When PowerShell 5.1 hands arguments to a native exe it rebuilds the command
 // line, swallowing embedded double quotes and dropping empty arguments. So on
 // Windows an invocation bound for a terminal container always takes cmd.exe's
