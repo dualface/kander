@@ -125,23 +125,7 @@
         },
         {
           "when": "field:posix=false",
-          "argv": [
-            "run",
-            "--bg",
-            "--no-parent",
-            "--rm",
-            "--json",
-            "--cwd",
-            "{cwd}",
-            "--name",
-            "{label_name}",
-            "--label",
-            "kander.window={label}",
-            "--",
-            "powershell.exe",
-            "-NoLogo",
-            "-NoProfile"
-          ],
+          "argv": ["run", "--bg", "--no-parent", "--rm", "--json", "--cwd", "{cwd}", "--name", "{label_name}", "--label", "kander.window={label}", "--", "powershell.exe", "-NoLogo", "-NoProfile"],
           "store": "new",
           "output": {
             "source": "stdout",
@@ -257,12 +241,7 @@
         },
         {
           "when": "field:posix=false",
-          "argv": [
-            "send",
-            "--json",
-            "{pane}",
-            "try {{ {powershell_env}{command} }} finally {{ if ($null -eq $LASTEXITCODE) {{ exit 1 }}; exit $LASTEXITCODE }}"
-          ],
+          "argv": ["send", "--json", "{pane}", "try {{ {powershell_env}{command} }} finally {{ if ($null -eq $LASTEXITCODE) {{ exit 1 }}; exit $LASTEXITCODE }}"],
           "messages": {
             "exec": {
               "id": "herdr_core.invocation_failed",
