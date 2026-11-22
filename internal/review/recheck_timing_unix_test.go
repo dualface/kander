@@ -327,10 +327,12 @@ func TestExtendedScheduleKeepsTheBaselinePrefix(t *testing.T) {
 }
 
 // TestDelayBeforeAReadDoesNotMoveTheEndOfTheRecheck delays every read by 1 ms before it creates its context.
-// The planned last read starts at 897 ms with 5 ms snapshots behind it, but this one takes 103.5 ms. Counted
-// from the delayed start, its budget would end at 1001 ms, so it would finish at 1000.5 ms and report the
-// member gone from a table taken after the 1 second limit. The absolute end of the recheck cancels it, and the
-// last completed observation still decides.
+// The planned last read starts at 897 ms with 5 ms snapshots behind it, but this one takes 103.5 ms. A read
+// samples the process table when it starts, so this one sees the member gone at 897 ms. Its completion is
+// what falls late: counted from the delayed start, its budget would end at 1001 ms and it would finish at
+// 1000.5 ms, after the 1 second limit. The absolute end of the recheck cancels it, and the last completed
+// observation still decides. The simulated read applies the end itself, so the production read is checked
+// apart in TestReadEndsAtTheEndOfTheRecheck.
 func TestDelayBeforeAReadDoesNotMoveTheEndOfTheRecheck(t *testing.T) {
 	s := newSim(ms(5), ms(890))
 	s.readDelay = ms(1)
@@ -348,6 +350,53 @@ func TestDelayBeforeAReadDoesNotMoveTheEndOfTheRecheck(t *testing.T) {
 	}
 	if last.completed || last.start < ms(890) || last.start+last.budget != reviewerRecheckLimit {
 		t.Fatalf("the last read must start late and be canceled at the limit: %+v", s.reads)
+	}
+}
+
+// TestCutOffByTheEndOfTheRecheckIsNotAFailure plans a full 500 ms budget for the second read, which starts
+// at 499.5 ms. The 1 ms delay before it creates its context leaves 499.5 ms to the end of the recheck, so the
+// read is canceled there with a planned budget of 500 ms. It is still a cut-off, not an observation failure.
+func TestCutOffByTheEndOfTheRecheckIsNotAFailure(t *testing.T) {
+	s := newSim(ms(5), time.Hour)
+	s.readDelay = ms(1)
+	s.snapshot = func(_ time.Duration, call int) time.Duration {
+		if call == 0 {
+			return ms(448.5)
+		}
+		return hangs
+	}
+	collection, empty := runRecheck(t, s)
+	got := outcomes(collection.evidence)
+	if len(s.reads) != 2 || s.reads[1].budget >= recheckSnapshotLimit {
+		t.Fatalf("the second read must be clamped by the end of the recheck: %+v", s.reads)
+	}
+	if !collection.lingering || empty || collection.evidence.Observation.Failed || got["100/a"] != memberLeftover || s.at != reviewerRecheckLimit {
+		t.Fatalf("%+v %v end=%v reads=%+v", collection, got, s.at, s.reads)
+	}
+}
+
+// TestReadEndsAtTheEndOfTheRecheck runs the production read with a stand-in table reader that records the
+// deadline of its context. The end of the recheck wins when it comes before the budget, and the budget wins
+// otherwise.
+func TestReadEndsAtTheEndOfTheRecheck(t *testing.T) {
+	var seen time.Time
+	injectRead(t, func(ctx context.Context) (map[int]procInfo, error) {
+		seen, _ = ctx.Deadline()
+		return map[int]procInfo{}, nil
+	})
+	hard := time.Now().Add(50 * time.Millisecond)
+	if _, err := boundedProcessTable(recheckSnapshotLimit, hard); err != nil || !seen.Equal(hard) {
+		t.Fatalf("the read must end at the end of the recheck: %v %v want %v", err, seen, hard)
+	}
+	before := time.Now()
+	if _, err := boundedProcessTable(50*time.Millisecond, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if seen.Before(before.Add(50*time.Millisecond)) || seen.After(time.Now().Add(50*time.Millisecond)) {
+		t.Fatalf("the read must end at its budget: %v", seen)
+	}
+	if _, err := boundedProcessTable(50*time.Millisecond, time.Time{}); err != nil || seen.After(time.Now().Add(50*time.Millisecond)) {
+		t.Fatalf("a zero end sets no absolute end: %v %v", err, seen)
 	}
 }
 

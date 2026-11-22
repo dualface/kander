@@ -117,7 +117,10 @@ func (o *groupObserver) recheck() (map[memberKey]bool, error) {
 		if err != nil {
 			// A read cut off by the limit before it got its full budget is not a failure when an earlier
 			// observation completed: that one decides, and its unattributed member still rejects the result.
-			if completed >= 1 && budget < recheckSnapshotLimit && errors.Is(err, context.DeadlineExceeded) {
+			// The read ends at the end of the recheck when a delay before it moved its own end past that
+			// point, so a cancellation at the end of the recheck is a cut-off whatever budget was planned.
+			cutOff := budget < recheckSnapshotLimit || !clock.now().Before(deadline)
+			if completed >= 1 && cutOff && errors.Is(err, context.DeadlineExceeded) {
 				return last, nil
 			}
 			return nil, err
