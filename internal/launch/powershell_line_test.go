@@ -288,6 +288,37 @@ func TestPowerShellLine(t *testing.T) {
 		})
 	}
 
+	t.Run("a program path with operators and odd quotes", func(t *testing.T) {
+		out := setup(t, 0)
+		dir := filepath.Join(t.TempDir(), "agent & (x) ^ !A! %B% O'Brien \u2019 中文")
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		program := filepath.Join(dir, filepath.Base(self))
+		data, err := os.ReadFile(self)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(program, data, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		marker := filepath.Join(t.TempDir(), "injected")
+		args := []string{
+			`one " quote`, `x"&echo.>` + marker + `&"`, `q"|echo.>` + marker, `z^&echo.>` + marker,
+			`"`, `%COMSPEC%&echo.>` + marker, `!COMSPEC!&echo.>` + marker, `tail\`, "last",
+		}
+		line, _ := typedLine(t, lineInvocation(t, process.AgentProgram{Path: program}, args...), nil)
+		if code := startShell(t, shell, line).exitCode(t); code != 0 {
+			t.Fatalf("exit=%d", code)
+		}
+		if _, err := os.Stat(marker); !os.IsNotExist(err) {
+			t.Fatalf("a value ran as a command: %v", err)
+		}
+		if report := readLineReport(t, out); !slices.Equal(report.Args, args) {
+			t.Fatalf("args=%q\nwant %q", report.Args, args)
+		}
+	})
+
 	// Only Windows has cmd.exe, the second parser of the line; elsewhere there
 	// is nothing to test, and a skip here would hide nothing on Windows.
 	if runtime.GOOS == "windows" {
