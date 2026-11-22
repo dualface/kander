@@ -290,6 +290,7 @@ func TestExtendedScheduleKeepsTheBaselinePrefix(t *testing.T) {
 	for v := 1; v <= 1100; v += 5 {
 		exits = append(exits, ms(float64(v)))
 	}
+	exits = append(exits, ms(1100))
 	for _, overshoot := range []time.Duration{0, ms(1), ms(10), ms(25)} {
 		for _, snapshot := range snapshots {
 			for _, exit := range exits {
@@ -324,16 +325,21 @@ func TestSnapshotReadErrorAfterTheDeadlineIsTheDeadline(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
 	defer cancel()
 	<-ctx.Done()
-	_, err := settleTableRead(ctx, nil, errors.New("signal: killed"))
+	deadline, _ := ctx.Deadline()
+	before := deadline.Add(-time.Millisecond)
+	_, err := settleTableRead(ctx, before, nil, errors.New("signal: killed"))
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("%v", err)
 	}
 	failure := errors.New("snapshot refused")
-	if _, err = settleTableRead(context.Background(), nil, failure); !errors.Is(err, failure) {
+	if _, err = settleTableRead(context.Background(), before, nil, failure); !errors.Is(err, failure) {
 		t.Fatalf("%v", err)
 	}
 	table := map[int]procInfo{1: member("a")}
-	if got, err := settleTableRead(ctx, table, nil); err != nil || len(got) != 1 {
-		t.Fatalf("a completed read stays completed: %v %v", got, err)
+	if got, err := settleTableRead(ctx, before, table, nil); err != nil || len(got) != 1 {
+		t.Fatalf("a read that finished inside its budget stays completed when it is received late: %v %v", got, err)
+	}
+	if got, err := settleTableRead(ctx, deadline.Add(time.Millisecond), map[int]procInfo{}, nil); !errors.Is(err, context.DeadlineExceeded) || got != nil {
+		t.Fatalf("a read that finished after the deadline is the deadline: %v %v", got, err)
 	}
 }

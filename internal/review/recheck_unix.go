@@ -89,10 +89,14 @@ func (o *groupObserver) observe(limit time.Duration) (map[memberKey]bool, error)
 // The schedule has two parts. The original schedule observes, waits recheckPollInterval, and stops once the
 // next observation could no longer have the full recheckSnapshotLimit. It is the unchanged prefix: it reads at
 // the same moments with the same budgets as before, so everything it let through is still let through. The
-// extension continues where the original stopped. It starts another observation only when the last observed
-// duration says that one fits before reviewerRecheckLimit minus recheckSettleMargin, so a slow ps is not
-// followed by a read that the limit would cut off. The budget of an observation is never shortened for
-// that: it is the smaller of recheckSnapshotLimit and the time left, in both parts.
+// extension continues where the original stopped. It reserves the measured duration of the last observation
+// and recheckSettleMargin at the end of reviewerRecheckLimit, and starts another observation only when that
+// fits, so a slow ps is not followed by a read that the limit would cut off. Two exceptions keep it useful
+// with slow snapshots. The poll wait shrinks, down to none, so the next observation starts as early as the
+// cadence of the last one allows, and the second observation is attempted even when it does not fit, because
+// one completed observation is a weak basis. After two completed observations a read that does not fit is not
+// started. The budget of an observation is never shortened for that: it is the smaller of
+// recheckSnapshotLimit and the time left, in both parts.
 func (o *groupObserver) recheck() (map[memberKey]bool, error) {
 	deadline := clock.now().Add(reviewerRecheckLimit)
 	planUntil := deadline.Add(-recheckSettleMargin)
@@ -221,26 +225,34 @@ func boundedProcessTable(limit time.Duration) (map[int]procInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), limit)
 	defer cancel()
 	type result struct {
-		table map[int]procInfo
-		err   error
+		table    map[int]procInfo
+		err      error
+		finished time.Time
 	}
 	done := make(chan result, 1)
 	read := readProcessTable
 	go func() {
 		table, err := read(ctx)
-		done <- result{table, err}
+		done <- result{table, err, time.Now()}
 	}()
 	select {
 	case r := <-done:
-		return settleTableRead(ctx, r.table, r.err)
+		return settleTableRead(ctx, r.finished, r.table, r.err)
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
 }
 
-// settleTableRead reports a read that failed after its budget ended as the deadline. The caller waits on the
-// context and the read at once, so a read that fails because the cancellation killed it can arrive first.
-func settleTableRead(ctx context.Context, table map[int]procInfo, err error) (map[int]procInfo, error) {
+// settleTableRead decides what a finished read means once its budget may have ended. The caller waits on the
+// context and the read at once, so either can arrive first. A read that finished after the deadline is the
+// deadline, whatever it returned: its table was taken after the limit, and a late success must not replace
+// the conclusion of the last observation inside it. A read that failed because the cancellation killed it is
+// the deadline too. A read that finished before the deadline keeps its own result, also when it is received
+// late.
+func settleTableRead(ctx context.Context, finished time.Time, table map[int]procInfo, err error) (map[int]procInfo, error) {
+	if deadline, ok := ctx.Deadline(); ok && finished.After(deadline) {
+		return nil, context.DeadlineExceeded
+	}
 	if err != nil && ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
