@@ -83,6 +83,33 @@ func TestBuildPromptLastMessageOutputContractIncremental(t *testing.T) {
 	}
 }
 
+func TestIncrementalQualityReviewGate(t *testing.T) {
+	isolateBuiltinConfig(t)
+	for _, role := range []string{"PMQA", "QA"} {
+		ctx := promptContractContext("codex")
+		ctx.role = role
+		ctx.reviewed = baselineReviewed
+		contract := mustBuildContract(t, ctx)
+		for _, want := range []string{
+			"Reuse the prior finding ID and lineage",
+			"describe the behavior at " + ctx.reviewed,
+			"cite the exact change in " + ctx.reviewed + ".." + ctx.commit,
+			"show the reachable consequence at " + ctx.commit,
+			"finish with an empty gate list",
+			"Grade inaccurate documentation or comments, dead code, and redundant tests by their demonstrated impact",
+		} {
+			if !strings.Contains(contract, want) {
+				t.Errorf("%s incremental contract is missing %q", role, want)
+			}
+		}
+		for _, obsolete := range []string{"Only a blocking defect introduced by the fix", "Always classify these as at least medium"} {
+			if strings.Contains(contract, obsolete) {
+				t.Errorf("%s incremental contract retains %q", role, obsolete)
+			}
+		}
+	}
+}
+
 func TestReviewPromptResourcesRenderCompletely(t *testing.T) {
 	for _, role := range []string{"PMQA", "Security", "PM", "QA", "CSA", "Hacker"} {
 		for _, reviewed := range []string{"", "cccccccccccccccccccccccccccccccccccccccc"} {
@@ -102,24 +129,19 @@ func TestReviewPromptResourcesRenderCompletely(t *testing.T) {
 	}
 }
 
-func TestReviewSizeRuleMatchesReleasedRules(t *testing.T) {
+func TestPMQAHasNoFileLineLimit(t *testing.T) {
+	isolateBuiltinConfig(t)
 	released, err := os.ReadFile(filepath.Join("..", "..", "rules", "KANDER-REVIEW-RULES.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	promptText := strings.ToLower(mustRoleRules(t, "QA"))
-	releasedText := strings.ToLower(string(released))
-	for _, phrase := range []string{
-		"file added this round exceeds 1000",
-		"touched file that was at or under 1000 lines at the base exceeds 1000 now",
-		"a file already above 1000 lines at the base is not measured",
+	for name, text := range map[string]string{
+		"PMQA contract": mustBuildContract(t, promptContractContext("codex")),
+		"review rules":  string(released),
 	} {
-		if !strings.Contains(promptText, phrase) || !strings.Contains(releasedText, phrase) {
-			t.Fatalf("review size policy drifted at %q", phrase)
+		if strings.Contains(text, "1000 physical lines") {
+			t.Errorf("%s still imposes the removed file line limit", name)
 		}
-	}
-	if strings.Contains(promptText, "increases the final physical-line count") {
-		t.Fatal("review prompt retained the obsolete already-oversized-file rule")
 	}
 }
 

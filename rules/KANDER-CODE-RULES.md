@@ -20,7 +20,7 @@
 
 ## Delivery Self-Check
 
-Before a card moves to `review/`, or a single card requests review, run this checklist and record each result under `IMPLEMENTATION` with the command and its output. When the review module applies, a reviewer finding in any of these categories means the self-check was skipped: record that on the card as a self-check failure and fix it in the same fix round as the other findings. It is still an ordinary finding under `KANDER-REVIEW-RULES.md`, never an extra review round or a return outside the review flow.
+Before a card moves to `review/`, or a single card requests review, run this checklist and record each result under `IMPLEMENTATION` with the command and its output. When the review module applies and a reviewer finds an item the author missed in these checks, record the self-check failure on the card. Apply the tier and disposition rules in `KANDER-REVIEW-RULES.md` to decide whether a fix or re-review is required. A non-blocking item may be deferred with its basis, including when it is the only finding left.
 
 1. `git diff --check` is clean: no conflict markers, trailing whitespace, or EOF drift.
 2. No non-generated code file added by this delivery exceeds 1000 physical lines, and no touched file that was at or under 1000 lines at the base exceeds 1000 lines now. A file already above 1000 lines at the base is not measured. Never trim or reformat lines unrelated to the task to satisfy this item; that widens the diff into files other cards touch.

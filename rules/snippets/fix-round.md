@@ -8,6 +8,7 @@ This snippet is read when a `notify --kind fix` dispatch arrives: it holds the e
 
 - Accepting or rejecting a reviewer conclusion without verification is forbidden. Every finding and every `NON-BLOCKING` item gets a conclusion only after the main agent independently verifies it; the reviewer's wording, tone, confidence, and finding count are not evidence.
 - Verification returns to the facts of the target commit: read the related code and contracts, walk the claimed trigger path, run commands and record output when needed. Concluding from impression or "sounds reasonable" is unverified.
+- For a new incremental PMQA or historical QA gate finding, verify the behavior at the prior reviewed commit, the cited repair change, and its concrete consequence at the target. Apply the scope grounds below against the start of the fix range when the issue already existed there and the fix neither worsened nor concealed it. A remaining instance of an open root cause belongs to its existing finding.
 - There are only three conclusions:
   - **Confirmed**: handle per tier; must-fix tiers are fixed and committed.
   - **Rejected**: not handled. There are two kinds of grounds, and the record names which one applies.

@@ -291,7 +291,6 @@ func TestPromptCarriesRoleAndQARules(t *testing.T) {
 		"Tag each such item with [mechanical]",
 		"Do not modify files",
 		"existing module responsibilities, dependency directions",
-		"a non-generated code file must not exceed 1000 physical lines",
 		"Do not enumerate contrived combinations, extreme edge cases",
 	} {
 		if !strings.Contains(normalized, needle) && !strings.Contains(prompt, needle) {
@@ -301,6 +300,7 @@ func TestPromptCarriesRoleAndQARules(t *testing.T) {
 }
 
 func TestSpecFileAuthoritative(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	h := newCodexHarness(t)
 	spec := filepath.Join(h.root, "spec.md")
 	if err := os.WriteFile(spec, []byte("# 任务契约\n"), 0o644); err != nil {
@@ -316,8 +316,8 @@ func TestSpecFileAuthoritative(t *testing.T) {
 	if !strings.Contains(prompt, "Authoritative spec file: "+abs) {
 		t.Fatalf("prompt=%s", prompt)
 	}
-	if !strings.Contains(prompt, "suggest tagged [out-of-contract]") {
-		t.Fatal("missing out-of-contract rule")
+	if !strings.Contains(prompt, "For each PM finding, cite the confirmed commitment") {
+		t.Fatal("missing PM plan acceptance rule")
 	}
 }
 
