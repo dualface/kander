@@ -36,7 +36,7 @@
     "herdr-core": {
       "auto_priority": 250,
       "requires": {
-        "platform": "posix",
+        "platform": "any",
         "binary": true,
         "inside_session": true,
         "env": [
@@ -69,6 +69,7 @@
     "create_container": {
       "steps": [
         {
+          "when": "field:posix=true",
           "argv": [
             "run",
             "--bg",
@@ -89,6 +90,42 @@
             "KANDER_LANG={env.KANDER_LANG}",
             "/bin/sh"
           ],
+          "store": "new",
+          "output": {
+            "source": "stdout",
+            "parse": "json_field:address"
+          },
+          "messages": {
+            "exec": {
+              "id": "herdr_core.invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "herdr_core.command_failed",
+              "args": [
+                "run",
+                {
+                  "or": [
+                    "{error}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "herdr_core.unexpected_response",
+              "args": [
+                "run",
+                "{detail}"
+              ]
+            }
+          }
+        },
+        {
+          "when": "field:posix=false",
+          "argv": ["run", "--bg", "--no-parent", "--rm", "--json", "--cwd", "{cwd}", "--name", "{label_name}", "--label", "kander.window={label}", "--", "powershell.exe", "-NoLogo", "-NoProfile"],
           "store": "new",
           "output": {
             "source": "stdout",
@@ -166,12 +203,45 @@
     "run_command": {
       "steps": [
         {
+          "when": "field:posix=true",
           "argv": [
             "send",
             "--json",
             "{pane}",
             "cd -- {cwd_quoted} && exec {command}"
           ],
+          "messages": {
+            "exec": {
+              "id": "herdr_core.invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "herdr_core.command_failed",
+              "args": [
+                "send",
+                {
+                  "or": [
+                    "{error}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "herdr_core.unexpected_response",
+              "args": [
+                "send",
+                "{detail}"
+              ]
+            }
+          },
+          "timeout": "90s"
+        },
+        {
+          "when": "field:posix=false",
+          "argv": ["send", "--json", "{pane}", "try {{ {powershell_env}{command} }} finally {{ if ($null -eq $LASTEXITCODE) {{ exit 1 }}; exit $LASTEXITCODE }}"],
           "messages": {
             "exec": {
               "id": "herdr_core.invocation_failed",

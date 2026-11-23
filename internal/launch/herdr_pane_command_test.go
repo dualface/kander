@@ -146,8 +146,9 @@ func writeResolvableAgent(t *testing.T, dir, name string) {
 }
 
 // start through herdr must build the invocation in shell form: on Windows only
-// cmd.exe's %VAR% form restores argv verbatim, and handing argv straight to
-// PowerShell loses embedded double quotes.
+// cmd.exe variable references restore argv verbatim (%VAR% for the .cmd agent
+// of this fixture), and handing argv straight to PowerShell loses embedded
+// double quotes.
 // This case watches whether the real call sites use launchInvocation, not
 // launchInvocation itself.
 func TestCommandStartUsesShellInvocationForHerdr(t *testing.T) {

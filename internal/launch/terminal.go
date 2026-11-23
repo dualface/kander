@@ -1,13 +1,16 @@
 package launch
 
 import (
+	"maps"
 	"os"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/dualface/kander/internal/process"
 	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/internal/terminal/builtin"
 )
 
 func resolveStartLauncher(launcher string) (string, error) {
@@ -18,6 +21,11 @@ func resolveStartLauncher(launcher string) (string, error) {
 		return backend.Name(), nil
 	}
 	if runtimeWindows() {
+		// A user definition may keep herdr-core POSIX-only; auto skipped it, so
+		// advising to enter one of its terminals would not help.
+		if backend, ok := terminal.Lookup(builtin.HerdrCore); ok && !terminal.SupportsPlatform(backend, true) {
+			return "", launchError("launch.auto_cannot_be_resolved_only_herdr_on_windows")
+		}
 		return "", launchError(
 			"launch.auto_cannot_be_resolved_not_in_herdr_on_windows",
 		)
@@ -29,6 +37,10 @@ func resolveStartLauncher(launcher string) (string, error) {
 
 func prepareLaunch(launcher, project, command string) (LaunchPlan, error) {
 	if runtimeWindows() && terminal.HasCapability(launcher, func(c terminal.Capabilities) bool { return c.POSIXOnly }) {
+		if launcher == builtin.HerdrCore {
+			// The general message would recommend the launcher it refuses.
+			return LaunchPlan{}, launchError("terminal.platform_unsupported_posix", launcher)
+		}
 		return LaunchPlan{}, launchError(
 			"launch.windows_does_not_support_the_launcher_use_console_or", launcher,
 		)
@@ -79,23 +91,35 @@ func launchInvocation(plan LaunchPlan, program process.AgentProgram, arguments [
 // call operator & — otherwise the shell just prints the line back and the agent
 // never starts. Argv carried in ShellEnv variables has to be assigned back in
 // the pane first.
+// The Windows line is typed into a line editor, which reads a control character
+// as a key (Esc clears the line typed so far), so no quoting protects it and
+// every control character is refused there.
 // This assumes the container shell is PowerShell on Windows (herdr's default)
 // and sh-like on POSIX. If a user points herdr's default_shell at cmd or
 // git-bash the line comes out wrong; the container only types the text in, it
 // never reports an error.
 func paneCommand(inv process.ProcessInvocation) (string, error) {
+	reject := rejectPaneControlChars
+	if runtimeWindows() {
+		reject = rejectTypedControlChars
+	}
 	for _, value := range inv.Argv {
-		if err := rejectPaneControlChars(value); err != nil {
+		if err := reject(value); err != nil {
 			return "", err
 		}
 	}
 	for _, value := range inv.ShellEnv {
-		if err := rejectPaneControlChars(value); err != nil {
+		if err := reject(value); err != nil {
 			return "", err
 		}
 	}
 	if !runtimeWindows() {
 		return posixJoin(inv.Argv), nil
+	}
+	for _, name := range terminal.ForwardedEnv() {
+		if err := reject(os.Getenv(name)); err != nil {
+			return "", err
+		}
 	}
 	return powershellJoin(inv.Argv, inv.ShellEnv), nil
 }
@@ -110,30 +134,31 @@ func rejectPaneControlChars(value string) error {
 	return nil
 }
 
+// rejectTypedControlChars also refuses every other control character (C0, DEL
+// and C1), for a line that an interactive line editor receives as keys.
+func rejectTypedControlChars(value string) error {
+	if err := rejectPaneControlChars(value); err != nil {
+		return err
+	}
+	if strings.ContainsFunc(value, unicode.IsControl) {
+		return launchError("launch.agent_command_contains_a_typed_control_character")
+	}
+	return nil
+}
+
 func powershellJoin(argv []string, shellEnv map[string]string) string {
 	if len(argv) == 0 {
 		return ""
 	}
 	parts := make([]string, 0, len(shellEnv)+len(argv)+1)
-	names := make([]string, 0, len(shellEnv))
-	for name := range shellEnv {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		parts = append(parts, "$env:"+name+"="+powershellQuote(shellEnv[name])+";")
+	for _, name := range slices.Sorted(maps.Keys(shellEnv)) {
+		parts = append(parts, "$env:"+name+"="+terminal.PowerShellQuote(shellEnv[name])+";")
 	}
 	parts = append(parts, "&")
 	for _, a := range argv {
-		parts = append(parts, powershellQuote(a))
+		parts = append(parts, terminal.PowerShellQuote(a))
 	}
 	return strings.Join(parts, " ")
-}
-
-// powershellQuote always single-quotes: a PowerShell single-quoted string is
-// literal, and an inner single quote is escaped by doubling it.
-func powershellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }
 
 func posixJoin(argv []string) string {

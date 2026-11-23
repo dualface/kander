@@ -78,6 +78,8 @@ A capability flag requires its operation (`focus`, `set_session_marker` for `pan
 
 ## Operations
 
+`posix` is `true` on POSIX and `false` on native Windows. A definition can select platform-specific steps with `"when": "field:posix=false"`. In `create_container`, the value comes from the platform `Prepare` checked. A target built without `Prepare` counts as POSIX. On Windows, `powershell_env` provides quoted PowerShell statements to set `KANBAN_DIR`, `KANDER_CONFIG`, and `KANDER_LANG` to the caller's values. Each statement ends in `; ` and removes the variable if the caller's value is empty or unset. On POSIX, `powershell_env` is empty. Both inputs are optional additions to `schema_version` 1.
+
 `cwd_quoted` is the startup directory, already quoted for a POSIX pane shell by `internal/launch`, and empty when `posix` is `false`. Use it verbatim, as in `cd -- {cwd_quoted} && exec {command}`; a definition never adds its own quoting. A definition that does not use it stays valid.
 
 `pane_directory` reports the working directory of the pane's foreground process, and an empty `directory` while there is none to report. A launch uses it to confirm the pane entered the startup directory, so a definition that declares it must start the pane somewhere else and enter the directory itself, as tmux does with `respawn-pane -c /`. Without the operation a launch does not watch the pane. See [Startup Directory](launch-and-delivery.md#startup-directory).
@@ -85,9 +87,9 @@ A capability flag requires its operation (`focus`, `set_session_marker` for `pan
 | Operation            | Inputs (placeholders)                                   | Result fields |
 | -------------------- | ------------------------------------------------------- | ------------- |
 | `prepare` (optional) | `project`, `project_key`, `command`                     | `session`, `session_exists` (`true`/`false`), `workspace` |
-| `create_container`   | `session`, `session_exists`, `workspace`, `project`, `project_key`, `cwd`, `cwd_resolved`, `label`, `label_name`, `title` | `session`, `container`, `pane` (container and pane required; with an address without `container`, map the pane as the container) |
+| `create_container`   | `session`, `session_exists`, `workspace`, `project`, `project_key`, `cwd`, `cwd_resolved`, `label`, `label_name`, `title`, `posix` | `session`, `container`, `pane` (container and pane required; with an address without `container`, map the pane as the container) |
 | `wait_ready` (optional; absent means ready) | `pane`, `timeout_ms` (the readiness budget: 15000, or 120000 with `extended_launch_timeouts`; `kander terminal test` always passes 15000) | none |
-| `run_command`        | `pane`, `cwd_quoted`, `command`, `posix` (`true`/`false`) | none |
+| `run_command`        | `pane`, `cwd_quoted`, `command`, `posix` (`true`/`false`), `powershell_env` | none |
 | `pane_directory` (optional) | `pane` | `directory` |
 | `set_session_marker` | `pane`, `value`                                         | none |
 | `pane_facts`         | `pane`                                                  | `command`, `in_mode`, `dead`, `session_marker`, `agent`, `agent_app`, `agent_status`, `agent_session`, `agent_session_kind`, `container` |

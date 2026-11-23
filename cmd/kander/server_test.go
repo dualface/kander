@@ -31,6 +31,7 @@ import (
 // Re-enter the real command implementation in a child process. The child is
 // detached by Controller just like the distributed executable.
 func TestMain(m *testing.M) {
+	serveFakeHC()
 	if os.Getenv("KANDER_TEST_SERVER_CHILD") == "1" && len(os.Args) > 2 && os.Args[1] == "server" {
 		os.Exit(runServer(os.Args[2:]))
 	}

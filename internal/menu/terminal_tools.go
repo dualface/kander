@@ -38,6 +38,9 @@ type TerminalTools struct {
 	// HerdrCoreDown is why herdr-core is not running, empty while it runs or
 	// when hc is unavailable and the server was not probed.
 	HerdrCoreDown string
+	// HerdrCoreUnknown is why native Windows could not tell whether herdr-core
+	// runs; it is never set together with HerdrCoreDown.
+	HerdrCoreUnknown string
 }
 
 func (t TerminalTools) NeedsHerdrInstall() bool {
@@ -77,13 +80,20 @@ func probeTerminalTool(backend terminal.Backend) TerminalTool {
 
 // CheckTerminalTools only probes commands: it starts no session/window/tab and installs no software.
 // Native Windows has no tmux or luvus, so they are neither probed nor reported there.
+// Whether herdr-core runs is read from its socket on POSIX and from hc on Windows.
 func CheckTerminalTools() TerminalTools {
 	tools := TerminalTools{Herdr: probeTerminalTool(herdrBackend())}
 	if !isWindowsOS() {
 		tools.Tmux = probeTerminalTool(tmuxBackend())
 		tools.Luvus = probeTerminalTool(luvusBackend())
+	}
+	if !herdrCoreUnsupported() {
 		tools.HerdrCore = probeTerminalTool(herdrCoreBackend())
-		if tools.HerdrCore.Available() {
+	}
+	if tools.HerdrCore.Available() {
+		if isWindowsOS() {
+			tools.HerdrCoreDown, tools.HerdrCoreUnknown = probeHerdrCoreStatus(tools.HerdrCore.Path)
+		} else {
 			tools.HerdrCoreDown = probeHerdrCoreServer(systemHerdrCoreSocketEnv())
 		}
 	}
@@ -220,14 +230,19 @@ func reportTerminalTools(tools TerminalTools) {
 	if tools.Luvus.Path != "" {
 		report(builtin.LuvusExecutable, tools.Luvus)
 	}
-	if !isWindowsOS() {
+	if herdrCoreUnsupported() {
+		hint(herdrCoreUnsupportedText())
+	} else {
 		report(builtin.HerdrCoreExecutable, tools.HerdrCore)
-		if tools.HerdrCore.Available() {
-			if tools.HerdrCoreDown == "" {
-				success(config.Text("herdr_core.doctor_running"))
-			} else {
-				hint(config.Text("herdr_core.doctor_not_running", tools.HerdrCoreDown))
-			}
+	}
+	if tools.HerdrCore.Available() {
+		switch {
+		case tools.HerdrCoreUnknown != "":
+			hint(tools.HerdrCoreUnknown)
+		case tools.HerdrCoreDown != "":
+			hint(config.Text("herdr_core.doctor_not_running", tools.HerdrCoreDown))
+		default:
+			success(config.Text("herdr_core.doctor_running"))
 		}
 	}
 	if tools.NeedsHerdrInstall() {

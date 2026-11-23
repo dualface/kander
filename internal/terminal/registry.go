@@ -117,6 +117,17 @@ func autoPriority(backend Backend) int {
 	return math.MaxInt
 }
 
+// SupportsPlatform reports whether a definition launcher allows the platform
+// (native Windows when windows is set, POSIX otherwise), by the rule Prepare
+// applies to the active definition. For a Go backend it checks only POSIXOnly,
+// so true does not mean that Prepare accepts: console refuses POSIX.
+func SupportsPlatform(backend Backend, windows bool) bool {
+	if declarative, ok := backend.(*DeclarativeBackend); ok {
+		return declarative.supportsPlatform(windows)
+	}
+	return !windows || !backend.Capabilities().POSIXOnly
+}
+
 // HasCapability reports whether the named launcher has a capability; unknown
 // names (including auto) have none.
 func HasCapability(name string, has func(Capabilities) bool) bool {

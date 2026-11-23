@@ -68,6 +68,15 @@ jobs:
           TMP: ${{ runner.temp }}
           TEMP: ${{ runner.temp }}
         run: go test ./internal/launch -count=1 -v -run "TestLateFailureKeepsAnExecutorThatWorked|TestStartConfirmsSessionOverExecutorWrite|TestPaneDeliveryExecutorWriteKeepsTheStart|TestTakeoverDiscoverySurvivesExecutorWrite|TestCompletedWrapUpVerifiesGitOnce"
+      # The Windows acceptance set of the herdr-core launcher: real PowerShell for the typed
+      # line, a fake hc for the rest. It runs only here with powershell.exe and cmd.exe.
+      - name: Windows herdr-core tests
+        if: ${{ runner.os == 'Windows' && !cancelled() }}
+        env:
+          TMPDIR: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+          TEMP: ${{ runner.temp }}
+        run: go test ./cmd/kander ./internal/launch ./internal/menu ./internal/terminal ./internal/terminal/builtin -count=1 -v -run '^(TestWindowsHerdrCore|TestPowerShell)'
       - name: Workflow test patterns
         if: ${{ !cancelled() }}
         run: go test ./cmd/kander -count=1 -v -run TestWorkflowRunPattern

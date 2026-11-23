@@ -32,7 +32,7 @@ func hcGet(state, status string, labels string) string {
 
 // Every operation calls only hc and reads its --json output; the only hook
 // places a new terminal in a tab, no focus and no session report are
-// declared, and the launcher is POSIX only.
+// declared, and the launcher runs on every platform.
 func TestHerdrCoreDefinitionShape(t *testing.T) {
 	def, err := Definition("herdr-core")
 	if err != nil {
@@ -46,7 +46,7 @@ func TestHerdrCoreDefinitionShape(t *testing.T) {
 		t.Fatalf("capabilities=%+v", caps)
 	}
 	launcher := def.Launchers[HerdrCore]
-	if launcher.Requires.Platform != "posix" || !herdrCoreBackendForTest(t, nil).Capabilities().POSIXOnly {
+	if launcher.Requires.Platform != "any" || herdrCoreBackendForTest(t, nil).Capabilities().POSIXOnly {
 		t.Fatalf("platform=%q", launcher.Requires.Platform)
 	}
 	if launcher.AutoPriority != 250 {

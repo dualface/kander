@@ -4,15 +4,39 @@ import (
 	"strings"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/terminal"
 	"github.com/dualface/kander/internal/terminal/builtin"
 )
+
+// herdrCoreUnsupported reports whether the active definition, which a user
+// file may replace, cannot run on this platform; a launch refuses it then.
+func herdrCoreUnsupported() bool {
+	backend, ok := terminal.Lookup(builtin.HerdrCore)
+	return ok && !terminal.SupportsPlatform(backend, isWindowsOS())
+}
+
+// herdrCoreUnsupportedText says which platform the active definition lacks.
+func herdrCoreUnsupportedText() string {
+	key := "terminal.platform_unsupported_windows"
+	if isWindowsOS() {
+		key = "terminal.platform_unsupported_posix"
+	}
+	return config.Text(key, builtin.HerdrCore)
+}
+
+// herdrCoreInstalled reports whether the active definition can run here and
+// its program is on PATH.
+func herdrCoreInstalled() bool {
+	backend, ok := terminal.Lookup(builtin.HerdrCore)
+	return ok && !herdrCoreUnsupported() && lookPath(backend.Executable()) != ""
+}
 
 // validateHerdrCoreLauncher checks the configured herdr-core launcher: hc on
 // PATH, a running core, and execution agents that report their status through
 // OSC 7501, because herdr-core identifies agents only by those reports.
 func validateHerdrCoreLauncher(cfg *config.Config, tools TerminalTools) bool {
-	if isWindowsOS() {
-		warning(config.Text("menu.the_configured_launcher_is_but_native_windows_does_not", builtin.HerdrCore))
+	if herdrCoreUnsupported() {
+		warning(herdrCoreUnsupportedText())
 		return false
 	}
 	if !tools.HerdrCore.Available() {
@@ -20,6 +44,10 @@ func validateHerdrCoreLauncher(cfg *config.Config, tools TerminalTools) bool {
 		return false
 	}
 	healthy := true
+	if tools.HerdrCoreUnknown != "" {
+		healthy = false
+		warning(tools.HerdrCoreUnknown)
+	}
 	if tools.HerdrCoreDown != "" {
 		healthy = false
 		warning(config.Text("herdr_core.doctor_launcher_not_running", tools.HerdrCoreDown))
@@ -46,15 +74,20 @@ func agentsWithoutProgramStatus(cfg *config.Config) []string {
 	return missing
 }
 
-// herdrCoreLauncherChoices offers herdr-core once hc is installed, or keeps a
-// configured herdr-core visible with the not-installed note.
+// herdrCoreLauncherChoices offers herdr-core when the active definition runs
+// on this platform and its program is installed. A configured herdr-core stays
+// visible otherwise: labelled with the unsupported platform when the definition
+// cannot run here, else with the not-installed note.
 func herdrCoreLauncherChoices(cfg *config.Config) []Choice {
-	installed := lookPath(builtin.HerdrCoreExecutable) != ""
+	installed := herdrCoreInstalled()
 	if !installed && cfg.Launcher != builtin.HerdrCore {
 		return nil
 	}
 	label := config.Text("herdr_core.menu_choice")
-	if !installed {
+	switch {
+	case herdrCoreUnsupported():
+		label = herdrCoreUnsupportedText()
+	case !installed:
 		label += config.Text("menu.not_currently_installed")
 	}
 	return []Choice{{Value: builtin.HerdrCore, Label: label}}

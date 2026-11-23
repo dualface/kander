@@ -90,6 +90,8 @@ type Target struct {
 	SessionExists bool
 	Workspace     string
 	Project       string
+	// Windows records the platform Prepare checked; false means POSIX.
+	Windows bool
 	// Title is the display title of the new container, such as a tab name.
 	// Empty means the container label.
 	Title string
