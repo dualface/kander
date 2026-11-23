@@ -22,7 +22,7 @@ const (
 	RulesChangeRewrite
 	// RulesChangeReplace means a symlink to the previous entry would be replaced by a file.
 	RulesChangeReplace
-	// RulesChangeUpdate means a previous release of the rules extension would be updated.
+	// RulesChangeUpdate means a previously installed extension or skill document would be updated.
 	RulesChangeUpdate
 	// RulesChangeNone means the file would stay as it is.
 	RulesChangeNone
@@ -37,8 +37,8 @@ type PlannedFile struct {
 }
 
 // PlanGroup is the covered agents that read the same rules file, with every file their
-// install_rules switches control: the rules file, an existing AGENTS.override.md sibling, and
-// the rules extension.
+// install_rules switches control: the rules file, an existing AGENTS.override.md sibling, the
+// rules extension, and bundled skill documents.
 type PlanGroup struct {
 	Agents []string
 	Files  []PlannedFile
@@ -49,6 +49,10 @@ type PlanGroup struct {
 // what Perform writes, and groups the agents that share one rules file, since one switch off
 // keeps that file unwritten for all of them.
 func PlanRulesInjection(paths config.InstallPaths) []PlanGroup {
+	return planRulesInjection(paths, leaderDestinations(paths))
+}
+
+func planRulesInjection(paths config.InstallPaths, targets []leaderDestination) []PlanGroup {
 	var groups []PlanGroup
 	byTarget := map[string]int{}
 	byAgent := map[string]int{}
@@ -86,8 +90,9 @@ func PlanRulesInjection(paths config.InstallPaths) []PlanGroup {
 		byAgent[agent] = len(groups)
 		groups = append(groups, PlanGroup{Agents: []string{agent}, Files: []PlannedFile{file}})
 	}
-	for _, agent := range []string{"codex", "claude"} {
-		files := leaderPreview(agent, paths)
+	for _, target := range targets {
+		agent := target.agent
+		files := leaderPreview(target, paths)
 		if len(files) == 0 {
 			continue
 		}

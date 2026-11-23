@@ -48,7 +48,7 @@ type UninstallPlan struct {
 	// ConfigFile receives install_rules=false so a later doctor repair writes nothing.
 	ConfigFile string
 	Items      []UninstallItem
-	// Dirs are the rules directory and its subdirectories, deepest first; each goes once empty.
+	// Dirs lists rules and managed skill directories, children before parents, to remove if empty.
 	Dirs []string
 }
 

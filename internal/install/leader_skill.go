@@ -21,15 +21,34 @@ const leaderReceipt = ".kander-install.json"
 var leaderFiles = []string{"references/deployment.md", "references/handover.md", "references/server-mode.md", "SKILL.md"}
 
 type skillReceipt struct {
-	Scope string            `json:"scope"`
-	Files map[string]string `json:"files"`
+	Target string            `json:"target"`
+	Scope  string            `json:"scope"`
+	Files  map[string]string `json:"files"`
 }
 
 type leaderSkill struct {
 	dir, anchor string
 	exists      bool
 	managed     bool
+	keepReason  error
 	receipt     skillReceipt
+}
+
+type leaderDestination struct {
+	agent, dir string
+	err        error
+}
+
+// Freeze coverage before the installer creates directories or saves configuration.
+func leaderDestinations(paths config.InstallPaths) []leaderDestination {
+	var targets []leaderDestination
+	for _, agent := range []string{"codex", "claude"} {
+		dir, err := leaderTarget(agent, paths)
+		if dir != "" || err != nil {
+			targets = append(targets, leaderDestination{agent: agent, dir: dir, err: err})
+		}
+	}
+	return targets
 }
 
 func leaderTarget(agent string, paths config.InstallPaths) (string, error) {
@@ -75,6 +94,10 @@ func inspectLeaderSkill(dir string, paths config.InstallPaths) (leaderSkill, err
 	if err != nil {
 		return s, err
 	}
+	if err := rejectReparseChain(s.anchor, filepath.Dir(dir)); err != nil {
+		s.keepReason = err
+		return s, nil
+	}
 	info, err := os.Lstat(dir)
 	if errors.Is(err, os.ErrNotExist) {
 		return s, nil
@@ -90,7 +113,7 @@ func inspectLeaderSkill(dir string, paths config.InstallPaths) (leaderSkill, err
 	if err != nil || !found {
 		return s, err
 	}
-	s.managed = json.Unmarshal(data, &s.receipt) == nil && s.receipt.Scope == paths.RulesDir && s.receipt.Files != nil
+	s.managed = json.Unmarshal(data, &s.receipt) == nil && s.receipt.Target == dir && s.receipt.Scope == paths.RulesDir && s.receipt.Files != nil
 	return s, nil
 }
 
@@ -123,14 +146,14 @@ func (s leaderSkill) planFiles() ([]PlannedFile, error) {
 	return files, nil
 }
 
-func leaderPreview(agent string, paths config.InstallPaths) []PlannedFile {
-	dir, err := leaderTarget(agent, paths)
-	if dir == "" && err == nil {
-		return nil
-	}
+func leaderPreview(target leaderDestination, paths config.InstallPaths) []PlannedFile {
+	dir, err := target.dir, target.err
 	if err == nil {
 		var skill leaderSkill
 		skill, err = inspectLeaderSkill(dir, paths)
+		if err == nil {
+			err = skill.keepReason
+		}
 		if err == nil {
 			var files []PlannedFile
 			files, err = skill.planFiles()
@@ -142,25 +165,26 @@ func leaderPreview(agent string, paths config.InstallPaths) []PlannedFile {
 	return []PlannedFile{{Target: dir, Err: err}}
 }
 
-func installLeaderSkills(paths config.InstallPaths) error {
+func (result *Result) installLeaderSkills(targets []leaderDestination) error {
+	paths := result.Paths
 	switches, err := config.ScopeInstallRules(paths)
 	if err != nil {
 		return err
 	}
-	for _, agent := range []string{"codex", "claude"} {
-		if !switches.Enabled(agent) {
+	for _, target := range targets {
+		if !switches.Enabled(target.agent) {
 			continue
 		}
-		dir, err := leaderTarget(agent, paths)
+		if target.err != nil {
+			return target.err
+		}
+		s, err := inspectLeaderSkill(target.dir, paths)
 		if err != nil {
 			return err
 		}
-		if dir == "" {
+		if s.keepReason != nil {
+			result.SkippedSkills = append(result.SkippedSkills, fmt.Errorf("%s: %w", s.dir, s.keepReason))
 			continue
-		}
-		s, err := inspectLeaderSkill(dir, paths)
-		if err != nil {
-			return err
 		}
 		if !s.exists || s.managed {
 			if err := s.install(paths); err != nil {
@@ -177,7 +201,7 @@ func (s leaderSkill) install(paths config.InstallPaths) error {
 		if err := fs.EnsureInheritedDirectoryPath(filepath.Dir(s.dir)); err != nil {
 			return err
 		}
-		s.receipt = skillReceipt{Scope: paths.RulesDir, Files: map[string]string{}}
+		s.receipt = skillReceipt{Target: s.dir, Scope: paths.RulesDir, Files: map[string]string{}}
 		initial, err := json.Marshal(s.receipt)
 		if err != nil {
 			return err
@@ -237,6 +261,9 @@ func planLeaderRemoval(dir string, paths config.InstallPaths) ([]UninstallItem, 
 	s, err := inspectLeaderSkill(dir, paths)
 	if err != nil {
 		return keep(err.Error())
+	}
+	if s.keepReason != nil {
+		return keep(s.keepReason.Error())
 	}
 	if !s.exists {
 		return nil, nil

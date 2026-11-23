@@ -23,6 +23,8 @@ type Request struct {
 	// RulesChoice is the install wizard's per-agent install_rules values that differ from
 	// the scope's current switches; Perform saves them before writing any rules file.
 	RulesChoice map[string]bool
+	// leaderTargets holds the destinations shown by the interactive wizard.
+	leaderTargets []leaderDestination
 }
 
 // Result records what Perform wrote.
@@ -41,6 +43,8 @@ type Result struct {
 	Integrations       []AgentIntegration
 	// Extensions records ensuring each covered agent's rules-extension file.
 	Extensions []AgentExtension
+	// SkippedSkills names skill directories that could not be safely inspected.
+	SkippedSkills []error
 }
 
 // AgentIntegration records ensuring one agent rules file references the Kander entry.
@@ -64,6 +68,9 @@ func Perform(req Request) (Result, error) {
 		return result, err
 	}
 	result.Paths = paths
+	if req.leaderTargets == nil {
+		req.leaderTargets = leaderDestinations(paths)
+	}
 	project := paths.Mode == config.ModeProject
 	if err := rejectProjectLayout(paths, project); err != nil {
 		return result, err
@@ -126,7 +133,7 @@ func Perform(req Request) (Result, error) {
 	result.LegacyLinksRemoved = removeLegacyEntrySymlinks(paths)
 	result.Integrations = integrateAgentRules(paths)
 	result.Extensions = integrateAgentExtensions(paths)
-	if err := installLeaderSkills(paths); err != nil {
+	if err := result.installLeaderSkills(req.leaderTargets); err != nil {
 		return result, err
 	}
 	if req.DeleteLegacy && len(result.Legacy) > 0 {

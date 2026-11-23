@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/dualface/kander/internal/config"
@@ -171,5 +172,89 @@ func TestLeaderUninstallSharedAgentConfigRoot(t *testing.T) {
 	}
 	if _, err := os.Lstat(dir); !os.IsNotExist(err) {
 		t.Fatalf("shared skill remains: %v", err)
+	}
+}
+
+func TestLeaderUninstallPreservesCopiedReceipt(t *testing.T) {
+	home := setupInstallHome(t)
+	req := Request{Language: "en", Source: stubBinary(t)}
+	result, err := Perform(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := filepath.Join(home, ".agents", "skills", leaderName)
+	dst := filepath.Join(home, ".claude", "skills", leaderName)
+	if err := os.CopyFS(dst, os.DirFS(src)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Perform(req); err != nil {
+		t.Fatal(err)
+	}
+	if err := ApplyUninstall(PlanUninstall(result.Paths), io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	assertSkill(t, dst)
+	if readBytes(t, filepath.Join(dst, leaderReceipt)) == "" {
+		t.Fatal("user's copied receipt removed")
+	}
+}
+
+func TestLeaderSkillUsesConfirmedTargets(t *testing.T) {
+	home := setupInstallHome(t)
+	root := filepath.Join(home, ".agents")
+	t.Setenv("CLAUDE_CONFIG_DIR", root)
+	req := Request{Language: "en", Source: stubBinary(t)}
+	paths, err := resolvePaths(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.leaderTargets = leaderDestinations(paths)
+	groups := planRulesInjection(paths, req.leaderTargets)
+	switches, err := config.ScopeInstallRules(paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.RulesChoice = rulesChoice(groups, nil, switches)
+	// The Claude root appears after preview, before execution. The wizard
+	// did not list a Claude destination, and the user deselected Codex.
+	if err := os.Mkdir(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Perform(req); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(filepath.Join(root, "skills", leaderName)); !os.IsNotExist(err) {
+		t.Fatalf("unconfirmed skill target written: %v", err)
+	}
+}
+
+func TestLeaderSkillSkipsLinkedParent(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("directory symlinks require privileges")
+	}
+	home := setupInstallHome(t)
+	dotfiles := t.TempDir()
+	entry := filepath.Join(dotfiles, leaderName, "SKILL.md")
+	writeIntegrateFile(t, entry, "personal skill")
+	root := filepath.Join(home, ".claude")
+	if err := os.Mkdir(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(dotfiles, filepath.Join(root, "skills")); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Perform(Request{Language: "en", Source: stubBinary(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.SkippedSkills) != 1 || !strings.Contains(result.SkippedSkills[0].Error(), filepath.Join(root, "skills")) {
+		t.Fatalf("missing linked path diagnostic: %v", result.SkippedSkills)
+	}
+	assertSkill(t, filepath.Join(home, ".agents", "skills", leaderName))
+	if err := ApplyUninstall(PlanUninstall(result.Paths), io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	if readBytes(t, entry) != "personal skill" {
+		t.Fatal("modified skill through linked parent")
 	}
 }
