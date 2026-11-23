@@ -60,7 +60,7 @@ jobs:
           TMPDIR: ${{ runner.temp }}
           TMP: ${{ runner.temp }}
           TEMP: ${{ runner.temp }}
-        run: go test -v ./internal/review -count=1 -run '^(TestProcessTableHasIdentity|TestChildExitingDuringRecheckIsNotLeftover|TestLeftoverIsRejectedCollectedAndAttributed|TestAbnormalEndsSkipTheRecheck|TestWindowsDelayedTamperCollected)$'
+        run: go test -v ./internal/review -count=1 -run '^(TestProcessTableHasIdentity|TestChildExitingDuringRecheckIsNotLeftover|TestChildExitingLateInTheRecheckIsNotLeftover|TestLeftoverIsRejectedCollectedAndAttributed|TestAbnormalEndsSkipTheRecheck|TestWindowsDelayedTamperCollected)$'
       - name: Directed dead-end tests
         if: ${{ !cancelled() }}
         env:

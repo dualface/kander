@@ -5,6 +5,7 @@ package review
 import (
 	"cmp"
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"time"
@@ -17,7 +18,17 @@ const (
 	reviewerRecheckLimit = time.Second
 	recheckSnapshotLimit = 500 * time.Millisecond
 	recheckPollInterval  = 50 * time.Millisecond
+	// recheckSettleMargin is kept at the end of reviewerRecheckLimit when the extension plans one more
+	// observation. It decides only whether to start one and never shortens its budget.
+	recheckSettleMargin = 50 * time.Millisecond
 )
+
+// recheckClock supplies time and snapshots for one group observation.
+type recheckClock struct {
+	now   func() time.Time
+	sleep func(time.Duration)
+	table func(limit time.Duration, hard time.Time) (map[int]procInfo, error)
+}
 
 // memberKey is a process incarnation: one PID with two start times is two members.
 type memberKey struct {
@@ -31,10 +42,11 @@ type groupObserver struct {
 	leader  int
 	tracker *reviewerProcessTree
 	members map[memberKey]*processMember
+	clock   recheckClock
 }
 
-func newGroupObserver(lp *launchedProcess) *groupObserver {
-	o := &groupObserver{leader: lp.cmd.Process.Pid, members: map[memberKey]*processMember{}}
+func newGroupObserver(lp *launchedProcess, clock recheckClock) *groupObserver {
+	o := &groupObserver{leader: lp.cmd.Process.Pid, members: map[memberKey]*processMember{}, clock: clock}
 	if lp.tracker != nil && lp.tracker.observed {
 		o.tracker = lp.tracker
 	}
@@ -51,8 +63,12 @@ func (o *groupObserver) attributed(key memberKey) bool {
 
 // observe records one bounded snapshot and returns the live members it holds. Group membership decides alone:
 // a reused PID outside the group is a stranger, and a new incarnation inside it is a member.
-func (o *groupObserver) observe(limit time.Duration) (map[memberKey]bool, error) {
-	table, err := boundedProcessTable(limit)
+//
+// The read ends after limit, or at hard when that comes first; a zero hard sets no absolute end. The recheck
+// passes its own end as hard, because a delay before the read starts would otherwise move the end of a short
+// budget past the end of the recheck.
+func (o *groupObserver) observe(limit time.Duration, hard time.Time) (map[memberKey]bool, error) {
+	table, err := o.clock.table(limit, hard)
 	if err != nil {
 		return nil, err
 	}
@@ -69,19 +85,73 @@ func (o *groupObserver) observe(limit time.Duration) (map[memberKey]bool, error)
 	return live, nil
 }
 
-// recheck polls until no unattributed member is left or the limit ends. It returns the last observation.
+// recheck polls until no unattributed member is left or the limit ends. It returns the last completed
+// observation, which holds an unattributed member whenever the error is nil and the recheck stopped on time.
+//
+// The schedule has two parts. The original schedule observes, waits recheckPollInterval, and stops once the
+// next observation could no longer have the full recheckSnapshotLimit. It is the unchanged prefix: it reads at
+// the same moments with the same budgets as before, so everything it let through is still let through. The
+// extension continues where the original stopped. It reserves the measured duration of the last observation
+// and recheckSettleMargin at the end of reviewerRecheckLimit, and starts another observation only when that
+// fits, so a slow ps is not followed by a read that the limit would cut off. Two exceptions keep it useful
+// with slow snapshots. The poll wait shrinks, down to none, so the next observation starts as early as the
+// cadence of the last one allows, and the second observation is attempted even when it does not fit, because
+// one completed observation is a weak basis. After two completed observations a read that does not fit is not
+// started. The budget of an observation is never shortened for that: it is the smaller of
+// recheckSnapshotLimit and the time left, in both parts.
 func (o *groupObserver) recheck() (map[memberKey]bool, error) {
-	deadline := time.Now().Add(reviewerRecheckLimit)
+	clock := o.clock
+	deadline := clock.now().Add(reviewerRecheckLimit)
+	planUntil := deadline.Add(-recheckSettleMargin)
+	var last map[memberKey]bool
+	completed := 0
 	for {
-		live, err := o.observe(min(recheckSnapshotLimit, time.Until(deadline)))
+		began := clock.now()
+		budget := min(recheckSnapshotLimit, deadline.Sub(began))
+		if completed >= 1 && budget <= 0 {
+			// A sleep overshot the limit. The last completed observation decides.
+			return last, nil
+		}
+		live, err := o.observe(budget, deadline)
 		if err != nil {
+			// A read cut off by the limit before it got its full budget is not a failure when an earlier
+			// observation completed: that one decides, and its unattributed member still rejects the result.
+			// The read ends at the end of the recheck when a delay before it moved its own end past that
+			// point, so a cancellation at the end of the recheck is a cut-off whatever budget was planned.
+			cutOff := budget < recheckSnapshotLimit || !clock.now().Before(deadline)
+			if completed >= 1 && cutOff && errors.Is(err, context.DeadlineExceeded) {
+				return last, nil
+			}
 			return nil, err
 		}
-		if !o.hasUnattributed(live) || time.Until(deadline) < recheckPollInterval+recheckSnapshotLimit {
+		completed++
+		last = live
+		if !o.hasUnattributed(live) {
 			return live, nil
 		}
-		time.Sleep(recheckPollInterval)
+		now := clock.now()
+		next := now.Add(recheckPollInterval)
+		if deadline.Sub(now) < recheckPollInterval+recheckSnapshotLimit {
+			// The original schedule stops here. Another observation takes as long as the last one did.
+			took := now.Sub(began)
+			if next.Add(took).After(planUntil) {
+				next = laterOf(now, began.Add(recheckPollInterval))
+			}
+			if !next.Before(planUntil) || (completed >= 2 && next.Add(took).After(planUntil)) {
+				return last, nil
+			}
+		}
+		if next.After(now) {
+			clock.sleep(next.Sub(now))
+		}
 	}
+}
+
+func laterOf(a, b time.Time) time.Time {
+	if b.After(a) {
+		return b
+	}
+	return a
 }
 
 func (o *groupObserver) hasUnattributed(live map[memberKey]bool) bool {
@@ -134,14 +204,18 @@ func (o *groupObserver) classifiedMembers(live map[memberKey]bool, recheck bool,
 // timeout, an interrupt, or a failed exit has no result to protect, so the members are recorded once. The
 // second result is true when the last observation found the group empty.
 func observeReviewerGroup(lp *launchedProcess, recheck bool) (processCollection, bool) {
-	o := newGroupObserver(lp)
+	o := newGroupObserver(lp, recheckClock{now: time.Now, sleep: time.Sleep, table: boundedProcessTable})
+	return o.collect(recheck)
+}
+
+func (o *groupObserver) collect(recheck bool) (processCollection, bool) {
 	started := time.Now()
 	var live map[memberKey]bool
 	var err error
 	if recheck {
 		live, err = o.recheck()
 	} else {
-		live, err = o.observe(recheckSnapshotLimit)
+		live, err = o.observe(recheckSnapshotLimit, time.Time{})
 	}
 	evidence := &processEvidence{Schema: 1, LeaderPID: o.leader, Cleanup: processCleanup{Sigkill: sigkillPending}}
 	if recheck {
@@ -157,23 +231,44 @@ func observeReviewerGroup(lp *launchedProcess, recheck bool) (processCollection,
 
 // boundedProcessTable keeps a snapshot inside its budget even when the read ignores cancellation, which the
 // /proc walk does.
-func boundedProcessTable(limit time.Duration) (map[int]procInfo, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), limit)
+func boundedProcessTable(limit time.Duration, hard time.Time) (map[int]procInfo, error) {
+	end := time.Now().Add(limit)
+	if !hard.IsZero() && hard.Before(end) {
+		end = hard
+	}
+	ctx, cancel := context.WithDeadline(context.Background(), end)
 	defer cancel()
 	type result struct {
-		table map[int]procInfo
-		err   error
+		table    map[int]procInfo
+		err      error
+		finished time.Time
 	}
 	done := make(chan result, 1)
 	read := readProcessTable
 	go func() {
 		table, err := read(ctx)
-		done <- result{table, err}
+		done <- result{table, err, time.Now()}
 	}()
 	select {
 	case r := <-done:
-		return r.table, r.err
+		return settleTableRead(ctx, r.finished, r.table, r.err)
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+// settleTableRead decides what a finished read means once its budget may have ended. The caller waits on the
+// context and the read at once, so either can arrive first. A read that finished after the deadline is the
+// deadline, whatever it returned: its table was taken after the limit, and a late success must not replace
+// the conclusion of the last observation inside it. A read that failed because the cancellation killed it is
+// the deadline too. A read that finished before the deadline keeps its own result, also when it is received
+// late.
+func settleTableRead(ctx context.Context, finished time.Time, table map[int]procInfo, err error) (map[int]procInfo, error) {
+	if deadline, ok := ctx.Deadline(); ok && finished.After(deadline) {
+		return nil, context.DeadlineExceeded
+	}
+	if err != nil && ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	return table, err
 }

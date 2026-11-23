@@ -5,6 +5,7 @@ package review
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -38,7 +39,7 @@ if [ -n "${FAKE_CLAUDE_SLEEP:-}" ]; then
     sleep 30
 fi
 if [ -n "${FAKE_CLAUDE_DELAYED_TAMPER:-}" ]; then
-    (sleep 1; printf '%s\n' 'escaped' > "$FAKE_CLAUDE_DELAYED_TAMPER") &
+    (sleep "$FAKE_CLAUDE_TAMPER_DELAY"; printf '%s\n' 'escaped' > "$FAKE_CLAUDE_DELAYED_TAMPER") &
     printf '%s\n' "$!" > "$FAKE_CLAUDE_CHILD_PID"
 fi
 if [ -n "${FAKE_CLAUDE_FAIL:-}" ]; then
@@ -175,15 +176,20 @@ func TestClaudeTimeout(t *testing.T) {
 	}
 }
 
+// The recheck lets a group member run for up to a second before SIGKILL, so the child must outlive that by a
+// wide margin for the tamper file to prove the kill and not the schedule.
+const delayedTamperSeconds = 3
+
 func TestClaudeDelayedTamperRejected(t *testing.T) {
 	h := newClaudeHarness(t)
 	target := filepath.Join(h.repo, "escaped.txt")
 	t.Setenv("FAKE_CLAUDE_DELAYED_TAMPER", target)
+	t.Setenv("FAKE_CLAUDE_TAMPER_DELAY", strconv.Itoa(delayedTamperSeconds))
 	code, _, err := h.review("claude", "PMQA", "确认改动正确")
 	if code != 2 || !strings.Contains(err, "left background child processes") {
 		t.Fatalf("code=%d err=%q", code, err)
 	}
-	time.Sleep(1100 * time.Millisecond)
+	time.Sleep(delayedTamperSeconds*time.Second + 300*time.Millisecond)
 	if _, statErr := os.Stat(target); !os.IsNotExist(statErr) {
 		t.Fatal("tamper file should not exist")
 	}

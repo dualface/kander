@@ -228,6 +228,30 @@ func TestChildExitingDuringRecheckIsNotLeftover(t *testing.T) {
 	}
 }
 
+// TestChildExitingLateInTheRecheckIsNotLeftover uses a real child that exits on its own about 700 ms after
+// the leader, which is after the observations the recheck made before it used the full window. A real clock
+// and the real process table drive it, and it runs on macOS too, where the table comes from ps.
+func TestChildExitingLateInTheRecheckIsNotLeftover(t *testing.T) {
+	h, root, args := archiveHarness(t)
+	reviewerChild(t, h, "(sleep 0.7) >/dev/null 2>&1 &")
+	code, out, stderr := captureRun(t, args)
+	if code != 0 || !strings.Contains(out, "REPORT BODY") {
+		t.Fatalf("%d %q %s", code, out, stderr)
+	}
+	evidence, _ := archivedEvidence(t, root, "stable")
+	if !evidence.Recheck.Performed || evidence.Cleanup.Sigkill != sigkillNotSent || !evidence.Cleanup.Collected || evidence.Observation.Failed {
+		t.Fatalf("%+v", evidence)
+	}
+	if len(evidence.Members) == 0 {
+		t.Fatal("the exiting child must be recorded")
+	}
+	for _, m := range evidence.Members {
+		if m.Outcome != memberExited {
+			t.Fatalf("%+v", m)
+		}
+	}
+}
+
 func TestLeftoverIsRejectedCollectedAndAttributed(t *testing.T) {
 	h, root, args := archiveHarness(t)
 	pidFile := filepath.Join(h.root, "child.pid")

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix (v2, POSIX): reviewer cleanup continues observing eligible child processes within the one-second recheck budget (#27). Each snapshot respects the recheck deadline. A snapshot cut short by that deadline leaves the last completed observation in effect. The process evidence documentation explains how to read a leftover record and the separate cleanup result.
+
 - In v2, PMQA evaluates confirmed task commitments and requires repair-range evidence for new incremental gate findings. This update removes the reviewer file-line limit. Executing agents decide how to handle Security findings. New waivers use `accepted-risk` without legacy timestamps. Historical waivers remain readable and replayable.
 
 - Feature (v2 client): `kander dispatch prepare` accepts read-only `check-integration` requests for group candidates. It checks the closed review range, patch equality when history was rewritten, and containment of the observed target tip. Group assembly accepts verified merge candidates, and ancestry failures in wrap-up identify the commits involved.
