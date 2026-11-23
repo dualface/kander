@@ -147,16 +147,17 @@ func PlanUninstall(paths config.InstallPaths) UninstallPlan {
 	items, dirs := planRulesDirRemoval(paths.RulesDir)
 	plan.Items = append(plan.Items, items...)
 	plan.Dirs = dirs
+	var previousSkillDir string
 	for _, agent := range []string{"codex", "claude"} {
 		dir, err := leaderTarget(agent, paths)
 		if err != nil {
 			plan.Items = append(plan.Items, UninstallItem{Action: UninstallKeep, Path: agent, Reason: err.Error()})
 			continue
 		}
-		if _, ok := seen[dir]; dir == "" || ok {
+		if dir == "" || sameSkillDirectory(previousSkillDir, dir) {
 			continue
 		}
-		seen[dir] = struct{}{}
+		previousSkillDir = dir
 		items, dirs := planLeaderRemoval(dir, paths)
 		plan.Items = append(plan.Items, items...)
 		plan.Dirs = append(plan.Dirs, dirs...)

@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/fs"
@@ -113,8 +114,29 @@ func inspectLeaderSkill(dir string, paths config.InstallPaths) (leaderSkill, err
 	if err != nil || !found {
 		return s, err
 	}
-	s.managed = json.Unmarshal(data, &s.receipt) == nil && s.receipt.Target == dir && s.receipt.Scope == paths.RulesDir && s.receipt.Files != nil
+	s.managed = json.Unmarshal(data, &s.receipt) == nil && sameSkillDirectory(s.receipt.Target, dir) && sameSkillDirectory(s.receipt.Scope, paths.RulesDir) && s.receipt.Files != nil
 	return s, nil
+}
+
+// Case can differ on a case-insensitive volume. Compare pinned directory
+// identities before accepting a variant; unrelated receipt paths are never opened.
+func sameSkillDirectory(recorded, target string) bool {
+	if recorded == target {
+		return true
+	}
+	if !strings.EqualFold(recorded, target) {
+		return false
+	}
+	anchor, err := fileAnchor(target)
+	if err != nil {
+		return false
+	}
+	actual, err := fs.DirectoryIdentity(anchor, target)
+	if err != nil {
+		return false
+	}
+	original, err := fs.DirectoryIdentity(anchor, recorded)
+	return err == nil && actual == original
 }
 
 func (s leaderSkill) planFiles() ([]PlannedFile, error) {

@@ -258,3 +258,48 @@ func TestLeaderSkillSkipsLinkedParent(t *testing.T) {
 		t.Fatal("modified skill through linked parent")
 	}
 }
+
+func TestLeaderSkillConfigRootCaseChange(t *testing.T) {
+	home := setupInstallHome(t)
+	root := filepath.Join(home, "ClaudeRoot")
+	variant := filepath.Join(home, "clauderoot")
+	if err := os.Mkdir(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CLAUDE_CONFIG_DIR", root)
+	req := Request{Language: "en", Source: stubBinary(t)}
+	result, err := Perform(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(root, "skills", leaderName)
+	other := filepath.Join(variant, "skills", leaderName)
+	t.Setenv("CLAUDE_CONFIG_DIR", variant)
+	if _, err := os.Stat(variant); os.IsNotExist(err) {
+		// Independent directories on a case-sensitive volume can hold
+		// identical copies, including the receipt.
+		if err := os.CopyFS(other, os.DirFS(dir)); err != nil {
+			t.Fatal(err)
+		}
+		if err := ApplyUninstall(PlanUninstall(result.Paths), io.Discard); err != nil {
+			t.Fatal(err)
+		}
+		assertSkill(t, other)
+		return
+	} else if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(dir, "references", "deployment.md")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Perform(req); err != nil {
+		t.Fatal(err)
+	}
+	assertSkill(t, other)
+	if err := ApplyUninstall(PlanUninstall(result.Paths), io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(dir); !os.IsNotExist(err) {
+		t.Fatalf("same skill remains after uninstall using alternate case: %v", err)
+	}
+}
