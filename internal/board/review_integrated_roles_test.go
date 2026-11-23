@@ -106,7 +106,7 @@ func TestWaiversForOriginalAndIntegratedSecurityRoles(t *testing.T) {
 			findings.Findings = []ReviewFinding{f}
 			run := gateRun(t, root, archiveInput([]string{id}, "risk", tc.role), findings)
 			assignGate(t, root, run, map[string][]string{f.ID: {id}})
-			d := ReviewDisposition{RecordID: "accepted-risk", RunID: run.RunID, BatchID: run.BatchID, FindingID: f.ID, TaskID: id, Author: "codex", ReportHash: run.Hashes["report.md"], Original: f.Text, Status: "waived", Basis: "verified risk", Waiver: &ReviewWaiver{Policy: "accepted-risk", Decision: "explicit user acceptance"}}
+			d := ReviewDisposition{RecordID: "accepted-risk", RunID: run.RunID, BatchID: run.BatchID, FindingID: f.ID, TaskID: id, Author: "codex", ReportHash: run.Hashes["report.md"], Original: f.Text, Status: "waived", Basis: "verified risk", Waiver: &ReviewWaiver{Policy: "accepted-risk", Decision: "executing agent retains the documented risk"}}
 			err := SubmitReviewDisposition(root, d, transactionSnapshot(t, root, id).Revision)
 			if !tc.security {
 				if err == nil {

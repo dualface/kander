@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="800" height="1672" viewBox="0 0 800 1672" role="img" aria-labelledby="rv-title rv-desc">
   <title id="rv-title">Kander レビューフロー</title>
-  <desc id="rv-desc">元の四ロールを保持し、二つの任意統合ロールを追加します。第1ステージは PM と QA、または PMQA（PM の契約確認後に QA の品質確認）。第2ステージは CSA/Hacker、または Security（CSA の信頼境界分析後に Hacker の攻撃チェーン確認、同じ根本原因は一件）。統合ロールは既定で skip。有効にすると構成元の二ロールを skip にします。安全性の修正は有効な QA または PMQA が増分再確認し、機能変更は有効な PM も確認します。後続の第1ステージの修正が安全性コードを実質変更すると、有効な安全ロールが増分再確認します。確認済みの安全性指摘は修正、リスク受容、統合中止をユーザーが決定します。看板の安全性指摘のみ15分間決定がなければ無視できますが、PASS やリスク受容ではありません。</desc>
+  <desc id="rv-desc">PMQA はタスクの契約とコード品質を確認します。Security は信頼境界と到達可能な攻撃経路を調べます。担当エージェントが各指摘を検証し、修正の要否を判断して残るリスクを記録します。</desc>
 
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
@@ -77,13 +77,13 @@
   <circle cx="90" cy="732" r="4" fill="#c4b5fd"/>
   <text x="106" y="737" class="s bt">Security：信頼境界の後に攻撃チェーン。同じ根本原因は一件</text>
   <circle cx="90" cy="758" r="4" fill="#c4b5fd"/>
-  <text x="106" y="763" class="s bt">確認済みの blocking / high / medium はユーザーが決定</text>
+  <text x="106" y="763" class="s bt">担当エージェントが各指摘を検証し、修正の要否を判断</text>
   <circle cx="90" cy="784" r="4" fill="#c4b5fd"/>
-  <text x="106" y="789" class="s bt">三択: 修正して再レビュー / リスク受容 / 統合中止</text>
+  <text x="106" y="789" class="s bt">残るリスクの根拠と影響を記録</text>
   <circle cx="90" cy="810" r="4" fill="#c4b5fd"/>
-  <text x="106" y="815" class="s bt">看板のみ：15 分間決定なしなら無視。PASS ではない</text>
+  <text x="106" y="815" class="s bt">残るリスクと理由を完了報告に記載</text>
 
-  <text x="106" y="841" class="s bt">有効な QA/PMQA が修正を確認。PM は機能変更も確認。</text>
+  <text x="106" y="841" class="s bt">機械的な修正を除き、Security が安全性の修正を再確認。</text>
   <text x="106" y="867" class="s bt">後続修正が安全性コードを実質変更すると、安全ロールが再確認。</text>
 
   <path d="M400 884  V908" class="flow"/>
@@ -96,7 +96,7 @@
   <text x="136" y="980" class="s pn">級の欠落は無効な結論。メイン Agent が補って判定</text>
   <line x1="80" y1="1004" x2="720" y2="1004" stroke="#eef1f6" stroke-width="1.5"/>
   <circle cx="90" cy="1028" r="4" fill="#5eead4"/>
-  <text x="106" y="1033" class="s bt">blocking、high、medium → 必修</text>
+  <text x="106" y="1033" class="s bt">blocking、high、medium → 各指摘の処置を記録</text>
   <circle cx="90" cy="1054" r="4" fill="#5eead4"/>
   <text x="106" y="1059" class="s bt">low、recommend、suggest → 統合を妨げない</text>
 
@@ -110,11 +110,11 @@
   <text x="136" y="1172" class="s pn">確認せずに reviewer の結論を受け入れ・却下することは禁止</text>
   <line x1="80" y1="1196" x2="720" y2="1196" stroke="#eef1f6" stroke-width="1.5"/>
   <circle cx="90" cy="1220" r="4" fill="#fbbf24"/>
-  <text x="106" y="1225" class="s bt">成立 → 級に応じて処理。必修は修正してコミット</text>
+  <text x="106" y="1225" class="s bt">成立 → ロールと重大度に応じて処置</text>
   <circle cx="90" cy="1246" r="4" fill="#fbbf24"/>
   <text x="106" y="1251" class="s bt">不成立 → ファイル、行番号、コマンド出力等の根拠を記録</text>
   <circle cx="90" cy="1272" r="4" fill="#fbbf24"/>
-  <text x="106" y="1277" class="s bt">確認不能 → ユーザーの決定に委ねる。不成立扱いは不可</text>
+  <text x="106" y="1277" class="s bt">確認不能 → 不足する証拠を記録し、ロールの規則を適用</text>
 
   <path d="M400 1294 V1318" class="flow"/>
 

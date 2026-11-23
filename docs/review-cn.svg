@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="800" height="1672" viewBox="0 0 800 1672" role="img" aria-labelledby="rv-title rv-desc">
   <title id="rv-title">Kander 审核流程</title>
-  <desc id="rv-desc">保留四个原角色，新增可选组合角色，阶段仍为两个。第一阶段 PM 与 QA 并行，或由 PMQA 先查 PM 契约再查 QA 质量；安全阶段运行 CSA/Hacker，或由 Security 先追踪 CSA 信任边界再验证 Hacker 攻击链，同根因只报一次。组合角色默认 skip，启用时对应两个原角色设 skip。安全修复由已启用 QA 或 PMQA 增量复审；功能变化也由已启用 PM 复核。第一阶段后续修复实质改动安全代码时，已启用安全角色增量复审。核实的安全发现交用户决定修复、接受风险或停止；仅看板安全发现可在15分钟无决策后超时忽略，不等于 PASS 或接受风险。</desc>
+  <desc id="rv-desc">PMQA 检查任务契约和代码质量。Security 追踪信任边界和现实可达的攻击路径。任务执行 agent 核实每项安全发现，决定是否修复，并记录保留的风险。</desc>
 
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
@@ -77,13 +77,13 @@
   <circle cx="90" cy="732" r="4" fill="#c4b5fd"/>
   <text x="106" y="737" class="s bt">Security 先追踪信任边界，再验证攻击链；同根因仅报一次</text>
   <circle cx="90" cy="758" r="4" fill="#c4b5fd"/>
-  <text x="106" y="763" class="s bt">经核实的 blocking / high / medium 交用户决策</text>
+  <text x="106" y="763" class="s bt">任务执行 agent 核实各项发现，自行决定是否修复</text>
   <circle cx="90" cy="784" r="4" fill="#c4b5fd"/>
-  <text x="106" y="789" class="s bt">三选一: 修复重审 / 接受风险 / 停止集成</text>
+  <text x="106" y="789" class="s bt">记录保留风险的证据和影响</text>
   <circle cx="90" cy="810" r="4" fill="#c4b5fd"/>
-  <text x="106" y="815" class="s bt">仅看板任务：15 分钟无决策则忽略，不等于 PASS</text>
+  <text x="106" y="815" class="s bt">在交付说明中列出保留的风险和理由</text>
 
-  <text x="106" y="841" class="s bt">已启用 QA/PMQA 复审修复；PM 复核功能变化。</text>
+  <text x="106" y="841" class="s bt">由 Security 增量复审非机械性安全修复。</text>
   <text x="106" y="867" class="s bt">后续修复实质改动安全代码时，已启用安全角色增量复审。</text>
 
   <path d="M400 884  V908" class="flow"/>
@@ -96,7 +96,7 @@
   <text x="136" y="980" class="s pn">缺级视为无效结论, 由主代理补判</text>
   <line x1="80" y1="1004" x2="720" y2="1004" stroke="#eef1f6" stroke-width="1.5"/>
   <circle cx="90" cy="1028" r="4" fill="#5eead4"/>
-  <text x="106" y="1033" class="s bt">blocking, high, medium → 必修</text>
+  <text x="106" y="1033" class="s bt">blocking、high、medium → 逐项处置</text>
   <circle cx="90" cy="1054" r="4" fill="#5eead4"/>
   <text x="106" y="1059" class="s bt">low, recommend, suggest → 不阻塞集成</text>
 
@@ -110,11 +110,11 @@
   <text x="136" y="1172" class="s pn">禁止不加核实就接受或驳回 reviewer 结论</text>
   <line x1="80" y1="1196" x2="720" y2="1196" stroke="#eef1f6" stroke-width="1.5"/>
   <circle cx="90" cy="1220" r="4" fill="#fbbf24"/>
-  <text x="106" y="1225" class="s bt">成立 → 按档位处理, 必修档修复并提交</text>
+  <text x="106" y="1225" class="s bt">成立 → 按角色和级别处置</text>
   <circle cx="90" cy="1246" r="4" fill="#fbbf24"/>
   <text x="106" y="1251" class="s bt">不成立 → 写明文件, 行号或命令输出等依据</text>
   <circle cx="90" cy="1272" r="4" fill="#fbbf24"/>
-  <text x="106" y="1277" class="s bt">无法核实 → 交用户决策, 不得按不成立处理</text>
+  <text x="106" y="1277" class="s bt">无法核实 → 记录缺失的证据，并按角色规则处置</text>
 
   <path d="M400 1294 V1318" class="flow"/>
 

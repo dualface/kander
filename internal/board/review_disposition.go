@@ -408,6 +408,10 @@ func appendDisposition(tx *Transaction, run ReviewRun, d *ReviewDisposition) (le
 			previous = record.RecordID
 		}
 	}
+	// Historical waivers remain readable and replayable under their original rules.
+	if w := d.Waiver; w != nil && (w.Policy != "accepted-risk" || w.SentAt != "" || w.TimeoutAt != "") {
+		return ledger, false, reviewError("new waivers require accepted-risk and omit legacy timestamps")
+	}
 	if d.PreviousRecordID != previous {
 		return ledger, false, reviewError("disposition predecessor CAS conflict")
 	}

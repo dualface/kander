@@ -406,7 +406,7 @@ The orchestrator carries the correction in a `--kind sync` dispatch without evid
 | `unverifiable` | Blocking | **Yes** | Cannot reproduce. |
 | `fixed` | Blocking / Non-blocking | No | Must supply `fix_commit` (strictly later than target) and `verification`. |
 | `rejected` | Blocking / Non-blocking | Enters unresolved list | Must state factual basis. |
-| `waived` | Security only | No | Requires `accepted-risk` or 15-minute `timed-out` notice. |
+| `waived` | Security only | No | The executing agent records its decision to retain the risk (`accepted-risk`) and the basis. |
 | `deferred` | Non-blocking only | No | Must state rationale. |
 | `withdrawn` | Excluded member only | No | Written by the orchestrator. Requires `withdrawal.exclusion_id` and `withdrawal.decision`. Not a fix. |
 

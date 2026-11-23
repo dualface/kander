@@ -500,25 +500,60 @@ func TestFailedRunRequiresExplicitSuccessfulReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-func TestSecurityWaiverPreservesNonPassStatus(t *testing.T) {
+func TestHistoricalSecurityTimeoutCanReplayAndClose(t *testing.T) {
 	root := tempBoard(t)
 	id := gateCard(t, root, "security-waiver")
 	requirements := noReviewRequirements()
 	requirements["Security"] = "required"
 	gatePlan(t, root, []string{id}, requirements)
-	f := ReviewFinding{ID: "Security-01", Tier: "high", Text: "已证实的安全问题", Evidence: "x:1"}
+	f := ReviewFinding{ID: "Security-01", Tier: "medium", Text: "已证实的安全问题", Evidence: "x:1"}
 	findings := emptyFindings()
 	findings.Findings = []ReviewFinding{f}
 	run := gateRun(t, root, archiveInput([]string{id}, "security", "Security"), findings)
 	assignGate(t, root, run, map[string][]string{f.ID: {id}})
-	d := ReviewDisposition{RecordID: "accepted-risk", RunID: run.RunID, BatchID: run.BatchID, FindingID: f.ID, TaskID: id, Author: "codex", ReportHash: run.Hashes["report.md"], Original: f.Text, Status: "waived", Basis: "已独立确认触发及影响", Waiver: &ReviewWaiver{Policy: "accepted-risk", Decision: "用户针对本项明确接受风险的记录"}}
-	s := transactionSnapshot(t, root, id)
-	if err := SubmitReviewDisposition(root, d, s.Revision); err != nil {
+	d := ReviewDisposition{
+		RecordID: "legacy-timeout", RunID: run.RunID, BatchID: run.BatchID, FindingID: f.ID,
+		TaskID: id, Author: "codex", ReportHash: run.Hashes["report.md"], Original: f.Text,
+		Status: "waived", Basis: "historical notice",
+		Waiver: &ReviewWaiver{Policy: "timed-out", Decision: "notice delivered",
+			SentAt: "2025-01-02T12:00:00Z", TimeoutAt: "2025-01-02T12:15:00Z"},
+	}
+	revision := transactionSnapshot(t, root, id).Revision
+	if err := SubmitReviewDisposition(root, d, revision); err == nil {
+		t.Fatal("new timed-out waiver accepted")
+	}
+
+	stale := *d.Waiver
+	stale.Policy = "accepted-risk"
+	withTimestamps := d
+	withTimestamps.Waiver = &stale
+	if err := SubmitReviewDisposition(root, withTimestamps, revision); err == nil {
+		t.Fatal("new waiver with legacy timestamps accepted")
+	}
+
+	// Reconstruct the immutable originals written by an older version.
+	d.RecordedAt = d.Waiver.TimeoutAt
+	d.SubmittedRevision = revision
+	err := WithTransaction(root, reviewScope(run.TaskIDs, false), func(tx *Transaction) error {
+		var ledger dispositionLedger
+		if _, err := readReviewJSON(tx, ledgerName(run.RunID), &ledger); err != nil {
+			return err
+		}
+		ledger.Records = append(ledger.Records, d)
+		if err := tx.Put(id, dispositionPath(d), reviewJSON(d)); err != nil {
+			return err
+		}
+		return tx.PutGroup(reviewControlGroup, ledgerName(run.RunID), reviewJSON(ledger))
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
+	if err := SubmitReviewDisposition(root, d, transactionSnapshot(t, root, id).Revision); err != nil {
+		t.Fatalf("replay of historical waiver: %v", err)
+	}
 	c, err := gateClose(t, root, map[string]ReviewRoleConclusion{"Security": passRole(run)})
-	if err != nil || c.RoleStatuses["Security"] != "accepted-risk" {
-		t.Fatalf("waiver became PASS %+v %v", c.RoleStatuses, err)
+	if err != nil || c.RoleStatuses["Security"] != "timed-out" {
+		t.Fatalf("historical waiver: %+v %v", c.RoleStatuses, err)
 	}
 }
 func TestPartialRunPublicationCannotCloseEvenWithNoFindings(t *testing.T) {

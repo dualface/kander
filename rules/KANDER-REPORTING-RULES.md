@@ -12,7 +12,7 @@ Loaded only when `rules.reporting=true`. This file defines the reporting format 
 - `Acceptance` counts the ticked `- [x]` items of `ACCEPTANCE_CRITERIA` as `<completed>` and all top-level items as `<total>`.
 - Whoever ends the task reports; a session switch or takeover does not exempt this, and the orchestration summary does not replace the per-card report.
 - Verification records actual results only; failures, unexecuted steps, and environment blocks are never written as passed. Use the full 40-character SHA for the final commit. Write "all completed" for wrap-up only when every applicable step succeeded; otherwise describe each exception.
-- Unresolved issues list known defects, verification gaps, and follow-up tasks; count one root cause once. Only when `rules.review=true` or the user explicitly requested a full review this time, record review items by the categories in `KANDER-REVIEW-RULES.md`, without loading a disabled review module. For a security review timeout, attach the send time and the timeout time.
+- Unresolved issues list known defects, verification gaps, and follow-up tasks; count one root cause once. Only when `rules.review=true` or the user explicitly requested a full review this time, record review items by the categories in `KANDER-REVIEW-RULES.md`, without loading a disabled review module.
 - Write the report, field labels included, in the card's `LANGUAGE` (or the `agent_language`); the template below fixes the fields and their order, not their English wording. Keep card states, `None`, `N/A`, `Not executed`, paths, SHAs, and command lines verbatim.
 
 ```markdown
@@ -25,7 +25,7 @@ Loaded only when `rules.reporting=true`. This file defines the reporting format 
 - Review: <reviewer, status, and summary for PMQA (stage one) and Security (stage two); include N/A with the skip/exemption basis and fixes made during review>
 - Wrap-up: <full SHA | N/A>; <integration result | N/A>; <main worktree sync, worktree, branch, temporary review files, `kander check` all completed or exceptions item by item>
 - Unresolved issues (<N>): <None, or one item per line below>
-  - `[source or category][tier or status] <issue>; impact: <...>; reason: <...>` <for a timed-out item, add the send time and the timeout time>
+  - `[source or category][tier or status] <issue>; impact: <...>; reason: <...>`
 - Summary: <one-sentence summary>
   - Code branch: <branch where the code finally lives | N/A>
   - Final card state: <done | archived (<result>) | trash | working (blocked) | review (blocked)>
