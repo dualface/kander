@@ -1,6 +1,7 @@
 package process
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -185,6 +186,23 @@ func TestBatchQuoteHandlesEmptyQuotesAndTrailingBackslash(t *testing.T) {
 	}
 }
 
+func TestNativeQuote(t *testing.T) {
+	for argument, want := range map[string]string{
+		``:            `""`,
+		`a"b`:         `"a\"b"`,
+		`back\"quote`: `"back\\\"quote"`,
+		`dir space\`:  `"dir space\\"`,
+		`C:\a b\c`:    `"C:\a b\c"`,
+	} {
+		if got, err := quoteWindowsNativeArgument(argument); err != nil || got != want {
+			t.Errorf("quote %q = %q %v, want %q", argument, got, err, want)
+		}
+	}
+	if _, err := quoteWindowsNativeArgument("a\x00b"); !errors.Is(err, ErrNUL) {
+		t.Errorf("NUL accepted: %v", err)
+	}
+}
+
 func TestBatchIgnoresRelativeComspec(t *testing.T) {
 	withWindows(t)
 	program := AgentProgram{Path: `C:\Agents\codex.cmd`, Batch: true}
@@ -338,7 +356,7 @@ func shellEnvName(t *testing.T, invocation ProcessInvocation, index int) string 
 }
 
 // On Windows an invocation bound for a terminal container always takes cmd.exe's
-// %VAR% form, batch or not: when PowerShell hands arguments to a native exe it
+// variable form, batch or not: when PowerShell hands arguments to a native exe it
 // rebuilds the command line and swallows embedded double quotes.
 // Directly spawned invocations must keep native argv, or the console launcher
 // would report cmd.exe's PID instead of the agent's.
@@ -361,6 +379,14 @@ func TestShellInvocationUsesVariableFormForNonBatch(t *testing.T) {
 	}
 	if len(shell.ShellEnv) != 3 {
 		t.Fatalf("ShellEnv = %#v", shell.ShellEnv)
+	}
+	// A native program is reached by delayed references, which cmd.exe expands
+	// after parsing, and by the quote escape every C runtime shares.
+	if shell.Argv[3] != "/v:on" || strings.Count(references, "!") != 2*3 || strings.Contains(references, "%") {
+		t.Fatalf("native references: %#v", shell.Argv)
+	}
+	if got, want := shell.ShellEnv[shellEnvName(t, shell, 2)], `"model_reasoning_effort=\"medium\""`; got != want {
+		t.Fatalf("native encoding = %q, want %q", got, want)
 	}
 	for _, want := range []string{"codex.exe", `model_reasoning_effort=`} {
 		found := false

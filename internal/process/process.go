@@ -4,6 +4,7 @@
 // Task files get no POSIX permission or Windows ACL check; the agent is asked to delete one when it finishes, and a failed
 // deletion or a leftover file does not affect the result. Windows prefers the native .exe; when only .cmd/.bat exists it uses
 // an explicit cmd.exe /d /s /v:off /c with the encoded arguments carried in environment variables, never shell concatenation.
+// A native .exe typed into a pane shell uses /v:on and delayed references instead (see NewShellInvocation).
 package process
 
 import (
@@ -158,6 +159,34 @@ func windowsPathCandidates(name, suffix string) []string {
 	return out
 }
 
+// quoteWindowsNativeArgument quotes by the CommandLineToArgvW rule every C runtime
+// shares. Only a delayed !VAR! reference may carry the result through cmd.exe.
+func quoteWindowsNativeArgument(argument string) (string, error) {
+	if strings.ContainsRune(argument, 0) {
+		return "", ErrNUL
+	}
+	var quoted strings.Builder
+	quoted.WriteByte('"')
+	backslashes := 0
+	for _, character := range argument {
+		switch character {
+		case '\\':
+			backslashes++
+		case '"':
+			// The backslashes before a quote are doubled; one more escapes it.
+			quoted.WriteString(strings.Repeat(`\`, backslashes+1))
+			backslashes = 0
+		default:
+			backslashes = 0
+		}
+		quoted.WriteRune(character)
+	}
+	// So are those before the closing quote.
+	quoted.WriteString(strings.Repeat(`\`, backslashes))
+	quoted.WriteByte('"')
+	return quoted.String(), nil
+}
+
 func quoteWindowsBatchArgument(argument string) (string, error) {
 	if strings.ContainsRune(argument, 0) {
 		return "", ErrNUL
@@ -271,11 +300,18 @@ func NewProcessInvocation(program AgentProgram, arguments []string, environment 
 }
 
 // NewShellInvocation builds an invocation that another shell will run as a
-// single line (herdr pane, tmux window). On Windows it always takes cmd.exe's
-// %VAR% form, batch or not: when PowerShell hands arguments to a native exe it
-// rebuilds the command line, swallowing embedded double quotes, dropping empty
-// arguments and letting a trailing backslash escape the closing quote. Only the
-// variable-reference form restores argv byte for byte.
+// single line (herdr pane, tmux window). On Windows it always goes through
+// cmd.exe and variable references, batch or not: when PowerShell hands
+// arguments to a native exe it rebuilds the command line, swallowing embedded
+// double quotes, dropping empty arguments and letting a trailing backslash
+// escape the closing quote. Only a variable reference restores argv byte for byte.
+//
+// A batch program keeps %VAR% and doubled quotes, which hold when the script
+// parses %* again. A native program gets !VAR! and the \" escape: "" does not
+// mean one quote to every C runtime (CommandLineToArgvW and Go leave the quoted
+// argument there, so an odd number of quotes merged the arguments after it),
+// and \" is safe only because cmd.exe expands !VAR! after it parsed operators
+// and quotes, so it never reads the value as syntax.
 // On POSIX it is equivalent to NewProcessInvocation.
 func NewShellInvocation(program AgentProgram, arguments []string, environment map[string]string) (ProcessInvocation, error) {
 	return newInvocation(program, arguments, environment, true)
@@ -297,24 +333,28 @@ func newInvocation(program AgentProgram, arguments []string, environment map[str
 	if err != nil {
 		return ProcessInvocation{}, err
 	}
+	quote, reference, expansion := quoteWindowsBatchArgument, "%", "/v:off"
+	if !program.Batch {
+		quote, reference, expansion = quoteWindowsNativeArgument, "!", "/v:on"
+	}
 	references := make([]string, 0, len(values))
 	shell := make(map[string]string, len(values))
 	for index, value := range values {
 		variable := fmt.Sprintf("%s_%d", namespace, index)
-		encoded, err := quoteWindowsBatchArgument(value)
+		encoded, err := quote(value)
 		if err != nil {
 			return ProcessInvocation{}, err
 		}
 		child[variable] = encoded
 		shell[variable] = encoded
-		references = append(references, "%"+variable+"%")
+		references = append(references, reference+variable+reference)
 	}
 	interpreter, err := windowsCommandInterpreter(child)
 	if err != nil {
 		return ProcessInvocation{}, err
 	}
 	return ProcessInvocation{
-		Argv:     []string{interpreter, "/d", "/s", "/v:off", "/c", strings.Join(references, " ")},
+		Argv:     []string{interpreter, "/d", "/s", expansion, "/c", strings.Join(references, " ")},
 		Env:      child,
 		ShellEnv: shell,
 	}, nil
