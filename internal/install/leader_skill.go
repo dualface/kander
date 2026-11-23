@@ -274,8 +274,9 @@ func (s leaderSkill) install(paths config.InstallPaths) error {
 	return fs.WriteBytesAtomicInherited(s.anchor, stamp, record, true)
 }
 
-// Apply only to named payload files with the recorded installed digest. Never
-// use paths from a receipt. Keep a modified skill together with its references.
+// Receipt paths verify directory identity. Removal targets come from the current
+// install directory and fixed payload names, and must match their recorded digests.
+// Keep a modified skill together with its references.
 func planLeaderRemoval(dir string, paths config.InstallPaths) ([]UninstallItem, []string) {
 	keep := func(reason string) ([]UninstallItem, []string) {
 		return []UninstallItem{{Action: UninstallKeep, Path: dir, Reason: reason}}, nil
