@@ -11,7 +11,7 @@ func TestIntegratedReviewRolePromptsComposeHistoricalRoles(t *testing.T) {
 	if contract < 0 || quality <= contract || !strings.Contains(pmqa, "PM component owns explicit performance acceptance") || !strings.Contains(pmqa, "root cause once") || !strings.Contains(pmqa, "PMQA-prefixed finding IDs") {
 		t.Fatal("PMQA must cover original PM+QA duties without losing contract-before-quality order")
 	}
-	if !strings.Contains(pmqa, "1000 physical lines") || !strings.Contains(pmqa, "requirement table is analysis") {
+	if !strings.Contains(pmqa, "Find logic defects, regressions, incomplete fixes") || !strings.Contains(pmqa, "requirement table is analysis") {
 		t.Fatal("PMQA dropped original PM or QA clauses")
 	}
 	if !strings.Contains(pmqa, strings.TrimSpace(mustRoleRules(t, "PM"))) || !strings.Contains(pmqa, strings.TrimSpace(mustRoleRules(t, "QA"))) {
