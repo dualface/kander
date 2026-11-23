@@ -97,3 +97,24 @@ func TestDoctorRepairsOnlyEnabledManagedLeaderSkills(t *testing.T) {
 		t.Fatalf("doctor restored a document of a disabled agent: %v", err)
 	}
 }
+
+func TestDoctorKeepsLinkedLeaderSkillParent(t *testing.T) {
+	h := newHarness(t)
+	h.installFake(false)
+	h.writeConfig(defaultPayload(map[string]any{"launcher": "foreground", "language": "en"}))
+	linked := filepath.Join(h.home, ".claude", "skills")
+	if err := os.MkdirAll(filepath.Dir(linked), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := t.TempDir()
+	if err := os.Symlink(target, linked); err != nil {
+		t.Fatal(err)
+	}
+	code, _, out := h.run("doctor")
+	if code != 0 || !strings.Contains(out, linked) {
+		t.Fatalf("doctor=%d, expected a healthy report naming %s: %s", code, linked, out)
+	}
+	if entries, err := os.ReadDir(target); err != nil || len(entries) != 0 {
+		t.Fatalf("doctor wrote through the linked parent: %v, %v", entries, err)
+	}
+}

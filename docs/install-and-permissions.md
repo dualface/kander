@@ -50,7 +50,7 @@ Providers decide what is written, not whether or where. The gates differ by call
 
 An existing skill directory or link without a receipt for this scope and exact destination stays user-owned, even if its files match the bundle. A common Claude link to the shared directory continues to work. If an ancestor of a skill directory is a link, the installer reports the path, keeps its contents, and continues with the other selected destinations. Rerunning `kander install` restores missing managed files and updates unchanged ones using the installed digests in `.kander-install.json`. Locally edited files stay in place. Uninstall retains a locally edited bundle together with its references. For an unmodified bundle it removes its managed files and receipt, then prunes empty skill directories. Other files in those directories stay in place.
 
-`kander doctor` uses the receipt to restore missing skill documents and update unmodified ones for agents with `install_rules` enabled. To create a skill at a new destination, confirm that destination in `kander install`.
+`kander doctor` uses the receipt to restore missing skill documents and update unmodified ones for agents with `install_rules` enabled. It reports and skips destinations reached through linked directories. To create a skill at a new destination, confirm that destination in `kander install`.
 
 ### Rules Injection Switch and Uninstall
 

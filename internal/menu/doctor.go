@@ -229,7 +229,11 @@ func printDoctorWithBinaries(tools TerminalTools, repair bool, interactive bool,
 				healthy = reportRulesIntegration(paths, switches, repair) && healthy
 				healthy = reportAgentExtensions(paths, switches, repair) && healthy
 				if repair {
-					if err := install.RepairLeaderSkills(paths, switches); err != nil {
+					skipped, err := install.RepairLeaderSkills(paths, switches)
+					for _, reason := range skipped {
+						hint(reason.Error())
+					}
+					if err != nil {
 						warning(err.Error())
 						healthy = false
 					}

@@ -196,11 +196,12 @@ func (result *Result) installLeaderSkills(targets []leaderDestination) error {
 }
 
 // RepairLeaderSkills restores managed documents for enabled agents. A valid
-// receipt records the destination confirmed during installation.
-func RepairLeaderSkills(paths config.InstallPaths, switches config.InstallRules) error {
+// receipt records the destination confirmed during installation. Skipped
+// destinations are reported separately from errors that prevented repair.
+func RepairLeaderSkills(paths config.InstallPaths, switches config.InstallRules) ([]error, error) {
 	result := Result{Paths: paths}
 	err := result.ensureLeaderSkills(leaderDestinations(paths), switches, false)
-	return errors.Join(append(result.SkippedSkills, err)...)
+	return result.SkippedSkills, err
 }
 
 func (result *Result) ensureLeaderSkills(targets []leaderDestination, switches config.InstallRules, create bool) error {
