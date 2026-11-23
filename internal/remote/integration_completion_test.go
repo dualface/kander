@@ -91,8 +91,8 @@ func TestIntegrationReceiptAllowsDoneButRewoundRemoteBlocksClient(t *testing.T) 
 	if err := f.a.SaveCredential(f.credential); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.a.MoveTask(t.Context(), f.task.TaskID, api.Move{State: "done"}); err == nil {
-		t.Fatal("rewound remote passed completion")
+	if _, err := f.a.MoveTask(t.Context(), f.task.TaskID, api.Move{State: "done"}); err == nil || !strings.Contains(err.Error(), "git merge-base --is-ancestor "+f.commit+" "+f.base) {
+		t.Fatalf("completion against the rewound remote: %v", err)
 	}
 	if _, err := f.b.FetchDelivery(t.Context(), f.second, f.task.TaskID, f.commit); err != nil {
 		t.Fatal(err)

@@ -1,5 +1,9 @@
 {
   "board.integration_target_group_mismatch": "タスクグループ {{.V0}} のメンバーで INTEGRATION_TARGET の値が一致しません（{{.V1}}）。全メンバーが同じ値を使う必要があります",
   "board.integration_target_invalid": "INTEGRATION_TARGET の値 {{.V0}} が不正です: '/' で区切り、各区切りが英数字で始まり英数字、'.'、'_'、'-' だけからなるブランチ名で、100 バイト以内、HEAD は不可、refs/ または group/ で始まらず、'..' を含まず、各区切りが '.lock' や '.' で終わらないこと",
-  "board.integration_target_none": "（なし）"
+  "board.integration_target_none": "（なし）",
+  "launch.integration_preflight_path": "事前確認のリクエストには絶対パスが必要です",
+  "launch.integration_preflight_git": "wrap_up.git が必要です",
+  "launch.integration_preflight_cwd": "統合用チェックアウトには絶対パスが必要です",
+  "launch.integration_preflight_range": "候補の範囲が終了済みのレビュープランと一致しません"
 }

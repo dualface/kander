@@ -32,6 +32,19 @@ func runRemoteDispatch(a dispatchArguments, cfg *config.Config) int {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
+	var input board.DispatchInput
+	if a.action == "prepare" {
+		data, err := os.ReadFile(a.args[0])
+		if err != nil {
+			return fail(err)
+		}
+		if err := board.DecodeReviewJSON(data, &input); err != nil {
+			return fail(err)
+		}
+		if input.Kind == "check-integration" {
+			return runIntegrationPreflight(ctx, cfg, a.args[0], input)
+		}
+	}
 	session, err := remote.Open(ctx, cfg, cwd)
 	if err != nil {
 		return fail(err)
@@ -55,14 +68,6 @@ func runRemoteDispatch(a dispatchArguments, cfg *config.Config) int {
 	action := a.action
 	switch action {
 	case "prepare":
-		data, err := os.ReadFile(args[0])
-		if err != nil {
-			return fail(err)
-		}
-		var input board.DispatchInput
-		if err := board.DecodeReviewJSON(data, &input); err != nil {
-			return fail(err)
-		}
 		task = input.TaskID
 		if input.ID == "" {
 			input.ID, err = board.NewDispatchID()

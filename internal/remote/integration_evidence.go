@@ -2,6 +2,7 @@ package remote
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -54,7 +55,10 @@ func (s *Session) VerifyIntegration(ctx context.Context, dir string, value api.I
 			return err
 		}
 		if !contained {
-			return integrationFailure("remote.integration_recovery_required")
+			if head == "" {
+				return integrationFailure("remote.integration_recovery_required")
+			}
+			return fmt.Errorf("git merge-base --is-ancestor %s %s: %w", source, head, integrationFailure("remote.integration_recovery_required"))
 		}
 	}
 	return nil
@@ -92,7 +96,7 @@ func (s *Session) VerifyWrapUpIntegration(ctx context.Context, dir string, g boa
 		return err
 	}
 	if !ancestor {
-		return integrationFailure("remote.integration_members_changed")
+		return fmt.Errorf("git merge-base --is-ancestor %s %s: %w", g.ReviewBase, g.ReviewTarget, integrationFailure("remote.integration_members_changed"))
 	}
 	return nil
 }

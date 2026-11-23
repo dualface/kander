@@ -2,6 +2,7 @@ package launch
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -39,6 +40,12 @@ func verifyDispatchIntegration(ctx context.Context, g board.DispatchIntegration)
 // proves only the one ref the evidence names; the other side of a local and
 // origin pair may not exist, as in a local-only integration.
 func verifyIntegrationTarget(ctx context.Context, g board.DispatchIntegration, target string) error {
+	return checkIntegrationTarget(ctx, g, target, false)
+}
+
+// The candidate contains the observed tip before publication. Afterwards,
+// the observed tip must contain the candidate. The review mapping is shared.
+func checkIntegrationTarget(ctx context.Context, g board.DispatchIntegration, target string, beforePublication bool) error {
 	if !filepath.IsAbs(g.CWD) {
 		return launchError("board.dispatch_evidence_invalid", "integration CWD or target ref")
 	}
@@ -92,7 +99,11 @@ func verifyIntegrationTarget(ctx context.Context, g board.DispatchIntegration, t
 	if err != nil {
 		return err
 	}
-	edges := [][2]string{{g.ReviewBase, g.ReviewTarget}, {g.SourceCommit, g.TargetCommit}, {g.TargetCommit, head}}
+	publication := [2]string{g.TargetCommit, head}
+	if beforePublication {
+		publication = [2]string{head, g.TargetCommit}
+	}
+	edges := [][2]string{{g.ReviewBase, g.ReviewTarget}, {g.SourceCommit, g.TargetCommit}, publication}
 	if g.RebasedBase == "" {
 		if g.SourceCommit != g.ReviewTarget {
 			return launchError("board.dispatch_evidence_invalid", "source must equal the closed target or provide an explicit rebase mapping")
@@ -109,7 +120,7 @@ func verifyIntegrationTarget(ctx context.Context, g board.DispatchIntegration, t
 	}
 	for _, edge := range edges {
 		if _, err = git("merge-base", "--is-ancestor", edge[0], edge[1]); err != nil {
-			return err
+			return fmt.Errorf("git merge-base --is-ancestor %s %s: %w", edge[0], edge[1], err)
 		}
 	}
 	after, err := resolve()

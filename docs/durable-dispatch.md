@@ -149,6 +149,10 @@ The system verifies:
 2. `source_commit` is an ancestor of `target_commit`.
 3. `target_commit` is contained within `target_ref`.
 
+### Preflight for a Group Candidate
+
+Before publishing a locally prepared group candidate, pass a `check-integration` request to `kander dispatch prepare`. The v2 client reads the card and closed review range from the service, including a closed all-N/A batch, and checks Git in the named checkout. A rewritten range must reproduce the closed patch. The observed target tip must be an ancestor of the candidate. Preflight has no write effects. After publication, wrap-up verifies containment in the opposite direction, using the published receipt on the distributed path. See the [dispatch contract](../rules/snippets/commands/dispatch.md) for the JSON format.
+
 ### Distributed Wrap-up
 
 In distributed mode, which every v2 client uses (an omitted `server.url` selects the default loopback server), the evidence names the published final integration. Copy it from `kander coordinator integration-show <target-ref>`: `id` → `integration_id`, `request.execution_id` → `integration_execution`, `generation` → `integration_generation`, `request.commit` → `source_commit`, `observed_target` → `target_commit`, `request.target_ref` → `target_ref`. The client stores `cwd` as `project:<id>`. When the card declares `INTEGRATION_TARGET`, the receipt must name `refs/heads/<target>`.

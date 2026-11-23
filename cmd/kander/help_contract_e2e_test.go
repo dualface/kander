@@ -281,6 +281,28 @@ func TestHelpJSONOfEveryCommandFollowsTheSchema(t *testing.T) {
 	}
 }
 
+func TestDispatchPrepareHelpDescribesIntegrationPreflight(t *testing.T) {
+	text := runKander(t, "dispatch", "prepare", "--help")
+	if text.code != 0 || !strings.Contains(text.stdout, "kind: check-integration") {
+		t.Fatalf("dispatch prepare help: %d %s", text.code, text.stdout)
+	}
+	structured := runKander(t, "dispatch", "prepare", "--help", "--json")
+	if structured.code != 0 {
+		t.Fatalf("dispatch prepare JSON help: %d %s", structured.code, structured.stderr)
+	}
+	object := decodeObject(t, structured.stdout)
+	if args, ok := object["arguments"].([]any); !ok || !slices.ContainsFunc(args, func(arg any) bool {
+		entry, ok := arg.(map[string]any)
+		if !ok {
+			return false
+		}
+		text, ok := entry["text"].(string)
+		return ok && strings.Contains(text, "kind: check-integration")
+	}) {
+		t.Fatalf("dispatch prepare JSON arguments omit the preflight: %v", object["arguments"])
+	}
+}
+
 // The subcommands of a command with subcommands carry their usage lines.
 func TestHelpJSONListsSubcommands(t *testing.T) {
 	object := decodeObject(t, runKander(t, "help", "--json", "server").stdout)

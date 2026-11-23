@@ -4,7 +4,7 @@ Source: moved from `KANDER-KANBAN-RULES.md` "Command Contract" ("Durable Dispatc
 
 ## Purpose and users
 
-Inspects and ends durable dispatches: the receipts behind `notify` and `resume` rounds. Used by the orchestrator to reconcile uncertainty (`show`), to prepare an explicit intent (`prepare`), to obtain the on-behalf wrap-up grant (`authorize-wrap-up`), to record a terminal decision (`fail`, `cancel`), and to give a completed binding a direct exit (`settle`). Executing agents consume dispatches through the ID/epoch-bound forms of `move` and `update`.
+Inspects and ends durable dispatches: the receipts behind `notify` and `resume` rounds. Used by the orchestrator to reconcile uncertainty (`show`), to prepare an explicit intent or check a Git integration candidate (`prepare`), to obtain the on-behalf wrap-up grant (`authorize-wrap-up`), to record a terminal decision (`fail`, `cancel`), and to give a completed binding a direct exit (`settle`). Executing agents consume dispatches through the ID/epoch-bound forms of `move` and `update`.
 
 ## Syntax
 
@@ -18,7 +18,7 @@ kander dispatch settle <task-id> <dispatch-id> <dispatch-revision>
 
 ## Arguments
 
-- `prepare <absolute-UTF8-intent.json>`: create an intent without sending (not for `wrap-up`, which needs the Git-aware entrance of `notify`).
+- `prepare <absolute-UTF8-intent.json>`: create an intent without sending, or check a candidate with the read-only `kind: check-integration` input below. Use `notify` for a wrap-up dispatch.
 - `authorize-wrap-up <absolute-UTF8-request.json>`: the on-behalf wrap-up grant.
 - `show <task-id> <dispatch-id>`: print the dispatch and its receipts.
 - `fail|cancel <task-id> <dispatch-id> <dispatch-revision> <reason> [--decision <reference>]`: record the terminal decision and release the binding. An accepted round requires `--decision`.
@@ -29,6 +29,9 @@ kander dispatch settle <task-id> <dispatch-id> <dispatch-revision>
 ```text
 # Create an intent without sending it
 kander dispatch prepare /tmp/intent.json
+
+# Check a locally prepared Git integration candidate
+kander dispatch prepare /tmp/integration-preflight.json
 
 # Obtain the wrap-up grant on behalf of a member
 kander dispatch authorize-wrap-up /tmp/request.json
@@ -154,7 +157,34 @@ kander dispatch settle 20261118-example-task dispatch-1 3
 - A new dispatch records the execution cycle it was prepared in (`cycle`) and the previous dispatch of the card (`previous_dispatch_id`). Accept, complete, end, settle, and takeover all require `cycle` to equal the card's current execution cycle; otherwise they fail and the error says the cycle changed. A dispatch record from before this field exists has no `cycle` and stays usable in every one of those commands.
 - Ordinary unbound working messages and non-group legacy notifications create no receipt. Bound card writes cannot omit the execution grant. Dispatch originals and epoch receipts are producer-owned `dispatches/` attachments; guarantees cover controlled card operations, never exactly-once external side effects.
 
+**Integration preflight**
+
+`prepare` accepts a read-only request with `kind: check-integration`, the member's `task_id`, and `evidence.wrap_up.git`:
+
+```json
+{
+  "kind": "check-integration",
+  "task_id": "20261118-example-task",
+  "evidence": {
+    "wrap_up": {
+      "git": {
+        "cwd": "/absolute/integration-checkout",
+        "source_commit": "<full SHA of the closed target or its replay>",
+        "target_commit": "<full SHA of the candidate to publish>",
+        "target_ref": "refs/remotes/origin/develop"
+      }
+    }
+  }
+}
+```
+
+- The client reads the member and the sealed, closed review range from the configured service, including all-N/A batches. Leave `review_base` and `review_target` out to use that range. If supplied, both must match their corresponding closed endpoints. There is no dispatch ID, message, base, claim, or integration receipt required.
+- All Git objects must be available in the absolute checkout named by `cwd`. Use the exact local `refs/heads/<target>` or fetched `refs/remotes/origin/<target>`. Refresh the remote-tracking ref first when publishing remotely. The card's declared integration target takes precedence over the checkout's configured mainline. When history was rewritten, set `rebased_base` to the full SHA at the start of the replayed range. The checker compares that range's patch with the closed range's patch.
+- Before publication, the observed target tip must be an ancestor of `target_commit`. Wrap-up after publication checks that the published candidate is contained in the target, using the distributed receipt when applicable. Preflight writes neither Git refs nor service state and creates no proposal or dispatch.
+
 ## Output
+
+- A successful preflight prints one JSON object with `task_id`, `review_base`, `review_target`, `source_commit`, `target_commit`, `target_ref`, and `rebased_base` when supplied. A refusal prints no result object.
 
 - One JSON object describing the dispatch and its receipts on standard output.
 - With and without `--json` the object is the same.
