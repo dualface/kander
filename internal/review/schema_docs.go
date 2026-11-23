@@ -165,7 +165,7 @@ func evidenceSchemaDocs() map[string]map[string]schemaMeta {
 			"mechanical":                opt("documentation | dead-code | redundant-test"),
 			"verification":              opt(""),
 			"waiver":                    opt(""),
-			"waiver.policy":             opt("accepted-risk | timed-out"),
+			"waiver.policy":             opt("accepted-risk"),
 			"waiver.decision":           opt(""),
 			"waiver.sent_at":            opt(""),
 			"waiver.timeout_at":         opt(""),

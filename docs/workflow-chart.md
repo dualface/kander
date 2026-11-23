@@ -17,7 +17,7 @@ flowchart TD
     SF -->|Incremental re-review| S
 ```
 
-The main path means that the applicable release conditions have been satisfied. The chart omits a separate self-check node, review-trigger decisions, user-decision boxes, pause nodes, mechanical-fix exceptions, and integration rework. Those rules still apply; omission is not permission to bypass a gate. The Security repair loop returns only to Security and does not reopen PMQA, per `rules/KANDER-REVIEW-RULES.md` "Carrying Conclusions Forward".
+The main path means that the applicable release conditions have been satisfied. The chart omits a separate self-check node, review-trigger decisions, user-decision boxes, pause nodes, mechanical-fix exceptions, and integration rework. Those rules still apply; omission is not permission to bypass a gate. The executing agent decides which Security findings need a fix and documents any retained risk. The Security repair loop returns only to Security and does not reopen PMQA, per `rules/KANDER-REVIEW-RULES.md` "Carrying Conclusions Forward".
 
 ## Configuration projection
 

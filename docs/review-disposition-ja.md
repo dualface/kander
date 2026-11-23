@@ -347,7 +347,7 @@ kander review aggregate <絶対作業ディレクトリ> <batch-id>
 | `unverifiable` | ブロッキング | **はい** | 再現不可。 |
 | `fixed` | ブロッキング / 非ブロッキング | いいえ | `fix_commit`（target より厳密に後）と `verification` 検証結果が必須。 |
 | `rejected` | ブロッキング / 非ブロッキング | 未解決リストへ移動 | 客観的事実に基づく理由が必要。 |
-| `waived` | Security のみ | いいえ | `accepted-risk` または 15 分経過した `timed-out` 通知が必要。 |
+| `waived` | Security のみ | いいえ | 担当エージェントが `accepted-risk` でリスクを受容する判断と根拠を記録する。 |
 | `deferred` | 非ブロッキングのみ | いいえ | 延期理由が必要。 |
 | `withdrawn` | 除外メンバーのみ | いいえ | オーケストレーターが書きます。`withdrawal.exclusion_id` と `withdrawal.decision` が必要。修正としては数えません。 |
 

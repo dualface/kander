@@ -511,7 +511,7 @@ func TestSecurityWaiverPreservesNonPassStatus(t *testing.T) {
 	findings.Findings = []ReviewFinding{f}
 	run := gateRun(t, root, archiveInput([]string{id}, "security", "Security"), findings)
 	assignGate(t, root, run, map[string][]string{f.ID: {id}})
-	d := ReviewDisposition{RecordID: "accepted-risk", RunID: run.RunID, BatchID: run.BatchID, FindingID: f.ID, TaskID: id, Author: "codex", ReportHash: run.Hashes["report.md"], Original: f.Text, Status: "waived", Basis: "已独立确认触发及影响", Waiver: &ReviewWaiver{Policy: "accepted-risk", Decision: "用户针对本项明确接受风险的记录"}}
+	d := ReviewDisposition{RecordID: "accepted-risk", RunID: run.RunID, BatchID: run.BatchID, FindingID: f.ID, TaskID: id, Author: "codex", ReportHash: run.Hashes["report.md"], Original: f.Text, Status: "waived", Basis: "已独立确认触发及影响", Waiver: &ReviewWaiver{Policy: "accepted-risk", Decision: "执行代理决定保留已记录的风险"}}
 	s := transactionSnapshot(t, root, id)
 	if err := SubmitReviewDisposition(root, d, s.Revision); err != nil {
 		t.Fatal(err)
@@ -521,6 +521,74 @@ func TestSecurityWaiverPreservesNonPassStatus(t *testing.T) {
 		t.Fatalf("waiver became PASS %+v %v", c.RoleStatuses, err)
 	}
 }
+
+func TestHistoricalSecurityTimeoutCanReplayAndClose(t *testing.T) {
+	root := tempBoard(t)
+	id := gateCard(t, root, "historical-waiver")
+	requirements := noReviewRequirements()
+	requirements["Security"] = "required"
+	gatePlan(t, root, []string{id}, requirements)
+	f := ReviewFinding{ID: "Security-01", Tier: "medium", Text: "verified risk", Evidence: "x:1"}
+	findings := emptyFindings()
+	findings.Findings = []ReviewFinding{f}
+	run := gateRun(t, root, archiveInput([]string{id}, "security", "Security"), findings)
+	assignGate(t, root, run, map[string][]string{f.ID: {id}})
+	const sentAt = "2025-01-02T12:00:00Z"
+	const timeoutAt = "2025-01-02T12:15:00Z"
+	d := ReviewDisposition{
+		RecordID: "legacy-timeout", RunID: run.RunID, BatchID: run.BatchID, FindingID: f.ID,
+		TaskID: id, Author: "codex", ReportHash: run.Hashes["report.md"], Original: f.Text,
+		Status: "waived", Basis: "historical notice",
+		Waiver: &ReviewWaiver{Policy: "timed-out", Decision: "notice delivered", SentAt: sentAt, TimeoutAt: timeoutAt},
+	}
+	revision := transactionSnapshot(t, root, id).Revision
+	for _, tc := range []struct {
+		name   string
+		waiver ReviewWaiver
+	}{
+		{"timed-out", *d.Waiver},
+		{"sent_at", ReviewWaiver{Policy: "accepted-risk", Decision: "retain the risk", SentAt: sentAt}},
+		{"timeout_at", ReviewWaiver{Policy: "accepted-risk", Decision: "retain the risk", TimeoutAt: timeoutAt}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			candidate := d
+			candidate.Waiver = &tc.waiver
+			if err := SubmitReviewDisposition(root, candidate, revision); err == nil || !strings.Contains(err.Error(), "new waivers require accepted-risk and omit legacy timestamps") {
+				t.Fatalf("unexpected waiver result: %v", err)
+			}
+		})
+	}
+
+	// Reconstruct the immutable originals written by an older version.
+	d.RecordedAt = timeoutAt
+	d.SubmittedRevision = revision
+	err := WithTransaction(root, reviewScope(run.TaskIDs, false), func(tx *Transaction) error {
+		var ledger dispositionLedger
+		if _, err := readReviewJSON(tx, ledgerName(run.RunID), &ledger); err != nil {
+			return err
+		}
+		ledger.Records = append(ledger.Records, d)
+		if err := tx.Put(id, dispositionPath(d), reviewJSON(d)); err != nil {
+			return err
+		}
+		return tx.PutGroup(reviewControlGroup, ledgerName(run.RunID), reviewJSON(ledger))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	revision = transactionSnapshot(t, root, id).Revision
+	if err := SubmitReviewDisposition(root, d, revision); err != nil {
+		t.Fatalf("replay of historical waiver: %v", err)
+	}
+	if got := transactionSnapshot(t, root, id).Revision; got != revision {
+		t.Fatalf("replay changed the revision from %d to %d", revision, got)
+	}
+	c, err := gateClose(t, root, map[string]ReviewRoleConclusion{"Security": passRole(run)})
+	if err != nil || c.RoleStatuses["Security"] != "timed-out" {
+		t.Fatalf("historical waiver: %+v %v", c.RoleStatuses, err)
+	}
+}
+
 func TestPartialRunPublicationCannotCloseEvenWithNoFindings(t *testing.T) {
 	root := tempBoard(t)
 	a := gateCard(t, root, "partial-a")

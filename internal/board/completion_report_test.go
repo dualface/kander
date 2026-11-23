@@ -34,6 +34,7 @@ func TestCompletionReportCarriesTemplateTaskAndLanguage(t *testing.T) {
 		config.Text("board.report_template_reminder"),
 		reportTemplateHeading,
 		"- Task: [20260101-report-task - 报告模板](kanban/done/20260101-report-task)",
+		"  - `[source or category][tier or status] <issue>; impact: <...>; reason: <...>`\n",
 		"Final card state: done\n",
 		`Write the report in "zh-CN".`,
 	} {

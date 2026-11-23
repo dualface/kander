@@ -385,7 +385,7 @@ kander review aggregate <绝对工作目录> <batch-id>
 | `unverifiable` | 阻塞性缺陷 | **是** | 无法复现。 |
 | `fixed` | 阻塞 / 非阻塞 | 否 | 必须提供 `fix_commit`（严格晚于 target）和 `verification` 测试验证记录。 |
 | `rejected` | 阻塞 / 非阻塞 | 进入未决列表 | 必须陈述客观事实依据。 |
-| `waived` | 仅限 Security | 否 | 需包含 `accepted-risk` 明确决策或满 15 分钟的 `timed-out` 通知记录。 |
+| `waived` | 仅限 Security | 否 | 任务执行 agent 用 `accepted-risk` 记录保留风险的决定和依据。 |
 | `deferred` | 仅限非阻塞项 | 否 | 延期处理，需记录原因。 |
 | `withdrawn` | 仅限已排除成员 | 否 | 由编排者写入，需要 `withdrawal.exclusion_id` 与 `withdrawal.decision`。不计为修复。 |
 

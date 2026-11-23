@@ -458,6 +458,10 @@ func appendDisposition(tx *Transaction, run ReviewRun, d *ReviewDisposition) (le
 	if dup == reviewdisposition.DupSame {
 		return ledger, false, nil
 	}
+	// Historical waivers remain readable and replayable under their original rules.
+	if w := d.Waiver; w != nil && (w.Policy != "accepted-risk" || w.SentAt != "" || w.TimeoutAt != "") {
+		return ledger, false, reviewError("new waivers require accepted-risk and omit legacy timestamps")
+	}
 	d.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	ledger.Records = append(ledger.Records, *d)
 	return ledger, true, nil

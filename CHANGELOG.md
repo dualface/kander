@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- In v2, PMQA evaluates confirmed task commitments and requires repair-range evidence for new incremental gate findings. This update removes the reviewer file-line limit. Executing agents decide how to handle Security findings. New waivers use `accepted-risk` without legacy timestamps. Historical waivers remain readable and replayable.
+
 - Feature (v2 client): `kander dispatch prepare` accepts read-only `check-integration` requests for group candidates. It checks the closed review range, patch equality when history was rewritten, and containment of the observed target tip. Group assembly accepts verified merge candidates, and ancestry failures in wrap-up identify the commits involved.
 
 - Feature (v2): cards can declare an optional `INTEGRATION_TARGET` branch, frozen from `todo/` on. Kander checks field validity and group consistency and binds local wrap-up evidence or distributed receipts to the declared branch. Cards without the field retain their existing target checks.

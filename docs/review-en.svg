@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="800" height="1672" viewBox="0 0 800 1672" role="img" aria-labelledby="rv-title rv-desc">
   <title id="rv-title">Kander Review Flow</title>
-  <desc id="rv-desc">Two stages preserve the four original roles and add optional composites. Stage one runs PM and QA, or PMQA (PM contract checks followed by QA quality checks). Stage two runs CSA/Hacker, or Security (CSA trust boundaries followed by Hacker exploit chains, deduplicated by root cause). Composites default to skip; enabling one requires its constituent roles to be skip. After security fixes, enabled QA or PMQA incrementally re-reviews; enabled PM also checks functional changes. Subsequent first-stage fixes that substantively change security code are incrementally checked by enabled security roles. Verified security findings require a user decision: fix, accept risk or stop. Only kanban security findings may time out after 15 minutes; timeout means neither PASS nor accepted risk.</desc>
+  <desc id="rv-desc">PMQA checks the task contract and code quality. Security traces trust boundaries and realistic attack paths. The executing agent assesses each security finding, chooses whether to fix it, and documents any retained risk.</desc>
 
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
@@ -77,13 +77,13 @@
   <circle cx="90" cy="732" r="4" fill="#c4b5fd"/>
   <text x="106" y="737" class="s bt">Security: trust boundaries, then exploit chains; one item per root cause</text>
   <circle cx="90" cy="758" r="4" fill="#c4b5fd"/>
-  <text x="106" y="763" class="s bt">Verified blocking / high / medium findings go to the user to decide</text>
+  <text x="106" y="763" class="s bt">The executing agent verifies each finding and decides whether to fix it</text>
   <circle cx="90" cy="784" r="4" fill="#c4b5fd"/>
-  <text x="106" y="789" class="s bt">One of three: fix and re-review / accept the risk / stop integration</text>
+  <text x="106" y="789" class="s bt">Record the evidence and impact of each retained risk</text>
   <circle cx="90" cy="810" r="4" fill="#c4b5fd"/>
-  <text x="106" y="815" class="s bt">Kanban only: no decision for 15 min is ignored, not PASS</text>
+  <text x="106" y="815" class="s bt">List retained risks and the reasons in the delivery notes</text>
 
-  <text x="106" y="841" class="s bt">Enabled QA/PMQA checks fixes; PM checks behavior changes.</text>
+  <text x="106" y="841" class="s bt">Security re-reviews non-mechanical security fixes.</text>
   <text x="106" y="867" class="s bt">Enabled security roles re-check substantive security changes.</text>
 
   <path d="M400 884  V908" class="flow"/>
@@ -96,7 +96,7 @@
   <text x="136" y="980" class="s pn">A missing tier is an invalid conclusion; the main agent fills it in</text>
   <line x1="80" y1="1004" x2="720" y2="1004" stroke="#eef1f6" stroke-width="1.5"/>
   <circle cx="90" cy="1028" r="4" fill="#5eead4"/>
-  <text x="106" y="1033" class="s bt">blocking, high, medium → must fix</text>
+  <text x="106" y="1033" class="s bt">blocking, high, medium → resolve each finding</text>
   <circle cx="90" cy="1054" r="4" fill="#5eead4"/>
   <text x="106" y="1059" class="s bt">low, recommend, suggest → do not block integration</text>
 
@@ -110,11 +110,11 @@
   <text x="136" y="1172" class="s pn">Accepting or rejecting reviewer conclusions unverified is forbidden</text>
   <line x1="80" y1="1196" x2="720" y2="1196" stroke="#eef1f6" stroke-width="1.5"/>
   <circle cx="90" cy="1220" r="4" fill="#fbbf24"/>
-  <text x="106" y="1225" class="s bt">Valid → handle by tier; fix and commit must-fix items</text>
+  <text x="106" y="1225" class="s bt">Confirmed → apply the disposition for the role and tier</text>
   <circle cx="90" cy="1246" r="4" fill="#fbbf24"/>
   <text x="106" y="1251" class="s bt">Invalid → record the basis: files, line numbers, or command output</text>
   <circle cx="90" cy="1272" r="4" fill="#fbbf24"/>
-  <text x="106" y="1277" class="s bt">Unverifiable → hand to the user; never treat as invalid</text>
+  <text x="106" y="1277" class="s bt">Unverifiable → record missing evidence and apply the role rules</text>
 
   <path d="M400 1294 V1318" class="flow"/>
 
