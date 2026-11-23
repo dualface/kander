@@ -34,7 +34,7 @@
   },
   "launchers": {
     "herdr-core": {
-      "auto_priority": 120,
+      "auto_priority": 250,
       "requires": {
         "platform": "posix",
         "binary": true,
