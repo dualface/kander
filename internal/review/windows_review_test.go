@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dualface/kander/internal/terminal/terminaltest"
 )
 
 func TestMain(m *testing.M) {
@@ -20,6 +22,7 @@ func TestMain(m *testing.M) {
 	if os.Getenv("KANDER_FAKE_REVIEWER") == "1" || os.Getenv("KANDER_FAKE_CHILD") == "sleep-write" {
 		os.Exit(runWindowsFakeReviewer())
 	}
+	terminaltest.ClearEnv()
 	os.Exit(m.Run())
 }
 

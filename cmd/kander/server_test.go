@@ -25,6 +25,7 @@ import (
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/server"
 	"github.com/dualface/kander/internal/servicectl"
+	"github.com/dualface/kander/internal/terminal/terminaltest"
 )
 
 // Re-enter the real command implementation in a child process. The child is
@@ -50,6 +51,7 @@ func TestMain(m *testing.M) {
 		time.Sleep(time.Hour)
 		os.Exit(1)
 	}
+	terminaltest.ClearEnv()
 	os.Exit(m.Run())
 }
 

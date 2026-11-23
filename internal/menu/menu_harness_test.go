@@ -5,7 +5,6 @@ package menu
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/dualface/kander/internal/install/installtest"
 	"io"
 	"os"
 	"os/exec"
@@ -16,12 +15,16 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/dualface/kander/internal/install/installtest"
+	"github.com/dualface/kander/internal/terminal/terminaltest"
 )
 
 var testKander string
 var repoRoot string
 
 func TestMain(m *testing.M) {
+	terminaltest.ClearEnv()
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		os.Exit(1)

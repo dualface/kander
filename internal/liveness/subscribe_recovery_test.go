@@ -1,6 +1,7 @@
 package liveness
 
 import (
+	"os/exec"
 	"testing"
 	"time"
 
@@ -27,8 +28,11 @@ func TestSubscriptionUsesRecoveredEpochDeadline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oldNow := nowFn
-	t.Cleanup(func() { nowFn = oldNow })
+	oldNow, oldLookPath := nowFn, lookPath
+	// Only the deadline is under test: the recorded address must not be probed
+	// through a herdr installed on the host.
+	lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
+	t.Cleanup(func() { nowFn, lookPath = oldNow, oldLookPath })
 	for _, overdue := range []bool{false, true} {
 		observed := d.Input.ConfirmBy.Add(time.Second)
 		if overdue {
