@@ -215,7 +215,11 @@ func TestPowerShellLine(t *testing.T) {
 			"with space", "中文 路径", "O'Brien", "a\u2018b", "a\u2019b", "a\u201ab", "a\u201bb", "",
 			`say "hi"`, "100% %PATH%", "!PATH!", "a&b", "a|b", "a^b", `C:\dir with space\`, `back\"quote`, "<in>", "(p)", "$env:PATH", "`tick",
 		}
-		env := map[string]string{"KANBAN_DIR": "C:\\看板 dir\\O'Brien \u2018\u2019\u201a\u201b", "KANDER_LANG": "cn"}
+		env := map[string]string{
+			"KANBAN_DIR":         "C:\\看板 dir\\O'Brien \u2018\u2019\u201a\u201b",
+			"KANDER_LANG":        "cn",
+			"KANDER_CLIENT_HOME": "C:\\work\\client O\u2019Brien",
+		}
 		// A stale value of the terminal service must not survive.
 		t.Setenv("KANDER_CONFIG", "stale")
 		line, _ := typedLine(t, lineInvocation(t, agent, args...), env)

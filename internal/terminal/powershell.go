@@ -23,7 +23,7 @@ func PowerShellQuote(value string) string {
 
 // forwardedEnv are the caller's variables a Windows pane shell receives: a
 // terminal service passes none of the caller's environment.
-var forwardedEnv = []string{"KANBAN_DIR", "KANDER_CONFIG", "KANDER_LANG"}
+var forwardedEnv = []string{"KANBAN_DIR", "KANDER_CONFIG", "KANDER_LANG", "KANDER_CLIENT_HOME"}
 
 // ForwardedEnv lists the variables powershell_env forwards, so a launch can
 // check their values before it creates a container.

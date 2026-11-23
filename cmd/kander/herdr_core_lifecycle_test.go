@@ -94,7 +94,7 @@ func fakeHC(dir string, args []string) int {
 			return end()
 		}
 		if agent != "" && strings.Contains(text, agent) {
-			if os.WriteFile(started, nil, 0o600) != nil {
+			if os.WriteFile(started, []byte(text), 0o600) != nil {
 				return 97
 			}
 		}
@@ -180,7 +180,8 @@ func TestWindowsHerdrCoreLifecycle(t *testing.T) {
 	if window := cardField(t, id, board.FieldWindow); window != "herdr-core:t8" {
 		t.Fatalf("WINDOW=%q", window)
 	}
-	if _, err := os.Stat(filepath.Join(state, "started")); err != nil {
+	line, err := os.ReadFile(filepath.Join(state, "started"))
+	if err != nil {
 		t.Fatalf("the line that starts the agent was not sent to t8: %v", err)
 	}
 	calls, err := os.ReadFile(filepath.Join(state, "calls"))
@@ -190,9 +191,13 @@ func TestWindowsHerdrCoreLifecycle(t *testing.T) {
 	shell := "/bin/sh"
 	if runtime.GOOS == "windows" {
 		shell = "powershell.exe"
-	}
-	if runtime.GOOS == "windows" && !strings.Contains(string(calls), "$env:KANDER_EXECUTION_ID=") {
-		t.Fatal("PowerShell line did not pass the distributed execution identity")
+		if !strings.Contains(string(line), "$env:KANDER_EXECUTION_ID=") {
+			t.Fatal("PowerShell line did not pass the distributed execution identity")
+		}
+		clientHome := "$env:KANDER_CLIENT_HOME=" + terminal.PowerShellQuote(service.Home) + "; "
+		if !strings.Contains(string(line), clientHome) {
+			t.Fatal("PowerShell line did not pass the service fixture's client home")
+		}
 	}
 	if !strings.Contains(string(calls), shell) {
 		t.Fatalf("the container shell is not %s:\n%s", shell, calls)

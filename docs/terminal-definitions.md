@@ -78,7 +78,7 @@ A capability flag requires its operation (`focus`, `set_session_marker` for `pan
 
 ## Operations
 
-`posix` is `true` on POSIX and `false` on native Windows. A definition can select platform-specific steps with `"when": "field:posix=false"`. In `create_container`, the value comes from the platform `Prepare` checked. A target built without `Prepare` counts as POSIX. On Windows, `powershell_env` provides quoted PowerShell statements to set `KANBAN_DIR`, `KANDER_CONFIG`, and `KANDER_LANG` to the caller's values. Each statement ends in `; ` and removes the variable if the caller's value is empty or unset. On POSIX, `powershell_env` is empty. Both inputs are optional additions to `schema_version` 1.
+`posix` is `true` on POSIX and `false` on native Windows. A definition can select platform-specific steps with `"when": "field:posix=false"`. In `create_container`, the value comes from the platform `Prepare` checked. A target built without `Prepare` counts as POSIX. On Windows, `powershell_env` provides quoted PowerShell statements to set `KANBAN_DIR`, `KANDER_CONFIG`, `KANDER_LANG`, and `KANDER_CLIENT_HOME` to the caller's values. Each statement ends in `; ` and removes the variable if the caller's value is empty or unset. On POSIX, `powershell_env` is empty. Both inputs are optional additions to `schema_version` 1.
 
 `cwd_quoted` is the startup directory, already quoted for a POSIX pane shell by `internal/launch`, and empty when `posix` is `false`. Use it verbatim, as in `cd -- {cwd_quoted} && exec {command}`; a definition never adds its own quoting. A definition that does not use it stays valid.
 

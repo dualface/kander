@@ -83,6 +83,7 @@ func TestWindowsHerdrCoreDefinition(t *testing.T) {
 		"$env:KANBAN_DIR='C:\\work\\O\u2019\u2019Brien'; " + // set: assigned
 		"$env:KANDER_CONFIG=$null; " + // unset: removed
 		"$env:KANDER_LANG=$null; " + // empty: removed
+		"$env:KANDER_CLIENT_HOME=$null; " +
 		"& 'agent' } finally { if ($null -eq $LASTEXITCODE) { exit 1 }; exit $LASTEXITCODE }"}
 	if len(calls) != 1 || !slices.Equal(calls[0], want) {
 		t.Fatalf("send=%q\nwant %q", calls, want)
