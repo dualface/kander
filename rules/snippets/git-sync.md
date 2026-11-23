@@ -4,15 +4,20 @@ Source: moved from `KANDER-GIT-RULES.md` "Keeping a Task Branch Current".
 
 ## Keeping a Task Branch Current
 
-- A task branch drifts from its source branch (the integration target for a single card, the group branch for an in-group card) the whole time it is open, and the eventual conflict grows with the drift. Fetch at every natural pause (before starting a work item, after finishing one, before requesting review, before delivery) and run the overlap check, with `SOURCE` the remote or local source branch:
+- At each natural pause (before and after a work item, before review, and before delivery), check the task branch against its source: the integration target for a single card or the group branch for a member. Set `source_branch` to the recorded branch name. With `origin` and remote delivery:
 
 ```sh
-git fetch -q origin
-kander check overlap --source SOURCE --json
+git fetch -q origin && kander check overlap --source "refs/remotes/origin/$source_branch" --json
 ```
 
-- `status` `action-required` names paths changed on both sides: rebase onto the latest source branch now, while the upstream change is small and its author is reachable. `status` `pass` (empty `paths`): rebase at the latest before the next delivery. A rebase onto an unchanged source branch is a no-op, so running it often is fine. Exit 2 or 3 means the check did not finish; never treat that as an empty overlap. Never substitute `comm`, process substitution, or `git diff --name-only` pipelines for this command.
-- Never rebase while a review batch is open on this branch (`KANDER-REVIEW-RULES.md` "Review Base"); rebase before the review starts. After the batch closes, integration follows `snippets/git-integrate.md` "One-Time Review Gate", which may require a merge commit instead.
-- Re-verification after a clean mid-task rebase: compile the touched modules and run the targeted tests of the changed behavior; the full `KANDER-CODE-RULES.md` "Delivery Self-Check" item 6 runs once, at the final delivery commit. After a rebase with conflict resolution, also rerun the tests of every file touched by the resolution.
+Without `origin`, or with explicit local-only delivery:
+
+```sh
+kander check overlap --source "refs/heads/$source_branch" --json
+```
+
+- A failed remote fetch stops the remote path. `action-required` lists paths changed on both sides: inspect them now and sync overlapping work in the task worktree. With `pass`, independent commits may be delivered from diverged branches. Exit 2 or 3 means the check did not finish. Never substitute path-list shell pipelines for the overlap check.
+- Never rebase while a review batch is open on this branch (`KANDER-REVIEW-RULES.md` "Review Base"); synchronize before the review starts if needed. After the batch closes, integration follows `snippets/git-integrate.md` "One-Time Review Gate", which may require a merge commit instead.
+- Re-verification after a clean mid-task merge or rebase: compile the touched modules and run the targeted tests of the changed behavior; the full `KANDER-CODE-RULES.md` "Delivery Self-Check" item 6 runs once, at the final delivery commit. After resolving a conflict, also rerun the tests of every file touched by the resolution.
 - When the source branch already contains a fix for the same problem, take the upstream version and drop this branch's duplicate commit.
 - Only the dedicated task branch is rewritten this way, and only with `--force-with-lease` per `snippets/git-integrate.md` "Integration and Cleanup"; the group branch exception named there belongs to the orchestrator alone.
