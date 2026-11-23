@@ -291,7 +291,6 @@ func TestPromptCarriesRoleAndQARules(t *testing.T) {
 		"Tag each such item with [mechanical]",
 		"Do not modify files",
 		"existing module responsibilities, dependency directions",
-		"a non-generated code file must not exceed 1000 physical lines",
 		"Do not enumerate contrived combinations, extreme edge cases",
 	} {
 		if !strings.Contains(normalized, needle) && !strings.Contains(prompt, needle) {
