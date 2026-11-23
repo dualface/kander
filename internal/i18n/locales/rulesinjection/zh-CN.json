@@ -1,4 +1,5 @@
 {
+  "install.leader_skill_modified": "leader 技能已在本机修改",
   "config.install_rules": "规则注入",
   "config.install_rules_must_be_a_boolean": "install_rules 必须是 boolean",
   "config.agent_install_rules_builtin_only": "install_rules 只能用于内置 agent。",

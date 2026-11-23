@@ -97,7 +97,11 @@ func TestPlanRulesInjectionGroupsSharedProjectFile(t *testing.T) {
 	for _, file := range shared.Files {
 		targets = append(targets, file.Target)
 	}
-	if !slices.Equal(targets, []string{filepath.Join(project, "AGENTS.md"), piExtensionTarget(t, project, true)}) {
+	want := []string{filepath.Join(project, "AGENTS.md"), piExtensionTarget(t, project, true)}
+	for _, name := range leaderFiles {
+		want = append(want, filepath.Join(project, ".agents", "skills", leaderName, filepath.FromSlash(name)))
+	}
+	if !slices.Equal(targets, want) {
 		t.Fatalf("shared files=%v", targets)
 	}
 }

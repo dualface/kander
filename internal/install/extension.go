@@ -110,18 +110,18 @@ func ExtensionAgents(paths config.InstallPaths) []string {
 	return out
 }
 
-// rejectExtensionReparse refuses to read or write through a symlink, junction,
+// rejectReparseChain refuses to read or write through a symlink, junction,
 // or other reparse point: every existing component between the base directory
 // and the target file is checked. Unlike EnsureRulesIntegration, which follows
-// user-managed symlinks in the global scope, an executable extension file is
+// user-managed symlinks in the global scope, an extension or a bundled skill is
 // never written through a redirect.
-func rejectExtensionReparse(base, target string) error {
+func rejectReparseChain(base, target string) error {
 	rel, err := filepath.Rel(base, target)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
 		return fmt.Errorf("%s", config.Text("install.rules_target_symlink_escapes_project", target))
 	}
 	current := base
-	for _, part := range strings.Split(rel, string(os.PathSeparator)) {
+	for part := range strings.SplitSeq(rel, string(os.PathSeparator)) {
 		if part == "" || part == "." {
 			continue
 		}
@@ -200,7 +200,7 @@ func InspectExtension(agent string, paths config.InstallPaths) (ExtensionOutcome
 	if err != nil {
 		return outcome, err
 	}
-	if err := rejectExtensionReparse(base, target); err != nil {
+	if err := rejectReparseChain(base, target); err != nil {
 		return outcome, err
 	}
 	anchor, err := fileAnchor(target)
@@ -255,7 +255,7 @@ func EnsureExtensionWith(agent string, paths config.InstallPaths, switches confi
 	if err != nil {
 		return outcome, err
 	}
-	if err := rejectExtensionReparse(base, target); err != nil {
+	if err := rejectReparseChain(base, target); err != nil {
 		return outcome, err
 	}
 	anchor, err := fileAnchor(target)

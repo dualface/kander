@@ -1,4 +1,5 @@
 {
+  "install.leader_skill_modified": "the leader skill was edited locally",
   "config.install_rules": "Rules injection",
   "config.install_rules_must_be_a_boolean": "install_rules must be a boolean",
   "config.agent_install_rules_builtin_only": "install_rules is accepted only for built-in agents.",

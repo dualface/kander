@@ -38,6 +38,7 @@ kander uninstall --yes
 - Never follows a symlink, junction, or other reparse point to delete a file; a project rules file that resolves outside the main worktree is not edited and is reported.
 - Keeps the binary (global or `.kander/bin/`), `config.json`, the share directory, caches, and the board.
 - Running `kander` or `kander doctor` afterwards extracts the rules root again but writes no agent file until `install_rules` is turned back on.
+- Removes this scope's unmodified managed leader skill files. A pre-existing skill, user link, or locally modified bundle stays in place.
 
 ## Output
 

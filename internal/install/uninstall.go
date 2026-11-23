@@ -40,7 +40,8 @@ type UninstallItem struct {
 	Reason  string
 	content []byte
 	// rules marks a file of the rules directory, which the plan lists as one count.
-	rules bool
+	rules       bool
+	skillDigest string
 }
 
 // UninstallPlan is everything kander uninstall removes or edits in one scope, computed
@@ -50,7 +51,7 @@ type UninstallPlan struct {
 	// ConfigFile receives install_rules=false so a later doctor repair writes nothing.
 	ConfigFile string
 	Items      []UninstallItem
-	// Dirs are the rules directory and its subdirectories, deepest first; each goes once empty.
+	// Dirs lists rules and managed skill directories, children before parents, to remove if empty.
 	Dirs []string
 }
 
@@ -180,6 +181,21 @@ func PlanUninstall(paths config.InstallPaths) UninstallPlan {
 	items, dirs := planRulesDirRemoval(paths.RulesDir)
 	plan.Items = append(plan.Items, items...)
 	plan.Dirs = dirs
+	var previousSkillDir string
+	for _, agent := range []string{"codex", "claude"} {
+		dir, err := leaderTarget(agent, paths)
+		if err != nil {
+			plan.Items = append(plan.Items, UninstallItem{Action: UninstallKeep, Path: agent, Reason: err.Error()})
+			continue
+		}
+		if dir == "" || sameSkillDirectory(previousSkillDir, dir) {
+			continue
+		}
+		previousSkillDir = dir
+		items, dirs := planLeaderRemoval(dir, paths)
+		plan.Items = append(plan.Items, items...)
+		plan.Dirs = append(plan.Dirs, dirs...)
+	}
 	return plan
 }
 
@@ -324,10 +340,18 @@ func planRulesDirRemoval(dir string) ([]UninstallItem, []string) {
 	return items, dirs
 }
 
-// ApplyUninstall turns the scope's switch off first, so a doctor repair that runs meanwhile or
-// afterwards writes nothing, then edits and deletes the planned files and removes the empty
-// rules directories. A failed config write changes nothing else.
+// ApplyUninstall rechecks the skill preview and turns off the scope's switch
+// before editing or removing files. It then removes empty managed directories.
 func ApplyUninstall(plan UninstallPlan, out io.Writer) error {
+	// A user can edit a skill while the confirmation prompt is open. Recheck
+	// the whole preview before removing any of its interdependent documents.
+	for _, item := range plan.Items {
+		if item.skillDigest != "" {
+			if err := verifySkillRemoval(item); err != nil {
+				return err
+			}
+		}
+	}
 	if err := disableRulesInjection(plan.ConfigFile); err != nil {
 		return err
 	}
@@ -343,7 +367,14 @@ func ApplyUninstall(plan UninstallPlan, out io.Writer) error {
 				fmt.Fprintln(out, config.Text("install.uninstall_edited", item.Path))
 			}
 		case UninstallRemove:
-			err = removeUninstallFile(item.Path)
+			if item.skillDigest != "" {
+				if err = removeSkillFile(item); err != nil {
+					// Keep the receipt so a later run can finish this bundle.
+					return errors.Join(failed, err)
+				}
+			} else {
+				err = removeUninstallFile(item.Path)
+			}
 			if err == nil && item.rules {
 				removedRules++
 			} else if err == nil {

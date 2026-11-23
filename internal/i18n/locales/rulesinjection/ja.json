@@ -1,4 +1,5 @@
 {
+  "install.leader_skill_modified": "leader スキルはローカルで変更されています",
   "config.install_rules": "ルール注入",
   "config.install_rules_must_be_a_boolean": "install_rules は boolean でなければなりません",
   "config.agent_install_rules_builtin_only": "install_rules は組み込み agent にのみ指定できます。",

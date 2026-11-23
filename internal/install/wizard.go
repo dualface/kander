@@ -90,7 +90,7 @@ func runWizard() (Request, error) {
 		}
 		req.Project = project
 	}
-	choice, err := confirmRulesInjection(req)
+	choice, err := confirmRulesInjection(&req)
 	if err != nil {
 		return req, err
 	}
@@ -102,8 +102,8 @@ func runWizard() (Request, error) {
 // the agents Kander writes rules for, before anything is written. A group starts selected when
 // every agent in it has install_rules on, so a fresh install selects all and a reinstall keeps
 // an agent the user turned off. Cancelling writes nothing.
-func confirmRulesInjection(req Request) (map[string]bool, error) {
-	paths, err := resolvePaths(req)
+func confirmRulesInjection(req *Request) (map[string]bool, error) {
+	paths, err := resolvePaths(*req)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,8 @@ func confirmRulesInjection(req Request) (map[string]bool, error) {
 	if err != nil {
 		return nil, err
 	}
-	groups := PlanRulesInjection(paths)
+	req.leaderTargets = leaderDestinations(paths)
+	groups := planRulesInjection(paths, req.leaderTargets)
 	fields := []huh.Field{
 		huh.NewNote().Title(config.Text("install.rules_plan_title")).Description(planDescription(groups, paths)),
 	}
@@ -219,6 +220,9 @@ func printResult(result Result) {
 	}
 	for _, path := range result.LegacyLinksRemoved {
 		fmt.Fprintln(os.Stderr, config.Text("install.legacy_link_replaced", path))
+	}
+	for _, reason := range result.SkippedSkills {
+		fmt.Fprintln(os.Stderr, reason)
 	}
 	for _, item := range result.Integrations {
 		target := item.Target
