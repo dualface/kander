@@ -19,6 +19,7 @@ kander dispatch settle <task-id> <dispatch-id> <dispatch-revision>
 ## Arguments
 
 - `prepare <absolute-UTF8-intent.json>`: create an intent without sending (not for `wrap-up`, which needs the Git-aware entrance of `notify`).
+- For a read-only Git preflight use `prepare` with an absolute JSON file of the form `{"kind":"check-integration","task_id":"<member>","evidence":{"wrap_up":{"git":{"cwd":"<absolute checkout>","target_ref":"refs/heads/develop","source_commit":"<closed final SHA>","target_commit":"<candidate SHA>"}}}}`. Use the actual local or origin target ref. For a rewritten range supply the last replayed commit as `source_commit` and the parent of its first replayed commit as `rebased_base`. The command reads the member's sealed, closed plan and target, checks that the observed tip is in the candidate, and prints the checked mapping. It creates no dispatch or receipt and moves no ref. Actual wrap-up checks the candidate in the published target.
 - `authorize-wrap-up <absolute-UTF8-request.json>`: the on-behalf wrap-up grant.
 - `show <task-id> <dispatch-id>`: print the dispatch and its receipts.
 - `fail|cancel <task-id> <dispatch-id> <dispatch-revision> <reason> [--decision <reference>]`: record the terminal decision and release the binding. An accepted round requires `--decision`.

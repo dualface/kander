@@ -48,6 +48,12 @@ func integrationTargetOfTask(root, taskID string) (string, error) {
 // proves only the one ref the evidence names; the other side of a local and
 // origin pair may not exist, as in a local-only integration.
 func verifyIntegrationTarget(ctx context.Context, g board.DispatchIntegration, target string) error {
+	return checkIntegrationTarget(ctx, g, target, false)
+}
+
+// Before publication the candidate must contain the current tip. After publication
+// the observed tip must contain the candidate. Both paths verify the same mapping.
+func checkIntegrationTarget(ctx context.Context, g board.DispatchIntegration, target string, beforePublication bool) error {
 	if !filepath.IsAbs(g.CWD) {
 		return launchError("board.dispatch_evidence_invalid", "integration CWD or target ref")
 	}
@@ -101,7 +107,11 @@ func verifyIntegrationTarget(ctx context.Context, g board.DispatchIntegration, t
 	if err != nil {
 		return err
 	}
-	edges := [][2]string{{g.ReviewBase, g.ReviewTarget}, {g.SourceCommit, g.TargetCommit}, {g.TargetCommit, head}}
+	publication := [2]string{g.TargetCommit, head}
+	if beforePublication {
+		publication = [2]string{head, g.TargetCommit}
+	}
+	edges := [][2]string{{g.ReviewBase, g.ReviewTarget}, {g.SourceCommit, g.TargetCommit}, publication}
 	if g.RebasedBase == "" {
 		if g.SourceCommit != g.ReviewTarget {
 			return launchError("board.dispatch_evidence_invalid", "source must equal the closed target or provide an explicit rebase mapping")
@@ -118,7 +128,7 @@ func verifyIntegrationTarget(ctx context.Context, g board.DispatchIntegration, t
 	}
 	for _, edge := range edges {
 		if _, err = git("merge-base", "--is-ancestor", edge[0], edge[1]); err != nil {
-			return err
+			return fmt.Errorf("git merge-base --is-ancestor %s %s: %w", edge[0], edge[1], err)
 		}
 	}
 	after, err := resolve()
@@ -313,6 +323,12 @@ func RunDispatch(args []string) int {
 	if args[0] == "prepare" {
 		var in board.DispatchInput
 		if err = board.DecodeReviewJSON(data, &in); err == nil {
+			if in.Kind == "check-integration" {
+				if !filepath.IsAbs(args[1]) {
+					return fail(launchError("board.dispatch_evidence_invalid", "absolute preflight request path required"))
+				}
+				return runIntegrationPreflight(root, in)
+			}
 			d, err = PrepareBoundDispatch(root, in)
 		}
 	} else {
@@ -331,6 +347,43 @@ func RunDispatch(args []string) int {
 	}
 	if d.WrapUpAuthority != nil && d.State == board.DispatchPrepared {
 		fmt.Fprintln(os.Stderr, t("launch.dispatch_wrap_up_only", d.WrapUpAuthority.Author, d.Input.ID, d.Authorization.Epoch))
+	}
+	return 0
+}
+
+// runIntegrationPreflight reads the sealed plan and Git objects without creating
+// a dispatch. A passing candidate still needs the post-publication checks.
+func runIntegrationPreflight(root string, in board.DispatchInput) int {
+	if in.Evidence.WrapUp == nil {
+		return fail(launchError("board.dispatch_evidence_invalid", "wrap_up.git required"))
+	}
+	g := in.Evidence.WrapUp.Git
+	r, err := board.DispatchReviewRange(root, in.TaskID)
+	if err != nil {
+		return fail(err)
+	}
+	if (g.ReviewBase != "" && g.ReviewBase != r.Ancestor) || (g.ReviewTarget != "" && g.ReviewTarget != r.Descendant) {
+		return fail(launchError("board.dispatch_evidence_invalid", "candidate range differs from the closed plan"))
+	}
+	g.ReviewBase, g.ReviewTarget = r.Ancestor, r.Descendant
+	target, err := integrationTargetOfTask(root, in.TaskID)
+	if err != nil {
+		return fail(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := checkIntegrationTarget(ctx, g, target, true); err != nil {
+		return fail(err)
+	}
+	result := map[string]string{
+		"task_id": in.TaskID, "review_base": g.ReviewBase, "review_target": g.ReviewTarget,
+		"source_commit": g.SourceCommit, "target_commit": g.TargetCommit, "target_ref": g.TargetRef,
+	}
+	if g.RebasedBase != "" {
+		result["rebased_base"] = g.RebasedBase
+	}
+	if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
+		return fail(err)
 	}
 	return 0
 }

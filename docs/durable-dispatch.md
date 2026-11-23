@@ -6,6 +6,8 @@ Dispatch identity is governed by `dispatch_id`. Status is never inferred from te
 
 ---
 
+Before publishing a group integration, pass a `check-integration` request to `kander dispatch prepare`. This read-only variant checks the candidate against the member’s closed plan, including an all-N/A plan. It uses the same patch comparison as wrap-up, and verifies that the observed target tip is an ancestor of the candidate. After publication, wrap-up verifies the opposite relation. The [dispatch contract](../rules/snippets/commands/dispatch.md) gives the JSON format.
+
 ## 1. Dispatch Lifecycle & State Machine
 
 ```text

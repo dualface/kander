@@ -21,6 +21,11 @@ import (
 func launchCoordinatorFixture(t *testing.T) (string, string, board.DispatchInput, board.CoordinatorCheckpoint) {
 	t.Helper()
 	root, task, _, in := launchWrapFixture(t)
+	return root, task, in, claimFixtureGroup(t, root, task)
+}
+
+func claimFixtureGroup(t *testing.T, root, task string) board.CoordinatorCheckpoint {
+	t.Helper()
 	s, e := board.ReadSnapshot(root, task)
 	if e != nil {
 		t.Fatal(e)
@@ -35,7 +40,7 @@ func launchCoordinatorFixture(t *testing.T) (string, string, board.DispatchInput
 	if e != nil {
 		t.Fatal(e)
 	}
-	return root, task, in, c
+	return c
 }
 
 func launchCoordinatorRequest(t *testing.T, root, task string, c board.CoordinatorCheckpoint, d board.Dispatch) board.CoordinatorReconcile {

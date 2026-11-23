@@ -151,8 +151,13 @@ func launchWrapFixture(t *testing.T) (string, string, string, board.DispatchInpu
 func closedWrapUp(t *testing.T, root, task string) board.DispatchInput {
 	t.Helper()
 	cwd, head := integrationGit(t)
+	return closedWrapUpRange(t, root, task, cwd, head, head)
+}
+
+func closedWrapUpRange(t *testing.T, root, task, cwd, base, head string) board.DispatchInput {
+	t.Helper()
 	roles := map[string]string{"PMQA": "N/A: lifecycle fixture", "Security": "N/A: fixture"}
-	plan := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: "wrap-plan", Author: "fixture", Basis: "lifecycle fixture", CWD: cwd, ReportLanguage: "zh-CN", TaskIDs: []string{task}, Batches: []board.ReviewPlanBatch{{BatchID: "wrap-batch", TaskIDs: []string{task}, Base: head, TargetCommit: head, Requirements: roles}}}
+	plan := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: "wrap-plan", Author: "fixture", Basis: "lifecycle fixture", CWD: cwd, ReportLanguage: "zh-CN", TaskIDs: []string{task}, Batches: []board.ReviewPlanBatch{{BatchID: "wrap-batch", TaskIDs: []string{task}, Base: base, TargetCommit: head, Requirements: roles}}}
 	if err := board.CreateReviewPlan(root, plan); err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +173,7 @@ func closedWrapUp(t *testing.T, root, task string) board.DispatchInput {
 	if _, err = board.CloseReviewBatch(root, request, board.ReviewGitEvidence{CWD: cwd, Head: head, Edges: edges, VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano)}); err != nil {
 		t.Fatal(err)
 	}
-	in := board.DispatchInput{ID: "launch-wrap", TaskID: task, Kind: "wrap-up", Message: "只清理和记录", Base: head, Evidence: board.DispatchEvidence{WrapUp: &board.DispatchWrapUpBinding{Git: board.DispatchIntegration{CWD: cwd, SourceCommit: head, ReviewTarget: head, ReviewBase: head, TargetCommit: head, TargetRef: "refs/heads/develop", Author: "coordinator", Basis: "本地 develop 实际祖先验证"}}}}
+	in := board.DispatchInput{ID: "launch-wrap", TaskID: task, Kind: "wrap-up", Message: "只清理和记录", Base: head, Evidence: board.DispatchEvidence{WrapUp: &board.DispatchWrapUpBinding{Git: board.DispatchIntegration{CWD: cwd, SourceCommit: head, ReviewTarget: head, ReviewBase: base, TargetCommit: head, TargetRef: "refs/heads/develop", Author: "coordinator", Basis: "本地 develop 实际祖先验证"}}}}
 	return in
 }
 
