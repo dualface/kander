@@ -83,6 +83,13 @@ func putWrapUpEvidence(tx *Transaction, group string, e WrapUpGitEvidence) error
 // closures of the plan batches that bind it.
 func wrapUpGitFacts(tx *Transaction, id string, d Dispatch) (CoordinatorGitFacts, error) {
 	facts := CoordinatorGitFacts{Integration: d.Input.Evidence.WrapUp.Git}
+	card, err := tx.Snapshot(id)
+	if err != nil {
+		return facts, err
+	}
+	if facts.IntegrationTarget, err = IntegrationTargetOf(card.Text); err != nil {
+		return facts, err
+	}
 	plan, _, err := readTaskPlan(tx, id)
 	if err != nil {
 		return facts, err

@@ -28,7 +28,7 @@ kander pick
 
 ## Preconditions
 
-- The same gate as `kander move <task-id> todo`: `SELF_REVIEW:` and, when required, `CARD_REVIEW:` records and complete contract sections.
+- The same gate as `kander move <task-id> todo`: `SELF_REVIEW:` and, when required, `CARD_REVIEW:` records, complete contract sections, and an `INTEGRATION_TARGET` line, if present, that is not repeated and, when it has a value, holds a valid branch name (`snippets/git-integrate.md` "Integration Target").
 
 ## Effects
 

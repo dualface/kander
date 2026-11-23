@@ -100,6 +100,11 @@ var frozenSections = []string{SectionGoal, SectionUserDecisions, SectionExpected
 
 func frozenContract(text string) map[string]string {
 	fields := map[string]string{"TASK_GROUP": TaskGroupFrom(text), "SIZE": MetadataFrom(text, "SIZE")}
+	// Like the pin fields, the target joins the frozen record only when set, so
+	// cards without it keep the exact shape of their contract decisions.
+	if target := MetadataFrom(text, FieldIntegrationTarget); target != "" {
+		fields[FieldIntegrationTarget] = target
+	}
 	for name, lines := range pinFrozenFields(text) {
 		fields[name] = lines
 	}
@@ -129,7 +134,7 @@ func fieldLines(text, name string) []string {
 }
 func validSpecUpdate(id, old, next, state, decision string) (string, error) {
 	// Duplicate headings and metadata create ambiguous contracts across readers.
-	for _, field := range append(append([]string(nil), managedFields...), FieldTaskGroup, "SIZE", FieldType, FieldTaskBranch) {
+	for _, field := range append(append([]string(nil), managedFields...), FieldTaskGroup, "SIZE", FieldType, FieldTaskBranch, FieldIntegrationTarget) {
 		if len(fieldLines(next, field)) > 1 {
 			return "", withUpdateHint(kanbanError("board.transaction_invalid", field), "board.update_hint_duplicate")
 		}
@@ -141,6 +146,9 @@ func validSpecUpdate(id, old, next, state, decision string) (string, error) {
 		}
 	}
 	if _, err := prerequisiteIDsFrom(next, "update"); err != nil {
+		return "", err
+	}
+	if _, err := IntegrationTargetOf(next); err != nil {
 		return "", err
 	}
 	if field := pinDuplicateField(next); field != "" {

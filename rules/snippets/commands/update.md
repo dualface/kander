@@ -31,7 +31,7 @@ kander update 20261118-example-task --document spec.md --file /tmp/spec.md --exp
 ## Preconditions
 
 - Obtain the revision from `kander show --json <task-id>` first; prepare the replacement in a separate file.
-- After `todo/`, the frozen fields (`GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `OUT_OF_SCOPE`, `SIZE`, task group relations) change only with `--contract-decision-file`. One exception: in `working/` or `review/`, an update whose only frozen difference toggles line-start markers of top-level acceptance items between `- [ ] ` and `- [x] ` needs no decision file and records no `CONTRACT_DECISIONS` entry.
+- After `todo/`, the frozen fields (`GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `OUT_OF_SCOPE`, `SIZE`, task group relations, `INTEGRATION_TARGET`) change only with `--contract-decision-file`. One exception: in `working/` or `review/`, an update whose only frozen difference toggles line-start markers of top-level acceptance items between `- [ ] ` and `- [x] ` needs no decision file and records no `CONTRACT_DECISIONS` entry.
 
 ## Effects
 
@@ -47,6 +47,7 @@ kander update 20261118-example-task --document spec.md --file /tmp/spec.md --exp
 
 - A revision conflict: read and reconcile the current document before retrying.
 - A `TASK_GROUP` change while the old or the new group has a coordinator checkpoint.
+- A repeated `INTEGRATION_TARGET` line, or a value that is not a valid branch name (`snippets/git-integrate.md` "Integration Target").
 - A frozen-field change without a decision file, a managed path, a non-canonical path, an archived card, or a bound card without the grant.
 - A rejected managed field or section, managed path, duplicate field or section, or frozen-contract change adds a localized next step on the following line: keep the line or section exactly as `kander show` prints it and use the command that writes it, merge duplicates into one place, or write execution records into `DISCUSSION` or `IMPLEMENTATION`. Follow that step instead of retrying the same content.
 - A missing task ID, an option without a value, or an unknown option is a usage error.

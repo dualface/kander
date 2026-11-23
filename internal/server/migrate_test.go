@@ -13,6 +13,11 @@ import (
 // v1Board builds a v1 board with a backlog card and a working card.
 func v1Board(t *testing.T) string {
 	t.Helper()
+	return v1BoardWithTarget(t, "")
+}
+
+func v1BoardWithTarget(t *testing.T, integrationTarget string) string {
+	t.Helper()
 	root := filepath.Join(t.TempDir(), "kanban")
 	if err := board.InitStorage(root); err != nil {
 		t.Fatal(err)
@@ -30,6 +35,9 @@ func v1Board(t *testing.T) string {
 		t.Fatal(err)
 	}
 	text := strings.ReplaceAll(s.Text, "<FILL_IN>", "filled")
+	if integrationTarget != "" {
+		text = strings.Replace(text, "- RESULT:", "- INTEGRATION_TARGET: "+integrationTarget+"\n- RESULT:", 1)
+	}
 	text = strings.Replace(text, "## DISCUSSION\n", "## DISCUSSION\n\nSELF_REVIEW: PASS\n", 1)
 	if err := board.UpdateDocument(root, id, board.UpdateOptions{Document: "spec.md", Text: text, ExpectedRevision: s.Revision}); err != nil {
 		t.Fatal(err)
@@ -49,7 +57,7 @@ func v1Board(t *testing.T) string {
 }
 
 func TestImportFillsAnEmptyProjectAndKeepsTheSource(t *testing.T) {
-	source := v1Board(t)
+	source := v1BoardWithTarget(t, "release/v2")
 	_, before, err := snapshotTree(source)
 	if err != nil {
 		t.Fatal(err)
@@ -92,6 +100,9 @@ func TestImportFillsAnEmptyProjectAndKeepsTheSource(t *testing.T) {
 	shown, err := p.Show(t.Context(), busy)
 	if err != nil || shown.Claim != nil {
 		t.Fatalf("an imported working card has no claim: %+v %v", shown.Claim, err)
+	}
+	if target, err := board.IntegrationTargetOf(shown.Text); err != nil || target != "release/v2" {
+		t.Fatalf("imported card target = %q: %v", target, err)
 	}
 	_, err = p.Move(t.Context(), "", busy, api.Move{State: "done", Result: "completed"}, nil)
 	expectServerCode(t, err, api.CodeLeaseInvalid)

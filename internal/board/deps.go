@@ -381,6 +381,7 @@ func collectBoardProblems(root string, taskIDs []string, includeAll, importHisto
 	}
 	allProblems = append(allProblems, dependencyProblems(dependencyBoard, selected, skipStates)...)
 	allProblems = append(allProblems, contractProblems(board)...)
+	allProblems = append(allProblems, integrationTargetProblems(board, dependencyBoard, includeAll || len(taskIDs) > 0)...)
 	return board, allProblems, nil
 }
 

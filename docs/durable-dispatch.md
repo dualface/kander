@@ -81,7 +81,7 @@ kander dispatch show <task-id> <id>
 |---|---|---|
 | `fix` | `working` $\to$ `review` | Binds batch ID, finding IDs, and prior author disposition records. |
 | `sync` | `working` $\to$ `review` | Used for branch/rebase synchronization. Does not accept review finding bindings. An accepted sync round still authorizes the current `OWNER` to append author records with the `authorization` of that round. The owner uses this to correct records whose `fix_commit` a rebase rewrote, and a round for corrections only needs no rebase ([Review Disposition](review-disposition.md#fix-commits-must-stay-in-the-batch-history)). |
-| `wrap-up` | `working` $\to$ `done` | Binds closed review target SHA, Git integration commit, and mainline branch ref. |
+| `wrap-up` | `working` $\to$ `done` | Binds closed review target SHA, Git integration commit, and integration target ref. |
 
 ---
 
@@ -127,7 +127,7 @@ Fix dispatches enforce that the executor receives exact, structured review findi
 
 ### Standard Wrap-up
 
-This is the legacy local-board form, kept for storage compatibility; every v2 client, including one on the default loopback server, uses the distributed form below. Binds the closed review final commit with the commit integrated into the mainline branch. `git.branch_mode` of the checkout at `cwd` (its project overlay included) selects the mainline branch: `develop` for `main-develop` (the default), `main` for `main-only`. `target_ref` must be `refs/heads/<mainline>` or `refs/remotes/origin/<mainline>`; the example uses `main-develop`:
+This is the legacy local-board form, kept for storage compatibility; every v2 client, including one on the default loopback server, uses the distributed form below. Binds the closed review final commit with the commit integrated into the mainline branch. `git.branch_mode` of the checkout at `cwd` (its project overlay included) selects the mainline branch: `develop` for `main-develop` (the default), `main` for `main-only`. `target_ref` must be `refs/heads/<mainline>` or `refs/remotes/origin/<mainline>`; the example uses `main-develop`. For an explicit `INTEGRATION_TARGET`, the legacy verifier instead requires and resolves the exact `refs/heads/<target>` or `refs/remotes/origin/<target>` named in the evidence. In `main-develop` mode it rejects an explicit `main`.
 
 ```json
 {
@@ -151,7 +151,7 @@ The system verifies:
 
 ### Distributed Wrap-up
 
-In distributed mode, which every v2 client uses (an omitted `server.url` selects the default loopback server), the evidence names the published final integration. Copy it from `kander coordinator integration-show <target-ref>`: `id` → `integration_id`, `request.execution_id` → `integration_execution`, `generation` → `integration_generation`, `request.commit` → `source_commit`, `observed_target` → `target_commit`, `request.target_ref` → `target_ref`. The client stores `cwd` as `project:<id>`.
+In distributed mode, which every v2 client uses (an omitted `server.url` selects the default loopback server), the evidence names the published final integration. Copy it from `kander coordinator integration-show <target-ref>`: `id` → `integration_id`, `request.execution_id` → `integration_execution`, `generation` → `integration_generation`, `request.commit` → `source_commit`, `observed_target` → `target_commit`, `request.target_ref` → `target_ref`. The client stores `cwd` as `project:<id>`. When the card declares `INTEGRATION_TARGET`, the receipt must name `refs/heads/<target>`.
 
 ```json
 {

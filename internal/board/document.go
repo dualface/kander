@@ -257,6 +257,9 @@ func validateTarget(entry Entry, targetState, text string) error {
 		if err := validateReviewRecords(entry, text); err != nil {
 			return err
 		}
+		if _, err := IntegrationTargetOf(text); err != nil {
+			return err
+		}
 		return cardPinProblem(text)
 	case "review":
 		if MetadataFrom(text, FieldTaskBranch) == "" {

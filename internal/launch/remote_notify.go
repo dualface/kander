@@ -140,7 +140,7 @@ func notifyRemoteForExecution(task, message, messageFile, pane string, messageSe
 		if request.Kind, err = api.DispatchRequestKind(options.Kind); err != nil {
 			return out, err
 		}
-		if err := completeRemoteDispatchInput(ctx, session, cwd, request.Dispatch); err != nil {
+		if err := completeRemoteDispatchInput(ctx, session, cwd, card.Text, request.Dispatch); err != nil {
 			return out, err
 		}
 		request.CardRevision, request.AcceptWithin = card.Revision, api.DurationOf(time.Duration(timeout*float64(time.Second)))

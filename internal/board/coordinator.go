@@ -127,6 +127,9 @@ type CoordinatorGitFacts struct {
 	Integration DispatchIntegration
 	Closures    []ReviewClosure
 	Delivery    *CoordinatorDelivery
+	// IntegrationTarget is the card's target field, empty for the mainline
+	// branch. It is read from the card, never from the integration record.
+	IntegrationTarget string `json:",omitempty"`
 }
 
 // CoordinatorDelivery binds a first delivery to the card's recorded branch and

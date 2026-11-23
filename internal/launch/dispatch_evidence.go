@@ -28,7 +28,17 @@ func readDispatchEvidence(path string) (board.DispatchEvidence, error) {
 	return evidence, err
 }
 
+// verifyDispatchIntegration verifies an integration into the mainline branch,
+// the target of a card with no target field.
 func verifyDispatchIntegration(ctx context.Context, g board.DispatchIntegration) error {
+	return verifyIntegrationTarget(ctx, g, "")
+}
+
+// verifyIntegrationTarget verifies an integration into the branch a card
+// targets: its target field, or the mainline branch when target is empty. It
+// proves only the one ref the evidence names; the other side of a local and
+// origin pair may not exist, as in a local-only integration.
+func verifyIntegrationTarget(ctx context.Context, g board.DispatchIntegration, target string) error {
 	if !filepath.IsAbs(g.CWD) {
 		return launchError("board.dispatch_evidence_invalid", "integration CWD or target ref")
 	}
@@ -38,8 +48,19 @@ func verifyDispatchIntegration(ctx context.Context, g board.DispatchIntegration)
 	if err != nil {
 		return err
 	}
-	mainline := config.MainlineBranch(cfg)
-	if g.TargetRef != "refs/heads/"+mainline && g.TargetRef != "refs/remotes/origin/"+mainline {
+	branch := config.MainlineBranch(cfg)
+	if target != "" {
+		// `main` only advances from `develop` in main-develop mode, so a card may
+		// not name it as a target there.
+		if target == "main" && branch == "develop" {
+			return launchError("board.dispatch_evidence_invalid", "integration CWD or target ref")
+		}
+		branch = target
+	}
+	if g.TargetRef != "refs/heads/"+branch && g.TargetRef != "refs/remotes/origin/"+branch {
+		return launchError("board.dispatch_evidence_invalid", "integration CWD or target ref")
+	}
+	if target != "" && exec.CommandContext(ctx, "git", "-C", g.CWD, "check-ref-format", "--branch", target).Run() != nil {
 		return launchError("board.dispatch_evidence_invalid", "integration CWD or target ref")
 	}
 	for _, commit := range []string{g.SourceCommit, g.TargetCommit, g.ReviewTarget, g.ReviewBase} {
@@ -55,7 +76,19 @@ func verifyDispatchIntegration(ctx context.Context, g board.DispatchIntegration)
 		}
 		return strings.TrimSpace(string(data)), nil
 	}
-	head, err := git("rev-parse", "--verify", g.TargetRef+"^{commit}")
+	// A card's own target is read as the exact ref path, so a same-named ref in
+	// another namespace cannot stand in for a missing one.
+	resolve := func() (string, error) {
+		if target == "" {
+			return git("rev-parse", "--verify", g.TargetRef+"^{commit}")
+		}
+		exact, err := git("show-ref", "--verify", "--hash", g.TargetRef)
+		if err != nil {
+			return "", err
+		}
+		return git("rev-parse", "--verify", exact+"^{commit}")
+	}
+	head, err := resolve()
 	if err != nil {
 		return err
 	}
@@ -79,12 +112,33 @@ func verifyDispatchIntegration(ctx context.Context, g board.DispatchIntegration)
 			return err
 		}
 	}
-	after, err := git("rev-parse", "--verify", g.TargetRef+"^{commit}")
+	after, err := resolve()
 	if err != nil {
 		return err
 	}
 	if after != head {
 		return launchError("board.dispatch_evidence_invalid", "integration target changed during verification")
+	}
+	return nil
+}
+
+// verifyPortableWrapUpTarget binds a distributed receipt to a declared card
+// target. For older cards the receipt itself supplies the target as before.
+func verifyPortableWrapUpTarget(cwd, target, ref string) error {
+	if target == "" {
+		return nil
+	}
+	if ref != "refs/heads/"+target {
+		return launchError("board.dispatch_evidence_invalid", "integration binding")
+	}
+	if target == "main" {
+		cfg, err := config.LoadFor(cwd)
+		if err != nil {
+			return err
+		}
+		if config.MainlineBranch(cfg) == "develop" {
+			return launchError("board.dispatch_evidence_invalid", "integration CWD or target ref")
+		}
 	}
 	return nil
 }

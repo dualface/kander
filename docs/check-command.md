@@ -10,6 +10,14 @@ kander check overlap --source <ref> [--head <ref>]
 
 Git is invoked with `exec.CommandContext` and a direct argv. There is no shell, and refs are resolved to commit IDs with `--end-of-options` before any diff. Paths are read from `git diff --name-status -z --find-copies-harder`. Every Git subprocess sets `GIT_OPTIONAL_LOCKS=0`, `GIT_TERMINAL_PROMPT=0`, `GIT_NO_LAZY_FETCH=1`, and a C locale so missing objects fail instead of fetching and so error text stays stable. Commit and path fields never include host-absolute paths or timestamps, and invalid-ref errors do not echo the supplied ref.
 
+## Integration target problems
+
+For every card the no-mode form selects (`backlog/`, `todo/`, `working/`, `review/`, and `trash/` by default; `done/` and `archived/` too when a card is named or `--all` is set) it checks the optional `INTEGRATION_TARGET` header line (see [Directory cards](directory-cards.md#integration-target)). Each of these is a problem and makes the exit code non-zero:
+
+- the line appears more than once;
+- the value is not a valid branch name;
+- the members of one `TASK_GROUP` do not all have the same value; a member with no line counts as a value of its own. One problem is reported per group, and the comparison reads every card of the group on the board except those in `trash/`, so naming a single member still compares the whole group.
+
 ## Liveness results
 
 The no-mode form probes `working/` cards and prints one line per card with its status and reason. `internal/liveness` classifies the card; `kander subscribe` reuses the same classifier and result set.

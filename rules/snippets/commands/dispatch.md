@@ -136,7 +136,7 @@ kander dispatch settle 20261118-example-task dispatch-1 3
   ```
 
   The problem list and the way to send again are under "Distributed authority"; the example does not repeat them.
-- New wrap-up intents require `evidence.wrap_up.git` with absolute CWD, source_commit, target_commit, target_ref (`refs/heads/<mainline branch>` or `refs/remotes/origin/<mainline branch>`, where `git.branch_mode` of the checkout at CWD selects `develop` or `main`), author, and basis.
+- New wrap-up intents require `evidence.wrap_up.git` with absolute CWD, source_commit, target_commit, target_ref (`refs/heads/<integration target>` or `refs/remotes/origin/<integration target>`, using the card's `INTEGRATION_TARGET` or the mainline branch selected by `git.branch_mode` of the checkout at CWD), author, and basis.
   - The command binds the base of the first planned batch and the closed final target of the last batch (kept in sync by `review advance` and `--advance-file`, see `snippets/review-evidence-gate.md` "Review Evidence Completion Gate"). It verifies source and target ancestry into the selected mainline reference and rereads that ref.
   - `source_commit` must equal the dispatch base, so pass `--base <source_commit>` whenever it differs from the HEAD of the directory the command runs in. By default source equals that closed final target; include no additional unreviewed commits.
   - After an authorized rebase, supply `rebased_base`: the command verifies base ancestry and compares the complete patch of the recorded range with the rebased range, normalizing only blob hashes and hunk offsets. A different patch rejects, and the orchestrator stops and reports per `snippets/orchestrate-integrate.md` "Merge-Back and Cleanup Preconditions".
@@ -175,7 +175,7 @@ For a registered Git remote, working-to-review CLI and TUI moves publish the ful
 
 **Distributed wrap-up evidence**
 
-In distributed mode, which every v2 client uses (an omitted `server.url` selects the default loopback server), wrap-up evidence names the published final integration instead of a machine path and a mainline ref. `evidence.wrap_up.git` requires `integration_id`, `integration_execution`, `integration_generation`, `source_commit`, `target_commit`, `target_ref`, `author`, and `basis`. The client writes `cwd` as `project:<project-id>` and fills `dispatch_id`, `task_id`, the artifact reference, and the review range itself. Copy every value from the public receipt that `kander coordinator integration-show <target-ref>` prints:
+In distributed mode, which every v2 client uses (an omitted `server.url` selects the default loopback server), wrap-up evidence names the published final integration by its portable receipt. `evidence.wrap_up.git` requires `integration_id`, `integration_execution`, `integration_generation`, `source_commit`, `target_commit`, `target_ref`, `author`, and `basis`. The client writes `cwd` as `project:<project-id>` and fills `dispatch_id`, `task_id`, the artifact reference, and the review range itself. Copy every value from the public receipt that `kander coordinator integration-show <target-ref>` prints:
 
 | Evidence field | Receipt field |
 | --- | --- |
@@ -184,7 +184,7 @@ In distributed mode, which every v2 client uses (an omitted `server.url` selects
 | `integration_generation` | `generation` |
 | `source_commit` | `request.commit` |
 | `target_commit` | `observed_target` |
-| `target_ref` | `request.target_ref` (a `refs/heads/...` name; never `refs/remotes/origin/...`) |
+| `target_ref` | `request.target_ref` (a `refs/heads/...` name that matches the card's integration target when declared) |
 
 ```json
 {

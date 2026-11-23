@@ -55,6 +55,7 @@ var testCatalogFiles = []string{
 	"locales/rulesinjection/%s.json",
 	"locales/server/%s.json",
 	"locales/document/%s.json",
+	"locales/integrationtarget/%s.json",
 	"locales/refusal/%s.json",
 	"locales/dispatchevidence/%s.json",
 	"locales/jsonoutput/%s.json",

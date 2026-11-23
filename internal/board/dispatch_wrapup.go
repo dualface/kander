@@ -49,6 +49,16 @@ func mainlineTargetRef(ref string) bool {
 	return false
 }
 
+// integrationTargetRef accepts the local or origin ref of a card's integration
+// target. A card without a target field keeps the mainline rule. The Git
+// verifier in launch narrows both to the one branch this checkout allows.
+func integrationTargetRef(ref, target string) bool {
+	if target == "" {
+		return mainlineTargetRef(ref)
+	}
+	return ref == "refs/heads/"+target || ref == "refs/remotes/origin/"+target
+}
+
 // validateDispatchWrapUp checks the integration of a wrap-up. A completed round
 // (historical) was bound to the plan of its day: a batch appended later for
 // another member's rebound cycle moves the end of the plan, not this delivery.
@@ -58,7 +68,15 @@ func validateDispatchWrapUp(tx *Transaction, in DispatchInput, published, histor
 		return dispatchEvidenceError("wrap-up binding required")
 	}
 	g := w.Git
-	if w.Artifact != (ArtifactReference{in.TaskID, dispatchPath(in.ID, "integration")}) || g.DispatchID != in.ID || g.TaskID != in.TaskID || !validDispatchLocation(g.CWD) || g.SourceCommit != in.Base || !dispatchCommitPattern.MatchString(g.TargetCommit) || !validWrapUpTarget(g) || strings.TrimSpace(g.Author) == "" || strings.TrimSpace(g.Basis) == "" || g.VerifiedAt.IsZero() || g.VerifiedAt.After(time.Now()) {
+	card, err := tx.Snapshot(in.TaskID)
+	if err != nil {
+		return err
+	}
+	target, err := IntegrationTargetOf(card.Text)
+	if err != nil {
+		return err
+	}
+	if w.Artifact != (ArtifactReference{in.TaskID, dispatchPath(in.ID, "integration")}) || g.DispatchID != in.ID || g.TaskID != in.TaskID || !validDispatchLocation(g.CWD) || g.SourceCommit != in.Base || !dispatchCommitPattern.MatchString(g.TargetCommit) || !validWrapUpTarget(g, target) || strings.TrimSpace(g.Author) == "" || strings.TrimSpace(g.Basis) == "" || g.VerifiedAt.IsZero() || g.VerifiedAt.After(time.Now()) {
 		return dispatchEvidenceError("integration binding")
 	}
 	var reviewRange ReviewGitEdge
@@ -72,7 +90,6 @@ func validateDispatchWrapUp(tx *Transaction, in DispatchInput, published, histor
 			reviewRange.Ancestor = plan.Batches[0].Base
 		}
 	} else {
-		var err error
 		if reviewRange, err = dispatchReviewRange(tx, in.TaskID); err != nil {
 			return err
 		}
@@ -342,10 +359,13 @@ func validDispatchLocation(value string) bool {
 
 // Portable targets require a service identity and a complete receipt binding.
 // The service independently checks the published immutable integration record.
-func validWrapUpTarget(g DispatchIntegration) bool {
+func validWrapUpTarget(g DispatchIntegration, target string) bool {
 	hasReceipt := g.IntegrationID != "" || g.IntegrationExecution != "" || g.IntegrationGeneration != 0
 	if !hasReceipt {
-		return mainlineTargetRef(g.TargetRef)
+		return integrationTargetRef(g.TargetRef, target)
+	}
+	if target != "" && g.TargetRef != "refs/heads/"+target {
+		return false
 	}
 	project, portable := strings.CutPrefix(g.CWD, "project:")
 	return portable && ValidReviewID(project) && strings.HasPrefix(g.TargetRef, "refs/heads/") && strings.HasPrefix(g.IntegrationID, "i-") && len(g.IntegrationID) == 66 && commitPattern.MatchString(strings.TrimPrefix(g.IntegrationID, "i-")) && len(g.IntegrationExecution) > 0 && len(g.IntegrationExecution) <= 128 && g.IntegrationGeneration > 0

@@ -21,6 +21,9 @@ func verifyRemoteCoordinatorGitFacts(ctx context.Context, s *remote.Session, cwd
 		_, err = s.FetchDelivery(ctx, cwd, d.TaskID, d.Commit)
 		return err
 	}
+	if err := verifyPortableWrapUpTarget(cwd, facts.IntegrationTarget, facts.Integration.TargetRef); err != nil {
+		return err
+	}
 	if err := s.VerifyWrapUpIntegration(ctx, cwd, facts.Integration); err != nil {
 		return err
 	}

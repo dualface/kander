@@ -102,7 +102,7 @@ func openWrapUpSession(t *testing.T, cfg *config.Config, home, dir string) *remo
 
 // newWrapUpScenario delivers one group member through the gitless service:
 // a published delivery, a closed joint review and a final integration.
-func newWrapUpScenario(t *testing.T) *wrapUpScenario {
+func newWrapUpScenario(t *testing.T, targetBranch string) *wrapUpScenario {
 	t.Helper()
 	target, data := startGitlessServer(t)
 	root := t.TempDir()
@@ -143,7 +143,13 @@ func newWrapUpScenario(t *testing.T) *wrapUpScenario {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if target, err := board.IntegrationTargetOf(task.Text); err != nil || target != "" || strings.Contains(task.Text, "- INTEGRATION_TARGET:") {
+		t.Fatalf("new card has an integration target: %q, %v", target, err)
+	}
 	text := strings.ReplaceAll(task.Text, "<FILL_IN>", "filled")
+	if targetBranch != "" {
+		text = strings.Replace(text, "- RESULT:", "- INTEGRATION_TARGET: "+targetBranch+"\n- RESULT:", 1)
+	}
 	text = strings.ReplaceAll(text, "- [ ]", "- [x]")
 	text = strings.Replace(text, "- TASK_GROUP:", "- TASK_GROUP: "+s.group, 1)
 	text = strings.Replace(text, "- TASK_BRANCH:", "- TASK_BRANCH: task/gitless-wrap", 1)
@@ -154,6 +160,19 @@ func newWrapUpScenario(t *testing.T) *wrapUpScenario {
 	}
 	if _, err := s.holder.Project.Move(ctx, "", task.TaskID, api.Move{State: "todo"}, nil); err != nil {
 		t.Fatal(err)
+	}
+	if targetBranch != "" {
+		current, err := s.holder.Project.Show(ctx, task.TaskID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if target, err := board.IntegrationTargetOf(current.Text); target != targetBranch || err != nil {
+			t.Fatalf("stored target = %q, want %q: %v", target, targetBranch, err)
+		}
+		modified := strings.Replace(current.Text, "- INTEGRATION_TARGET: "+targetBranch+"\n", "- INTEGRATION_TARGET: another\n", 1)
+		if _, err := s.holder.Project.PutDocument(ctx, "", task.TaskID, api.Document{Path: "spec.md", Text: modified, ExpectedRevision: current.Revision}, nil); err == nil || !strings.Contains(err.Error(), "board.transaction_decision_required") {
+			t.Fatalf("frozen target change: %v", err)
+		}
 	}
 	s.task = task.TaskID
 	grant, err := s.holder.Project.Claim(ctx, "", s.task, api.ClaimRequest{ClientID: s.holder.Client.ClientID(), ExecutionID: "gitless-wrap-executor", Owner: "codex"})
@@ -244,7 +263,7 @@ func (s *wrapUpScenario) requests() []api.CollabRequest {
 }
 
 func TestGitlessServiceCompletesDistributedWrapUpFromAnotherCheckout(t *testing.T) {
-	s := newWrapUpScenario(t)
+	s := newWrapUpScenario(t, "v2")
 	ctx := t.Context()
 	// The pre-fix documented shape: no published integration identity.
 	legacy := map[string]any{"cwd": s.first, "source_commit": s.commit, "target_commit": s.final.ObservedTarget, "target_ref": "refs/heads/v2", "author": "coordinator", "basis": "verified final integration"}
@@ -380,5 +399,24 @@ func (s *wrapUpScenario) rewindRequest(request api.CollabRequest) {
 	}
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A published integration can target any valid non-group head. A wrap-up
+// using its receipt must still match the member's frozen card contract.
+func TestDistributedWrapUpRejectsReceiptForAnotherIntegrationTarget(t *testing.T) {
+	s := newWrapUpScenario(t, "release/v2")
+	git := map[string]any{
+		"integration_id": s.final.ID, "integration_execution": s.final.Request.ExecutionID,
+		"integration_generation": s.final.Generation, "source_commit": s.commit,
+		"target_commit": s.final.ObservedTarget, "target_ref": s.final.Request.TargetRef,
+		"author": "coordinator", "basis": "verified final integration",
+	}
+	out := s.notify("wrong-card-target", git)
+	if out.code == 0 || !strings.Contains(out.stderr, "integration binding") {
+		t.Fatalf("receipt for another branch accepted or misdiagnosed: code=%d\n%s", out.code, out.stderr)
+	}
+	if requests := s.requests(); len(requests) != 0 {
+		t.Fatalf("rejected evidence created requests: %+v", requests)
 	}
 }

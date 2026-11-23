@@ -112,7 +112,7 @@ func runRemoteDispatch(a dispatchArguments, cfg *config.Config) int {
 	}
 	act.CardRevision = current.Revision
 	if action == "prepare" {
-		if err := completeRemoteDispatchInput(ctx, session, cwd, act.Input); err != nil {
+		if err := completeRemoteDispatchInput(ctx, session, cwd, current.Text, act.Input); err != nil {
 			return fail(err)
 		}
 	}
@@ -173,7 +173,7 @@ func runRemoteDispatch(a dispatchArguments, cfg *config.Config) int {
 	return 0
 }
 
-func completeRemoteDispatchInput(ctx context.Context, session *remote.Session, cwd string, input *board.DispatchInput) error {
+func completeRemoteDispatchInput(ctx context.Context, session *remote.Session, cwd, cardText string, input *board.DispatchInput) error {
 	if session.Info.Remote != "" {
 		if err := session.FetchCommit(ctx, cwd, input.Base); err != nil {
 			return err
@@ -247,7 +247,13 @@ func completeRemoteDispatchInput(ctx context.Context, session *remote.Session, c
 	if err := session.VerifyWrapUpIntegration(ctx, cwd, w.Git); err != nil {
 		return err
 	}
-	w.Git.CWD = "project:" + session.Info.ID
+	target, err := board.IntegrationTargetOf(cardText)
+	if err != nil {
+		return err
+	}
+	if err := verifyPortableWrapUpTarget(cwd, target, w.Git.TargetRef); err != nil {
+		return err
+	}
 	if w.Git.VerifiedAt.IsZero() {
 		w.Git.VerifiedAt = time.Now().UTC()
 	}
@@ -270,11 +276,11 @@ func authorizeRemoteWrapUp(ctx context.Context, session *remote.Session, cwd str
 		if input.Intent.Kind != "wrap-up" || input.Intent.TaskID != input.TaskID || input.Intent.ID != input.DispatchID {
 			return value, errors.New(config.Text("remote.wrap_up_identity_mismatch"))
 		}
-		if err := completeRemoteDispatchInput(ctx, session, cwd, input.Intent); err != nil {
-			return value, err
-		}
 		current, err := session.Project.Show(ctx, input.TaskID)
 		if err != nil {
+			return value, err
+		}
+		if err := completeRemoteDispatchInput(ctx, session, cwd, current.Text, input.Intent); err != nil {
 			return value, err
 		}
 		value, err = session.Project.DispatchAction(ctx, client.NewKey(), input.TaskID, "prepare", api.DispatchCommand{Input: input.Intent, CardRevision: current.Revision}, *credential.Claim())
@@ -309,6 +315,13 @@ func authorizeRemoteWrapUp(ctx context.Context, session *remote.Session, cwd str
 		return value, errors.New(config.Text("remote.wrap_up_foreign_terminal"))
 	}
 	if w := value.Input.Evidence.WrapUp; w != nil {
+		target, err := board.IntegrationTargetOf(current.Text)
+		if err != nil {
+			return value, err
+		}
+		if err := verifyPortableWrapUpTarget(cwd, target, w.Git.TargetRef); err != nil {
+			return value, err
+		}
 		if err := session.VerifyWrapUpIntegration(ctx, cwd, w.Git); err != nil {
 			return value, err
 		}

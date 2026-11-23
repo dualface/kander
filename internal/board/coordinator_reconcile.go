@@ -129,7 +129,14 @@ func walkCoordinatorMember(ctx context.Context, tx *Transaction, pass *coordinat
 			if s.Entry.State != "review" || branch == "" || !dispatchCommitPattern.MatchString(o.DeliveryCommit) || verify == nil {
 				return m, coordinatorError("first delivery requires review state, task branch and Git verification")
 			}
-			if err = verify(ctx, CoordinatorGitFacts{Delivery: &CoordinatorDelivery{TaskID: id, Branch: branch, Commit: o.DeliveryCommit}}); err != nil {
+			target, targetErr := IntegrationTargetOf(s.Text)
+			if targetErr != nil {
+				return m, targetErr
+			}
+			if branch == target {
+				return m, coordinatorError("task branch is the integration target")
+			}
+			if err = verify(ctx, CoordinatorGitFacts{IntegrationTarget: target, Delivery: &CoordinatorDelivery{TaskID: id, Branch: branch, Commit: o.DeliveryCommit}}); err != nil {
 				return m, err
 			}
 			m.DeliveryCommit = o.DeliveryCommit

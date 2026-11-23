@@ -30,7 +30,7 @@ func verifyWrapUpGit(ctx context.Context, cwd string, facts board.CoordinatorGit
 	if cwd != "" {
 		g.CWD = cwd
 	}
-	if err := verifyDispatchIntegration(ctx, g); err != nil {
+	if err := verifyIntegrationTarget(ctx, g, facts.IntegrationTarget); err != nil {
 		return err
 	}
 	for _, c := range facts.Closures {
@@ -38,7 +38,7 @@ func verifyWrapUpGit(ctx context.Context, cwd string, facts board.CoordinatorGit
 			return err
 		}
 	}
-	return verifyDispatchIntegration(ctx, g)
+	return verifyIntegrationTarget(ctx, g, facts.IntegrationTarget)
 }
 
 // verifyWrapUpCompletion runs for kander move done. Cleanup may already have
