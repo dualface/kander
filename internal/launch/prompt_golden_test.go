@@ -71,17 +71,23 @@ func waitingReminder(t *testing.T) string {
 	return string(data)
 }
 
-// The waiting reminder follows the report reminder (when rules.reporting is on) and comes before the
-// SIZE sentence in the start and takeover prompts, with the reporting switch on and off.
+// The reporting switch controls only the report reminder in the start and takeover prompts.
+// With reporting off, the instruction contains the preamble, waiting reminder, and SIZE sentence
+// in order. The waiting reminder is present in both cases.
 func TestExecutionPromptsCarryTheWaitingReminder(t *testing.T) {
 	waiting := waitingReminder(t)
 	card := "- LANGUAGE: en\n- SIZE: small\n"
+	preamble, err := rulesAndLanguage(goldenPaths, "en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sizeText, err := render(goldenPaths, "size.md", map[string]string{"Size": "small"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	withoutReport := preamble + " " + waiting + " " + sizeText
 	for _, reporting := range []bool{true, false} {
 		goldenConfig(t, reporting)
-		sizeText, err := render(goldenPaths, "size.md", map[string]string{"Size": "small"})
-		if err != nil {
-			t.Fatal(err)
-		}
 		prompts := map[string]func() (string, error){
 			"start": func() (string, error) { return startAgentPrompt("20260101-golden-task", goldenPaths, "", card) },
 			"takeover": func() (string, error) {
@@ -92,6 +98,9 @@ func TestExecutionPromptsCarryTheWaitingReminder(t *testing.T) {
 			text, err := build()
 			if err != nil {
 				t.Fatal(err)
+			}
+			if !reporting && !strings.Contains(text, withoutReport) {
+				t.Fatalf("%s prompt without reporting lacks the preamble, waiting reminder, or SIZE sentence in order: %s", name, text)
 			}
 			if !strings.Contains(text, waiting+" "+sizeText) {
 				t.Fatalf("%s prompt (reporting=%v) lacks the waiting reminder before the SIZE sentence: %s", name, reporting, text)
@@ -113,7 +122,7 @@ func TestOrchestratePromptCarriesTheWaitingReminder(t *testing.T) {
 	}
 	for _, want := range []string{
 		`Never end a turn without a wake-up source per ` + "`snippets/commands/subscribe.md`" + ` "Waking Up"`,
-		"its exit by default, each output line under `--follow`",
+		"wait in its subscription loop, because a background `kander subscribe` wakes this session only through a report the runner delivers (its exit by default, each output line under `--follow`).",
 		"Run long commands such as `kander review` in the foreground or in a background mode whose completion the runner reports; never detach them with & or nohup.",
 	} {
 		if !strings.Contains(text, want) {
