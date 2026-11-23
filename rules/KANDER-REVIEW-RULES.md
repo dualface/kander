@@ -37,7 +37,7 @@ Loaded automatically and used to judge triggering only when `rules.review=true`;
 
 The only runnable roles are `PMQA` (stage one) and `Security` (stage two), both defaulting to `auto`. `skip` means N/A unless a higher-precedence source requires the role; `required` means the role runs once review is triggered unless a higher-precedence source skips it. New invocations and two-key batches accept only these two names and their case aliases.
 
-- `PMQA` first checks every acceptance criterion against the task contract, including explicit performance acceptance, then performs the architecture, correctness, regression, testing, and code-quality checks under "Goals and Boundaries". Explicit performance acceptance belongs to the contract portion; there is no general performance review. Finding IDs use the `PMQA-` prefix.
+- `PMQA` first checks whether the delivery meets the confirmed commitments in the task context, including explicit performance targets and required implementation constraints. Each PM finding cites the commitment and the observable shortfall. An alternative implementation that satisfies the commitments passes PM acceptance. QA then checks architecture, correctness, regressions, testing, and code quality under "Goals and Boundaries". Finding IDs use the `PMQA-` prefix.
 - `Security` first traces untrusted inputs across trust boundaries, then verifies realistic end-to-end exploit chains, reporting each root cause once and stating explicitly when no qualifying vulnerability was found. Finding IDs use the `Security-` prefix.
 - Reviewer selection, models, large/small policies, incremental chains, verification, and failure handling apply equally to both roles. Never switch an existing run chain into a different role.
 - New plans and batches use exactly the two keys `PMQA` and `Security`, each `required` or `N/A: <reason>`; a later batch appended to a historical four-role plan also uses the two-key form, and each batch freezes its own role set.
@@ -184,7 +184,7 @@ Example wording for tier (2): `Security is always N/A in this repository`, or `S
 
 ## Review Profiles
 
-Review profiles decide which roles run in a round and the default content of each role's "Review Focus"; they change neither stage order nor the invocation and isolation of the review entry.
+Review profiles decide which roles run in a round and the default content of each role's "Review Focus"; they change neither stage order nor the invocation and isolation of the review entry. For PM, each focus applies only to commitments in the task context.
 
 - The profile is derived from the whitelist entries the task's actual changes hit; the executing agent classifying or downgrading on its own is forbidden. With several hits take the union: each role starts one first round, fixes are incremental re-reviews, and the focus of each entry is merged into "Review Focus".
 - The table only suggests role combinations; whether a role actually runs is decided by "Review Stages". Entries formerly annotated "PM exempt" still run `PMQA`.

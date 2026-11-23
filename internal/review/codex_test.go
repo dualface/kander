@@ -301,6 +301,7 @@ func TestPromptCarriesRoleAndQARules(t *testing.T) {
 }
 
 func TestSpecFileAuthoritative(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	h := newCodexHarness(t)
 	spec := filepath.Join(h.root, "spec.md")
 	if err := os.WriteFile(spec, []byte("# 任务契约\n"), 0o644); err != nil {
@@ -316,8 +317,8 @@ func TestSpecFileAuthoritative(t *testing.T) {
 	if !strings.Contains(prompt, "Authoritative spec file: "+abs) {
 		t.Fatalf("prompt=%s", prompt)
 	}
-	if !strings.Contains(prompt, "suggest tagged [out-of-contract]") {
-		t.Fatal("missing out-of-contract rule")
+	if !strings.Contains(prompt, "For each PM finding, cite the confirmed commitment") {
+		t.Fatal("missing PM plan acceptance rule")
 	}
 }
 
