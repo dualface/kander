@@ -38,7 +38,7 @@ kander subscribe --follow --watch 20261118-example-task
 
 **Waking Up**
 
-- Never end the turn, switch away, or report the cards as watched without a wake-up source: something the runner is certain to deliver to this session at the next event. A background process counts only when the runner reports what wakes you: its exit for a single-event subscription, each output line for `--follow`. Without the report required by the chosen mode, ending the turn stalls the orchestration until someone wakes the session by hand.
+- Never end the turn, switch away, or report the cards as watched without a wake-up source: something the runner is certain to deliver to this session at the next event. A background process counts only when the runner reports what wakes you: its exit for a single-event subscription, each output line for `--follow`. A process whose exit or output the runner does not report is not a wake-up source; ending the turn on it stalls the orchestration until someone wakes the session by hand.
 - The wait loop is the default. Start `kander subscribe` without `--follow`, with standard output in a new file. It exits with status 0 after the first wake-up event. Read the file, handle every line, then start the next subscription with a new file.
   - A runner that wakes the session when a background process exits (Claude Code: background Bash, `run_in_background`, which reports nothing before the exit) runs each subscription in the background.
   - A runner with no background wake-up runs each subscription in the foreground within the turn, with `--heartbeat` shorter than its command timeout.
