@@ -83,6 +83,33 @@ func TestBuildPromptLastMessageOutputContractIncremental(t *testing.T) {
 	}
 }
 
+func TestIncrementalQualityReviewGate(t *testing.T) {
+	isolateBuiltinConfig(t)
+	for _, role := range []string{"PMQA", "QA"} {
+		ctx := promptContractContext("codex")
+		ctx.role = role
+		ctx.reviewed = baselineReviewed
+		contract := mustBuildContract(t, ctx)
+		for _, want := range []string{
+			"Reuse the prior finding ID and lineage",
+			"describe the behavior at " + ctx.reviewed,
+			"cite the exact change in " + ctx.reviewed + ".." + ctx.commit,
+			"show the reachable consequence at " + ctx.commit,
+			"finish with an empty gate list",
+			"Grade inaccurate documentation or comments, dead code, and redundant tests by their demonstrated impact",
+		} {
+			if !strings.Contains(contract, want) {
+				t.Errorf("%s incremental contract is missing %q", role, want)
+			}
+		}
+		for _, obsolete := range []string{"Only a blocking defect introduced by the fix", "Always classify these as at least medium"} {
+			if strings.Contains(contract, obsolete) {
+				t.Errorf("%s incremental contract retains %q", role, obsolete)
+			}
+		}
+	}
+}
+
 func TestReviewPromptResourcesRenderCompletely(t *testing.T) {
 	for _, role := range []string{"PMQA", "Security", "PM", "QA", "CSA", "Hacker"} {
 		for _, reviewed := range []string{"", "cccccccccccccccccccccccccccccccccccccccc"} {

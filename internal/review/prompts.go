@@ -77,17 +77,20 @@ func lastMessageOutputContract() (string, error) {
 	return strings.TrimSpace(text), err
 }
 
-func incrementalScopeRules(ctx reviewContext) (string, error) {
-	return renderReviewTemplate("scope-incremental.md", incrementalScopeData{
-		Base: ctx.base, Commit: ctx.commit, Reviewed: ctx.reviewed,
-	})
-}
-
 func buildReviewContract(ctx reviewContext) (string, error) {
-	scope, err := renderReviewTemplate("scope-full.md", nil)
+	qualityReview := ctx.role == "PMQA" || ctx.role == "QA"
+	scopeTemplate := "scope-full.md"
 	if ctx.reviewed != "" {
-		scope, err = incrementalScopeRules(ctx)
+		scopeTemplate = "scope-incremental.md"
+		if qualityReview {
+			scopeTemplate = "scope-incremental-qa.md"
+		}
 	}
+	scope, err := renderReviewTemplate(scopeTemplate, incrementalScopeData{
+		Base:     ctx.base,
+		Reviewed: ctx.reviewed,
+		Commit:   ctx.commit,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -101,7 +104,7 @@ func buildReviewContract(ctx reviewContext) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	tiers, err := renderReviewTemplate("tiers.md", nil)
+	tiers, err := renderReviewTemplate("tiers.md", qualityReview)
 	if err != nil {
 		return "", err
 	}
