@@ -37,7 +37,8 @@ type UninstallItem struct {
 	Reason  string
 	content []byte
 	// rules marks a file of the rules directory, which the plan lists as one count.
-	rules bool
+	rules       bool
+	skillDigest string
 }
 
 // UninstallPlan is everything kander uninstall removes or edits in one scope, computed
@@ -146,6 +147,20 @@ func PlanUninstall(paths config.InstallPaths) UninstallPlan {
 	items, dirs := planRulesDirRemoval(paths.RulesDir)
 	plan.Items = append(plan.Items, items...)
 	plan.Dirs = dirs
+	for _, agent := range []string{"codex", "claude"} {
+		dir, err := leaderTarget(agent, paths)
+		if err != nil {
+			plan.Items = append(plan.Items, UninstallItem{Action: UninstallKeep, Path: agent, Reason: err.Error()})
+			continue
+		}
+		if _, ok := seen[dir]; dir == "" || ok {
+			continue
+		}
+		seen[dir] = struct{}{}
+		items, dirs := planLeaderRemoval(dir, paths)
+		plan.Items = append(plan.Items, items...)
+		plan.Dirs = append(plan.Dirs, dirs...)
+	}
 	return plan
 }
 
@@ -294,6 +309,15 @@ func planRulesDirRemoval(dir string) ([]UninstallItem, []string) {
 // afterwards writes nothing, then edits and deletes the planned files and removes the empty
 // rules directories. A failed config write changes nothing else.
 func ApplyUninstall(plan UninstallPlan, out io.Writer) error {
+	// A user can edit a skill while the confirmation prompt is open. Recheck
+	// the whole preview before removing any of its interdependent documents.
+	for _, item := range plan.Items {
+		if item.skillDigest != "" {
+			if err := verifySkillRemoval(item); err != nil {
+				return err
+			}
+		}
+	}
 	if err := disableRulesInjection(plan.ConfigFile); err != nil {
 		return err
 	}
@@ -309,7 +333,14 @@ func ApplyUninstall(plan UninstallPlan, out io.Writer) error {
 				fmt.Fprintln(out, config.Text("install.uninstall_edited", item.Path))
 			}
 		case UninstallRemove:
-			err = removeUninstallFile(item.Path)
+			if item.skillDigest != "" {
+				if err = removeSkillFile(item); err != nil {
+					// Keep the receipt so a later run can finish this bundle.
+					return errors.Join(failed, err)
+				}
+			} else {
+				err = removeUninstallFile(item.Path)
+			}
 			if err == nil && item.rules {
 				removedRules++
 			} else if err == nil {

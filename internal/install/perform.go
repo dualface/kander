@@ -126,6 +126,9 @@ func Perform(req Request) (Result, error) {
 	result.LegacyLinksRemoved = removeLegacyEntrySymlinks(paths)
 	result.Integrations = integrateAgentRules(paths)
 	result.Extensions = integrateAgentExtensions(paths)
+	if err := installLeaderSkills(paths); err != nil {
+		return result, err
+	}
 	if req.DeleteLegacy && len(result.Legacy) > 0 {
 		if !destIsExecutable(result.RunBinary) {
 			return result, fmt.Errorf("%s", config.Text("install.new_entry_not_executable", result.RunBinary))

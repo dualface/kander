@@ -32,6 +32,8 @@ kander uninstall [--yes]
 - Keeps the binary (global or `.kander/bin/`), `config.json`, the share directory, caches, and the board.
 - Running `kander` or `kander doctor` afterwards extracts the rules root again but writes no agent file until `install_rules` is turned back on.
 
+- Removes this scope's unmodified managed leader skill files. A pre-existing skill, user link, or locally modified bundle stays in place.
+
 ## Output
 
 - The plan on standard output, the y/N prompt on standard error, then one line per change.

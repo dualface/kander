@@ -36,7 +36,7 @@ func TestInstallWizardListsFilesAndCancelWritesNothing(t *testing.T) {
 		t.Fatalf("missing scope step: %s", session.text())
 	}
 	session.send("\r")
-	for _, want := range []string{"Kander will write these agent files", "create  ~/.claude/CLAUDE.md (Claude)"} {
+	for _, want := range []string{"Kander will write these agent files", "create  ~/.claude/CLAUDE.md (Claude)", "kander-leader/SKILL.md"} {
 		if !session.waitForPlain(want, 10*time.Second) {
 			t.Fatalf("missing %q: %s", want, session.text())
 		}

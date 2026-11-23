@@ -86,6 +86,17 @@ func PlanRulesInjection(paths config.InstallPaths) []PlanGroup {
 		byAgent[agent] = len(groups)
 		groups = append(groups, PlanGroup{Agents: []string{agent}, Files: []PlannedFile{file}})
 	}
+	for _, agent := range []string{"codex", "claude"} {
+		files := leaderPreview(agent, paths)
+		if len(files) == 0 {
+			continue
+		}
+		if index, ok := byAgent[agent]; ok {
+			groups[index].Files = append(groups[index].Files, files...)
+		} else {
+			groups = append(groups, PlanGroup{Agents: []string{agent}, Files: files})
+		}
+	}
 	return groups
 }
 
