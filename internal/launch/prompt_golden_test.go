@@ -58,6 +58,14 @@ func dispatchFor(kind string) board.Dispatch {
 	d.Input.ID = "dispatch-1"
 	d.Input.Kind = kind
 	d.Authorization.Epoch = 2
+	if kind == "wrap-up" {
+		// Every wrap-up dispatch carries its integration evidence; the prompt names its source commit.
+		d.Input.Base = strings.Repeat("b", 40)
+		d.Input.Evidence.WrapUp = &board.DispatchWrapUpBinding{
+			Artifact: board.ArtifactReference{TaskID: d.Input.TaskID, Path: "dispatches/dispatch-1/integration.json"},
+			Git:      board.DispatchIntegration{SourceCommit: d.Input.Base},
+		}
+	}
 	return d
 }
 
@@ -125,6 +133,12 @@ func TestPromptGoldens(t *testing.T) {
 			t.Fatal(err)
 		}
 		assertGolden(t, "dispatch-"+kind, instruction)
+		if kind == "wrap-up" {
+			complete := "kander move 20260101-golden-task done --result completed --dispatch-id dispatch-1 --execution-epoch 2 --delivery-commit " + strings.Repeat("b", 40) + ";"
+			if !strings.Contains(instruction, complete) || strings.Contains(strings.ReplaceAll(instruction, "never a --disposition argument", ""), "--disposition <") {
+				t.Fatalf("wrap-up dispatch must give the source-commit completion without a disposition:\n%s", instruction)
+			}
+		}
 	}
 	report, err := config.RenderRulesTemplate(goldenPaths, "templates/report/completion.md", map[string]string{
 		"TaskID": "20260101-golden-task", "Title": "Golden {{.X}} title", "Path": "/board/done/20260101-golden-task", "FinalState": "done",

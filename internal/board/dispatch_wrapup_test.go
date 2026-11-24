@@ -2,6 +2,7 @@ package board
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -237,5 +238,65 @@ func TestDispatchWrapUpSnapshotUsesCurrentGrantDeadline(t *testing.T) {
 	}
 	if fact.Epoch != grant.Authorization.Epoch || !fact.ConfirmBy.Equal(grant.WrapUpAuthority.ConfirmBy) || !fact.ConfirmBy.After(time.Now()) || !grant.Input.ConfirmBy.Equal(d.Input.ConfirmBy) {
 		t.Fatal("snapshot used expired original deadline", fact)
+	}
+}
+
+// A wrap-up completion names the verified source commit and no disposition. Each
+// rejection spells out the expected SHA, so the executor's first retry succeeds,
+// and leaves the dispatch accepted and the card in working.
+func TestDispatchWrapUpCompletionNamesSourceCommit(t *testing.T) {
+	root, d, _ := wrapUpGrantFixture(t, false)
+	source := d.Input.Evidence.WrapUp.Git.SourceCommit
+	integration := d.Input.Evidence.WrapUp.Artifact
+	if text := DispatchEvidenceInstruction(d); !strings.Contains(text, "INTEGRATION: "+integration.Path+" (read-only integration evidence; never a --disposition argument)") {
+		t.Fatalf("instruction=%s", text)
+	}
+	if _, err := dispatchMove(t, root, d, "working"); err != nil {
+		t.Fatal(err)
+	}
+	ownCommit := strings.Repeat("c", 40)
+	for _, tc := range []struct {
+		name string
+		o    MoveOptions
+		want []string
+	}{
+		{"own final commit", MoveOptions{DeliveryCommit: ownCommit}, []string{"expected --delivery-commit " + source, "got " + ownCommit, "source_commit"}},
+		{"integration as disposition", MoveOptions{DeliveryCommit: source, Disposition: &integration}, []string{"takes no --disposition", "--delivery-commit " + source}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := transactionSnapshot(t, root, d.Input.TaskID)
+			tc.o.Result, tc.o.Authorization = "completed", d.Authorization
+			_, err := MoveWithOptions(s.Entry, root, "done", tc.o)
+			var ke *Error
+			if !errors.As(err, &ke) || ke.Code != "board.dispatch_evidence_invalid" {
+				t.Fatalf("err=%v", err)
+			}
+			for _, want := range tc.want {
+				if !strings.Contains(ke.Message, want) {
+					t.Fatalf("message %q lacks %q", ke.Message, want)
+				}
+			}
+			if got := transactionSnapshot(t, root, d.Input.TaskID); got.Entry.State != "working" {
+				t.Fatalf("rejected completion moved the card to %s", got.Entry.State)
+			}
+			current, err := ReadDispatch(root, d.Input.TaskID, d.Input.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if current.State != DispatchAccepted || current.Completed != nil {
+				t.Fatal("rejected completion wrote a receipt")
+			}
+		})
+	}
+	s := transactionSnapshot(t, root, d.Input.TaskID)
+	if _, err := MoveWithOptions(s.Entry, root, "done", MoveOptions{Result: "completed", Authorization: d.Authorization, DeliveryCommit: source}); err != nil {
+		t.Fatal(err)
+	}
+	current, err := ReadDispatch(root, d.Input.TaskID, d.Input.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.State != DispatchCompleted || current.Completed.DeliveryCommit != source || current.Completed.Disposition != nil {
+		t.Fatalf("completion=%+v", current.Completed)
 	}
 }

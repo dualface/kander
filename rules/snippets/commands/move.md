@@ -21,8 +21,8 @@ kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--owner
 - `--duplicate-of <task-id>`: the replacement card for `--result duplicate`.
 - `--expect-revision <revision>`: compare-and-swap on the card revision.
 - `--dispatch-id <id> --execution-epoch <epoch>`: the durable dispatch grant from the dispatch prompt (`snippets/commands/dispatch.md`).
-- `--delivery-commit <full-SHA>`: the final delivery commit of a bound completion.
-- `--disposition <card-relative-path>`: the disposition artifact of a bound completion.
+- `--delivery-commit <full-SHA>`: the final delivery commit of a bound fix or sync completion. A bound wrap-up completion names the `source_commit` of its wrap-up evidence instead (`intent.evidence.wrap_up.git.source_commit` in `kander dispatch show`, equal to `intent.base`), never the card's own final commit.
+- `--disposition <card-relative-path>`: the disposition artifact of a bound fix or sync completion. A bound wrap-up completion takes none; `dispatches/<id>/integration.json` is read-only evidence, not a disposition.
 
 ## Preconditions
 
@@ -59,5 +59,6 @@ Source: moved from `KANDER-KANBAN-RULES.md` "Claiming, Starting, and Coordinatio
 
 - A revision conflict: read and reconcile the current document before retrying.
 - A missing gate record, an unknown state, a missing result or decision, or a plain move on a bound card.
+- A bound wrap-up completion whose `--delivery-commit` differs from the evidence `source_commit` (the error names the expected and the given SHA), or that carries `--disposition` (the error names the expected `--delivery-commit`), fails with `board.dispatch_evidence_invalid` and writes no receipt.
 - A wrap-up of a group with a coordinator checkpoint whose Git facts fail verification, or with no checkout in reach that holds the target commit. Run the move from a checkout of the repository.
 - A missing task ID or state, an option without a value, or an unknown option is a usage error.

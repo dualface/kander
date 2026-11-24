@@ -180,9 +180,10 @@ kander update <task-id> --document spec.md --file <file> \
 kander move <task-id> review --dispatch-id <id> --execution-epoch <epoch> \
   --delivery-commit <fix-sha> --disposition <relative-artifact-path>
 
-# 4. Complete wrap-up
+# 4. Complete wrap-up: the evidence source_commit (intent.evidence.wrap_up.git.source_commit
+#    in `kander dispatch show`, equal to intent.base), never the card's own commit; no --disposition
 kander move <task-id> done --result completed --dispatch-id <id> \
-  --execution-epoch <epoch> --delivery-commit <integrated-sha>
+  --execution-epoch <epoch> --delivery-commit <source_commit>
 ```
 
 - **Replay Safety**: If an acceptance command is retried, it returns `replayed: true` and the original receipt without incrementing the task revision.

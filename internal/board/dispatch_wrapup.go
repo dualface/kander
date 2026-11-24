@@ -3,6 +3,7 @@ package board
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -299,4 +300,20 @@ func DispatchReviewRange(root, task string) (reviewRange ReviewGitEdge, err erro
 	scope.ReadOnly = true
 	err = WithTransaction(root, scope, func(tx *Transaction) error { var e error; reviewRange, e = dispatchReviewRange(tx, task); return e })
 	return
+}
+
+// wrapUpCompletionError names the one completion a wrap-up dispatch accepts: the
+// verified source commit, which equals the intent base, and no disposition. The
+// detail spells out the expected SHA and where to read it, because the card's own
+// final commit and the integration artifact path are the usual wrong guesses.
+func wrapUpCompletionError(w *DispatchWrapUpBinding, o MoveOptions) error {
+	source := w.Git.SourceCommit
+	where := "intent.evidence.wrap_up.git.source_commit of kander dispatch show, or source_commit in " + w.Artifact.Path
+	if o.Disposition != nil {
+		return dispatchEvidenceError(fmt.Sprintf("wrap-up completion takes no --disposition; complete with --delivery-commit %s and no --disposition (%s)", source, where))
+	}
+	if o.DeliveryCommit != source {
+		return dispatchEvidenceError(fmt.Sprintf("wrap-up completion must bind original integration source: expected --delivery-commit %s, got %s (%s)", source, o.DeliveryCommit, where))
+	}
+	return nil
 }

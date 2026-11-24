@@ -118,12 +118,22 @@ func DispatchInstruction(paths config.InstallPaths, d board.Dispatch) (string, e
 		"DispatchID":    d.Input.ID,
 		"Epoch":         d.Authorization.Epoch,
 		"Kind":          d.Input.Kind,
+		"WrapUpSource":  wrapUpSource(d),
 		"PhaseSnippets": phaseSnippets(paths, dispatchSnippets(d.Input.Kind)...),
 	})
 	if err != nil {
 		return "", err
 	}
 	return text + "\n" + board.DispatchEvidenceInstruction(d), nil
+}
+
+// wrapUpSource is the commit a bound wrap-up completion must name: the source
+// commit its evidence verified. Dispatches without wrap-up evidence render none.
+func wrapUpSource(d board.Dispatch) string {
+	if w := d.Input.Evidence.WrapUp; w != nil {
+		return w.Git.SourceCommit
+	}
+	return ""
 }
 
 // DispatchObservation uses P3's shared deadline and identity-valid report. A

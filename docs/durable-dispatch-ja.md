@@ -169,9 +169,10 @@ kander update <task-id> --document spec.md --file <ファイル> \
 kander move <task-id> review --dispatch-id <id> --execution-epoch <epoch> \
   --delivery-commit <修正-sha> --disposition <添付相対パス>
 
-# 4. wrap-up 完了の提出
+# 4. wrap-up 完了の提出：wrap-up 証跡の source_commit（`kander dispatch show` の
+#    intent.evidence.wrap_up.git.source_commit、intent.base と同じ）を使い、カード自身のコミットは使わない。--disposition は付けない
 kander move <task-id> done --result completed --dispatch-id <id> \
-  --execution-epoch <epoch> --delivery-commit <統合-sha>
+  --execution-epoch <epoch> --delivery-commit <source_commit>
 ```
 
 - **リプレイセーフ**：受領コマンドの再試行は `replayed: true` と元のレシートを返し、余計な処理や版数増加を起こしません。
