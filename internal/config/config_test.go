@@ -27,7 +27,31 @@ func setupHome(t *testing.T) string {
 	_ = os.Unsetenv("GIT_WORK_TREE")
 	_ = os.Unsetenv("GIT_COMMON_DIR")
 	resetLanguageState()
+	isolateInheritedOverlay(t)
 	return root
+}
+
+// isolateInheritedOverlay moves the test into a temporary working directory
+// unless that directory is itself the overlay's project root (a fixture the
+// test created). During go test the package directory resolves its overlay to
+// the main worktree's .kander-config.json, which Load merges but
+// SaveIfUnchanged does not, so a developer's own overlay would surface as a
+// concurrent edit. It runs after the Git variables are cleared so resolution
+// sees the same repository the test later uses. t.Chdir restores the package
+// directory after the test.
+func isolateInheritedOverlay(t *testing.T) {
+	t.Helper()
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	location, err := ResolveOverlayLocation(cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if location.ProjectRoot != cwd {
+		t.Chdir(t.TempDir())
+	}
 }
 
 func resetLanguageState() {

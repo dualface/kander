@@ -528,6 +528,10 @@ func configEditConflicts(current, baseline, target *Config) bool {
 }
 
 // SaveIfUnchanged saves only while the on-disk config still equals the editing baseline; a missing file may be created directly.
+// The comparison reads the scope file alone, without the project overlay, so the
+// baseline must come from a scope-only read (LoadScope or LoadScopeRaw). A
+// baseline from Load carries the overlay's values and reports them as a
+// concurrent edit.
 func SaveIfUnchanged(cfg, baseline *Config) (string, error) {
 	path, err := ConfigPath()
 	if err != nil {
