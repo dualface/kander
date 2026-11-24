@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/dualface/kander/internal/install"
 )
 
 // Doctor repair must name every rule file it rewrote from the embedded copy, and stay
@@ -51,7 +49,9 @@ func TestDoctorReportsRewrittenRuleFiles(t *testing.T) {
 	}
 }
 
-func TestDoctorRepairsOnlyEnabledManagedLeaderSkills(t *testing.T) {
+// Doctor repair installs the leader skill at every enabled destination where it is
+// missing, then restores managed documents only for agents whose install_rules is on.
+func TestDoctorInstallsAndRepairsEnabledLeaderSkills(t *testing.T) {
 	h := newHarness(t)
 	h.installFake(false)
 	h.writeConfig(defaultPayload(map[string]any{"launcher": "foreground", "language": "en"}))
@@ -64,12 +64,9 @@ func TestDoctorRepairsOnlyEnabledManagedLeaderSkills(t *testing.T) {
 		t.Fatalf("doctor=%d %s", code, out)
 	}
 	for _, dir := range []string{codex, claude} {
-		if _, err := os.Lstat(dir); !os.IsNotExist(err) {
-			t.Fatalf("doctor created an unconfirmed skill at %s: %v", dir, err)
+		if _, err := os.Stat(filepath.Join(dir, "SKILL.md")); err != nil {
+			t.Fatalf("doctor did not install the skill at %s: %v", dir, err)
 		}
-	}
-	if _, err := install.Perform(install.Request{Language: "en"}); err != nil {
-		t.Fatal(err)
 	}
 	missingCodex := filepath.Join(codex, "references", "handover.md")
 	missingClaude := filepath.Join(claude, "references", "handover.md")

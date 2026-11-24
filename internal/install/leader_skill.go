@@ -188,23 +188,11 @@ func leaderPreview(target leaderDestination, paths config.InstallPaths) []Planne
 }
 
 func (result *Result) installLeaderSkills(targets []leaderDestination) error {
-	switches, err := config.ScopeInstallRules(result.Paths)
+	paths := result.Paths
+	switches, err := config.ScopeInstallRules(paths)
 	if err != nil {
 		return err
 	}
-	return result.ensureLeaderSkills(targets, switches, true)
-}
-
-// RepairLeaderSkills restores managed documents for enabled agents. A valid
-// receipt records the destination confirmed during installation. Skipped
-// destinations are reported separately from errors that prevented repair.
-func RepairLeaderSkills(paths config.InstallPaths, switches config.InstallRules) ([]error, error) {
-	result := Result{Paths: paths}
-	err := result.ensureLeaderSkills(leaderDestinations(paths), switches, false)
-	return result.SkippedSkills, err
-}
-
-func (result *Result) ensureLeaderSkills(targets []leaderDestination, switches config.InstallRules, create bool) error {
 	for _, target := range targets {
 		if !switches.Enabled(target.agent) {
 			continue
@@ -212,7 +200,7 @@ func (result *Result) ensureLeaderSkills(targets []leaderDestination, switches c
 		if target.err != nil {
 			return target.err
 		}
-		s, err := inspectLeaderSkill(target.dir, result.Paths)
+		s, err := inspectLeaderSkill(target.dir, paths)
 		if err != nil {
 			return err
 		}
@@ -220,8 +208,8 @@ func (result *Result) ensureLeaderSkills(targets []leaderDestination, switches c
 			result.SkippedSkills = append(result.SkippedSkills, fmt.Errorf("%s: %w", s.dir, s.keepReason))
 			continue
 		}
-		if s.managed || (create && !s.exists) {
-			if err := s.install(result.Paths); err != nil {
+		if !s.exists || s.managed {
+			if err := s.install(paths); err != nil {
 				return err
 			}
 		}
