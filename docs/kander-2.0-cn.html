@@ -1,0 +1,1086 @@
+<!doctype html>
+<!--
+  Kander 2.0 presentation (Chinese), a standalone export of the claude.ai Slides deck.
+  Open in a browser: arrow keys, space or a click move between slides, F goes full screen,
+  and printing gives one slide per page. Without JavaScript the slides are shown one after another.
+  Brand marks are from lobehub/lobe-icons and GitHub Octicons (both MIT licensed);
+  the trademarks belong to their owners.
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kander 2.0：打造 AI 原生团队</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700;900&amp;display=swap">
+<style>
+
+/* Base rules of the Slides renderer, then the standalone viewer. */
+* { margin: 0 }
+html, body { background: #0B0C10; }
+body { font: 32px/1.2 'Noto Sans SC', sans-serif; }
+h1 { font-size: 96px; font-weight: 600 } h2 { font-size: 64px; font-weight: 600 } h3 { font-size: 44px; font-weight: 600 }
+p, li, h1, h2, h3 { overflow-wrap: break-word; text-wrap: pretty }
+.deck > section { width: 1920px; height: 1080px; box-sizing: border-box; position: relative; overflow: hidden; isolation: isolate; margin: 0 auto 24px; }
+.deck > section > .hero { z-index: -1; }
+.xc { position: absolute; overflow: visible; pointer-events: none; }
+.counter { display: none; }
+body.js { overflow: hidden; }
+body.js .deck > section { position: absolute; left: 50%; top: 50%; margin: 0; transform: translate(-50%, -50%) scale(var(--scale, 1)); }
+body.js .deck > section:not(.current) { display: none; }
+body.js .counter { display: block; position: fixed; right: 20px; bottom: 14px; font: 14px/1 'JetBrains Mono', monospace; color: #B9B6C8; opacity: 0.7; }
+@media print {
+  @page { size: 1920px 1080px; margin: 0; }
+  html, body { background: none; }
+  body.js { overflow: visible; }
+  body.js .deck > section, .deck > section { display: flex !important; position: relative; left: auto; top: auto; transform: none; margin: 0; break-after: page; }
+  .counter { display: none !important; }
+}
+
+:root {
+  --ink: #15171C;
+  --ink2: #22252F;
+  --ink3: #2A2E3F;
+  --code: #0E1014;
+  --paper: #F6F5F1;
+  --paper2: #ECEAF1;
+  --card: #FFFEFB;
+  --line: #D9D6E2;
+  --heading: #1E2130;
+  --body: #2A2E3F;
+  --muted: #4A4F63;
+  --light: #F3F1F7;
+  --muted-d: #B9B6C8;
+  --violet: #8A2BC2;
+  --violet-deep: #4A1870;
+  --violet-line: #6B3A93;
+  --lilac: #E3C6F5;
+  --cyan: #4DD0E1;
+  --teal: #0B6B78;
+}
+
+body { font-family: 'Noto Sans SC', Arial, sans-serif; }
+
+section {
+  padding: 128px;
+  background: var(--paper);
+  color: var(--body);
+  font-family: 'Noto Sans SC', Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+section.tint { background: var(--paper2); }
+section.dark { background: var(--ink); color: var(--light); }
+section.accent { background: var(--violet-deep); color: var(--light); }
+
+/* Motion: the plain rules are the finished look; content rises in on arrival */
+@keyframes rise { from { opacity: 0; transform: translateY(24px); } }
+.anim { animation: rise 0.6s ease-out 0.1s both; }
+.stagger > * { animation: rise 0.5s ease-out both; }
+.stagger > :nth-child(1) { animation-delay: 0.1s; }
+.stagger > :nth-child(2) { animation-delay: 0.2s; }
+.stagger > :nth-child(3) { animation-delay: 0.3s; }
+.stagger > :nth-child(4) { animation-delay: 0.4s; }
+
+/* Headings */
+.eyebrow {
+  font-family: 'JetBrains Mono', 'Noto Sans SC', monospace;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--violet);
+}
+.dark .eyebrow { color: var(--cyan); }
+.accent .eyebrow { color: var(--lilac); }
+.title {
+  font-size: 72px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--heading);
+  margin-top: 20px;
+}
+.dark .title, .accent .title { color: var(--light); }
+.lead { font-size: 32px; line-height: 1.5; color: var(--muted); }
+.accent .lead { color: var(--lilac); }
+.source {
+  position: absolute;
+  left: 128px;
+  bottom: 64px;
+  width: 1664px;
+  font-size: 24px;
+  color: var(--muted-d);
+}
+
+/* Statement lines, always at the foot of the slide */
+.note {
+  margin-top: auto;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--heading);
+  border-left: 6px solid var(--violet);
+  padding-left: 24px;
+}
+.callout {
+  margin-top: auto;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--light);
+  background: var(--violet-deep);
+  border-radius: 16px;
+  padding: 28px 48px;
+}
+
+/* Cover and closing */
+.dots { display: flex; gap: 18px; }
+.dot { width: 32px; height: 32px; }
+.cover-title {
+  font-family: 'JetBrains Mono', 'Noto Sans SC', monospace;
+  font-size: 120px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--light);
+  margin-top: 32px;
+}
+.cover-sub { font-size: 44px; font-weight: 700; line-height: 1.45; color: var(--light); margin-top: 40px; }
+.cover-sub .hl { color: var(--cyan); }
+.next { display: flex; gap: 64px; margin-top: 96px; }
+.next-item { border-left: 6px solid var(--cyan); padding-left: 24px; }
+.next-v { font-size: 32px; line-height: 1.5; color: var(--light); margin-top: 8px; }
+
+/* Split pane: statement on the left, list on the right (problem slide) */
+.pane { flex: 1; display: flex; gap: 96px; }
+.pane-l { width: 600px; flex: none; display: flex; flex-direction: column; }
+.pane-l .lead { margin-top: auto; }
+.pane-r { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.issue { display: flex; gap: 32px; padding: 28px 0; border-top: 2px solid var(--violet-line); }
+.issue-h { width: 420px; flex: none; font-size: 44px; font-weight: 700; line-height: 1.25; color: var(--light); }
+.issue-p { flex: 1; font-size: 32px; line-height: 1.5; color: var(--lilac); }
+
+/* Numbered path (vision) */
+.path { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 48px; margin-top: 72px; }
+.path-step { border-top: 6px solid var(--violet-deep); padding-top: 32px; display: flex; flex-direction: column; gap: 16px; }
+.path-step:nth-child(2) { border-top-color: var(--violet); }
+.path-step:nth-child(3) { border-top-color: var(--cyan); }
+.path-n { font-family: 'JetBrains Mono', 'Noto Sans SC', monospace; font-size: 32px; font-weight: 700; color: var(--violet); }
+.path-h { font-size: 44px; font-weight: 700; line-height: 1.25; color: var(--heading); }
+.path-p { font-size: 32px; line-height: 1.5; color: var(--muted); }
+
+/* Feature tiles with large numbers */
+.tiles { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 32px; margin-top: 64px; }
+.tile { background: var(--card); border-radius: 24px; padding: 48px 40px; display: flex; flex-direction: column; gap: 16px; }
+.tile-n { font-family: 'JetBrains Mono', 'Noto Sans SC', monospace; font-size: 72px; font-weight: 700; line-height: 1; color: var(--violet); }
+.tile-h { font-size: 44px; font-weight: 700; line-height: 1.25; color: var(--heading); margin-top: 16px; }
+.tile-p { font-size: 32px; line-height: 1.5; color: var(--muted); }
+.tile.dark-tile { background: var(--ink); }
+.tile.dark-tile .tile-n { color: var(--cyan); }
+.tile.dark-tile .tile-h { color: var(--light); }
+.tile.dark-tile .tile-p { color: var(--muted-d); }
+
+/* Stages: light boxes are people's steps, dark boxes are AI steps */
+.flow { display: flex; align-items: stretch; margin-top: 64px; }
+.stage {
+  box-sizing: border-box;
+  flex: none;
+  border-radius: 20px;
+  padding: 40px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.stage.human { background: var(--card); border: 2px solid var(--violet); }
+.stage.ai { background: var(--ink); border: 2px solid var(--ink); }
+.stage.sm { padding: 32px 24px; gap: 12px; border-radius: 16px; }
+.tag { font-family: 'JetBrains Mono', 'Noto Sans SC', monospace; font-size: 24px; font-weight: 700; line-height: 1.4; color: var(--violet); }
+.stage.ai .tag { color: var(--cyan); }
+.stage-h { font-size: 44px; font-weight: 700; line-height: 1.25; color: var(--heading); }
+.stage.ai .stage-h { color: var(--light); }
+.stage-p { font-size: 32px; line-height: 1.5; color: var(--muted); }
+.stage.ai .stage-p { color: var(--muted-d); }
+.stage.sm .stage-p { font-size: 24px; }
+.arrow { width: 56px; flex: none; align-self: center; color: #8A2BC2; border-width: 3px; }
+.loop { font-size: 32px; font-weight: 700; line-height: 1.5; color: var(--violet); margin-top: 40px; }
+.loop-label { font-size: 24px; font-weight: 700; line-height: 36px; color: #8A2BC2; text-align: center; }
+.chips { display: flex; flex-wrap: wrap; gap: 12px; }
+.chip {
+  font-family: 'JetBrains Mono', 'Noto Sans SC', monospace;
+  font-size: 24px;
+  color: var(--heading);
+  background: var(--paper2);
+  border-radius: 999px;
+  padding: 8px 20px;
+}
+.stage.ai .chip { background: var(--ink3); color: var(--light); }
+
+/* Four guarantees under a diagram */
+.facts { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 32px; margin-top: 40px; }
+.fact { border-top: 4px solid var(--violet); padding-top: 16px; }
+.fact-h { font-size: 32px; font-weight: 700; line-height: 1.3; color: var(--heading); }
+.fact-p { font-size: 24px; line-height: 1.5; color: var(--muted); margin-top: 8px; }
+
+/* Pinned diagram nodes */
+.node {
+  position: absolute;
+  box-sizing: border-box;
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.node-h { font-size: 32px; font-weight: 700; line-height: 1.3; color: var(--heading); }
+.node-p { font-size: 24px; line-height: 1.5; color: var(--muted); }
+.node.human { border: 2px solid var(--violet); }
+.node.hub { background: var(--violet); border: 2px solid var(--violet); }
+.node.hub .node-h { color: var(--card); font-family: 'JetBrains Mono', 'Noto Sans SC', monospace; }
+.node.hub .node-p { color: var(--paper); }
+.node.pc { background: var(--ink); border: 2px solid var(--ink); }
+.node.pc .node-h { color: var(--light); }
+.node.pc .node-p { color: var(--muted-d); }
+.node.pc.busy { background: var(--ink2); border: 2px dashed var(--muted); }
+.node.pc.free { border: 2px solid var(--cyan); }
+.node.pc.free .node-p { color: var(--cyan); }
+.wire { color: #8A2BC2; border-width: 3px; }
+.wire-label { position: absolute; font-size: 24px; font-weight: 700; line-height: 36px; color: #8A2BC2; }
+
+/* Two contrasting columns on a dark slide */
+.duo { display: grid; grid-template-columns: 1fr 1fr; margin-top: 64px; }
+.duo-col { display: flex; flex-direction: column; }
+.duo-col.left { padding-right: 64px; border-right: 2px solid var(--ink3); }
+.duo-col.right { padding-left: 64px; }
+.duo-k { font-family: 'JetBrains Mono', 'Noto Sans SC', monospace; font-size: 24px; font-weight: 700; letter-spacing: 3px; color: var(--cyan); margin-bottom: 16px; }
+.duo-col.right .duo-k { color: var(--lilac); }
+.duo-item { padding: 28px 0; border-top: 2px solid var(--ink3); }
+.duo-h { font-size: 44px; font-weight: 700; line-height: 1.25; color: var(--light); }
+.duo-p { font-size: 32px; line-height: 1.5; color: var(--muted-d); margin-top: 8px; }
+
+/* Dashboard-style panels */
+.panels { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 32px; margin-top: 64px; }
+.panel { background: var(--card); border: 2px solid var(--line); border-radius: 20px; overflow: hidden; display: flex; flex-direction: column; }
+.panel-bar { background: var(--paper2); padding: 20px 32px; display: flex; gap: 10px; align-items: center; }
+.pdot { width: 14px; height: 14px; }
+.panel-body { padding: 32px; display: flex; flex-direction: column; gap: 16px; }
+.panel-h { font-size: 44px; font-weight: 700; line-height: 1.25; color: var(--heading); }
+.panel-p { font-size: 32px; line-height: 1.5; color: var(--muted); }
+
+/* Pillars on a dark slide */
+.pillars { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; margin-top: 88px; }
+.pillar { padding: 0 32px; border-left: 2px solid var(--ink3); display: flex; flex-direction: column; gap: 16px; }
+.pillar:first-child { padding-left: 0; border-left: none; }
+.pillar-n { font-family: 'JetBrains Mono', 'Noto Sans SC', monospace; font-size: 72px; font-weight: 700; line-height: 1; color: var(--cyan); }
+.pillar-h { font-size: 44px; font-weight: 700; line-height: 1.25; color: var(--light); margin-top: 16px; }
+.pillar-p { font-size: 32px; line-height: 1.5; color: var(--muted-d); }
+
+/* Vertical list beside a visual */
+.split { display: flex; gap: 56px; margin-top: 56px; align-items: flex-start; }
+.vlist { flex: 1; display: flex; flex-direction: column; gap: 32px; }
+.vitem { border-top: 4px solid var(--violet); padding-top: 16px; }
+.vitem-h { font-size: 32px; font-weight: 700; line-height: 1.3; color: var(--heading); }
+.vitem-p { font-size: 32px; line-height: 1.5; color: var(--muted); margin-top: 8px; }
+
+/* Ecosystem hero */
+.eco { display: flex; gap: 64px; margin-top: 56px; align-items: flex-start; }
+.eco-hero { width: 760px; flex: none; box-sizing: border-box; background: var(--ink); border-radius: 24px; padding: 48px; display: flex; flex-direction: column; gap: 32px; }
+.eco-h { font-size: 44px; font-weight: 700; line-height: 1.25; color: var(--light); }
+.eco-hero .chip { font-size: 32px; padding: 12px 28px; background: var(--ink3); color: var(--light); }
+.eco-hero .chip.more { background: transparent; color: var(--cyan); border: 2px solid var(--cyan); }
+
+/* Browser mock of the web console */
+.browser {
+  width: 1000px;
+  height: 540px;
+  box-sizing: border-box;
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.bbar { height: 60px; flex: none; background: #DDD9E8; display: flex; align-items: center; gap: 12px; padding: 0 24px; }
+.bdot { width: 16px; height: 16px; }
+.burl { font-size: 24px; color: var(--muted); margin-left: 16px; }
+.bbody { flex: 1; display: flex; }
+.mboard { flex: 1; display: flex; gap: 16px; padding: 24px; }
+.mcol { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+.mlabel { font-size: 24px; font-weight: 700; color: var(--heading); }
+.mcard { height: 64px; border-radius: 8px; background: var(--paper2); }
+.mcard-sel { height: 64px; box-sizing: border-box; border-radius: 8px; background: var(--card); border: 3px solid var(--violet); display: flex; align-items: center; padding: 0 10px; }
+.mtext { font-size: 24px; color: var(--heading); }
+.mterm { width: 400px; flex: none; box-sizing: border-box; background: var(--code); padding: 24px; display: flex; flex-direction: column; gap: 12px; }
+.mterm-h { font-family: 'JetBrains Mono', 'Noto Sans SC', monospace; font-size: 24px; font-weight: 700; color: var(--cyan); }
+.mline { font-size: 24px; color: #E8E6EF; }
+.minput { font-size: 24px; color: #A5A3B5; border: 2px solid #3A3D4D; border-radius: 8px; padding: 10px 16px; margin-top: 12px; }
+.caption { font-size: 24px; color: var(--muted); margin-top: 16px; }
+
+/* Cover hero: Kander at the centre, agents in orbit, the task flow running through it */
+.hero { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+.hero-hub { position: absolute; font-family: 'JetBrains Mono', 'Noto Sans SC', monospace; font-size: 44px; font-weight: 700; line-height: 60px; color: #FFFEFB; text-align: center; }
+.hero-stop { position: absolute; box-sizing: border-box; height: 54px; font-size: 24px; font-weight: 700; line-height: 48px; color: var(--light); text-align: center; background: var(--ink); border: 3px solid var(--cyan); border-radius: 999px; }
+.hero-card { position: absolute; box-sizing: border-box; height: 64px; padding: 0 20px; font-size: 24px; font-weight: 700; line-height: 60px; color: var(--light); background: #FFFFFF14; border: 2px solid #FFFFFF38; border-left: 8px solid var(--lilac); border-radius: 14px; }
+
+section.with-source { padding: 128px 128px 160px; }
+
+/* Shared task pool */
+.pool { position: absolute; box-sizing: border-box; background: var(--violet-deep); border-radius: 24px; padding: 32px; display: flex; flex-direction: column; gap: 8px; }
+.pool-h { font-size: 32px; font-weight: 700; line-height: 1.3; color: var(--light); }
+.pool-p { font-size: 24px; line-height: 1.5; color: var(--lilac); }
+.pool-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 16px; margin-top: 16px; }
+.mini { background: #5E2589; border-radius: 10px; border-left: 6px solid var(--lilac); padding: 16px; font-size: 24px; line-height: 1.5; color: var(--light); }
+.mini.run { border-left-color: var(--cyan); }
+.mini.done { border-left-color: #7FD17F; }
+.pool-legend { font-size: 24px; line-height: 1.5; color: var(--lilac); margin-top: 8px; }
+
+/* Task card mock */
+.doc { width: 800px; flex: none; box-sizing: border-box; background: var(--card); border: 2px solid var(--line); border-radius: 20px; padding: 36px 40px; display: flex; flex-direction: column; gap: 14px; }
+.doc-top { display: flex; justify-content: space-between; align-items: center; }
+.doc-k { font-family: 'JetBrains Mono', 'Noto Sans SC', monospace; font-size: 24px; font-weight: 700; letter-spacing: 3px; color: var(--violet); }
+.doc-lock { font-size: 24px; font-weight: 700; line-height: 1.5; color: var(--teal); border: 2px solid var(--teal); border-radius: 999px; padding: 2px 18px; }
+.doc-t { font-size: 44px; font-weight: 700; line-height: 1.25; color: var(--heading); }
+.doc-row { display: flex; gap: 24px; border-top: 2px solid var(--paper2); padding-top: 14px; }
+.doc-label { width: 140px; flex: none; font-size: 24px; font-weight: 700; line-height: 1.5; color: var(--violet); }
+.doc-lines { flex: 1; display: flex; flex-direction: column; gap: 12px; padding-top: 10px; }
+.bar { height: 14px; border-radius: 7px; background: var(--paper2); }
+.check-row { display: flex; gap: 12px; align-items: center; }
+.box { width: 20px; height: 20px; flex: none; box-sizing: border-box; border: 2px solid var(--teal); border-radius: 4px; }
+
+/* Review gates on a dark slide */
+.node.gate { background: var(--ink2); border: 2px solid var(--cyan); }
+.node.gate .node-h { color: var(--light); }
+.node.gate .node-p { color: var(--cyan); }
+.dark .node.pc { background: var(--ink3); border: 2px solid var(--ink3); }
+.wire.lite { color: #C9A2E6; }
+.dark .wire-label { color: #C9A2E6; }
+.stats3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 48px; margin-top: 48px; }
+.stat { border-left: 4px solid var(--cyan); padding-left: 32px; display: flex; flex-direction: column; gap: 16px; }
+.stat-n { font-family: 'JetBrains Mono', 'Noto Sans SC', monospace; font-size: 72px; font-weight: 700; line-height: 1; color: var(--light); }
+.stat-l { font-size: 32px; line-height: 1.5; color: var(--muted-d); }
+
+/* Audit log */
+.log { width: 960px; flex: none; box-sizing: border-box; background: var(--card); border: 2px solid var(--line); border-radius: 20px; padding: 36px 40px; display: flex; flex-direction: column; }
+.log-k { font-family: 'JetBrains Mono', 'Noto Sans SC', monospace; font-size: 24px; font-weight: 700; letter-spacing: 3px; color: var(--violet); margin-bottom: 12px; }
+.log-row { display: flex; gap: 24px; align-items: center; padding: 14px 0; border-top: 2px solid var(--paper2); }
+.log-t { width: 96px; flex: none; font-family: 'JetBrains Mono', 'Noto Sans SC', monospace; font-size: 24px; color: var(--muted); }
+.log-who { width: 112px; flex: none; font-family: 'JetBrains Mono', 'Noto Sans SC', monospace; font-size: 24px; font-weight: 700; color: var(--violet); }
+.log-who.ai { color: var(--teal); }
+.log-e { flex: 1; font-size: 32px; line-height: 1.5; color: var(--heading); }
+.stat-s { font-size: 24px; line-height: 1.5; color: var(--muted-d); }
+
+/* Repository badge with the GitHub mark */
+.gh { display: flex; align-self: flex-start; align-items: center; gap: 18px; margin-top: 64px; background: var(--ink2); border: 2px solid var(--cyan); border-radius: 999px; padding: 14px 36px 14px 24px; }
+.gh-text { font-family: 'JetBrains Mono', 'Noto Sans SC', monospace; font-size: 32px; font-weight: 700; line-height: 1.4; color: var(--light); }
+.gh-text a { color: var(--light); text-decoration: none; }
+
+</style>
+</head>
+<body>
+<main class="deck">
+<section id="cover" class="dark" style="justify-content:center">
+<div class="hero anim">
+<svg aria-label="插图：Kander 位于中心，Claude、OpenAI、DeepSeek、Gemini、Grok、Kimi 等 AI Agent 环绕在轨道上；一条发光的任务流转主线穿过中心，依次经过创建、调度、实现、验证、交付，验证处有审核闭环。" style="position:absolute; left:0; top:0" width="1920" height="1080" viewBox="0 0 1920 1080"><defs><radialGradient id="glowv"><stop offset="0" stop-color="#8A2BC2" stop-opacity="0.55"/><stop offset="1" stop-color="#8A2BC2" stop-opacity="0"/></radialGradient><radialGradient id="glowc"><stop offset="0" stop-color="#4DD0E1" stop-opacity="0.3"/><stop offset="1" stop-color="#4DD0E1" stop-opacity="0"/></radialGradient><radialGradient id="halo"><stop offset="0.45" stop-color="#4DD0E1" stop-opacity="0.35"/><stop offset="1" stop-color="#4DD0E1" stop-opacity="0"/></radialGradient><radialGradient id="core" cx="0.38" cy="0.32" r="0.75"><stop offset="0" stop-color="#C9A2E6"/><stop offset="0.45" stop-color="#8A2BC2"/><stop offset="1" stop-color="#3A1258"/></radialGradient><radialGradient id="chip" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#E6E0F0"/></radialGradient><radialGradient id="fadeg" cx="0.69" cy="0.5" r="0.42"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#000000"/></radialGradient><mask id="fade"><rect x="0" y="0" width="1920" height="1080" fill="url(#fadeg)"/></mask><pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse"><circle cx="18" cy="18" r="2" fill="#B9B6C8" fill-opacity="0.45"/></pattern><linearGradient id="flowg" gradientUnits="userSpaceOnUse" x1="-140" y1="1120" x2="1010" y2="130"><stop offset="0" stop-color="#E3C6F5"/><stop offset="0.4" stop-color="#B57EDC"/><stop offset="0.7" stop-color="#4DD0E1"/><stop offset="1" stop-color="#7FD17F"/></linearGradient><marker id="flowhead" orient="auto" markerWidth="4" markerHeight="4" refX="1.6" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#7FD17F"/></marker><marker id="loophead" orient="auto" markerWidth="4" markerHeight="4" refX="1.6" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#4DD0E1"/></marker><defs><linearGradient id="lobe-icons-gemini-fill" x1="0%" x2="68.73%" y1="100%" y2="30.395%"><stop offset="0%" stop-color="#1C7DFF"></stop><stop offset="52.021%" stop-color="#1C69FF"></stop><stop offset="100%" stop-color="#F0DCD6"></stop></linearGradient></defs></defs><circle cx="1320" cy="540" r="700" fill="url(#glowv)"/><circle cx="1700" cy="200" r="380" fill="url(#glowc)"/><rect x="0" y="0" width="1920" height="1080" fill="url(#grid)" mask="url(#fade)"/><g transform="translate(820 0)"><ellipse cx="500" cy="540" rx="400" ry="146" transform="rotate(22 500 540)" fill="none" stroke="#C9A2E6" stroke-opacity="0.35" stroke-width="3" stroke-dasharray="2 12" stroke-linecap="round"/><ellipse cx="500" cy="540" rx="290" ry="104" transform="rotate(22 500 540)" fill="none" stroke="#C9A2E6" stroke-opacity="0.45" stroke-width="3"/><ellipse cx="500" cy="540" rx="190" ry="68" transform="rotate(22 500 540)" fill="none" stroke="#C9A2E6" stroke-opacity="0.3" stroke-width="3"/><path d="M503 385 Q501 423 500 540" fill="none" stroke="#4DD0E1" stroke-opacity="0.35" stroke-width="2.5" stroke-dasharray="6 8"/><path d="M241 339 Q371 399 500 540" fill="none" stroke="#4DD0E1" stroke-opacity="0.35" stroke-width="2.5" stroke-dasharray="6 8"/><path d="M126 400 Q313 430 500 540" fill="none" stroke="#4DD0E1" stroke-opacity="0.35" stroke-width="2.5" stroke-dasharray="6 8"/><path d="M736 566 Q618 513 500 540" fill="none" stroke="#4DD0E1" stroke-opacity="0.35" stroke-width="2.5" stroke-dasharray="6 8"/><path d="M550 711 Q525 586 500 540" fill="none" stroke="#4DD0E1" stroke-opacity="0.35" stroke-width="2.5" stroke-dasharray="6 8"/><path d="M817 732 Q658 596 500 540" fill="none" stroke="#4DD0E1" stroke-opacity="0.35" stroke-width="2.5" stroke-dasharray="6 8"/><g opacity="0.7"><circle cx="503" cy="385" r="57" fill="url(#halo)"/><circle cx="503" cy="385" r="30" fill="url(#chip)" stroke="#4DD0E1" stroke-width="3"/><g transform="translate(483.8 366.3) scale(1.5625)" fill="#111111" fill-rule="evenodd"><path d="M9.27 15.29l7.978-5.897c.391-.29.95-.177 1.137.272.98 2.369.542 5.215-1.41 7.169-1.951 1.954-4.667 2.382-7.149 1.406l-2.711 1.257c3.889 2.661 8.611 2.003 11.562-.953 2.341-2.344 3.066-5.539 2.388-8.42l.006.007c-.983-4.232.242-5.924 2.75-9.383.06-.082.12-.164.179-.248l-3.301 3.305v-.01L9.267 15.292M7.623 16.723c-2.792-2.67-2.31-6.801.071-9.184 1.761-1.763 4.647-2.483 7.166-1.425l2.705-1.25a7.808 7.808 0 00-1.829-1A8.975 8.975 0 005.984 5.83c-2.533 2.536-3.33 6.436-1.962 9.764 1.022 2.487-.653 4.246-2.34 6.022-.599.63-1.199 1.259-1.682 1.925l7.62-6.815"></path></g></g><g opacity="0.75"><circle cx="241" cy="339" r="61" fill="url(#halo)"/><circle cx="241" cy="339" r="32" fill="url(#chip)" stroke="#4DD0E1" stroke-width="3"/><g transform="translate(221.4 318.6) scale(1.6667)" fill="#111111" fill-rule="evenodd"><path d="M19.738 5.776c.163-.209.306-.4.457-.585.07-.087.064-.153-.004-.244-.655-.861-.717-1.817-.34-2.787.283-.73.909-1.072 1.674-1.145.477-.045.945.004 1.379.236.57.305.902.77 1.01 1.412.086.512.07 1.012-.075 1.508-.257.878-.888 1.333-1.753 1.448-.718.096-1.446.108-2.17.157-.056.004-.113 0-.178 0z" fill="#027AFF"></path><path d="M17.962 1.844h-4.326l-3.425 7.81H5.369V1.878H1.5V22h3.87v-8.477h6.824a3.025 3.025 0 002.743-1.75V22h3.87v-8.477a3.87 3.87 0 00-3.588-3.86v-.01h-2.125a3.94 3.94 0 002.323-2.12l2.545-5.689z"></path></g></g><g opacity="0.9"><circle cx="126" cy="400" r="72" fill="url(#halo)"/><circle cx="126" cy="400" r="38" fill="url(#chip)" stroke="#4DD0E1" stroke-width="3"/><g transform="translate(102.5 376.2) scale(1.9792)"><path d="M12 24A14.304 14.304 0 000 12 14.304 14.304 0 0012 0a14.305 14.305 0 0012 12 14.305 14.305 0 00-12 12" fill="url(#lobe-icons-gemini-fill)" fill-rule="nonzero"></path></g></g><path d="M-140 1120 C110 1040 270 820 400 640 C450 570 540 500 620 450 C720 390 790 320 850 260 C900 210 950 170 1010 130" fill="none" stroke="url(#flowg)" stroke-opacity="0.22" stroke-width="34" stroke-linecap="round"/><path id="flowpath" d="M-140 1120 C110 1040 270 820 400 640 C450 570 540 500 620 450 C720 390 790 320 850 260 C900 210 950 170 1010 130" fill="none" stroke="url(#flowg)" stroke-width="10" stroke-linecap="round" marker-end="url(#flowhead)"/><circle cx="500" cy="540" r="170" fill="url(#glowv)"/><circle cx="500" cy="540" r="132" fill="none" stroke="#C9A2E6" stroke-opacity="0.5" stroke-width="3"/><circle cx="500" cy="540" r="110" fill="url(#core)" stroke="#4DD0E1" stroke-width="4"/><path d="M747 315 A 80 80 0 0 0 897 315" fill="none" stroke="#4DD0E1" stroke-width="5" stroke-dasharray="10 9" stroke-linecap="round" marker-end="url(#loophead)"/><g opacity="1.0"><circle cx="736" cy="566" r="76" fill="url(#halo)"/><circle cx="736" cy="566" r="40" fill="url(#chip)" stroke="#4DD0E1" stroke-width="3"/><g transform="translate(710.9 541.2) scale(2.0833)"><path d="M23.748 4.482c-.254-.124-.364.113-.512.234-.051.039-.094.09-.137.136-.372.397-.806.657-1.373.626-.829-.046-1.537.214-2.163.848-.133-.782-.575-1.248-1.247-1.548-.352-.156-.708-.311-.955-.65-.172-.241-.219-.51-.305-.774-.055-.16-.11-.323-.293-.35-.2-.031-.278.136-.356.276-.313.572-.434 1.202-.422 1.84.027 1.436.633 2.58 1.838 3.393.137.093.172.187.129.323-.082.28-.18.552-.266.833-.055.179-.137.217-.329.14a5.526 5.526 0 01-1.736-1.18c-.857-.828-1.631-1.742-2.597-2.458a11.365 11.365 0 00-.689-.471c-.985-.957.13-1.743.388-1.836.27-.098.093-.432-.779-.428-.872.004-1.67.295-2.687.684a3.055 3.055 0 01-.465.137 9.597 9.597 0 00-2.883-.102c-1.885.21-3.39 1.102-4.497 2.623C.082 8.606-.231 10.684.152 12.85c.403 2.284 1.569 4.175 3.36 5.653 1.858 1.533 3.997 2.284 6.438 2.14 1.482-.085 3.133-.284 4.994-1.86.47.234.962.327 1.78.397.63.059 1.236-.03 1.705-.128.735-.156.684-.837.419-.961-2.155-1.004-1.682-.595-2.113-.926 1.096-1.296 2.746-2.642 3.392-7.003.05-.347.007-.565 0-.845-.004-.17.035-.237.23-.256a4.173 4.173 0 001.545-.475c1.396-.763 1.96-2.015 2.093-3.517.02-.23-.004-.467-.247-.588zM11.581 18c-2.089-1.642-3.102-2.183-3.52-2.16-.392.024-.321.471-.235.763.09.288.207.486.371.739.114.167.192.416-.113.603-.673.416-1.842-.14-1.897-.167-1.361-.802-2.5-1.86-3.301-3.307-.774-1.393-1.224-2.887-1.298-4.482-.02-.386.093-.522.477-.592a4.696 4.696 0 011.529-.039c2.132.312 3.946 1.265 5.468 2.774.868.86 1.525 1.887 2.202 2.891.72 1.066 1.494 2.082 2.48 2.914.348.292.625.514.891.677-.802.09-2.14.11-3.054-.614zm1-6.44a.306.306 0 01.415-.287.302.302 0 01.2.288.306.306 0 01-.31.307.303.303 0 01-.304-.308zm3.11 1.596c-.2.081-.399.151-.59.16a1.245 1.245 0 01-.798-.254c-.274-.23-.47-.358-.552-.758a1.73 1.73 0 01.016-.588c.07-.327-.008-.537-.239-.727-.187-.156-.426-.199-.688-.199a.559.559 0 01-.254-.078c-.11-.054-.2-.19-.114-.358.028-.054.16-.186.192-.21.356-.202.767-.136 1.146.016.352.144.618.408 1.001.782.391.451.462.576.685.914.176.265.336.537.445.848.067.195-.019.354-.25.452z" fill="#4D6BFE"></path></g></g><g opacity="1.0"><circle cx="550" cy="711" r="87" fill="url(#halo)"/><circle cx="550" cy="711" r="46" fill="url(#chip)" stroke="#4DD0E1" stroke-width="3"/><g transform="translate(520.9 682.7) scale(2.3958)" fill="#111111" fill-rule="evenodd"><path d="M21.55 10.004a5.416 5.416 0 00-.478-4.501c-1.217-2.09-3.662-3.166-6.05-2.66A5.59 5.59 0 0010.831 1C8.39.995 6.224 2.546 5.473 4.838A5.553 5.553 0 001.76 7.496a5.487 5.487 0 00.691 6.5 5.416 5.416 0 00.477 4.502c1.217 2.09 3.662 3.165 6.05 2.66A5.586 5.586 0 0013.168 23c2.443.006 4.61-1.546 5.361-3.84a5.553 5.553 0 003.715-2.66 5.488 5.488 0 00-.693-6.497v.001zm-8.381 11.558a4.199 4.199 0 01-2.675-.954c.034-.018.093-.05.132-.074l4.44-2.53a.71.71 0 00.364-.623v-6.176l1.877 1.069c.02.01.033.029.036.05v5.115c-.003 2.274-1.87 4.118-4.174 4.123zM4.192 17.78a4.059 4.059 0 01-.498-2.763c.032.02.09.055.131.078l4.44 2.53c.225.13.504.13.73 0l5.42-3.088v2.138a.068.068 0 01-.027.057L9.9 19.288c-1.999 1.136-4.552.46-5.707-1.51h-.001zM3.023 8.216A4.15 4.15 0 015.198 6.41l-.002.151v5.06a.711.711 0 00.364.624l5.42 3.087-1.876 1.07a.067.067 0 01-.063.005l-4.489-2.559c-1.995-1.14-2.679-3.658-1.53-5.63h.001zm15.417 3.54l-5.42-3.088L14.896 7.6a.067.067 0 01.063-.006l4.489 2.557c1.998 1.14 2.683 3.662 1.529 5.633a4.163 4.163 0 01-2.174 1.807V12.38a.71.71 0 00-.363-.623zm1.867-2.773a6.04 6.04 0 00-.132-.078l-4.44-2.53a.731.731 0 00-.729 0l-5.42 3.088V7.325a.068.068 0 01.027-.057L14.1 4.713c2-1.137 4.555-.46 5.707 1.513.487.833.664 1.809.499 2.757h.001zm-11.741 3.81l-1.877-1.068a.065.065 0 01-.036-.051V6.559c.001-2.277 1.873-4.122 4.181-4.12.976 0 1.92.338 2.671.954-.034.018-.092.05-.131.073l-4.44 2.53a.71.71 0 00-.365.623l-.003 6.173v.002zm1.02-2.168L12 9.25l2.414 1.375v2.75L12 14.75l-2.415-1.375v-2.75z"></path></g></g><g opacity="1.0"><circle cx="817" cy="732" r="99" fill="url(#halo)"/><circle cx="817" cy="732" r="52" fill="url(#chip)" stroke="#4DD0E1" stroke-width="3"/><g transform="translate(784.1 699.4) scale(2.7083)"><path d="M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z" fill="#D97757" fill-rule="nonzero"></path></g></g><circle r="9" fill="#FFFEFB" opacity="0"><set attributeName="opacity" to="1" begin="0.6s"/><animateMotion dur="4.2s" begin="0.6s" repeatCount="3" fill="freeze"><mpath href="#flowpath"/></animateMotion></circle><circle r="9" fill="#FFFEFB" opacity="0"><set attributeName="opacity" to="1" begin="2.0s"/><animateMotion dur="4.2s" begin="2.0s" repeatCount="3" fill="freeze"><mpath href="#flowpath"/></animateMotion></circle><circle r="9" fill="#FFFEFB" opacity="0"><set attributeName="opacity" to="1" begin="3.4s"/><animateMotion dur="4.2s" begin="3.4s" repeatCount="3" fill="freeze"><mpath href="#flowpath"/></animateMotion></circle></g></svg>
+<p class="hero-hub" style="left:1190px; top:510px; width:260px">Kander</p>
+<p class="hero-stop" style="left:951px; top:875px; width:120px; border-color:#E3C6F5">创建</p>
+<p class="hero-stop" style="left:1042px; top:770px; width:120px; border-color:#C9A2E6">调度</p>
+<p class="hero-stop" style="left:1462px; top:367px; width:120px; border-color:#4DD0E1">实现</p>
+<p class="hero-stop" style="left:1582px; top:261px; width:120px; border-color:#4DD0E1">验证</p>
+<p class="hero-stop" style="left:1664px; top:182px; width:120px; border-color:#7FD17F">交付</p>
+<p class="hero-card" style="left:850px; top:640px; width:210px; border-left-color:#E3C6F5">支付接口</p>
+<p class="hero-card" style="left:1290px; top:236px; width:210px; border-left-color:#4DD0E1">登录页改版</p>
+<p class="hero-card" style="left:1420px; top:128px; width:210px; border-left-color:#7FD17F">数据导出 ✓</p>
+</div>
+<div class="dots">
+<div class="dot" style="background:#9D2EC5; border-radius:50%"></div>
+<div class="dot" style="background:#E48FE4; border-radius:50%"></div>
+<div class="dot" style="background:#6EA8FE; border-radius:50%"></div>
+<div class="dot" style="background:#4DD0E1; border-radius:50%"></div>
+<div class="dot" style="background:#7FD17F; border-radius:50%"></div>
+</div>
+<p class="eyebrow" style="margin-top:48px">Coming Soon · 2026</p>
+<h1 class="cover-title">Kander 2.0</h1>
+<h2 class="cover-sub">打造 AI 原生团队<br><span class="hl">可协作、可信赖、可审计</span></h2>
+<div class="gh anim">
+<svg aria-label="GitHub" width="44" height="44" viewBox="0 0 16 16"><path fill="#F3F1F7" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+<p class="gh-text"><a href="https://github.com/dualface/kander">github.com/dualface/kander</a></p>
+</div>
+</section>
+<section id="what" class="accent">
+<div class="pane">
+<div class="pane-l">
+<p class="eyebrow">新的困境</p>
+<h2 class="title">团队里的人和 AI 都是孤岛</h2>
+<p class="lead">AI 已经足够强大，但我们使用 AI 的方式，还没能充分发挥它的能力。</p>
+</div>
+<div class="pane-r stagger">
+<div class="issue">
+<p class="issue-h">没有上帝视角</p>
+<p class="issue-p">人和 AI 都不知道项目全景，<br>重复、冲突、错漏成了常态。</p>
+</div>
+<div class="issue">
+<p class="issue-h">没有统一的流程</p>
+<p class="issue-p">团队成员各自按自己的方式使用 AI，彼此割裂。</p>
+</div>
+<div class="issue">
+<p class="issue-h">没有统一的质量门禁</p>
+<p class="issue-p">交付质量参差不齐，<br>全凭感觉。</p>
+</div>
+<div class="issue">
+<p class="issue-h">没有痕迹</p>
+<p class="issue-p">每个团队成员的交付，<br>都无法审计与追溯。</p>
+</div>
+</div>
+</div>
+</section>
+<section id="3800fd5a">
+<p class="eyebrow">Kander 的愿景</p>
+<h2 class="title">将人的智力留给决策，所有执行都交给 AI</h2>
+<div class="path stagger">
+<div class="path-step">
+<p class="path-n">01</p>
+<h3 class="path-h">人确定目标</h3>
+<p class="path-p">人提出需求、创建任务，<br>AI 负责剩下的一切。</p>
+</div>
+<div class="path-step">
+<p class="path-n">02</p>
+<h3 class="path-h">AI 往目标前进</h3>
+<p class="path-p">更少阻塞、更多并行、<br>更快交付。</p>
+</div>
+<div class="path-step">
+<p class="path-n">03</p>
+<h3 class="path-h">一切都有序推进</h3>
+<p class="path-p">每一项改动、每一次交付，<br>都留下证据。</p>
+</div>
+</div>
+<p class="callout anim">人的智力是稀缺资源，应该留给最重要的事情。</p>
+</section>
+<section id="f7f53d3a" class="tint">
+<p class="eyebrow">三件大事</p>
+<h2 class="title">Kander 带来三件大事</h2>
+<div class="tiles stagger">
+<div class="tile">
+<p class="tile-n">01</p>
+<h3 class="tile-h">整个团队一起用</h3>
+<p class="tile-p">统一的规范、统一的工具、<br>统一的流程、统一的结果。</p>
+</div>
+<div class="tile dark-tile">
+<p class="tile-n">02</p>
+<h3 class="tile-h">黑灯工厂</h3>
+<p class="tile-p">AI 负责调度与执行，<br>无人值守时项目也在高速推进。</p>
+</div>
+<div class="tile">
+<p class="tile-n">03</p>
+<h3 class="tile-h">可扩充的交付能力</h3>
+<p class="tile-p">更多的 AI、更多的电脑，<br>交付能力随之提升。</p>
+</div>
+</div>
+<p class="note anim">从一个人带一组 AI，升级为一个团队带很多组 AI。</p>
+</section>
+<section id="pool">
+<p class="eyebrow">共享任务池</p>
+<h2 class="title">一个任务池，团队全景尽在眼前</h2>
+<!-- sources 260x100 at left 0, tops 0/150/300 (centres y 50/200/350); pool 380,0,900,400; computers 260x100 at left 1404, tops 0/150/300 -->
+<div class="anim" style="position:relative; width:1664px; height:400px; margin-top:48px">
+<div class="node human" style="left:0px; top:0px; width:260px; height:100px">
+<p class="node-h">市场</p>
+</div>
+<div class="node human" style="left:0px; top:150px; width:260px; height:100px">
+<p class="node-h">QA</p>
+</div>
+<div class="node human" style="left:0px; top:300px; width:260px; height:100px">
+<p class="node-h">开发</p>
+</div>
+<div class="pool" style="left:380px; top:0px; width:900px; height:400px">
+<p class="pool-h">共享任务池</p>
+<p class="pool-p">所有任务、状态与负责人集中在这里</p>
+<div class="pool-grid">
+<p class="mini done">登录页改版</p>
+<p class="mini run">支付接口</p>
+<p class="mini run">修复崩溃</p>
+<p class="mini">首页性能</p>
+<p class="mini done">数据导出</p>
+<p class="mini run">权限调整</p>
+<p class="mini">消息推送</p>
+<p class="mini">单元测试</p>
+</div>
+<p class="pool-legend"><span style="color:#E3C6F5">■ 待执行</span>　　<span style="color:#4DD0E1">■ 执行中</span>　　<span style="color:#7FD17F">■ 已完成</span></p>
+</div>
+<div class="node pc" style="left:1404px; top:0px; width:260px; height:100px">
+<p class="node-h">电脑 A</p>
+</div>
+<div class="node pc" style="left:1404px; top:150px; width:260px; height:100px">
+<p class="node-h">电脑 B</p>
+</div>
+<div class="node pc" style="left:1404px; top:300px; width:260px; height:100px">
+<p class="node-h">电脑 C</p>
+</div>
+<svg class="xc" aria-hidden="true" width="144" height="24" style="left:248px; top:38px"><line x1="12.0" y1="12.0" x2="121.0" y2="12.0" stroke="#8A2BC2" stroke-width="3" stroke-linecap="round"/><path d="M132.0 12.0 L120.0 18.5 L120.0 5.5 Z" fill="#8A2BC2"/></svg>
+<svg class="xc" aria-hidden="true" width="144" height="24" style="left:248px; top:188px"><line x1="12.0" y1="12.0" x2="121.0" y2="12.0" stroke="#8A2BC2" stroke-width="3" stroke-linecap="round"/><path d="M132.0 12.0 L120.0 18.5 L120.0 5.5 Z" fill="#8A2BC2"/></svg>
+<svg class="xc" aria-hidden="true" width="144" height="24" style="left:248px; top:338px"><line x1="12.0" y1="12.0" x2="121.0" y2="12.0" stroke="#8A2BC2" stroke-width="3" stroke-linecap="round"/><path d="M132.0 12.0 L120.0 18.5 L120.0 5.5 Z" fill="#8A2BC2"/></svg>
+<svg class="xc" aria-hidden="true" width="148" height="24" style="left:1268px; top:38px"><line x1="12.0" y1="12.0" x2="125.0" y2="12.0" stroke="#8A2BC2" stroke-width="3" stroke-linecap="round"/><path d="M136.0 12.0 L124.0 18.5 L124.0 5.5 Z" fill="#8A2BC2"/></svg>
+<svg class="xc" aria-hidden="true" width="148" height="24" style="left:1268px; top:188px"><line x1="12.0" y1="12.0" x2="125.0" y2="12.0" stroke="#8A2BC2" stroke-width="3" stroke-linecap="round"/><path d="M136.0 12.0 L124.0 18.5 L124.0 5.5 Z" fill="#8A2BC2"/></svg>
+<svg class="xc" aria-hidden="true" width="148" height="24" style="left:1268px; top:338px"><line x1="12.0" y1="12.0" x2="125.0" y2="12.0" stroke="#8A2BC2" stroke-width="3" stroke-linecap="round"/><path d="M136.0 12.0 L124.0 18.5 L124.0 5.5 Z" fill="#8A2BC2"/></svg>
+<p class="wire-label" style="left:272px; top:154px; width:96px; text-align:center">提交</p>
+<p class="wire-label" style="left:1294px; top:154px; width:96px; text-align:center">调度</p>
+</div>
+<div class="facts stagger">
+<div class="fact">
+<p class="fact-h">全景可见</p>
+<p class="fact-p">人和 AI 看到同一份任务全景，信息完整统一。</p>
+</div>
+<div class="fact">
+<p class="fact-h">依赖有序</p>
+<p class="fact-p">前置任务完成后，后续任务才进入执行。</p>
+</div>
+<div class="fact">
+<p class="fact-h">冲突可控</p>
+<p class="fact-p">改动同一文件的任务依次执行，减少冲突。</p>
+</div>
+<div class="fact">
+<p class="fact-h">任务组</p>
+<p class="fact-p">大需求拆成任务组，按计划依次推进。</p>
+</div>
+</div>
+</section>
+<section id="rules" class="tint">
+<p class="eyebrow">统一规范</p>
+<h2 class="title">一套规范，所有 AI 统一执行</h2>
+<div class="split">
+<div class="doc anim">
+<div class="doc-top">
+<p class="doc-k">任务卡</p>
+<p class="doc-lock">确认后锁定</p>
+</div>
+<p class="doc-t">登录页改版</p>
+<div class="doc-row">
+<p class="doc-label">目标</p>
+<div class="doc-lines"><div class="bar"></div><div class="bar" style="width:70%"></div></div>
+</div>
+<div class="doc-row">
+<p class="doc-label">预期结果</p>
+<div class="doc-lines"><div class="bar" style="width:85%"></div></div>
+</div>
+<div class="doc-row">
+<p class="doc-label">验收标准</p>
+<div class="doc-lines">
+<div class="check-row"><div class="box"></div><div class="bar" style="flex:1"></div></div>
+<div class="check-row"><div class="box"></div><div class="bar" style="width:60%"></div></div>
+<div class="check-row"><div class="box"></div><div class="bar" style="width:75%"></div></div>
+</div>
+</div>
+<div class="doc-row">
+<p class="doc-label">范围之外</p>
+<div class="doc-lines"><div class="bar" style="width:55%"></div></div>
+</div>
+<div class="doc-row">
+<p class="doc-label">执行记录</p>
+<div class="doc-lines"><div class="bar"></div><div class="bar" style="width:40%"></div></div>
+</div>
+</div>
+<div class="vlist stagger">
+<div class="vitem">
+<p class="vitem-h">一套规范，所有 AI 共用</p>
+<p class="vitem-p">同一套工作规范自动装入<br>Claude、Codex 等各种 AI。</p>
+</div>
+<div class="vitem">
+<p class="vitem-h">任务即契约</p>
+<p class="vitem-p">目标、验收标准、范围写进任务卡，<br>确认后即锁定。</p>
+</div>
+<div class="vitem">
+<p class="vitem-h">统一的完成报告</p>
+<p class="vitem-p">交付内容、验收结果、验证过程、<br>遗留问题，按同一模板汇报。</p>
+</div>
+</div>
+</div>
+</section>
+<section id="review" class="dark with-source">
+<p class="eyebrow">审核闭环</p>
+<h2 class="title">层层审核，每次交付都经得起检验</h2>
+<!-- boxes 224x176 at left 0/288/576/864/1152/1440, top 0 (centres 112/400/688/976/1264/1552); arrows y 88; loops: card y 226, PMQA y 236 into x 720, Security y 266 into x 656 -->
+<div class="anim" style="position:relative; width:1664px; height:312px; margin-top:48px">
+<div class="node human" style="left:0px; top:0px; width:224px; height:176px">
+<p class="node-h">任务卡</p>
+<p class="node-p">目标与验收标准</p>
+</div>
+<div class="node gate" style="left:288px; top:0px; width:224px; height:176px">
+<p class="node-h">开工前审卡</p>
+<p class="node-p">独立 AI 审核任务卡</p>
+</div>
+<div class="node pc" style="left:576px; top:0px; width:224px; height:176px">
+<p class="node-h">AI 开发</p>
+<p class="node-p">按契约执行</p>
+</div>
+<div class="node gate" style="left:864px; top:0px; width:224px; height:176px">
+<p class="node-h">质量审核</p>
+<p class="node-p">需求符合度与代码质量</p>
+</div>
+<div class="node gate" style="left:1152px; top:0px; width:224px; height:176px">
+<p class="node-h">安全审核</p>
+<p class="node-p">排查安全漏洞与攻击路径</p>
+</div>
+<div class="node pc" style="left:1440px; top:0px; width:224px; height:176px">
+<p class="node-h">交付</p>
+<p class="node-p">合格后合入主干</p>
+</div>
+<svg class="xc" aria-hidden="true" width="88" height="24" style="left:212px; top:76px"><line x1="12.0" y1="12.0" x2="65.0" y2="12.0" stroke="#C9A2E6" stroke-width="3" stroke-linecap="round"/><path d="M76.0 12.0 L64.0 18.5 L64.0 5.5 Z" fill="#C9A2E6"/></svg>
+<svg class="xc" aria-hidden="true" width="88" height="24" style="left:500px; top:76px"><line x1="12.0" y1="12.0" x2="65.0" y2="12.0" stroke="#C9A2E6" stroke-width="3" stroke-linecap="round"/><path d="M76.0 12.0 L64.0 18.5 L64.0 5.5 Z" fill="#C9A2E6"/></svg>
+<svg class="xc" aria-hidden="true" width="88" height="24" style="left:788px; top:76px"><line x1="12.0" y1="12.0" x2="65.0" y2="12.0" stroke="#C9A2E6" stroke-width="3" stroke-linecap="round"/><path d="M76.0 12.0 L64.0 18.5 L64.0 5.5 Z" fill="#C9A2E6"/></svg>
+<svg class="xc" aria-hidden="true" width="88" height="24" style="left:1076px; top:76px"><line x1="12.0" y1="12.0" x2="65.0" y2="12.0" stroke="#C9A2E6" stroke-width="3" stroke-linecap="round"/><path d="M76.0 12.0 L64.0 18.5 L64.0 5.5 Z" fill="#C9A2E6"/></svg>
+<svg class="xc" aria-hidden="true" width="88" height="24" style="left:1364px; top:76px"><line x1="12.0" y1="12.0" x2="65.0" y2="12.0" stroke="#C9A2E6" stroke-width="3" stroke-linecap="round"/><path d="M76.0 12.0 L64.0 18.5 L64.0 5.5 Z" fill="#C9A2E6"/></svg>
+<svg class="xc" aria-hidden="true" width="24" height="74" style="left:388px; top:164px"><line x1="12.0" y1="12.0" x2="12.0" y2="62.0" stroke="#4DD0E1" stroke-width="3" stroke-linecap="round" stroke-dasharray="10 8"/></svg>
+<svg class="xc" aria-hidden="true" width="312" height="24" style="left:100px; top:214px"><line x1="300.0" y1="12.0" x2="12.0" y2="12.0" stroke="#4DD0E1" stroke-width="3" stroke-linecap="round" stroke-dasharray="10 8"/></svg>
+<svg class="xc" aria-hidden="true" width="24" height="74" style="left:100px; top:164px"><line x1="12.0" y1="62.0" x2="12.0" y2="23.0" stroke="#4DD0E1" stroke-width="3" stroke-linecap="round" stroke-dasharray="10 8"/><path d="M12.0 12.0 L18.5 24.0 L5.5 24.0 Z" fill="#4DD0E1"/></svg>
+<svg class="xc" aria-hidden="true" width="24" height="84" style="left:964px; top:164px"><line x1="12.0" y1="12.0" x2="12.0" y2="72.0" stroke="#4DD0E1" stroke-width="3" stroke-linecap="round" stroke-dasharray="10 8"/></svg>
+<svg class="xc" aria-hidden="true" width="280" height="24" style="left:708px; top:224px"><line x1="268.0" y1="12.0" x2="12.0" y2="12.0" stroke="#4DD0E1" stroke-width="3" stroke-linecap="round" stroke-dasharray="10 8"/></svg>
+<svg class="xc" aria-hidden="true" width="24" height="84" style="left:708px; top:164px"><line x1="12.0" y1="72.0" x2="12.0" y2="23.0" stroke="#4DD0E1" stroke-width="3" stroke-linecap="round" stroke-dasharray="10 8"/><path d="M12.0 12.0 L18.5 24.0 L5.5 24.0 Z" fill="#4DD0E1"/></svg>
+<svg class="xc" aria-hidden="true" width="24" height="114" style="left:1252px; top:164px"><line x1="12.0" y1="12.0" x2="12.0" y2="102.0" stroke="#4DD0E1" stroke-width="3" stroke-linecap="round" stroke-dasharray="10 8"/></svg>
+<svg class="xc" aria-hidden="true" width="632" height="24" style="left:644px; top:254px"><line x1="620.0" y1="12.0" x2="12.0" y2="12.0" stroke="#4DD0E1" stroke-width="3" stroke-linecap="round" stroke-dasharray="10 8"/></svg>
+<svg class="xc" aria-hidden="true" width="24" height="114" style="left:644px; top:164px"><line x1="12.0" y1="102.0" x2="12.0" y2="23.0" stroke="#4DD0E1" stroke-width="3" stroke-linecap="round" stroke-dasharray="10 8"/><path d="M12.0 12.0 L18.5 24.0 L5.5 24.0 Z" fill="#4DD0E1"/></svg>
+<p class="wire-label" style="left:112px; top:236px; width:288px; text-align:center">完善任务卡</p>
+<p class="wire-label" style="left:760px; top:276px; width:420px; text-align:center">发现问题，退回修复</p>
+</div>
+<div class="stats3 stagger">
+<div class="stat">
+<p class="stat-n">2,865</p>
+<p class="stat-l">次独立审核运行</p>
+<p class="stat-s">5 个项目、1,727 张任务卡的审核记录</p>
+</div>
+<div class="stat">
+<p class="stat-n">51%</p>
+<p class="stat-l">的审核批次发现必须处理的问题</p>
+<p class="stat-s">1,504 个审核批次中的 773 个</p>
+</div>
+<div class="stat">
+<p class="stat-n">3 轮</p>
+<p class="stat-l">修复上限，超出即交给人决策</p>
+<p class="stat-s">同一问题修复两轮仍未解决，同样上报</p>
+</div>
+</div>
+<p class="source">数据来源：Kander 实战数据（github.com/dualface/kander/docs/production-stats-cn.md），5 个项目，2026-08-01 至 10-29</p>
+</section>
+<section id="audit" class="tint">
+<p class="eyebrow">可审计信息</p>
+<h2 class="title">每一次交付，都有完整证据链</h2>
+<div class="split">
+<div class="log anim">
+<p class="log-k">任务记录 · 登录页改版</p>
+<div class="log-row"><p class="log-t">09:12</p><p class="log-who">人</p><p class="log-e">创建任务，目标与验收标准锁定</p></div>
+<div class="log-row"><p class="log-t">09:15</p><p class="log-who">Leader</p><p class="log-e">调度至电脑 C</p></div>
+<div class="log-row"><p class="log-t">10:40</p><p class="log-who ai">AI</p><p class="log-e">质量审核发现 2 项必须处理的问题</p></div>
+<div class="log-row"><p class="log-t">11:05</p><p class="log-who ai">AI</p><p class="log-e">修复完成，复审通过</p></div>
+<div class="log-row"><p class="log-t">11:20</p><p class="log-who ai">AI</p><p class="log-e">合入主干（代码版本 a3f9c21）</p></div>
+<div class="log-row"><p class="log-t">11:21</p><p class="log-who ai">AI</p><p class="log-e">完成报告：验收 5/5，遗留问题 0</p></div>
+</div>
+<div class="vlist stagger">
+<div class="vitem">
+<p class="vitem-h">需求有据</p>
+<p class="vitem-p">任务契约确认后即锁定，<br>每项决策注明来源。</p>
+</div>
+<div class="vitem">
+<p class="vitem-h">过程有据</p>
+<p class="vitem-p">执行记录与审核报告原件<br>完整保存。</p>
+</div>
+<div class="vitem">
+<p class="vitem-h">交付有据</p>
+<p class="vitem-p">每次交付对应确切的代码版本<br>与完成报告。</p>
+</div>
+</div>
+</div>
+</section>
+<section id="teamflow">
+<p class="eyebrow">工作流程</p>
+<h2 class="title">人定方向，AI 跑完全程</h2>
+<div class="flow anim">
+<div class="stage human" style="width:440px">
+<p class="tag">人</p>
+<p class="stage-h">提出需求</p>
+<p class="stage-p">市场、QA、开发随时创建任务，即刻汇入团队看板。</p>
+</div>
+<svg class="arrow" aria-hidden="true" width="56" height="24" viewBox="0 0 56 24"><line x1="2" y1="12" x2="42" y2="12" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M40 4 L54 12 L40 20 Z" fill="currentColor"/></svg>
+<div class="stage human" style="width:440px">
+<p class="tag">人</p>
+<p class="stage-h">指定负责人</p>
+<p class="stage-p">每个任务指定负责人，由负责人对交付结果负责。</p>
+</div>
+<svg class="arrow" aria-hidden="true" width="56" height="24" viewBox="0 0 56 24"><line x1="2" y1="12" x2="42" y2="12" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M40 4 L54 12 L40 20 Z" fill="currentColor"/></svg>
+<div class="stage ai" style="width:672px">
+<p class="tag">AI</p>
+<p class="stage-h">端到端交付</p>
+<p class="stage-p">从调度到交付一气呵成，<br>每一步都经过独立审核。</p>
+<div class="chips">
+<p class="chip">调度</p>
+<p class="chip">开发</p>
+<p class="chip">独立审核</p>
+<p class="chip">自动修复</p>
+<p class="chip">交付</p>
+</div>
+</div>
+</div>
+<p class="loop">问题在交付前拦截，修复到合格为止</p>
+<p class="note">人只出现在起点，执行全程交给 AI。</p>
+</section>
+<section id="lifecycle" class="tint">
+<p class="eyebrow">任务流转</p>
+<h2 class="title">五个阶段，任务流转井然有序</h2>
+<!-- stages 288x260 at left 0/344/688/1032/1376, top 0; centres 144/488/832/1176/1520; arrows at y 130; loop strip y 320 -->
+<div class="anim" style="position:relative; width:1664px; height:366px; margin-top:48px">
+<div class="stage sm human" style="position:absolute; left:0px; top:0px; width:288px; height:260px">
+<p class="tag">人</p>
+<p class="stage-h">创建任务</p>
+<p class="stage-p">理清需求，创建任务。</p>
+</div>
+<div class="stage sm ai" style="position:absolute; left:344px; top:0px; width:288px; height:260px">
+<p class="tag">AI</p>
+<p class="stage-h">任务调度</p>
+<p class="stage-p">在团队所有电脑上自动调度执行任务。</p>
+</div>
+<div class="stage sm ai" style="position:absolute; left:688px; top:0px; width:288px; height:260px">
+<p class="tag">AI</p>
+<p class="stage-h">实现</p>
+<p class="stage-p">AI 完成开发，持续推进。</p>
+</div>
+<div class="stage sm ai" style="position:absolute; left:1032px; top:0px; width:288px; height:260px">
+<p class="tag">AI</p>
+<p class="stage-h">验证</p>
+<p class="stage-p">AI 自动化验收。</p>
+</div>
+<div class="stage sm ai" style="position:absolute; left:1376px; top:0px; width:288px; height:260px">
+<p class="tag">AI</p>
+<p class="stage-h">交付</p>
+<p class="stage-p">自动交付。</p>
+</div>
+<svg class="xc" aria-hidden="true" width="80" height="24" style="left:276px; top:118px"><line x1="12.0" y1="12.0" x2="57.0" y2="12.0" stroke="#8A2BC2" stroke-width="3" stroke-linecap="round"/><path d="M68.0 12.0 L56.0 18.5 L56.0 5.5 Z" fill="#8A2BC2"/></svg>
+<svg class="xc" aria-hidden="true" width="80" height="24" style="left:620px; top:118px"><line x1="12.0" y1="12.0" x2="57.0" y2="12.0" stroke="#8A2BC2" stroke-width="3" stroke-linecap="round"/><path d="M68.0 12.0 L56.0 18.5 L56.0 5.5 Z" fill="#8A2BC2"/></svg>
+<svg class="xc" aria-hidden="true" width="80" height="24" style="left:964px; top:118px"><line x1="12.0" y1="12.0" x2="57.0" y2="12.0" stroke="#8A2BC2" stroke-width="3" stroke-linecap="round"/><path d="M68.0 12.0 L56.0 18.5 L56.0 5.5 Z" fill="#8A2BC2"/></svg>
+<svg class="xc" aria-hidden="true" width="80" height="24" style="left:1308px; top:118px"><line x1="12.0" y1="12.0" x2="57.0" y2="12.0" stroke="#8A2BC2" stroke-width="3" stroke-linecap="round"/><path d="M68.0 12.0 L56.0 18.5 L56.0 5.5 Z" fill="#8A2BC2"/></svg>
+<svg class="xc" aria-hidden="true" width="24" height="84" style="left:1164px; top:248px"><line x1="12.0" y1="12.0" x2="12.0" y2="72.0" stroke="#8A2BC2" stroke-width="3" stroke-linecap="round"/></svg>
+<svg class="xc" aria-hidden="true" width="368" height="24" style="left:820px; top:308px"><line x1="356.0" y1="12.0" x2="12.0" y2="12.0" stroke="#8A2BC2" stroke-width="3" stroke-linecap="round"/></svg>
+<svg class="xc" aria-hidden="true" width="24" height="84" style="left:820px; top:248px"><line x1="12.0" y1="72.0" x2="12.0" y2="23.0" stroke="#8A2BC2" stroke-width="3" stroke-linecap="round"/><path d="M12.0 12.0 L18.5 24.0 L5.5 24.0 Z" fill="#8A2BC2"/></svg>
+<p class="loop-label" style="position:absolute; left:832px; top:330px; width:344px">发现问题，退回修复</p>
+</div>
+<p class="loop" style="margin-top:16px">每一个任务交付前，都必须通过审核闭环，确保交付质量。</p>
+<div class="facts stagger">
+<div class="fact">
+<p class="fact-h">需求锁定</p>
+<p class="fact-p">任务确认后即锁定需求，<br>交付的正是确认过的内容。</p>
+</div>
+<div class="fact">
+<p class="fact-h">一事一主</p>
+<p class="fact-p">自动分配与调度任务，避免团队里的 AI 争抢同一个任务。</p>
+</div>
+<div class="fact">
+<p class="fact-h">随时接手</p>
+<p class="fact-p">可随时将任务调度给其他 AI 继续执行。</p>
+</div>
+<div class="fact">
+<p class="fact-h">全程留痕</p>
+<p class="fact-p">决策、改动、流转都记录在案，<br>随时可追溯。</p>
+</div>
+</div>
+</section>
+<section id="leader">
+<p class="eyebrow">分布式调度</p>
+<h2 class="title">任务调度主管，统筹所有电脑与 AI</h2>
+<!-- owner 0,0,400,150  leader 632,0,400,150  board 1264,0,400,150 ; computers 380x150 at left 0/428/856/1284, top 310 (centres 190/618/1046/1474) ; bus y 240 -->
+<div class="anim" style="position:relative; width:1664px; height:460px; margin-top:40px">
+<div class="node human" style="left:0px; top:0px; width:400px; height:150px">
+<p class="node-h">项目负责人</p>
+<p class="node-p">设定目标，做出关键决策</p>
+</div>
+<div class="node hub" style="left:632px; top:0px; width:400px; height:150px">
+<p class="node-h">Kander Leader</p>
+<p class="node-p">AI 任务调度主管</p>
+</div>
+<div class="node" style="left:1264px; top:0px; width:400px; height:150px">
+<p class="node-h">团队看板</p>
+<p class="node-p">任务与进度的统一视图</p>
+</div>
+<div class="node pc" style="left:0px; top:310px; width:380px; height:150px">
+<p class="node-h">电脑 A</p>
+<p class="node-p">3 个 AI 并行执行</p>
+</div>
+<div class="node pc busy" style="left:428px; top:310px; width:380px; height:150px">
+<p class="node-h">电脑 B</p>
+<p class="node-p">满负载，暂停分配</p>
+</div>
+<div class="node pc free" style="left:856px; top:310px; width:380px; height:150px">
+<p class="node-h">电脑 C</p>
+<p class="node-p">资源空闲，优先分配</p>
+</div>
+<div class="node pc" style="left:1284px; top:310px; width:380px; height:150px">
+<p class="node-h">新加入的电脑</p>
+<p class="node-p">接入即参与调度</p>
+</div>
+<svg class="xc" aria-hidden="true" width="256" height="24" style="left:388px; top:63px"><line x1="23.0" y1="12.0" x2="233.0" y2="12.0" stroke="#8A2BC2" stroke-width="3" stroke-linecap="round"/><path d="M244.0 12.0 L232.0 18.5 L232.0 5.5 Z" fill="#8A2BC2"/><path d="M12.0 12.0 L24.0 5.5 L24.0 18.5 Z" fill="#8A2BC2"/></svg>
+<svg class="xc" aria-hidden="true" width="256" height="24" style="left:1020px; top:63px"><line x1="23.0" y1="12.0" x2="233.0" y2="12.0" stroke="#8A2BC2" stroke-width="3" stroke-linecap="round"/><path d="M244.0 12.0 L232.0 18.5 L232.0 5.5 Z" fill="#8A2BC2"/><path d="M12.0 12.0 L24.0 5.5 L24.0 18.5 Z" fill="#8A2BC2"/></svg>
+<svg class="xc" aria-hidden="true" width="24" height="114" style="left:820px; top:138px"><line x1="12.0" y1="12.0" x2="12.0" y2="102.0" stroke="#8A2BC2" stroke-width="3" stroke-linecap="round"/></svg>
+<svg class="xc" aria-hidden="true" width="1308" height="24" style="left:178px; top:228px"><line x1="12.0" y1="12.0" x2="1296.0" y2="12.0" stroke="#8A2BC2" stroke-width="3" stroke-linecap="round"/></svg>
+<svg class="xc" aria-hidden="true" width="24" height="94" style="left:178px; top:228px"><line x1="12.0" y1="12.0" x2="12.0" y2="71.0" stroke="#8A2BC2" stroke-width="3" stroke-linecap="round"/><path d="M12.0 82.0 L5.5 70.0 L18.5 70.0 Z" fill="#8A2BC2"/></svg>
+<svg class="xc" aria-hidden="true" width="24" height="94" style="left:606px; top:228px"><line x1="12.0" y1="12.0" x2="12.0" y2="71.0" stroke="#8A2BC2" stroke-width="3" stroke-linecap="round"/><path d="M12.0 82.0 L5.5 70.0 L18.5 70.0 Z" fill="#8A2BC2"/></svg>
+<svg class="xc" aria-hidden="true" width="24" height="94" style="left:1034px; top:228px"><line x1="12.0" y1="12.0" x2="12.0" y2="71.0" stroke="#8A2BC2" stroke-width="3" stroke-linecap="round"/><path d="M12.0 82.0 L5.5 70.0 L18.5 70.0 Z" fill="#8A2BC2"/></svg>
+<svg class="xc" aria-hidden="true" width="24" height="94" style="left:1462px; top:228px"><line x1="12.0" y1="12.0" x2="12.0" y2="71.0" stroke="#8A2BC2" stroke-width="3" stroke-linecap="round"/><path d="M12.0 82.0 L5.5 70.0 L18.5 70.0 Z" fill="#8A2BC2"/></svg>
+<p class="wire-label" style="left:416px; top:24px; width:200px; text-align:center">决策 / 汇报</p>
+<p class="wire-label" style="left:1048px; top:24px; width:200px; text-align:center">同步状态</p>
+<p class="wire-label" style="left:852px; top:176px; width:520px">按负载分配任务，持续巡检</p>
+</div>
+<div class="facts stagger" style="margin-top:32px">
+<div class="fact">
+<p class="fact-h">全局视图</p>
+<p class="fact-p">实时掌握所有任务的状态与先后顺序。</p>
+</div>
+<div class="fact">
+<p class="fact-h">按负载分配</p>
+<p class="fact-p">依据每台电脑的负载分配任务，充分利用资源。</p>
+</div>
+<div class="fact">
+<p class="fact-h">持续巡检</p>
+<p class="fact-p">定时检查执行进度，及时消除阻塞。</p>
+</div>
+<div class="fact">
+<p class="fact-h">权责清晰</p>
+<p class="fact-p">关键决策交给人，日常调度由 AI 完成。</p>
+</div>
+</div>
+</section>
+<section id="agentcli" class="dark">
+<p class="eyebrow">人机分工</p>
+<h2 class="title">AI 自主执行，人专注决策</h2>
+<div class="duo stagger">
+<div class="duo-col left">
+<p class="duo-k">交给 AI</p>
+<div class="duo-item">
+<h3 class="duo-h">自主执行</h3>
+<p class="duo-p">开发、送审、修复，<br>全程按统一规范推进。</p>
+</div>
+<div class="duo-item">
+<h3 class="duo-h">全天候运转</h3>
+<p class="duo-p">无人值守时持续推进，<br>异常自动处理或及时上报。</p>
+</div>
+</div>
+<div class="duo-col right">
+<p class="duo-k">人来掌握</p>
+<div class="duo-item">
+<h3 class="duo-h">决策点清晰</h3>
+<p class="duo-p">遇到需要人决策的问题，<br>AI 暂停并给出可选方案。</p>
+</div>
+<div class="duo-item">
+<h3 class="duo-h">汇报如实</h3>
+<p class="duo-p">已完成、已验证、待确认，<br>每份报告清清楚楚。</p>
+</div>
+</div>
+</div>
+</section>
+<section id="insight">
+<p class="eyebrow">进度与报告</p>
+<h2 class="title">项目全景，一目了然</h2>
+<div class="panels stagger">
+<div class="panel">
+<div class="panel-bar">
+<div class="pdot" style="background:#E48FE4; border-radius:50%"></div>
+<div class="pdot" style="background:#6EA8FE; border-radius:50%"></div>
+<div class="pdot" style="background:#7FD17F; border-radius:50%"></div>
+</div>
+<div class="panel-body">
+<h3 class="panel-h">全局看板</h3>
+<p class="panel-p">任务状态、负责人、阻塞点，<br>实时可见。</p>
+</div>
+</div>
+<div class="panel">
+<div class="panel-bar">
+<div class="pdot" style="background:#E48FE4; border-radius:50%"></div>
+<div class="pdot" style="background:#6EA8FE; border-radius:50%"></div>
+<div class="pdot" style="background:#7FD17F; border-radius:50%"></div>
+</div>
+<div class="panel-body">
+<h3 class="panel-h">自动周报</h3>
+<p class="panel-p">交付数量、拦截的问题，<br>自动汇总成周报。</p>
+</div>
+</div>
+<div class="panel">
+<div class="panel-bar">
+<div class="pdot" style="background:#E48FE4; border-radius:50%"></div>
+<div class="pdot" style="background:#6EA8FE; border-radius:50%"></div>
+<div class="pdot" style="background:#7FD17F; border-radius:50%"></div>
+</div>
+<div class="panel-body">
+<h3 class="panel-h">全程可追溯</h3>
+<p class="panel-p">谁创建、谁负责、如何完成，<br>随时可查。</p>
+</div>
+</div>
+</div>
+<p class="callout anim">管理者、开发、QA、市场，看到的是同一份事实。</p>
+</section>
+<section id="console" class="tint">
+<p class="eyebrow">Web 控制台</p>
+<h2 class="title">一个网页，掌控你负责的全部任务</h2>
+<div class="split">
+<div class="anim" style="flex:none; width:1000px">
+<div class="browser">
+<div class="bbar">
+<div class="bdot" style="background:#E48FE4; border-radius:50%"></div>
+<div class="bdot" style="background:#6EA8FE; border-radius:50%"></div>
+<div class="bdot" style="background:#7FD17F; border-radius:50%"></div>
+<p class="burl">Kander 团队看板</p>
+</div>
+<div class="bbody">
+<div class="mboard">
+<div class="mcol">
+<p class="mlabel">实现</p>
+<div class="mcard-sel"><p class="mtext">登录页改版</p></div>
+<div class="mcard"></div>
+<div class="mcard"></div>
+</div>
+<div class="mcol">
+<p class="mlabel">验证</p>
+<div class="mcard"></div>
+<div class="mcard"></div>
+</div>
+<div class="mcol">
+<p class="mlabel">交付</p>
+<div class="mcard"></div>
+<div class="mcard"></div>
+<div class="mcard"></div>
+</div>
+</div>
+<div class="mterm">
+<p class="mterm-h">登录页改版 · 电脑 C</p>
+<p class="mline">正在改登录页…</p>
+<p class="mline">需要你决定：</p>
+<p class="mline">1. 保留旧的登录方式</p>
+<p class="mline">2. 全部换成新的</p>
+<p class="minput">回复 AI…</p>
+</div>
+</div>
+</div>
+<p class="caption">界面示意，以实际发布为准</p>
+</div>
+<div class="vlist stagger">
+<div class="vitem">
+<p class="vitem-h">实时可见</p>
+<p class="vitem-p">AI 的执行过程与阻塞原因，<br>实时呈现。</p>
+</div>
+<div class="vitem">
+<p class="vitem-h">随时介入</p>
+<p class="vitem-p">回答提问、批准方案、暂停执行，<br>都在网页中完成。</p>
+</div>
+<div class="vitem">
+<p class="vitem-h">权限按任务划分</p>
+<p class="vitem-p">每个人随时能看到自己所负责任务的 AI，<br>无论它运行在哪台电脑上。</p>
+</div>
+</div>
+</div>
+</section>
+<section id="security" class="dark">
+<p class="eyebrow">安全与管控</p>
+<h2 class="title">数据自主可控，权限清晰可管</h2>
+<div class="pillars stagger">
+<div class="pillar">
+<p class="pillar-n">01</p>
+<h3 class="pillar-h">代码留在本地</h3>
+<p class="pillar-p">代码库始终保存在团队自己的电脑上，看板只记录任务与过程。</p>
+</div>
+<div class="pillar">
+<p class="pillar-n">02</p>
+<h3 class="pillar-h">私有化部署</h3>
+<p class="pillar-p">部署在公司内网，数据存放在自有服务器。</p>
+</div>
+<div class="pillar">
+<p class="pillar-n">03</p>
+<h3 class="pillar-h">按任务授权</h3>
+<p class="pillar-p">每个人只能查看并操作自己所负责任务的 AI。</p>
+</div>
+<div class="pillar">
+<p class="pillar-n">04</p>
+<h3 class="pillar-h">账号即时回收</h3>
+<p class="pillar-p">停用账号立即生效，任务随即移交给新的负责人。</p>
+</div>
+</div>
+</section>
+<section id="ecosystem">
+<p class="eyebrow">成本与选择</p>
+<h2 class="title">兼容主流 AI，选择始终自由</h2>
+<div class="eco">
+<div class="eco-hero anim">
+<h3 class="eco-h">10 种 Agent，多家模型</h3>
+<div class="chips">
+<p class="chip">Claude</p>
+<p class="chip">Codex</p>
+<p class="chip">Gemini</p>
+<p class="chip">Cursor</p>
+<p class="chip">Grok</p>
+<p class="chip">Kimi</p>
+<p class="chip">DeepSeek</p>
+<p class="chip">Devin</p>
+<p class="chip more">更多</p>
+</div>
+</div>
+<div class="vlist stagger">
+<div class="vitem">
+<p class="vitem-h">成本可控</p>
+<p class="vitem-p">执行与审核可选用不同的 AI，<br>按需搭配，成本与质量兼顾。</p>
+</div>
+<div class="vitem">
+<p class="vitem-h">灵活切换</p>
+<p class="vitem-p">出现更好的 AI 时随时切换，<br>团队流程保持不变。</p>
+</div>
+<div class="vitem">
+<p class="vitem-h">开源透明</p>
+<p class="vitem-p">规则全部公开，<br>可审阅、可定制。</p>
+</div>
+</div>
+</div>
+</section>
+<section id="summary" class="dark" style="justify-content:center">
+<p class="eyebrow">Kander 2.0</p>
+<h2 class="cover-title anim">从使用 AI 的团队<br>到 AI 原生团队</h2>
+<div class="next stagger">
+<div class="next-item">
+<p class="eyebrow">现在</p>
+<p class="next-v">开源版本已可使用</p>
+</div>
+<div class="next-item">
+<p class="eyebrow">2026</p>
+<p class="next-v">Kander 2.0 正式发布</p>
+</div>
+</div>
+<div class="gh anim">
+<svg aria-label="GitHub" width="44" height="44" viewBox="0 0 16 16"><path fill="#F3F1F7" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+<p class="gh-text"><a href="https://github.com/dualface/kander">github.com/dualface/kander</a></p>
+</div>
+</section>
+</main>
+<div class="counter" aria-live="polite"></div>
+<script>
+(() => {
+  const slides = Array.from(document.querySelectorAll('.deck > section'));
+  const counter = document.querySelector('.counter');
+  let index = 0;
+  document.body.classList.add('js');
+  const fit = () => document.documentElement.style.setProperty('--scale', Math.min(innerWidth / 1920, innerHeight / 1080));
+  const show = (n) => {
+    index = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, k) => s.classList.toggle('current', k === index));
+    counter.textContent = (index + 1) + ' / ' + slides.length;
+    history.replaceState(null, '', '#' + (index + 1));
+  };
+  addEventListener('resize', fit);
+  addEventListener('keydown', (e) => {
+    if (['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter'].includes(e.key)) { show(index + 1); e.preventDefault(); }
+    else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'].includes(e.key)) { show(index - 1); e.preventDefault(); }
+    else if (e.key === 'Home') show(0);
+    else if (e.key === 'End') show(slides.length - 1);
+    else if (e.key === 'f' && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+  });
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('a')) return;
+    show(index + (e.clientX > innerWidth / 2 ? 1 : -1));
+  });
+  fit();
+  show((parseInt(location.hash.slice(1), 10) || 1) - 1);
+})();
+</script>
+</body>
+</html>
