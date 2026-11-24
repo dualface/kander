@@ -140,6 +140,8 @@ When idle notices are unavailable, use each approved, active patrol to check for
 
 Identify the responsible session and next step for each actionable change. Flag unavailable checks; a successful patrol with nothing actionable returns one line to the leader. The leader routes actions to the owner and updates state only when something affects follow-up. Retire any context-usage checks or handover thresholds from earlier patrol checklists and leader state. Keep routine all-clears local.
 
+**Stop an idle patrol.** When a check first confirms there is no work for the leader to advance, record the time in leader state. Keep that timestamp across routine all-clears, resume, and handover. Clear it whenever actionable work appears, including between patrols. At the first check that confirms the patrol has been idle for more than one hour, mark it inactive and cancel its timer. Keep pending decisions and open cards available for follow-up. When a message or event makes work actionable again, reactivate the patrol if its approval still applies.
+
 ## Deployment, CI, and release
 
 **CI failures.** Send the failing job, test or step, error, and likely cause to the owner when relevant jobs finish. For a suspected timing flake, have the owner rerun once and link or open a card with both results and remaining uncertainty.
