@@ -258,7 +258,7 @@ func DispatchEvidenceInstruction(d Dispatch) string {
 		}
 	}
 	if w := d.Input.Evidence.WrapUp; w != nil {
-		lines = append(lines, "INTEGRATION: "+w.Artifact.Path)
+		lines = append(lines, "INTEGRATION: "+w.Artifact.Path+" (read-only integration evidence, not a disposition argument)")
 	}
 	return strings.Join(lines, "\n")
 }

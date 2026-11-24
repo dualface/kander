@@ -22,12 +22,19 @@ type DispatchOptions struct {
 // DispatchInstruction names the only business acknowledgement and completion
 // entrances. A repeated receipt must never start the external work twice.
 func DispatchInstruction(paths config.InstallPaths, d board.Dispatch) (string, error) {
+	// A wrap-up completion binds the integration source of its evidence, so the
+	// prompt names that commit instead of a placeholder the agent must guess.
+	source := ""
+	if w := d.Input.Evidence.WrapUp; w != nil {
+		source = w.Git.SourceCommit
+	}
 	text, err := render(paths, "dispatch.md", map[string]any{
 		"Command":       commandName(paths),
 		"TaskID":        d.Input.TaskID,
 		"DispatchID":    d.Input.ID,
 		"Epoch":         d.Authorization.Epoch,
 		"Kind":          d.Input.Kind,
+		"SourceCommit":  source,
 		"PhaseSnippets": phaseSnippets(paths, dispatchSnippets(d.Input.Kind)...),
 	})
 	if err != nil {

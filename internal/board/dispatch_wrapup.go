@@ -3,6 +3,7 @@ package board
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -57,6 +58,20 @@ func integrationTargetRef(ref, target string) bool {
 		return mainlineTargetRef(ref)
 	}
 	return ref == "refs/heads/"+target || ref == "refs/remotes/origin/"+target
+}
+
+// wrapUpCompletionError explains a refused wrap-up completion. The completion
+// binds the integration source recorded in the evidence, not the card's own
+// final commit, and the integration file is read-only evidence rather than a
+// disposition, so both mistakes name the commit the completion needs.
+func wrapUpCompletionError(source string, o MoveOptions) error {
+	if o.Disposition != nil {
+		return dispatchEvidenceError(fmt.Sprintf("wrap-up completion takes no --disposition (dispatches/<id>/integration.json is read-only evidence); complete with --delivery-commit %s and no --disposition", source))
+	}
+	if o.DeliveryCommit != source {
+		return dispatchEvidenceError(fmt.Sprintf("wrap-up completion must bind the integration source: expected --delivery-commit %s (source_commit of the wrap-up evidence), got %q; read it from intent.evidence.wrap_up.git.source_commit of kander dispatch show", source, o.DeliveryCommit))
+	}
+	return nil
 }
 
 // validateDispatchWrapUp checks the integration of a wrap-up. A completed round

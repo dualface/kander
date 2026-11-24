@@ -2,6 +2,7 @@ package board
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -203,8 +204,30 @@ func TestDispatchWrapUpRecordAndCompletionKeepOriginalEvidence(t *testing.T) {
 	if err = UpdateDocument(root, d.Input.TaskID, report); err == nil || !strings.Contains(err.Error(), "kander dispatch fail") {
 		t.Fatalf("wrap-up report hint: %v", err)
 	}
-	if _, err = MoveWithOptions(s.Entry, root, "done", MoveOptions{Result: "completed", Authorization: grant.Authorization, DeliveryCommit: strings.Repeat("c", 40)}); err == nil {
-		t.Fatal("unbound completion commit accepted")
+	source := d.Input.Evidence.WrapUp.Git.SourceCommit
+	integration := d.Input.Evidence.WrapUp.Artifact
+	for _, tc := range []struct {
+		name string
+		o    MoveOptions
+		want []string
+	}{
+		{"own final commit", MoveOptions{DeliveryCommit: strings.Repeat("c", 40)}, []string{"expected --delivery-commit " + source, `got "` + strings.Repeat("c", 40) + `"`, "intent.evidence.wrap_up.git.source_commit"}},
+		{"integration as disposition", MoveOptions{DeliveryCommit: source, Disposition: &integration}, []string{"takes no --disposition", "--delivery-commit " + source}},
+	} {
+		tc.o.Result, tc.o.Authorization = "completed", grant.Authorization
+		_, err = MoveWithOptions(s.Entry, root, "done", tc.o)
+		var boardErr *Error
+		if !errors.As(err, &boardErr) || boardErr.Code != "board.dispatch_evidence_invalid" {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		for _, part := range tc.want {
+			if !strings.Contains(boardErr.Message, part) {
+				t.Fatalf("%s: message lacks %q: %s", tc.name, part, boardErr.Message)
+			}
+		}
+		if s = transactionSnapshot(t, root, d.Input.TaskID); s.Entry.State != "working" {
+			t.Fatalf("%s: refused completion moved the card to %s", tc.name, s.Entry.State)
+		}
 	}
 	if err = os.Remove(filepath.Join(s.Entry.Path, d.Input.Evidence.WrapUp.Artifact.Path)); err != nil {
 		t.Fatal(err)

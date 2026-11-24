@@ -21,8 +21,8 @@ kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--owner
 - `--duplicate-of <task-id>`: the replacement card for `--result duplicate`.
 - `--expect-revision <revision>`: compare-and-swap on the card revision.
 - `--dispatch-id <id> --execution-epoch <epoch>`: the durable dispatch grant from the dispatch prompt (`snippets/commands/dispatch.md`).
-- `--delivery-commit <full-SHA>`: the final delivery commit of a bound completion. In distributed mode it is also the delivery commit that a move into `review/` publishes; for a single card it is the closed review target `C`.
-- `--disposition <card-relative-path>`: the disposition artifact of a bound completion.
+- `--delivery-commit <full-SHA>`: the final delivery commit of a bound completion. In distributed mode it is also the delivery commit that a move into `review/` publishes; for a single card it is the closed review target `C`. A wrap-up completion instead passes the `source_commit` of its wrap-up evidence: `intent.evidence.wrap_up.git.source_commit` in the output of `kander dispatch show <task-id> <dispatch-id>` (it equals `intent.base`; in distributed mode it is readable once `kander dispatch prepare` ran), or `source_commit` in `kander show --document dispatches/<dispatch-id>/integration.json <task-id>`.
+- `--disposition <card-relative-path>`: the disposition artifact of a bound fix or sync completion. A wrap-up completion takes none; `dispatches/<dispatch-id>/integration.json` is read-only evidence, not a disposition.
 
 ## Examples
 
@@ -77,5 +77,6 @@ Source: moved from `KANDER-KANBAN-RULES.md` "Claiming, Starting, and Coordinatio
 
 - A revision conflict: read and reconcile the current document before retrying.
 - A missing gate record, an unknown state, a missing result or decision, or a plain move on a bound card.
+- A wrap-up completion whose `--delivery-commit` is not the `source_commit` of its wrap-up evidence (`board.dispatch_evidence_invalid`; the message gives the expected `source_commit` and the value passed), or that carries `--disposition` (same code; the message says a wrap-up completion takes no `--disposition` and gives the `--delivery-commit` to use). Nothing is written; run the move again with `--delivery-commit <source_commit>` and no `--disposition`.
 - A wrap-up of a group with a coordinator checkpoint whose Git facts fail verification, or with no checkout in reach that holds the target commit. Run the move from a checkout of the repository.
 - A missing task ID or state, an option without a value, or an unknown option is a usage error.

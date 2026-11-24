@@ -98,8 +98,13 @@ func renderedPrompts(t *testing.T) map[string]string {
 	text, err = SelfMoveInstruction(goldenPaths, task, "review")
 	must("self move", text, err)
 	for _, kind := range []string{"fix", "sync", "wrap-up"} {
+		input := board.DispatchInput{ID: "dispatch-1", TaskID: task, Kind: kind}
+		if kind == "wrap-up" {
+			// The wrap-up prompt names the full completion command, so its command line is checked too.
+			input.Evidence.WrapUp = &board.DispatchWrapUpBinding{Git: board.DispatchIntegration{SourceCommit: strings.Repeat("a", 40)}}
+		}
 		text, err = DispatchInstruction(goldenPaths, board.Dispatch{
-			Input:         board.DispatchInput{ID: "dispatch-1", TaskID: task, Kind: kind},
+			Input:         input,
 			Authorization: board.ExecutionAuthorization{DispatchID: "dispatch-1", Epoch: 2},
 		})
 		must("dispatch "+kind, text, err)

@@ -116,8 +116,10 @@ func stageDispatchMove(tx *Transaction, s Snapshot, target string, o MoveOptions
 				return false, false, err
 			}
 		}
-		if d.Input.Evidence.WrapUp != nil && (o.DeliveryCommit != d.Input.Evidence.WrapUp.Git.SourceCommit || o.Disposition != nil) {
-			return false, false, dispatchEvidenceError("wrap-up completion must bind original integration source")
+		if w := d.Input.Evidence.WrapUp; w != nil {
+			if err := wrapUpCompletionError(w.Git.SourceCommit, o); err != nil {
+				return false, false, err
+			}
 		}
 		disp := o.Disposition == nil || validReference(*o.Disposition) && o.Disposition.TaskID == s.Entry.TaskID
 		if !v.allows(probe, complete(disp, true, dispatchkernel.ColWorking, commit)) {
