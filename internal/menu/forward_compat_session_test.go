@@ -12,6 +12,7 @@ import (
 // (an unregistered session hook), the way a newer release could leave it, and loads it.
 func unusableCodexScope(t *testing.T, mutate func(doc map[string]any)) (string, *config.Config) {
 	t.Helper()
+	isolateOverlay(t)
 	path := filepath.Join(t.TempDir(), "config.json")
 	t.Setenv(config.EnvConfig, path)
 	base := config.DefaultConfig()

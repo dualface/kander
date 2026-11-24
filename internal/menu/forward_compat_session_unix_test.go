@@ -13,6 +13,7 @@ import (
 // Before the welcome completes, opening Options picks installed agents for the roles that name
 // one that is missing, but a role that names an agent only a newer version knows stays as it is.
 func TestOptionsBeforeWelcomeKeepsUnknownAgentReferences(t *testing.T) {
+	isolateOverlay(t)
 	h := newHarness(t)
 	t.Setenv("PATH", h.fakeBin)
 	for _, name := range []string{"claude", "codex"} {
@@ -47,6 +48,7 @@ func TestOptionsBeforeWelcomeKeepsUnknownAgentReferences(t *testing.T) {
 // installed, never the unknown agent kept for kanban_agent: the legacy mirror is not a usable
 // choice, and the saved file must start small tasks.
 func TestOptionsBeforeWelcomeFallsBackToAnInstalledAgentAndKeepsTheUnknownMirror(t *testing.T) {
+	isolateOverlay(t)
 	h := newHarness(t)
 	t.Setenv("PATH", h.fakeBin)
 	for _, name := range []string{"codex", "grok"} {
