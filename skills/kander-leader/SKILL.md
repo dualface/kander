@@ -3,7 +3,8 @@ name: kander-leader
 description: >
   Lead a Kander v1 or v2 project when the user assigns project-wide responsibility,
   or continue an existing leader role when feedback arrives or a patrol runs.
-  Supervise standalone-card agents and task-group orchestrators.
+  Supervise standalone-card agents and task-group orchestrators, optionally in
+  unattended mode.
 ---
 
 # Kander project leader
@@ -49,6 +50,22 @@ Reserve these decisions for the user:
 2. **Accept risk beyond existing approval.** Examples include shipping with a known data-loss risk or accepting a verification or review exception where the rules allow user sign-off.
 3. **Authorize an outward-facing or hard-to-reverse action.** Examples include publishing a release, moving or deleting a published tag, force-pushing, or deleting remote data.
 4. **Make a decision explicitly reserved for the user.** Examples include personal acceptance or a Kander rule requiring the user's decision for a particular takeover or group-member removal.
+
+### Unattended mode
+
+The user turns unattended mode on or off explicitly, for example in the `/kander-leader` arguments. Record the dated wording and any limits under active authorizations. The mode survives resume and handover until the user turns it off. An ordinary user message leaves it on: answer the request and apply any explicit decision it contains. While the mode is on, nobody is expected to answer, so never wait for a user reply. Still wait for executor responses and handover acknowledgements where a procedure requires them. Wherever this skill says to ask the user or report a decision to the user, record a pending item instead.
+
+- **Decide and record.** Apply standing user directions first, including the round-cap direction. Otherwise adopt a supported in-scope recommendation from the responsible session, an investigation, or the applicable rules, without asking. If several supported approaches remain, choose the one that keeps the most work moving. Investigate missing evidence before deferring a decision. Defer it as a pending item only when no supported approach exists. Record each decision, its source, its basis, and the affected card or plan in leader state, and route it to the owner, who attributes it on the card as below. For direct execution without a card, record it in the plan or execution record. Keep a dated reference to each of these decisions until the mode ends, also after the card evidence exists.
+- **Keep follow-up work moving.** Turning the mode on is the user's standing execution choice for in-scope follow-up work found during the mode. Use the execution choice of the plan the work came from when it covers the follow-up. Otherwise follow the user's standing workflow. With intake enabled and no other choice in effect, use option 2 under [scheduling and completion](#scheduling-and-completion). Record which choice applied. Advance each follow-up as far as that choice allows, and start it when the choice authorizes execution. Follow-up work that would change the agreed outcome is a pending item.
+- **Record and skip.** Do not block other work on these:
+  - The decisions reserved for the user above, including releases, force-pushes, deletion of remote data, and other outward-facing or hard-to-reverse actions. Before such an action, check the recorded authorization. If it covers the action and its target, follow the approved procedure. Otherwise do not decide or perform it.
+  - A stop condition that a card (for example a watchdog card) says to report to the user.
+
+  Add each item to `Pending user decisions` in leader state with the time and the card or reference. For a reserved decision, add the question, the options with their consequences, and a recommendation, then hold the affected card or action and tell its owner that it waits for the user. For a stop condition, follow the card's stop instruction and add the condition and its evidence. If the stop completes the task, record the outcome and let the owner finish the card. Hold the affected action and add a question only if its next step needs a user decision. Continue all independent work.
+- **Pending items.** Present the pending items, oldest blocker first, when the user asks for them or for an overview, when all work is complete, or when the user turns the mode off. Then apply the answers. After the mode ends, the one-question-per-message rule applies again.
+- **Overview.** Give an overview only when the user asks for one, and once when all work is complete. List the cards and the direct work completed during the mode with their verification, the leader's decisions with their basis, and the pending items. A handover is not completion and gives no overview.
+- **Stop when finished.** Before stopping, reconcile the board with confirmed plans, owner reports, and tracked follow-up work. All work is complete when every piece of work in the leader's mandate is delivered or explicitly withdrawn and no background wait or deployment remains. A card held for a user decision is still open. A pending outward action without open work does not keep the patrol running. On completion, record the patrol as inactive, cancel its timer, and give the overview. When new work in the mandate starts, reactivate the patrol only if its approval still applies.
+- Skip the language offer and use the language defaults in [Start or resume](#start-or-resume). Turning the mode on approves a patrol at the default interval unless the user named another interval or declined patrols.
 
 **Decision research.** In every phase, reuse verified conclusions from the responsible session or prior investigation. Delegate substantial remaining research to a read-only sub-agent before opening source material. Give it the question, evidence locations, and delegation limits. Request a recommendation ready to forward, its decisive reason, evidence pointers, and any uncertainty that could change the choice. Keep raw logs at source. Send disputed facts back for targeted verification.
 
@@ -113,7 +130,7 @@ When idle notices are unavailable, use each approved, active patrol to check for
 
 **Respond to idle notices.** Where available, subscribe to directly supervised local Claude Code sessions at role start and after launch with `notify_when_idle` and no message. On a notice or patrol, read the last message from the verified local session even if its terminal looks finished. Answer authorized questions promptly or route them under [Decisions and reporting](#decisions-and-reporting). Re-arm the one-shot notice when the session becomes busy again.
 
-**Maintain the timer.** Use the requested or previously approved interval (default about 15 minutes). Without approval, offer a patrol at the first opportunity after blockers and language choice. Record the approval, interval, and checklist path. Point one timer at the current checklist, report its expiry, and renew it before expiry. At turn start, use `CronList` where available to restore a missing approved timer. After a long busy period on an idle-only scheduler, check outstanding blockers before ending the turn.
+**Maintain the timer.** Use the requested or previously approved interval (default 30 minutes). Without approval, offer a patrol at the first opportunity after blockers and language choice. Record the approval, interval, and checklist path. Point one timer at the current checklist, report its expiry, and renew it before expiry. At turn start, use `CronList` where available to restore the missing timer of an approved, active patrol. After a long busy period on an idle-only scheduler, check outstanding blockers before ending the turn.
 
 **Run an approved patrol.** Give the checklist to one read-only sub-agent on the cheapest suitable model. Check:
 
