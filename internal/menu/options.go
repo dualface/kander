@@ -729,8 +729,9 @@ func (s *Session) finish() error {
 			reportIntegrationOutcome(labels[selected], *outcome.Override)
 		}
 	}
-	// The rules-extension files converge the same way the references do.
+	// The rules-extension files and the leader skill converge the same way the references do.
 	reportAgentExtensions(paths, switches, true)
+	reportLeaderSkills(paths, switches, true)
 	note(config.Text(
 		"menu.note_kanban_start_uses_the_agent_s_no_confirmation",
 	))

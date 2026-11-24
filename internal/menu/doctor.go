@@ -228,16 +228,7 @@ func printDoctorWithBinaries(tools TerminalTools, repair bool, interactive bool,
 			} else {
 				healthy = reportRulesIntegration(paths, switches, repair) && healthy
 				healthy = reportAgentExtensions(paths, switches, repair) && healthy
-				if repair {
-					skipped, err := install.RepairLeaderSkills(paths, switches)
-					for _, reason := range skipped {
-						hint(reason.Error())
-					}
-					if err != nil {
-						warning(err.Error())
-						healthy = false
-					}
-				}
+				healthy = reportLeaderSkills(paths, switches, repair) && healthy
 			}
 		}
 	}
@@ -415,6 +406,50 @@ func reportAgentExtensions(paths config.InstallPaths, switches config.InstallRul
 			warning(config.Text("menu.agent_extension_outdated", label, outcome.Target))
 		default:
 			hint(config.Text("menu.agent_extension_modified", label, outcome.Target))
+		}
+	}
+	return healthy
+}
+
+// reportLeaderSkills reports the bundled kander-leader skill at every destination the
+// install scope covers; in repair mode it installs a missing skill and updates a managed
+// one, so a new binary refreshes the skill together with the rules. Local edits,
+// user-owned directories and links, and unsafe destinations are reported and kept.
+func reportLeaderSkills(paths config.InstallPaths, switches config.InstallRules, repair bool) bool {
+	outcomes := install.InspectLeaderSkills(paths, switches)
+	if repair {
+		outcomes = install.EnsureLeaderSkills(paths, switches)
+	}
+	healthy := true
+	for _, outcome := range outcomes {
+		label := config.AgentDisplayName(outcome.Agent)
+		if outcome.Err != nil {
+			healthy = false
+			warning(config.Text("menu.leader_skill_error", label, outcome.Err.Error()))
+			continue
+		}
+		switch outcome.Status {
+		case install.LeaderSkillDisabled:
+			hint(config.Text("menu.rules_injection_disabled", label, outcome.Target))
+		case install.LeaderSkillInstalled:
+			success(config.Text("menu.leader_skill_installed", label, outcome.Target))
+		case install.LeaderSkillWritten:
+			success(config.Text("menu.leader_skill_written", label, outcome.Target))
+		case install.LeaderSkillUpdated:
+			success(config.Text("menu.leader_skill_updated", label, outcome.Target))
+		case install.LeaderSkillMissing:
+			healthy = false
+			warning(config.Text("menu.leader_skill_missing", label, outcome.Target))
+		case install.LeaderSkillOutdated:
+			healthy = false
+			warning(config.Text("menu.leader_skill_outdated", label, outcome.Target))
+		case install.LeaderSkillUnmanaged:
+			hint(config.Text("menu.leader_skill_unmanaged", label, outcome.Target))
+		case install.LeaderSkillSkipped:
+			hint(config.Text("menu.leader_skill_skipped", label, outcome.Reason.Error()))
+		}
+		if outcome.Modified {
+			hint(config.Text("menu.leader_skill_modified", label, outcome.Target))
 		}
 	}
 	return healthy

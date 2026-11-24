@@ -343,7 +343,13 @@ func TestProjectConfigAndDoctor(t *testing.T) {
 	if !strings.Contains(err, filepath.Join(installRoot, "rules", "KANDER-AGENTS.md")) {
 		t.Fatalf("%s", err)
 	}
-	if strings.Contains(err, filepath.Join(h.home, ".local", "bin")) || strings.Contains(err, ".agents") {
+	// Doctor repair installs the bundled leader skill in the project scope.
+	if _, statErr := os.Stat(filepath.Join(project, ".agents", "skills", "kander-leader", "SKILL.md")); statErr != nil {
+		t.Fatalf("doctor did not install the leader skill: %v\n%s", statErr, err)
+	}
+	// The project scope installs the leader skill under <project>/.agents/skills, so only a
+	// home-relative .agents path is a leak.
+	if strings.Contains(err, filepath.Join(h.home, ".local", "bin")) || strings.Contains(err, filepath.Join(h.home, ".agents")) {
 		t.Fatalf("leaked global path: %s", err)
 	}
 	if strings.Contains(err, ".config/kander") && strings.Contains(err, h.home) {
