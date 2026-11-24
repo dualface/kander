@@ -376,6 +376,50 @@ section.with-source { padding: 128px 128px 160px; }
 .gh-text { font-family: 'JetBrains Mono', 'Noto Sans SC', monospace; font-size: 32px; font-weight: 700; line-height: 1.4; color: var(--light); }
 .gh-text a { color: var(--light); text-decoration: none; }
 
+/* Product overview: definition on the left, the layered stack on the right */
+.ov { flex: 1; display: flex; gap: 80px; }
+.ov-l { width: 580px; flex: none; display: flex; flex-direction: column; }
+.ov-lead { margin-top: 40px; color: var(--body); }
+.ov-r { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 16px; }
+.band { display: flex; flex-direction: column; gap: 8px; box-sizing: border-box; border-radius: 20px; padding: 24px 36px; }
+.band-top { display: flex; justify-content: space-between; align-items: baseline; gap: 24px; }
+.band-k { font-family: 'JetBrains Mono', 'Noto Sans SC', monospace; font-size: 24px; font-weight: 700; letter-spacing: 3px; line-height: 1.4; color: var(--violet); white-space: nowrap; }
+.band-h { font-size: 44px; font-weight: 700; line-height: 1.25; color: var(--heading); }
+.band-p { font-size: 32px; line-height: 1.5; color: var(--muted); }
+.band.human { background: var(--card); border: 2px solid var(--violet); }
+.band.data { background: var(--paper2); border: 2px solid var(--line); }
+.band.lead-band { background: var(--violet); border: 2px solid var(--violet); }
+.band.lead-band .band-k { color: var(--lilac); }
+.band.lead-band .band-h { color: var(--card); font-family: 'JetBrains Mono', 'Noto Sans SC', monospace; }
+.band.lead-band .band-p { color: var(--paper); }
+.band.exec { background: var(--ink); border: 2px solid var(--ink); }
+.band.exec .band-k { color: var(--cyan); }
+.band.exec .band-h { color: var(--light); }
+.band.exec .band-p { color: var(--muted-d); }
+
+/* Efficiency: real numbers on the left, the four levers on the right */
+.eff { display: flex; gap: 64px; margin-top: 40px; align-items: stretch; }
+.eff-proof { width: 600px; flex: none; box-sizing: border-box; background: var(--violet-deep); border-radius: 24px; padding: 36px 44px; display: flex; flex-direction: column; justify-content: space-between; gap: 16px; }
+.eff-n { font-family: 'JetBrains Mono', 'Noto Sans SC', monospace; font-size: 72px; font-weight: 700; line-height: 1; color: var(--light); }
+.eff-l { font-size: 24px; line-height: 1.5; color: var(--lilac); margin-top: 6px; }
+.eff-grid { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 40px 48px; align-content: center; }
+.lever { border-top: 4px solid var(--violet); padding-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+.lever-n { font-family: 'JetBrains Mono', 'Noto Sans SC', monospace; font-size: 24px; font-weight: 700; color: var(--violet); }
+.lever-h { font-size: 44px; font-weight: 700; line-height: 1.25; color: var(--heading); }
+.lever-p { font-size: 32px; line-height: 1.5; color: var(--muted); }
+
+/* Collaboration network illustration */
+.net-hub { position: absolute; font-size: 32px; font-weight: 700; line-height: 44px; color: #FFFEFB; text-align: center; }
+.net-sub { position: absolute; font-size: 24px; line-height: 32px; color: var(--lilac); text-align: center; }
+.net-lead { position: absolute; font-family: 'JetBrains Mono', 'Noto Sans SC', monospace; font-size: 24px; font-weight: 700; line-height: 34px; color: var(--light); text-align: center; }
+.net-name { position: absolute; font-size: 32px; font-weight: 700; line-height: 40px; color: var(--light); text-align: right; }
+.net-mach { position: absolute; font-size: 24px; font-weight: 700; line-height: 36px; color: var(--muted-d); text-align: center; }
+.net-lead-line { margin-top: 20px; color: var(--muted-d); }
+
+/* Problem slide: islands illustration in the left pane */
+.islands { width: 600px; height: 380px; margin-top: 48px; }
+
+
 </style>
 </head>
 <body>
@@ -408,11 +452,95 @@ section.with-source { padding: 128px 128px 160px; }
 <p class="gh-text"><a href="https://github.com/dualface/kander">github.com/dualface/kander</a></p>
 </div>
 </section>
+<section id="overview">
+<div class="ov">
+<div class="ov-l">
+<p class="eyebrow">产品概述</p>
+<h2 class="title">Kander 2.0：<br>面向团队的 AI<br>任务编排平台</h2>
+<p class="lead ov-lead">把需求变成任务，<br>把任务交给 AI，<br>把交付变成可审计的结果。</p>
+</div>
+<div class="ov-r stagger">
+<div class="band human">
+<div class="band-top"><p class="band-h">Web 控制台</p><p class="band-k">人 · 入口</p></div>
+<p class="band-p">提需求、看进度，与自己负责任务的 AI 直接对话。</p>
+</div>
+<div class="band data">
+<div class="band-top"><p class="band-h">团队看板服务</p><p class="band-k">数据 · 中枢</p></div>
+<p class="band-p">共享任务池、统一规范、审核记录与权限，私有化部署。</p>
+</div>
+<div class="band lead-band">
+<div class="band-top"><p class="band-h">Kander Leader</p><p class="band-k">调度 · 主管</p></div>
+<p class="band-p">AI 调度主管：按负载分配任务，持续巡检，无人值守推进。</p>
+</div>
+<div class="band exec">
+<div class="band-top"><p class="band-h">AI Agent 集群</p><p class="band-k">执行 · 节点</p></div>
+<p class="band-p">各台电脑上的 Claude、Codex、Gemini 等 AI，<br>按统一规范开发、审核、交付。</p>
+</div>
+</div>
+</div>
+</section>
+<section id="efficiency" class="tint with-source">
+<p class="eyebrow">效率提升</p>
+<h2 class="title">四种方式，让团队交付全面提速</h2>
+<div class="eff">
+<div class="eff-proof anim">
+<div><p class="eff-n">1 + 6</p><p class="eff-l">1 个人带 6 个 AI Agent</p></div>
+<div><p class="eff-n">2,477</p><p class="eff-l">张任务卡，90 天完成</p></div>
+<div><p class="eff-n">≈ 28</p><p class="eff-l">张任务卡，平均每天完成</p></div>
+<div><p class="eff-n">57 分钟</p><p class="eff-l">单张任务卡耗时中位数</p></div>
+</div>
+<div class="eff-grid stagger">
+<div class="lever">
+<p class="lever-n">01</p>
+<h3 class="lever-h">并行开发</h3>
+<p class="lever-p">多台电脑上的多个 AI，<br>同时推进不同任务。</p>
+</div>
+<div class="lever">
+<p class="lever-n">02</p>
+<h3 class="lever-h">全天运转</h3>
+<p class="lever-p">无人值守时持续推进，<br>夜间与周末同样产出。</p>
+</div>
+<div class="lever">
+<p class="lever-n">03</p>
+<h3 class="lever-h">一次做对</h3>
+<p class="lever-p">需求确认后锁定，<br>问题在交付前拦截。</p>
+</div>
+<div class="lever">
+<p class="lever-n">04</p>
+<h3 class="lever-h">协调更轻</h3>
+<p class="lever-p">进度与报告自动汇总，<br>人只处理需要决策的事。</p>
+</div>
+</div>
+</div>
+<p class="source" style="color:#4A4F63">数据来源：Kander 实战数据（github.com/dualface/kander/docs/production-stats-cn.md），1 人、6 个 Agent、5 个项目，统计至 2026-10-29</p>
+</section>
+<section id="network" class="dark">
+<div class="hero anim">
+<svg aria-label="插图：左侧的项目负责人、开发、QA、市场把任务汇入中间的团队看板；Kander Leader 从看板调度任务到右侧三台电脑，每台电脑上运行着 Claude、Gemini、OpenAI、Grok、DeepSeek、Kimi 等 AI；完成的结果沿绿色回线回到看板。光点表示在网络中流转的任务。" style="position:absolute; left:0; top:0" width="1920" height="1080" viewBox="0 0 1920 1080"><defs><radialGradient id="nglowv"><stop offset="0" stop-color="#8A2BC2" stop-opacity="0.5"/><stop offset="1" stop-color="#8A2BC2" stop-opacity="0"/></radialGradient><radialGradient id="nglowc"><stop offset="0" stop-color="#4DD0E1" stop-opacity="0.22"/><stop offset="1" stop-color="#4DD0E1" stop-opacity="0"/></radialGradient><radialGradient id="nhalo"><stop offset="0.45" stop-color="#4DD0E1" stop-opacity="0.3"/><stop offset="1" stop-color="#4DD0E1" stop-opacity="0"/></radialGradient><radialGradient id="ncore" cx="0.38" cy="0.32" r="0.75"><stop offset="0" stop-color="#C9A2E6"/><stop offset="0.45" stop-color="#8A2BC2"/><stop offset="1" stop-color="#3A1258"/></radialGradient><radialGradient id="nchip" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#E6E0F0"/></radialGradient><radialGradient id="nfadeg" cx="0.55" cy="0.6" r="0.5"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#000000"/></radialGradient><mask id="nfade"><rect x="0" y="0" width="1920" height="1080" fill="url(#nfadeg)"/></mask><pattern id="ngrid" width="36" height="36" patternUnits="userSpaceOnUse"><circle cx="18" cy="18" r="2" fill="#B9B6C8" fill-opacity="0.4"/></pattern><marker id="nml" orient="auto" markerWidth="4" markerHeight="4" refX="1.6" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#E3C6F5"/></marker><marker id="nmv" orient="auto" markerWidth="4" markerHeight="4" refX="1.6" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#C9A2E6"/></marker><marker id="nmc" orient="auto" markerWidth="4" markerHeight="4" refX="1.6" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#4DD0E1"/></marker><marker id="nmg" orient="auto" markerWidth="4" markerHeight="4" refX="1.6" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#7FD17F"/></marker><defs><linearGradient id="net-lobe-gemini-fill" x1="0%" x2="68.73%" y1="100%" y2="30.395%"><stop offset="0%" stop-color="#1C7DFF"></stop><stop offset="52.021%" stop-color="#1C69FF"></stop><stop offset="100%" stop-color="#F0DCD6"></stop></linearGradient></defs></defs><circle cx="900" cy="640" r="640" fill="url(#nglowv)"/><circle cx="1640" cy="560" r="420" fill="url(#nglowc)"/><rect x="0" y="0" width="1920" height="1080" fill="url(#ngrid)" mask="url(#nfade)"/><path d="M428 420 C610 420 640 640 788 640" fill="none" stroke="#E3C6F5" stroke-opacity="0.22" stroke-width="16" stroke-linecap="round"/><path id="np0" d="M428 420 C610 420 640 640 788 640" fill="none" stroke="#E3C6F5" stroke-width="4" stroke-linecap="round" marker-end="url(#nml)"/><path d="M428 560 C610 560 640 640 788 640" fill="none" stroke="#E3C6F5" stroke-opacity="0.22" stroke-width="16" stroke-linecap="round"/><path id="np1" d="M428 560 C610 560 640 640 788 640" fill="none" stroke="#E3C6F5" stroke-width="4" stroke-linecap="round" marker-end="url(#nml)"/><path d="M428 700 C610 700 640 640 788 640" fill="none" stroke="#E3C6F5" stroke-opacity="0.22" stroke-width="16" stroke-linecap="round"/><path id="np2" d="M428 700 C610 700 640 640 788 640" fill="none" stroke="#E3C6F5" stroke-width="4" stroke-linecap="round" marker-end="url(#nml)"/><path d="M428 840 C610 840 640 640 788 640" fill="none" stroke="#E3C6F5" stroke-opacity="0.22" stroke-width="16" stroke-linecap="round"/><path id="np3" d="M428 840 C610 840 640 640 788 640" fill="none" stroke="#E3C6F5" stroke-width="4" stroke-linecap="round" marker-end="url(#nml)"/><path d="M970 568 C1040 480 1100 440 1164 440" fill="none" stroke="#C9A2E6" stroke-opacity="0.22" stroke-width="20" stroke-linecap="round"/><path id="nhl" d="M970 568 C1040 480 1100 440 1164 440" fill="none" stroke="#C9A2E6" stroke-width="5" stroke-linecap="round" marker-end="url(#nmv)"/><path d="M1310 440 C1410 440 1420 380 1518 380" fill="none" stroke="#4DD0E1" stroke-opacity="0.22" stroke-width="16" stroke-linecap="round"/><path id="nm0" d="M1310 440 C1410 440 1420 380 1518 380" fill="none" stroke="#4DD0E1" stroke-width="4" stroke-linecap="round" marker-end="url(#nmc)"/><path d="M1310 440 C1410 440 1420 600 1518 600" fill="none" stroke="#4DD0E1" stroke-opacity="0.22" stroke-width="16" stroke-linecap="round"/><path id="nm1" d="M1310 440 C1410 440 1420 600 1518 600" fill="none" stroke="#4DD0E1" stroke-width="4" stroke-linecap="round" marker-end="url(#nmc)"/><path d="M1310 440 C1410 440 1420 820 1518 820" fill="none" stroke="#4DD0E1" stroke-opacity="0.22" stroke-width="16" stroke-linecap="round"/><path id="nm2" d="M1310 440 C1410 440 1420 820 1518 820" fill="none" stroke="#4DD0E1" stroke-width="4" stroke-linecap="round" marker-end="url(#nmc)"/><path d="M1530 850 C1270 880 1200 830 970 726" fill="none" stroke="#7FD17F" stroke-opacity="0.22" stroke-width="16" stroke-linecap="round"/><path id="nr0" d="M1530 850 C1270 880 1200 830 970 726" fill="none" stroke="#7FD17F" stroke-width="4" stroke-linecap="round" stroke-dasharray="10 9" marker-end="url(#nmg)"/><path d="M1530 634 C1270 660 1230 680 1012 656" fill="none" stroke="#7FD17F" stroke-opacity="0.22" stroke-width="16" stroke-linecap="round"/><path id="nr1" d="M1530 634 C1270 660 1230 680 1012 656" fill="none" stroke="#7FD17F" stroke-width="4" stroke-linecap="round" stroke-dasharray="10 9" marker-end="url(#nmg)"/><circle cx="380" cy="420" r="44" fill="#22252F" stroke="#E48FE4" stroke-width="4"/><circle cx="380" cy="410" r="12" fill="none" stroke="#E48FE4" stroke-width="4"/><path d="M358 444 Q380 418 402 444" fill="none" stroke="#E48FE4" stroke-width="4" stroke-linecap="round"/><circle cx="380" cy="560" r="44" fill="#22252F" stroke="#E48FE4" stroke-width="4"/><circle cx="380" cy="550" r="12" fill="none" stroke="#E48FE4" stroke-width="4"/><path d="M358 584 Q380 558 402 584" fill="none" stroke="#E48FE4" stroke-width="4" stroke-linecap="round"/><circle cx="380" cy="700" r="44" fill="#22252F" stroke="#E48FE4" stroke-width="4"/><circle cx="380" cy="690" r="12" fill="none" stroke="#E48FE4" stroke-width="4"/><path d="M358 724 Q380 698 402 724" fill="none" stroke="#E48FE4" stroke-width="4" stroke-linecap="round"/><circle cx="380" cy="840" r="44" fill="#22252F" stroke="#E48FE4" stroke-width="4"/><circle cx="380" cy="830" r="12" fill="none" stroke="#E48FE4" stroke-width="4"/><path d="M358 864 Q380 838 402 864" fill="none" stroke="#E48FE4" stroke-width="4" stroke-linecap="round"/><circle cx="900" cy="640" r="150" fill="url(#nglowv)"/><circle cx="900" cy="640" r="120" fill="none" stroke="#C9A2E6" stroke-opacity="0.5" stroke-width="3"/><circle cx="900" cy="640" r="100" fill="url(#ncore)" stroke="#4DD0E1" stroke-width="4"/><circle cx="1240" cy="440" r="64" fill="#8A2BC2" stroke="#E3C6F5" stroke-width="4"/><circle cx="1240" cy="440" r="20" fill="#E3C6F5"/><path d="M1240 418 L1240 400" stroke="#E3C6F5" stroke-width="4" stroke-linecap="round"/><path d="M1259 452 L1275 462" stroke="#E3C6F5" stroke-width="4" stroke-linecap="round"/><path d="M1221 452 L1205 462" stroke="#E3C6F5" stroke-width="4" stroke-linecap="round"/><rect x="1530" y="315" width="250" height="130" rx="18" fill="#22252F" stroke="#B9B6C8" stroke-width="3"/><path d="M1655 445 L1655 459 M1621 461 L1689 461" stroke="#B9B6C8" stroke-width="4" stroke-linecap="round"/><circle cx="1608" cy="380" r="54" fill="url(#nhalo)"/><circle cx="1608" cy="380" r="30" fill="url(#nchip)" stroke="#4DD0E1" stroke-width="3"/><g transform="translate(1589.2 361.2) scale(1.5625)"><path d="M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z" fill="#D97757" fill-rule="nonzero"></path></g><circle cx="1702" cy="380" r="54" fill="url(#nhalo)"/><circle cx="1702" cy="380" r="30" fill="url(#nchip)" stroke="#4DD0E1" stroke-width="3"/><g transform="translate(1683.2 361.2) scale(1.5625)"><path d="M12 24A14.304 14.304 0 000 12 14.304 14.304 0 0012 0a14.305 14.305 0 0012 12 14.305 14.305 0 00-12 12" fill="url(#net-lobe-gemini-fill)" fill-rule="nonzero"></path></g><rect x="1530" y="535" width="250" height="130" rx="18" fill="#22252F" stroke="#B9B6C8" stroke-width="3"/><path d="M1655 665 L1655 679 M1621 681 L1689 681" stroke="#B9B6C8" stroke-width="4" stroke-linecap="round"/><circle cx="1608" cy="600" r="54" fill="url(#nhalo)"/><circle cx="1608" cy="600" r="30" fill="url(#nchip)" stroke="#4DD0E1" stroke-width="3"/><g transform="translate(1589.2 581.2) scale(1.5625)" fill="#111111" fill-rule="evenodd"><path d="M21.55 10.004a5.416 5.416 0 00-.478-4.501c-1.217-2.09-3.662-3.166-6.05-2.66A5.59 5.59 0 0010.831 1C8.39.995 6.224 2.546 5.473 4.838A5.553 5.553 0 001.76 7.496a5.487 5.487 0 00.691 6.5 5.416 5.416 0 00.477 4.502c1.217 2.09 3.662 3.165 6.05 2.66A5.586 5.586 0 0013.168 23c2.443.006 4.61-1.546 5.361-3.84a5.553 5.553 0 003.715-2.66 5.488 5.488 0 00-.693-6.497v.001zm-8.381 11.558a4.199 4.199 0 01-2.675-.954c.034-.018.093-.05.132-.074l4.44-2.53a.71.71 0 00.364-.623v-6.176l1.877 1.069c.02.01.033.029.036.05v5.115c-.003 2.274-1.87 4.118-4.174 4.123zM4.192 17.78a4.059 4.059 0 01-.498-2.763c.032.02.09.055.131.078l4.44 2.53c.225.13.504.13.73 0l5.42-3.088v2.138a.068.068 0 01-.027.057L9.9 19.288c-1.999 1.136-4.552.46-5.707-1.51h-.001zM3.023 8.216A4.15 4.15 0 015.198 6.41l-.002.151v5.06a.711.711 0 00.364.624l5.42 3.087-1.876 1.07a.067.067 0 01-.063.005l-4.489-2.559c-1.995-1.14-2.679-3.658-1.53-5.63h.001zm15.417 3.54l-5.42-3.088L14.896 7.6a.067.067 0 01.063-.006l4.489 2.557c1.998 1.14 2.683 3.662 1.529 5.633a4.163 4.163 0 01-2.174 1.807V12.38a.71.71 0 00-.363-.623zm1.867-2.773a6.04 6.04 0 00-.132-.078l-4.44-2.53a.731.731 0 00-.729 0l-5.42 3.088V7.325a.068.068 0 01.027-.057L14.1 4.713c2-1.137 4.555-.46 5.707 1.513.487.833.664 1.809.499 2.757h.001zm-11.741 3.81l-1.877-1.068a.065.065 0 01-.036-.051V6.559c.001-2.277 1.873-4.122 4.181-4.12.976 0 1.92.338 2.671.954-.034.018-.092.05-.131.073l-4.44 2.53a.71.71 0 00-.365.623l-.003 6.173v.002zm1.02-2.168L12 9.25l2.414 1.375v2.75L12 14.75l-2.415-1.375v-2.75z"></path></g><circle cx="1702" cy="600" r="54" fill="url(#nhalo)"/><circle cx="1702" cy="600" r="30" fill="url(#nchip)" stroke="#4DD0E1" stroke-width="3"/><g transform="translate(1683.2 581.2) scale(1.5625)" fill="#111111" fill-rule="evenodd"><path d="M9.27 15.29l7.978-5.897c.391-.29.95-.177 1.137.272.98 2.369.542 5.215-1.41 7.169-1.951 1.954-4.667 2.382-7.149 1.406l-2.711 1.257c3.889 2.661 8.611 2.003 11.562-.953 2.341-2.344 3.066-5.539 2.388-8.42l.006.007c-.983-4.232.242-5.924 2.75-9.383.06-.082.12-.164.179-.248l-3.301 3.305v-.01L9.267 15.292M7.623 16.723c-2.792-2.67-2.31-6.801.071-9.184 1.761-1.763 4.647-2.483 7.166-1.425l2.705-1.25a7.808 7.808 0 00-1.829-1A8.975 8.975 0 005.984 5.83c-2.533 2.536-3.33 6.436-1.962 9.764 1.022 2.487-.653 4.246-2.34 6.022-.599.63-1.199 1.259-1.682 1.925l7.62-6.815"></path></g><rect x="1530" y="755" width="250" height="130" rx="18" fill="#22252F" stroke="#B9B6C8" stroke-width="3"/><path d="M1655 885 L1655 899 M1621 901 L1689 901" stroke="#B9B6C8" stroke-width="4" stroke-linecap="round"/><circle cx="1608" cy="820" r="54" fill="url(#nhalo)"/><circle cx="1608" cy="820" r="30" fill="url(#nchip)" stroke="#4DD0E1" stroke-width="3"/><g transform="translate(1589.2 801.2) scale(1.5625)"><path d="M23.748 4.482c-.254-.124-.364.113-.512.234-.051.039-.094.09-.137.136-.372.397-.806.657-1.373.626-.829-.046-1.537.214-2.163.848-.133-.782-.575-1.248-1.247-1.548-.352-.156-.708-.311-.955-.65-.172-.241-.219-.51-.305-.774-.055-.16-.11-.323-.293-.35-.2-.031-.278.136-.356.276-.313.572-.434 1.202-.422 1.84.027 1.436.633 2.58 1.838 3.393.137.093.172.187.129.323-.082.28-.18.552-.266.833-.055.179-.137.217-.329.14a5.526 5.526 0 01-1.736-1.18c-.857-.828-1.631-1.742-2.597-2.458a11.365 11.365 0 00-.689-.471c-.985-.957.13-1.743.388-1.836.27-.098.093-.432-.779-.428-.872.004-1.67.295-2.687.684a3.055 3.055 0 01-.465.137 9.597 9.597 0 00-2.883-.102c-1.885.21-3.39 1.102-4.497 2.623C.082 8.606-.231 10.684.152 12.85c.403 2.284 1.569 4.175 3.36 5.653 1.858 1.533 3.997 2.284 6.438 2.14 1.482-.085 3.133-.284 4.994-1.86.47.234.962.327 1.78.397.63.059 1.236-.03 1.705-.128.735-.156.684-.837.419-.961-2.155-1.004-1.682-.595-2.113-.926 1.096-1.296 2.746-2.642 3.392-7.003.05-.347.007-.565 0-.845-.004-.17.035-.237.23-.256a4.173 4.173 0 001.545-.475c1.396-.763 1.96-2.015 2.093-3.517.02-.23-.004-.467-.247-.588zM11.581 18c-2.089-1.642-3.102-2.183-3.52-2.16-.392.024-.321.471-.235.763.09.288.207.486.371.739.114.167.192.416-.113.603-.673.416-1.842-.14-1.897-.167-1.361-.802-2.5-1.86-3.301-3.307-.774-1.393-1.224-2.887-1.298-4.482-.02-.386.093-.522.477-.592a4.696 4.696 0 011.529-.039c2.132.312 3.946 1.265 5.468 2.774.868.86 1.525 1.887 2.202 2.891.72 1.066 1.494 2.082 2.48 2.914.348.292.625.514.891.677-.802.09-2.14.11-3.054-.614zm1-6.44a.306.306 0 01.415-.287.302.302 0 01.2.288.306.306 0 01-.31.307.303.303 0 01-.304-.308zm3.11 1.596c-.2.081-.399.151-.59.16a1.245 1.245 0 01-.798-.254c-.274-.23-.47-.358-.552-.758a1.73 1.73 0 01.016-.588c.07-.327-.008-.537-.239-.727-.187-.156-.426-.199-.688-.199a.559.559 0 01-.254-.078c-.11-.054-.2-.19-.114-.358.028-.054.16-.186.192-.21.356-.202.767-.136 1.146.016.352.144.618.408 1.001.782.391.451.462.576.685.914.176.265.336.537.445.848.067.195-.019.354-.25.452z" fill="#4D6BFE"></path></g><circle cx="1702" cy="820" r="54" fill="url(#nhalo)"/><circle cx="1702" cy="820" r="30" fill="url(#nchip)" stroke="#4DD0E1" stroke-width="3"/><g transform="translate(1683.2 801.2) scale(1.5625)" fill="#111111" fill-rule="evenodd"><path d="M19.738 5.776c.163-.209.306-.4.457-.585.07-.087.064-.153-.004-.244-.655-.861-.717-1.817-.34-2.787.283-.73.909-1.072 1.674-1.145.477-.045.945.004 1.379.236.57.305.902.77 1.01 1.412.086.512.07 1.012-.075 1.508-.257.878-.888 1.333-1.753 1.448-.718.096-1.446.108-2.17.157-.056.004-.113 0-.178 0z" fill="#027AFF"></path><path d="M17.962 1.844h-4.326l-3.425 7.81H5.369V1.878H1.5V22h3.87v-8.477h6.824a3.025 3.025 0 002.743-1.75V22h3.87v-8.477a3.87 3.87 0 00-3.588-3.86v-.01h-2.125a3.94 3.94 0 002.323-2.12l2.545-5.689z"></path></g><circle r="8" fill="#E3C6F5" opacity="0"><set attributeName="opacity" to="1" begin="0.2s"/><animateMotion dur="3.2s" begin="0.2s" repeatCount="indefinite"><mpath href="#np0"/></animateMotion></circle><circle r="8" fill="#E3C6F5" opacity="0"><set attributeName="opacity" to="1" begin="1.1s"/><animateMotion dur="3.2s" begin="1.1s" repeatCount="indefinite"><mpath href="#np2"/></animateMotion></circle><circle r="8" fill="#E3C6F5" opacity="0"><set attributeName="opacity" to="1" begin="2.0s"/><animateMotion dur="3.2s" begin="2.0s" repeatCount="indefinite"><mpath href="#np3"/></animateMotion></circle><circle r="8" fill="#FFFEFB" opacity="0"><set attributeName="opacity" to="1" begin="0.8s"/><animateMotion dur="2.4s" begin="0.8s" repeatCount="indefinite"><mpath href="#nhl"/></animateMotion></circle><circle r="8" fill="#4DD0E1" opacity="0"><set attributeName="opacity" to="1" begin="1.4s"/><animateMotion dur="2.6s" begin="1.4s" repeatCount="indefinite"><mpath href="#nm0"/></animateMotion></circle><circle r="8" fill="#4DD0E1" opacity="0"><set attributeName="opacity" to="1" begin="2.2s"/><animateMotion dur="2.6s" begin="2.2s" repeatCount="indefinite"><mpath href="#nm1"/></animateMotion></circle><circle r="8" fill="#4DD0E1" opacity="0"><set attributeName="opacity" to="1" begin="0.5s"/><animateMotion dur="2.6s" begin="0.5s" repeatCount="indefinite"><mpath href="#nm2"/></animateMotion></circle><circle r="8" fill="#7FD17F" opacity="0"><set attributeName="opacity" to="1" begin="1.0s"/><animateMotion dur="3.4s" begin="1.0s" repeatCount="indefinite"><mpath href="#nr0"/></animateMotion></circle><circle r="8" fill="#7FD17F" opacity="0"><set attributeName="opacity" to="1" begin="2.4s"/><animateMotion dur="3.4s" begin="2.4s" repeatCount="indefinite"><mpath href="#nr1"/></animateMotion></circle></svg>
+<p class="net-hub" style="left:800px; top:600px; width:200px">团队看板</p>
+<p class="net-sub" style="left:800px; top:648px; width:200px">共享任务池</p>
+<p class="net-lead" style="left:1110px; top:516px; width:260px">Kander Leader<br><span style="color:#C9A2E6">AI 调度主管</span></p>
+<p class="net-name" style="left:128px; top:400px; width:180px">项目负责人</p>
+<p class="net-name" style="left:128px; top:540px; width:180px">开发</p>
+<p class="net-name" style="left:128px; top:680px; width:180px">QA</p>
+<p class="net-name" style="left:128px; top:820px; width:180px">市场</p>
+<p class="net-mach" style="left:1530px; top:469px; width:250px">电脑 A</p>
+<p class="net-mach" style="left:1530px; top:689px; width:250px">电脑 B</p>
+<p class="net-mach" style="left:1530px; top:909px; width:250px">电脑 C</p>
+<p class="hero-card" style="left:470px; top:330px; width:210px; border-left-color:#E3C6F5">支付接口</p>
+<p class="hero-card" style="left:1310px; top:330px; width:210px; border-left-color:#4DD0E1">登录页改版</p>
+<p class="hero-card" style="left:1170px; top:860px; width:210px; border-left-color:#7FD17F">数据导出 ✓</p>
+</div>
+<p class="eyebrow">协作网络</p>
+<h2 class="title">人、AI 与机器，组成一张协作网络</h2>
+<p class="lead net-lead-line">任务从人出发，经看板汇总、Leader 调度，由各台电脑上的 AI 完成，结果回到看板。</p>
+</section>
 <section id="what" class="accent">
 <div class="pane">
 <div class="pane-l">
 <p class="eyebrow">新的困境</p>
 <h2 class="title">团队里的人和 AI 都是孤岛</h2>
+<div class="islands anim"><svg aria-label="插图：四座彼此隔开的小岛，两座岛上是人，两座岛上是 AI，岛与岛之间的连线都断开了。" width="600" height="380" viewBox="0 0 600 380"><path d="M230 137 L281 131 M309 129 L360 123" stroke="#C9A2E6" stroke-opacity="0.55" stroke-width="3" stroke-dasharray="8 8" stroke-linecap="round"/><path d="M286 121 L304 139 M304 121 L286 139" stroke="#E48FE4" stroke-width="4" stroke-linecap="round"/><path d="M250 329 L296 325 M324 325 L370 321" stroke="#C9A2E6" stroke-opacity="0.55" stroke-width="3" stroke-dasharray="8 8" stroke-linecap="round"/><path d="M301 316 L319 334 M319 316 L301 334" stroke="#E48FE4" stroke-width="4" stroke-linecap="round"/><path d="M218 161 L288 223 M312 237 L382 299" stroke="#C9A2E6" stroke-opacity="0.55" stroke-width="3" stroke-dasharray="8 8" stroke-linecap="round"/><path d="M291 221 L309 239 M309 221 L291 239" stroke="#E48FE4" stroke-width="4" stroke-linecap="round"/><path d="M10 162 q15 -8 30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0" fill="none" stroke="#C9A2E6" stroke-opacity="0.35" stroke-width="3" stroke-linecap="round"/><ellipse cx="130" cy="140" rx="96" ry="26" fill="#5E2589" stroke="#C9A2E6" stroke-width="3"/><circle cx="130" cy="80" r="14" fill="none" stroke="#E48FE4" stroke-width="4"/><path d="M106 130 Q130 88 154 130" fill="none" stroke="#E48FE4" stroke-width="4" stroke-linecap="round"/><path d="M340 142 q15 -8 30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0" fill="none" stroke="#C9A2E6" stroke-opacity="0.35" stroke-width="3" stroke-linecap="round"/><ellipse cx="460" cy="120" rx="96" ry="26" fill="#5E2589" stroke="#C9A2E6" stroke-width="3"/><path d="M460 50 L460 40" stroke="#4DD0E1" stroke-width="4" stroke-linecap="round"/><circle cx="460" cy="36" r="4" fill="#4DD0E1"/><rect x="434" y="50" width="52" height="44" rx="12" fill="none" stroke="#4DD0E1" stroke-width="4"/><circle cx="450" cy="70" r="4.5" fill="#4DD0E1"/><circle cx="470" cy="70" r="4.5" fill="#4DD0E1"/><path d="M30 352 q15 -8 30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0" fill="none" stroke="#C9A2E6" stroke-opacity="0.35" stroke-width="3" stroke-linecap="round"/><ellipse cx="150" cy="330" rx="96" ry="26" fill="#5E2589" stroke="#C9A2E6" stroke-width="3"/><path d="M150 260 L150 250" stroke="#4DD0E1" stroke-width="4" stroke-linecap="round"/><circle cx="150" cy="246" r="4" fill="#4DD0E1"/><rect x="124" y="260" width="52" height="44" rx="12" fill="none" stroke="#4DD0E1" stroke-width="4"/><circle cx="140" cy="280" r="4.5" fill="#4DD0E1"/><circle cx="160" cy="280" r="4.5" fill="#4DD0E1"/><path d="M350 342 q15 -8 30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0" fill="none" stroke="#C9A2E6" stroke-opacity="0.35" stroke-width="3" stroke-linecap="round"/><ellipse cx="470" cy="320" rx="96" ry="26" fill="#5E2589" stroke="#C9A2E6" stroke-width="3"/><circle cx="470" cy="260" r="14" fill="none" stroke="#E48FE4" stroke-width="4"/><path d="M446 310 Q470 268 494 310" fill="none" stroke="#E48FE4" stroke-width="4" stroke-linecap="round"/></svg></div>
 <p class="lead">AI 已经足够强大，但我们使用 AI 的方式，还没能充分发挥它的能力。</p>
 </div>
 <div class="pane-r stagger">
