@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.6.1 — 2026-11-24
+
+- The `kander-leader` skill supports unattended supervision. It records decisions that need the user and continues independent work. In both supervision modes, the leader cancels its patrol timer once a check confirms more than one continuous hour with no work to advance. A later message or event can restart an approved patrol when work becomes actionable.
+- `kander doctor` installs a missing leader skill and refreshes an outdated managed copy when rules integration is enabled for that agent. The first bare `kander` launch after an upgrade runs the same repair. Doctor reports locally edited and user-owned copies and preserves them.
+- Wrap-up instructions now give executors the integration source commit to pass to `kander move done --delivery-commit` and tell them to omit `--disposition`. A rejected wrap-up completion reports the expected commit so the executor can retry.
+
 ## v1.6.0 — 2026-11-23
 
 - Install: `kander install` now ships the `kander-leader` skill and its three reference documents inside the binary. The Codex choice writes the shared `.agents/skills/kander-leader/` directory under the home directory (global) or the main worktree (project); the Claude choice writes `skills/kander-leader/` under an existing global Claude configuration directory, or `.claude/skills/kander-leader/` in the project. The install preview lists the skill documents with the other agent files, and an agent whose `install_rules` switch is off gets no skill write. Kander manages only the files it installed: an existing skill directory or link without a receipt for this scope and destination stays user-owned, even when its files match the bundle; a link in an ancestor of the skill directory is reported and skipped; and on a case-insensitive file system a receipt whose recorded path differs only in letter case still matches when both paths name the same directory. Rerunning `kander install` restores missing managed files and updates unchanged ones from the digests in `.kander-install.json`, and keeps locally edited files. `kander uninstall` removes an unmodified bundle and its receipt, prunes empty skill directories, and keeps a locally edited bundle with its references. See `docs/install-and-permissions.md`.
