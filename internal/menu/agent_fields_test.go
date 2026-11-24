@@ -10,6 +10,7 @@ import (
 )
 
 func TestCustomAgentChoicesAndSavePreserveTemplates(t *testing.T) {
+	isolateOverlay(t)
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
 	cfg := config.DefaultConfig()
 	cfg.WelcomeComplete = true

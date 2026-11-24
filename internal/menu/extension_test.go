@@ -12,6 +12,7 @@ import (
 
 func setupExtensionHome(t *testing.T) (string, config.InstallPaths, string) {
 	t.Helper()
+	isolateOverlay(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)

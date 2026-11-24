@@ -14,6 +14,7 @@ import (
 // unknown key, an entry for an agent this version does not know, and roles that name it.
 func futureScope(t *testing.T) (string, *config.Config) {
 	t.Helper()
+	isolateOverlay(t)
 	path := filepath.Join(t.TempDir(), "config.json")
 	t.Setenv(config.EnvConfig, path)
 	base := config.DefaultConfig()
@@ -314,6 +315,7 @@ func TestEditingTheSmallScaleLeavesKanbanAgentAlone(t *testing.T) {
 // entry of unknown content; a second save in the same session must not see that as
 // someone else's edit.
 func TestOptionsSwitchThenSecondSaveInOneSession(t *testing.T) {
+	isolateOverlay(t)
 	path := filepath.Join(t.TempDir(), "config.json")
 	t.Setenv(config.EnvConfig, path)
 	base := config.DefaultConfig()

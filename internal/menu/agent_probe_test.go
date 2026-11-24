@@ -110,6 +110,7 @@ echo barrier-timeout
 }
 
 func TestPanelCanConfigureUnselectedRenamedBuiltin(t *testing.T) {
+	isolateOverlay(t)
 	h := newHarness(t)
 	t.Setenv("PATH", h.fakeBin)
 	t.Setenv(config.EnvConfig, h.configPath)

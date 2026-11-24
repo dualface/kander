@@ -8,6 +8,7 @@ import (
 )
 
 func TestRuleSessionCopiesSelectionsAndRejectsInvalidChanges(t *testing.T) {
+	isolateOverlay(t)
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
 	cfg := config.DefaultConfig()
 	cfg.Rules = config.DefaultRules(false)
@@ -42,6 +43,7 @@ func TestRuleSessionCopiesSelectionsAndRejectsInvalidChanges(t *testing.T) {
 }
 
 func TestSessionPreservesReviewRoleModels(t *testing.T) {
+	isolateOverlay(t)
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
 	cfg := config.DefaultConfig()
 	cfg.WelcomeComplete = true

@@ -21,6 +21,7 @@ func hasWarning(lines []ReportLine) bool {
 
 func setupSwitchHome(t *testing.T) (string, config.InstallPaths) {
 	t.Helper()
+	isolateOverlay(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
