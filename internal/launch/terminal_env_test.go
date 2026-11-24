@@ -9,6 +9,7 @@ import (
 
 func TestMain(m *testing.M) {
 	serveLineAgent()
+	serveFakeGit()
 	terminaltest.Main()
 	terminaltest.ClearEnv()
 	os.Exit(m.Run())

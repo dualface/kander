@@ -57,6 +57,5 @@ func (s *Session) fetchIntegrationSource(ctx context.Context, dir string, value 
 	if !exists {
 		return integrationFailure("remote.git_commit_unavailable")
 	}
-	_, err = gitCommand(ctx, dir, "fetch", "--no-tags", "origin", ref)
-	return err
+	return fetchOrigin(ctx, dir, ref)
 }

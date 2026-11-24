@@ -25,7 +25,12 @@ func startRemoteWorker(home string) error {
 	return err
 }
 
-func runRemoteCoordinator(ctx context.Context, cfg *config.Config, args []string) int {
+// runRemoteCoordinator runs a coordinator subcommand through the service.
+// parent carries the cancellation of the command; the deadlines come from
+// coordinatorTimeout and, for reconcile, from the deadlines of its phases.
+func runRemoteCoordinator(parent context.Context, cfg *config.Config, args []string) int {
+	ctx, cancel := context.WithTimeout(parent, coordinatorTimeout)
+	defer cancel()
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fail(err)
@@ -76,31 +81,7 @@ func runRemoteCoordinator(ctx context.Context, cfg *config.Config, args []string
 		if err := board.DecodeReviewJSON(data, &request); err != nil {
 			return fail(err)
 		}
-		localCWD := request.CWD
-		if localCWD == "" {
-			localCWD = cwd
-		}
-		request.CWD = "project:" + session.Info.ID
-		facts, err := session.Project.CoordinatorFacts(ctx, request.GroupID, request)
-		if err != nil {
-			return fail(err)
-		}
-		input := api.GroupReconcile{Request: request}
-		for _, fact := range facts {
-			input.Checks = append(input.Checks, coordinatorGitCheck(fact, verifyRemoteCoordinatorGitFacts(ctx, session, localCWD, fact)))
-		}
-		proof, err := session.CoordinatorAuthority(request.GroupID, nil)
-		if err != nil {
-			return fail(err)
-		}
-		checkpoint, err = session.Project.CoordinatorAction(ctx, client.NewKey(), request.GroupID, "reconcile", input, proof)
-		if err != nil {
-			return fail(err)
-		}
-		if blocked := checkpoint.BlockedMembers(); len(blocked) > 0 && len(blocked) == len(checkpoint.Members) {
-			err = &board.CoordinatorBlockedError{Group: request.GroupID, Reason: checkpoint.Members[blocked[0]].Blocked.Reason}
-		}
-		return finishReconcile(checkpoint, err)
+		return finishReconcile(remoteReconcile(parent, ctx, session, cwd, args[1], request))
 	case "recover":
 		var request board.CoordinatorRecover
 		if err := board.DecodeReviewJSON(data, &request); err != nil {

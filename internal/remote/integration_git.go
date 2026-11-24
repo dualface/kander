@@ -11,8 +11,12 @@ import (
 	"github.com/dualface/kander/internal/probe"
 )
 
+// IntegrationTargetTimeout bounds one observation of an integration target
+// ref on origin. Tests replace it; nothing else writes it.
+var IntegrationTargetTimeout = 10 * time.Second
+
 func (s *Session) integrationTarget(ctx context.Context, dir, ref string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, IntegrationTargetTimeout)
 	defer cancel()
 	if !api.IntegrationTarget(ref) {
 		return "", integrationFailure("remote.integration_input_required")
@@ -72,7 +76,7 @@ func gitAncestor(ctx context.Context, dir, source, target string) (bool, error) 
 	if !api.CommitSHA(source) || !api.CommitSHA(target) {
 		return false, integrationFailure("remote.git_full_sha")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, GitCommandTimeout)
 	defer cancel()
 	result, err := probe.CaptureWithEnvDirLimit(ctx, "git", []string{"merge-base", "--is-ancestor", source, target}, append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never"), dir, 1<<20)
 	if err != nil {

@@ -16,12 +16,16 @@ import (
 	"github.com/dualface/kander/internal/probe"
 )
 
+// GitCommandTimeout bounds one Git process of this package. Tests replace it;
+// nothing else writes it.
+var GitCommandTimeout = 60 * time.Second
+
 // gitCommand uses direct argv, bounded streams and an owned process tree. Git
 // diagnostics can contain authenticated URLs, so the error keeps only a
 // sanitized, bounded diagnostic for the local user; text that leaves this
 // machine goes through ServerText, which drops it.
 func gitCommand(ctx context.Context, dir string, args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, GitCommandTimeout)
 	defer cancel()
 	env := append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never")
 	result, err := probe.CaptureWithEnvDirLimit(ctx, "git", gitArgs(runtime.GOOS, args), env, dir, 1<<20)
@@ -158,7 +162,7 @@ func (s *Session) FetchDelivery(ctx context.Context, dir, task, commit string) (
 	if err != nil || !exists {
 		return value, errors.Join(err, errors.New(config.Text("remote.git_commit_unavailable")))
 	}
-	if _, err := gitCommand(ctx, dir, "fetch", "--no-tags", "origin", value.Ref); err != nil {
+	if err := fetchOrigin(ctx, dir, value.Ref); err != nil {
 		return value, err
 	}
 	_, err = gitCommand(ctx, dir, "cat-file", "-e", commit+"^{commit}")
@@ -174,7 +178,7 @@ func (s *Session) FetchCommit(ctx context.Context, dir, commit string) error {
 	if err := verifiedRemote(ctx, dir, s.Info.Remote); err != nil {
 		return err
 	}
-	if _, err := gitCommand(ctx, dir, "fetch", "--no-tags", "origin", commit); err != nil {
+	if err := fetchOrigin(ctx, dir, commit); err != nil {
 		return err
 	}
 	_, err := gitCommand(ctx, dir, "cat-file", "-e", commit+"^{commit}")

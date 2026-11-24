@@ -24,7 +24,8 @@ func verifyRemoteCoordinatorGitFacts(ctx context.Context, s *remote.Session, cwd
 	if err := verifyPortableWrapUpTarget(cwd, facts.IntegrationTarget, facts.Integration.TargetRef); err != nil {
 		return err
 	}
-	if err := s.VerifyWrapUpIntegration(ctx, cwd, facts.Integration); err != nil {
+	witness, err := s.VerifyWrapUpIntegrationWitness(ctx, cwd, facts.Integration)
+	if err != nil {
 		return err
 	}
 	for _, closure := range facts.Closures {
@@ -32,7 +33,10 @@ func verifyRemoteCoordinatorGitFacts(ctx context.Context, s *remote.Session, cwd
 			return err
 		}
 	}
-	return s.VerifyWrapUpIntegration(ctx, cwd, facts.Integration)
+	// The target must still hold the integration after the closures were read.
+	// The service records and the fetched commits do not change, so only the
+	// target ref is observed again.
+	return s.RecheckWrapUpTarget(ctx, cwd, witness)
 }
 
 // coordinatorGitCheck is the verdict sent to the server for one fact. The text

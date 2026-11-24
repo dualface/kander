@@ -197,7 +197,5 @@ func runCoordinator(action, argument string) int {
 	if err = cfg.Rules.CheckTaskGroup("coordinator"); err != nil {
 		return fail(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	return runRemoteCoordinator(ctx, cfg, args)
+	return runRemoteCoordinator(context.Background(), cfg, args)
 }
