@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.6.2 — 2026-11-25
+
+- The `kander-leader` skill no longer stops in unattended mode when a blocked executor or orchestrator has marked a recommended option. A recommended option is now sufficient basis, and the leader answers a selection, permission, or confirmation dialog in the agent's pane, recording it as a leader decision with the user's verbatim authorization. Unattended mode now records and skips only releases and tags, advancing `main`, force pushes and remote deletions, writes to external services, credentials, installation outside the worktree, card stop conditions, and items with no recommended option. Other decisions reserved for the user, such as archiving, review round caps, numbered confirmation points, dismissal, takeover, and `coordinator recover`, follow the recommended option. When the leader starts an orchestrator in this mode, the orchestration notes carry the user's delegation and the leader's reply channel. Attended mode is unchanged.
+- Rules (orchestration): `snippets/orchestrate-sessions.md` gains "Delegated Decisions". When the orchestration notes carry a user delegation (verbatim wording, date, limits, supervising session, and reply channel), the orchestrator adopts the executors' recommended options within those limits, answers their dialogs in the pane, and sends other items that rules route to the user to the supervising session instead of waiting in its own window. Releases, tags, force pushes, remote deletions, external writes, credentials, and outside installs stay with the user unless the delegation names the action and its target. Without a delegation, orchestrator behavior is unchanged.
+
 ## v1.6.1 — 2026-11-24
 
 - The `kander-leader` skill supports unattended supervision. It records decisions that need the user and continues independent work. In both supervision modes, the leader cancels its patrol timer once a check confirms more than one continuous hour with no work to advance. A later message or event can restart an approved patrol when work becomes actionable.
