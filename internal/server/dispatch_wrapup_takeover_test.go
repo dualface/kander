@@ -187,3 +187,48 @@ func TestSuccessorGenerationFinishesWrapUpAfterEndingRetainedRound(t *testing.T)
 		t.Fatalf("successor completion: %+v %v", done, err)
 	}
 }
+
+// A wrap-up completion that names the card's own final commit, or that passes
+// the integration file as a disposition, is refused through the move path with
+// the board code and a message that names the source_commit to use; the round
+// then completes with that commit and no disposition.
+func TestWrapUpCompletionRefusalNamesSourceCommit(t *testing.T) {
+	f := newFixture(t)
+	p := f.project("host-a")
+	ctx := t.Context()
+	member, grant := integrationTask(t, f, p, "host-a", "wrap-up-refusal")
+	proof := client.Claim{Token: grant.Token, Generation: grant.Claim.Generation}
+	integration := integrate(t, p, integrationInput(t, p, member, grant.Claim.ExecutionID, "wrap-up-refusal-integration"), "refusal", proof)
+	current, err := p.Show(ctx, member.TaskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := wrapUpRound(t, p, member, integration, "wrap-up-refusal-round")
+	prepared, err := p.DispatchAction(ctx, "prepare-refusal", member.TaskID, "prepare", api.DispatchCommand{Input: &input, CardRevision: current.Revision}, proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Move(ctx, "accept-refusal", member.TaskID, api.Move{State: "working", Authorization: prepared.Authorization}, &proof); err != nil {
+		t.Fatal(err)
+	}
+	source := input.Evidence.WrapUp.Git.SourceCommit
+	own := strings.Repeat("e", 40)
+	for key, move := range map[string]api.Move{
+		"own-final-commit":           {DeliveryCommit: own},
+		"integration-as-disposition": {DeliveryCommit: source, Disposition: &input.Evidence.WrapUp.Artifact},
+	} {
+		move.State, move.Result, move.Authorization = "done", "completed", prepared.Authorization
+		_, err := p.Move(ctx, "complete-"+key, member.TaskID, move, &proof)
+		refusal := apiError(t, err)
+		if refusal.Code != api.CodeBoardRejected || refusal.BoardCode != "board.dispatch_evidence_invalid" || !strings.Contains(refusal.Message, "--delivery-commit "+source) {
+			t.Fatalf("%s: %+v", key, refusal)
+		}
+		if card, err := p.Show(ctx, member.TaskID); err != nil || card.State != "working" {
+			t.Fatalf("%s: card after the refusal: %+v %v", key, card, err)
+		}
+	}
+	done, err := p.Move(ctx, "complete-source", member.TaskID, api.Move{State: "done", Result: "completed", Authorization: prepared.Authorization, DeliveryCommit: source}, &proof)
+	if err != nil || done.State != "done" {
+		t.Fatalf("completion with the source commit: %+v %v", done, err)
+	}
+}

@@ -192,9 +192,10 @@ kander update <task-id> --document spec.md --file <文件> \
 kander move <task-id> review --dispatch-id <id> --execution-epoch <epoch> \
   --delivery-commit <修复-sha> --disposition <附件相对路径>
 
-# 4. 提交收尾完成
+# 4. 提交收尾完成：使用收尾证据的 source_commit
+#    （`kander dispatch show` 输出中的 intent.evidence.wrap_up.git.source_commit），不带 --disposition
 kander move <task-id> done --result completed --dispatch-id <id> \
-  --execution-epoch <epoch> --delivery-commit <集成-sha>
+  --execution-epoch <epoch> --delivery-commit <收尾证据的-source_commit>
 ```
 
 - **重放安全（Replay Safety）**：重复执行接收命令将返回 `replayed: true` 与原始收据，不会重复触发作业，版本号不发生自增。
