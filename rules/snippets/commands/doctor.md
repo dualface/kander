@@ -24,6 +24,7 @@ None.
 
 - Rewrites missing and outdated files below the rules root and stamps `kander-rules-state.json`.
 - Writes the missing Kander references into the covered agents' rules files and installs or updates their rules extensions, except for an agent whose `install_rules` switch is off (`agents.<name>.install_rules`, else the top-level `install_rules`; read only from the scope `config.json`). For such an agent it neither reads nor writes the files and prints one "turned off" line instead of a missing-integration warning; that line does not fail the check. A shared rules file (a project `AGENTS.md`, or one reached through a symlink to another agent's) stays unwritten when any agent that reads it is off.
+- Installs the bundled `kander-leader` skill where it is missing and updates a managed copy, at the same Codex and Claude destinations and with the same `install_rules` gate as `kander install`. A locally edited skill file, a skill directory or link without this scope's receipt, and a destination below a linked ancestor are reported and kept.
 - A reference that appears only inside an HTML comment, a code fence, or a negated sentence is reported as inactive, not as connected.
 - `install_rules` keys in the project overlay are ignored with one warning each.
 - Interactive sessions may back up and replace locally modified files.

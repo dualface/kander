@@ -27,7 +27,7 @@ None.
 - Unselected agents are recorded as `agents.<name>.install_rules: false` in the scope `config.json` before any rules file is written; a selected agent whose switch was off is recorded as `true`. A missing `config.json` is created for this with `welcome_complete` false.
 - Writes below the install root and the rules root; preserves existing agent rules entries. An agent whose switch is off gets no rules file, override, extension, or skill write; the rules root is written either way.
 
-- Installs the bundled `kander-leader` skill under the selected Codex and Claude skill directories in the chosen scope. A pre-existing unmanaged directory or link stays in place. Reinstallation preserves locally edited documents.
+- Installs the bundled `kander-leader` skill under the selected Codex and Claude skill directories in the chosen scope. A pre-existing unmanaged directory or link stays in place. Reinstallation preserves locally edited documents. Later, `kander doctor` and the first bare `kander` start after an upgrade install a missing skill and update a managed one the same way.
 
 ## Output
 
