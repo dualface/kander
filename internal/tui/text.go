@@ -192,7 +192,7 @@ func taskMatches(task Task, keyword string) bool {
 		return true
 	}
 	haystack := strings.ToLower(strings.Join([]string{
-		task.Title, task.TaskID, task.TaskGroup, task.Type, task.Assignee, task.State,
+		task.Title, task.TaskID, task.TaskGroup, task.Type, task.Owner, task.State,
 	}, " "))
 	return strings.Contains(haystack, needle)
 }

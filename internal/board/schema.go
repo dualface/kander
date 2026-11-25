@@ -15,6 +15,8 @@ const (
 	FieldTaskGroup  = "TASK_GROUP"
 	FieldLanguage   = "LANGUAGE"
 	FieldCreatedAt  = "CREATED_AT"
+	FieldSubmitter  = "SUBMITTER"
+	FieldAssignee   = "ASSIGNEE"
 	FieldOwner      = "OWNER"
 	FieldSession    = "SESSION"
 	FieldWindow     = "WINDOW"

@@ -27,6 +27,8 @@ type ListTask struct {
 	Type       string     `json:"type"`
 	TaskGroup  string     `json:"task_group"`
 	Owner      string     `json:"owner"`
+	Submitter  string     `json:"submitter"`
+	Assignee   string     `json:"assignee"`
 	Session    string     `json:"session"`
 	Window     string     `json:"window"`
 	Launcher   string     `json:"launcher"`

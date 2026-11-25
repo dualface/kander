@@ -97,7 +97,11 @@ func (s *Server) registerRoutes(mux *routeTable) {
 		if err := decode(r, &req); err != nil {
 			return outcome{err: err}
 		}
-		return p.newTask(r.Header.Get(api.HeaderIdempotencyKey), req)
+		submitter, err := attribution(r, req.Submitter)
+		if err != nil {
+			return outcome{err: err}
+		}
+		return p.newTask(r.Header.Get(api.HeaderIdempotencyKey), req, submitter)
 	})
 	s.projectRoute(mux, "GET "+task, func(p *project, r *http.Request) outcome {
 		t, err := p.show(r.PathValue("task"))
@@ -123,6 +127,13 @@ func (s *Server) registerRoutes(mux *routeTable) {
 			return outcome{err: err}
 		}
 		return p.move(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("task"), req, holderOf(r))
+	})
+	s.projectRoute(mux, "POST "+task+"/assignee", func(p *project, r *http.Request) outcome {
+		var req api.Assign
+		if err := decode(r, &req); err != nil {
+			return outcome{err: err}
+		}
+		return p.assign(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("task"), req)
 	})
 	s.projectRoute(mux, "POST "+task+"/claim", func(p *project, r *http.Request) outcome {
 		var req api.ClaimRequest

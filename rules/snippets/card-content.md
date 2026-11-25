@@ -14,6 +14,8 @@ Read this file before creating, completing, updating, or reviewing a card. It de
 - TASK_GROUP:
 - LANGUAGE: <agent communication language, e.g. en, zh-CN, ja>
 - CREATED_AT: YYYY-MM-DD HH:MM
+- SUBMITTER:
+- ASSIGNEE:
 - OWNER:
 - SESSION:
 - WINDOW:
@@ -78,6 +80,7 @@ Read this file before creating, completing, updating, or reviewing a card. It de
 
 - Preserve the generated hard language requirement in `GOAL`. It applies to every conversation related to the task, derives from `LANGUAGE`, and is not a second language setting. Old cards without the sentence remain valid; their task files supply the requirement.
 - `LANGUAGE` is the language for everything written for the user about this card: title and body, records, reports, review reports, and the messages passed to `kander notify` and `kander resume`. `kander new` fills it from the configured `agent_language` or `--language <value>`; it is fixed at creation and overrides the configuration, and an old card without it falls back to the configuration per `KANDER-AGENTS.md` "Language".
+- `kander new` and `kander issue import` set `SUBMITTER` once at creation and leave `ASSIGNEE` empty. Only `kander assign` can change `ASSIGNEE`, the person responsible for the card. It does not change `OWNER`, the executing agent. Preserve both lines unchanged when replacing the body. Old cards without either line read as empty.
 - Manual claiming and `start` write `OWNER`, `STARTED_AT`, `SESSION`, and `WINDOW` per `KANDER-KANBAN-RULES.md` "Controlled Documents and Recovery"; manually claimed cards leave `SESSION` and `WINDOW` empty. Update `TASK_BRANCH` through the controlled body entrance (`N/A` without a branch). The command fills `FINISHED_AT` on entering `done/`, and the move options fill the result atomically on entering `done/`, `archived/`, or `trash/`.
 - `MODELS` is an optional header line for the models and reasoning efforts used to execute the card. `kander new` does not write it: add it after `TASK_BRANCH`. The executing agent records `<agent> <model> <effort>` with its next `update`, using `-` for a value it does not know; never guess a value. When one of the values changes, append ` -> <agent> <model> <effort>` to the same line and keep the earlier entries, for example `- MODELS: claude opus high -> claude opus xhigh`. A missing, empty, or incomplete line is valid and blocks nothing.
 - Once a card enters `todo/`, `GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `OUT_OF_SCOPE`, `SIZE`, task group relations, and `INTEGRATION_TARGET` are frozen; changing any needs an explicit user decision first. One exception: while the card is in `working/` or `review/`, the executing agent ticks acceptance criteria through ordinary `update`, without a decision file. A tick toggles only the line-start marker of a top-level item between `- [ ] ` and `- [x] `; any other change, including an uppercase `[X]` or an indented item, is a contract change. `THREAT_MODEL` is part of the review task context but not frozen; refine it through ordinary `update` and note the change in `DISCUSSION`.

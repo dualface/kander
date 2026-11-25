@@ -6,18 +6,27 @@ import (
 	"strings"
 )
 
-// newTask creates a directory card with an independent task size in backlog. language is written to the
-// card's LANGUAGE field and must already satisfy config.ValidateAgentLanguage.
-func newTask(tx *Transaction, root, kind, slug, title, language string, large bool) (string, error) {
+// NewTaskInput supplies the initial card contract and its submission identity.
+// Language must already satisfy config.ValidateAgentLanguage.
+type NewTaskInput struct {
+	Kind, Slug, Title, Language, Submitter string
+	Large                                  bool
+}
+
+func newTask(tx *Transaction, root string, input NewTaskInput) (string, error) {
+	kind, slug, title := input.Kind, input.Slug, strings.TrimSpace(input.Title)
 	if !slugRe.MatchString(slug) {
 		return "", kanbanError("board.slug_may_contain_only_lowercase_ascii_letters_digits_and")
 	}
-	title = strings.TrimSpace(title)
 	if title == "" || strings.ContainsAny(title, "\n\r") {
 		return "", kanbanError("board.title_must_not_be_empty_or_contain_newlines")
 	}
 	if _, ok := typeNames[kind]; !ok {
 		return "", kanbanError("board.unknown_task_type", kind)
+	}
+	submitter, err := personField(FieldSubmitter, input.Submitter)
+	if err != nil {
+		return "", err
 	}
 	board, err := scan(root)
 	if err != nil {
@@ -30,11 +39,11 @@ func newTask(tx *Transaction, root, kind, slug, title, language string, large bo
 	if _, ok := board.Blocked[taskID]; ok {
 		return "", kanbanError("board.task_already_exists", taskID)
 	}
-	contract := renderContract(title, kind, language)
+	contract := renderContract(title, kind, input.Language, submitter)
 
 	taskKind := "small"
 	target := filepath.Join(root, "backlog", taskID)
-	if large {
+	if input.Large {
 		taskKind = "large"
 	} else {
 		contract += smallTaskExtra()
@@ -57,16 +66,16 @@ func newTask(tx *Transaction, root, kind, slug, title, language string, large bo
 
 // NewTask creates an entry under the board and task locks, including identity allocation.
 func NewTask(root, kind, slug, title, language string, large bool) (target string, err error) {
-	return NewTaskWithTransaction(root, kind, slug, title, language, large)
+	return NewTaskWithTransaction(root, NewTaskInput{Kind: kind, Slug: slug, Title: title, Language: language, Large: large})
 }
 
 // NewTaskWithTransaction creates a card and lets a service stage its exact
 // initial Snapshot from OperationResult in the same redo transaction.
-func NewTaskWithTransaction(root, kind, slug, title, language string, large bool, extensions ...TransactionExtension) (target string, err error) {
-	id := todayPrefix() + "-" + slug + "-task"
+func NewTaskWithTransaction(root string, input NewTaskInput, extensions ...TransactionExtension) (target string, err error) {
+	id := todayPrefix() + "-" + input.Slug + "-task"
 	err = WithTransaction(root, LockScope{Tasks: []string{id}, ExclusiveBoard: true}, func(tx *Transaction) error {
 		var e error
-		target, e = newTask(tx, root, kind, slug, title, language, large)
+		target, e = newTask(tx, root, input)
 		return e
 	}, extensions...)
 	return target, err

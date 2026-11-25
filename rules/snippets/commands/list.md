@@ -43,7 +43,8 @@ kander list --json --agent-status
 - Without `--json`: one row per card: state, size, time, task ID, title.
 - With `--json`: one object, `schema_version` 1:
   - Top level: `schema_version` (integer), `change_token` (string), `generated_at` (string, RFC 3339, UTC), `root` (string, absolute board directory), `tasks` (array).
-  - Each task: `task_id`, `title`, `state`, `size`, `type`, `task_group`, `owner`, `session`, `window`, `launcher`, `created_at`, `started_at`, `finished_at`, `result` (strings; a missing value is `""`, never an omitted key), `revision` (integer, the revision of `kander show --json`), `agent` (object or `null`).
+  - Each task: `task_id`, `title`, `state`, `size`, `type`, `task_group`, `owner`, `submitter`, `assignee`, `session`, `window`, `launcher`, `created_at`, `started_at`, `finished_at`, `result` (strings; a missing value is `""`, never an omitted key), `revision` (integer, the revision of `kander show --json`), `agent` (object or `null`).
+  - `owner` is the executing agent, `submitter` is the submission identity, and `assignee` is the person currently responsible.
   - `launcher` is the part of `window` before the first colon; `""` when `window` is empty.
   - `agent`: `status`, `runtime_state`, `reason`, `observed_at` (strings), `valid` (boolean). `status` is one of `alive`, `stopped`, `drifted`, `unknown`, `alive-orphaned`, `identity-mismatch`, `unprobeable`. `runtime_state` is one of `idle`, `working`, `blocked`, `done`, `unknown`. `agent` is `null` on every card without `--agent-status`, and on every card that is not in `working` or `review` or has an empty `window`.
   - `change_token` digests the snapshot without `generated_at` and every `observed_at`, plus the `spec.md` of every listed card. Any change of a listed card (added, removed, moved, body or header edited) or of an agent object changes it; an unchanged snapshot keeps it. With a state filter it covers only the listed cards.

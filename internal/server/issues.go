@@ -37,6 +37,10 @@ func (s *Server) issueRoutes(mux *routeTable) {
 		if err := decode(r, &request); err != nil {
 			return outcome{err: err}
 		}
+		submitter, err := attribution(r, request.Submitter)
+		if err != nil {
+			return outcome{err: err}
+		}
 		record, err := issue.UnmarshalImportSnapshot(request.Snapshot)
 		if err != nil {
 			return outcome{err: apiError(api.CodeInvalidRequest, err.Error())}
@@ -46,7 +50,9 @@ func (s *Server) issueRoutes(mux *routeTable) {
 		}
 		defer p.mu.Unlock()
 		run := func() outcome {
-			imported, err := issue.PublishImport(p.board, record, issue.ImportOptions{Type: request.Type, Language: request.Language, Large: request.Large})
+			imported, err := issue.PublishImport(p.board, record, issue.ImportOptions{
+				Type: request.Type, Language: request.Language, Large: request.Large, Submitter: submitter,
+			})
 			if err != nil {
 				return outcome{err: err}
 			}

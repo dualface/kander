@@ -19,6 +19,8 @@ type TaskSummary struct {
 	Kind             string     `json:"kind"`
 	Type             string     `json:"type"`
 	TaskGroup        string     `json:"task_group"`
+	Owner            string     `json:"owner"`
+	Submitter        string     `json:"submitter"`
 	Assignee         string     `json:"assignee"`
 	CreatedAt        string     `json:"created_at"`
 	StartedAt        string     `json:"started_at"`
@@ -86,7 +88,9 @@ func TaskSummaryOf(entry Entry, text string) TaskSummary {
 		Kind:        kind,
 		Type:        taskType,
 		TaskGroup:   taskGroupFrom(text),
-		Assignee:    MetadataFrom(text, FieldOwner),
+		Owner:       MetadataFrom(text, FieldOwner),
+		Submitter:   MetadataFrom(text, FieldSubmitter),
+		Assignee:    MetadataFrom(text, FieldAssignee),
 		CreatedAt:   MetadataFrom(text, FieldCreatedAt),
 		StartedAt:   MetadataFrom(text, FieldStartedAt),
 		CompletedAt: MetadataFrom(text, FieldFinishedAt),

@@ -8,6 +8,8 @@
   "config.server_board_unavailable": "unavailable",
   "config.server_board_path": "Server board path (on the server host)",
   "remote.error_invalid_request": "invalid request",
+  "remote.error_forbidden": "request forbidden by the embedding host",
+  "remote.error_attribution_required": "the embedding host did not identify the caller",
   "remote.error_not_found": "not found",
   "remote.error_revision_conflict": "revision conflict; read the card again",
   "remote.error_held_by_other": "the task is held by another execution",

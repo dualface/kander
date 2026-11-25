@@ -2,7 +2,7 @@
 
 Before running any `kander` command in this session, read `<rules root>/snippets/commands/README.md` once. Before the first use of a command, read its contract file.
 
-`--help` prints summary, syntax, arguments, examples; `kander help --json [<command>]` prints JSON. Global flags: `--lang`, `--json`. The final block matches `KANDER-KANBAN-RULES.md` "Command Contract".
+Global flags: `--lang`, `--json`.
 
 First: `show`, `update`, `move`, `check`.
 
@@ -19,6 +19,7 @@ First: `show`, `update`, `move`, `check`.
 | `list` | List cards by state | creator, user | `snippets/commands/list.md` |
 | `show` | Print card/revision | executors | `snippets/commands/show.md` |
 | `new` | Create backlog card | creator | `snippets/commands/new.md` |
+| `assign` | Change task assignee | user | `snippets/commands/assign.md` |
 | `move` | Move card | executor, orchestrator, creator | `snippets/commands/move.md` |
 | `pick` | Pick backlog card | creator, orchestrator | `snippets/commands/pick.md` |
 | `update` | Publish document | executor, creator | `snippets/commands/update.md` |
@@ -54,6 +55,7 @@ kander init [--server <URL>] [--project <name>] [project-path]
 kander list [--agent-status] [backlog|todo|working|review|done|archived|trash]
 kander show [--document <relative-path>] <task-id>
 kander new [--large] [--language <agent language>] <feature|bug|chore|research> <slug> <title...>
+kander assign <task-id> [<assignee>] [--expect-revision <revision>]
 kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--owner <agent> [--decision <reference>]] [--result <result>] [--reason <reason> --decision <reference>] [--duplicate-of <task-id>] [--expect-revision <revision>] [--dispatch-id <id> --execution-epoch <epoch>] [--delivery-commit <full-SHA>] [--disposition <card-relative-path>]
 kander pick [task-id]
 kander update <task-id> --document <relative-path> --file <UTF8-input> --expect-revision <revision> [--contract-decision-file <UTF8-decision>] [--dispatch-id <id> --execution-epoch <epoch>]

@@ -145,7 +145,7 @@ func (p *project) list(ctx context.Context, state string) (api.TaskList, error) 
 		}
 		s := api.TaskSummary{
 			TaskID: t.TaskID, Title: t.Title, State: t.State, Kind: t.Kind, Type: t.Type, Session: t.Session, Window: t.Window,
-			TaskGroup: t.TaskGroup, Assignee: t.Assignee, CreatedAt: t.CreatedAt,
+			TaskGroup: t.TaskGroup, Owner: t.Owner, Submitter: t.Submitter, Assignee: t.Assignee, CreatedAt: t.CreatedAt,
 			StartedAt: t.StartedAt, CompletedAt: t.CompletedAt, Time: t.Time, Result: t.Result,
 		}
 		snapshot, err := board.ReadSnapshot(p.board, t.TaskID)
@@ -218,7 +218,7 @@ func (p *project) changed(id string, generation uint64) {
 	}
 }
 
-func (p *project) newTask(key string, req api.NewTask) outcome {
+func (p *project) newTask(key string, req api.NewTask, submitter string) outcome {
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
@@ -233,7 +233,9 @@ func (p *project) newTask(key string, req api.NewTask) outcome {
 			created = api.Task{ObservedAt: p.server.now(), TaskID: snapshot.Entry.TaskID, State: snapshot.Entry.State, Revision: snapshot.Revision, OperationID: snapshot.OperationID, Text: snapshot.Text}
 			return p.stageOperationReceiptStatus(tx, key, "new", req, http.StatusCreated, created)
 		}}
-		_, err := board.NewTaskWithTransaction(p.board, req.Type, req.Slug, req.Title, req.Language, req.Large, extension)
+		_, err := board.NewTaskWithTransaction(p.board, board.NewTaskInput{
+			Kind: req.Type, Slug: req.Slug, Title: req.Title, Language: req.Language, Large: req.Large, Submitter: submitter,
+		}, extension)
 		if err != nil {
 			return outcome{err: err}
 		}

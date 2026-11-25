@@ -38,7 +38,9 @@ Every key is always present. A string field without a value is `""`.
 | `size`        | string         | `small` or `large`                                     |
 | `type`        | string         | the `TYPE` field, for example `Feature`                |
 | `task_group`  | string         | the `TASK_GROUP` field (legacy discussion line included) |
-| `owner`       | string         | the `OWNER` field                                      |
+| `owner`       | string         | the `OWNER` field (executing agent)                    |
+| `submitter`   | string         | the `SUBMITTER` field (submission identity)           |
+| `assignee`    | string         | the `ASSIGNEE` field (responsible person)              |
 | `session`     | string         | the `SESSION` field                                    |
 | `window`      | string         | the `WINDOW` field                                     |
 | `launcher`    | string         | the part of `window` before the first colon            |
@@ -69,7 +71,7 @@ The value sets are the status constants of `internal/liveness` and the agent sta
 
 `change_token` is the SHA-256 of the snapshot content, excluding `generated_at` and every `observed_at`, together with the SHA-256 of the full `spec.md` of every listed card.
 
-- Adding, removing, or moving a card, a `kander update`, and a body or header edit change it, also when an edit bypasses the revision.
+- Adding, removing, or moving a card, a `kander update` or `kander assign`, and a body or header edit change it, also when an edit bypasses the revision.
 - A change of any agent field other than `observed_at` changes it.
 - Two snapshots of an unchanged board, with unchanged agent observations, have the same token.
 - With a state filter the token covers only the listed cards, so a change to a card of another state does not change it.

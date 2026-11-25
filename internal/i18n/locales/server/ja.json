@@ -8,6 +8,8 @@
   "config.server_board_unavailable": "取得できません",
   "config.server_board_path": "サーバーのボードパス（サーバーホスト上）",
   "remote.error_invalid_request": "無効なリクエスト",
+  "remote.error_forbidden": "組み込みホストがリクエストを拒否しました",
+  "remote.error_attribution_required": "組み込みホストが呼び出し元を識別できませんでした",
   "remote.error_not_found": "見つかりません",
   "remote.error_revision_conflict": "リビジョンの競合。カードを読み直してください",
   "remote.error_held_by_other": "タスクは別の実行が保持しています",

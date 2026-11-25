@@ -23,13 +23,22 @@ func setMetadata(text, field, value string) (string, error) {
 	}
 	line := RenderField(field, value)
 	if len(matches) == 1 {
-		return text[:matches[0][0]] + line + text[matches[0][1]:], nil
+		start, end := matches[0][0], matches[0][1]
+		if text[end-1] == '\r' {
+			end--
+		}
+		return text[:start] + line + text[end:], nil
 	}
 	at := strings.Index(text, "\n## ")
+	ending := "\n"
+	if at > 0 && text[at-1] == '\r' {
+		at--
+		ending = "\r\n"
+	}
 	if at < 0 {
 		at = len(text)
 	}
-	return text[:at] + "\n" + line + "\n" + text[at:], nil
+	return text[:at] + ending + line + ending + text[at:], nil
 }
 func moveMetadata(text, from, to string, o MoveOptions) (string, error) {
 	var err error
@@ -95,7 +104,7 @@ type UpdateOptions struct {
 	Authorization    ExecutionAuthorization
 }
 
-var managedFields = []string{FieldOwner, FieldSession, FieldWindow, FieldStartedAt, FieldFinishedAt, FieldResult, FieldLanguage, FieldCreatedAt, "REVISION", "OPERATION_ID", "EXECUTION_EPOCH", "DISPATCH_ID", "REVIEWS"}
+var managedFields = []string{FieldOwner, FieldSession, FieldWindow, FieldStartedAt, FieldFinishedAt, FieldResult, FieldLanguage, FieldCreatedAt, FieldSubmitter, FieldAssignee, "REVISION", "OPERATION_ID", "EXECUTION_EPOCH", "DISPATCH_ID", "REVIEWS"}
 var frozenSections = []string{SectionGoal, SectionUserDecisions, SectionExpectedOutcome, SectionAcceptanceCriteria, SectionOutOfScope}
 
 func frozenContract(text string) map[string]string {
@@ -210,6 +219,10 @@ func managedFieldHint(field string) string {
 		return "board.update_hint_result"
 	case FieldLanguage, FieldCreatedAt:
 		return "board.update_hint_created"
+	case FieldSubmitter:
+		return "board.update_hint_submitter"
+	case FieldAssignee:
+		return "board.update_hint_assignee"
 	case "DISPATCH_ID", "EXECUTION_EPOCH":
 		return "board.update_hint_dispatch_field"
 	}

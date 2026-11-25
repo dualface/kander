@@ -58,6 +58,7 @@ func commandLeaves(root *cobra.Command) []leafCommand {
 
 // samplePositionals are valid positional arguments for each command path.
 var samplePositionals = map[string][]string{
+	"assign":                       {sampleTask, "Example User"},
 	"check":                        {},
 	"check delivery":               {},
 	"check overlap":                {},

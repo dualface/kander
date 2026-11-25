@@ -68,6 +68,12 @@ func (p *Project) NewTask(ctx context.Context, key string, req api.NewTask) (api
 	return p.impl.NewTask(ctx, key, req)
 }
 
+// Assign changes the person assigned to a task. Reuse key when retrying the
+// same operation. An empty key generates a new key for this call.
+func (p *Project) Assign(ctx context.Context, key, id string, req api.Assign) (api.Task, error) {
+	return p.impl.Assign(ctx, key, id, req)
+}
+
 // Events reads project events after cursor, waiting up to wait on the server.
 func (p *Project) Events(ctx context.Context, cursor string, wait time.Duration) (api.EventPage, error) {
 	return p.impl.Events(ctx, cursor, wait)

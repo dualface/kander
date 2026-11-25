@@ -58,6 +58,7 @@ type ProjectService interface {
 	List(context.Context, string) (api.TaskList, error)
 	Show(context.Context, string) (api.Task, error)
 	NewTask(context.Context, string, api.NewTask) (api.Task, error)
+	Assign(context.Context, string, string, api.Assign) (api.Task, error)
 	Document(context.Context, string, string) (api.Document, error)
 	PutDocument(context.Context, string, string, api.Document, *client.Claim) (api.Task, error)
 	Move(context.Context, string, string, api.Move, *client.Claim) (api.Task, error)

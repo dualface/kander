@@ -317,13 +317,17 @@ func TestIssueImportHostileIssueCannotChangeTheCard(t *testing.T) {
 	if strings.Count(text, "\n## ") != 9 {
 		t.Fatalf("remote text changed the section structure:\n%s", text)
 	}
-	lines := strings.Split(text, "\n")
-	if len(lines) < 15 || lines[1] != "" || lines[14] != "" {
+	header := strings.Split(board.CardHeader(text), "\n")
+	fields := []string{
+		"TYPE", "SIZE", "TASK_GROUP", "LANGUAGE", "CREATED_AT", "SUBMITTER", "ASSIGNEE",
+		"OWNER", "SESSION", "WINDOW", "STARTED_AT", "FINISHED_AT", "TASK_BRANCH", "RESULT",
+	}
+	if len(header) != len(fields)+4 || header[1] != "" || header[len(fields)+2] != "" || header[len(fields)+3] != "" {
 		t.Fatalf("the metadata block was disturbed:\n%s", text)
 	}
-	for _, line := range lines[2:14] {
-		if !strings.HasPrefix(line, "- ") {
-			t.Fatalf("remote text added a metadata line (%q):\n%s", line, text)
+	for i, field := range fields {
+		if line := header[i+2]; !strings.HasPrefix(line, "- "+field+":") {
+			t.Fatalf("unexpected metadata line (%q) in place of %s:\n%s", line, field, text)
 		}
 	}
 	contract, _, _ := strings.Cut(text, "## IMPLEMENTATION")

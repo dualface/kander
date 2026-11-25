@@ -157,7 +157,7 @@ func runList(state string, agentStatus bool, observe board.AgentStatusFunc) erro
 	}
 	w := tabwriter.NewWriter(stdout, 0, 2, 2, ' ', 0)
 	for _, t := range list.Tasks {
-		owner := t.Assignee
+		owner := t.Owner
 		if t.Claim != nil && t.Claim.Status != api.ClaimReleased {
 			owner = t.Claim.Owner + "@" + t.Claim.ClientID + " g" + strconv.FormatUint(t.Claim.Generation, 10) + " " + t.Claim.Status
 		}
@@ -271,7 +271,9 @@ func runNew(kind, slug, title string, large bool, language string, languageGiven
 		}
 		return fail(err)
 	}
-	t, err := s.Project.NewTask(ctx, client.NewKey(), api.NewTask{Type: kind, Slug: slug, Title: title, Language: language, Large: large})
+	t, err := s.Project.NewTask(ctx, client.NewKey(), api.NewTask{
+		Type: kind, Slug: slug, Title: title, Language: language, Large: large, Submitter: GitSubmitter(ctx),
+	})
 	if err != nil {
 		return fail(err)
 	}

@@ -3,12 +3,12 @@ package issue
 import (
 	"context"
 	"encoding/json"
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/fs"
 	"path/filepath"
 
 	"github.com/dualface/kander/api"
+	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/remote"
 )
 
@@ -60,7 +60,9 @@ func ImportRemote(ctx context.Context, session *remote.Session, provider IssuePr
 	if err != nil {
 		return ImportResult{}, err
 	}
-	raw, err := session.Project.ImportIssue(ctx, client.NewKey(), api.IssueImport{Snapshot: encoded, Type: options.Type, Language: options.Language, Large: options.Large})
+	raw, err := session.Project.ImportIssue(ctx, client.NewKey(), api.IssueImport{
+		Snapshot: encoded, Type: options.Type, Language: options.Language, Large: options.Large, Submitter: remote.GitSubmitter(ctx),
+	})
 	if err != nil {
 		return ImportResult{}, err
 	}

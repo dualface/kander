@@ -17,6 +17,7 @@ var boardCodes = map[string]string{
 	"board.transaction_pending":  api.CodeNotReady,
 	"board.task_does_not_exist":  api.CodeNotFound,
 	"board.invalid_task_id":      api.CodeInvalidRequest,
+	"board.person_field_invalid": api.CodeInvalidRequest,
 }
 
 var codeStatus = map[string]int{

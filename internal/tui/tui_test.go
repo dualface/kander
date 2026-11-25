@@ -37,7 +37,7 @@ func TestDisplayHelpers(t *testing.T) {
 	if len(wrapped) != 2 || wrapped[0] != "任务" || wrapped[1] != "标题" {
 		t.Fatalf("%v", wrapped)
 	}
-	task := Task{Title: "Alpha", TaskID: "id", TaskGroup: "group-one", Type: "Feature", Assignee: "Codex", State: "todo"}
+	task := Task{Title: "Alpha", TaskID: "id", TaskGroup: "group-one", Type: "Feature", Owner: "Codex", State: "todo"}
 	for _, kw := range []string{"alpha", "ID", "group-one", "feature", "codex", "todo"} {
 		if !taskMatches(task, kw) {
 			t.Fatalf("expected match %q", kw)
@@ -112,9 +112,9 @@ func TestModelNavigationAndSearch(t *testing.T) {
 	model.SetBoard(BoardPayload{
 		GeneratedAt: "2026-08-20 22:30:00",
 		Tasks: []Task{
-			{TaskID: "20260820-first-task", Title: "第一项", State: "todo", TaskGroup: "20260820-terminal-group", Type: "Feature", Assignee: "Codex"},
+			{TaskID: "20260820-first-task", Title: "第一项", State: "todo", TaskGroup: "20260820-terminal-group", Type: "Feature", Owner: "Codex"},
 			{TaskID: "20260820-second-task", Title: "Second item", State: "todo", Type: "Bug"},
-			{TaskID: "20260820-old-task", Title: "Old item", State: "archived", Type: "Chore", Assignee: "QA"},
+			{TaskID: "20260820-old-task", Title: "Old item", State: "archived", Type: "Chore", Owner: "QA"},
 		},
 	})
 	if strings.Join(model.States(), ",") != strings.Join(activeStates, ",") {

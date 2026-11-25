@@ -62,7 +62,7 @@ func boardContentKey(tasks []Task) string {
 	rows := make([]row, 0, len(tasks))
 	for _, task := range tasks {
 		item := row{
-			"assignee":     task.Assignee,
+			"owner":        task.Owner,
 			"completed_at": task.CompletedAt,
 			"created_at":   task.CreatedAt,
 			"document":     task.Document,

@@ -85,6 +85,8 @@ type ImportOptions struct {
 	// Language is the LANGUAGE of the new card. It is required because the
 	// card keeps its language for its whole life.
 	Language string
+	// Submitter is the submission identity selected by the service.
+	Submitter string
 	// Comments stores the issue discussion in the snapshot.
 	Comments bool
 }
@@ -423,6 +425,7 @@ func PublishImport(root string, record ImportSnapshot, options ImportOptions) (r
 		Title:     importTitle(record),
 		Kind:      taskType,
 		Language:  language,
+		Submitter: options.Submitter,
 		Large:     options.Large,
 		Contract:  BuildImportContract(record, requestedType, options.Large),
 		Files: []board.ImportFile{

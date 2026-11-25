@@ -321,6 +321,13 @@ func (p *Project) NewTask(ctx context.Context, key string, req api.NewTask) (api
 	return t, err
 }
 
+// Assign changes the person assigned to a task, independently of its claim.
+func (p *Project) Assign(ctx context.Context, key, id string, req api.Assign) (api.Task, error) {
+	var t api.Task
+	err := p.c.do(ctx, call{method: http.MethodPost, path: p.path(taskPath(id, "assignee")...), body: req, key: key}, &t)
+	return t, err
+}
+
 func documentPath(path string) string {
 	parts := strings.Split(path, "/")
 	for i, part := range parts {

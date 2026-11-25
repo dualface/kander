@@ -8,6 +8,8 @@
   "config.server_board_unavailable": "不可用",
   "config.server_board_path": "服务端看板路径（服务端主机上）",
   "remote.error_invalid_request": "请求无效",
+  "remote.error_forbidden": "嵌入方拒绝了此请求",
+  "remote.error_attribution_required": "嵌入方未识别请求者身份",
   "remote.error_not_found": "不存在",
   "remote.error_revision_conflict": "版本冲突, 请重新读取卡片",
   "remote.error_held_by_other": "任务由其他执行持有",

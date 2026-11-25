@@ -43,7 +43,7 @@ The same project-level limit applies to routes that resolve task membership from
 2. Hook returns `(value, true)`. Use that value even if the client reports something else.
 3. Hook returns `(_, false)`. Refuse the attributed operation with HTTP 403 and code `attribution_required`. Never fall back to the client value.
 
-The hook records the caller for the current request. It does not by itself alter any existing writes.
+Task creation and issue import use this attribution to populate the immutable `SUBMITTER` header. Task assignment is a separate write through `POST /tasks/{task}/assignee` under the project route. The authorization hook receives its matched task scope and can decide who may assign or clear the responsible person.
 
 ### Administration
 

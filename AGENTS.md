@@ -128,7 +128,7 @@ The terminal interface uses the Charm libraries as one set, with no hand-rolled 
 
 ## Subcommands
 
-The command tree contains: `doctor` `config` `version` `server` `install` `uninstall` `review` `init` `issue` `terminal` `list`/`ls` `show` `update` `new` `move` `pick` `start` `resume` `notify` `dismiss` `check` `guard-write` `dispatch` `coordinator` `subscribe`. `request` is its own command (its forms are documented in `notify.md`), and `worker` is a hidden internal command that takes no arguments. `help` is cobra's help command, answered like `--help` (`kander help [--json] [<command>]`); there is no `completion` command. Bare `kander` opens the terminal kanban; the global flags are `--lang {cn,en,ja}` and `--json` (every command except the bare `kander` and `worker`).
+The command tree contains: `doctor` `config` `version` `server` `install` `uninstall` `review` `init` `issue` `terminal` `list`/`ls` `show` `update` `new` `assign` `move` `pick` `start` `resume` `notify` `dismiss` `check` `guard-write` `dispatch` `coordinator` `subscribe`. `request` is its own command (its forms are documented in `notify.md`), and `worker` is a hidden internal command that takes no arguments. `help` is cobra's help command, answered like `--help` (`kander help [--json] [<command>]`); there is no `completion` command. Bare `kander` opens the terminal kanban; the global flags are `--lang {cn,en,ja}` and `--json` (every command except the bare `kander` and `worker`).
 
 ## TUI Tests
 

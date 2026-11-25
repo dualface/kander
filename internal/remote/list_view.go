@@ -34,7 +34,11 @@ func (s *Session) machineList(ctx context.Context, list api.TaskList, observe bo
 	var requests []board.AgentStatusRequest
 	var positions []int
 	for _, item := range list.Tasks {
-		task := listTask{ListTask: board.ListTask{TaskID: item.TaskID, Title: item.Title, State: item.State, Size: item.Kind, Type: item.Type, TaskGroup: item.TaskGroup, Owner: item.Assignee, CreatedAt: item.CreatedAt, StartedAt: item.StartedAt, FinishedAt: item.CompletedAt, Result: item.Result, Revision: item.Revision}, Claim: item.Claim}
+		task := listTask{ListTask: board.ListTask{
+			TaskID: item.TaskID, Title: item.Title, State: item.State, Size: item.Kind, Type: item.Type, TaskGroup: item.TaskGroup,
+			Owner: item.Owner, Submitter: item.Submitter, Assignee: item.Assignee, CreatedAt: item.CreatedAt, StartedAt: item.StartedAt,
+			FinishedAt: item.CompletedAt, Result: item.Result, Revision: item.Revision,
+		}, Claim: item.Claim}
 		if s.SceneIsLocal(item.TaskID, item.Claim, item.Window, item.Session) {
 			task.Session, task.Window = item.Session, item.Window
 			task.Launcher, _, _ = strings.Cut(item.Window, ":")
