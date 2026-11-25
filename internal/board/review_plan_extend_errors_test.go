@@ -1,7 +1,11 @@
 package board
 
 import (
-	"reflect"
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -32,19 +36,36 @@ func nextBatch(p ReviewPlan) *ReviewPlanBatch {
 	return &ReviewPlanBatch{BatchID: "second", PreviousBatchID: "batch", TaskIDs: p.TaskIDs, Base: strings.Repeat("b", 40), TargetCommit: strings.Repeat("c", 40), Requirements: noReviewRequirements()}
 }
 
-func requirePlanUnchanged(t *testing.T, root string, before ReviewPlan) {
+// planBytes returns the raw bytes of the authoritative plan record and of every
+// member copy, so a refusal that rewrote either, even to equal JSON, is caught.
+func planBytes(t *testing.T, root string, p ReviewPlan) [][]byte {
 	t.Helper()
-	after, err := ReadReviewPlan(root, before.PlanID)
-	if err != nil {
-		t.Fatal(err)
+	paths := []string{control(root, "groups", reviewControlGroup, "plans", p.PlanID+".json")}
+	for _, id := range p.TaskIDs {
+		paths = append(paths, filepath.Join(transactionSnapshot(t, root, id).Entry.Path, "reviews", "plan.json"))
 	}
-	if !reflect.DeepEqual(after, before) {
-		t.Fatalf("refused request changed the plan:\nbefore %+v\nafter  %+v", before, after)
+	var out [][]byte
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, data)
+	}
+	return out
+}
+
+func requirePlanUnchanged(t *testing.T, root string, p ReviewPlan, before [][]byte) {
+	t.Helper()
+	after := planBytes(t, root, p)
+	if !slices.EqualFunc(before, after, func(a, b []byte) bool { return string(a) == string(b) }) {
+		t.Fatal("refused request rewrote the plan record or a member copy")
 	}
 }
 
 func TestSealedPlanRefusalNamesTheSealAndTheWayOut(t *testing.T) {
 	root, p := closedSealedPlan(t, "sealed-refusal")
+	before := planBytes(t, root, p)
 	err := ExtendReviewPlan(root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, Batch: nextBatch(p), Author: "codex", Basis: "later commits"})
 	if err == nil {
 		t.Fatal("sealed plan took a new batch")
@@ -56,11 +77,12 @@ func TestSealedPlanRefusalNamesTheSealAndTheWayOut(t *testing.T) {
 	if strings.Contains(err.Error(), "CAS") {
 		t.Fatalf("sealed refusal still reads as a revision conflict: %v", err)
 	}
-	requirePlanUnchanged(t, root, p)
+	requirePlanUnchanged(t, root, p, before)
 }
 
 func TestStalePlanRevisionIsReportedWithBothRevisions(t *testing.T) {
 	root, p := closedSealedPlan(t, "stale-revision")
+	before := planBytes(t, root, p)
 	stale := p.Revision - 1
 	err := ExtendReviewPlan(root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: stale, Batch: nextBatch(p), Author: "codex", Basis: "stale view"})
 	if err == nil {
@@ -74,7 +96,7 @@ func TestStalePlanRevisionIsReportedWithBothRevisions(t *testing.T) {
 	if strings.Contains(err.Error(), sealedRule) {
 		t.Fatalf("revision conflict mentions the seal: %v", err)
 	}
-	requirePlanUnchanged(t, root, p)
+	requirePlanUnchanged(t, root, p, before)
 }
 
 func TestMissingPlanIsReportedAsMissing(t *testing.T) {
@@ -85,6 +107,9 @@ func TestMissingPlanIsReportedAsMissing(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), sealedRule) || strings.Contains(err.Error(), "CAS") {
 		t.Fatalf("missing plan reads as a seal or revision conflict: %v", err)
+	}
+	if _, err := os.Stat(control(root, "groups", reviewControlGroup, "plans", "absent.json")); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("refused request created the missing plan: %v", err)
 	}
 }
 
