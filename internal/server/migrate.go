@@ -199,7 +199,7 @@ func (s *Server) ImportWithProgress(ctx context.Context, name, remote, source st
 			return fmt.Errorf("staged board check failed: %w", err)
 		}
 		if len(check.Blocking) > 0 {
-			return importRejected("staged board fails check; nothing was published: " + strings.Join(check.Blocking, "; ") + "; " + importCheckHint)
+			return importRejected("staged board fails check; nothing was published: " + sourcePaths(strings.Join(check.Blocking, "; "), staging, source) + "; " + importCheckHint)
 		}
 		progress.phase(api.ImportPhasePublish)
 		// A non-cooperating external writer must also invalidate publication.
@@ -293,6 +293,13 @@ const importCheckHint = "fix these cards on the source board, or wait until no r
 // internal error.
 func importRejected(message string) error {
 	return apiError(api.CodeBoardRejected, message)
+}
+
+// sourcePaths names the source board instead of its staged copy in check
+// text. The caller knows the source path, and a refusal must not reveal the
+// server data directory that holds the staging copy.
+func sourcePaths(text, staging, source string) string {
+	return strings.ReplaceAll(text, staging, source)
 }
 
 func projectNotEmpty(name string) error {

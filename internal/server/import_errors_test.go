@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -70,13 +71,47 @@ func TestImportRouteAnswersTheReasonOfABlockedBoardInOneJSON(t *testing.T) {
 	wantRejection(t, err, id)
 }
 
-func TestImportRefusesASourceInsideTheDataDirectoryAsInvalid(t *testing.T) {
+func TestImportNamesTheSourceBoardInsteadOfTheStagingCopy(t *testing.T) {
+	source := v1Board(t)
+	// A card directory without spec.md is a structural problem whose text
+	// carries the path of the entry.
+	broken := filepath.Join(source, "backlog", "20261125-broken-task")
+	if err := os.MkdirAll(broken, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(broken, "notes.md"), []byte("notes\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	s, h := openTest(t, t.TempDir(), nil)
 	defer h.Close()
 	defer s.Close()
-	_, err := s.Import("demo", "", filepath.Join(s.data, "kanban"))
-	var apiErr *api.Error
-	if !errors.As(err, &apiErr) || apiErr.Code != api.CodeInvalidRequest || apiErr.Status != http.StatusBadRequest {
-		t.Fatalf("an overlapping source must be an invalid request: %v", err)
+	_, err := s.Import("demo", "", source)
+	if !api.IsCode(err, api.CodeBoardRejected) || !strings.Contains(err.Error(), broken) || strings.Contains(err.Error(), s.data) {
+		t.Fatalf("the refusal must name the source entry and never the data directory: %v", err)
+	}
+}
+
+func TestImportRejectsAStagedCopyThatDiffersFromTheSource(t *testing.T) {
+	source := v1Board(t)
+	s, h := openTest(t, t.TempDir(), nil)
+	defer h.Close()
+	defer s.Close()
+	s.importFault = func(step string) error {
+		if step != "copied" {
+			return nil
+		}
+		info, err := s.projectByName("demo")
+		if err != nil {
+			return err
+		}
+		p, err := s.project(info.ID)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(p.root, "board.import", "extra.md"), []byte("x\n"), 0o600)
+	}
+	_, err := s.Import("demo", "", source)
+	if !api.IsCode(err, api.CodeBoardRejected) || !strings.Contains(err.Error(), "staged board differs from the source; nothing was published") {
+		t.Fatalf("a staged copy that differs must be a board rejection: %v", err)
 	}
 }

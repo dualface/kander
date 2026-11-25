@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 )
 
@@ -156,7 +157,7 @@ func TestImportRejectsOverlappingDirectories(t *testing.T) {
 	}
 	defer srv.Close()
 	for _, source := range []string{data, filepath.Join(data, "source"), filepath.Dir(data)} {
-		if _, err := srv.Import("overlap", "", source); err == nil || !strings.Contains(err.Error(), "must not overlap") {
+		if _, err := srv.Import("overlap", "", source); !api.IsCode(err, api.CodeInvalidRequest) || !strings.Contains(err.Error(), "must not overlap") {
 			t.Fatalf("overlap %s: %v", source, err)
 		}
 	}
@@ -175,7 +176,7 @@ func TestImportRejectsSourceMutationBeforePublication(t *testing.T) {
 		}
 		return os.WriteFile(filepath.Join(source, "external-writer.md"), []byte("concurrent source mutation\n"), 0600)
 	}
-	if _, err := srv.Import("changed-source", "", source); err == nil || !strings.Contains(err.Error(), "source board changed") {
+	if _, err := srv.Import("changed-source", "", source); !api.IsCode(err, api.CodeBoardRejected) || !strings.Contains(err.Error(), "source board changed") {
 		t.Fatalf("source mutation: %v", err)
 	}
 	info, err := srv.projectByName("changed-source")

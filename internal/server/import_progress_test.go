@@ -551,8 +551,8 @@ func TestVerifyDefaultedTreeAcceptsOnlyTheInsertedLine(t *testing.T) {
 			_ = os.Remove(filepath.Join(root, other))
 		},
 	} {
-		if err := verifyDefaultedTree(source, src, stage(edit), defaults); err == nil {
-			t.Fatalf("%s: a staged tree that differs beyond the SIZE line was accepted", name)
+		if err := verifyDefaultedTree(source, src, stage(edit), defaults); !api.IsCode(err, api.CodeBoardRejected) {
+			t.Fatalf("%s: a staged tree that differs beyond the SIZE line must be a board rejection: %v", name, err)
 		}
 	}
 }
