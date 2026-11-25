@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-func (s *Server) reviewEvidenceRoutes(mux *http.ServeMux) {
+func (s *Server) reviewEvidenceRoutes(mux *routeTable) {
 	s.projectRoute(mux, "POST /api/v1/projects/{project}/reviews/members", func(p *project, r *http.Request) outcome {
 		var ids []string
 		if err := decode(r, &ids); err != nil {

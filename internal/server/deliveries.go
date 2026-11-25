@@ -134,7 +134,7 @@ func (p *project) deliveryGuard(task, commit string, h holder) func(*board.Trans
 	}
 }
 
-func (s *Server) deliveryRoutes(mux *http.ServeMux) {
+func (s *Server) deliveryRoutes(mux *routeTable) {
 	const base = "/api/v1/projects/{project}/tasks/{task}/deliveries"
 	s.projectRoute(mux, "POST "+base, func(p *project, r *http.Request) outcome {
 		var input api.DeliveryEvidence

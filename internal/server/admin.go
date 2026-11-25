@@ -5,11 +5,12 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
-	"github.com/dualface/kander/api"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/dualface/kander/api"
 )
 
 func (s *Server) loadAdminToken() error {
@@ -38,24 +39,34 @@ func (s *Server) loadAdminToken() error {
 	return nil
 }
 
-func (s *Server) adminRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/server", func(w http.ResponseWriter, r *http.Request) {
+func (s *Server) adminRoutes(mux *routeTable) {
+	mux.HandleFunc("GET /api/v1/server", s.authorizedAdmin(func(w http.ResponseWriter, r *http.Request) {
 		writeJSONResponse(w, http.StatusOK, api.ServerInfo{
 			Version: s.version, PID: os.Getpid(), DataDir: s.data, LogPath: filepath.Join(s.data, "server.log"), Listen: s.listen,
 			TTL: api.DurationOf(s.ttl), Renew: api.DurationOf(s.renew), StartedAt: s.startedAt, Projects: len(s.projectInfos()),
 		})
-	})
-	mux.HandleFunc("POST /api/v1/server/shutdown", func(w http.ResponseWriter, r *http.Request) {
+	}))
+	mux.HandleFunc("POST /api/v1/server/shutdown", s.authorizedAdmin(func(w http.ResponseWriter, r *http.Request) {
 		if !s.administrator(r) {
 			writeJSONResponse(w, http.StatusForbidden, api.Error{Code: api.CodeInvalidRequest, Message: "server shutdown refused"})
 			return
 		}
 		writeJSONResponse(w, http.StatusAccepted, map[string]string{"status": "stopping"})
 		s.shutdownCancel()
-	})
+	}))
 	// Import changes board data, so unlike shutdown it passes the protocol
 	// handshake and the readiness gate of domain().
 	mux.HandleFunc("POST /api/v1/server/import", s.domain(s.importRoute))
+}
+
+func (s *Server) authorizedAdmin(fn http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := s.authorize(r); err != nil {
+			writeJSONResponse(w, err.Status, err)
+			return
+		}
+		fn(w, s.withAttribution(r))
+	}
 }
 
 // administrator accepts only a loopback peer that presents the private

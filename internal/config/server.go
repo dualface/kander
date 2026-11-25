@@ -29,7 +29,7 @@ type Project struct {
 }
 
 // projectNamePattern copies api.ProjectNamePattern; this package cannot import
-// internal/api, so a test in internal/api pins the two together.
+// the api package, so an api test pins the two together.
 const projectNamePattern = `^[A-Za-z][A-Za-z0-9_-]{0,127}$`
 
 var projectNameRe = regexp.MustCompile(projectNamePattern)

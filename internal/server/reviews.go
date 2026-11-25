@@ -203,7 +203,7 @@ func (p *project) batchTasks(id string) func() ([]string, error) {
 	}
 }
 
-func (s *Server) reviewRoutes(mux *http.ServeMux) {
+func (s *Server) reviewRoutes(mux *routeTable) {
 	const base = "/api/v1/projects/{project}/reviews"
 	s.projectRoute(mux, "POST "+base+"/plan", func(p *project, r *http.Request) outcome {
 		var plan board.ReviewPlan

@@ -7,7 +7,7 @@ import (
 	"github.com/dualface/kander/internal/board"
 )
 
-func (s *Server) snapshotRoutes(mux *http.ServeMux) {
+func (s *Server) snapshotRoutes(mux *routeTable) {
 	s.projectRoute(mux, "POST /api/v1/projects/{project}/check", func(p *project, r *http.Request) outcome {
 		var query api.CheckQuery
 		if err := decode(r, &query); err != nil {

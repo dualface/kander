@@ -15,7 +15,7 @@ import (
 // evidenceCleanupRoutes serve the read-only cleanup scope of the Git evidence
 // of a done card and of a finished task group. The server runs no Git; the
 // client deletes the refs.
-func (s *Server) evidenceCleanupRoutes(mux *http.ServeMux) {
+func (s *Server) evidenceCleanupRoutes(mux *routeTable) {
 	s.projectRoute(mux, "GET /api/v1/projects/{project}/tasks/{task}/evidence-cleanup", func(p *project, r *http.Request) outcome {
 		value, err := p.taskEvidenceCleanup(r.Context(), r.PathValue("task"))
 		return result(http.StatusOK, value, err)

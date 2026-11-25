@@ -1,6 +1,6 @@
 # Distributed server
 
-Kander v2 ships one `kander` executable with a resident board service under `kander server` and REST client commands. Every host that works on one Git repository talks to the same server over REST, so all hosts see one board, task ownership is decided in one place, and each host executes its own tasks. This document is the design contract of the v2 branch. Normal client entry points use the service contract described below.
+Kander v2 ships one `kander` executable with a resident board service under `kander server` and REST client commands. Every host that works on one Git repository talks to the same server over REST, so all hosts see one board, task ownership is decided in one place, and each host executes its own tasks. This document is the design contract of the v2 branch. Normal client entry points use the service contract described below. Another Go process can use the same service through the [embedding API](embedding.md).
 
 ## Roles
 
@@ -85,7 +85,7 @@ All routes live below `/api/v1`. Every domain request sends `Kander-Protocol: <n
 | `POST /projects/{p}/issues/results/view`, `/save` | Completed work-set evidence and versioned result publication/decision history |
 | `GET /projects/{p}/events?cursor=&wait=` | Long-polled change log |
 
-Errors are JSON `{code, message, board_code}` with stable codes: `invalid_request`, `not_found`, `revision_conflict`, `held_by_other`, `taken_over`, `lease_invalid`, `lease_active`, `claim_required`, `evidence_incomplete`, `protocol_incompatible`, `idempotency_mismatch`, `project_mismatch`, `project_not_empty`, `board_rejected`, `not_ready`, `internal`. `board_code` carries the board package message key of a domain rejection so the client renders the same localized text as v1.
+Errors are JSON `{code, message, board_code}` with stable codes: `invalid_request`, `not_found`, `revision_conflict`, `held_by_other`, `taken_over`, `lease_invalid`, `lease_active`, `claim_required`, `evidence_incomplete`, `protocol_incompatible`, `idempotency_mismatch`, `project_mismatch`, `project_not_empty`, `board_rejected`, `not_ready`, `internal`. Embedding reserves `forbidden` and `attribution_required` as HTTP 403 codes for host policy and missing attribution, respectively. `board_code` carries the board package message key of a domain rejection so the client renders the same localized text as v1.
 
 ### Idempotency
 

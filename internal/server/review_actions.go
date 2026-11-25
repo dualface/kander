@@ -14,7 +14,7 @@ type ReviewDispositionSubmission struct {
 	ExpectedRevision uint64                  `json:"expected_revision"`
 }
 
-func (s *Server) reviewActionRoutes(mux *http.ServeMux) {
+func (s *Server) reviewActionRoutes(mux *routeTable) {
 	const base = "/api/v1/projects/{project}/reviews"
 	s.projectRoute(mux, "GET "+base+"/plans/{plan}", func(p *project, r *http.Request) outcome {
 		value, err := board.ReadReviewPlan(p.board, r.PathValue("plan"))

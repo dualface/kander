@@ -7,7 +7,7 @@ import (
 	"github.com/dualface/kander/internal/issue"
 )
 
-func (s *Server) issueRoutes(mux *http.ServeMux) {
+func (s *Server) issueRoutes(mux *routeTable) {
 	const base = "/api/v1/projects/{project}/issues"
 	s.projectRoute(mux, "GET "+base+"/index", func(p *project, r *http.Request) outcome {
 		index, err := issue.LoadIndex(p.board)

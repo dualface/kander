@@ -106,11 +106,16 @@ func (languageValue) Set(raw string) error {
 
 // Run executes os.Args-shaped arguments and returns the process exit code.
 func Run(arguments []string) int {
+	return Execute(NewRoot(), arguments)
+}
+
+// Execute runs the supplied root with os.Args-shaped arguments and returns
+// the process exit code.
+func Execute(root *cobra.Command, arguments []string) int {
 	args := arguments
 	if len(args) > 0 {
 		args = args[1:]
 	}
-	root := NewRoot()
 	config.ApplyLanguageArgument(languageArguments(root, args))
 	return command.Execute(root, args)
 }

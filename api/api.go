@@ -45,7 +45,11 @@ const (
 // Stable error codes. Clients map them to localized text; the server message
 // is a diagnostic only.
 const (
-	CodeInvalidRequest       = "invalid_request"
+	CodeInvalidRequest = "invalid_request"
+	// CodeForbidden means the embedding host denied the request.
+	CodeForbidden = "forbidden"
+	// CodeAttributionRequired means the embedding host did not identify a caller for an attributed operation.
+	CodeAttributionRequired  = "attribution_required"
 	CodeNotFound             = "not_found"
 	CodeRevisionConflict     = "revision_conflict"
 	CodeHeldByOther          = "held_by_other"

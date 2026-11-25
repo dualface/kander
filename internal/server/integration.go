@@ -297,7 +297,7 @@ func (p *project) integrationAction(key, id string, input api.IntegrationCommand
 		return result(http.StatusOK, next.Value, err)
 	}, func() (outcome, bool) { return outcome{}, false })
 }
-func (s *Server) integrationRoutes(mux *http.ServeMux) {
+func (s *Server) integrationRoutes(mux *routeTable) {
 	const base = "/api/v1/projects/{project}/integrations/{integration}"
 	s.projectRoute(mux, "GET "+base, func(p *project, r *http.Request) outcome {
 		value, err := p.integrationView(r.PathValue("integration"))

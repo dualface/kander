@@ -1,8 +1,8 @@
 // Package server implements kander server: the single-instance board server of the
 // distributed architecture. It owns every board below its data directory,
 // decides task ownership with leases, and serves the /api/v1 contract of
-// the public api package. It runs no Git, stores no code, and offers no generic file or
-// command interface; see docs/distributed-server.md.
+// the public api package. It runs no Git, stores no code, and offers no generic
+// file or command interface. See docs/distributed-server.md.
 package server
 
 import (
@@ -40,6 +40,7 @@ type Options struct {
 	TTL           time.Duration
 	RenewInterval time.Duration
 	Logger        *slog.Logger
+	Hooks         Hooks
 	// Now overrides the clock in tests.
 	Now     func() time.Time
 	Version string
@@ -61,6 +62,7 @@ type Server struct {
 	log                *slog.Logger
 	clock              func() time.Time
 	version            string
+	hooks              Hooks
 	listen             string
 	startedAt          time.Time
 	adminToken         string
@@ -96,7 +98,7 @@ func Open(o Options) (*Server, error) {
 		}
 	}()
 	s := &Server{
-		maintenance: o.maintenance, data: o.DataDir, ttl: o.TTL, renew: o.RenewInterval, log: o.Logger, clock: o.Now, version: o.Version,
+		maintenance: o.maintenance, data: o.DataDir, ttl: o.TTL, renew: o.RenewInterval, log: o.Logger, clock: o.Now, version: o.Version, hooks: o.Hooks,
 		projects: map[string]*project{}, byName: map[string]string{}, shutdown: shutdown, shutdownCancel: shutdownCancel, startedAt: time.Now().UTC(),
 	}
 	if s.ttl <= 0 {

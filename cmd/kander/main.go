@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/dualface/kander/internal/cli"
+	"github.com/dualface/kander/cli"
 )
 
 func main() {

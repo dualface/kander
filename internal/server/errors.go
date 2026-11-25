@@ -21,6 +21,8 @@ var boardCodes = map[string]string{
 
 var codeStatus = map[string]int{
 	api.CodeInvalidRequest:       http.StatusBadRequest,
+	api.CodeForbidden:            http.StatusForbidden,
+	api.CodeAttributionRequired:  http.StatusForbidden,
 	api.CodeNotFound:             http.StatusNotFound,
 	api.CodeRevisionConflict:     http.StatusConflict,
 	api.CodeHeldByOther:          http.StatusConflict,

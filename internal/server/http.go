@@ -22,7 +22,36 @@ const maxWait = 60 * time.Second
 
 // Handler returns the /api/v1 routes.
 func (s *Server) Handler() http.Handler {
+	return s.routes().handler()
+}
+
+type route struct {
+	pattern string
+	handler http.HandlerFunc
+}
+
+// routeTable is the inventory used to mount and verify the same set of routes.
+type routeTable []route
+
+func (t *routeTable) HandleFunc(pattern string, handler http.HandlerFunc) {
+	*t = append(*t, route{pattern: pattern, handler: handler})
+}
+
+func (t routeTable) handler() http.Handler {
 	mux := http.NewServeMux()
+	for _, route := range t {
+		mux.HandleFunc(route.pattern, route.handler)
+	}
+	return mux
+}
+
+func (s *Server) routes() routeTable {
+	var table routeTable
+	s.registerRoutes(&table)
+	return table
+}
+
+func (s *Server) registerRoutes(mux *routeTable) {
 	s.adminRoutes(mux)
 	mux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSONResponse(w, http.StatusOK, api.Health{Status: "alive", Ready: s.ready.Load()})
@@ -176,7 +205,6 @@ func (s *Server) Handler() http.Handler {
 	s.issueRoutes(mux)
 	s.issueResultRoutes(mux)
 	s.publicationRoutes(mux)
-	return mux
 }
 
 func result(status int, body any, err error) outcome {
@@ -205,7 +233,7 @@ func holderOf(r *http.Request) holder {
 // projectEvents is the one read route that never touches the board.
 const projectEvents = "GET /api/v1/projects/{project}/events"
 
-func (s *Server) projectRoute(mux *http.ServeMux, pattern string, fn func(*project, *http.Request) outcome) {
+func (s *Server) projectRoute(mux *routeTable, pattern string, fn func(*project, *http.Request) outcome) {
 	// The registered pattern decides the lock: a GET pattern also serves
 	// HEAD, and a request path ending in /events may still name a document.
 	read := strings.HasPrefix(pattern, http.MethodGet+" ") && pattern != projectEvents
@@ -225,7 +253,7 @@ func (s *Server) projectRoute(mux *http.ServeMux, pattern string, fn func(*proje
 }
 
 // domain wraps a domain route with the protocol handshake, the readiness
-// gate, the body limit, and the access log. The claim token is never logged.
+// gate, embedding hooks, the body limit, and the access log.
 func (s *Server) domain(fn func(*http.Request) outcome) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		started := time.Now()
@@ -237,8 +265,12 @@ func (s *Server) domain(fn func(*http.Request) outcome) http.HandlerFunc {
 		case !s.ready.Load():
 			out = outcome{err: apiError(api.CodeNotReady, "server is recovering")}
 		default:
-			r.Body = http.MaxBytesReader(w, r.Body, maxBody)
-			out = fn(r)
+			if err := s.authorize(r); err != nil {
+				out = outcome{err: err}
+			} else {
+				r.Body = http.MaxBytesReader(w, r.Body, maxBody)
+				out = fn(s.withAttribution(r))
+			}
 		}
 		status := out.status
 		switch {

@@ -135,7 +135,7 @@ func (p *project) missingDispatch(task, dispatchID string) error {
 	return apiError(api.CodeNotFound, "dispatch does not exist")
 }
 
-func (s *Server) dispatchRoutes(mux *http.ServeMux) {
+func (s *Server) dispatchRoutes(mux *routeTable) {
 	const base = "/api/v1/projects/{project}/tasks/{task}/dispatches"
 	s.projectRoute(mux, "GET "+base+"/{dispatch}", func(p *project, r *http.Request) outcome {
 		value, err := board.ReadDispatch(p.board, r.PathValue("task"), r.PathValue("dispatch"))

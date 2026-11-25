@@ -184,7 +184,7 @@ func (p *project) saveIssueResult(ctx context.Context, key string, input api.Iss
 		return result(http.StatusOK, resultState, err)
 	}, func() (outcome, bool) { return outcome{}, false })
 }
-func (s *Server) issueResultRoutes(mux *http.ServeMux) {
+func (s *Server) issueResultRoutes(mux *routeTable) {
 	const base = "/api/v1/projects/{project}/issues/results"
 	s.projectRoute(mux, "POST "+base+"/view", func(p *project, r *http.Request) outcome {
 		var input api.IssueResultQuery

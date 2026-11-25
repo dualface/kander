@@ -105,7 +105,7 @@ func (p *project) validatePublication(tx *board.Transaction, value api.Publicati
 	return nil
 }
 
-func (s *Server) publicationRoutes(mux *http.ServeMux) {
+func (s *Server) publicationRoutes(mux *routeTable) {
 	const base = "/api/v1/projects/{project}/publications"
 	s.projectRoute(mux, "GET "+base+"/{publication}", func(p *project, r *http.Request) outcome {
 		value, err := p.readPublication(r.PathValue("publication"))

@@ -79,7 +79,7 @@ func (p *project) changedMembersHold(tx *board.Transaction, h holder) error {
 	}
 	return nil
 }
-func (s *Server) groupRoutes(mux *http.ServeMux) {
+func (s *Server) groupRoutes(mux *routeTable) {
 	const base = "/api/v1/projects/{project}/groups/{group}"
 	route := func(pattern string, handler func(*project, *http.Request) outcome) {
 		s.projectRoute(mux, pattern, func(p *project, r *http.Request) outcome {

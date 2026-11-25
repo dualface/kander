@@ -29,6 +29,7 @@ type eventLog struct {
 	next    uint64
 	window  []api.Event
 	changed chan struct{}
+	subs    map[eventSink]struct{}
 }
 
 func openEventLog(root string) (*eventLog, error) {
@@ -64,8 +65,8 @@ func (l *eventLog) append(events ...api.Event) (err error) {
 		if err != nil {
 			// Any observer that could have missed a committed write must re-read.
 			_ = l.rotate()
-			close(l.changed)
-			l.changed = make(chan struct{})
+			l.resetSubscribersLocked()
+			l.wakeLocked()
 		}
 	}()
 	file, err := fs.OpenAppendFile(l.root, filepath.Join(l.root, l.rel))
@@ -112,8 +113,10 @@ func (l *eventLog) append(events ...api.Event) (err error) {
 			return err
 		}
 	}
-	close(l.changed)
-	l.changed = make(chan struct{})
+	for sub := range l.subs {
+		sub.publish(l, events)
+	}
+	l.wakeLocked()
 	return nil
 }
 
@@ -121,7 +124,16 @@ func (l *eventLog) append(events ...api.Event) (err error) {
 func (l *eventLog) cursor() string {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return l.epoch + ":" + strconv.FormatUint(l.next-1, 10)
+	return l.cursorLocked(l.next - 1)
+}
+
+func (l *eventLog) cursorLocked(seq uint64) string {
+	return l.epoch + ":" + strconv.FormatUint(seq, 10)
+}
+
+func (l *eventLog) wakeLocked() {
+	close(l.changed)
+	l.changed = make(chan struct{})
 }
 
 // read returns the events after cursor, waiting up to wait for at least one.
@@ -147,7 +159,7 @@ func (l *eventLog) read(ctx context.Context, cursor string, wait time.Duration) 
 }
 
 func (l *eventLog) pageLocked(cursor string) (api.EventPage, bool) {
-	current := l.epoch + ":" + strconv.FormatUint(l.next-1, 10)
+	current := l.cursorLocked(l.next - 1)
 	epoch, raw, ok := strings.Cut(cursor, ":")
 	after, err := strconv.ParseUint(raw, 10, 64)
 	if !ok || err != nil || epoch != l.epoch || after >= l.next {
@@ -174,8 +186,8 @@ func (l *eventLog) reset() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	err := l.rotate()
-	close(l.changed)
-	l.changed = make(chan struct{})
+	l.resetSubscribersLocked()
+	l.wakeLocked()
 	return err
 }
 

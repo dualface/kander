@@ -1,4 +1,4 @@
-package main
+package commands
 
 import (
 	"context"
@@ -22,19 +22,19 @@ import (
 	"github.com/dualface/kander/internal/version"
 )
 
-func init() { cli.Register(newServerCommand) }
+func init() {
+	cli.Register(func() *cobra.Command { return NewServerCommand(server.RunForeground) })
+}
 
-var runForegroundServer = server.RunForeground
-
-// newServerCommand builds kander server: the service lifecycle commands, which this package owns,
+// NewServerCommand builds kander server: the service lifecycle commands, which this package owns,
 // and the offline commands that hold the data directory lock, which internal/server owns.
-func newServerCommand() *cobra.Command {
+func NewServerCommand(runForeground func(context.Context, server.Options, string) error) *cobra.Command {
 	var start servicectl.StartOptions
 	var foreground bool
 	startCommand := command.Streaming(&cobra.Command{
 		Use:  "start",
 		Args: command.Args(0, 0),
-		RunE: func(*cobra.Command, []string) error { return command.Exit(runStart(start, foreground)) },
+		RunE: func(*cobra.Command, []string) error { return command.Exit(runStart(start, foreground, runForeground)) },
 	})
 	startFlags := startCommand.Flags()
 	startFlags.StringVar(&start.DataDir, "data", "", "")
@@ -125,7 +125,7 @@ func (l *serverLog) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func runStart(o servicectl.StartOptions, foreground bool) int {
+func runStart(o servicectl.StartOptions, foreground bool, runForeground func(context.Context, server.Options, string) error) int {
 	cfg, target, err := serverTargetConfig()
 	if err != nil {
 		return command.Fail(err)
@@ -152,7 +152,7 @@ func runStart(o servicectl.StartOptions, foreground bool) int {
 			} else {
 				logs.ready()
 			}
-			err = runForegroundServer(context.Background(), options, o.Listen)
+			err = runForeground(context.Background(), options, o.Listen)
 		}
 		if err != nil {
 			return failServer(err)

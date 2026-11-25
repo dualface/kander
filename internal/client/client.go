@@ -1,5 +1,5 @@
 // Package client is the kander side of /api/v1. It speaks only the typed
-// contract of internal/api, retries transport failures with the same
+// contract of the public api package, retries transport failures with the same
 // idempotency key, and never touches a local board.
 package client
 
@@ -42,7 +42,7 @@ func New(serverURL, clientID string) (*Client, error) {
 	if !api.ValidIdentity(clientID) {
 		return nil, fmt.Errorf("client id %q is not a valid identity", clientID)
 	}
-	return &Client{base: u, http: &http.Client{Timeout: 90 * time.Second}, clientID: clientID, Retries: 3, Backoff: 200 * time.Millisecond}, nil
+	return &Client{base: u, http: &http.Client{Timeout: 90 * time.Second, Transport: configuredTransport()}, clientID: clientID, Retries: 3, Backoff: 200 * time.Millisecond}, nil
 }
 
 // ClientID returns the identity this client sends.

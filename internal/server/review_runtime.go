@@ -73,7 +73,7 @@ func prepareIdentityDigest(request api.ReviewPrepare, recordedVersion string) st
 	return requestDigest("review-prepare", request)
 }
 
-func (s *Server) reviewRuntimeRoutes(mux *http.ServeMux) {
+func (s *Server) reviewRuntimeRoutes(mux *routeTable) {
 	const base = "/api/v1/projects/{project}/reviews/runtime"
 	s.projectRoute(mux, "POST "+base+"/prepare", func(p *project, r *http.Request) outcome {
 		var request api.ReviewPrepare
