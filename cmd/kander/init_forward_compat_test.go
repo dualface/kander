@@ -6,9 +6,11 @@ import (
 	"log/slog"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
+	"github.com/dualface/kander/internal/client"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/server"
@@ -56,5 +58,42 @@ func TestInitKeepsUnknownOverlayKeys(t *testing.T) {
 	}
 	if name, _ := config.OverlayGet(overlay, "project", "name"); name != "keep-unknown" {
 		t.Fatalf("project.name not written: %s", raw)
+	}
+}
+
+// A project registered without a Git remote takes the remote of the first
+// checkout that runs kander init against it.
+func TestInitBindsTheRemoteOfAnUnboundProject(t *testing.T) {
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	t.Setenv(remote.EnvClientHome, filepath.Join(t.TempDir(), "client"))
+	if _, err := config.Save(config.DefaultConfig()); err != nil {
+		t.Fatal(err)
+	}
+	srv, err := server.Open(server.Options{DataDir: t.TempDir(), Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = srv.Close() })
+	httpServer := httptest.NewServer(srv.Handler())
+	t.Cleanup(httpServer.Close)
+	c, err := client.New(httpServer.URL, "unbound-registrar")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info, err := c.Register(t.Context(), "bind-remote", ""); err != nil || info.Remote != "" {
+		t.Fatalf("register without a remote: %+v, %v", info, err)
+	}
+	const origin = "https://github.com/example/bind-remote.git"
+	dir := t.TempDir()
+	for _, args := range [][]string{{"init", "-q", dir}, {"-C", dir, "remote", "add", "origin", origin}} {
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	t.Chdir(dir)
+	runKander(t, "init", "--server", httpServer.URL, "--project", "bind-remote").require(t, "init in a checkout with an origin")
+	found, err := c.ProjectByName(t.Context(), "bind-remote")
+	if err != nil || found.Remote != origin {
+		t.Fatalf("project after init: %+v, %v", found, err)
 	}
 }

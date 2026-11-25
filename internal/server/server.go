@@ -297,8 +297,8 @@ func (s *Server) register(req api.RegisterProject) (api.Project, bool, error) {
 
 // bindRemote gives a project registered without a Git remote the first remote
 // a registration brings, as a new project would have taken it. The project
-// lock comes first: request handlers read the remote under it, and they take
-// s.mu only briefly before it, never while holding it.
+// lock comes first: project code reads the remote under it, and request
+// handlers take s.mu only briefly before it, never while holding it.
 func (s *Server) bindRemote(p *project, remote string) (api.Project, bool, error) {
 	if err := p.lockBoard(); err != nil {
 		return api.Project{}, false, err

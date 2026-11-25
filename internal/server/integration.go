@@ -105,13 +105,17 @@ func (p *project) claimIntegration(key, id string, input api.IntegrationRequest,
 	if err != nil {
 		return outcome{err: err}
 	}
-	if id != api.IntegrationID(input.TargetRef) || !api.ValidIdentity(h.clientID) || p.info.Remote == "" {
+	if id != api.IntegrationID(input.TargetRef) || !api.ValidIdentity(h.clientID) {
 		return outcome{err: apiError(api.CodeInvalidRequest, "integration must bind a registered common remote and target")}
 	}
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
 	defer p.mu.Unlock()
+	// The registered remote can be bound late (bindRemote), so read it under the lock.
+	if p.info.Remote == "" {
+		return outcome{err: apiError(api.CodeInvalidRequest, "integration must bind a registered common remote and target")}
+	}
 	operation := "integration-claim:" + id
 	out := p.idempotent(key, operation, input, func() outcome {
 		previous, found, err := p.readIntegration(id)
