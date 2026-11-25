@@ -61,5 +61,6 @@
   "board.refusal_task_state": "期望状态 {{.V0}}，当前状态 {{.V1}}",
   "board.refusal_next_rebind_none": "下一步：没有成员的周期发生变化，请求不需要 rebind_cycles；只写 kander review progress 在 rebind_cycles 里列出的成员。",
   "board.refusal_wrapup_named": "author 和 reason 都必须给出",
-  "board.refusal_next_dispatch": "下一步：用 kander dispatch show {{.V0}} {{.V1}} 读取该轮，确认决定仍然成立，再重写请求。"
+  "board.refusal_next_dispatch": "下一步：用 kander dispatch show {{.V0}} {{.V1}} 读取该轮，确认决定仍然成立，再重写请求。",
+  "board.refusal_next_sealed": "下一步：plan {{.V0}} 保持封存。计划成员在已关闭的最终目标上完成；之后的提交或契约改动放到新卡中，并建立新卡自己的计划（KANDER-REVIEW-RULES.md \"Carrying Conclusions Forward\"）。"
 }

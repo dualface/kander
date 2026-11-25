@@ -196,7 +196,8 @@ func admitRefusal(p ReviewPlan, st reviewplan.State, x ReviewPlanExtension, ev r
 	if !ev.Cas {
 		parts = append(parts, t("board.refusal_revision_plan", p.PlanID, x.ExpectedRevision, p.Revision))
 	}
-	if st.Sealed && !(ev.OtherOp || ev.BatchOnly && ev.Owed) {
+	sealed := st.Sealed && !(ev.OtherOp || ev.BatchOnly && ev.Owed)
+	if sealed {
 		parts = append(parts, t("board.refusal_plan_sealed", p.PlanID))
 	}
 	if !st.Planned {
@@ -208,6 +209,9 @@ func admitRefusal(p ReviewPlan, st reviewplan.State, x ReviewPlanExtension, ev r
 	next := ""
 	if !ev.Cas {
 		next = t("board.refusal_next_plan", p.PlanID)
+	} else if sealed {
+		// A sealed plan takes no later batch; the work continues in a new card.
+		next = t("board.refusal_next_sealed", p.PlanID)
 	}
 	return reviewRefusal("plan extension CAS/sealed conflict", next, parts...)
 }
