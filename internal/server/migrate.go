@@ -80,7 +80,7 @@ func (s *Server) ImportWithProgress(ctx context.Context, name, remote, source st
 		return result, err
 	}
 	if importPathsOverlap(source, s.data) {
-		return result, errors.New("source board and server data directories must not overlap")
+		return result, apiError(api.CodeInvalidRequest, "source board and server data directories must not overlap")
 	}
 	if err := board.RecoverTransactions(source); err != nil {
 		return result, fmt.Errorf("recover the source board first: %w", err)
@@ -173,7 +173,7 @@ func (s *Server) ImportWithProgress(ctx context.Context, name, remote, source st
 			return err
 		}
 		if staged.digest != snapshot || !slices.Equal(staged.files, files) {
-			return errors.New("staged board differs from the source; nothing was published")
+			return importRejected("staged board differs from the source; nothing was published")
 		}
 		progress.phase(api.ImportPhaseCheck)
 		defaults, err := board.DefaultMissingSize(staging)
@@ -199,7 +199,7 @@ func (s *Server) ImportWithProgress(ctx context.Context, name, remote, source st
 			return fmt.Errorf("staged board check failed: %w", err)
 		}
 		if len(check.Blocking) > 0 {
-			return fmt.Errorf("staged board fails check; nothing was published: %s", strings.Join(check.Blocking, "; "))
+			return importRejected("staged board fails check; nothing was published: " + strings.Join(check.Blocking, "; ") + "; " + importCheckHint)
 		}
 		progress.phase(api.ImportPhasePublish)
 		// A non-cooperating external writer must also invalidate publication.
@@ -208,7 +208,7 @@ func (s *Server) ImportWithProgress(ctx context.Context, name, remote, source st
 			return err
 		}
 		if again != snapshot {
-			return errors.New("source board changed during import; nothing was published")
+			return importRejected("source board changed during import; nothing was published")
 		}
 		// Validation uses read locks, which may add empty lock files. They carry no
 		// evidence, but must be removed from staging to retain the staged tree.
@@ -259,7 +259,7 @@ func importWarnings(findings []board.ImportFinding) []api.ImportWarning {
 // tree except for the spec.md of the defaulted cards, which must be the source
 // text with the one inserted SIZE line.
 func verifyDefaultedTree(source string, src, staged treeScan, defaults []board.SizeDefault) error {
-	differs := errors.New("staged board differs from the source beyond the default SIZE lines; nothing was published")
+	differs := importRejected("staged board differs from the source beyond the default SIZE lines; nothing was published")
 	if !slices.Equal(src.files, staged.files) {
 		return differs
 	}
@@ -281,6 +281,18 @@ func verifyDefaultedTree(source string, src, staged treeScan, defaults []board.S
 		}
 	}
 	return nil
+}
+
+// importCheckHint follows the blocking problems of a refused import. A
+// problem of an active card is either a card to fix or evidence that a review
+// or an agent was still writing when the source was copied.
+const importCheckHint = "fix these cards on the source board, or wait until no review or agent writes to it, then import again"
+
+// importRejected is a deterministic refusal of the source board. It is a
+// domain rejection, so the client receives the reason instead of the generic
+// internal error.
+func importRejected(message string) error {
+	return apiError(api.CodeBoardRejected, message)
 }
 
 func projectNotEmpty(name string) error {
