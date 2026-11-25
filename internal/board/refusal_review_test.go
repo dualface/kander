@@ -83,7 +83,7 @@ func TestPlanExtensionRefusals(t *testing.T) {
 		p := gatePlan(t, root, []string{id}, noReviewRequirements())
 		batch := ReviewPlanBatch{BatchID: "second", PreviousBatchID: "batch", TaskIDs: []string{id}, Base: strings.Repeat("b", 40), TargetCommit: strings.Repeat("c", 40), Requirements: noReviewRequirements()}
 		err := ExtendReviewPlan(root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: 1, Batch: &batch, Author: "coordinator", Basis: "more"})
-		requireRefusal(t, err, "board.review_evidence_invalid", []string{"plan extension CAS/sealed conflict", "plan " + p.PlanID + " is sealed", "rebind_cycles", "release_obligation", "append-cycle-batch", "Next step: plan " + p.PlanID + " stays sealed", "new card", "Carrying Conclusions Forward"}, "expected_revision", "at revision", "kander show --document reviews/plan.json")
+		requireRefusal(t, err, "board.review_evidence_invalid", []string{"plan extension CAS/sealed conflict", "plan " + p.PlanID + " is sealed", "rebind_cycles", "release_obligation", "append-cycle-batch", "Next step: plan " + p.PlanID + " stays sealed", "send that batch again without seal", "new card", "Carrying Conclusions Forward"}, "expected_revision", "at revision", "kander show --document reviews/plan.json")
 	})
 	t.Run("a plan that is not there", func(t *testing.T) {
 		root := tempBoard(t)

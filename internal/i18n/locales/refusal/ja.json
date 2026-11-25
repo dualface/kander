@@ -62,5 +62,5 @@
   "board.refusal_next_rebind_none": "次の手順: サイクルが変わったメンバーはないため、リクエストに rebind_cycles は不要です。kander review progress が rebind_cycles に示すメンバーだけを指定してください。",
   "board.refusal_wrapup_named": "author と reason の両方が必要です",
   "board.refusal_next_dispatch": "次の手順: kander dispatch show {{.V0}} {{.V1}} でラウンドを読み、決定がまだ有効か確認して、リクエストを書き直してください。",
-  "board.refusal_next_sealed": "次の手順: plan {{.V0}} は sealed のままです。メンバーはクローズ済みの最終ターゲットで完了させ、以降のコミットや契約変更は独自の計画を持つ新しいカードで扱ってください（KANDER-REVIEW-RULES.md \"Carrying Conclusions Forward\"）。"
+  "board.refusal_next_sealed": "次の手順: plan {{.V0}} は sealed のままです。kander review progress が要求したバッチのメンバーを append-cycle-batch と示している場合は、seal を外してそのバッチを再送してください。それ以外の場合、メンバーはクローズ済みの最終ターゲットで完了させ、以降のコミットや契約変更は独自の計画を持つ新しいカードで扱ってください（KANDER-REVIEW-RULES.md \"Carrying Conclusions Forward\"）。"
 }
