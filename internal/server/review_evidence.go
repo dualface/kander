@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-func (s *Server) reviewEvidenceRoutes(mux *http.ServeMux) {
+func (s *Server) reviewEvidenceRoutes(mux *routeTable) {
 	s.projectRoute(mux, "POST /api/v1/projects/{project}/reviews/members", func(p *project, r *http.Request) outcome {
 		var ids []string
 		if err := decode(r, &ids); err != nil {
@@ -14,7 +14,7 @@ func (s *Server) reviewEvidenceRoutes(mux *http.ServeMux) {
 		if err := p.lockBoard(); err != nil {
 			return outcome{err: err}
 		}
-		defer p.mu.Unlock()
+		defer p.unlockBoard()
 		remaining, err := board.ReviewRemainingMembers(p.board, ids)
 		return result(http.StatusOK, remaining, err)
 	})

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"reflect"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 )
 
@@ -14,12 +14,12 @@ func (p *project) groupWrite(key, operation, group string, request any, h holder
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	return p.idempotent(key, operation, request, func() outcome {
 		if _, err := p.requireGroup(group, h); err != nil {
 			return outcome{err: err}
 		}
-		guard := board.TransactionExtension{Groups: []string{serviceGroup}, Before: func(*board.Transaction) error { _, err := p.requireGroup(group, h); return err }, After: func(tx *board.Transaction) error {
+		guard := board.TransactionExtension{Groups: []string{serviceGroup}, Published: p.indexPublication, Before: func(*board.Transaction) error { _, err := p.requireGroup(group, h); return err }, After: func(tx *board.Transaction) error {
 			c, err := p.groupLease(group, h)
 			if err != nil {
 				return err
@@ -79,7 +79,7 @@ func (p *project) changedMembersHold(tx *board.Transaction, h holder) error {
 	}
 	return nil
 }
-func (s *Server) groupRoutes(mux *http.ServeMux) {
+func (s *Server) groupRoutes(mux *routeTable) {
 	const base = "/api/v1/projects/{project}/groups/{group}"
 	route := func(pattern string, handler func(*project, *http.Request) outcome) {
 		s.projectRoute(mux, pattern, func(p *project, r *http.Request) outcome {
@@ -118,7 +118,7 @@ func (s *Server) groupRoutes(mux *http.ServeMux) {
 		if err := p.lockBoard(); err != nil {
 			return outcome{err: err}
 		}
-		defer p.mu.Unlock()
+		defer p.unlockBoard()
 		facts, err := board.CollectCoordinatorGitFacts(r.Context(), p.board, request)
 		return result(http.StatusOK, facts, err)
 	})

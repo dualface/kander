@@ -1,7 +1,6 @@
 package remote
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -12,7 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/client"
 	"github.com/dualface/kander/internal/command"
 )
@@ -78,21 +77,8 @@ func NewRequestCommand() *cobra.Command {
 	return send
 }
 
-// openRequestSession opens the project session of one request operation; release must be
-// deferred by the caller.
-func openRequestSession() (ctx context.Context, s *Session, release func(), err error) {
-	base, cancel := commandContext()
-	s, _, err = open(base)
-	if err != nil {
-		cancel()
-		return nil, nil, nil, err
-	}
-	ctx, finish := s.OperationContext(base)
-	return ctx, s, func() { finish(); cancel() }, nil
-}
-
 func runRequestShow(task, id string) error {
-	ctx, s, release, err := openRequestSession()
+	ctx, s, release, err := openOperationSession()
 	if err != nil {
 		return fail(err)
 	}
@@ -110,7 +96,7 @@ func runRequestShow(task, id string) error {
 }
 
 func runRequestList(task string) error {
-	ctx, s, release, err := openRequestSession()
+	ctx, s, release, err := openOperationSession()
 	if err != nil {
 		return fail(err)
 	}
@@ -131,7 +117,7 @@ func runRequestList(task string) error {
 }
 
 func runRequestAnswer(task, id, status, note string) error {
-	ctx, s, release, err := openRequestSession()
+	ctx, s, release, err := openOperationSession()
 	if err != nil {
 		return fail(err)
 	}
@@ -173,7 +159,7 @@ func runRequestSend(task, kind, message string) error {
 	if err := CheckRequestMessage(message); err != nil {
 		return fail(err)
 	}
-	ctx, s, release, err := openRequestSession()
+	ctx, s, release, err := openOperationSession()
 	if err != nil {
 		return fail(err)
 	}

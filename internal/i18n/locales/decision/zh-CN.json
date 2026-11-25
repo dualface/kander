@@ -1,0 +1,9 @@
+{
+  "board.decision_invalid": "决策字段无效：{{.V0}}。",
+  "board.decision_trash": "不能更改 trash 状态卡片的决策：{{.V0}}。",
+  "board.decision_corrupt": "卡片 {{.V0}} 的受管决策记录不一致。",
+  "board.update_hint_decision_mode": "下一步：按 kander show 的输出保留此行。请用 kander decision mode 修改。",
+  "board.update_hint_decisions_section": "下一步：按 kander show 的输出保留 DECISIONS。请用 kander decision record 追加决定。",
+  "remote.decision_input": "决策输入必须是单个字段有效的 UTF-8 JSON 对象，最多 {{.V0}} 字节。",
+  "board.decision_reserved": "该卡只允许 ASSIGNEE 作决定，不能记录 Leader 代决。"
+}

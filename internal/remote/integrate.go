@@ -7,7 +7,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/client"
 )
 

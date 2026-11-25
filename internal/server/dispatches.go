@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 )
 
@@ -14,7 +14,7 @@ func (p *project) dispatchWrite(key, action, task string, input api.DispatchComm
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	operation := "dispatch:" + task + ":" + action
 	return p.idempotent(key, operation, input, func() outcome {
 		if _, err := p.requireHolder(task, h); err != nil {
@@ -29,7 +29,7 @@ func (p *project) dispatchWrite(key, action, task string, input api.DispatchComm
 			}
 		}
 		var proposal *dispatchProposal
-		guard := board.TransactionExtension{Groups: []string{serviceGroup}, Before: func(tx *board.Transaction) error {
+		guard := board.TransactionExtension{Groups: []string{serviceGroup}, Published: p.indexPublication, Before: func(tx *board.Transaction) error {
 			if _, err := p.requireHolder(task, h); err != nil {
 				return err
 			}
@@ -135,7 +135,7 @@ func (p *project) missingDispatch(task, dispatchID string) error {
 	return apiError(api.CodeNotFound, "dispatch does not exist")
 }
 
-func (s *Server) dispatchRoutes(mux *http.ServeMux) {
+func (s *Server) dispatchRoutes(mux *routeTable) {
 	const base = "/api/v1/projects/{project}/tasks/{task}/dispatches"
 	s.projectRoute(mux, "GET "+base+"/{dispatch}", func(p *project, r *http.Request) outcome {
 		value, err := board.ReadDispatch(p.board, r.PathValue("task"), r.PathValue("dispatch"))

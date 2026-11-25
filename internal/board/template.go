@@ -23,6 +23,7 @@ var contractTemplates = template.Must(
 type templateFields struct {
 	Type, Size, TaskGroup, Language, CreatedAt, Owner, Session, Window string
 	StartedAt, FinishedAt, TaskBranch, Result                          string
+	Submitter, Assignee, DecisionMode                                  string
 }
 
 type templateSections struct {
@@ -37,28 +38,32 @@ type templateBodies struct {
 }
 
 type templateData struct {
-	Title              string
-	Type               string
-	Size               string
-	Language           string
-	LanguageConstraint string
-	Created            string
-	Placeholder        string
-	F                  templateFields
-	S                  templateSections
-	Bodies             templateBodies
+	Title               string
+	Type                string
+	Size                string
+	Language            string
+	LanguageConstraint  string
+	Created             string
+	Submitter           string
+	DefaultDecisionMode DecisionMode
+	Placeholder         string
+	F                   templateFields
+	S                   templateSections
+	Bodies              templateBodies
 }
 
 func newTemplateData(title, taskType, language, created string) templateData {
 	return templateData{
-		Title:              title,
-		Type:               taskType,
-		Language:           language,
-		LanguageConstraint: config.LanguageConstraint(language),
-		Created:            created,
-		Placeholder:        Placeholder,
+		Title:               title,
+		Type:                taskType,
+		Language:            language,
+		LanguageConstraint:  config.LanguageConstraint(language),
+		Created:             created,
+		DefaultDecisionMode: DecisionModeLeader,
+		Placeholder:         Placeholder,
 		F: templateFields{
 			Type: FieldType, Size: FieldSize, TaskGroup: FieldTaskGroup, Language: FieldLanguage, CreatedAt: FieldCreatedAt,
+			Submitter: FieldSubmitter, Assignee: FieldAssignee, DecisionMode: FieldDecisionMode,
 			Owner: FieldOwner, Session: FieldSession, Window: FieldWindow,
 			StartedAt: FieldStartedAt, FinishedAt: FieldFinishedAt,
 			TaskBranch: FieldTaskBranch, Result: FieldResult,
@@ -84,8 +89,10 @@ func renderTemplate(name string, data templateData) string {
 }
 
 // renderContract renders the card skeleton; language is the agent communication language recorded in the LANGUAGE field.
-func renderContract(title, taskType, language string) string {
-	return renderTemplate("contract.md.tmpl", newTemplateData(title, typeNames[taskType], language, nowStamp()))
+func renderContract(title, taskType, language, submitter string) string {
+	data := newTemplateData(title, typeNames[taskType], language, nowStamp())
+	data.Submitter = submitter
+	return renderTemplate("contract.md.tmpl", data)
 }
 
 func smallTaskExtra() string {
@@ -93,11 +100,12 @@ func smallTaskExtra() string {
 }
 
 // renderImportedContract renders the card of an imported source. The title and
-// the section bodies are the only caller input; the skeleton, metadata fields
-// and section headings always come from this template.
+// the section bodies describe the source. The skeleton and section headings
+// always come from this template.
 func renderImportedContract(request ImportRequest, size string) string {
 	data := newTemplateData(request.Title, typeNames[request.Kind], request.Language, nowStamp())
 	data.Size = size
+	data.Submitter = request.Submitter
 	data.Bodies = templateBodies{
 		Goal:               request.Contract.Goal,
 		UserDecisions:      request.Contract.UserDecisions,

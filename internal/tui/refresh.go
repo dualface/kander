@@ -227,7 +227,7 @@ func (a *App) applyDetailTask(next Task, err error) bool {
 		a.Detail.Title != next.Title ||
 		a.Detail.Time != next.Time ||
 		a.Detail.State != next.State ||
-		a.Detail.Assignee != next.Assignee ||
+		a.Detail.Owner != next.Owner ||
 		a.Detail.Kind != next.Kind ||
 		a.Detail.TaskGroup != next.TaskGroup ||
 		a.Detail.Type != next.Type

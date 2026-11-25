@@ -23,13 +23,22 @@ func setMetadata(text, field, value string) (string, error) {
 	}
 	line := RenderField(field, value)
 	if len(matches) == 1 {
-		return text[:matches[0][0]] + line + text[matches[0][1]:], nil
+		start, end := matches[0][0], matches[0][1]
+		if text[end-1] == '\r' {
+			end--
+		}
+		return text[:start] + line + text[end:], nil
 	}
 	at := strings.Index(text, "\n## ")
+	ending := "\n"
+	if at > 0 && text[at-1] == '\r' {
+		at--
+		ending = "\r\n"
+	}
 	if at < 0 {
 		at = len(text)
 	}
-	return text[:at] + "\n" + line + "\n" + text[at:], nil
+	return text[:at] + ending + line + ending + text[at:], nil
 }
 func moveMetadata(text, from, to string, o MoveOptions) (string, error) {
 	var err error
@@ -95,7 +104,7 @@ type UpdateOptions struct {
 	Authorization    ExecutionAuthorization
 }
 
-var managedFields = []string{FieldOwner, FieldSession, FieldWindow, FieldStartedAt, FieldFinishedAt, FieldResult, FieldLanguage, FieldCreatedAt, "REVISION", "OPERATION_ID", "EXECUTION_EPOCH", "DISPATCH_ID", "REVIEWS"}
+var managedFields = []string{FieldOwner, FieldSession, FieldWindow, FieldStartedAt, FieldFinishedAt, FieldResult, FieldLanguage, FieldCreatedAt, FieldSubmitter, FieldAssignee, FieldDecisionMode, "REVISION", "OPERATION_ID", "EXECUTION_EPOCH", "DISPATCH_ID", "REVIEWS"}
 var frozenSections = []string{SectionGoal, SectionUserDecisions, SectionExpectedOutcome, SectionAcceptanceCriteria, SectionOutOfScope}
 
 func frozenContract(text string) map[string]string {
@@ -139,7 +148,7 @@ func validSpecUpdate(id, old, next, state, decision string) (string, error) {
 			return "", withUpdateHint(kanbanError("board.transaction_invalid", field), "board.update_hint_duplicate")
 		}
 	}
-	for _, section := range append(append([]string(nil), frozenSections...), SectionDiscussion, "REVIEWS", "DISPATCHES", "CONTRACT_DECISIONS", "LIFECYCLE_DECISION") {
+	for _, section := range append(append([]string(nil), frozenSections...), SectionDiscussion, "REVIEWS", SectionDecisions, "DISPATCHES", "CONTRACT_DECISIONS", "LIFECYCLE_DECISION") {
 		re := regexp.MustCompile(`(?m)^## ` + regexp.QuoteMeta(section) + `[ \t\r]*$`)
 		if len(re.FindAllStringIndex(next, -1)) > 1 {
 			return "", withUpdateHint(kanbanError("board.transaction_invalid", section), "board.update_hint_duplicate")
@@ -163,7 +172,7 @@ func validSpecUpdate(id, old, next, state, decision string) (string, error) {
 			return "", withUpdateHint(kanbanError("board.transaction_managed", field), managedFieldHint(field))
 		}
 	}
-	for _, section := range []string{"REVIEWS", "DISPATCHES", "REVIEW_DISPOSITIONS", "CONTRACT_DECISIONS", "LIFECYCLE_DECISION"} {
+	for _, section := range []string{"REVIEWS", SectionDecisions, "DISPATCHES", "REVIEW_DISPOSITIONS", "CONTRACT_DECISIONS", "LIFECYCLE_DECISION"} {
 		a, ok := SectionBody(old, section)
 		b, present := SectionBody(next, section)
 		if ok != present || a != b {
@@ -210,6 +219,12 @@ func managedFieldHint(field string) string {
 		return "board.update_hint_result"
 	case FieldLanguage, FieldCreatedAt:
 		return "board.update_hint_created"
+	case FieldSubmitter:
+		return "board.update_hint_submitter"
+	case FieldAssignee:
+		return "board.update_hint_assignee"
+	case FieldDecisionMode:
+		return "board.update_hint_decision_mode"
 	case "DISPATCH_ID", "EXECUTION_EPOCH":
 		return "board.update_hint_dispatch_field"
 	}
@@ -218,6 +233,7 @@ func managedFieldHint(field string) string {
 
 var managedSectionHints = map[string]string{
 	"REVIEWS":             "board.update_hint_reviews_section",
+	SectionDecisions:      "board.update_hint_decisions_section",
 	"DISPATCHES":          "board.update_hint_dispatches_section",
 	"REVIEW_DISPOSITIONS": "board.update_hint_dispositions_section",
 	"CONTRACT_DECISIONS":  "board.update_hint_contract_decisions_section",
@@ -227,7 +243,7 @@ var managedSectionHints = map[string]string{
 // Producer-owned paths are excluded from ordinary updates and migration edits.
 func managedDocumentPart(part string) bool {
 	switch strings.ToLower(part) {
-	case "reviews", "dispatches", "manifest.json", "checkpoint.json", "index.json":
+	case "reviews", "decisions", "dispatches", "manifest.json", "checkpoint.json", "index.json":
 		return true
 	}
 	return false

@@ -25,7 +25,7 @@ const (
 // importFields lists every metadata field a section body must never rewrite.
 var importFields = []string{
 	FieldType, FieldSize, FieldTaskGroup, FieldLanguage, FieldCreatedAt,
-	FieldOwner, FieldSession, FieldWindow, FieldStartedAt, FieldFinishedAt,
+	FieldSubmitter, FieldAssignee, FieldDecisionMode, FieldOwner, FieldSession, FieldWindow, FieldStartedAt, FieldFinishedAt,
 	FieldTaskBranch, FieldResult,
 }
 
@@ -69,6 +69,8 @@ type ImportRequest struct {
 	Kind string
 	// Language is the LANGUAGE field value, already validated by the caller.
 	Language string
+	// Submitter is the initial submission identity selected by the caller.
+	Submitter string
 	// Large selects the SIZE field only; imported cards are always directory
 	// cards so a later large card can grow plan.md and report.md in place.
 	Large bool
@@ -121,13 +123,17 @@ func ReadCardFile(entry Entry, name string) ([]byte, bool, error) {
 // recoverable transaction, or returns the card already bound to the source key.
 // Concurrent imports of the same source serialize on the exclusive board lock:
 // exactly one card is published and every other call returns that card.
-func ImportTask(root string, request ImportRequest) (ImportResult, error) {
-	return importTask(nil, root, request)
+func ImportTask(root string, request ImportRequest, extensions ...TransactionExtension) (ImportResult, error) {
+	return importTask(nil, root, request, extensions...)
 }
 
 // importTask takes an optional publication checkpoint so interruption tests can
 // stop between the journal write and the commit.
-func importTask(checkpoint func(string) error, root string, request ImportRequest) (result ImportResult, err error) {
+func importTask(checkpoint func(string) error, root string, request ImportRequest, extensions ...TransactionExtension) (result ImportResult, err error) {
+	request.Submitter, err = personField(FieldSubmitter, request.Submitter)
+	if err != nil {
+		return result, err
+	}
 	if err = validateImportRequest(request); err != nil {
 		return result, err
 	}
@@ -202,7 +208,7 @@ func importTask(checkpoint func(string) error, root string, request ImportReques
 		tx.record.Entries = append(tx.record.Entries, EntryChange{To: rel, Kind: "large", Text: text})
 		result = ImportResult{TaskID: id, State: "backlog", Path: target, SourceKey: request.SourceKey}
 		return nil
-	})
+	}, extensions...)
 	if err != nil {
 		return ImportResult{}, err
 	}

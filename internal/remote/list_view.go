@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 )
 
@@ -24,17 +24,22 @@ type listSnapshot struct {
 	Root          string     `json:"root"`
 	ProjectID     string     `json:"project_id"`
 	Cursor        string     `json:"cursor"`
+	NextCursor    string     `json:"next_cursor,omitempty"`
 	Tasks         []listTask `json:"tasks"`
 }
 
 // machineList retains the CLI snapshot contract used by dsh. Terminal facts
 // are observed only for this host's claims; a foreign WINDOW is never probed.
 func (s *Session) machineList(ctx context.Context, list api.TaskList, observe board.AgentStatusFunc) (listSnapshot, error) {
-	out := listSnapshot{SchemaVersion: board.ListSnapshotSchemaVersion, GeneratedAt: time.Now().UTC().Format(time.RFC3339), Root: s.Location(""), ProjectID: s.Info.ID, Cursor: list.Cursor, Tasks: []listTask{}}
+	out := listSnapshot{SchemaVersion: board.ListSnapshotSchemaVersion, GeneratedAt: time.Now().UTC().Format(time.RFC3339), Root: s.Location(""), ProjectID: s.Info.ID, Cursor: list.Cursor, NextCursor: list.NextCursor, Tasks: []listTask{}}
 	var requests []board.AgentStatusRequest
 	var positions []int
 	for _, item := range list.Tasks {
-		task := listTask{ListTask: board.ListTask{TaskID: item.TaskID, Title: item.Title, State: item.State, Size: item.Kind, Type: item.Type, TaskGroup: item.TaskGroup, Owner: item.Assignee, CreatedAt: item.CreatedAt, StartedAt: item.StartedAt, FinishedAt: item.CompletedAt, Result: item.Result, Revision: item.Revision}, Claim: item.Claim}
+		task := listTask{ListTask: board.ListTask{
+			TaskID: item.TaskID, Title: item.Title, State: item.State, Size: item.Kind, Type: item.Type, TaskGroup: item.TaskGroup,
+			Owner: item.Owner, Submitter: item.Submitter, Assignee: item.Assignee, DecisionMode: item.DecisionMode, CreatedAt: item.CreatedAt, StartedAt: item.StartedAt,
+			FinishedAt: item.CompletedAt, Result: item.Result, Revision: item.Revision,
+		}, Claim: item.Claim}
 		if s.SceneIsLocal(item.TaskID, item.Claim, item.Window, item.Session) {
 			task.Session, task.Window = item.Session, item.Window
 			task.Launcher, _, _ = strings.Cut(item.Window, ":")

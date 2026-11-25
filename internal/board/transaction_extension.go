@@ -9,13 +9,40 @@ import (
 
 // TransactionExtension lets a domain service validate its authority and stage
 // its control records in the same redo transaction as a board mutation. Both
-// callbacks run under the declared board, group and task locks. They must use
-// tx methods and must never call a locking board API.
+// staging callbacks run under the declared board, group and task locks. They
+// must use tx methods and must never call a locking board API.
 type TransactionExtension struct {
 	Groups []string
 	Tasks  []string
 	Before func(*Transaction) error
 	After  func(*Transaction) error
+	// Published runs after the publication attempt and release of board locks.
+	// It cannot roll back the journal. An error means the outcome is uncertain.
+	Published func(TransactionChanges, error)
+}
+
+// TransactionChanges identifies card revisions and board-relative files in a
+// publication without exposing document or control-record contents.
+type TransactionChanges struct {
+	Tasks []string
+	Files []string
+}
+
+func (tx *Transaction) notifyPublication(extensions []TransactionExtension, err error) {
+	var changes TransactionChanges
+	for _, extension := range extensions {
+		if extension.Published == nil {
+			continue
+		}
+		if changes.Files == nil {
+			changes.Tasks = tx.ChangedTaskIDs()
+			changes.Files = make([]string, 0, len(tx.record.Files))
+			for _, file := range tx.record.Files {
+				changes.Files = append(changes.Files, file.Path)
+			}
+		}
+		extension.Published(changes, err)
+	}
 }
 
 // StagedSnapshot returns the document, location and version this transaction
@@ -86,6 +113,13 @@ func combineExtensions(extensions []TransactionExtension) TransactionExtension {
 			}
 		}
 		return nil
+	}
+	combined.Published = func(changes TransactionChanges, err error) {
+		for _, extension := range extensions {
+			if extension.Published != nil {
+				extension.Published(changes, err)
+			}
+		}
 	}
 	return combined
 }

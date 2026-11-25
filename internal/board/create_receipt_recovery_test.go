@@ -37,7 +37,7 @@ func TestCreationAndInitialReceiptRecoverAsOneOperation(t *testing.T) {
 				}
 				return nil
 			}, func(tx *Transaction) error {
-				_, err := newTask(tx, root, "chore", "create-recovery", "  Original title  ", "en", true)
+				_, err := newTask(tx, root, NewTaskInput{Kind: "chore", Slug: "create-recovery", Title: "  Original title  ", Language: "en", Large: true})
 				return err
 			}, extension)
 			if !errors.Is(err, stop) {
@@ -45,7 +45,7 @@ func TestCreationAndInitialReceiptRecoverAsOneOperation(t *testing.T) {
 			}
 			if point == "prepared" {
 				// A retry before recovery must not publish a replacement receipt.
-				_, err := NewTaskWithTransaction(root, "chore", "create-recovery", "Other title", "en", false, TransactionExtension{Groups: []string{group}})
+				_, err := NewTaskWithTransaction(root, NewTaskInput{Kind: "chore", Slug: "create-recovery", Title: "Other title", Language: "en"}, TransactionExtension{Groups: []string{group}})
 				var rejection *Error
 				if !errors.As(err, &rejection) || rejection.Code != "board.transaction_pending" {
 					t.Fatalf("pending creation accepted another producer: %v", err)

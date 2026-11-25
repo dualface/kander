@@ -5,12 +5,14 @@
 ## Command
 
 ```text
-kander list [--agent-status] [backlog|todo|working|review|done|archived|trash]
+kander list [--agent-status] [--assignee NAME] [--submitter NAME] [--group ID]
+            [--search TEXT] [--limit N] [--cursor TOKEN] [backlog|todo|working|review|done|archived|trash]
 ```
 
 - With the global `--json` the command prints one JSON object on stdout and exits 0. Without it the table output is unchanged.
 - `--agent-status` (only with the global `--json`) fills the agent objects. Without it the command runs no terminal probe at all.
-- A state argument limits the snapshot to the cards of that state.
+- A state argument limits the snapshot to the cards of that state. `--assignee`, `--submitter`, `--group`, and `--search` filter the service list. See [Task query index](distributed-server.md#task-query-index).
+- To paginate, pass `--limit` and continue with `--cursor` using the previous page's `next_cursor`. Text output prints this token on stderr when another page exists. The event `cursor` (without the `next_` prefix) is not a page token.
 - `--agent-status` without `--json`, an unknown state, or an unknown option is a usage error (exit 2); with `--json` it is the error object with the code `usage`.
 - Board read failures exit 1 with the same messages as the table form, as the error object with `--json`. Journal and invalid-entry advisories go to stderr as before; with `--json` they are the `notices` field of the object, never another field.
 
@@ -24,6 +26,8 @@ kander list [--agent-status] [backlog|todo|working|review|done|archived|trash]
 | `change_token`   | string  | 64 lowercase hex digits, see "Change token"        |
 | `generated_at`   | string  | RFC 3339 time in UTC, for example `2026-11-03T08:23:20Z` |
 | `root`           | string  | absolute path of the board directory               |
+| `cursor`         | string  | position of the server event stream                |
+| `next_cursor`    | string  | continuation token, omitted on the last page or without pagination |
 | `tasks`          | array   | one object per listed card                         |
 
 ### Task
@@ -38,7 +42,10 @@ Every key is always present. A string field without a value is `""`.
 | `size`        | string         | `small` or `large`                                     |
 | `type`        | string         | the `TYPE` field, for example `Feature`                |
 | `task_group`  | string         | the `TASK_GROUP` field (legacy discussion line included) |
-| `owner`       | string         | the `OWNER` field                                      |
+| `owner`       | string         | the `OWNER` field (executing agent)                    |
+| `submitter`   | string         | the `SUBMITTER` field (submission identity)           |
+| `assignee`    | string         | the `ASSIGNEE` field (responsible person)              |
+| `decision_mode` | string       | effective decision mode, `leader` or `assignee`       |
 | `session`     | string         | the `SESSION` field                                    |
 | `window`      | string         | the `WINDOW` field                                     |
 | `launcher`    | string         | the part of `window` before the first colon            |
@@ -69,9 +76,9 @@ The value sets are the status constants of `internal/liveness` and the agent sta
 
 `change_token` is the SHA-256 of the snapshot content, excluding `generated_at` and every `observed_at`, together with the SHA-256 of the full `spec.md` of every listed card.
 
-- Adding, removing, or moving a card, a `kander update`, and a body or header edit change it, also when an edit bypasses the revision.
+- Adding, removing, or moving a card, a `kander update` or `kander assign`, and a body or header edit change it, also when an edit bypasses the revision.
 - A change of any agent field other than `observed_at` changes it.
 - Two snapshots of an unchanged board, with unchanged agent observations, have the same token.
-- With a state filter the token covers only the listed cards, so a change to a card of another state does not change it.
+- With filters or pagination the token covers only the returned cards.
 
 A consumer polls the command and redraws only when the token differs from the last one it saw. The token is opaque: compare it for equality only.

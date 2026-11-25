@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 )
 
 // importProgressInterval spaces the file counts of one phase, and the repeat of

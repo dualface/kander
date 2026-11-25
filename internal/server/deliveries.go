@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"path/filepath"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/statemachine/serverdelivery"
 )
@@ -33,14 +33,14 @@ func (p *project) publishDelivery(key, task string, input api.DeliveryEvidence, 
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	// The registered remote can be bound late (bindRemote), so read it under the lock.
 	if input.Remote != p.info.Remote {
 		return outcome{err: apiError(api.CodeEvidenceIncomplete, "delivery must bind the registered remote, exact commit, card version and generation")}
 	}
 	operation := "delivery:" + task
 	return p.idempotent(key, operation, input, func() outcome {
-		err := board.WithTransaction(p.board, board.LockScope{Groups: []string{serviceGroup}, Tasks: []string{task}}, func(tx *board.Transaction) error {
+		err := p.boardTransaction(board.LockScope{Groups: []string{serviceGroup}, Tasks: []string{task}}, func(tx *board.Transaction) error {
 			claim, err := p.requireHolder(task, h)
 			if err != nil {
 				return err
@@ -134,7 +134,7 @@ func (p *project) deliveryGuard(task, commit string, h holder) func(*board.Trans
 	}
 }
 
-func (s *Server) deliveryRoutes(mux *http.ServeMux) {
+func (s *Server) deliveryRoutes(mux *routeTable) {
 	const base = "/api/v1/projects/{project}/tasks/{task}/deliveries"
 	s.projectRoute(mux, "POST "+base, func(p *project, r *http.Request) outcome {
 		var input api.DeliveryEvidence

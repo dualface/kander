@@ -25,7 +25,7 @@ import (
 const sampleTask = "20261118-sample-task"
 
 // groups are the commands that only group subcommands.
-var groups = map[string]bool{"coordinator": true, "dispatch": true, "issue": true, "server": true, "terminal": true}
+var groups = map[string]bool{"coordinator": true, "decision": true, "dispatch": true, "issue": true, "server": true, "terminal": true}
 
 // leafCommand is a command that runs something, with its command path.
 type leafCommand struct {
@@ -58,6 +58,7 @@ func commandLeaves(root *cobra.Command) []leafCommand {
 
 // samplePositionals are valid positional arguments for each command path.
 var samplePositionals = map[string][]string{
+	"assign":                       {sampleTask, "Example User"},
 	"check":                        {},
 	"check delivery":               {},
 	"check overlap":                {},
@@ -70,6 +71,9 @@ var samplePositionals = map[string][]string{
 	"coordinator release":          {"/abs/release.json"},
 	"coordinator remove-member":    {"/abs/request.json"},
 	"coordinator show":             {"20261118-sample-group"},
+	"decision list":                {sampleTask},
+	"decision mode":                {sampleTask, "leader"},
+	"decision record":              {sampleTask},
 	"dismiss":                      {sampleTask},
 	"dispatch authorize-wrap-up":   {"/abs/request.json"},
 	"dispatch cancel":              {sampleTask, "d1", "3", "reason"},
@@ -133,17 +137,25 @@ var samplePositionals = map[string][]string{
 // sampleValues are valid values for each value flag; every name is shared by the commands that
 // declare it.
 var sampleValues = map[string]string{
-	"action": "inspect", "advance-file": "advance.json", "agent": "claude", "base": "abc123", "batch-id": "batch-1",
-	"card": sampleTask, "commit": "HEAD", "contract-decision-file": "decision.md", "data": "/tmp/data", "decision": "ref-1",
+	"action": "inspect", "advance-file": "advance.json", "agent": "claude", "assignee": "alice", "base": "abc123", "batch-id": "batch-1",
+	"card": sampleTask, "commit": "HEAD", "contract-decision-file": "decision.md", "cursor": "opaque", "data": "/tmp/data", "decision": "ref-1",
 	"delivery-commit": "abc123", "disposition": "reviews/a.json", "dispatch-id": "dispatch-1", "document": "plan.md",
 	"duplicate-of": sampleTask, "evidence-file": "evidence.json", "execution-epoch": "2", "expect-revision": "3",
-	"file": "input.md", "from": "/tmp/board", "head": "HEAD", "heartbeat": "5", "kind": "fix", "label": "bug",
+	"file": "input.md", "from": "/tmp/board", "group": "20261125-example-group", "head": "HEAD", "heartbeat": "5", "kind": "fix", "label": "bug",
 	"language": "en", "launcher": "herdr", "limit": "5", "listen": "127.0.0.1:7878", "message": "hello",
 	"message-file": "message.md", "operation-id": "operation-1", "owner": "codex", "pane": "pane-1", "previous-run-id": "run-0",
 	"project": "demo", "reason": "because", "refresh": "2", "remote": "https://example.com/r.git", "renew": "10s",
 	"repo": "github.com/owner/repo", "requirements-file": "requirements.json", "result": "completed", "run-id": "run-1",
-	"search": "query", "server": "http://127.0.0.1:7878", "source": "HEAD", "state": "open", "task": sampleTask,
+	"search": "query", "server": "http://127.0.0.1:7878", "source": "HEAD", "state": "open", "submitter": "bob", "task": sampleTask,
 	"timeout": "5", "ttl": "60s", "type": "feature", "watch": sampleTask,
+}
+
+func sampleValue(path, flag string) (string, bool) {
+	if path == "decision record" && flag == "kind" {
+		return "leader", true
+	}
+	value, ok := sampleValues[flag]
+	return value, ok
 }
 
 // valueFlags are the flags of c that take a value, in name order.
@@ -179,6 +191,7 @@ var replacedBy = map[string]string{"message-file": "message"}
 
 // companionFlags are the flags that a flag under test needs next to it.
 var companionFlags = map[string][]string{
+	"cursor":          {"--limit", "5"},
 	"dispatch-id":     {"--execution-epoch", "2"},
 	"execution-epoch": {"--dispatch-id", "d1"},
 }
@@ -260,7 +273,7 @@ func TestCommandTreeHasEveryCommandPath(t *testing.T) {
 func TestValueFlagsAcceptSpaceAndEqualsForms(t *testing.T) {
 	for _, leaf := range commandLeaves(cli.NewRoot()) {
 		for _, f := range valueFlags(leaf.Command) {
-			value, ok := sampleValues[f.Name]
+			value, ok := sampleValue(leaf.path, f.Name)
 			if !ok {
 				t.Fatalf("%s: no sample value for --%s", leaf.path, f.Name)
 			}
@@ -291,8 +304,9 @@ func TestFlagsMayFollowPositionalArguments(t *testing.T) {
 			f := flags[0]
 			path := strings.Fields(leaf.path)
 			required := requiredArguments(leaf, f.Name)
-			before := append(append(append(slices.Clone(path), required...), "--"+f.Name, sampleValues[f.Name]), positionals...)
-			after := append(append(append(slices.Clone(path), positionals...), required...), "--"+f.Name, sampleValues[f.Name])
+			value, _ := sampleValue(leaf.path, f.Name)
+			before := append(append(append(slices.Clone(path), required...), "--"+f.Name, value), positionals...)
+			after := append(append(append(slices.Clone(path), positionals...), required...), "--"+f.Name, value)
 			a, aGot, aErr := runStubbed(t, before...)
 			b, bGot, bErr := runStubbed(t, after...)
 			if a != 0 || b != 0 {

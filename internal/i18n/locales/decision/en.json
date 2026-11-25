@@ -1,0 +1,9 @@
+{
+  "board.decision_invalid": "Invalid decision field: {{.V0}}.",
+  "board.decision_trash": "Cannot change decisions for a card in trash: {{.V0}}.",
+  "board.decision_corrupt": "The managed decision records for {{.V0}} are inconsistent.",
+  "board.update_hint_decision_mode": "Next step: preserve this line as kander show prints it. Use kander decision mode to change it.",
+  "board.update_hint_decisions_section": "Next step: preserve DECISIONS as kander show prints it. Use kander decision record to append a decision.",
+  "remote.decision_input": "The decision input must be one UTF-8 JSON object with valid fields, at most {{.V0}} bytes.",
+  "board.decision_reserved": "Only the assignee may decide on this card. Leader decisions are disabled."
+}

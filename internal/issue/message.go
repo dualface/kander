@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/dualface/kander/api"
+	"github.com/dualface/kander/internal/command"
 	"github.com/dualface/kander/internal/config"
 )
 
@@ -13,6 +15,11 @@ import (
 func Message(err error) string {
 	var structured *Error
 	if !errors.As(err, &structured) {
+		var serviceError *api.Error
+		if errors.As(err, &serviceError) {
+			_, message := command.Describe(err)
+			return Sanitize(message)
+		}
 		return Sanitize(err.Error())
 	}
 	var message string

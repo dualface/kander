@@ -3,11 +3,11 @@ package server
 import (
 	"net/http"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 )
 
-func (s *Server) snapshotRoutes(mux *http.ServeMux) {
+func (s *Server) snapshotRoutes(mux *routeTable) {
 	s.projectRoute(mux, "POST /api/v1/projects/{project}/check", func(p *project, r *http.Request) outcome {
 		var query api.CheckQuery
 		if err := decode(r, &query); err != nil {
@@ -19,7 +19,7 @@ func (s *Server) snapshotRoutes(mux *http.ServeMux) {
 		if err := p.lockBoard(); err != nil {
 			return outcome{err: err}
 		}
-		defer p.mu.Unlock()
+		defer p.unlockBoard()
 		code, output, diagnostics, err := board.CheckBoard(p.board, query.Tasks, query.All)
 		return result(http.StatusOK, api.CheckResult{Code: code, Output: output, Diagnostics: diagnostics}, err)
 	})
@@ -41,7 +41,7 @@ func (s *Server) snapshotRoutes(mux *http.ServeMux) {
 		if err := p.lockBoard(); err != nil {
 			return outcome{err: err}
 		}
-		defer p.mu.Unlock()
+		defer p.unlockBoard()
 		scanned, err := board.ScanDispatchesContext(r.Context(), p.board, query.Tasks)
 		if err != nil {
 			return outcome{err: err}

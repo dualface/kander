@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
 )
@@ -23,6 +23,36 @@ type retainedWrapUp struct {
 	newGrant    api.ClaimGrant
 	newProof    client.Claim
 	round       board.Dispatch
+}
+
+// The audited HTTP fixture compares the whole index after the restricted
+// wrap-up grant writes the new execution epoch.
+func TestTaskIndexAfterDispatchWrapUpGrant(t *testing.T) {
+	f := newFixture(t)
+	p := f.project("host-a")
+	commit := strings.Repeat("b", 40)
+	member, grant := integrationTaskPlan(t, f, p, "host-a", "indexed-wrap-up", commit, commit, true,
+		api.StartInput{Session: "claude index-wrap-up", Window: "tmux:$1:@1:%1"})
+	proof := client.Claim{Token: grant.Token, Generation: grant.Claim.Generation}
+	integration := integrate(t, p, integrationInput(t, p, member, grant.Claim.ExecutionID, "indexed-integration"), "index-wrap", proof)
+	input := wrapUpRound(t, p, member, integration, "indexed-wrap")
+	round, err := p.DispatchAction(t.Context(), "", member.TaskID, "prepare", api.DispatchCommand{Input: &input, CardRevision: member.Revision}, proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	card, err := p.Show(t.Context(), member.TaskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exit := board.WrapUpExitEvidence{Outcome: "stopped", CardRevision: card.Revision, ObservedAt: time.Now().UTC(),
+		Session: board.MetadataFrom(card.Text, board.FieldSession), Window: board.MetadataFrom(card.Text, board.FieldWindow),
+		Owner: board.MetadataFrom(card.Text, board.FieldOwner), StartedAt: board.MetadataFrom(card.Text, board.FieldStartedAt)}
+	restricted, err := p.DispatchAction(t.Context(), "", member.TaskID, "authorize-wrap-up", api.DispatchCommand{
+		DispatchID: input.ID, Revision: round.Revision, Exit: &exit, Author: "coordinator", Reason: "executor stopped",
+	}, proof)
+	if err != nil || restricted.WrapUpAuthority == nil || restricted.Authorization.Epoch != round.Authorization.Epoch+1 {
+		t.Fatalf("restricted grant: %+v %v", restricted, err)
+	}
 }
 
 func wrapUpRound(t *testing.T, p *client.Project, member api.IntegrationMember, integration api.Integration, id string) board.DispatchInput {

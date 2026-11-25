@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/statemachine/serverproposal"
@@ -73,7 +73,7 @@ func (p *project) requestWriteScoped(key, operation, id string, payload any, ext
 		if extend != nil {
 			scope = extend(scope)
 		}
-		err := board.WithTransaction(p.board, scope, func(tx *board.Transaction) error {
+		err := p.boardTransaction(scope, func(tx *board.Transaction) error {
 			var err error
 			request, err = produce(tx)
 			if err != nil {
@@ -131,7 +131,7 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	return p.requestWriteScoped(key, "request:"+id, normalized, input, p.proposalScope(input), func(tx *board.Transaction) (api.CollabRequest, error) {
 		var request api.CollabRequest
 		task, err := tx.Snapshot(normalized)
@@ -233,7 +233,7 @@ func (p *project) answerRequest(key, id, requestID string, answer api.CollabAnsw
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	return p.requestWrite(key, "answer:"+id+":"+requestID, normalized, answer, func(tx *board.Transaction) (api.CollabRequest, error) {
 		var request api.CollabRequest
 		claim, err := p.requireHolder(normalized, h)

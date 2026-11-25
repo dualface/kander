@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 )
 
@@ -12,10 +12,10 @@ func (p *project) updateGroupLease(key, group, operation string, input any, h ho
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	return p.idempotent(key, operation, input, func() outcome {
 		var view api.ClaimView
-		err := board.WithTransaction(p.board, board.LockScope{Groups: []string{serviceGroup}}, func(tx *board.Transaction) error {
+		err := p.boardTransaction(board.LockScope{Groups: []string{serviceGroup}}, func(tx *board.Transaction) error {
 			c, err := p.groupLease(group, h)
 			if err != nil {
 				return err

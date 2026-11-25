@@ -10,7 +10,7 @@ import (
 	"reflect"
 	"slices"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 )
 
@@ -73,7 +73,7 @@ func prepareIdentityDigest(request api.ReviewPrepare, recordedVersion string) st
 	return requestDigest("review-prepare", request)
 }
 
-func (s *Server) reviewRuntimeRoutes(mux *http.ServeMux) {
+func (s *Server) reviewRuntimeRoutes(mux *routeTable) {
 	const base = "/api/v1/projects/{project}/reviews/runtime"
 	s.projectRoute(mux, "POST "+base+"/prepare", func(p *project, r *http.Request) outcome {
 		var request api.ReviewPrepare
@@ -194,7 +194,7 @@ func (s *Server) reviewRuntimeRoutes(mux *http.ServeMux) {
 		if err := p.lockBoard(); err != nil {
 			return outcome{err: err}
 		}
-		defer p.mu.Unlock()
+		defer p.unlockBoard()
 		writer, err := p.writer(id, r.Header.Get(api.HeaderClientID), r.Header.Get(api.HeaderReviewWriter))
 		if err != nil {
 			return outcome{err: err}
@@ -205,7 +205,7 @@ func (s *Server) reviewRuntimeRoutes(mux *http.ServeMux) {
 			if err != nil {
 				return outcome{err: err}
 			}
-			extension := board.TransactionExtension{Groups: []string{serviceGroup}, Tasks: run.TaskIDs, Before: func(tx *board.Transaction) error { return p.validateWriter(tx, writer) }}
+			extension := board.TransactionExtension{Groups: []string{serviceGroup}, Published: p.indexPublication, Tasks: run.TaskIDs, Before: func(tx *board.Transaction) error { return p.validateWriter(tx, writer) }}
 			extension.After = func(tx *board.Transaction) error {
 				if err := p.validateWriter(tx, writer); err != nil {
 					return err

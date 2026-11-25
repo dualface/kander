@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/board/boardtest"
 	"github.com/dualface/kander/internal/config"
@@ -30,6 +30,9 @@ func newReviewedHolder(t *testing.T, slug string) *reviewedHolder {
 		t.Fatal(err)
 	}
 	evidence := boardtest.ReviewedFinding(t, root, h.task)
+	if err := h.f.srv.ReconcileIndexForSeed(h.holder.ID()); err != nil {
+		t.Fatal(err)
+	}
 	// Publishing the run touched the card; a proposal binds the version it sees.
 	if h.card, err = h.holder.Show(t.Context(), h.task); err != nil {
 		t.Fatal(err)
@@ -184,6 +187,9 @@ func TestFixOnASupersededRoundNamesTheLaterRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	next := boardtest.Successor(t, root, h.task, h.evidence)
+	if err := h.f.srv.ReconcileIndexForSeed(h.holder.ID()); err != nil {
+		t.Fatal(err)
+	}
 	card, err := h.holder.Show(t.Context(), h.task)
 	if err != nil {
 		t.Fatal(err)

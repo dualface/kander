@@ -19,9 +19,10 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/client"
 	"github.com/dualface/kander/internal/command/commandtest"
+	"github.com/dualface/kander/internal/commands"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/server"
 	"github.com/dualface/kander/internal/servicectl"
@@ -56,8 +57,12 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+var runForegroundServer = server.RunForeground
+
 // runServer runs kander server with the arguments after its name.
-func runServer(args []string) int { return commandtest.Run(newServerCommand(), args...) }
+func runServer(args []string) int {
+	return commandtest.Run(commands.NewServerCommand(runForegroundServer), args...)
+}
 
 func serverCommandEnv(t *testing.T) (servicectl.Controller, string, string) {
 	t.Helper()

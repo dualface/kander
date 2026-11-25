@@ -9,12 +9,12 @@ import (
 
 // ScanContext captures all states, documents and revisions under shared locks.
 // The context bounds lock contention, not OS file operations.
-func ScanContext(ctx context.Context, root string) (Board, error) {
-	return scanContext(ctx, root, nil, false)
+func ScanContext(ctx context.Context, root string, warnings ...*WarningLog) (Board, error) {
+	return scanContext(ctx, root, nil, false, warnings...)
 }
 
 // ScanTargetsContext captures selected identities without reading unrelated cards.
-func ScanTargetsContext(ctx context.Context, root string, values []string) (Board, error) {
+func ScanTargetsContext(ctx context.Context, root string, values []string, warnings ...*WarningLog) (Board, error) {
 	ids := make([]string, len(values))
 	for i, value := range values {
 		id, err := NormalizeTaskID(value)
@@ -26,7 +26,7 @@ func ScanTargetsContext(ctx context.Context, root string, values []string) (Boar
 	if ids == nil {
 		ids = []string{}
 	}
-	return scanContext(ctx, root, ids, false)
+	return scanContext(ctx, root, ids, false, warnings...)
 }
 
 func (locks *lockSet) takeSharedContext(ctx context.Context, root, path string) error {

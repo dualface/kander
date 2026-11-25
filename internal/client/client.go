@@ -1,5 +1,5 @@
 // Package client is the kander side of /api/v1. It speaks only the typed
-// contract of internal/api, retries transport failures with the same
+// contract of the public api package, retries transport failures with the same
 // idempotency key, and never touches a local board.
 package client
 
@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 )
 
 // Client talks to one server for one client identity.
@@ -42,7 +42,7 @@ func New(serverURL, clientID string) (*Client, error) {
 	if !api.ValidIdentity(clientID) {
 		return nil, fmt.Errorf("client id %q is not a valid identity", clientID)
 	}
-	return &Client{base: u, http: &http.Client{Timeout: 90 * time.Second}, clientID: clientID, Retries: 3, Backoff: 200 * time.Millisecond}, nil
+	return &Client{base: u, http: &http.Client{Timeout: 90 * time.Second, Transport: configuredTransport()}, clientID: clientID, Retries: 3, Backoff: 200 * time.Millisecond}, nil
 }
 
 // ClientID returns the identity this client sends.
@@ -298,10 +298,23 @@ func taskPath(id string, rest ...string) []string {
 
 // List reads the task list, optionally limited to one state.
 func (p *Project) List(ctx context.Context, state string) (api.TaskList, error) {
+	return p.ListWithOptions(ctx, api.TaskListOptions{State: state})
+}
+
+// ListWithOptions lists tasks with optional filters, title search and pagination.
+func (p *Project) ListWithOptions(ctx context.Context, options api.TaskListOptions) (api.TaskList, error) {
 	var l api.TaskList
 	q := url.Values{}
-	if state != "" {
-		q.Set("state", state)
+	for name, value := range map[string]string{
+		"state": options.State, "assignee": options.Assignee, "submitter": options.Submitter,
+		"group": options.Group, "q": options.Search, "cursor": options.Cursor, "decision_mode": string(options.DecisionMode),
+	} {
+		if value != "" {
+			q.Set(name, value)
+		}
+	}
+	if options.Limit != 0 {
+		q.Set("limit", strconv.Itoa(options.Limit))
 	}
 	err := p.c.do(ctx, call{method: http.MethodGet, path: p.path("tasks"), query: q}, &l)
 	return l, err
@@ -318,6 +331,13 @@ func (p *Project) Show(ctx context.Context, id string) (api.Task, error) {
 func (p *Project) NewTask(ctx context.Context, key string, req api.NewTask) (api.Task, error) {
 	var t api.Task
 	err := p.c.do(ctx, call{method: http.MethodPost, path: p.path("tasks"), body: req, key: key}, &t)
+	return t, err
+}
+
+// Assign changes the person assigned to a task, independently of its claim.
+func (p *Project) Assign(ctx context.Context, key, id string, req api.Assign) (api.Task, error) {
+	var t api.Task
+	err := p.c.do(ctx, call{method: http.MethodPost, path: p.path(taskPath(id, "assignee")...), body: req, key: key}, &t)
 	return t, err
 }
 

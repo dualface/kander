@@ -20,12 +20,11 @@ import (
 // ProtocolVersion is the wire protocol this build speaks. MinProtocolVersion is
 // the oldest peer protocol it still accepts. A peer outside the range is
 // refused with CodeProtocolIncompatible before any domain operation runs.
-// Protocol 2 made an expired lease recoverable by its holder (ClaimLapsed,
-// CodeTakenOver); a protocol 1 worker would still stop agents on its own
-// timeout, so mixed versions are refused.
+// Protocol 3 moves the executing agent to "owner"; "assignee" now names the
+// person assigned to the task. Older peers would misread the same key.
 const (
-	ProtocolVersion    = 2
-	MinProtocolVersion = 2
+	ProtocolVersion    = 3
+	MinProtocolVersion = 3
 )
 
 // Header names. The claim token is a bearer secret for one execution; it is
@@ -45,7 +44,11 @@ const (
 // Stable error codes. Clients map them to localized text; the server message
 // is a diagnostic only.
 const (
-	CodeInvalidRequest       = "invalid_request"
+	CodeInvalidRequest = "invalid_request"
+	// CodeForbidden means the embedding host denied the request.
+	CodeForbidden = "forbidden"
+	// CodeAttributionRequired means the embedding host did not identify a caller for an attributed operation.
+	CodeAttributionRequired  = "attribution_required"
 	CodeNotFound             = "not_found"
 	CodeRevisionConflict     = "revision_conflict"
 	CodeHeldByOther          = "held_by_other"
@@ -60,6 +63,8 @@ const (
 	CodeProjectNotEmpty      = "project_not_empty"
 	CodeBoardRejected        = "board_rejected"
 	CodeNotReady             = "not_ready"
+	CodeIndexRebuilding      = "index_rebuilding"
+	CodeDecisionReserved     = "decision_reserved"
 	CodeInternal             = "internal"
 )
 
@@ -173,22 +178,25 @@ type Task struct {
 
 // TaskSummary is one list row. Its fields follow the v1 board summary.
 type TaskSummary struct {
-	Revision    uint64     `json:"revision"`
-	TaskID      string     `json:"task_id"`
-	Title       string     `json:"title"`
-	State       string     `json:"state"`
-	Kind        string     `json:"kind"`
-	Type        string     `json:"type"`
-	TaskGroup   string     `json:"task_group"`
-	Assignee    string     `json:"assignee"`
-	CreatedAt   string     `json:"created_at"`
-	StartedAt   string     `json:"started_at"`
-	CompletedAt string     `json:"completed_at"`
-	Time        string     `json:"time"`
-	Result      string     `json:"result"`
-	Claim       *ClaimView `json:"claim,omitempty"`
-	Session     string     `json:"session,omitempty"`
-	Window      string     `json:"window,omitempty"`
+	Revision     uint64       `json:"revision"`
+	TaskID       string       `json:"task_id"`
+	Title        string       `json:"title"`
+	State        string       `json:"state"`
+	Kind         string       `json:"kind"`
+	Type         string       `json:"type"`
+	TaskGroup    string       `json:"task_group"`
+	Owner        string       `json:"owner"`
+	Submitter    string       `json:"submitter"`
+	Assignee     string       `json:"assignee"`
+	DecisionMode DecisionMode `json:"decision_mode"`
+	CreatedAt    string       `json:"created_at"`
+	StartedAt    string       `json:"started_at"`
+	CompletedAt  string       `json:"completed_at"`
+	Time         string       `json:"time"`
+	Result       string       `json:"result"`
+	Claim        *ClaimView   `json:"claim,omitempty"`
+	Session      string       `json:"session,omitempty"`
+	Window       string       `json:"window,omitempty"`
 }
 
 // TaskList is GET /api/v1/projects/{project}/tasks.
@@ -197,17 +205,47 @@ type TaskList struct {
 	Tasks      []TaskSummary `json:"tasks"`
 	// Cursor is the event cursor the list is consistent with; a subscriber
 	// continues from it without missing a change.
-	Cursor   string   `json:"cursor"`
-	Warnings []string `json:"warnings,omitempty"`
+	Cursor     string   `json:"cursor"`
+	Warnings   []string `json:"warnings,omitempty"`
+	NextCursor string   `json:"next_cursor,omitempty"`
+}
+
+// TaskListOptions selects tasks for List. Zero values return the entire board.
+// Cursor continues a query with the same filters and requires a positive Limit.
+type TaskListOptions struct {
+	State, Assignee, Submitter, Group, Search, Cursor string
+	DecisionMode                                      DecisionMode
+	Limit                                             int
+}
+
+// MaxTaskListLimit bounds one paginated list response.
+const MaxTaskListLimit = 1000
+
+// TaskAccess is the current task identity, workflow state and revision that a
+// host authorization policy can read from its embedded server.
+type TaskAccess struct {
+	Submitter    string       `json:"submitter"`
+	Assignee     string       `json:"assignee"`
+	DecisionMode DecisionMode `json:"decision_mode"`
+	State        string       `json:"state"`
+	Revision     uint64       `json:"revision"`
 }
 
 // NewTask is POST /api/v1/projects/{project}/tasks.
 type NewTask struct {
-	Type     string `json:"type"`
-	Slug     string `json:"slug"`
-	Title    string `json:"title"`
-	Language string `json:"language"`
-	Large    bool   `json:"large,omitzero"`
+	Type      string `json:"type"`
+	Slug      string `json:"slug"`
+	Title     string `json:"title"`
+	Language  string `json:"language"`
+	Large     bool   `json:"large,omitzero"`
+	Submitter string `json:"submitter,omitempty"`
+}
+
+// Assign is POST /api/v1/projects/{project}/tasks/{task}/assignee.
+// An empty Assignee clears the assignment.
+type Assign struct {
+	Assignee         string  `json:"assignee"`
+	ExpectedRevision *uint64 `json:"expected_revision,omitempty"`
 }
 
 // Document is GET and PUT /api/v1/projects/{project}/tasks/{task}/documents/{path}.
@@ -485,10 +523,11 @@ func ValidIdentity(value string) bool { return identityRe.MatchString(value) }
 // IssueImport publishes one issue snapshot. Contract sections are generated by
 // the server; remote body and comments remain untrusted source attachments.
 type IssueImport struct {
-	Snapshot json.RawMessage `json:"snapshot"`
-	Type     string          `json:"type,omitempty"`
-	Language string          `json:"language"`
-	Large    bool            `json:"large,omitzero"`
+	Snapshot  json.RawMessage `json:"snapshot"`
+	Type      string          `json:"type,omitempty"`
+	Language  string          `json:"language"`
+	Large     bool            `json:"large,omitzero"`
+	Submitter string          `json:"submitter,omitempty"`
 }
 
 // ClaimProof is one execution's private authority over one task. A multi-task

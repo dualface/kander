@@ -446,6 +446,8 @@ func planPrune(root string, report *PruneReport) (*prunePlan, error) {
 		}
 		return plan.receipts[id]
 	}
+	// Only review artifacts are eligible here. Decision audit records stay
+	// with the card, along with their managed index in spec.md.
 	cardReviews := func(id string) string {
 		e := b.Entries[id]
 		if !e.IsDirectory() {

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 )
 
@@ -105,7 +105,7 @@ func (p *project) execution(key, id string, u api.ExecutionUpdate, h holder) out
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	run := func() outcome {
 		id, err := board.NormalizeTaskID(id)
 		if err != nil {
@@ -184,7 +184,7 @@ func (p *project) execution(key, id string, u api.ExecutionUpdate, h holder) out
 			if u.ExpectedRevision == 0 || strings.TrimSpace(u.Decision) == "" || u.Presence == nil || u.Presence.Status != "stopped" {
 				return outcome{err: apiError(api.CodeEvidenceIncomplete, "lease release requires a decision and a fresh confirmed stopped executor")}
 			}
-			err = board.WithTransaction(p.board, board.LockScope{Tasks: []string{id}}, func(tx *board.Transaction) error {
+			err = p.boardTransaction(board.LockScope{Tasks: []string{id}}, func(tx *board.Transaction) error {
 				return stageJSON(tx, "releases/"+id+"/"+digest(key)+".json", struct {
 					Generation  uint64    `json:"generation"`
 					ExecutionID string    `json:"execution_id"`

@@ -1,6 +1,6 @@
 # Distributed server
 
-Kander v2 ships one `kander` executable with a resident board service under `kander server` and REST client commands. Every host that works on one Git repository talks to the same server over REST, so all hosts see one board, task ownership is decided in one place, and each host executes its own tasks. This document is the design contract of the v2 branch. Normal client entry points use the service contract described below.
+Kander v2 ships one `kander` executable with a resident board service under `kander server` and REST client commands. Every host that works on one Git repository talks to the same server over REST, so all hosts see one board, task ownership is decided in one place, and each host executes its own tasks. This document is the design contract of the v2 branch. Normal client entry points use the service contract described below. Another Go process can use the same service through the [embedding API](embedding.md).
 
 ## Roles
 
@@ -9,7 +9,7 @@ Kander v2 ships one `kander` executable with a resident board service under `kan
 | `kander server` | Registered projects, card documents and attachments, claims and leases, handoff records, collaboration requests, idempotency receipts, the event log, published review evidence | Code, Git repositories, worktrees, agent sessions, terminals |
 | `kander` client and worker | Agent and terminal control, repository location, worktrees, sessions, temporary logs, unpublished output, the private action and request journals | The board; a client never writes a local `kanban/` in normal operation |
 
-The first version trusts its network: there is no login and no role model, one server instance serves one data directory, and storage reuses the board package's file transactions instead of a database. Claim tokens and generations isolate concurrent executions; they do not defend against a malicious client on the network. The server binds `127.0.0.1:7878` by default; serving a LAN is an explicit `--listen` choice.
+The first version trusts its network: there is no login and no role model, one server instance serves one data directory, and the board package's file transactions remain the source of truth. SQLite is used only for a rebuildable query index. Claim tokens and generations isolate concurrent executions; they do not defend against a malicious client on the network. The server binds `127.0.0.1:7878` by default; serving a LAN is an explicit `--listen` choice.
 
 ## Data directory
 
@@ -19,6 +19,7 @@ The first version trusts its network: there is no login and no role model, one s
   secret.json            server secret that derives claim tokens (0600)
   projects.json          registry: id, name, remote, created_at
   projects/<name>-<hash>/  lowercase name (first 48 characters) and name hash
+    index.sqlite         rebuildable task list and access projection
     board/               a board in the v1 layout (backlog/ ... trash/)
       .kander/groups/00000000-service-group/
         claims/<task>.json       task claim and handoff history
@@ -50,7 +51,59 @@ v2 development data is not migrated. When `projects.json` holds a project whose 
 
 The first registration of a name may bind a Git remote URL; a later registration with a different remote is refused with `project_mismatch`, so two repositories cannot share a board by a name collision. A project registered without a remote takes the first remote a later registration brings and writes it to `projects.json`; every client session registers the remote of its checkout, so the next command run there binds it. When that write fails, the project stays without a remote and the registration fails. No record keys on a client's absolute path.
 
-`kander server` opens the data directory, takes `server.lock`, recovers every project's interrupted board transactions (`board.RecoverTransactions`), settles claims from the committed card state, logs one `project` line per project with its name, ID and board path, and only then reports ready. Until ready, domain routes answer `not_ready` (503).
+`kander server` opens the data directory, takes `server.lock`, recovers every project's interrupted board transactions (`board.RecoverTransactions`), settles claims from the committed card state, extends their startup leases, reconciles the task index, logs one `project` line per project with its name, ID and board path, and only then reports ready. Until ready, domain routes answer `not_ready` (503).
+
+## Task decision records
+
+Cards have a managed decision policy and can retain immutable human and Leader decisions. See [Task decision records](decision-records.md) for the routes, attribution, and CLI.
+
+## Task query index
+
+Each project has one private `index.sqlite` next to `board/`. It contains task
+summaries, revisions, and only the claim inputs needed for a public view.
+Lease status is calculated at query time from the service clock. The index
+holds no claim tokens or original card documents.
+
+Canonical board publications identify their changed card revisions and
+claim files. The service refreshes those rows synchronously, under the
+project lock, before answering the write. This does not depend on events
+being appended. If refresh fails or a file publication has an uncertain
+outcome, the project marks the index untrusted before the request returns.
+A committed write keeps its original outcome. While the index is untrusted,
+both the REST list and the embedded `Server.TaskAccess` return
+`index_rebuilding` (HTTP 503 for REST) with no result. A background
+reconciliation can restore the index. If reconciliation fails, the index
+stays unavailable. Later project operations or a restart can retry it.
+
+Startup reconciles every row against the canonical board after file
+transaction recovery, claim reconciliation and startup lease extension,
+before readiness. It restores missing and differing rows and removes
+orphaned rows. A missing or corrupt index, or one with an unsupported SQLite format, is
+recreated from the same scan. An online import reconciles the published
+board after its claims and event reset as part of the import. Other board
+reads such as `snapshot` and `check` keep their existing file-based paths.
+
+`GET /projects/{p}/tasks` accepts exact `state`, `assignee`, `submitter`,
+`group`, and `decision_mode` filters, combined with AND. `q` matches a literal title
+substring using FTS5 trigram for three or more Unicode characters.
+For shorter terms it uses LIKE with escaped wildcards. ASCII letter
+case is ignored in either path. The order is state in board order,
+then display time descending, then task ID descending.
+
+Without `limit`, the response contains the whole matching list. Set
+`limit` to 1–1000 to receive at most that many results. If more match,
+the response contains `next_cursor`. Pass it back as `cursor` with
+the same filters and a limit. A cursor belongs to its project and filters.
+Pages use the last ordering key, not a pinned snapshot. Writes between
+pages can move rows into or out of later results.
+
+The response's `cursor` remains the event cursor, captured before the SQL
+query under the same project lock. It is not a pagination token.
+`warnings` are the unfiltered journal advisories that the old whole-board
+scan captured. There were no per-card list warnings. Ordinary invalid
+entries remain suppressed. The index stores the journal advisories in
+`meta`, refreshing them at reconciliation and when it refreshes changed
+rows, including state moves.
 
 ## Offline card maintenance
 
@@ -60,15 +113,20 @@ Maintenance reuses the board migration redo journal, checks the final board and 
 
 ## Protocol
 
-All routes live below `/api/v1`. Every domain request sends `Kander-Protocol: <n>`; a version outside the server's `[min, current]` range is refused with `protocol_incompatible` (412) before any domain operation. `GET /api/v1/version` returns both ranges so a client can refuse an incompatible server first. The current protocol is 2 and the oldest accepted one is 2: protocol 2 added the claim view status `lapsed` and the error code `taken_over`, and a protocol 1 worker would still stop agents on its own timeout, so mixed versions are refused.
+All routes live below `/api/v1`. Every domain request sends `Kander-Protocol: <n>`; a version outside the server's `[min, current]` range is refused with `protocol_incompatible` (412) before any domain operation. `GET /api/v1/version` returns the server's range so a client can refuse an incompatible server first. The current and oldest accepted protocol are both 3. Earlier versions used `assignee` for the executing agent, so mixing them would misread that field. The client's offline board cache is separated by wire protocol so an old snapshot cannot be decoded with the new schema.
 
 | Route | Purpose |
 | --- | --- |
 | `GET /health`, `GET /ready`, `GET /version` | Liveness, readiness, protocol range |
 | `GET /projects?name=`, `POST /projects` | Resolve or register a project |
-| `GET /projects/{p}/tasks[?state=]` | Task list with claim views and the event cursor it is consistent with |
+| `GET /projects/{p}/tasks` | Indexed task list with filters, title search, pagination, and claim views |
 | `POST /projects/{p}/tasks` | `kander new` |
 | `GET /projects/{p}/tasks/{t}` | `kander show` |
+| `POST /projects/{p}/tasks/{t}/assignee` | Change or clear the person responsible for the card with `kander assign` |
+| `GET /projects/{p}/tasks/{t}/decisions` | List the task's human and delegated decisions |
+| `POST /projects/{p}/tasks/{t}/decisions/human` | Record a human decision |
+| `POST /projects/{p}/tasks/{t}/decisions/leader` | Record a delegated Leader decision |
+| `POST /projects/{p}/tasks/{t}/decision-mode` | Set the managed decision mode |
 | `GET`, `PUT /projects/{p}/tasks/{t}/documents/{path}` | Read (`kander show --document`) or publish (`kander update --document`) `spec.md`, `plan.md`, `report.md`, attachments |
 | `POST /projects/{p}/tasks/{t}/deliveries`, `GET .../deliveries/{sha}` | Authenticated publication facts for a commit available from the common remote |
 | `GET .../tasks/{t}/dispatches/{id}`, `POST .../dispatches/actions/{action}` | Controlled dispatch preparation, attempts, reauthorization, terminal decisions, settlement and wrap-up grants |
@@ -82,20 +140,31 @@ All routes live below `/api/v1`. Every domain request sends `Kander-Protocol: <n
 | `GET /projects/{p}/groups/{g}`, `POST .../claim`, `/renew`, `/observation`, `/release` | Private coordinator lease and its public checkpoint |
 | `POST /projects/{p}/groups/{g}/facts`, `/reconcile`, `/recover`, `/remove-member` | Controlled coordinator producers and client Git verdicts; `remove-member` takes one unstarted member out of a checkpointed group (see [Orchestration checkpoints](coordinator-recovery.md#removing-an-unstarted-member)) |
 | `GET /projects/{p}/tasks/{t}/evidence-cleanup`, `GET /projects/{p}/groups/{g}/evidence-cleanup` | Read-only scope of the completion cleanup of Git evidence refs: whether the card or group is finished, its `done/` cards, and its integration executions |
+| `POST /projects/{p}/issues/import` | Create a card from a GitHub issue with its source attachments |
 | `POST /projects/{p}/issues/results/view`, `/save` | Completed work-set evidence and versioned result publication/decision history |
 | `GET /projects/{p}/events?cursor=&wait=` | Long-polled change log |
 
-Errors are JSON `{code, message, board_code}` with stable codes: `invalid_request`, `not_found`, `revision_conflict`, `held_by_other`, `taken_over`, `lease_invalid`, `lease_active`, `claim_required`, `evidence_incomplete`, `protocol_incompatible`, `idempotency_mismatch`, `project_mismatch`, `project_not_empty`, `board_rejected`, `not_ready`, `internal`. `board_code` carries the board package message key of a domain rejection so the client renders the same localized text as v1.
+Errors are JSON `{code, message, board_code}` with stable codes: `invalid_request`, `not_found`, `revision_conflict`, `held_by_other`, `taken_over`, `lease_invalid`, `lease_active`, `claim_required`, `evidence_incomplete`, `protocol_incompatible`, `idempotency_mismatch`, `project_mismatch`, `project_not_empty`, `board_rejected`, `not_ready`, `index_rebuilding`, `internal`. Embedding reserves `forbidden` and `attribution_required` as HTTP 403 codes for host policy and missing attribution, respectively. `board_code` carries the board package message key of a domain rejection so the client renders the same localized text as v1.
 
 ### Idempotency
 
-Every write carries an `Idempotency-Key`. The server writes a pending receipt before the operation. Card creation, updates, moves, launcher facts, claims and takeovers stage the completed receipt in the same board redo transaction as the card and claim. A successful board recovery therefore also recovers the exact answer. Creation freezes the initial task ID, text, revision, operation ID, observation time and HTTP 201 answer; a later title edit, move or date change cannot change that answer or create another card. Review producers, runtime finalization and collaboration requests also stage their exact result receipts in the domain transaction. Dispatch and coordinator producers also stage their exact receipts in the same domain transaction. The same key with the same request returns the stored answer; the same key with a different request is refused with `idempotency_mismatch`. A pending receipt makes the retry inspect durable operation evidence before running again. Internal failures and pending board recovery stay pending; the latter returns `not_ready` without replacing the original receipt. The client retries transport failures and `not_ready` with the same key.
+Every write carries an `Idempotency-Key`. The server writes a pending receipt before the operation. Card creation, assignments, updates, moves, launcher facts, claims and takeovers stage the completed receipt in the same board redo transaction as the card and claim. A successful board recovery therefore also recovers the exact answer. Creation freezes the initial task ID, text, revision, operation ID, observation time and HTTP 201 answer; a later title edit, move or date change cannot change that answer or create another card. Review producers, runtime finalization and collaboration requests also stage their exact result receipts in the domain transaction. Dispatch and coordinator producers also stage their exact receipts in the same domain transaction. The same key with the same request returns the stored answer; the same key with a different request is refused with `idempotency_mismatch`. A pending receipt makes the retry inspect durable operation evidence before running again. Internal failures and pending board recovery stay pending; the latter returns `not_ready` without replacing the original receipt. The client retries transport failures and `not_ready` with the same key.
 
 Pending receipts now carry schema 1. An older prototype's unversioned pending creation has no stable binding to a card or its original response, so it is preserved and refused with `evidence_incomplete` for operator inspection. The service never infers that binding from a mutable title or state. Previously completed receipts remain readable with their exact original bodies.
 
 ### Documents
 
 `PUT .../documents/{path}` carries the full text, its SHA-256, the expected card revision, and an optional contract decision. The server checks the digest of the received bytes before publishing, so an interrupted upload never becomes a visible partial document. Publication goes through `board.UpdateDocument`, which keeps every v1 rule: frozen contract fields, managed fields, managed paths, line endings.
+
+### Submitter and assignee
+
+The task summary reads `owner` from `OWNER` (executing agent), `submitter` from `SUBMITTER` (submission identity), and `assignee` from `ASSIGNEE` (responsible person). Cards that lack either new field need no migration and return an empty string for the missing value.
+
+Both creation routes accept `submitter`. The CLI reports the current directory's `git config user.name`, or an empty value if unavailable. An embedding host's attribution hook replaces the reported value. If a configured hook does not identify the caller, the service returns `attribution_required` and creates no card. A new card starts with an empty `ASSIGNEE`. Both header fields are managed: a full-body replacement cannot add, remove, or change their lines. The server selects `SUBMITTER` once at creation and never changes it.
+
+`POST .../assignee` accepts `{"assignee":"name","expected_revision":7}` and returns the updated task. An empty `assignee` clears it. The revision check is optional. A successful write advances the card revision and emits one `task_changed` event. The idempotency receipt commits with the write, and replay emits no new event. The authorization hook sees the task-scoped route. No execution credential or contract decision is required, even in `working` or `review`. Cards in `archived` or `trash` cannot be assigned.
+
+The service treats both values as opaque strings. It rejects control characters and line separators, trims leading and trailing whitespace, then enforces a maximum of 256 UTF-8 bytes. Invalid values return `invalid_request`. The service does not implement user accounts or enforce which person may be assigned.
 
 ## Claims and leases
 
@@ -107,7 +176,7 @@ A claim is the server-side ownership of one task by one execution, kept in `boar
 - `POST .../renew` with the claim headers (`Kander-Claim-Token`, `Kander-Claim-Generation`) extends the lease by the TTL. A renewal writes no card, so it never changes the card revision. Default TTL 90 s and renewal interval 15 s; the server announces both in the grant and decides time with its own clock.
 - Safety rests on the generation and token fence, not on the clock. Holder authority is an active record with the token and the generation header of its current generation; the lease clock only decides whether another execution may take the task over. A lease past its expiry that nobody took over reads as `lapsed`: its holder keeps writing, moving and renewing at the same generation, and a renewal makes it `active` again. `lapsed` is a view value and is never stored.
 - The task is never reassigned automatically. Once the lease lapsed, or the record is no longer active, `POST .../takeover` with a decision reference and the generation the caller observed hands the task to a new execution with generation `n+1`, appends a handoff record, and supersedes the open requests of older generations. In the same project lock the card's execution ledger hands off (`board.BeginTakeover`): `OWNER`, `SESSION`, and `WINDOW` name the new execution, the old record is retired as handed off, and the new executor reports and confirms its start through `POST .../execution` like a start. A live lease refuses a foreign takeover with `lease_active`. Its current client can perform an explicit owned handoff with the old private proof, exact card revision and a service-clock ticket around a fresh stopped observation. A claimed card without any claim record (a migrated board) can be taken over from generation 0.
-- Every write of a `working` or `review` card (document, move, request answer) checks inside the project lock that the presented token and generation are the current claim. A token other than the current one with an older generation header is `taken_over`, whatever the record's status is now: a newer generation replaced that execution for good. The server keeps only the current token hash, so this answer does not authenticate the old token and grants nothing. Another token is `held_by_other`, and a header of another generation with the current token, or a record that is not active, is `lease_invalid`. Card updates and moves additionally run the ownership check under the board transaction locks. Their receipts and any claim release are staged in that same redo record. Server read routes share the project lock, so a snapshot cannot mix a newly committed card with an older claim. A presented execution credential is also checked when its card is no longer claimed; a released execution cannot publish a late result to a todo card. A user-authorized `archived`/`trash` termination may end a task whose record is no longer active, or present the holder's own credential; another execution's token is refused while the record is active, lapsed or not, so it takes the task over first.
+- A document update, move, or request answer for a `working` or `review` card checks inside the project lock that the presented token and generation are the current claim. A token other than the current one with an older generation header is `taken_over`, whatever the record's status is now: a newer generation replaced that execution for good. The server keeps only the current token hash, so this answer does not authenticate the old token and grants nothing. Another token is `held_by_other`, and a header of another generation with the current token, or a record that is not active, is `lease_invalid`. Card updates and moves additionally run the ownership check under the board transaction locks. Their receipts and any claim release are staged in that same redo record. Server read routes share the project lock, so a snapshot cannot mix a newly committed card with an older claim. A presented execution credential is also checked when its card is no longer claimed; a released execution cannot publish a late result to a todo card. A user-authorized `archived`/`trash` termination may end a task whose record is no longer active, or present the holder's own credential; another execution's token is refused while the record is active, lapsed or not, so it takes the task over first.
 - A move into `done`, `archived`, or `trash` stages the claim release in the card transaction. Startup recovers the whole redo record before serving reads. It also reconciles pending records left by the earlier prototype.
 - After that reconciliation, project startup gives every active lease (task claims, group leases and integration target leases) an expiry of at least one TTL from the start, through each kernel's `startup` event, so the server's downtime never opens a takeover. A lease that had already lapsed before the server stopped is extended as well, because a crashed server records no stop time; a takeover then waits one more TTL. A failed write stops the project from opening, and opening it again repeats the same writes.
 - Checks of another task's claim (a joint publication member, a member of a coordinator review write, a review writer or review input, a collaboration request target, an integration contributor or actor) call the `standing` event of the claim or group kernel, which accepts exactly the generation that may still write as the holder, and never compare `ExpiresAt` in the shell.

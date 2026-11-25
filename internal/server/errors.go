@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/issue"
 )
@@ -17,12 +17,18 @@ var boardCodes = map[string]string{
 	"board.transaction_pending":  api.CodeNotReady,
 	"board.task_does_not_exist":  api.CodeNotFound,
 	"board.invalid_task_id":      api.CodeInvalidRequest,
+	"board.person_field_invalid": api.CodeInvalidRequest,
+	"board.decision_invalid":     api.CodeInvalidRequest,
+	"board.decision_reserved":    api.CodeDecisionReserved,
 }
 
 var codeStatus = map[string]int{
 	api.CodeInvalidRequest:       http.StatusBadRequest,
+	api.CodeForbidden:            http.StatusForbidden,
+	api.CodeAttributionRequired:  http.StatusForbidden,
 	api.CodeNotFound:             http.StatusNotFound,
 	api.CodeRevisionConflict:     http.StatusConflict,
+	api.CodeDecisionReserved:     http.StatusConflict,
 	api.CodeHeldByOther:          http.StatusConflict,
 	api.CodeTakenOver:            http.StatusConflict,
 	api.CodeLeaseInvalid:         http.StatusConflict,
@@ -35,6 +41,7 @@ var codeStatus = map[string]int{
 	api.CodeProjectNotEmpty:      http.StatusConflict,
 	api.CodeBoardRejected:        http.StatusUnprocessableEntity,
 	api.CodeNotReady:             http.StatusServiceUnavailable,
+	api.CodeIndexRebuilding:      http.StatusServiceUnavailable,
 	api.CodeInternal:             http.StatusInternalServerError,
 }
 

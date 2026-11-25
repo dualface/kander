@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 )
 
 func TestCredentialWritersPreserveLauncherAndWorkerFacts(t *testing.T) {

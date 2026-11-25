@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 )
 
 // Attachment names with a space or a non-ASCII character cross the client and

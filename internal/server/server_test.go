@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
 	"github.com/dualface/kander/internal/server"
@@ -35,15 +35,19 @@ type fixture struct {
 }
 
 func start(t *testing.T, dir string, c *clock) *fixture {
+	return startWithHooks(t, dir, c, server.Hooks{})
+}
+
+func startWithHooks(t *testing.T, dir string, c *clock, hooks server.Hooks) *fixture {
 	t.Helper()
 	s, err := server.Open(server.Options{
 		DataDir: dir, TTL: 90 * time.Second, RenewInterval: 15 * time.Second, Now: c.now,
-		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Version: "test",
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Version: "test", Hooks: hooks,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := httptest.NewServer(s.Handler())
+	h := httptest.NewServer(s.IndexDifferentialHandler(t))
 	f := &fixture{t: t, dir: dir, clock: c, srv: s, http: h}
 	t.Cleanup(f.stop)
 	return f
@@ -61,9 +65,14 @@ func (f *fixture) stop() {
 }
 
 func newFixture(t *testing.T) *fixture {
+	return newFixtureWithHooks(t, server.Hooks{})
+}
+
+func newFixtureWithHooks(t *testing.T, hooks server.Hooks) *fixture {
+	t.Helper()
 	c := &clock{}
 	c.at.Store(time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC).UnixNano())
-	return start(t, t.TempDir(), c)
+	return startWithHooks(t, t.TempDir(), c, hooks)
 }
 
 func (f *fixture) project(clientID string) *client.Project {
@@ -350,10 +359,10 @@ func TestRestartKeepsStateAndRefusesASecondInstance(t *testing.T) {
 }
 
 // A newer and an older peer protocol are refused before any domain operation:
-// protocol 1 clients predate recoverable lapsed leases.
+// protocol 2 clients still interpret assignee as the executing agent.
 func TestProtocolMismatchIsRefused(t *testing.T) {
 	f := newFixture(t)
-	for _, version := range []string{"99", "1"} {
+	for _, version := range []string{"99", "2", "1"} {
 		req, _ := http.NewRequest(http.MethodGet, f.http.URL+"/api/v1/projects?name=demo", nil)
 		req.Header.Set(api.HeaderProtocol, version)
 		resp, err := http.DefaultClient.Do(req)

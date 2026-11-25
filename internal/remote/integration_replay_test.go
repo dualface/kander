@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 )
 
 // replayFixture reviews a range of two commits: the first changes work.txt, the

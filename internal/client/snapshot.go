@@ -2,7 +2,7 @@ package client
 
 import (
 	"context"
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"net/http"
 )
 

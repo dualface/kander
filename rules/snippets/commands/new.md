@@ -38,6 +38,7 @@ kander new --large --language en bug example-slug Fix the example
 ## Effects
 
 - Writes `<task-id>/spec.md` with the metadata and the contract template; `new` writes `SIZE` and, for a small card, the IMPLEMENTATION/SUMMARY sections. The command creates the template only. The caller completes the card through `update` per `snippets/card-content.md`, then follows "Post-Creation Self-Review".
+- Leaves `ASSIGNEE` empty. The client reports the current directory's `git config user.name`, or an empty value if unavailable. The service uses that value for `SUBMITTER` unless the embedding host supplies caller attribution, in which case its value takes precedence. The same rule applies to `kander issue import`.
 
 ## Output
 
@@ -46,3 +47,4 @@ kander new --large --language en bug example-slug Fix the example
 ## Rejections
 
 - A missing type, slug, or title, an unknown option, or an invalid `--language` value is a usage error; an invalid configured `agent_language` is an ordinary failure.
+- A configured attribution hook that does not identify the caller refuses creation with `attribution_required`. The selected `SUBMITTER` must be a single line without control characters and at most 256 UTF-8 bytes after trimming leading and trailing whitespace. An invalid value returns `board.person_field_invalid`.

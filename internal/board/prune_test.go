@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/dualface/kander/internal/fs"
 )
@@ -92,6 +93,15 @@ func TestArchivePrunesSingleCardEvidence(t *testing.T) {
 	root := tempBoard(t)
 	id := pruneCard(t, root, "prune-single", "")
 	pruneRun(t, root, "prune-single-run", "prune-single-batch", id)
+	input := DecisionInput{Question: "Archive this card?", Answer: "Yes", Options: []DecisionOption{}, RecordedBy: "tester", Channel: "cli"}
+	var record DecisionRecord
+	if err := WithTransaction(root, LockScope{Tasks: []string{id}}, func(tx *Transaction) error {
+		var err error
+		record, err = tx.RecordDecision(id, DecisionHuman, input, time.Now())
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
 	card := transactionSnapshot(t, root, id)
 	if err := UpdateDocument(root, id, UpdateOptions{Document: "report.md", Text: "报告\n", ExpectedRevision: card.Revision}); err != nil {
 		t.Fatal(err)
@@ -103,6 +113,10 @@ func TestArchivePrunesSingleCardEvidence(t *testing.T) {
 	s := transactionSnapshot(t, root, id)
 	requireExists(t, filepath.Join(s.Entry.Path, "reviews"), false)
 	requireExists(t, filepath.Join(s.Entry.Path, "report.md"), true)
+	requireExists(t, filepath.Join(s.Entry.Path, decisionPath(record.ID)), true)
+	if records, err := Decisions(root, id); err != nil || len(records) != 1 || records[0].ID != record.ID {
+		t.Fatalf("archive removed the decision: %+v, %v", records, err)
+	}
 	requireExists(t, reviewPath(root, "runs", "prune-single-run"), false)
 	requireExists(t, reviewPath(root, "batches", "prune-single-batch.json"), false)
 	if indexes, err := ParseReviewIndexes(s.Text); err != nil || len(indexes) != 1 {

@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/statemachine/serverintegration"
 )
@@ -156,7 +156,7 @@ func (p *project) wrapUpIntegration(tx *board.Transaction, task string, generati
 	}
 	return apiError(api.CodeEvidenceIncomplete, "wrap-up integration no longer matches the final review target")
 }
-func (s *Server) taskIntegrationRoutes(mux *http.ServeMux) {
+func (s *Server) taskIntegrationRoutes(mux *routeTable) {
 	s.projectRoute(mux, "GET /api/v1/projects/{project}/tasks/{task}/integration", func(p *project, r *http.Request) outcome {
 		value, err := p.taskIntegration(r.PathValue("task"))
 		return result(http.StatusOK, value, err)

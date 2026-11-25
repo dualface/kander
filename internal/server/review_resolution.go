@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"slices"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 )
 
@@ -28,7 +28,7 @@ func (p *project) resolutionFacts(input board.ReviewPlanExtension) outcome {
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	facts, err := board.ReviewBatchResolutionFacts(p.board, input)
 	return result(http.StatusOK, facts, err)
 }

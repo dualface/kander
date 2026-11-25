@@ -6,9 +6,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
 	"github.com/dualface/kander/internal/config"
@@ -23,7 +24,8 @@ type cachedList struct {
 }
 
 func (s *Session) cachePath() string {
-	return filepath.Join(s.Home, "cache", projectNamespace(s.ServerURL, s.Info.ID)+".json")
+	// A stale snapshot must not decode with a different wire schema.
+	return filepath.Join(s.Home, "cache", projectNamespace(s.ServerURL, s.Info.ID)+".v"+strconv.Itoa(api.ProtocolVersion)+".json")
 }
 
 // Location is a resource identity for display and prompts, never a local path.
@@ -71,7 +73,11 @@ func (s *Session) ListView(ctx context.Context, allowStale bool) (board.BoardVie
 		view.Warnings = append(view.Warnings, config.Text("remote.stale_snapshot", view.GeneratedAt))
 	}
 	for _, item := range list.Tasks {
-		summary := board.TaskSummary{TaskID: item.TaskID, Title: item.Title, State: item.State, Kind: item.Kind, Type: item.Type, TaskGroup: item.TaskGroup, Assignee: item.Assignee, CreatedAt: item.CreatedAt, StartedAt: item.StartedAt, CompletedAt: item.CompletedAt, Time: item.Time, Result: item.Result}
+		summary := board.TaskSummary{
+			TaskID: item.TaskID, Title: item.Title, State: item.State, Kind: item.Kind, Type: item.Type, TaskGroup: item.TaskGroup,
+			Owner: item.Owner, Submitter: item.Submitter, Assignee: item.Assignee, DecisionMode: item.DecisionMode, CreatedAt: item.CreatedAt, StartedAt: item.StartedAt,
+			CompletedAt: item.CompletedAt, Time: item.Time, Result: item.Result,
+		}
 		if item.Claim != nil {
 			summary.ClaimStatus, summary.ClaimClientID = item.Claim.Status, item.Claim.ClientID
 			if item.Claim.Observation != nil || item.Claim.Status == api.ClaimLost || item.Claim.Status == api.ClaimLapsed {

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 )
 
@@ -43,7 +43,7 @@ func (p *project) reviewWrite(key, operation string, request any, tasks func() (
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	coordinatorGroup := ""
 	run := func() outcome {
 		if err := h.coordinatorConflict(); err != nil {
@@ -101,7 +101,7 @@ func (p *project) reviewWrite(key, operation string, request any, tasks func() (
 			}
 		}
 
-		extension := board.TransactionExtension{Groups: []string{serviceGroup}, Tasks: ids, Before: func(tx *board.Transaction) error {
+		extension := board.TransactionExtension{Groups: []string{serviceGroup}, Published: p.indexPublication, Tasks: ids, Before: func(tx *board.Transaction) error {
 			if publication != nil {
 				return p.validatePublication(tx, *publication)
 			}
@@ -203,7 +203,7 @@ func (p *project) batchTasks(id string) func() ([]string, error) {
 	}
 }
 
-func (s *Server) reviewRoutes(mux *http.ServeMux) {
+func (s *Server) reviewRoutes(mux *routeTable) {
 	const base = "/api/v1/projects/{project}/reviews"
 	s.projectRoute(mux, "POST "+base+"/plan", func(p *project, r *http.Request) outcome {
 		var plan board.ReviewPlan

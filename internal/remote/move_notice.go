@@ -6,7 +6,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 )
 
 // MoveObserver prepares a CLI-only notice from service data. Failures must not

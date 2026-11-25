@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/statemachine/serverclaim"
 )
 
@@ -57,7 +57,12 @@ func (p *project) readClaim(task string) (claimRecord, bool, error) {
 	return r, found, err
 }
 
-func (p *project) writeClaim(r claimRecord) error { return writeJSON(p.root, claimPath(r.TaskID), r) }
+func (p *project) writeClaim(r claimRecord) error {
+	// A replacement can fail after publication. Read the authoritative record
+	// before unlocking the project, regardless of the returned error.
+	p.markIndexTask(r.TaskID)
+	return writeJSON(p.root, claimPath(r.TaskID), r)
+}
 
 // token derives the bearer secret of one execution from the server secret, so
 // a replayed claim receipt can return it without the server storing it.
@@ -76,14 +81,21 @@ func tokenHash(token string) string {
 // query gives for the server clock: an active record whose lease expired is
 // lapsed.
 func (r claimRecord) view(now time.Time) *api.ClaimView {
-	status := r.Status
-	if s, ok := claimStatuses[r.Status]; ok {
-		status = claimStatusNames[serverclaim.Shown(serverclaim.State{Status: s, Live: now.Before(r.ExpiresAt)}, serverclaim.Params{})]
-	}
-	return &api.ClaimView{
+	return visibleClaim(r.storedView(), now)
+}
+
+func (r claimRecord) storedView() api.ClaimView {
+	return api.ClaimView{
 		Observation: r.Observation, ClientID: r.ClientID, ExecutionID: r.ExecutionID, Owner: r.Owner,
-		Generation: r.Generation, Status: status, ExpiresAt: r.ExpiresAt, RenewedAt: r.RenewedAt,
+		Generation: r.Generation, Status: r.Status, ExpiresAt: r.ExpiresAt, RenewedAt: r.RenewedAt,
 	}
+}
+
+func visibleClaim(view api.ClaimView, now time.Time) *api.ClaimView {
+	if s, ok := claimStatuses[view.Status]; ok {
+		view.Status = claimStatusNames[serverclaim.Shown(serverclaim.State{Status: s, Live: now.Before(view.ExpiresAt)}, serverclaim.Params{})]
+	}
+	return &view
 }
 
 // claimedState reports whether a board state keeps an owner.

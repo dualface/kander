@@ -37,6 +37,10 @@ func TestContractEnumerationsAndRequirementsAreArgumentErrors(t *testing.T) {
 	unboundCheckout(t)
 	for _, args := range [][]string{
 		{"list", "wokring"},
+		{"decision"},
+		{"decision", "record", sampleTask, "--kind", "human"},
+		{"decision", "record", sampleTask, "--kind", "unknown", "--file", "input.json"},
+		{"decision", "mode", sampleTask, "unknown"},
 		{"list", "--json", "wokring"},
 		{"new", "nonsense", "slug", "title"},
 		{"request", sampleTask, "nonsense", "text"},

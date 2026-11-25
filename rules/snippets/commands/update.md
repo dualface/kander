@@ -36,8 +36,8 @@ kander update 20261118-example-task --document spec.md --file /tmp/spec.md --exp
 
 ## Effects
 
-- Full-body replacements preserve `LANGUAGE`, `OWNER`, `SESSION`, `WINDOW`, the timestamps, `RESULT`, execution metadata, and managed indexes (`REVIEWS`, `*_RESOLVED`, `CONTRACT_DECISIONS`, `LIFECYCLE_DECISION`).
-- Never writes managed `reviews/`, `dispatches/`, manifests, indexes, or control records; dedicated producers own them.
+- Full-body replacements preserve `LANGUAGE`, `SUBMITTER`, `ASSIGNEE`, `DECISION_MODE`, `OWNER`, `SESSION`, `WINDOW`, the timestamps, `RESULT`, execution metadata, and managed indexes (`REVIEWS`, `DECISIONS`, `*_RESOLVED`, `CONTRACT_DECISIONS`, `LIFECYCLE_DECISION`).
+- Never writes managed `reviews/`, `decisions/`, `dispatches/`, manifests, indexes, or control records; dedicated producers own them.
 - Legacy file cards are read-only: the command fails before side effects and directs the caller to offline `kander server maintain --project NAME`.
 
 ## Output

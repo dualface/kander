@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 )
 
@@ -22,7 +22,36 @@ const maxWait = 60 * time.Second
 
 // Handler returns the /api/v1 routes.
 func (s *Server) Handler() http.Handler {
+	return s.routes().handler()
+}
+
+type route struct {
+	pattern string
+	handler http.HandlerFunc
+}
+
+// routeTable is the inventory used to mount and verify the same set of routes.
+type routeTable []route
+
+func (t *routeTable) HandleFunc(pattern string, handler http.HandlerFunc) {
+	*t = append(*t, route{pattern: pattern, handler: handler})
+}
+
+func (t routeTable) handler() http.Handler {
 	mux := http.NewServeMux()
+	for _, route := range t {
+		mux.HandleFunc(route.pattern, route.handler)
+	}
+	return mux
+}
+
+func (s *Server) routes() routeTable {
+	var table routeTable
+	s.registerRoutes(&table)
+	return table
+}
+
+func (s *Server) registerRoutes(mux *routeTable) {
 	s.adminRoutes(mux)
 	mux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSONResponse(w, http.StatusOK, api.Health{Status: "alive", Ready: s.ready.Load()})
@@ -59,8 +88,12 @@ func (s *Server) Handler() http.Handler {
 		return outcome{status: http.StatusOK, body: info}
 	}))
 	const task = "/api/v1/projects/{project}/tasks/{task}"
-	s.projectRoute(mux, "GET /api/v1/projects/{project}/tasks", func(p *project, r *http.Request) outcome {
-		list, err := p.list(r.Context(), r.URL.Query().Get("state"))
+	s.projectRoute(mux, taskListRoute, func(p *project, r *http.Request) outcome {
+		query, err := parseTaskList(r.URL.RawQuery)
+		if err != nil {
+			return outcome{err: err}
+		}
+		list, err := p.list(r.Context(), query)
 		return result(http.StatusOK, list, err)
 	})
 	s.projectRoute(mux, "POST /api/v1/projects/{project}/tasks", func(p *project, r *http.Request) outcome {
@@ -68,7 +101,11 @@ func (s *Server) Handler() http.Handler {
 		if err := decode(r, &req); err != nil {
 			return outcome{err: err}
 		}
-		return p.newTask(r.Header.Get(api.HeaderIdempotencyKey), req)
+		submitter, err := attribution(r, req.Submitter)
+		if err != nil {
+			return outcome{err: err}
+		}
+		return p.newTask(r.Header.Get(api.HeaderIdempotencyKey), req, submitter)
 	})
 	s.projectRoute(mux, "GET "+task, func(p *project, r *http.Request) outcome {
 		t, err := p.show(r.PathValue("task"))
@@ -95,6 +132,14 @@ func (s *Server) Handler() http.Handler {
 		}
 		return p.move(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("task"), req, holderOf(r))
 	})
+	s.projectRoute(mux, "POST "+task+"/assignee", func(p *project, r *http.Request) outcome {
+		var req api.Assign
+		if err := decode(r, &req); err != nil {
+			return outcome{err: err}
+		}
+		return p.assign(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("task"), req)
+	})
+	s.registerDecisionRoutes(mux, task)
 	s.projectRoute(mux, "POST "+task+"/claim", func(p *project, r *http.Request) outcome {
 		var req api.ClaimRequest
 		if err := decode(r, &req); err != nil {
@@ -176,7 +221,6 @@ func (s *Server) Handler() http.Handler {
 	s.issueRoutes(mux)
 	s.issueResultRoutes(mux)
 	s.publicationRoutes(mux)
-	return mux
 }
 
 func result(status int, body any, err error) outcome {
@@ -205,10 +249,10 @@ func holderOf(r *http.Request) holder {
 // projectEvents is the one read route that never touches the board.
 const projectEvents = "GET /api/v1/projects/{project}/events"
 
-func (s *Server) projectRoute(mux *http.ServeMux, pattern string, fn func(*project, *http.Request) outcome) {
+func (s *Server) projectRoute(mux *routeTable, pattern string, fn func(*project, *http.Request) outcome) {
 	// The registered pattern decides the lock: a GET pattern also serves
 	// HEAD, and a request path ending in /events may still name a document.
-	read := strings.HasPrefix(pattern, http.MethodGet+" ") && pattern != projectEvents
+	read := strings.HasPrefix(pattern, http.MethodGet+" ") && pattern != projectEvents && pattern != taskListRoute
 	mux.HandleFunc(pattern, s.domain(func(r *http.Request) outcome {
 		p, err := s.project(r.PathValue("project"))
 		if err != nil {
@@ -218,14 +262,14 @@ func (s *Server) projectRoute(mux *http.ServeMux, pattern string, fn func(*proje
 			if err := p.lockBoard(); err != nil {
 				return outcome{err: err}
 			}
-			defer p.mu.Unlock()
+			defer p.unlockBoard()
 		}
 		return fn(p, r)
 	}))
 }
 
 // domain wraps a domain route with the protocol handshake, the readiness
-// gate, the body limit, and the access log. The claim token is never logged.
+// gate, embedding hooks, the body limit, and the access log.
 func (s *Server) domain(fn func(*http.Request) outcome) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		started := time.Now()
@@ -237,8 +281,12 @@ func (s *Server) domain(fn func(*http.Request) outcome) http.HandlerFunc {
 		case !s.ready.Load():
 			out = outcome{err: apiError(api.CodeNotReady, "server is recovering")}
 		default:
-			r.Body = http.MaxBytesReader(w, r.Body, maxBody)
-			out = fn(r)
+			if err := s.authorize(r); err != nil {
+				out = outcome{err: err}
+			} else {
+				r.Body = http.MaxBytesReader(w, r.Body, maxBody)
+				out = fn(s.withAttribution(r))
+			}
 		}
 		status := out.status
 		switch {

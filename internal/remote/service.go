@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
 )
@@ -56,8 +56,13 @@ type ProjectService interface {
 	IssueIndex(context.Context) (json.RawMessage, error)
 	ID() string
 	List(context.Context, string) (api.TaskList, error)
+	ListWithOptions(context.Context, api.TaskListOptions) (api.TaskList, error)
 	Show(context.Context, string) (api.Task, error)
 	NewTask(context.Context, string, api.NewTask) (api.Task, error)
+	Assign(context.Context, string, string, api.Assign) (api.Task, error)
+	RecordDecision(context.Context, string, string, api.DecisionKind, api.DecisionInput) (api.DecisionRecord, error)
+	Decisions(context.Context, string) (api.DecisionList, error)
+	SetDecisionMode(context.Context, string, string, api.SetDecisionMode) (api.DecisionModeResult, error)
 	Document(context.Context, string, string) (api.Document, error)
 	PutDocument(context.Context, string, string, api.Document, *client.Claim) (api.Task, error)
 	Move(context.Context, string, string, api.Move, *client.Claim) (api.Task, error)
