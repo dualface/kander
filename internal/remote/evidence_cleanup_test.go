@@ -393,3 +393,53 @@ func TestCompletionCleanupWaitsForTheSettledGroup(t *testing.T) {
 		t.Fatalf("cleanup of the replay: %+v", report)
 	}
 }
+
+// A push to origin reaches every push URL it has. A checkout whose origin also
+// pushes to a mirror deletes nothing, in neither repository, and the warning
+// names the refs to check.
+func TestCompletionCleanupRefusesAnExtraPushURL(t *testing.T) {
+	f := newIntegrationFixture(t)
+	ctx, p, task := t.Context(), f.a.Info.ID, f.task.TaskID
+	if _, err := f.a.Integrate(ctx, f.first, f.options("extra-push-url")); err != nil {
+		t.Fatal(err)
+	}
+	delivery := api.DeliveryRef(p, task, f.credential.Generation, f.commit)
+	mirror := filepath.Join(f.root, "mirror.git")
+	deliveryGit(t, f.root, "init", "-q", "--bare", mirror)
+	deliveryGit(t, f.first, "push", "-q", mirror, f.commit+":"+delivery)
+	report := f.completeCleaningWith(func() {
+		deliveryGit(t, f.first, "remote", "set-url", "--add", "--push", "origin", f.bare)
+		deliveryGit(t, f.first, "remote", "set-url", "--add", "--push", "origin", mirror)
+		t.Chdir(f.root)
+	})
+	if report.Err == nil || len(report.Deleted) != 0 || len(report.Kept) != 0 {
+		t.Fatalf("cleanup through two push URLs: %+v", report)
+	}
+	if warning := report.Warning(); !strings.Contains(warning, "refs/heads/kander/"+p+"/"+task+"/*") {
+		t.Fatalf("warning %q does not name the scope", warning)
+	}
+	if !slices.Contains(f.evidenceRefs(), delivery) {
+		t.Fatal("the registered remote lost the delivery ref")
+	}
+	if got := deliveryGit(t, mirror, "for-each-ref", "--format=%(refname)", delivery); got != delivery {
+		t.Fatalf("the mirror lost the delivery ref: %q", got)
+	}
+}
+
+// A deletion whose result could not be checked names every listed ref as
+// unconfirmed instead of dropping it.
+func TestCompletionCleanupWarningNamesUnconfirmedRefs(t *testing.T) {
+	report := remote.EvidenceCleanupReport{Kept: []remote.KeptEvidenceRef{
+		{Ref: "refs/heads/kander/p/a-task/g1/" + strings.Repeat("a", 40), Reason: "push failed", Unconfirmed: true},
+		{Ref: "refs/heads/kander/p/a-task/g2/" + strings.Repeat("b", 40), Reason: "push refused"},
+	}}
+	warning := report.Warning()
+	for _, kept := range report.Kept {
+		if !strings.Contains(warning, kept.Ref) || !strings.Contains(warning, kept.Reason) {
+			t.Fatalf("warning %q lacks %s", warning, kept.Ref)
+		}
+	}
+	if strings.Count(warning, "\n") != 2 {
+		t.Fatalf("warning %q", warning)
+	}
+}

@@ -32,26 +32,44 @@ type EvidenceCleanupReport struct {
 	// Err ends the cleanup before any deletion: the scope or the remote could
 	// not be read, or no checkout of the project is available.
 	Err error
+	// Scope names what the service owned when Err came before the remote was
+	// listed: the task evidence prefixes and the exact source refs. Whether the
+	// remote still holds them is unknown.
+	Scope []string
 }
 
 // KeptEvidenceRef is an evidence ref that could not be deleted, and why.
+// Unconfirmed marks a ref whose deletion could not be checked because the
+// remote could not be listed again; it may or may not still exist.
 type KeptEvidenceRef struct {
-	Ref    string
-	Reason string
+	Ref         string
+	Reason      string
+	Unconfirmed bool
 }
 
 // Warning is the localized text for standard error, empty when the cleanup
 // deleted every listed ref or had nothing to do.
 func (r EvidenceCleanupReport) Warning() string {
 	if r.Err != nil {
-		return config.Text("remote.evidence_cleanup_failed", r.Err.Error())
+		lines := []string{config.Text("remote.evidence_cleanup_failed", r.Err.Error())}
+		if len(r.Scope) > 0 {
+			lines = append(lines, config.Text("remote.evidence_cleanup_scope_unknown"))
+			for _, ref := range r.Scope {
+				lines = append(lines, "  "+ref)
+			}
+		}
+		return strings.Join(lines, "\n")
 	}
 	if len(r.Kept) == 0 {
 		return ""
 	}
 	lines := []string{config.Text("remote.evidence_cleanup_kept", len(r.Kept))}
 	for _, kept := range r.Kept {
-		lines = append(lines, "  "+config.Text("remote.evidence_cleanup_kept_ref", kept.Ref, kept.Reason))
+		id := "remote.evidence_cleanup_kept_ref"
+		if kept.Unconfirmed {
+			id = "remote.evidence_cleanup_unconfirmed_ref"
+		}
+		lines = append(lines, "  "+config.Text(id, kept.Ref, kept.Reason))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -189,15 +207,22 @@ func (s *Session) cleanEvidence(ctx context.Context, scope api.EvidenceCleanup, 
 	if err != nil {
 		return EvidenceCleanupReport{Err: err}
 	}
+	unknown := func(err error) EvidenceCleanupReport {
+		return EvidenceCleanupReport{Err: err, Scope: ownership.patterns}
+	}
 	// The same check as a completion: origin and its push URL are the
-	// registered remote, so a deletion never reaches another repository.
+	// registered remote. A push to origin reaches every push URL it has, so a
+	// deletion also needs that URL to be the only one.
 	dir, err := s.completionCheckout(ctx, recorded)
 	if err != nil {
-		return EvidenceCleanupReport{Err: err}
+		return unknown(err)
+	}
+	if err := singlePushRemote(ctx, dir, s.Info.Remote); err != nil {
+		return unknown(err)
 	}
 	listed, err := listEvidenceRefs(ctx, dir, ownership)
 	if err != nil {
-		return EvidenceCleanupReport{Err: err}
+		return unknown(err)
 	}
 	if len(listed) == 0 {
 		return EvidenceCleanupReport{}
@@ -217,10 +242,14 @@ func (s *Session) cleanEvidence(ctx context.Context, scope api.EvidenceCleanup, 
 	// another client may have deleted others: only a ref the remote still
 	// lists is kept.
 	remaining, err := listEvidenceRefs(ctx, dir, ownership)
-	if err != nil {
-		return EvidenceCleanupReport{Err: errors.Join(pushErr, err)}
-	}
 	report.Deleted = nil
+	if err != nil {
+		reason := errors.Join(pushErr, err).Error()
+		for _, ref := range listed {
+			report.Kept = append(report.Kept, KeptEvidenceRef{Ref: ref, Reason: reason, Unconfirmed: true})
+		}
+		return report
+	}
 	for _, ref := range listed {
 		if slices.Contains(remaining, ref) {
 			report.Kept = append(report.Kept, KeptEvidenceRef{Ref: ref, Reason: pushErr.Error()})
@@ -229,6 +258,19 @@ func (s *Session) cleanEvidence(ctx context.Context, scope api.EvidenceCleanup, 
 		}
 	}
 	return report
+}
+
+// singlePushRemote refuses a checkout whose origin pushes anywhere besides the
+// registered remote: git push sends a deletion to every push URL of origin.
+func singlePushRemote(ctx context.Context, dir, expected string) error {
+	urls, err := gitCommand(ctx, dir, "remote", "get-url", "--push", "--all", "origin")
+	if err != nil {
+		return err
+	}
+	if urls != expected {
+		return errors.New(config.Text("remote.git_push_remote_mismatch"))
+	}
+	return nil
 }
 
 // listEvidenceRefs lists the owned refs the common remote holds, sorted.
