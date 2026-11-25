@@ -61,5 +61,5 @@
   "review.fix_commit_next": "次の手順：rebase が修正コミットを書き換えた場合、作者は一覧の各記録に対して訂正記録を追加します。previous_record_id は一覧の記録を指し、status は変えず、fix_commit は同じ修正を担う書き換え後のコミットにします（git patch-id --stable で比較）。依頼は kander notify --kind sync で送り、訂正後は kander review aggregate をやり直してから閉じます。snippets/execute-group-member.md \"Author Records After a Rebase\" を参照してください。",
   "review.fix_commit_not_later": "fix_commit は所属する実行のレビュー対象コミット {{.V0}} と同じです。修正は後のコミットでなければなりません",
   "board.review_plan_revision_conflict": "レビュー計画 {{.V0}} の現在の revision は {{.V2}} ですが、リクエストは revision {{.V1}} を想定しています: reviews/plan.json を読み直し（kander show --document reviews/plan.json <task-id>）、それに基づいてリクエストを作り直してください",
-  "board.review_plan_sealed": "レビュー計画 {{.V0}} は封印済みです。seal 付きの新しいバッチも、メンバーが不足していないバッチも追加できません。kander review progress が要求したバッチのメンバーを append-cycle-batch と示している場合は、seal を外してそのバッチを再送してください。それ以外の場合、メンバーはクローズ済みの最終ターゲットで完了させ、以降のコミットや契約変更は独自の計画を持つ新しいカードで扱ってください（KANDER-REVIEW-RULES.md \"Carrying Conclusions Forward\"）"
+  "board.review_plan_sealed": "レビュー計画 {{.V0}} は封印済みです: seal が true の新しいバッチと、kander review progress が append-cycle-batch と示すメンバーを一人も含まない新しいバッチを拒否します。要求したバッチのメンバーが示されている場合は、seal を外して（省略するか false にして）そのバッチを再送してください。それ以外の場合、計画のメンバーはクローズ済みの最終ターゲットで完了させ、以降のコミットや契約変更は独自の計画を持つ新しいカードで扱ってください（KANDER-REVIEW-RULES.md \"Carrying Conclusions Forward\"）"
 }
