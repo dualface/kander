@@ -647,12 +647,15 @@ func TestReboundCycleNeedsABatchBeforeDone(t *testing.T) {
 				t.Fatal("a sealed plan took a batch no rebound cycle needs")
 			}
 			// The owed batch with seal set is refused with the retry, and the same
-			// request at the same revision without seal is accepted below. The
-			// message language is pinned because the retry phrase is matched literally.
-			t.Setenv(config.EnvLang, "en")
-			t.Setenv(config.EnvLangCLI, "1")
+			// request at the same revision without seal is accepted below. The retry
+			// phrase is written out per language, never taken from the catalog.
+			retry := map[string]string{
+				"en": "send that batch again with seal omitted or false",
+				"cn": "去掉 seal 后重新提交该批次",
+				"ja": "seal を外して（省略するか false にして）そのバッチを再送してください",
+			}[config.ResolveLanguage()]
 			err = ExtendReviewPlan(root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, Batch: &batch, Seal: true, Author: "coordinator", Basis: "new cycle and seal"})
-			if err == nil || !strings.Contains(err.Error(), "append-cycle-batch") || !strings.Contains(err.Error(), "send that batch again with seal omitted or false") {
+			if retry == "" || err == nil || !strings.Contains(err.Error(), "append-cycle-batch") || !strings.Contains(err.Error(), retry) {
 				t.Fatalf("an owed batch with seal was not pointed at a retry without seal: %v", err)
 			}
 			if err = ExtendReviewPlan(root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, Batch: &batch, Author: "coordinator", Basis: "new cycle"}); err != nil {
