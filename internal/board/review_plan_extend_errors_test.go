@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 const sealedRule = `"Carrying Conclusions Forward"`
@@ -116,18 +117,23 @@ func TestMissingPlanIsReportedAsMissing(t *testing.T) {
 func TestStaleResolutionReportsTheRevisionConflict(t *testing.T) {
 	s := defaultStrayBoard(t, "stale-resolution")
 	x := s.request(t, s.fixed())
-	current := x.ExpectedRevision
-	x.ExpectedRevision--
+	// The request passes the preflight, then a legal plan write lands before the
+	// write entrance, which must refuse it inside its own transaction.
+	edges, err := ReviewBatchResolutionEdges(s.root, x)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.seal(t)
 	p, err := ReadReviewPlan(s.root, s.plan)
 	if err != nil {
 		t.Fatal(err)
 	}
 	before := planBytes(t, s.root, p)
-	err = s.resolve(x)
+	err = ResolveReviewBatch(s.root, x, ReviewResolutionGit{CWD: "/repo", VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano), Edges: edges})
 	if err == nil {
 		t.Fatal("stale resolution accepted")
 	}
-	want := t2("board.review_plan_revision_conflict", s.plan, x.ExpectedRevision, current)
+	want := t2("board.review_plan_revision_conflict", s.plan, x.ExpectedRevision, p.Revision)
 	if !strings.Contains(err.Error(), want) {
 		t.Fatalf("stale resolution does not report the revision conflict: %v", err)
 	}
