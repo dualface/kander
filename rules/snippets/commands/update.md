@@ -25,6 +25,7 @@ kander update <task-id> --document <relative-path> --file <UTF8-input> --expect-
 
 - Obtain the revision from `kander show --json <task-id>` first; prepare the replacement in a separate file.
 - After `todo/`, the frozen fields (`GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `OUT_OF_SCOPE`, `SIZE`, task group relations, `INTEGRATION_TARGET`) change only with `--contract-decision-file`. One exception: in `working/` or `review/`, an update whose only frozen difference toggles line-start markers of top-level acceptance items between `- [ ] ` and `- [x] ` needs no decision file and records no `CONTRACT_DECISIONS` entry.
+- A contract change on a card that has a review plan needs a new batch in the same, still unsealed plan (`KANDER-REVIEW-RULES.md` "Carrying Conclusions Forward"). A sealed plan takes no new batch: before deciding such a change, check `sealed` in `reviews/plan.json` (`kander show <task-id> --document reviews/plan.json`), and when it is sealed, leave this card's contract unchanged and carry the new requirement in a new card with its own plan.
 
 ## Effects
 
