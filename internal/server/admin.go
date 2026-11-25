@@ -5,7 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"net"
 	"net/http"
 	"os"

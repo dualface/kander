@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/config"
 )
 

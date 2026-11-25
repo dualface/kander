@@ -9,7 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/launch"
 	"github.com/dualface/kander/internal/remote"

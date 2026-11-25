@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	kfs "github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/process"
 	"github.com/dualface/kander/internal/remote"

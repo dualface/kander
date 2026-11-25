@@ -3,7 +3,7 @@ package server_test
 import (
 	"testing"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 )
 
 // The cleanup scope is empty until a standalone card is done; a group answers

@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 )
 
 // A client refuses a server that only speaks protocol 1, which predates

@@ -1,7 +1,7 @@
 // Package server implements kander server: the single-instance board server of the
 // distributed architecture. It owns every board below its data directory,
 // decides task ownership with leases, and serves the /api/v1 contract of
-// internal/api. It runs no Git, stores no code, and offers no generic file or
+// the public api package. It runs no Git, stores no code, and offers no generic file or
 // command interface; see docs/distributed-server.md.
 package server
 
@@ -19,7 +19,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/fs"
 )

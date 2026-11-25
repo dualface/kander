@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/client"
 	"github.com/dualface/kander/internal/statemachine/serverclaim"
 	"github.com/dualface/kander/internal/statemachine/servergrouplease"

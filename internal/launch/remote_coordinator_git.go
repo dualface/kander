@@ -3,7 +3,7 @@ package launch
 import (
 	"context"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/review"

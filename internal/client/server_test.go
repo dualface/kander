@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 )
 
 func TestImportKeepsTheTokenOnItsEndpoint(t *testing.T) {

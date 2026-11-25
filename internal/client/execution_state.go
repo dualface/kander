@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 )
 
 func (p *Project) ExecutionState(ctx context.Context, task string, proof Claim) (api.ExecutionState, error) {

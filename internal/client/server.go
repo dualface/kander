@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 )
 
 func (c *Client) Health(ctx context.Context) (api.Health, error) {

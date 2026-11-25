@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 )
 
 // Client talks to one server for one client identity.

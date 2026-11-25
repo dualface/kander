@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 )
 
 // A Codex execution whose card and credential both record the discovered

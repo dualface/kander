@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 )
 
