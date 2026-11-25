@@ -118,8 +118,12 @@ func TestStaleResolutionReportsTheRevisionConflict(t *testing.T) {
 	x := s.request(t, s.fixed())
 	current := x.ExpectedRevision
 	x.ExpectedRevision--
-	before := s.planFile(t)
-	err := s.resolve(x)
+	p, err := ReadReviewPlan(s.root, s.plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := planBytes(t, s.root, p)
+	err = s.resolve(x)
 	if err == nil {
 		t.Fatal("stale resolution accepted")
 	}
@@ -127,9 +131,7 @@ func TestStaleResolutionReportsTheRevisionConflict(t *testing.T) {
 	if !strings.Contains(err.Error(), want) {
 		t.Fatalf("stale resolution does not report the revision conflict: %v", err)
 	}
-	if string(s.planFile(t)) != string(before) {
-		t.Fatal("plan changed")
-	}
+	requirePlanUnchanged(t, s.root, p, before)
 }
 
 // t2 renders a board message the way the code under test does.
