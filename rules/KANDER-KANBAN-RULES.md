@@ -20,7 +20,7 @@ KANBAN_DIR="$MAIN_WORKTREE/kanban"
 
 ## Command Contract
 
-Creating entries, querying, and moving states use only `kander`; `mv`, `cp`, or a file manager is forbidden. Body editing and same-state form upgrades follow "Entries and Documents" and "Task Scale and Grouping".
+Create, query, and move cards only through `kander`, never by direct file operations. For edits and upgrades, see "Entries and Documents" and "Task Scale and Grouping".
 
 Before running any `kander` command in this session, read `<rules root>/snippets/commands/README.md` once. Before the first use of a command, read its contract file. `kander <command> --help` prints the contract summary, syntax, and examples.
 
@@ -44,6 +44,9 @@ kander list [--agent-status] [backlog|todo|working|review|done|archived|trash]
 kander show [--document <relative-path>] <task-id>
 kander new [--large] [--language <agent language>] <feature|bug|chore|research> <slug> <title...>
 kander assign <task-id> [<assignee>] [--expect-revision <revision>]
+kander decision record <task-id> --kind <human|leader> --file <JSON>
+kander decision list <task-id>
+kander decision mode <task-id> <leader|assignee>
 kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--owner <agent> [--decision <reference>]] [--result <result>] [--reason <reason> --decision <reference>] [--duplicate-of <task-id>] [--expect-revision <revision>] [--dispatch-id <id> --execution-epoch <epoch>] [--delivery-commit <full-SHA>] [--disposition <card-relative-path>]
 kander pick [task-id]
 kander update <task-id> --document <relative-path> --file <UTF8-input> --expect-revision <revision> [--contract-decision-file <UTF8-decision>] [--dispatch-id <id> --execution-epoch <epoch>]
@@ -141,12 +144,18 @@ Before creating, completing, updating, or reviewing card content, read `snippets
 
 - Read a card document only through `kander show`: `kander show <task-id>` for `spec.md`, and `kander show --document <relative-path> <task-id>` for `plan.md`, `report.md`, an ordinary attachment, or a read-only file below `reviews/` or `dispatches/`. Never read any document by the `Path` that `show` prints: that path locates the card and is not a way to read a document, and the board may live on another host. Write the ordinary documents (`spec.md`, `plan.md`, `report.md`, ordinary attachments) only with `kander update`.
 - Use `update --document spec.md` for every card body. Both scales accept `plan.md`, `report.md`, and ordinary attachments, including relative subdirectories. Legacy file cards are read-only: mutation commands fail before side effects and direct the caller to offline `kander server maintain --project NAME`; never bypass this with an older binary or direct editing.
-- Paths must be canonical, relative, and free of traversal, symlinks, and reparse points. Never edit managed `reviews/`, `dispatches/`, manifests, indexes, or control records through update; dedicated producers own them.
-- Full-body replacements preserve `LANGUAGE`, `SUBMITTER`, `ASSIGNEE`, `OWNER`, `SESSION`, `WINDOW`, creation/start/completion timestamps, `RESULT`, execution metadata, and managed indexes. Keep `TASK_BRANCH` and ordinary implementation and summary records current through update.
+- Paths must be canonical, relative, and free of traversal, symlinks, and reparse points. Never edit managed `reviews/`, `decisions/`, `dispatches/`, manifests, indexes, or control records through update; dedicated producers own them.
+- Full-body replacements preserve `LANGUAGE`, `SUBMITTER`, `ASSIGNEE`, `DECISION_MODE`, `OWNER`, `SESSION`, `WINDOW`, creation/start/completion timestamps, `RESULT`, execution metadata, and managed sections such as `REVIEWS`, `DECISIONS`, `DISPATCHES`, `REVIEW_DISPOSITIONS`, `CONTRACT_DECISIONS`, and `LIFECYCLE_DECISION`. Keep `TASK_BRANCH` and ordinary implementation and summary records current through update.
 - Manual claiming uses `kander move <task-id> working --owner <agent>`, writing `OWNER` and `STARTED_AT` with the transition; `start` and `resume` own session and window metadata; dispatch-back moves to working keep the existing owner.
 - Completion uses `kander move <task-id> done --result completed`, with validation, `RESULT`, and `FINISHED_AT` in one transaction, after the summary or report was written through update. Termination uses `move <task-id> archived --result cancelled|duplicate|wontfix --reason <reason> --decision <user-decision-reference>` (`--duplicate-of <replacement-id>` for duplicate); archiving a completed card uses `--result completed` with reason and decision reference; trash uses `move <task-id> trash --result trashed --reason <reason> --decision <user-decision-reference>`. These references record the authorization basis; the tool does not verify user intent. `--expect-revision` is available on move when the transition must match a previously read snapshot.
 - After a card enters todo, its contract stays frozen even if withdrawn to backlog. A user-authorized contract change uses update with `--contract-decision-file <UTF8-decision>` and the expected revision; Kander records the decision and old/new frozen fields in the protected `CONTRACT_DECISIONS` section. This never authorizes changing managed metadata or language.
 - A process interrupted during publication leaves a recoverable transaction. Readers report the unfinished operation without repairing it; ask the service operator to stop the server and run `kander server maintain --project NAME` to finish prepared writes and moves. A recovery conflict preserves the evidence and both copies; never guess a primary copy or delete one. Transactions protect commands and agents that follow this protocol, not arbitrary local processes editing files directly.
+
+## Decision Records
+
+- Use `kander decision record` to write the managed files under `decisions/` and append their entries to `DECISIONS`. Use `kander decision list` or `kander show --document` to read them. The server records human answers and Leader answers separately. Do not attribute a Leader answer to a person.
+- Use `kander decision mode` to change `DECISION_MODE`. This managed header is separate from the frozen contract. Cards without the line use `leader`; `assignee` reserves the answer for the assigned person.
+- Archiving and review-evidence cleanup retain the decision files and the `DECISIONS` index. Archived and trashed cards cannot take new records or mode changes.
 
 ## Archived Review Evidence
 

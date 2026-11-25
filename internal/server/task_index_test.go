@@ -39,7 +39,7 @@ func TestTaskIndexFaultRefusesQueriesUntilReconciled(t *testing.T) {
 		t.Fatal(err)
 	}
 	access, err := s.TaskAccess(t.Context(), info.ID, task.TaskID)
-	if access != (api.TaskAccess{Submitter: "alice", State: "backlog", Revision: task.Revision}) || err != nil {
+	if access != (api.TaskAccess{Submitter: "alice", DecisionMode: api.DecisionModeLeader, State: "backlog", Revision: task.Revision}) || err != nil {
 		t.Fatalf("access before fault: %+v %v", access, err)
 	}
 	if _, err := s.TaskAccess(t.Context(), info.ID, "20261125-missing-task"); !api.IsCode(err, api.CodeNotFound) {

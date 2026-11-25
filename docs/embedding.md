@@ -43,7 +43,7 @@ The same project-level limit applies to routes that resolve task membership from
 2. Hook returns `(value, true)`. Use that value even if the client reports something else.
 3. Hook returns `(_, false)`. Refuse the attributed operation with HTTP 403 and code `attribution_required`. Never fall back to the client value.
 
-Task creation and issue import use this attribution to populate the immutable `SUBMITTER` header. Task assignment is a separate write through `POST /tasks/{task}/assignee` under the project route. The authorization hook receives its matched task scope and can decide who may assign or clear the responsible person.
+Task creation and issue import use this attribution to populate the immutable `SUBMITTER` header. The two decision write routes use the same attribution for `recorded_by` and also reject a blank attribution. The host can authorize human and Leader writes separately. See [Task decision records](decision-records.md). Task assignment is a separate write through `POST /tasks/{task}/assignee` under the project route. The authorization hook receives its matched task scope and can decide who may assign or clear the responsible person.
 
 ### Administration
 
@@ -52,7 +52,7 @@ Task creation and issue import use this attribution to populate the immutable `S
 ## Read task access facts in process
 
 `service.TaskAccess(ctx, projectID, taskID)` reads the task's submitter,
-assignee, state, and revision. It may be called from `Hooks.Authorize`
+assignee, decision mode, state, and revision. It may be called from `Hooks.Authorize`
 without invoking that hook again or reading the card files. A missing
 project or task returns `not_found`. An untrusted index refuses the
 query with `index_rebuilding` until reconciliation succeeds. Host

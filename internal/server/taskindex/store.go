@@ -20,7 +20,7 @@ import (
 
 const (
 	filename = "index.sqlite"
-	format   = 1
+	format   = 2
 )
 
 const schema = `
@@ -35,6 +35,7 @@ CREATE TABLE tasks (
 	task_group TEXT NOT NULL,
 	submitter TEXT NOT NULL,
 	assignee TEXT NOT NULL,
+	decision_mode TEXT NOT NULL,
 	owner TEXT NOT NULL,
 	session TEXT NOT NULL,
 	window TEXT NOT NULL,
@@ -48,6 +49,7 @@ CREATE TABLE tasks (
 CREATE INDEX tasks_order ON tasks(state_rank, display_time DESC, task_id DESC);
 CREATE INDEX tasks_state ON tasks(state);
 CREATE INDEX tasks_assignee ON tasks(assignee);
+CREATE INDEX tasks_decision_mode ON tasks(decision_mode);
 CREATE INDEX tasks_submitter ON tasks(submitter);
 CREATE INDEX tasks_group ON tasks(task_group);
 CREATE TABLE meta (id INTEGER PRIMARY KEY CHECK (id = 1), warnings TEXT NOT NULL, reconciled_at TEXT NOT NULL);
@@ -62,7 +64,7 @@ CREATE TRIGGER tasks_update AFTER UPDATE OF title ON tasks WHEN old.title <> new
 	INSERT INTO tasks_fts(tasks_fts, rowid, title) VALUES('delete', old.rowid, old.title);
 	INSERT INTO tasks_fts(rowid, title) VALUES(new.rowid, new.title);
 END;
-PRAGMA user_version = 1;
+PRAGMA user_version = 2;
 `
 
 // Row is a task summary and the inputs needed to render its claim at read time.
@@ -160,13 +162,13 @@ func Reset(root string) error {
 	return nil
 }
 
-const columns = `task_id, revision, state, state_rank, title, type, kind, task_group, submitter, assignee, owner,
+const columns = `task_id, revision, state, state_rank, title, type, kind, task_group, submitter, assignee, decision_mode, owner,
 	session, window, created_at, started_at, completed_at, display_time, result, claim`
 
-const upsert = `INSERT INTO tasks (` + columns + `) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+const upsert = `INSERT INTO tasks (` + columns + `) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(task_id) DO UPDATE SET revision=excluded.revision, state=excluded.state, state_rank=excluded.state_rank,
 	title=excluded.title, type=excluded.type, kind=excluded.kind, task_group=excluded.task_group, submitter=excluded.submitter,
-	assignee=excluded.assignee, owner=excluded.owner, session=excluded.session, window=excluded.window, created_at=excluded.created_at,
+	assignee=excluded.assignee, decision_mode=excluded.decision_mode, owner=excluded.owner, session=excluded.session, window=excluded.window, created_at=excluded.created_at,
 	started_at=excluded.started_at, completed_at=excluded.completed_at, display_time=excluded.display_time, result=excluded.result,
 	claim=excluded.claim`
 
@@ -178,7 +180,7 @@ func put(ctx context.Context, tx *sql.Tx, row Row) error {
 	}
 	// Board revisions are uint64. Decimal text preserves the entire range.
 	_, err = tx.ExecContext(ctx, upsert, t.TaskID, strconv.FormatUint(t.Revision, 10), t.State, row.StateRank, t.Title, t.Type,
-		t.Kind, t.TaskGroup, t.Submitter, t.Assignee, t.Owner, t.Session, t.Window, t.CreatedAt, t.StartedAt, t.CompletedAt, t.Time, t.Result, string(claim))
+		t.Kind, t.TaskGroup, t.Submitter, t.Assignee, t.DecisionMode, t.Owner, t.Session, t.Window, t.CreatedAt, t.StartedAt, t.CompletedAt, t.Time, t.Result, string(claim))
 	return err
 }
 
@@ -186,7 +188,7 @@ func scanRow(src interface{ Scan(...any) error }) (row Row, err error) {
 	t := &row.Summary
 	var claim string
 	err = src.Scan(&t.TaskID, &t.Revision, &t.State, &row.StateRank, &t.Title, &t.Type, &t.Kind, &t.TaskGroup, &t.Submitter,
-		&t.Assignee, &t.Owner, &t.Session, &t.Window, &t.CreatedAt, &t.StartedAt, &t.CompletedAt, &t.Time, &t.Result, &claim)
+		&t.Assignee, &t.DecisionMode, &t.Owner, &t.Session, &t.Window, &t.CreatedAt, &t.StartedAt, &t.CompletedAt, &t.Time, &t.Result, &claim)
 	if err != nil {
 		return row, err
 	}
@@ -281,8 +283,8 @@ func (s *Store) Warnings(ctx context.Context) ([]string, error) {
 
 // Access is the projection that a host policy may consult.
 func (s *Store) Access(ctx context.Context, id string) (out api.TaskAccess, found bool, err error) {
-	err = s.db.QueryRowContext(ctx, "SELECT submitter, assignee, state, revision FROM tasks WHERE task_id=?", id).
-		Scan(&out.Submitter, &out.Assignee, &out.State, &out.Revision)
+	err = s.db.QueryRowContext(ctx, "SELECT submitter, assignee, decision_mode, state, revision FROM tasks WHERE task_id=?", id).
+		Scan(&out.Submitter, &out.Assignee, &out.DecisionMode, &out.State, &out.Revision)
 	if errors.Is(err, sql.ErrNoRows) {
 		return out, false, nil
 	}

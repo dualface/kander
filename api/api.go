@@ -64,6 +64,7 @@ const (
 	CodeBoardRejected        = "board_rejected"
 	CodeNotReady             = "not_ready"
 	CodeIndexRebuilding      = "index_rebuilding"
+	CodeDecisionReserved     = "decision_reserved"
 	CodeInternal             = "internal"
 )
 
@@ -177,24 +178,25 @@ type Task struct {
 
 // TaskSummary is one list row. Its fields follow the v1 board summary.
 type TaskSummary struct {
-	Revision    uint64     `json:"revision"`
-	TaskID      string     `json:"task_id"`
-	Title       string     `json:"title"`
-	State       string     `json:"state"`
-	Kind        string     `json:"kind"`
-	Type        string     `json:"type"`
-	TaskGroup   string     `json:"task_group"`
-	Owner       string     `json:"owner"`
-	Submitter   string     `json:"submitter"`
-	Assignee    string     `json:"assignee"`
-	CreatedAt   string     `json:"created_at"`
-	StartedAt   string     `json:"started_at"`
-	CompletedAt string     `json:"completed_at"`
-	Time        string     `json:"time"`
-	Result      string     `json:"result"`
-	Claim       *ClaimView `json:"claim,omitempty"`
-	Session     string     `json:"session,omitempty"`
-	Window      string     `json:"window,omitempty"`
+	Revision     uint64       `json:"revision"`
+	TaskID       string       `json:"task_id"`
+	Title        string       `json:"title"`
+	State        string       `json:"state"`
+	Kind         string       `json:"kind"`
+	Type         string       `json:"type"`
+	TaskGroup    string       `json:"task_group"`
+	Owner        string       `json:"owner"`
+	Submitter    string       `json:"submitter"`
+	Assignee     string       `json:"assignee"`
+	DecisionMode DecisionMode `json:"decision_mode"`
+	CreatedAt    string       `json:"created_at"`
+	StartedAt    string       `json:"started_at"`
+	CompletedAt  string       `json:"completed_at"`
+	Time         string       `json:"time"`
+	Result       string       `json:"result"`
+	Claim        *ClaimView   `json:"claim,omitempty"`
+	Session      string       `json:"session,omitempty"`
+	Window       string       `json:"window,omitempty"`
 }
 
 // TaskList is GET /api/v1/projects/{project}/tasks.
@@ -212,6 +214,7 @@ type TaskList struct {
 // Cursor continues a query with the same filters and requires a positive Limit.
 type TaskListOptions struct {
 	State, Assignee, Submitter, Group, Search, Cursor string
+	DecisionMode                                      DecisionMode
 	Limit                                             int
 }
 
@@ -221,10 +224,11 @@ const MaxTaskListLimit = 1000
 // TaskAccess is the current task identity, workflow state and revision that a
 // host authorization policy can read from its embedded server.
 type TaskAccess struct {
-	Submitter string `json:"submitter"`
-	Assignee  string `json:"assignee"`
-	State     string `json:"state"`
-	Revision  uint64 `json:"revision"`
+	Submitter    string       `json:"submitter"`
+	Assignee     string       `json:"assignee"`
+	DecisionMode DecisionMode `json:"decision_mode"`
+	State        string       `json:"state"`
+	Revision     uint64       `json:"revision"`
 }
 
 // NewTask is POST /api/v1/projects/{project}/tasks.

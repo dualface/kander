@@ -37,7 +37,7 @@ func (s *Session) machineList(ctx context.Context, list api.TaskList, observe bo
 	for _, item := range list.Tasks {
 		task := listTask{ListTask: board.ListTask{
 			TaskID: item.TaskID, Title: item.Title, State: item.State, Size: item.Kind, Type: item.Type, TaskGroup: item.TaskGroup,
-			Owner: item.Owner, Submitter: item.Submitter, Assignee: item.Assignee, CreatedAt: item.CreatedAt, StartedAt: item.StartedAt,
+			Owner: item.Owner, Submitter: item.Submitter, Assignee: item.Assignee, DecisionMode: item.DecisionMode, CreatedAt: item.CreatedAt, StartedAt: item.StartedAt,
 			FinishedAt: item.CompletedAt, Result: item.Result, Revision: item.Revision,
 		}, Claim: item.Claim}
 		if s.SceneIsLocal(item.TaskID, item.Claim, item.Window, item.Session) {

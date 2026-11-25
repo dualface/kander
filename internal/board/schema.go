@@ -10,20 +10,21 @@ import (
 // of cards written before the rename are converted when such a card is read, in
 // legacy_card.go.
 const (
-	FieldType       = "TYPE"
-	FieldSize       = "SIZE"
-	FieldTaskGroup  = "TASK_GROUP"
-	FieldLanguage   = "LANGUAGE"
-	FieldCreatedAt  = "CREATED_AT"
-	FieldSubmitter  = "SUBMITTER"
-	FieldAssignee   = "ASSIGNEE"
-	FieldOwner      = "OWNER"
-	FieldSession    = "SESSION"
-	FieldWindow     = "WINDOW"
-	FieldStartedAt  = "STARTED_AT"
-	FieldFinishedAt = "FINISHED_AT"
-	FieldTaskBranch = "TASK_BRANCH"
-	FieldResult     = "RESULT"
+	FieldType         = "TYPE"
+	FieldSize         = "SIZE"
+	FieldTaskGroup    = "TASK_GROUP"
+	FieldLanguage     = "LANGUAGE"
+	FieldCreatedAt    = "CREATED_AT"
+	FieldSubmitter    = "SUBMITTER"
+	FieldAssignee     = "ASSIGNEE"
+	FieldDecisionMode = "DECISION_MODE"
+	FieldOwner        = "OWNER"
+	FieldSession      = "SESSION"
+	FieldWindow       = "WINDOW"
+	FieldStartedAt    = "STARTED_AT"
+	FieldFinishedAt   = "FINISHED_AT"
+	FieldTaskBranch   = "TASK_BRANCH"
+	FieldResult       = "RESULT"
 	// FieldIntegrationTarget is optional: it names the branch a card integrates
 	// into when that is not the mainline branch (a value equal to the mainline
 	// branch is allowed but redundant). `kander new` never writes it.
@@ -40,6 +41,7 @@ const (
 	SectionDiscussion         = "DISCUSSION"
 	SectionImplementation     = "IMPLEMENTATION"
 	SectionSummary            = "SUMMARY"
+	SectionDecisions          = "DECISIONS"
 )
 
 const (

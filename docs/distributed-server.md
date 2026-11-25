@@ -53,6 +53,10 @@ The first registration of a name may bind a Git remote URL; a later registration
 
 `kander server` opens the data directory, takes `server.lock`, recovers every project's interrupted board transactions (`board.RecoverTransactions`), settles claims from the committed card state, extends their startup leases, reconciles the task index, logs one `project` line per project with its name, ID and board path, and only then reports ready. Until ready, domain routes answer `not_ready` (503).
 
+## Task decision records
+
+Cards have a managed decision policy and can retain immutable human and Leader decisions. See [Task decision records](decision-records.md) for the routes, attribution, and CLI.
+
 ## Task query index
 
 Each project has one private `index.sqlite` next to `board/`. It contains task
@@ -80,7 +84,7 @@ board after its claims and event reset as part of the import. Other board
 reads such as `snapshot` and `check` keep their existing file-based paths.
 
 `GET /projects/{p}/tasks` accepts exact `state`, `assignee`, `submitter`,
-and `group` filters, combined with AND. `q` matches a literal title
+`group`, and `decision_mode` filters, combined with AND. `q` matches a literal title
 substring using FTS5 trigram for three or more Unicode characters.
 For shorter terms it uses LIKE with escaped wildcards. ASCII letter
 case is ignored in either path. The order is state in board order,
@@ -119,6 +123,10 @@ All routes live below `/api/v1`. Every domain request sends `Kander-Protocol: <n
 | `POST /projects/{p}/tasks` | `kander new` |
 | `GET /projects/{p}/tasks/{t}` | `kander show` |
 | `POST /projects/{p}/tasks/{t}/assignee` | Change or clear the person responsible for the card with `kander assign` |
+| `GET /projects/{p}/tasks/{t}/decisions` | List the task's human and delegated decisions |
+| `POST /projects/{p}/tasks/{t}/decisions/human` | Record a human decision |
+| `POST /projects/{p}/tasks/{t}/decisions/leader` | Record a delegated Leader decision |
+| `POST /projects/{p}/tasks/{t}/decision-mode` | Set the managed decision mode |
 | `GET`, `PUT /projects/{p}/tasks/{t}/documents/{path}` | Read (`kander show --document`) or publish (`kander update --document`) `spec.md`, `plan.md`, `report.md`, attachments |
 | `POST /projects/{p}/tasks/{t}/deliveries`, `GET .../deliveries/{sha}` | Authenticated publication facts for a commit available from the common remote |
 | `GET .../tasks/{t}/dispatches/{id}`, `POST .../dispatches/actions/{action}` | Controlled dispatch preparation, attempts, reauthorization, terminal decisions, settlement and wrap-up grants |

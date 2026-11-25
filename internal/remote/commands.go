@@ -61,8 +61,11 @@ func classify(err error) (code, message string, ok bool) {
 	var e *api.Error
 	switch {
 	case errors.As(err, &e):
-		if e.Code == api.CodeIndexRebuilding {
+		switch e.Code {
+		case api.CodeIndexRebuilding:
 			return e.Code, config.Text("remote.error_index_rebuilding"), true
+		case api.CodeDecisionReserved:
+			return e.Code, config.Text("board.decision_reserved"), true
 		}
 		if e.BoardCode != "" {
 			return e.BoardCode, e.Message, true
@@ -94,6 +97,19 @@ func open(ctx context.Context) (*Session, *config.Config, error) {
 
 var commandContext = func() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), 2*time.Minute)
+}
+
+// openOperationSession opens a project session and starts a fresh operation budget; release must be
+// deferred by the caller.
+func openOperationSession() (ctx context.Context, s *Session, release func(), err error) {
+	base, cancel := commandContext()
+	s, _, err = open(base)
+	if err != nil {
+		cancel()
+		return nil, nil, nil, err
+	}
+	ctx, finish := s.OperationContext(base)
+	return ctx, s, func() { finish(); cancel() }, nil
 }
 
 func location(s *Session, task string) string {

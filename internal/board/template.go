@@ -23,7 +23,7 @@ var contractTemplates = template.Must(
 type templateFields struct {
 	Type, Size, TaskGroup, Language, CreatedAt, Owner, Session, Window string
 	StartedAt, FinishedAt, TaskBranch, Result                          string
-	Submitter, Assignee                                                string
+	Submitter, Assignee, DecisionMode                                  string
 }
 
 type templateSections struct {
@@ -38,30 +38,32 @@ type templateBodies struct {
 }
 
 type templateData struct {
-	Title              string
-	Type               string
-	Size               string
-	Language           string
-	LanguageConstraint string
-	Created            string
-	Submitter          string
-	Placeholder        string
-	F                  templateFields
-	S                  templateSections
-	Bodies             templateBodies
+	Title               string
+	Type                string
+	Size                string
+	Language            string
+	LanguageConstraint  string
+	Created             string
+	Submitter           string
+	DefaultDecisionMode DecisionMode
+	Placeholder         string
+	F                   templateFields
+	S                   templateSections
+	Bodies              templateBodies
 }
 
 func newTemplateData(title, taskType, language, created string) templateData {
 	return templateData{
-		Title:              title,
-		Type:               taskType,
-		Language:           language,
-		LanguageConstraint: config.LanguageConstraint(language),
-		Created:            created,
-		Placeholder:        Placeholder,
+		Title:               title,
+		Type:                taskType,
+		Language:            language,
+		LanguageConstraint:  config.LanguageConstraint(language),
+		Created:             created,
+		DefaultDecisionMode: DecisionModeLeader,
+		Placeholder:         Placeholder,
 		F: templateFields{
 			Type: FieldType, Size: FieldSize, TaskGroup: FieldTaskGroup, Language: FieldLanguage, CreatedAt: FieldCreatedAt,
-			Submitter: FieldSubmitter, Assignee: FieldAssignee,
+			Submitter: FieldSubmitter, Assignee: FieldAssignee, DecisionMode: FieldDecisionMode,
 			Owner: FieldOwner, Session: FieldSession, Window: FieldWindow,
 			StartedAt: FieldStartedAt, FinishedAt: FieldFinishedAt,
 			TaskBranch: FieldTaskBranch, Result: FieldResult,

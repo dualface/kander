@@ -196,6 +196,7 @@ func TestUnboundCheckoutRefusesEveryCommandThatNeedsAProject(t *testing.T) {
 
 // requiredFlags are the flags a command line of each command path needs to be a complete one.
 var requiredFlags = map[string][]string{
+	"decision record": {"--kind", "leader", "--file", "decision.json"},
 	"init":            {"--project", "sample"},
 	"server import":   {"--project", "sample", "--from", "/abs/board", "--data", "/abs/data"},
 	"server maintain": {"--project", "sample", "--data", "/abs/data"},

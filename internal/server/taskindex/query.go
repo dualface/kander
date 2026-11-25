@@ -23,7 +23,7 @@ func (s *Store) List(ctx context.Context, query api.TaskListOptions, after *Posi
 	var conditions []string
 	var args []any
 	for _, field := range []struct{ column, value string }{
-		{"state", query.State}, {"assignee", query.Assignee}, {"submitter", query.Submitter}, {"task_group", query.Group},
+		{"state", query.State}, {"assignee", query.Assignee}, {"submitter", query.Submitter}, {"task_group", query.Group}, {"decision_mode", string(query.DecisionMode)},
 	} {
 		if field.value != "" {
 			conditions = append(conditions, field.column+" = ?")

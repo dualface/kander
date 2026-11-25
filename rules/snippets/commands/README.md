@@ -4,37 +4,36 @@ Before running any `kander` command in this session, read `<rules root>/snippets
 
 Global flags: `--lang`, `--json`.
 
-First: `show`, `update`, `move`, `check`.
-
 | Command | Purpose | Users | Contract |
 | --- | --- | --- | --- |
-| `server` | Administer service | user | `snippets/commands/server.md` |
-| `config` | Print configuration | agents | `snippets/commands/config.md` |
-| `doctor` | Repair installation | user | `snippets/commands/doctor.md` |
-| `version` | Print version | user | `snippets/commands/version.md` |
+| `server` | Administer | user | `snippets/commands/server.md` |
+| `config` | Configuration | agents | `snippets/commands/config.md` |
+| `doctor` | Repair | user | `snippets/commands/doctor.md` |
+| `version` | Version | user | `snippets/commands/version.md` |
 | `install` | Installer | user | `snippets/commands/install.md` |
-| `uninstall` | Uninstall rules | user | `snippets/commands/uninstall.md` |
-| `terminal` | Test launchers | user | `snippets/commands/terminal.md` |
-| `init` | Initialize board | user | `snippets/commands/init.md` |
-| `list` | List cards by state | creator, user | `snippets/commands/list.md` |
-| `show` | Print card/revision | executors | `snippets/commands/show.md` |
-| `new` | Create backlog card | creator | `snippets/commands/new.md` |
-| `assign` | Change task assignee | user | `snippets/commands/assign.md` |
-| `move` | Move card | executor, orchestrator, creator | `snippets/commands/move.md` |
-| `pick` | Pick backlog card | creator, orchestrator | `snippets/commands/pick.md` |
-| `update` | Publish document | executor, creator | `snippets/commands/update.md` |
-| `start` | Launch executor | creator, orchestrator | `snippets/commands/start.md` |
-| `orchestrate` | Launch orchestrator | creator | `snippets/commands/orchestrate.md` |
-| `resume` | Resume execution | orchestrator (via notify), user | `snippets/commands/resume.md` |
-| `notify` | Dispatch to executor | orchestrator | `snippets/commands/notify.md` |
-| `dispatch` | Manage dispatches | orchestrator | `snippets/commands/dispatch.md` |
+| `uninstall` | Uninstall | user | `snippets/commands/uninstall.md` |
+| `terminal` | Launchers | user | `snippets/commands/terminal.md` |
+| `init` | Initialize | user | `snippets/commands/init.md` |
+| `list` | List cards | creator, user | `snippets/commands/list.md` |
+| `show` | Card/revision | executors | `snippets/commands/show.md` |
+| `new` | Create card | creator | `snippets/commands/new.md` |
+| `assign` | Set assignee | user | `snippets/commands/assign.md` |
+| `decision` | Decisions | user, leader, orchestrator | `snippets/commands/decision.md` |
+| `move` | Move | executor, orchestrator, creator | `snippets/commands/move.md` |
+| `pick` | Pick card | creator, orchestrator | `snippets/commands/pick.md` |
+| `update` | Publish | executor, creator | `snippets/commands/update.md` |
+| `start` | Start executor | creator, orchestrator | `snippets/commands/start.md` |
+| `orchestrate` | Orchestrate cards | creator | `snippets/commands/orchestrate.md` |
+| `resume` | Resume | orchestrator (via notify), user | `snippets/commands/resume.md` |
+| `notify` | Notify executor | orchestrator | `snippets/commands/notify.md` |
+| `dispatch` | Dispatch | orchestrator | `snippets/commands/dispatch.md` |
 | `dismiss` | Exit agent/container | orchestrator, user | `snippets/commands/dismiss.md` |
-| `check` | Validate cards/liveness/Git | executor, orchestrator | `snippets/commands/check.md` |
+| `check` | Validate | executor, orchestrator | `snippets/commands/check.md` |
 | `guard-write` | Pre-write check | agent hooks | `snippets/commands/guard-write.md` |
-| `subscribe` | Stream events | orchestrator | `snippets/commands/subscribe.md` |
-| `coordinator` | Group checkpoints | orchestrator | `snippets/commands/coordinator.md` |
-| `review` | Review and evidence | main agent, orchestrator | `snippets/commands/review.md` |
-| `issue` | GitHub issues | user, issue session | `snippets/commands/issue.md` |
+| `subscribe` | Events | orchestrator | `snippets/commands/subscribe.md` |
+| `coordinator` | Checkpoints | orchestrator | `snippets/commands/coordinator.md` |
+| `review` | Review evidence | main agent, orchestrator | `snippets/commands/review.md` |
+| `issue` | Issues | user, issue session | `snippets/commands/issue.md` |
 
 ```text
 kander config
@@ -56,6 +55,9 @@ kander list [--agent-status] [backlog|todo|working|review|done|archived|trash]
 kander show [--document <relative-path>] <task-id>
 kander new [--large] [--language <agent language>] <feature|bug|chore|research> <slug> <title...>
 kander assign <task-id> [<assignee>] [--expect-revision <revision>]
+kander decision record <task-id> --kind <human|leader> --file <JSON>
+kander decision list <task-id>
+kander decision mode <task-id> <leader|assignee>
 kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--owner <agent> [--decision <reference>]] [--result <result>] [--reason <reason> --decision <reference>] [--duplicate-of <task-id>] [--expect-revision <revision>] [--dispatch-id <id> --execution-epoch <epoch>] [--delivery-commit <full-SHA>] [--disposition <card-relative-path>]
 kander pick [task-id]
 kander update <task-id> --document <relative-path> --file <UTF8-input> --expect-revision <revision> [--contract-decision-file <UTF8-decision>] [--dispatch-id <id> --execution-epoch <epoch>]

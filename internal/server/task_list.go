@@ -23,14 +23,17 @@ func parseTaskList(raw string) (api.TaskListOptions, error) {
 	if err != nil {
 		return api.TaskListOptions{}, listQueryError("server.index_list_invalid_query")
 	}
-	for _, name := range []string{"state", "assignee", "submitter", "group", "q", "limit", "cursor"} {
+	for _, name := range []string{"state", "assignee", "submitter", "group", "decision_mode", "q", "limit", "cursor"} {
 		if len(q[name]) > 1 {
 			return api.TaskListOptions{}, listQueryError("server.index_list_invalid_query")
 		}
 	}
 	query := api.TaskListOptions{
 		State: q.Get("state"), Assignee: q.Get("assignee"), Submitter: q.Get("submitter"),
-		Group: q.Get("group"), Search: q.Get("q"), Cursor: q.Get("cursor"),
+		Group: q.Get("group"), DecisionMode: api.DecisionMode(q.Get("decision_mode")), Search: q.Get("q"), Cursor: q.Get("cursor"),
+	}
+	if q.Has("decision_mode") && !query.DecisionMode.Valid() {
+		return query, listQueryError("board.decision_invalid", "decision_mode")
 	}
 	if q.Has("limit") {
 		query.Limit, err = strconv.Atoi(q.Get("limit"))
@@ -55,7 +58,13 @@ type taskListCursor struct {
 }
 
 func (p *project) pageScope(query api.TaskListOptions) string {
-	raw, _ := json.Marshal([6]string{p.info.ID, query.State, query.Assignee, query.Submitter, query.Group, query.Search})
+	values := []string{p.info.ID, query.State, query.Assignee, query.Submitter, query.Group, query.Search}
+	// Existing unfiltered cursors keep their scope, while a mode filter binds
+	// the cursor to that mode.
+	if query.DecisionMode != "" {
+		values = append(values, string(query.DecisionMode))
+	}
+	raw, _ := json.Marshal(values)
 	return digest(string(raw))
 }
 

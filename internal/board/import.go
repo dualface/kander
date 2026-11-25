@@ -25,7 +25,7 @@ const (
 // importFields lists every metadata field a section body must never rewrite.
 var importFields = []string{
 	FieldType, FieldSize, FieldTaskGroup, FieldLanguage, FieldCreatedAt,
-	FieldSubmitter, FieldAssignee, FieldOwner, FieldSession, FieldWindow, FieldStartedAt, FieldFinishedAt,
+	FieldSubmitter, FieldAssignee, FieldDecisionMode, FieldOwner, FieldSession, FieldWindow, FieldStartedAt, FieldFinishedAt,
 	FieldTaskBranch, FieldResult,
 }
 

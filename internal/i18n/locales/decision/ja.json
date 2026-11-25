@@ -1,0 +1,9 @@
+{
+  "board.decision_invalid": "決定フィールドが無効です: {{.V0}}。",
+  "board.decision_trash": "ごみ箱にあるカードの決定は変更できません: {{.V0}}。",
+  "board.decision_corrupt": "カード {{.V0}} の管理対象の決定記録に不整合があります。",
+  "board.update_hint_decision_mode": "次の手順: kander show の出力どおりにこの行を残してください。変更には kander decision mode を使います。",
+  "board.update_hint_decisions_section": "次の手順: kander show の出力どおりに DECISIONS を残してください。追記には kander decision record を使います。",
+  "remote.decision_input": "決定の入力は有効なフィールドを持つ単一の UTF-8 JSON オブジェクトで、最大 {{.V0}} バイトです。",
+  "board.decision_reserved": "このカードの決定は担当者に限られます。リーダーによる代理決定は記録できません。"
+}

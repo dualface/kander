@@ -45,6 +45,7 @@ Every key is always present. A string field without a value is `""`.
 | `owner`       | string         | the `OWNER` field (executing agent)                    |
 | `submitter`   | string         | the `SUBMITTER` field (submission identity)           |
 | `assignee`    | string         | the `ASSIGNEE` field (responsible person)              |
+| `decision_mode` | string       | effective decision mode, `leader` or `assignee`       |
 | `session`     | string         | the `SESSION` field                                    |
 | `window`      | string         | the `WINDOW` field                                     |
 | `launcher`    | string         | the part of `window` before the first colon            |

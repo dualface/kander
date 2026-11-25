@@ -129,7 +129,7 @@ The terminal interface uses the Charm libraries as one set, with no hand-rolled 
 
 ## Subcommands
 
-The command tree contains: `doctor` `config` `version` `server` `install` `uninstall` `review` `init` `issue` `terminal` `list`/`ls` `show` `update` `new` `assign` `move` `pick` `start` `resume` `notify` `dismiss` `check` `guard-write` `dispatch` `coordinator` `subscribe`. `request` is its own command (its forms are documented in `notify.md`), and `worker` is a hidden internal command that takes no arguments. `help` is cobra's help command, answered like `--help` (`kander help [--json] [<command>]`); there is no `completion` command. Bare `kander` opens the terminal kanban; the global flags are `--lang {cn,en,ja}` and `--json` (every command except the bare `kander` and `worker`).
+The command tree contains: `doctor` `config` `version` `server` `install` `uninstall` `review` `init` `issue` `terminal` `list`/`ls` `show` `update` `new` `assign` `decision` `move` `pick` `start` `resume` `notify` `dismiss` `check` `guard-write` `dispatch` `coordinator` `subscribe`. `request` is its own command (its forms are documented in `notify.md`), and `worker` is a hidden internal command that takes no arguments. `help` is cobra's help command, answered like `--help` (`kander help [--json] [<command>]`); there is no `completion` command. Bare `kander` opens the terminal kanban; the global flags are `--lang {cn,en,ja}` and `--json` (every command except the bare `kander` and `worker`).
 
 ## TUI Tests
 
@@ -235,6 +235,7 @@ Go runtime writes of configuration, board migration, the review runtime, Git exc
 - [JSON output](docs/json-output.md): the global `--json` flag, the result and error objects, the stable error codes and their priority, notices, streaming commands, interactive forms, and where each command contract describes its result object.
 - [dsh launcher](docs/dsh-launcher.md): the `dsh` launcher, the `kander-dsh` plugin architecture, panes and IDs, the carrier host, the socket protocol and version check, the JavaScript interface, installation in dsh Web and Desktop, and limits.
 - [dsh Kander view](docs/dsh-kander-view.md): the plugin's Kander view in dsh (board, Start, agent terminal tabs, focus, two hosts), the plugin configuration and `kander` lookup, the HTTP routes and the event-stream output, and the page implementation.
+- [Task decision records](docs/decision-records.md): decision policy, immutable audit records, API routes, attribution, and CLI.
 - [Embedding Kander v2](docs/embedding.md): the public Go packages, request hooks, in-process events, and client and command integration.
 - [Distributed server](docs/distributed-server.md): the v2 server/client split, data directory, protocol and error codes, idempotency, claims, leases, generations and takeover, collaboration requests, events, and the planned stages.
 - [Formal verification](docs/formal-verification.md): the Lean state machine definition language, semantics and generic theorems, proof obligations, the generated Go interface, differential vectors, the check command and CI job, the trust boundary, adding a machine, and the v2 state machine inventory.

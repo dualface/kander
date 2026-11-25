@@ -319,7 +319,7 @@ func TestIssueImportHostileIssueCannotChangeTheCard(t *testing.T) {
 	}
 	header := strings.Split(board.CardHeader(text), "\n")
 	fields := []string{
-		"TYPE", "SIZE", "TASK_GROUP", "LANGUAGE", "CREATED_AT", "SUBMITTER", "ASSIGNEE",
+		"TYPE", "SIZE", "TASK_GROUP", "LANGUAGE", "CREATED_AT", "SUBMITTER", "ASSIGNEE", "DECISION_MODE",
 		"OWNER", "SESSION", "WINDOW", "STARTED_AT", "FINISHED_AT", "TASK_BRANCH", "RESULT",
 	}
 	if len(header) != len(fields)+4 || header[1] != "" || header[len(fields)+2] != "" || header[len(fields)+3] != "" {

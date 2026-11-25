@@ -139,6 +139,7 @@ func (s *Server) registerRoutes(mux *routeTable) {
 		}
 		return p.assign(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("task"), req)
 	})
+	s.registerDecisionRoutes(mux, task)
 	s.projectRoute(mux, "POST "+task+"/claim", func(p *project, r *http.Request) outcome {
 		var req api.ClaimRequest
 		if err := decode(r, &req); err != nil {

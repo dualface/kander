@@ -307,7 +307,7 @@ func (p *Project) ListWithOptions(ctx context.Context, options api.TaskListOptio
 	q := url.Values{}
 	for name, value := range map[string]string{
 		"state": options.State, "assignee": options.Assignee, "submitter": options.Submitter,
-		"group": options.Group, "q": options.Search, "cursor": options.Cursor,
+		"group": options.Group, "q": options.Search, "cursor": options.Cursor, "decision_mode": string(options.DecisionMode),
 	} {
 		if value != "" {
 			q.Set(name, value)

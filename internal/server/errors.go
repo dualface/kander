@@ -18,6 +18,8 @@ var boardCodes = map[string]string{
 	"board.task_does_not_exist":  api.CodeNotFound,
 	"board.invalid_task_id":      api.CodeInvalidRequest,
 	"board.person_field_invalid": api.CodeInvalidRequest,
+	"board.decision_invalid":     api.CodeInvalidRequest,
+	"board.decision_reserved":    api.CodeDecisionReserved,
 }
 
 var codeStatus = map[string]int{
@@ -26,6 +28,7 @@ var codeStatus = map[string]int{
 	api.CodeAttributionRequired:  http.StatusForbidden,
 	api.CodeNotFound:             http.StatusNotFound,
 	api.CodeRevisionConflict:     http.StatusConflict,
+	api.CodeDecisionReserved:     http.StatusConflict,
 	api.CodeHeldByOther:          http.StatusConflict,
 	api.CodeTakenOver:            http.StatusConflict,
 	api.CodeLeaseInvalid:         http.StatusConflict,

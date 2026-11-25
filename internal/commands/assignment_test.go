@@ -22,7 +22,8 @@ import (
 	"github.com/dualface/kander/internal/version"
 )
 
-func TestPeopleFieldsThroughCLI(t *testing.T) {
+func boundCardCLI(t *testing.T) (runGit func(...string), run func(...string) string, project *client.Project) {
+	t.Helper()
 	git, err := exec.LookPath("git")
 	if err != nil {
 		t.Skip("Git is required to test the submitter default")
@@ -36,7 +37,7 @@ func TestPeopleFieldsThroughCLI(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	runGit := func(args ...string) {
+	runGit = func(args ...string) {
 		t.Helper()
 		if out, err := exec.CommandContext(t.Context(), git, args...).CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v\n%s", args, err, out)
@@ -67,7 +68,7 @@ func TestPeopleFieldsThroughCLI(t *testing.T) {
 	if _, err := config.Save(cfg); err != nil {
 		t.Fatal(err)
 	}
-	run := func(args ...string) string {
+	run = func(args ...string) string {
 		t.Helper()
 		code, stdout, stderr := commandtest.Capture(func() int {
 			return cli.Run(append([]string{"kander", "--lang", "en", "--json"}, args...))
@@ -77,6 +78,11 @@ func TestPeopleFieldsThroughCLI(t *testing.T) {
 		}
 		return stdout
 	}
+	return runGit, run, c.Project(info.ID)
+}
+
+func TestPeopleFieldsThroughCLI(t *testing.T) {
+	runGit, run, p := boundCardCLI(t)
 	newCard := func(slug string) (id string, revision uint64) {
 		t.Helper()
 		var item struct {
@@ -92,7 +98,6 @@ func TestPeopleFieldsThroughCLI(t *testing.T) {
 	empty, _ := newCard("people-blank")
 	runGit("config", "--local", "user.name", "Local Name")
 	id, revision := newCard("people-local")
-	p := c.Project(info.ID)
 	created, err := p.Show(t.Context(), id)
 	if err != nil || !strings.Contains(board.CardHeader(created.Text), "\n- SUBMITTER: Local Name\n- ASSIGNEE:\n") {
 		t.Fatalf("CLI did not write the configured Git name: %+v, %v", created, err)

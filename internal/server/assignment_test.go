@@ -81,7 +81,7 @@ func TestCardCreationSelectsSubmitter(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			line := "\n" + board.RenderField(board.FieldSubmitter, tc.want) + "\n- ASSIGNEE:\n- OWNER:"
+			line := "\n" + board.RenderField(board.FieldSubmitter, tc.want) + "\n- ASSIGNEE:\n- DECISION_MODE: leader\n- OWNER:"
 			for _, task := range []api.Task{created, card} {
 				if !strings.Contains(board.CardHeader(task.Text), line) {
 					t.Errorf("%s does not have initial person fields:\n%s", task.TaskID, board.CardHeader(task.Text))

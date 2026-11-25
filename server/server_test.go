@@ -119,11 +119,11 @@ func TestTaskAccessCanBeCalledFromAnAuthorizationHook(t *testing.T) {
 	created := request[api.Task](t, handler, http.MethodPost, base, `{"type":"feature","slug":"access","title":"Access task","submitter":"alice"}`, http.StatusCreated)
 	path := base + "/" + created.TaskID
 	request[api.Task](t, handler, http.MethodPost, path+"/assignee", `{"assignee":"bob"}`, http.StatusOK, "assign-access-task")
-	if seen != (api.TaskAccess{Submitter: "alice", State: "backlog", Revision: created.Revision}) {
+	if seen != (api.TaskAccess{Submitter: "alice", DecisionMode: api.DecisionModeLeader, State: "backlog", Revision: created.Revision}) {
 		t.Fatalf("hook before assignment: %+v", seen)
 	}
 	shown := request[api.Task](t, handler, http.MethodGet, path, "", http.StatusOK)
-	if seen != (api.TaskAccess{Submitter: "alice", Assignee: "bob", State: "backlog", Revision: shown.Revision}) {
+	if seen != (api.TaskAccess{Submitter: "alice", Assignee: "bob", DecisionMode: api.DecisionModeLeader, State: "backlog", Revision: shown.Revision}) {
 		t.Fatalf("hook after assignment: %+v", seen)
 	}
 	if _, err := s.TaskAccess(t.Context(), project.ID, "20261125-missing-task"); !api.IsCode(err, api.CodeNotFound) {

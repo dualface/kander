@@ -9,24 +9,25 @@ import (
 
 // TaskSummary is the task digest used by tui; its fields match the onevoke payload.
 type TaskSummary struct {
-	AgentObservation *ListAgent `json:"agent_observation,omitempty"`
-	ClaimStatus      string     `json:"claim_status,omitempty"`
-	ClaimClientID    string     `json:"claim_client_id,omitempty"`
-	Warnings         []string   `json:"warnings,omitempty"`
-	TaskID           string     `json:"task_id"`
-	Title            string     `json:"title"`
-	State            string     `json:"state"`
-	Kind             string     `json:"kind"`
-	Type             string     `json:"type"`
-	TaskGroup        string     `json:"task_group"`
-	Owner            string     `json:"owner"`
-	Submitter        string     `json:"submitter"`
-	Assignee         string     `json:"assignee"`
-	CreatedAt        string     `json:"created_at"`
-	StartedAt        string     `json:"started_at"`
-	CompletedAt      string     `json:"completed_at"`
-	Time             string     `json:"time"`
-	Result           string     `json:"result"`
+	AgentObservation *ListAgent   `json:"agent_observation,omitempty"`
+	ClaimStatus      string       `json:"claim_status,omitempty"`
+	ClaimClientID    string       `json:"claim_client_id,omitempty"`
+	Warnings         []string     `json:"warnings,omitempty"`
+	TaskID           string       `json:"task_id"`
+	Title            string       `json:"title"`
+	State            string       `json:"state"`
+	Kind             string       `json:"kind"`
+	Type             string       `json:"type"`
+	TaskGroup        string       `json:"task_group"`
+	Owner            string       `json:"owner"`
+	Submitter        string       `json:"submitter"`
+	Assignee         string       `json:"assignee"`
+	DecisionMode     DecisionMode `json:"decision_mode"`
+	CreatedAt        string       `json:"created_at"`
+	StartedAt        string       `json:"started_at"`
+	CompletedAt      string       `json:"completed_at"`
+	Time             string       `json:"time"`
+	Result           string       `json:"result"`
 	// Session and Window are the raw execution metadata, consumed by the TUI
 	// agent status observation.
 	Session  string `json:"session,omitempty"`
@@ -82,22 +83,23 @@ func TaskSummaryOf(entry Entry, text string) TaskSummary {
 		taskType = "-"
 	}
 	return TaskSummary{
-		TaskID:      entry.TaskID,
-		Title:       TitleFrom(text),
-		State:       entry.State,
-		Kind:        kind,
-		Type:        taskType,
-		TaskGroup:   taskGroupFrom(text),
-		Owner:       MetadataFrom(text, FieldOwner),
-		Submitter:   MetadataFrom(text, FieldSubmitter),
-		Assignee:    MetadataFrom(text, FieldAssignee),
-		CreatedAt:   MetadataFrom(text, FieldCreatedAt),
-		StartedAt:   MetadataFrom(text, FieldStartedAt),
-		CompletedAt: MetadataFrom(text, FieldFinishedAt),
-		Time:        TaskDisplayTime(entry, text),
-		Result:      resultFrom(text),
-		Session:     MetadataFrom(text, FieldSession),
-		Window:      MetadataFrom(text, FieldWindow),
+		TaskID:       entry.TaskID,
+		Title:        TitleFrom(text),
+		State:        entry.State,
+		Kind:         kind,
+		Type:         taskType,
+		TaskGroup:    taskGroupFrom(text),
+		Owner:        MetadataFrom(text, FieldOwner),
+		Submitter:    MetadataFrom(text, FieldSubmitter),
+		Assignee:     MetadataFrom(text, FieldAssignee),
+		DecisionMode: DecisionModeOf(text),
+		CreatedAt:    MetadataFrom(text, FieldCreatedAt),
+		StartedAt:    MetadataFrom(text, FieldStartedAt),
+		CompletedAt:  MetadataFrom(text, FieldFinishedAt),
+		Time:         TaskDisplayTime(entry, text),
+		Result:       resultFrom(text),
+		Session:      MetadataFrom(text, FieldSession),
+		Window:       MetadataFrom(text, FieldWindow),
 	}
 }
 

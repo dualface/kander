@@ -18,26 +18,28 @@ type ListSnapshot struct {
 }
 
 // ListTask is one card of a ListSnapshot. Every string field is always
-// present; a missing value is the empty string.
+// present; a missing value is the empty string except for DecisionMode,
+// which uses the effective default.
 type ListTask struct {
-	TaskID     string     `json:"task_id"`
-	Title      string     `json:"title"`
-	State      string     `json:"state"`
-	Size       string     `json:"size"`
-	Type       string     `json:"type"`
-	TaskGroup  string     `json:"task_group"`
-	Owner      string     `json:"owner"`
-	Submitter  string     `json:"submitter"`
-	Assignee   string     `json:"assignee"`
-	Session    string     `json:"session"`
-	Window     string     `json:"window"`
-	Launcher   string     `json:"launcher"`
-	CreatedAt  string     `json:"created_at"`
-	StartedAt  string     `json:"started_at"`
-	FinishedAt string     `json:"finished_at"`
-	Result     string     `json:"result"`
-	Revision   uint64     `json:"revision"`
-	Agent      *ListAgent `json:"agent"`
+	TaskID       string       `json:"task_id"`
+	Title        string       `json:"title"`
+	State        string       `json:"state"`
+	Size         string       `json:"size"`
+	Type         string       `json:"type"`
+	TaskGroup    string       `json:"task_group"`
+	Owner        string       `json:"owner"`
+	Submitter    string       `json:"submitter"`
+	Assignee     string       `json:"assignee"`
+	DecisionMode DecisionMode `json:"decision_mode"`
+	Session      string       `json:"session"`
+	Window       string       `json:"window"`
+	Launcher     string       `json:"launcher"`
+	CreatedAt    string       `json:"created_at"`
+	StartedAt    string       `json:"started_at"`
+	FinishedAt   string       `json:"finished_at"`
+	Result       string       `json:"result"`
+	Revision     uint64       `json:"revision"`
+	Agent        *ListAgent   `json:"agent"`
 }
 
 // ListAgent is the observed executing agent of one card.

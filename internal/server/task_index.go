@@ -226,7 +226,7 @@ func (p *project) indexRow(view board.Board, id string) (taskindex.Row, error) {
 		StateRank: slices.Index(board.States, t.State),
 		Summary: api.TaskSummary{
 			TaskID: t.TaskID, Revision: revision, Title: t.Title, State: t.State, Kind: t.Kind, Type: t.Type, Session: t.Session, Window: t.Window,
-			TaskGroup: t.TaskGroup, Owner: t.Owner, Submitter: t.Submitter, Assignee: t.Assignee, CreatedAt: t.CreatedAt,
+			TaskGroup: t.TaskGroup, Owner: t.Owner, Submitter: t.Submitter, Assignee: t.Assignee, DecisionMode: t.DecisionMode, CreatedAt: t.CreatedAt,
 			StartedAt: t.StartedAt, CompletedAt: t.CompletedAt, Time: t.Time, Result: t.Result,
 		},
 	}

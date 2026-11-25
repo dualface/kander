@@ -25,7 +25,7 @@ import (
 const sampleTask = "20261118-sample-task"
 
 // groups are the commands that only group subcommands.
-var groups = map[string]bool{"coordinator": true, "dispatch": true, "issue": true, "server": true, "terminal": true}
+var groups = map[string]bool{"coordinator": true, "decision": true, "dispatch": true, "issue": true, "server": true, "terminal": true}
 
 // leafCommand is a command that runs something, with its command path.
 type leafCommand struct {
@@ -71,6 +71,9 @@ var samplePositionals = map[string][]string{
 	"coordinator release":          {"/abs/release.json"},
 	"coordinator remove-member":    {"/abs/request.json"},
 	"coordinator show":             {"20261118-sample-group"},
+	"decision list":                {sampleTask},
+	"decision mode":                {sampleTask, "leader"},
+	"decision record":              {sampleTask},
 	"dismiss":                      {sampleTask},
 	"dispatch authorize-wrap-up":   {"/abs/request.json"},
 	"dispatch cancel":              {sampleTask, "d1", "3", "reason"},
@@ -145,6 +148,14 @@ var sampleValues = map[string]string{
 	"repo": "github.com/owner/repo", "requirements-file": "requirements.json", "result": "completed", "run-id": "run-1",
 	"search": "query", "server": "http://127.0.0.1:7878", "source": "HEAD", "state": "open", "submitter": "bob", "task": sampleTask,
 	"timeout": "5", "ttl": "60s", "type": "feature", "watch": sampleTask,
+}
+
+func sampleValue(path, flag string) (string, bool) {
+	if path == "decision record" && flag == "kind" {
+		return "leader", true
+	}
+	value, ok := sampleValues[flag]
+	return value, ok
 }
 
 // valueFlags are the flags of c that take a value, in name order.
@@ -262,7 +273,7 @@ func TestCommandTreeHasEveryCommandPath(t *testing.T) {
 func TestValueFlagsAcceptSpaceAndEqualsForms(t *testing.T) {
 	for _, leaf := range commandLeaves(cli.NewRoot()) {
 		for _, f := range valueFlags(leaf.Command) {
-			value, ok := sampleValues[f.Name]
+			value, ok := sampleValue(leaf.path, f.Name)
 			if !ok {
 				t.Fatalf("%s: no sample value for --%s", leaf.path, f.Name)
 			}
@@ -293,8 +304,9 @@ func TestFlagsMayFollowPositionalArguments(t *testing.T) {
 			f := flags[0]
 			path := strings.Fields(leaf.path)
 			required := requiredArguments(leaf, f.Name)
-			before := append(append(append(slices.Clone(path), required...), "--"+f.Name, sampleValues[f.Name]), positionals...)
-			after := append(append(append(slices.Clone(path), positionals...), required...), "--"+f.Name, sampleValues[f.Name])
+			value, _ := sampleValue(leaf.path, f.Name)
+			before := append(append(append(slices.Clone(path), required...), "--"+f.Name, value), positionals...)
+			after := append(append(append(slices.Clone(path), positionals...), required...), "--"+f.Name, value)
 			a, aGot, aErr := runStubbed(t, before...)
 			b, bGot, bErr := runStubbed(t, after...)
 			if a != 0 || b != 0 {

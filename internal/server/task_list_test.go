@@ -50,6 +50,9 @@ func TestTaskListFiltersSearchAndKeysetPagination(t *testing.T) {
 	chinese := makeTask("login-zh", `登录页改版 "100%_done"`, "lin", "mika", group)
 	english := makeTask("login-en", "Redesign the Login page", "lin", "mika", "")
 	other := makeTask("other", "Shipping times", "lee", "max", group)
+	if _, err := p.SetDecisionMode(t.Context(), "", other.TaskID, api.SetDecisionMode{Mode: api.DecisionModeAssignee}); err != nil {
+		t.Fatal(err)
+	}
 	zulu := makeTask("zulu", "Console login", "lee", "", "")
 	differentState := makeTask("trash", "Obsolete login screen", "lee", "", "")
 	if _, err := p.Move(t.Context(), "", differentState.TaskID, api.Move{State: "trash", Result: "trashed", Reason: "test", Decision: "discard fixture"}, nil); err != nil {
@@ -63,6 +66,8 @@ func TestTaskListFiltersSearchAndKeysetPagination(t *testing.T) {
 		{"assignee", api.TaskListOptions{Assignee: "mika"}, []string{chinese.TaskID, english.TaskID}},
 		{"submitter", api.TaskListOptions{Submitter: "lin"}, []string{chinese.TaskID, english.TaskID}},
 		{"group", api.TaskListOptions{Group: group}, []string{chinese.TaskID, other.TaskID}},
+		{"assignee mode", api.TaskListOptions{DecisionMode: api.DecisionModeAssignee, Group: group}, []string{other.TaskID}},
+		{"leader mode", api.TaskListOptions{DecisionMode: api.DecisionModeLeader, Group: group}, []string{chinese.TaskID}},
 		{"english substring", api.TaskListOptions{State: "backlog", Search: "OGiN"}, []string{english.TaskID, zulu.TaskID}},
 		{"chinese trigram", api.TaskListOptions{Search: "登录页"}, []string{chinese.TaskID}},
 		{"short substring", api.TaskListOptions{Search: "登录"}, []string{chinese.TaskID}},
@@ -102,6 +107,9 @@ func TestTaskListFiltersSearchAndKeysetPagination(t *testing.T) {
 			if _, err := p.ListWithOptions(t.Context(), api.TaskListOptions{Limit: 2, State: "trash", Cursor: out.NextCursor}); !api.IsCode(err, api.CodeInvalidRequest) {
 				t.Fatalf("cursor reused with different filters: %v", err)
 			}
+			if _, err := p.ListWithOptions(t.Context(), api.TaskListOptions{Limit: 2, DecisionMode: api.DecisionModeLeader, Cursor: out.NextCursor}); !api.IsCode(err, api.CodeInvalidRequest) {
+				t.Fatalf("cursor reused with decision mode filter: %v", err)
+			}
 		}
 		paginated = append(paginated, out.Tasks...)
 		q.Cursor = out.NextCursor
@@ -113,7 +121,7 @@ func TestTaskListFiltersSearchAndKeysetPagination(t *testing.T) {
 	if err := project.checkIndex(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	for _, invalid := range []string{"limit=0", "limit=1001", "limit=z", "cursor=opaque", "limit=2&cursor=!", "limit=2&limit=3", "q=%00"} {
+	for _, invalid := range []string{"limit=0", "limit=1001", "limit=z", "cursor=opaque", "limit=2&cursor=!", "limit=2&limit=3", "q=%00", "decision_mode=", "decision_mode=other", "decision_mode=leader&decision_mode=assignee"} {
 		r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/v1/projects/"+info.ID+"/tasks?"+invalid, nil)
 		r.Header.Set(api.HeaderProtocol, strconv.Itoa(api.ProtocolVersion))
 		w := httptest.NewRecorder()
