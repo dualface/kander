@@ -18,6 +18,8 @@ type ProjectService interface {
 	SaveIssueResult(context.Context, string, api.IssueResultWrite) (api.IssueResultState, error)
 	Integration(context.Context, string) (api.Integration, error)
 	TaskIntegration(context.Context, string) (api.Integration, error)
+	TaskEvidenceCleanup(context.Context, string) (api.EvidenceCleanup, error)
+	GroupEvidenceCleanup(context.Context, string) (api.EvidenceCleanup, error)
 	IntegrationExecution(context.Context, string, string) (api.Integration, error)
 	IntegrationObservation(context.Context, string) (api.IntegrationObservation, error)
 	ClaimIntegration(context.Context, string, api.IntegrationRequest, client.Claim) (api.IntegrationGrant, error)

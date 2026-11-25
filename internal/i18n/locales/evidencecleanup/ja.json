@@ -1,0 +1,6 @@
+{
+  "remote.evidence_cleanup_failed": "警告: 完了クリーンアップは共通リモートの証跡 ref を削除しませんでした。カードは done のままです: {{.V0}}",
+  "remote.evidence_cleanup_kept": "警告: 完了クリーンアップは共通リモートの証跡 ref {{.V0}} 個を削除できませんでした。カードは done のままです:",
+  "remote.evidence_cleanup_kept_ref": "{{.V0}}: {{.V1}}",
+  "remote.evidence_cleanup_scope_invalid": "サービスが無効なクリーンアップ範囲を返しました"
+}

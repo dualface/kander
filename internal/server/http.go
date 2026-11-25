@@ -172,6 +172,7 @@ func (s *Server) Handler() http.Handler {
 	s.deliveryRoutes(mux)
 	s.integrationRoutes(mux)
 	s.taskIntegrationRoutes(mux)
+	s.evidenceCleanupRoutes(mux)
 	s.issueRoutes(mux)
 	s.issueResultRoutes(mux)
 	s.publicationRoutes(mux)

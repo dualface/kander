@@ -437,9 +437,12 @@ func runMove(task, state string, o moveOptions) error {
 		return fail(err)
 	}
 	notices := observeServiceMove(ctx, s, before, state)
-	t, err := s.MoveTask(ctx, task, req)
+	t, cleanup, err := s.MoveTaskCleaningEvidence(ctx, task, req)
 	if err != nil {
 		return fail(err)
+	}
+	if warning := cleanup.Warning(); warning != "" {
+		remark("evidence_cleanup", warning)
 	}
 	replayed := t.MoveReceipt != nil && t.MoveReceipt.Replayed
 	var report string

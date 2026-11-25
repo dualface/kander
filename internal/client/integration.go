@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"net/http"
+	"net/url"
 
 	"github.com/dualface/kander/internal/api"
 )
@@ -43,5 +44,21 @@ func (p *Project) IntegrationExecution(ctx context.Context, id, execution string
 func (p *Project) TaskIntegration(ctx context.Context, task string) (api.Integration, error) {
 	var value api.Integration
 	err := p.c.do(ctx, call{method: http.MethodGet, path: p.path("tasks", task, "integration")}, &value)
+	return value, err
+}
+
+// TaskEvidenceCleanup reads the cleanup scope of the Git evidence of a card;
+// a card of a task group answers with its group.
+func (p *Project) TaskEvidenceCleanup(ctx context.Context, task string) (api.EvidenceCleanup, error) {
+	var value api.EvidenceCleanup
+	err := p.c.do(ctx, call{method: http.MethodGet, path: p.path("tasks", task, "evidence-cleanup")}, &value)
+	return value, err
+}
+
+// GroupEvidenceCleanup reads the cleanup scope of the Git evidence of a task
+// group.
+func (p *Project) GroupEvidenceCleanup(ctx context.Context, group string) (api.EvidenceCleanup, error) {
+	var value api.EvidenceCleanup
+	err := p.c.do(ctx, call{method: http.MethodGet, path: p.path("groups", url.PathEscape(group), "evidence-cleanup")}, &value)
 	return value, err
 }
