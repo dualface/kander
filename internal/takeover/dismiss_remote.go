@@ -47,7 +47,14 @@ func commandRemoteDismiss(cfg *config.Config, task string, timeout float64) erro
 		return err
 	}
 	cardSession, cardWindow := board.MetadataFrom(card.Text, board.FieldSession), board.MetadataFrom(card.Text, board.FieldWindow)
-	if local.Session != cardSession || local.Window != cardWindow {
+	// recordedSession is what the card and the execution record must hold:
+	// the retained session, or only its agent for an execution started before
+	// remote starts confirmed the discovered session to the server.
+	recordedSession := local.Session
+	if local.Window == cardWindow && agentOnlySession(cardSession, local.Session) {
+		recordedSession = cardSession
+	}
+	if recordedSession != cardSession || local.Window != cardWindow {
 		return remote.LocalExecutionRefused(remote.RefusalSceneMismatch, remote.RefusalValue(local.Session), remote.RefusalValue(local.Window), remote.RefusalValue(cardSession), remote.RefusalValue(cardWindow))
 	}
 	record, err := service.Project.ExecutionRecord(ctx, card.TaskID)
@@ -57,7 +64,7 @@ func commandRemoteDismiss(cfg *config.Config, task string, timeout float64) erro
 	if record.SelfClaimed() {
 		return remote.LocalExecutionRefused(remote.RefusalSelfClaimed, card.TaskID, record.Kind)
 	}
-	if mismatch := recordMismatch(record, board.MetadataFrom(card.Text, board.FieldOwner), local.Session); mismatch != "" {
+	if mismatch := recordMismatch(record, board.MetadataFrom(card.Text, board.FieldOwner), recordedSession); mismatch != "" {
 		return remote.LocalExecutionRefused(remote.RefusalRecordMismatch, mismatch)
 	}
 	backend, address, parsed := terminal.ParseWindow(local.Window)
@@ -129,6 +136,16 @@ func commandRemoteDismiss(cfg *config.Config, task string, timeout float64) erro
 	}
 	reportDismiss(t("remote.execution_dismissed", card.TaskID), card.TaskID, "dismissed")
 	return nil
+}
+
+// agentOnlySession reports whether the card session is only the agent of the
+// retained session, which carries a reference. A remote start recorded that
+// pair for a session it discovered without confirming it to the server; the
+// retained session then identifies the executor, and the pane must still prove
+// it before anything is sent.
+func agentOnlySession(card, retained string) bool {
+	agent, reference, _ := strings.Cut(retained, " ")
+	return card != "" && card == agent && reference != ""
 }
 
 // recordMismatch names each field in which the execution record differs from
