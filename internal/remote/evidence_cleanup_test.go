@@ -10,6 +10,7 @@ import (
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 )
 
@@ -430,6 +431,9 @@ func TestCompletionCleanupRefusesAnExtraPushURL(t *testing.T) {
 // every listed ref in the warning as unconfirmed, with both errors, and the
 // card stays done.
 func TestCompletionCleanupKeepsUnconfirmedRefsWhenTheRemoteGoesAway(t *testing.T) {
+	// The warning text is asserted in English.
+	t.Setenv(config.EnvLang, "en")
+	t.Setenv(config.EnvLangCLI, "1")
 	f := newIntegrationFixture(t)
 	ctx, p, task := t.Context(), f.a.Info.ID, f.task.TaskID
 	if _, err := f.a.Integrate(ctx, f.first, f.options("unconfirmed-cleanup")); err != nil {
