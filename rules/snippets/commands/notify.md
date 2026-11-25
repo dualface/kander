@@ -68,7 +68,7 @@ kander request answer 20261118-example-task request-1 done "Fixed in the latest 
 
 **Codex Session Identity**
 
-- Notify repairs no session identity. A start or takeover that discovers the Codex session on a launcher that marks the pane (herdr-core, tmux, tmux-session, dsh) or reports the session (herdr) records `codex <id>` on the card, the execution record, and the local execution credential, and delivery proves the pane by that id. An execution started before this behavior can keep only `SESSION: codex` while its pane carries the id: its delivery does not prove the pane and its requests stay open. Take it over with `kander resume <task-id> --agent <agent> --decision <reference>`.
+- Notify repairs no session identity. A start or takeover that discovers the Codex session on a launcher that marks the pane (herdr-core, tmux, tmux-session, dsh) or reports the session (herdr) records `codex <id>` on the card, the execution record, and the local execution credential, and delivery proves the pane by that id. An execution started before this behavior can keep only `SESSION: codex` while its pane carries the id: its delivery does not prove the pane and its requests stay open. Take it over with `kander resume <task-id> --agent <agent> --decision <reference> --message <message>` (`snippets/commands/resume.md`; an executor that still holds the claim must be stopped first).
 
 ## Output
 
