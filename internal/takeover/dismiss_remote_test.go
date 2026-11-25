@@ -50,6 +50,12 @@ func bindDismissProcess(t *testing.T, execution, coordinator string) {
 
 func newRemoteDismiss(t *testing.T, slug string) *remoteDismiss {
 	t.Helper()
+	return newRemoteDismissAt(t, slug, "herdr:w1:t8:w1:p8")
+}
+
+// newRemoteDismissAt is newRemoteDismiss with the execution at window.
+func newRemoteDismissAt(t *testing.T, slug, window string) *remoteDismiss {
+	t.Helper()
 	// A user terminal definition named herdr would replace the fake terminal.
 	// Only the embedded definitions take part, whatever the share directories
 	// of this machine or of the checkout hold.
@@ -63,7 +69,7 @@ func newRemoteDismiss(t *testing.T, slug string) *remoteDismiss {
 		terminal.ReloadDefinitions()
 	})
 	root, _ := setupBoard(t)
-	task, path := makeDone(t, root, slug, "herdr:w1:t8:w1:p8")
+	task, path := makeDone(t, root, slug, window)
 	text, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)

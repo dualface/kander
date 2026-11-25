@@ -83,6 +83,10 @@ func writeFakeHerdr(t *testing.T, path, log string) {
 	script := `#!/bin/sh
 log="${KANBAN_HERDR_LOG}"
 if [ "$1" = "agent" ] && [ "$2" = "prompt" ]; then
+  if [ -n "${KANBAN_HERDR_PROMPT_FAIL:-}" ]; then
+    printf '%s\n' "$KANBAN_HERDR_PROMPT_FAIL" >&2
+    exit 1
+  fi
   printf '%s\n' "$@" > "$log.prompt"
   exit 0
 fi

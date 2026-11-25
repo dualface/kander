@@ -118,16 +118,24 @@ func commandRemoteDismiss(cfg *config.Config, task string, timeout float64) erro
 	if changed := taskChanges(card, current, local); changed != "" {
 		return remote.LocalExecutionRefused(remote.RefusalTaskChanged, card.TaskID, changed)
 	}
+	// The exit intent is recorded only once every pre-send check passed. A
+	// check that fails sends nothing and leaves the receipt prepared, so the
+	// dismiss can run again once the pane accepts delivery; from the first
+	// send on the receipt stays exiting.
+	var exit paneExit
+	if backend.Capabilities().AgentIdentity {
+		exit, err = checkAgentPaneAt(backend, address, true, toLive(session), false)
+	} else {
+		exit, err = checkProcessPaneAt(backend, address, toLive(session), false)
+	}
+	if err != nil {
+		return err
+	}
 	journal.Value.Phase = "exiting"
 	if err := journal.Save(); err != nil {
 		return err
 	}
-	if backend.Capabilities().AgentIdentity {
-		_, _, err = dismissAgentPaneAt(backend, address, true, toLive(session), session, exitCommand, timeout, false)
-	} else {
-		_, _, err = dismissProcessPaneAt(backend, address, toLive(session), session, exitCommand, timeout, false)
-	}
-	if err != nil {
+	if err := exit.send(session, exitCommand, timeout); err != nil {
 		return err
 	}
 	journal.Value.Phase = "complete"
