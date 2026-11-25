@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -17,10 +18,17 @@ import (
 
 func integrationGroupCards(t *testing.T, f *integrationFixture, group string) ([]string, []remote.Credential) {
 	t.Helper()
+	return integrationGroupCardsOf(t, f, group, []*remote.Session{f.a, f.b})
+}
+
+// integrationGroupCardsOf creates one claimed group member per session, in
+// order; a session may hold more than one member.
+func integrationGroupCardsOf(t *testing.T, f *integrationFixture, group string, sessions []*remote.Session) ([]string, []remote.Credential) {
+	t.Helper()
 	var ids []string
 	var owners []remote.Credential
-	for i, s := range []*remote.Session{f.a, f.b} {
-		slug := []string{"group-first", "group-second"}[i]
+	for i, s := range sessions {
+		slug := []string{"group-first", "group-second", "group-third"}[i]
 		task, err := s.Project.NewTask(t.Context(), "", api.NewTask{Type: "feature", Slug: slug, Title: "Deliver independent group work", Language: "en"})
 		if err != nil {
 			t.Fatal(err)
@@ -38,8 +46,12 @@ func integrationGroupCards(t *testing.T, f *integrationFixture, group string) ([
 		}
 		ids = append(ids, task.TaskID)
 	}
-	for i, s := range []*remote.Session{f.a, f.b} {
-		grant, err := s.Project.Claim(t.Context(), "", ids[i], api.ClaimRequest{ClientID: s.Client.ClientID(), ExecutionID: "group-owner-" + s.Client.ClientID(), Owner: "codex"})
+	for i, s := range sessions {
+		execution := "group-owner-" + s.Client.ClientID()
+		if i >= 2 {
+			execution += "-" + strconv.Itoa(i)
+		}
+		grant, err := s.Project.Claim(t.Context(), "", ids[i], api.ClaimRequest{ClientID: s.Client.ClientID(), ExecutionID: execution, Owner: "codex"})
 		if err != nil {
 			t.Fatal(err)
 		}

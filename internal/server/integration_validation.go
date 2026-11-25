@@ -134,6 +134,14 @@ func (p *project) integrationFacts(tx *board.Transaction, input api.IntegrationR
 			if progress.Status != "closed" || progress.PlanTarget != input.Commit {
 				return apiError(api.CodeEvidenceIncomplete, closedTargetMismatch(member.TaskID, progress, input.Commit))
 			}
+			// A done group member completed with an earlier receipt and stays in
+			// the topology without contributing, so a member taken over after
+			// that receipt can still be integrated for its new generation. A
+			// done member that names a delivery falls through and is refused as
+			// a contributor below.
+			if input.GroupID != "" && snapshot.Entry.State == "done" && member.DeliveryCommit == "" {
+				continue
+			}
 			if member.DeliveryCommit == "" {
 				return apiError(api.CodeEvidenceIncomplete, "a remaining member has no frozen delivery")
 			}
