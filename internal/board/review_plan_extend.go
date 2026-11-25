@@ -34,6 +34,11 @@ type ReviewPlanExtension struct {
 	RetargetBatches map[string]ReviewBatchRetarget `json:"retarget_batches,omitempty"`
 }
 
+// planRevisionConflict reports an extension request built from a stale plan view.
+func planRevisionConflict(p ReviewPlan, expected uint64) error {
+	return reviewError(t("board.review_plan_revision_conflict", p.PlanID, expected, p.Revision))
+}
+
 func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 	if x.ResolveBatch != nil {
 		return reviewError("resolve_batch needs the Git evidence of ResolveReviewBatch")
@@ -93,8 +98,15 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 				return err
 			}
 		}
-		if !ok || p.Sealed && len(x.RebindCycles) == 0 && len(x.SyncTargets) == 0 && len(x.RetargetBatches) == 0 && len(x.DropBatches) == 0 && x.ReleaseObligation == nil && !cycleBatch || p.Revision != x.ExpectedRevision {
-			return reviewError("plan extension CAS/sealed conflict")
+		if !ok {
+			return reviewError("missing plan")
+		}
+		// A stale view is reported before the seal: the caller re-reads first.
+		if p.Revision != x.ExpectedRevision {
+			return planRevisionConflict(p, x.ExpectedRevision)
+		}
+		if p.Sealed && len(x.RebindCycles) == 0 && len(x.SyncTargets) == 0 && len(x.RetargetBatches) == 0 && len(x.DropBatches) == 0 && x.ReleaseObligation == nil && !cycleBatch {
+			return reviewError(t("board.review_plan_sealed", p.PlanID))
 		}
 		if err = verifyPlanCopiesFor(tx, p, len(x.RebindCycles) == 0 && len(x.SyncTargets) == 0); err != nil {
 			return err

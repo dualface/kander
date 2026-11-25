@@ -115,8 +115,11 @@ func resolutionEntry(tx *Transaction, x ReviewPlanExtension) (ReviewPlan, batchR
 	if err != nil {
 		return p, facts, err
 	}
-	if !ok || p.Revision != x.ExpectedRevision {
-		return p, facts, reviewError("plan extension CAS/sealed conflict")
+	if !ok {
+		return p, facts, reviewError("missing plan")
+	}
+	if p.Revision != x.ExpectedRevision {
+		return p, facts, planRevisionConflict(p, x.ExpectedRevision)
 	}
 	// The cycle may be stale: review progress cannot name rebind_cycles while the
 	// unplanned batch fails the gate, so the resolution has to come first.
