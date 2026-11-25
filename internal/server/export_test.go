@@ -334,6 +334,27 @@ func (s *Server) WrapUpEvidence(id, task string, generation uint64, g board.Disp
 	return p.evidence(task, func(tx *board.Transaction) error { return p.wrapUpIntegration(tx, task, generation, g) })
 }
 
+// IntegrationFacts runs the member checks of an integration request inside a
+// transaction over its members, without the actor and ticket checks that
+// come first on the API.
+func (s *Server) IntegrationFacts(id string, input api.IntegrationRequest) error {
+	p, err := s.project(id)
+	if err != nil {
+		return err
+	}
+	if err := p.lockBoard(); err != nil {
+		return err
+	}
+	defer p.mu.Unlock()
+	var ids []string
+	for _, member := range input.Members {
+		ids = append(ids, member.TaskID)
+	}
+	scope := board.IntegrationScope(ids, input.GroupID)
+	scope.Groups = append(scope.Groups, serviceGroup)
+	return board.WithTransaction(p.board, scope, func(tx *board.Transaction) error { return p.integrationFacts(tx, input, true) })
+}
+
 func (p *project) evidence(task string, fn func(*board.Transaction) error) error {
 	if err := p.lockBoard(); err != nil {
 		return err

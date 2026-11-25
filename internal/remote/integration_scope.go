@@ -105,6 +105,7 @@ func (s *Session) integrationMembers(ctx context.Context, options IntegrationOpt
 		selected[id] = true
 	}
 	var members []api.IntegrationMember
+	var delivered bool
 	for _, id := range slices.Sorted(slices.Values(ids)) {
 		task, err := s.Project.Show(ctx, id)
 		if err != nil {
@@ -117,7 +118,11 @@ func (s *Session) integrationMembers(ctx context.Context, options IntegrationOpt
 		if task.Claim != nil {
 			member.Generation = task.Claim.Generation
 		}
-		contributes := selected[id] || options.Purpose == "deliver" && slices.Contains(remaining, id)
+		// A done group member already completed with an earlier receipt, so a
+		// later group deliver (such as the re-integration a takeover needs)
+		// lists it without a delivery; the service still requires its closed
+		// review target to equal the requested commit.
+		contributes := selected[id] || options.Purpose == "deliver" && slices.Contains(remaining, id) && (options.GroupID == "" || task.State != "done")
 		if contributes {
 			if task.State != "review" || task.Claim == nil || !api.ClaimStands(task.Claim.Status) || task.Delivery == nil || task.Delivery.Purpose == "baseline" || task.Delivery.Generation != task.Claim.Generation || task.Delivery.ExecutionID != task.Claim.ExecutionID {
 				if task.State == "review" {
@@ -128,6 +133,10 @@ func (s *Session) integrationMembers(ctx context.Context, options IntegrationOpt
 			member.DeliveryCommit = task.Delivery.Commit
 		}
 		members = append(members, member)
+		delivered = delivered || member.DeliveryCommit != ""
+	}
+	if options.Purpose == "deliver" && options.GroupID != "" && !delivered {
+		return nil, integrationFailure("remote.integration_no_contributor", options.GroupID)
 	}
 	return members, nil
 }

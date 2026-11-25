@@ -232,3 +232,36 @@ func TestWrapUpCompletionRefusalNamesSourceCommit(t *testing.T) {
 		t.Fatalf("completion with the source commit: %+v %v", done, err)
 	}
 }
+
+// The relaxation for done members applies only to a group delivery: a request
+// for a done standalone card still needs its frozen delivery.
+func TestIntegrationFactsRefuseADoneStandaloneCardWithoutDelivery(t *testing.T) {
+	f := newFixture(t)
+	p := f.project("host-a")
+	ctx := t.Context()
+	member, grant := integrationTask(t, f, p, "host-a", "done-standalone")
+	proof := client.Claim{Token: grant.Token, Generation: grant.Claim.Generation}
+	integration := integrate(t, p, integrationInput(t, p, member, grant.Claim.ExecutionID, "done-standalone-integration"), "done-standalone", proof)
+	current, err := p.Show(ctx, member.TaskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := wrapUpRound(t, p, member, integration, "done-standalone-round")
+	prepared, err := p.DispatchAction(ctx, "prepare-done-standalone", member.TaskID, "prepare", api.DispatchCommand{Input: &input, CardRevision: current.Revision}, proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Move(ctx, "accept-done-standalone", member.TaskID, api.Move{State: "working", Authorization: prepared.Authorization}, &proof); err != nil {
+		t.Fatal(err)
+	}
+	done, err := p.Move(ctx, "complete-done-standalone", member.TaskID, api.Move{State: "done", Result: "completed", Authorization: prepared.Authorization, DeliveryCommit: member.DeliveryCommit}, &proof)
+	if err != nil || done.State != "done" {
+		t.Fatalf("completion: %+v %v", done, err)
+	}
+	request := integrationInput(t, p, member, grant.Claim.ExecutionID, "done-standalone-again")
+	request.Members = []api.IntegrationMember{{TaskID: member.TaskID, Revision: done.Revision, Generation: member.Generation}}
+	err = f.srv.IntegrationFacts(p.ID(), request)
+	if !api.IsCode(err, api.CodeEvidenceIncomplete) || !strings.Contains(err.Error(), "a remaining member has no frozen delivery") {
+		t.Fatalf("service refusal: %v", err)
+	}
+}
