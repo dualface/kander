@@ -647,7 +647,10 @@ func TestReboundCycleNeedsABatchBeforeDone(t *testing.T) {
 				t.Fatal("a sealed plan took a batch no rebound cycle needs")
 			}
 			// The owed batch with seal set is refused with the retry, and the same
-			// request at the same revision without seal is accepted below.
+			// request at the same revision without seal is accepted below. The
+			// message language is pinned because the retry phrase is matched literally.
+			t.Setenv(config.EnvLang, "en")
+			t.Setenv(config.EnvLangCLI, "1")
 			err = ExtendReviewPlan(root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, Batch: &batch, Seal: true, Author: "coordinator", Basis: "new cycle and seal"})
 			if err == nil || !strings.Contains(err.Error(), "append-cycle-batch") || !strings.Contains(err.Error(), "send that batch again with seal omitted or false") {
 				t.Fatalf("an owed batch with seal was not pointed at a retry without seal: %v", err)
