@@ -261,7 +261,17 @@ func runProjectsCommand(t *testing.T, args ...string) (int, string, string) {
 
 func TestProjectsCommandListsWhileServingAndStopped(t *testing.T) {
 	dir := t.TempDir()
-	s := openIdentityServer(t, dir, nil)
+	// Hold the reconciliation timestamp fixed so the comparison isolates the
+	// listing command, rather than the second startup's index metadata write.
+	fixed := time.Now().UTC()
+	open := func() *Server {
+		s, err := Open(Options{DataDir: dir, Logger: quietIndexLogger(), Now: func() time.Time { return fixed }})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	s := open()
 	info, _, err := s.register(api.RegisterProject{Name: "golf", Remote: "https://example.invalid/golf.git"})
 	if err != nil {
 		t.Fatal(err)
@@ -270,7 +280,7 @@ func TestProjectsCommandListsWhileServingAndStopped(t *testing.T) {
 	// of server.lock while serving; no file is excluded from the comparison.
 	s.Close()
 	before := treeSnapshot(t, dir)
-	s = openIdentityServer(t, dir, nil)
+	s = open()
 	t.Cleanup(func() { _ = s.Close() })
 	check := func(state string) {
 		code, out, errOut := runProjectsCommand(t, "--data", dir, "--json")

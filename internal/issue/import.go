@@ -388,7 +388,7 @@ func Import(ctx context.Context, provider IssueProvider, root string, repository
 // PublishImport validates a normalized source snapshot and atomically publishes
 // the card and attachments. The server uses this entrance without running an
 // issue provider or trusting client-authored contract text.
-func PublishImport(root string, record ImportSnapshot, options ImportOptions) (result ImportResult, err error) {
+func PublishImport(root string, record ImportSnapshot, options ImportOptions, extensions ...board.TransactionExtension) (result ImportResult, err error) {
 	snapshot, err := SnapshotFromImport(record)
 	if err != nil {
 		return result, err
@@ -436,7 +436,7 @@ func PublishImport(root string, record ImportSnapshot, options ImportOptions) (r
 			return findImportedCard(view, sourceKey)
 		},
 	}
-	imported, err := board.ImportTask(root, request)
+	imported, err := board.ImportTask(root, request, extensions...)
 	if err != nil {
 		return result, err
 	}

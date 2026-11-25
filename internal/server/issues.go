@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/dualface/kander/api"
+	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/issue"
 )
 
@@ -48,11 +49,11 @@ func (s *Server) issueRoutes(mux *routeTable) {
 		if err := p.lockBoard(); err != nil {
 			return outcome{err: err}
 		}
-		defer p.mu.Unlock()
+		defer p.unlockBoard()
 		run := func() outcome {
 			imported, err := issue.PublishImport(p.board, record, issue.ImportOptions{
 				Type: request.Type, Language: request.Language, Large: request.Large, Submitter: submitter,
-			})
+			}, board.TransactionExtension{Published: p.indexPublication})
 			if err != nil {
 				return outcome{err: err}
 			}

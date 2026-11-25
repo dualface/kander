@@ -117,7 +117,13 @@ func withTransactionCheckpoint(ctx context.Context, root string, scope LockScope
 	if err != nil {
 		return err
 	}
-	defer func() { err = errors.Join(err, locks.close()) }()
+	var publication *Transaction
+	defer func() {
+		err = errors.Join(err, locks.close())
+		if publication != nil {
+			publication.notifyPublication(extensions, err)
+		}
+	}()
 	if err = pendingContext(ctx, root, append(append([]string(nil), scope.Tasks...), scope.Groups...), scope.warnings); err != nil {
 		return err
 	}
@@ -161,6 +167,7 @@ func withTransactionCheckpoint(ctx context.Context, root string, scope LockScope
 		return err
 	}
 	path := control(root, "operations", "pending", id+".json")
+	publication = tx
 	if err = writeOperation(root, path, tx.record, false); err != nil {
 		return err
 	}

@@ -14,7 +14,7 @@ func (s *Server) reviewEvidenceRoutes(mux *routeTable) {
 		if err := p.lockBoard(); err != nil {
 			return outcome{err: err}
 		}
-		defer p.mu.Unlock()
+		defer p.unlockBoard()
 		remaining, err := board.ReviewRemainingMembers(p.board, ids)
 		return result(http.StatusOK, remaining, err)
 	})

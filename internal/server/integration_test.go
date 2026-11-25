@@ -27,7 +27,7 @@ func integrationTaskAt(t *testing.T, f *fixture, p *client.Project, host, slug, 
 
 // integrationTaskPlan closes the review batch and seals the plan only when
 // sealed is set; an unsealed plan keeps the card out of the completion gate.
-func integrationTaskPlan(t *testing.T, f *fixture, p *client.Project, host, slug, delivery, target string, sealed bool) (api.IntegrationMember, api.ClaimGrant) {
+func integrationTaskPlan(t *testing.T, f *fixture, p *client.Project, host, slug, delivery, target string, sealed bool, launch ...api.StartInput) (api.IntegrationMember, api.ClaimGrant) {
 	t.Helper()
 	task := todoTask(t, p, slug)
 	text := strings.Replace(task.Text, "- TASK_BRANCH:", "- TASK_BRANCH: task/"+slug, 1)
@@ -35,11 +35,21 @@ func integrationTaskPlan(t *testing.T, f *fixture, p *client.Project, host, slug
 	if err != nil {
 		t.Fatal(err)
 	}
-	grant, err := claim(t, p, task.TaskID, host)
+	input := api.ClaimRequest{ClientID: host, ExecutionID: "exec-" + host, Owner: "claude"}
+	if len(launch) != 0 {
+		input.Start = &launch[0]
+	}
+	grant, err := p.Claim(t.Context(), "", task.TaskID, input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	own := client.Claim{Token: grant.Token, Generation: grant.Claim.Generation}
+	if input.Start != nil {
+		grant.Task, err = p.Execution(t.Context(), "", task.TaskID, api.ExecutionUpdate{Action: api.ExecutionConfirm}, own)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	base, commit := strings.Repeat("a", 40), delivery
 	if _, err := p.PublishDelivery(t.Context(), "", api.DeliveryEvidence{Purpose: "delivery", TaskID: task.TaskID, ExecutionID: grant.Claim.ExecutionID, Generation: grant.Claim.Generation, CardRevision: grant.Task.Revision, Commit: commit, Ref: api.DeliveryRef(p.ID(), task.TaskID, grant.Claim.Generation, commit), Remote: "git@example.invalid:demo.git", ObservedAt: f.clock.now()}, own); err != nil {
 		t.Fatal(err)

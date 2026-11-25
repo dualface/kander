@@ -14,12 +14,12 @@ func (p *project) groupWrite(key, operation, group string, request any, h holder
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	return p.idempotent(key, operation, request, func() outcome {
 		if _, err := p.requireGroup(group, h); err != nil {
 			return outcome{err: err}
 		}
-		guard := board.TransactionExtension{Groups: []string{serviceGroup}, Before: func(*board.Transaction) error { _, err := p.requireGroup(group, h); return err }, After: func(tx *board.Transaction) error {
+		guard := board.TransactionExtension{Groups: []string{serviceGroup}, Published: p.indexPublication, Before: func(*board.Transaction) error { _, err := p.requireGroup(group, h); return err }, After: func(tx *board.Transaction) error {
 			c, err := p.groupLease(group, h)
 			if err != nil {
 				return err
@@ -118,7 +118,7 @@ func (s *Server) groupRoutes(mux *routeTable) {
 		if err := p.lockBoard(); err != nil {
 			return outcome{err: err}
 		}
-		defer p.mu.Unlock()
+		defer p.unlockBoard()
 		facts, err := board.CollectCoordinatorGitFacts(r.Context(), p.board, request)
 		return result(http.StatusOK, facts, err)
 	})

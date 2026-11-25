@@ -298,10 +298,23 @@ func taskPath(id string, rest ...string) []string {
 
 // List reads the task list, optionally limited to one state.
 func (p *Project) List(ctx context.Context, state string) (api.TaskList, error) {
+	return p.ListWithOptions(ctx, api.TaskListOptions{State: state})
+}
+
+// ListWithOptions lists tasks with optional filters, title search and pagination.
+func (p *Project) ListWithOptions(ctx context.Context, options api.TaskListOptions) (api.TaskList, error) {
 	var l api.TaskList
 	q := url.Values{}
-	if state != "" {
-		q.Set("state", state)
+	for name, value := range map[string]string{
+		"state": options.State, "assignee": options.Assignee, "submitter": options.Submitter,
+		"group": options.Group, "q": options.Search, "cursor": options.Cursor,
+	} {
+		if value != "" {
+			q.Set(name, value)
+		}
+	}
+	if options.Limit != 0 {
+		q.Set("limit", strconv.Itoa(options.Limit))
 	}
 	err := p.c.do(ctx, call{method: http.MethodGet, path: p.path("tasks"), query: q}, &l)
 	return l, err

@@ -93,12 +93,53 @@ func TestEmbeddedHandlerAuthorizesBeforeWritingAndPublishesEvent(t *testing.T) {
 	}
 }
 
-func request[T any](t *testing.T, handler http.Handler, method, path, body string, status int) T {
+func TestTaskAccessCanBeCalledFromAnAuthorizationHook(t *testing.T) {
+	var s *server.Server
+	var seen api.TaskAccess
+	options := server.Options{
+		DataDir: t.TempDir(), Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Hooks: server.Hooks{Authorize: func(ctx context.Context, request server.Request) error {
+			if request.Task == "" {
+				return nil
+			}
+			access, err := s.TaskAccess(ctx, request.ProjectID, request.Task)
+			seen = access
+			return err
+		}},
+	}
+	var err error
+	s, err = server.Open(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	handler := s.Handler()
+	project := request[api.Project](t, handler, http.MethodPost, "/api/v1/projects", `{"name":"access"}`, http.StatusCreated)
+	base := "/api/v1/projects/" + project.ID + "/tasks"
+	created := request[api.Task](t, handler, http.MethodPost, base, `{"type":"feature","slug":"access","title":"Access task","submitter":"alice"}`, http.StatusCreated)
+	path := base + "/" + created.TaskID
+	request[api.Task](t, handler, http.MethodPost, path+"/assignee", `{"assignee":"bob"}`, http.StatusOK, "assign-access-task")
+	if seen != (api.TaskAccess{Submitter: "alice", State: "backlog", Revision: created.Revision}) {
+		t.Fatalf("hook before assignment: %+v", seen)
+	}
+	shown := request[api.Task](t, handler, http.MethodGet, path, "", http.StatusOK)
+	if seen != (api.TaskAccess{Submitter: "alice", Assignee: "bob", State: "backlog", Revision: shown.Revision}) {
+		t.Fatalf("hook after assignment: %+v", seen)
+	}
+	if _, err := s.TaskAccess(t.Context(), project.ID, "20261125-missing-task"); !api.IsCode(err, api.CodeNotFound) {
+		t.Fatalf("missing task: %v", err)
+	}
+}
+
+func request[T any](t *testing.T, handler http.Handler, method, path, body string, status int, key ...string) T {
 	t.Helper()
 	r := httptest.NewRequestWithContext(t.Context(), method, path, strings.NewReader(body))
 	r.Header.Set(api.HeaderProtocol, strconv.Itoa(api.ProtocolVersion))
 	r.Header.Set(api.HeaderClientID, "embedder")
 	r.Header.Set(api.HeaderIdempotencyKey, "embedded-task")
+	if len(key) > 0 {
+		r.Header.Set(api.HeaderIdempotencyKey, key[0])
+	}
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, r)
 	if w.Code != status {

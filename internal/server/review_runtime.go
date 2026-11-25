@@ -194,7 +194,7 @@ func (s *Server) reviewRuntimeRoutes(mux *routeTable) {
 		if err := p.lockBoard(); err != nil {
 			return outcome{err: err}
 		}
-		defer p.mu.Unlock()
+		defer p.unlockBoard()
 		writer, err := p.writer(id, r.Header.Get(api.HeaderClientID), r.Header.Get(api.HeaderReviewWriter))
 		if err != nil {
 			return outcome{err: err}
@@ -205,7 +205,7 @@ func (s *Server) reviewRuntimeRoutes(mux *routeTable) {
 			if err != nil {
 				return outcome{err: err}
 			}
-			extension := board.TransactionExtension{Groups: []string{serviceGroup}, Tasks: run.TaskIDs, Before: func(tx *board.Transaction) error { return p.validateWriter(tx, writer) }}
+			extension := board.TransactionExtension{Groups: []string{serviceGroup}, Published: p.indexPublication, Tasks: run.TaskIDs, Before: func(tx *board.Transaction) error { return p.validateWriter(tx, writer) }}
 			extension.After = func(tx *board.Transaction) error {
 				if err := p.validateWriter(tx, writer); err != nil {
 					return err

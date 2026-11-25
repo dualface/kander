@@ -21,7 +21,7 @@ func (p *project) assign(key, id string, req api.Assign) outcome {
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	operation := "assign:" + id
 	run := func() outcome {
 		var updated api.Task

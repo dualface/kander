@@ -63,6 +63,7 @@ const (
 	CodeProjectNotEmpty      = "project_not_empty"
 	CodeBoardRejected        = "board_rejected"
 	CodeNotReady             = "not_ready"
+	CodeIndexRebuilding      = "index_rebuilding"
 	CodeInternal             = "internal"
 )
 
@@ -202,8 +203,28 @@ type TaskList struct {
 	Tasks      []TaskSummary `json:"tasks"`
 	// Cursor is the event cursor the list is consistent with; a subscriber
 	// continues from it without missing a change.
-	Cursor   string   `json:"cursor"`
-	Warnings []string `json:"warnings,omitempty"`
+	Cursor     string   `json:"cursor"`
+	Warnings   []string `json:"warnings,omitempty"`
+	NextCursor string   `json:"next_cursor,omitempty"`
+}
+
+// TaskListOptions selects tasks for List. Zero values return the entire board.
+// Cursor continues a query with the same filters and requires a positive Limit.
+type TaskListOptions struct {
+	State, Assignee, Submitter, Group, Search, Cursor string
+	Limit                                             int
+}
+
+// MaxTaskListLimit bounds one paginated list response.
+const MaxTaskListLimit = 1000
+
+// TaskAccess is the current task identity, workflow state and revision that a
+// host authorization policy can read from its embedded server.
+type TaskAccess struct {
+	Submitter string `json:"submitter"`
+	Assignee  string `json:"assignee"`
+	State     string `json:"state"`
+	Revision  uint64 `json:"revision"`
 }
 
 // NewTask is POST /api/v1/projects/{project}/tasks.

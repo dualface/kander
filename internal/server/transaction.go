@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"path/filepath"
@@ -8,6 +9,14 @@ import (
 	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
 )
+
+func (p *project) boardTransaction(scope board.LockScope, fn func(*board.Transaction) error, extensions ...board.TransactionExtension) error {
+	return board.WithTransaction(p.board, scope, fn, append(extensions, board.TransactionExtension{Published: p.indexPublication})...)
+}
+
+func (p *project) boardTransactionContext(ctx context.Context, scope board.LockScope, fn func(*board.Transaction) error, extensions ...board.TransactionExtension) error {
+	return board.WithTransactionContext(ctx, p.board, scope, fn, append(extensions, board.TransactionExtension{Published: p.indexPublication})...)
+}
 
 // serviceGroup shares the board redo journal with cards and execution records.
 // Renewals write only this group, so they never advance a card revision.
@@ -55,7 +64,7 @@ func (p *project) taskFromTransaction(tx *board.Transaction, id string, claim *c
 // transaction. A crash at any publication step rolls all of them forward.
 func (p *project) taskTransaction(key, operation string, request any, id string, validate func(*board.Transaction) error, claim *claimRecord, grant bool, decorate ...func(*board.Transaction, *api.Task) error) board.TransactionExtension {
 	return board.TransactionExtension{
-		Groups: []string{serviceGroup}, Before: validate,
+		Groups: []string{serviceGroup}, Before: validate, Published: p.indexPublication,
 		After: func(tx *board.Transaction) error {
 			if validate != nil {
 				if err := validate(tx); err != nil {

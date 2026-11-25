@@ -10,6 +10,28 @@ import (
 	"github.com/dualface/kander/internal/client"
 )
 
+func TestTaskIndexAfterDispatchReauthorization(t *testing.T) {
+	f := newFixture(t)
+	p := f.project("host-a")
+	task := withTaskBranch(t, p, todoTask(t, p, "indexed-sync"))
+	grant, err := claim(t, p, task.TaskID, "host-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	proof := client.Claim{Token: grant.Token, Generation: grant.Claim.Generation}
+	input := board.DispatchInput{ID: "indexed-sync", TaskID: task.TaskID, Kind: "sync", Message: "Synchronize the branch", Base: strings.Repeat("a", 40)}
+	round, err := p.DispatchAction(t.Context(), "", task.TaskID, "prepare", api.DispatchCommand{Input: &input, CardRevision: grant.Task.Revision}, proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The audited fixture checks the new card revision even though this action
+	// does not change any of the display or access columns.
+	renewed, err := p.DispatchAction(t.Context(), "", task.TaskID, "reauthorize", api.DispatchCommand{DispatchID: input.ID, Revision: round.Revision}, proof)
+	if err != nil || renewed.Authorization.Epoch != round.Authorization.Epoch+1 {
+		t.Fatalf("reauthorized: %+v %v", renewed, err)
+	}
+}
+
 func TestDispatchServiceKeepsOwnershipAndBusinessEpochAsSeparateFences(t *testing.T) {
 	f := newFixture(t)
 	a, b := f.project("host-a"), f.project("host-b")

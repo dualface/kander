@@ -134,16 +134,16 @@ var samplePositionals = map[string][]string{
 // sampleValues are valid values for each value flag; every name is shared by the commands that
 // declare it.
 var sampleValues = map[string]string{
-	"action": "inspect", "advance-file": "advance.json", "agent": "claude", "base": "abc123", "batch-id": "batch-1",
-	"card": sampleTask, "commit": "HEAD", "contract-decision-file": "decision.md", "data": "/tmp/data", "decision": "ref-1",
+	"action": "inspect", "advance-file": "advance.json", "agent": "claude", "assignee": "alice", "base": "abc123", "batch-id": "batch-1",
+	"card": sampleTask, "commit": "HEAD", "contract-decision-file": "decision.md", "cursor": "opaque", "data": "/tmp/data", "decision": "ref-1",
 	"delivery-commit": "abc123", "disposition": "reviews/a.json", "dispatch-id": "dispatch-1", "document": "plan.md",
 	"duplicate-of": sampleTask, "evidence-file": "evidence.json", "execution-epoch": "2", "expect-revision": "3",
-	"file": "input.md", "from": "/tmp/board", "head": "HEAD", "heartbeat": "5", "kind": "fix", "label": "bug",
+	"file": "input.md", "from": "/tmp/board", "group": "20261125-example-group", "head": "HEAD", "heartbeat": "5", "kind": "fix", "label": "bug",
 	"language": "en", "launcher": "herdr", "limit": "5", "listen": "127.0.0.1:7878", "message": "hello",
 	"message-file": "message.md", "operation-id": "operation-1", "owner": "codex", "pane": "pane-1", "previous-run-id": "run-0",
 	"project": "demo", "reason": "because", "refresh": "2", "remote": "https://example.com/r.git", "renew": "10s",
 	"repo": "github.com/owner/repo", "requirements-file": "requirements.json", "result": "completed", "run-id": "run-1",
-	"search": "query", "server": "http://127.0.0.1:7878", "source": "HEAD", "state": "open", "task": sampleTask,
+	"search": "query", "server": "http://127.0.0.1:7878", "source": "HEAD", "state": "open", "submitter": "bob", "task": sampleTask,
 	"timeout": "5", "ttl": "60s", "type": "feature", "watch": sampleTask,
 }
 
@@ -180,6 +180,7 @@ var replacedBy = map[string]string{"message-file": "message"}
 
 // companionFlags are the flags that a flag under test needs next to it.
 var companionFlags = map[string][]string{
+	"cursor":          {"--limit", "5"},
 	"dispatch-id":     {"--execution-epoch", "2"},
 	"execution-epoch": {"--dispatch-id", "d1"},
 }

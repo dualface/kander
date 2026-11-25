@@ -14,7 +14,7 @@ func (p *project) dispatchWrite(key, action, task string, input api.DispatchComm
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	operation := "dispatch:" + task + ":" + action
 	return p.idempotent(key, operation, input, func() outcome {
 		if _, err := p.requireHolder(task, h); err != nil {
@@ -29,7 +29,7 @@ func (p *project) dispatchWrite(key, action, task string, input api.DispatchComm
 			}
 		}
 		var proposal *dispatchProposal
-		guard := board.TransactionExtension{Groups: []string{serviceGroup}, Before: func(tx *board.Transaction) error {
+		guard := board.TransactionExtension{Groups: []string{serviceGroup}, Published: p.indexPublication, Before: func(tx *board.Transaction) error {
 			if _, err := p.requireHolder(task, h); err != nil {
 				return err
 			}

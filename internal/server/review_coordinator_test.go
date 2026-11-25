@@ -52,7 +52,7 @@ func startLogged(t *testing.T, c *clock) (*fixture, *lockedBuffer) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &fixture{t: t, dir: "", clock: c, srv: s, http: httptest.NewServer(s.Handler())}
+	f := &fixture{t: t, dir: "", clock: c, srv: s, http: httptest.NewServer(s.IndexDifferentialHandler(t))}
 	t.Cleanup(f.stop)
 	return f, logs
 }

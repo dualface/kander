@@ -38,6 +38,7 @@ var codeStatus = map[string]int{
 	api.CodeProjectNotEmpty:      http.StatusConflict,
 	api.CodeBoardRejected:        http.StatusUnprocessableEntity,
 	api.CodeNotReady:             http.StatusServiceUnavailable,
+	api.CodeIndexRebuilding:      http.StatusServiceUnavailable,
 	api.CodeInternal:             http.StatusInternalServerError,
 }
 

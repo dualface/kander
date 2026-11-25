@@ -239,8 +239,9 @@ func TestOrdinaryDocumentWriteCannotChangePeople(t *testing.T) {
 
 func TestOldCardWithoutPeopleFieldsStillWorks(t *testing.T) {
 	f := newFixture(t)
-	p := f.project("host-a")
-	// Seed the historical header directly in the isolated fixture before reading it.
+	f.project("host-a")
+	f.stop()
+	// Seed the historical header offline. Startup takes it into the index.
 	root := filepath.Join(f.dir, "projects", api.ProjectDirName("demo"), "board")
 	path, err := board.NewTask(root, "chore", "old-people", "Historical card", "en", false)
 	if err != nil {
@@ -257,6 +258,8 @@ func TestOldCardWithoutPeopleFieldsStillWorks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	f = start(t, f.dir, f.clock)
+	p := f.project("host-a")
 	ctx := t.Context()
 	shown, err := p.Show(ctx, id)
 	if err != nil || strings.Contains(shown.Text, "SUBMITTER:") || strings.Contains(shown.Text, "ASSIGNEE:") {

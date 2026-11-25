@@ -88,8 +88,12 @@ func (s *Server) registerRoutes(mux *routeTable) {
 		return outcome{status: http.StatusOK, body: info}
 	}))
 	const task = "/api/v1/projects/{project}/tasks/{task}"
-	s.projectRoute(mux, "GET /api/v1/projects/{project}/tasks", func(p *project, r *http.Request) outcome {
-		list, err := p.list(r.Context(), r.URL.Query().Get("state"))
+	s.projectRoute(mux, taskListRoute, func(p *project, r *http.Request) outcome {
+		query, err := parseTaskList(r.URL.RawQuery)
+		if err != nil {
+			return outcome{err: err}
+		}
+		list, err := p.list(r.Context(), query)
 		return result(http.StatusOK, list, err)
 	})
 	s.projectRoute(mux, "POST /api/v1/projects/{project}/tasks", func(p *project, r *http.Request) outcome {
@@ -247,7 +251,7 @@ const projectEvents = "GET /api/v1/projects/{project}/events"
 func (s *Server) projectRoute(mux *routeTable, pattern string, fn func(*project, *http.Request) outcome) {
 	// The registered pattern decides the lock: a GET pattern also serves
 	// HEAD, and a request path ending in /events may still name a document.
-	read := strings.HasPrefix(pattern, http.MethodGet+" ") && pattern != projectEvents
+	read := strings.HasPrefix(pattern, http.MethodGet+" ") && pattern != projectEvents && pattern != taskListRoute
 	mux.HandleFunc(pattern, s.domain(func(r *http.Request) outcome {
 		p, err := s.project(r.PathValue("project"))
 		if err != nil {
@@ -257,7 +261,7 @@ func (s *Server) projectRoute(mux *routeTable, pattern string, fn func(*project,
 			if err := p.lockBoard(); err != nil {
 				return outcome{err: err}
 			}
-			defer p.mu.Unlock()
+			defer p.unlockBoard()
 		}
 		return fn(p, r)
 	}))

@@ -71,7 +71,7 @@ func (p *project) issueResultView(ctx context.Context, query api.IssueResultQuer
 	if err := p.lockBoard(); err != nil {
 		return api.IssueResultState{}, err
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	repository, number, work, err := p.issueResultInputs(query)
 	if err != nil {
 		return api.IssueResultState{}, err
@@ -86,7 +86,7 @@ func (p *project) saveIssueResult(ctx context.Context, key string, input api.Iss
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	operation := "issue-result-save:" + input.Query.SourceKey
 	return p.idempotent(key, operation, input, func() outcome {
 		repository, number, work, err := p.issueResultInputs(input.Query)
@@ -167,7 +167,7 @@ func (p *project) saveIssueResult(ctx context.Context, key string, input api.Iss
 			}
 			return nil
 		}
-		err = board.WithTransactionContext(ctx, p.board, board.LockScope{Tasks: ids, Groups: []string{serviceGroup}, ExclusiveBoard: true}, func(tx *board.Transaction) error {
+		err = p.boardTransactionContext(ctx, board.LockScope{Tasks: ids, Groups: []string{serviceGroup}, ExclusiveBoard: true}, func(tx *board.Transaction) error {
 			if err := guard(tx); err != nil {
 				return err
 			}

@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -9,9 +8,11 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/dualface/kander/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/server/taskindex"
 	"github.com/dualface/kander/internal/statemachine/serverclaim"
 )
 
@@ -30,6 +31,12 @@ type project struct {
 	// importBroken is guarded by mu. It is set when a board import failed
 	// after its publication intent and in-process recovery failed too.
 	importBroken bool
+	// Index state is protected by mu, except the fail-closed read gate.
+	index           *taskindex.Store
+	indexDirty      map[string]struct{}
+	indexFull       bool
+	indexRunning    bool
+	indexRebuilding atomic.Bool
 }
 
 func (p *project) log() *slog.Logger { return p.server.log.With("project", p.info.ID) }
@@ -73,7 +80,10 @@ func (p *project) open() error {
 	}
 	p.events = events
 	p.starts = map[string]startCursor{}
-	return p.reconcileClaims()
+	if err := p.reconcileClaims(); err != nil {
+		return err
+	}
+	return p.reconcileIndex()
 }
 
 // reconcileClaims derives every claim from the committed card state: a
@@ -129,38 +139,6 @@ func (p *project) reconcileClaims() error {
 func (p *project) ownerMatches(entry board.Entry, r claimRecord) bool {
 	text, err := board.ReadDocument(entry)
 	return err == nil && board.MetadataFrom(text, board.FieldOwner) == r.Owner
-}
-
-func (p *project) list(ctx context.Context, state string) (api.TaskList, error) {
-	cursor := p.events.cursor()
-	view, err := board.BoardPayloadContext(ctx, p.board)
-	if err != nil {
-		return api.TaskList{}, err
-	}
-	now := p.server.now()
-	out := api.TaskList{ObservedAt: now, Tasks: []api.TaskSummary{}, Cursor: cursor, Warnings: view.Warnings}
-	for _, t := range view.Tasks {
-		if state != "" && t.State != state {
-			continue
-		}
-		s := api.TaskSummary{
-			TaskID: t.TaskID, Title: t.Title, State: t.State, Kind: t.Kind, Type: t.Type, Session: t.Session, Window: t.Window,
-			TaskGroup: t.TaskGroup, Owner: t.Owner, Submitter: t.Submitter, Assignee: t.Assignee, CreatedAt: t.CreatedAt,
-			StartedAt: t.StartedAt, CompletedAt: t.CompletedAt, Time: t.Time, Result: t.Result,
-		}
-		snapshot, err := board.ReadSnapshot(p.board, t.TaskID)
-		if err != nil {
-			return api.TaskList{}, err
-		}
-		s.Revision = snapshot.Revision
-		if r, found, err := p.readClaim(t.TaskID); err != nil {
-			return api.TaskList{}, err
-		} else if found && r.Status != claimPending {
-			s.Claim = r.view(now)
-		}
-		out.Tasks = append(out.Tasks, s)
-	}
-	return out, nil
 }
 
 func (p *project) show(id string) (api.Task, error) {
@@ -222,10 +200,10 @@ func (p *project) newTask(key string, req api.NewTask, submitter string) outcome
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	run := func() outcome {
 		var created api.Task
-		extension := board.TransactionExtension{Groups: []string{serviceGroup}, After: func(tx *board.Transaction) error {
+		extension := board.TransactionExtension{Groups: []string{serviceGroup}, Published: p.indexPublication, After: func(tx *board.Transaction) error {
 			snapshot, ok := tx.OperationResult().(board.Snapshot)
 			if !ok {
 				return apiError(api.CodeInternal, "creation did not stage its initial snapshot")
@@ -255,7 +233,7 @@ func (p *project) putDocument(key, id string, doc api.Document, h holder) outcom
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	if doc.SHA256 != digest(doc.Text) {
 		return outcome{err: apiError(api.CodeEvidenceIncomplete, "document digest does not match the received bytes")}
 	}
@@ -301,7 +279,7 @@ func (p *project) move(key, id string, req api.Move, h holder) outcome {
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	run := func() outcome {
 		view, err := board.LoadBoard(p.board)
 		if err != nil {
@@ -476,7 +454,7 @@ func (p *project) claim(key, id string, req api.ClaimRequest) outcome {
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	run := func() outcome {
 		view, err := board.LoadBoard(p.board)
 		if err != nil {
@@ -580,13 +558,13 @@ func (p *project) renew(id string, h holder) (api.Renewal, error) {
 	if err := p.lockBoard(); err != nil {
 		return api.Renewal{}, err
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	id, err := board.NormalizeTaskID(id)
 	if err != nil {
 		return api.Renewal{}, err
 	}
 	var r claimRecord
-	err = board.WithTransaction(p.board, board.LockScope{Groups: []string{serviceGroup}}, func(tx *board.Transaction) error {
+	err = p.boardTransaction(board.LockScope{Groups: []string{serviceGroup}}, func(tx *board.Transaction) error {
 		var err error
 		r, _, err = p.holderDecision(id, h, true, renewEvent)
 		if err != nil {
@@ -616,7 +594,7 @@ func (p *project) takeover(key, id string, req api.ClaimRequest, h holder) outco
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	run := func() outcome {
 		t, err := p.show(id)
 		if err != nil {

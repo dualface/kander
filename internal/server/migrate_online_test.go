@@ -200,6 +200,9 @@ func TestOnlineImportReadsWaitForPublicationAndEventsReset(t *testing.T) {
 	if list := waitFor(t, read, "queued read"); len(list.Tasks) != 2 {
 		t.Fatalf("queued read: %+v", list)
 	}
+	if err := project.checkIndex(t.Context()); err != nil {
+		t.Fatalf("index after online import: %v", err)
+	}
 	if status := waitFor(t, head, "queued HEAD"); status != http.StatusOK {
 		t.Fatalf("queued HEAD: %d", status)
 	}

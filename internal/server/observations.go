@@ -26,11 +26,11 @@ func (s *Server) observationRoutes(mux *routeTable) {
 		if err := p.lockBoard(); err != nil {
 			return outcome{err: err}
 		}
-		defer p.mu.Unlock()
+		defer p.unlockBoard()
 		key, operation := r.Header.Get(api.HeaderIdempotencyKey), "observation:"+id
 		return p.idempotent(key, operation, input, func() outcome {
 			var view api.ClaimView
-			err := board.WithTransaction(p.board, board.LockScope{Groups: []string{serviceGroup}, Tasks: []string{id}}, func(tx *board.Transaction) error {
+			err := p.boardTransaction(board.LockScope{Groups: []string{serviceGroup}, Tasks: []string{id}}, func(tx *board.Transaction) error {
 				claim, err := p.requireHolder(id, holderOf(r))
 				if err != nil {
 					return err

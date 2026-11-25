@@ -111,7 +111,7 @@ func (p *project) claimIntegration(key, id string, input api.IntegrationRequest,
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	// The registered remote can be bound late (bindRemote), so read it under the lock.
 	if p.info.Remote == "" {
 		return outcome{err: apiError(api.CodeInvalidRequest, "integration must bind a registered common remote and target")}
@@ -155,7 +155,7 @@ func (p *project) claimIntegration(key, id string, input api.IntegrationRequest,
 			return integrationRefusal(factsErr)
 		}
 		grant := api.IntegrationGrant{Integration: next.Value, RenewInterval: api.DurationOf(p.server.renew), TTL: api.DurationOf(p.server.ttl)}
-		err = board.WithTransaction(p.board, scope, func(tx *board.Transaction) error {
+		err = p.boardTransaction(scope, func(tx *board.Transaction) error {
 			if err := guard(tx); err != nil {
 				return err
 			}
@@ -185,7 +185,7 @@ func (p *project) renewIntegration(id string, h holder) (api.Renewal, error) {
 	if err := p.lockBoard(); err != nil {
 		return api.Renewal{}, err
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	lease, err := p.integrationHolder(id, h)
 	if err != nil {
 		return api.Renewal{}, err
@@ -195,7 +195,7 @@ func (p *project) renewIntegration(id string, h holder) (api.Renewal, error) {
 	if err != nil {
 		return api.Renewal{}, err
 	}
-	err = board.WithTransaction(p.board, scope, func(tx *board.Transaction) error {
+	err = p.boardTransaction(scope, func(tx *board.Transaction) error {
 		again, err := p.integrationHolder(id, h)
 		if err != nil {
 			return err
@@ -214,7 +214,7 @@ func (p *project) integrationAction(key, id string, input api.IntegrationCommand
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	operation := "integration-action:" + id
 	return p.idempotent(key, operation, input, func() outcome {
 		release := input.Action == "release"
@@ -282,7 +282,7 @@ func (p *project) integrationAction(key, id string, input api.IntegrationCommand
 			}
 			return nil
 		}
-		err = board.WithTransaction(p.board, scope, func(tx *board.Transaction) error {
+		err = p.boardTransaction(scope, func(tx *board.Transaction) error {
 			if err := guard(tx); err != nil {
 				return err
 			}

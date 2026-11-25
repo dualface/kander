@@ -51,7 +51,7 @@ func (p *project) claimGroup(ctx context.Context, key, group, client string, inp
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	operation := "group-claim:" + group
 	out := p.idempotent(key, operation, input, func() outcome {
 		previous, found, err := p.readGroupClaim(group)
@@ -73,7 +73,7 @@ func (p *project) claimGroup(ctx context.Context, key, group, client string, inp
 		}
 		request := input.Request
 		request.Token = "coordinator-" + tokenHash(claim.ExecutionID+":"+strconv.FormatUint(claim.Generation, 10))
-		extension := board.TransactionExtension{Groups: []string{serviceGroup}, Before: func(*board.Transaction) error {
+		extension := board.TransactionExtension{Groups: []string{serviceGroup}, Published: p.indexPublication, Before: func(*board.Transaction) error {
 			current, exists, err := p.readGroupClaim(group)
 			if err != nil {
 				return err
@@ -127,9 +127,9 @@ func (p *project) renewGroup(group string, h holder) (api.Renewal, error) {
 	if err := p.lockBoard(); err != nil {
 		return api.Renewal{}, err
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	var claim claimRecord
-	err := board.WithTransaction(p.board, board.LockScope{Groups: []string{serviceGroup}}, func(tx *board.Transaction) error {
+	err := p.boardTransaction(board.LockScope{Groups: []string{serviceGroup}}, func(tx *board.Transaction) error {
 		c, err := p.groupLease(group, h)
 		if err != nil {
 			return err

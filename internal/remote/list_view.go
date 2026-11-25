@@ -24,13 +24,14 @@ type listSnapshot struct {
 	Root          string     `json:"root"`
 	ProjectID     string     `json:"project_id"`
 	Cursor        string     `json:"cursor"`
+	NextCursor    string     `json:"next_cursor,omitempty"`
 	Tasks         []listTask `json:"tasks"`
 }
 
 // machineList retains the CLI snapshot contract used by dsh. Terminal facts
 // are observed only for this host's claims; a foreign WINDOW is never probed.
 func (s *Session) machineList(ctx context.Context, list api.TaskList, observe board.AgentStatusFunc) (listSnapshot, error) {
-	out := listSnapshot{SchemaVersion: board.ListSnapshotSchemaVersion, GeneratedAt: time.Now().UTC().Format(time.RFC3339), Root: s.Location(""), ProjectID: s.Info.ID, Cursor: list.Cursor, Tasks: []listTask{}}
+	out := listSnapshot{SchemaVersion: board.ListSnapshotSchemaVersion, GeneratedAt: time.Now().UTC().Format(time.RFC3339), Root: s.Location(""), ProjectID: s.Info.ID, Cursor: list.Cursor, NextCursor: list.NextCursor, Tasks: []listTask{}}
 	var requests []board.AgentStatusRequest
 	var positions []int
 	for _, item := range list.Tasks {

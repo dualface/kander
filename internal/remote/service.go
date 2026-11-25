@@ -56,6 +56,7 @@ type ProjectService interface {
 	IssueIndex(context.Context) (json.RawMessage, error)
 	ID() string
 	List(context.Context, string) (api.TaskList, error)
+	ListWithOptions(context.Context, api.TaskListOptions) (api.TaskList, error)
 	Show(context.Context, string) (api.Task, error)
 	NewTask(context.Context, string, api.NewTask) (api.Task, error)
 	Assign(context.Context, string, string, api.Assign) (api.Task, error)

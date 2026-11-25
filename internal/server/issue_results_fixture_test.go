@@ -108,7 +108,7 @@ func newIssueResultFixture(t *testing.T, legacy ...bool) *issueResultFixture {
 		t.Fatal(err)
 	}
 	f.infoID = imported.Project.ID
-	handler := srv.Handler()
+	handler := srv.IndexDifferentialHandler(t)
 	f.http = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if f.intercept != nil && f.intercept(w, r, handler) {
 			return

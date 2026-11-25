@@ -134,9 +134,9 @@ func (s *Server) publicationRoutes(mux *routeTable) {
 		if err := p.lockBoard(); err != nil {
 			return outcome{err: err}
 		}
-		defer p.mu.Unlock()
+		defer p.unlockBoard()
 		value := api.Publication{PublicationPrepare: request, Digest: digest, Status: "prepared", Approvals: map[string]api.PublicationApproval{}, CreatedAt: p.server.now()}
-		err = board.WithTransaction(p.board, board.LockScope{Tasks: ids, Groups: []string{serviceGroup}}, func(tx *board.Transaction) error {
+		err = p.boardTransaction(board.LockScope{Tasks: ids, Groups: []string{serviceGroup}}, func(tx *board.Transaction) error {
 			existing, err := p.readPublication(request.ID)
 			if err == nil {
 				oldDigest, _ := payloadDigest(existing.PublicationPrepare)
@@ -179,7 +179,7 @@ func (s *Server) publicationRoutes(mux *routeTable) {
 		if err := p.lockBoard(); err != nil {
 			return outcome{err: err}
 		}
-		defer p.mu.Unlock()
+		defer p.unlockBoard()
 		value, err := p.readPublication(r.PathValue("publication"))
 		if err != nil {
 			return outcome{err: err}
@@ -197,7 +197,7 @@ func (s *Server) publicationRoutes(mux *routeTable) {
 		if member == nil || member.Revision != request.Revision || member.Generation != request.Generation {
 			return outcome{err: apiError(api.CodeEvidenceIncomplete, "confirmation does not match the prepared version")}
 		}
-		err = board.WithTransaction(p.board, board.LockScope{Tasks: []string{request.TaskID}, Groups: []string{serviceGroup}}, func(tx *board.Transaction) error {
+		err = p.boardTransaction(board.LockScope{Tasks: []string{request.TaskID}, Groups: []string{serviceGroup}}, func(tx *board.Transaction) error {
 			if _, err := tx.Expect(request.TaskID, "", request.Revision); err != nil {
 				return err
 			}

@@ -57,6 +57,11 @@ func (p *Project) List(ctx context.Context, state string) (api.TaskList, error) 
 	return p.impl.List(ctx, state)
 }
 
+// ListWithOptions lists tasks using filters, title search and pagination.
+func (p *Project) ListWithOptions(ctx context.Context, options api.TaskListOptions) (api.TaskList, error) {
+	return p.impl.ListWithOptions(ctx, options)
+}
+
 // Show reads a task by ID.
 func (p *Project) Show(ctx context.Context, id string) (api.Task, error) {
 	return p.impl.Show(ctx, id)

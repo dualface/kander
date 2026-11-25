@@ -49,6 +49,19 @@ Task creation and issue import use this attribution to populate the immutable `S
 
 `POST /api/v1/server/shutdown` still requires a loopback peer and the private administration token even when the hook allows it. In embedded mode it cancels the service's shutdown context and wakes event readers. It does not stop the host's listener, release the data-directory lock, or exit the process. Hosts should normally deny the route and manage shutdown themselves.
 
+## Read task access facts in process
+
+`service.TaskAccess(ctx, projectID, taskID)` reads the task's submitter,
+assignee, state, and revision. It may be called from `Hooks.Authorize`
+without invoking that hook again or reading the card files. A missing
+project or task returns `not_found`. An untrusted index refuses the
+query with `index_rebuilding` until reconciliation succeeds. Host
+policy should deny access when the query returns any error.
+
+The facts describe a point-in-time read. The host still owns policy,
+including whether to recheck permission or disconnect an existing
+connection when the task changes.
+
 ## Subscribe in process
 
 `service.Subscribe(ctx, projectID, cursor)` uses the same project events and cursors as HTTP `GET …/events`. Use a cursor from a list or snapshot for a race-free start after that board view. Events include their task IDs and revisions when present in the HTTP stream and arrive in order until a reset.
@@ -58,6 +71,11 @@ An empty, stale, or invalid cursor produces a reset. A log epoch change, includi
 ## Embed the client and CLI
 
 Install a tunnel or other `http.RoundTripper` with `client.SetDefaultTransport(transport)` before making clients. All subsequent Kander client constructions in the process use it, including those inside native CLI commands. Existing clients retain their transport. Passing nil restores the standard HTTP default for new clients.
+
+The typed client keeps `Project.List(ctx, state)` for an unpaginated list.
+Use `Project.ListWithOptions(ctx, api.TaskListOptions{...})` for filters,
+title search, and page continuations. The host should pin its client and
+server revisions together before using the new query options.
 
 The public CLI builds the same tree as the standalone executable, including the bare terminal board. For example, given a transport `tunnel` and an unattached Cobra command `hostCommand`:
 

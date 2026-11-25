@@ -9,7 +9,7 @@ Kander v2 ships one `kander` executable with a resident board service under `kan
 | `kander server` | Registered projects, card documents and attachments, claims and leases, handoff records, collaboration requests, idempotency receipts, the event log, published review evidence | Code, Git repositories, worktrees, agent sessions, terminals |
 | `kander` client and worker | Agent and terminal control, repository location, worktrees, sessions, temporary logs, unpublished output, the private action and request journals | The board; a client never writes a local `kanban/` in normal operation |
 
-The first version trusts its network: there is no login and no role model, one server instance serves one data directory, and storage reuses the board package's file transactions instead of a database. Claim tokens and generations isolate concurrent executions; they do not defend against a malicious client on the network. The server binds `127.0.0.1:7878` by default; serving a LAN is an explicit `--listen` choice.
+The first version trusts its network: there is no login and no role model, one server instance serves one data directory, and the board package's file transactions remain the source of truth. SQLite is used only for a rebuildable query index. Claim tokens and generations isolate concurrent executions; they do not defend against a malicious client on the network. The server binds `127.0.0.1:7878` by default; serving a LAN is an explicit `--listen` choice.
 
 ## Data directory
 
@@ -19,6 +19,7 @@ The first version trusts its network: there is no login and no role model, one s
   secret.json            server secret that derives claim tokens (0600)
   projects.json          registry: id, name, remote, created_at
   projects/<name>-<hash>/  lowercase name (first 48 characters) and name hash
+    index.sqlite         rebuildable task list and access projection
     board/               a board in the v1 layout (backlog/ ... trash/)
       .kander/groups/00000000-service-group/
         claims/<task>.json       task claim and handoff history
@@ -50,7 +51,55 @@ v2 development data is not migrated. When `projects.json` holds a project whose 
 
 The first registration of a name may bind a Git remote URL; a later registration with a different remote is refused with `project_mismatch`, so two repositories cannot share a board by a name collision. A project registered without a remote takes the first remote a later registration brings and writes it to `projects.json`; every client session registers the remote of its checkout, so the next command run there binds it. When that write fails, the project stays without a remote and the registration fails. No record keys on a client's absolute path.
 
-`kander server` opens the data directory, takes `server.lock`, recovers every project's interrupted board transactions (`board.RecoverTransactions`), settles claims from the committed card state, logs one `project` line per project with its name, ID and board path, and only then reports ready. Until ready, domain routes answer `not_ready` (503).
+`kander server` opens the data directory, takes `server.lock`, recovers every project's interrupted board transactions (`board.RecoverTransactions`), settles claims from the committed card state, extends their startup leases, reconciles the task index, logs one `project` line per project with its name, ID and board path, and only then reports ready. Until ready, domain routes answer `not_ready` (503).
+
+## Task query index
+
+Each project has one private `index.sqlite` next to `board/`. It contains task
+summaries, revisions, and only the claim inputs needed for a public view.
+Lease status is calculated at query time from the service clock. The index
+holds no claim tokens or original card documents.
+
+Canonical board publications identify their changed card revisions and
+claim files. The service refreshes those rows synchronously, under the
+project lock, before answering the write. This does not depend on events
+being appended. If refresh fails or a file publication has an uncertain
+outcome, the project marks the index untrusted before the request returns.
+A committed write keeps its original outcome. While the index is untrusted,
+both the REST list and the embedded `Server.TaskAccess` return
+`index_rebuilding` (HTTP 503 for REST) with no result. A background
+reconciliation can restore the index. If reconciliation fails, the index
+stays unavailable. Later project operations or a restart can retry it.
+
+Startup reconciles every row against the canonical board after file
+transaction recovery, claim reconciliation and startup lease extension,
+before readiness. It restores missing and differing rows and removes
+orphaned rows. A missing or corrupt index, or one with an unsupported SQLite format, is
+recreated from the same scan. An online import reconciles the published
+board after its claims and event reset as part of the import. Other board
+reads such as `snapshot` and `check` keep their existing file-based paths.
+
+`GET /projects/{p}/tasks` accepts exact `state`, `assignee`, `submitter`,
+and `group` filters, combined with AND. `q` matches a literal title
+substring using FTS5 trigram for three or more Unicode characters.
+For shorter terms it uses LIKE with escaped wildcards. ASCII letter
+case is ignored in either path. The order is state in board order,
+then display time descending, then task ID descending.
+
+Without `limit`, the response contains the whole matching list. Set
+`limit` to 1–1000 to receive at most that many results. If more match,
+the response contains `next_cursor`. Pass it back as `cursor` with
+the same filters and a limit. A cursor belongs to its project and filters.
+Pages use the last ordering key, not a pinned snapshot. Writes between
+pages can move rows into or out of later results.
+
+The response's `cursor` remains the event cursor, captured before the SQL
+query under the same project lock. It is not a pagination token.
+`warnings` are the unfiltered journal advisories that the old whole-board
+scan captured. There were no per-card list warnings. Ordinary invalid
+entries remain suppressed. The index stores the journal advisories in
+`meta`, refreshing them at reconciliation and when it refreshes changed
+rows, including state moves.
 
 ## Offline card maintenance
 
@@ -66,7 +115,7 @@ All routes live below `/api/v1`. Every domain request sends `Kander-Protocol: <n
 | --- | --- |
 | `GET /health`, `GET /ready`, `GET /version` | Liveness, readiness, protocol range |
 | `GET /projects?name=`, `POST /projects` | Resolve or register a project |
-| `GET /projects/{p}/tasks[?state=]` | Task list with claim views and the event cursor it is consistent with |
+| `GET /projects/{p}/tasks` | Indexed task list with filters, title search, pagination, and claim views |
 | `POST /projects/{p}/tasks` | `kander new` |
 | `GET /projects/{p}/tasks/{t}` | `kander show` |
 | `POST /projects/{p}/tasks/{t}/assignee` | Change or clear the person responsible for the card with `kander assign` |
@@ -87,7 +136,7 @@ All routes live below `/api/v1`. Every domain request sends `Kander-Protocol: <n
 | `POST /projects/{p}/issues/results/view`, `/save` | Completed work-set evidence and versioned result publication/decision history |
 | `GET /projects/{p}/events?cursor=&wait=` | Long-polled change log |
 
-Errors are JSON `{code, message, board_code}` with stable codes: `invalid_request`, `not_found`, `revision_conflict`, `held_by_other`, `taken_over`, `lease_invalid`, `lease_active`, `claim_required`, `evidence_incomplete`, `protocol_incompatible`, `idempotency_mismatch`, `project_mismatch`, `project_not_empty`, `board_rejected`, `not_ready`, `internal`. Embedding reserves `forbidden` and `attribution_required` as HTTP 403 codes for host policy and missing attribution, respectively. `board_code` carries the board package message key of a domain rejection so the client renders the same localized text as v1.
+Errors are JSON `{code, message, board_code}` with stable codes: `invalid_request`, `not_found`, `revision_conflict`, `held_by_other`, `taken_over`, `lease_invalid`, `lease_active`, `claim_required`, `evidence_incomplete`, `protocol_incompatible`, `idempotency_mismatch`, `project_mismatch`, `project_not_empty`, `board_rejected`, `not_ready`, `index_rebuilding`, `internal`. Embedding reserves `forbidden` and `attribution_required` as HTTP 403 codes for host policy and missing attribution, respectively. `board_code` carries the board package message key of a domain rejection so the client renders the same localized text as v1.
 
 ### Idempotency
 

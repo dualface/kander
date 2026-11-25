@@ -36,6 +36,7 @@ const (
 // Options configure one server instance.
 type Options struct {
 	maintenance   *maintenanceRequest
+	indexFault    func(*project, string) error
 	DataDir       string
 	TTL           time.Duration
 	RenewInterval time.Duration
@@ -56,6 +57,7 @@ type Server struct {
 	importFault        func(string) error
 	createFault        func(api.Task)
 	registryFault      func() error
+	indexFault         func(*project, string) error
 	data               string
 	ttl                time.Duration
 	renew              time.Duration
@@ -72,6 +74,7 @@ type Server struct {
 	lock               *fs.ExclusiveLock
 	lockFile           *os.File
 	ready              atomic.Bool
+	indexWorkers       sync.WaitGroup
 
 	mu       sync.Mutex
 	projects map[string]*project
@@ -98,7 +101,7 @@ func Open(o Options) (*Server, error) {
 		}
 	}()
 	s := &Server{
-		maintenance: o.maintenance, data: o.DataDir, ttl: o.TTL, renew: o.RenewInterval, log: o.Logger, clock: o.Now, version: o.Version, hooks: o.Hooks,
+		maintenance: o.maintenance, indexFault: o.indexFault, data: o.DataDir, ttl: o.TTL, renew: o.RenewInterval, log: o.Logger, clock: o.Now, version: o.Version, hooks: o.Hooks,
 		projects: map[string]*project{}, byName: map[string]string{}, shutdown: shutdown, shutdownCancel: shutdownCancel, startedAt: time.Now().UTC(),
 	}
 	if s.ttl <= 0 {
@@ -163,9 +166,16 @@ func Open(o Options) (*Server, error) {
 func (s *Server) Close() error {
 	s.ready.Store(false)
 	s.shutdownCancel()
+	s.indexWorkers.Wait()
 	var err error
+	for _, p := range s.projects {
+		if p.index != nil {
+			err = errors.Join(err, p.index.Close())
+			p.index = nil
+		}
+	}
 	if s.lock != nil {
-		err = s.lock.Unlock()
+		err = errors.Join(err, s.lock.Unlock())
 		s.lock = nil
 	}
 	if s.lockFile != nil {
@@ -288,6 +298,7 @@ func (s *Server) register(req api.RegisterProject) (api.Project, bool, error) {
 		return api.Project{}, false, err
 	}
 	if err := s.writeRegistry(); err != nil {
+		err = errors.Join(err, s.projects[info.ID].index.Close())
 		delete(s.projects, info.ID)
 		delete(s.byName, info.Name)
 		return api.Project{}, false, err
@@ -305,7 +316,7 @@ func (s *Server) bindRemote(p *project, remote string) (api.Project, bool, error
 	if err := p.lockBoard(); err != nil {
 		return api.Project{}, false, err
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	switch p.info.Remote {

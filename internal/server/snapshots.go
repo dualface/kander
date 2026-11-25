@@ -19,7 +19,7 @@ func (s *Server) snapshotRoutes(mux *routeTable) {
 		if err := p.lockBoard(); err != nil {
 			return outcome{err: err}
 		}
-		defer p.mu.Unlock()
+		defer p.unlockBoard()
 		code, output, diagnostics, err := board.CheckBoard(p.board, query.Tasks, query.All)
 		return result(http.StatusOK, api.CheckResult{Code: code, Output: output, Diagnostics: diagnostics}, err)
 	})
@@ -41,7 +41,7 @@ func (s *Server) snapshotRoutes(mux *routeTable) {
 		if err := p.lockBoard(); err != nil {
 			return outcome{err: err}
 		}
-		defer p.mu.Unlock()
+		defer p.unlockBoard()
 		scanned, err := board.ScanDispatchesContext(r.Context(), p.board, query.Tasks)
 		if err != nil {
 			return outcome{err: err}

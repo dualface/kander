@@ -99,7 +99,7 @@ func (s *Server) ImportWithProgress(ctx context.Context, name, remote, source st
 	if err := p.lockBoard(); err != nil {
 		return result, err
 	}
-	defer p.mu.Unlock()
+	defer p.unlockBoard()
 	if err := p.recoverImport(); err != nil {
 		return result, err
 	}
@@ -316,7 +316,7 @@ func (p *project) precheckImport(ctx context.Context, info api.Project, source s
 		if err := p.lockBoard(); err != nil {
 			return 0, false, err
 		}
-		defer p.mu.Unlock()
+		defer p.unlockBoard()
 		// Recovery first: a leftover intent can leave no board to inspect.
 		if err := p.recoverImport(); err != nil {
 			return 0, false, err
@@ -386,6 +386,7 @@ func (p *project) settleFailedImport(failure error) error {
 
 // importPublished makes every observer re-read the replaced board.
 func (p *project) importPublished() {
+	p.indexFull = true
 	if err := p.events.reset(); err != nil {
 		p.log().Error("event stream reset failed after a board import", "error", err)
 	}

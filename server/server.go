@@ -98,6 +98,14 @@ func Open(options Options) (*Server, error) {
 // authentication middleware and mount it at the root of its URL space.
 func (s *Server) Handler() http.Handler { return s.impl.Handler() }
 
+// TaskAccess returns current attribution, state and revision for a task in a
+// project identified by its ID. It does not invoke authorization hooks and can
+// be called from one. A missing resource returns api.CodeNotFound, and an
+// untrusted index returns api.CodeIndexRebuilding. Hosts should deny on errors.
+func (s *Server) TaskAccess(ctx context.Context, projectID, taskID string) (api.TaskAccess, error) {
+	return s.impl.TaskAccess(ctx, projectID, taskID)
+}
+
 // Subscribe streams events for a registered project by ID, after the given
 // /events or snapshot cursor. A stale or empty cursor starts with a reset.
 // A slow reader can also receive a reset and should refresh its board view.

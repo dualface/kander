@@ -61,6 +61,9 @@ func classify(err error) (code, message string, ok bool) {
 	var e *api.Error
 	switch {
 	case errors.As(err, &e):
+		if e.Code == api.CodeIndexRebuilding {
+			return e.Code, config.Text("remote.error_index_rebuilding"), true
+		}
 		if e.BoardCode != "" {
 			return e.BoardCode, e.Message, true
 		}
@@ -101,6 +104,8 @@ func location(s *Session, task string) string {
 // --agent-status; the board package cannot import it.
 func NewListCommand(observe board.AgentStatusFunc) *cobra.Command {
 	var agentStatus bool
+	var options api.TaskListOptions
+	var limit string
 	c := command.RequireProject(&cobra.Command{
 		Use:     "list [state]",
 		Aliases: []string{"ls"},
@@ -114,24 +119,44 @@ func NewListCommand(observe board.AgentStatusFunc) *cobra.Command {
 			return nil
 		},
 		RunE: func(_ *cobra.Command, args []string) error {
-			state := ""
 			if len(args) == 1 {
-				state = args[0]
+				options.State = args[0]
 			}
-			return runList(state, agentStatus, observe)
+			return runList(options, agentStatus, observe)
 		},
 	})
 	c.PreRunE = func(*cobra.Command, []string) error {
 		if agentStatus && !command.JSON() {
 			return command.Usage("cli.error_flag_needs", "--agent-status", "--json")
 		}
+		if options.Cursor != "" && limit == "" {
+			return command.Usage("cli.error_flag_needs", "--cursor", "--limit")
+		}
+		if limit != "" {
+			n, err := strconv.Atoi(limit)
+			if err != nil || n < 1 || n > api.MaxTaskListLimit {
+				return command.Usage("server.index_list_limit", api.MaxTaskListLimit)
+			}
+			options.Limit = n
+		}
+		for _, value := range []string{options.Assignee, options.Submitter, options.Group, options.Search} {
+			if len(value) > 1024 || !utf8.ValidString(value) {
+				return command.Usage("server.index_list_invalid_query")
+			}
+		}
 		return nil
 	}
 	c.Flags().BoolVar(&agentStatus, "agent-status", false, "")
+	command.OnceNonEmpty(c.Flags(), &options.Assignee, "assignee", "")
+	command.OnceNonEmpty(c.Flags(), &options.Submitter, "submitter", "")
+	command.OnceNonEmpty(c.Flags(), &options.Group, "group", "")
+	command.OnceNonEmpty(c.Flags(), &options.Search, "search", "")
+	command.OnceNonEmpty(c.Flags(), &limit, "limit", "")
+	command.OnceNonEmpty(c.Flags(), &options.Cursor, "cursor", "")
 	return c
 }
 
-func runList(state string, agentStatus bool, observe board.AgentStatusFunc) error {
+func runList(options api.TaskListOptions, agentStatus bool, observe board.AgentStatusFunc) error {
 	ctx, cancel := commandContext()
 	defer cancel()
 	s, _, err := open(ctx)
@@ -141,7 +166,7 @@ func runList(state string, agentStatus bool, observe board.AgentStatusFunc) erro
 	operationCtx, finishOperation := s.OperationContext(ctx)
 	defer finishOperation()
 	ctx = operationCtx
-	list, err := s.Project.List(ctx, state)
+	list, err := s.Project.ListWithOptions(ctx, options)
 	if err != nil {
 		return fail(err)
 	}
@@ -164,6 +189,9 @@ func runList(state string, agentStatus bool, observe board.AgentStatusFunc) erro
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", t.State, t.TaskID, t.Title, cmpOr(owner, "-"))
 	}
 	w.Flush()
+	if list.NextCursor != "" {
+		fmt.Fprintln(stderr, config.Text("remote.list_next_cursor", list.NextCursor))
+	}
 	return nil
 }
 

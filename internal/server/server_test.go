@@ -47,7 +47,7 @@ func startWithHooks(t *testing.T, dir string, c *clock, hooks server.Hooks) *fix
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := httptest.NewServer(s.Handler())
+	h := httptest.NewServer(s.IndexDifferentialHandler(t))
 	f := &fixture{t: t, dir: dir, clock: c, srv: s, http: h}
 	t.Cleanup(f.stop)
 	return f
