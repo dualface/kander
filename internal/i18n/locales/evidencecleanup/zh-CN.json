@@ -4,5 +4,6 @@
   "remote.evidence_cleanup_kept_ref": "{{.V0}}：{{.V1}}",
   "remote.evidence_cleanup_scope_invalid": "服务端给出的清理范围无效",
   "remote.evidence_cleanup_unconfirmed_ref": "{{.V0}}：删除结果未确认，无法再次列出远端：{{.V1}}",
-  "remote.evidence_cleanup_scope_unknown": "未能列出远端；请核查以下证据 ref（以 * 结尾的模式覆盖一张卡的所有代）："
+  "remote.evidence_cleanup_scope_unknown": "未能列出远端；请核查以下证据 ref（以 * 结尾的模式覆盖一张卡的所有代）：",
+  "remote.evidence_cleanup_unsettled": "警告：完成清理无法确认共同远端上的 {{.V0}} 个证据 ref 已删除；卡片仍在 done："
 }

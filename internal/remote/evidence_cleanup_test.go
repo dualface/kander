@@ -426,20 +426,40 @@ func TestCompletionCleanupRefusesAnExtraPushURL(t *testing.T) {
 	}
 }
 
-// A deletion whose result could not be checked names every listed ref as
-// unconfirmed instead of dropping it.
-func TestCompletionCleanupWarningNamesUnconfirmedRefs(t *testing.T) {
-	report := remote.EvidenceCleanupReport{Kept: []remote.KeptEvidenceRef{
-		{Ref: "refs/heads/kander/p/a-task/g1/" + strings.Repeat("a", 40), Reason: "push failed", Unconfirmed: true},
-		{Ref: "refs/heads/kander/p/a-task/g2/" + strings.Repeat("b", 40), Reason: "push refused"},
-	}}
-	warning := report.Warning()
+// A deletion whose push fails and whose result cannot be listed again keeps
+// every listed ref in the warning as unconfirmed, with both errors, and the
+// card stays done.
+func TestCompletionCleanupKeepsUnconfirmedRefsWhenTheRemoteGoesAway(t *testing.T) {
+	f := newIntegrationFixture(t)
+	ctx, p, task := t.Context(), f.a.Info.ID, f.task.TaskID
+	if _, err := f.a.Integrate(ctx, f.first, f.options("unconfirmed-cleanup")); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(f.root, "deletion-attempted")
+	t.Setenv("KANDER_TEST_DELETION_MARKER", marker)
+	f.gitWrapper(`for a do
+ case "$a" in
+  --delete) : > "$KANDER_TEST_DELETION_MARKER"; echo "fixture push failure" >&2; exit 1;;
+  ls-remote) if [ -e "$KANDER_TEST_DELETION_MARKER" ]; then echo "fixture listing failure" >&2; exit 128; fi;;
+ esac
+done
+exec "$KANDER_TEST_REAL_GIT" "$@"
+`)
+	report := f.completeCleaning()
+	delivery := api.DeliveryRef(p, task, f.credential.Generation, f.commit)
+	if report.Err != nil || len(report.Deleted) != 0 || len(report.Kept) != 2 {
+		t.Fatalf("unconfirmed cleanup: %+v", report)
+	}
 	for _, kept := range report.Kept {
-		if !strings.Contains(warning, kept.Ref) || !strings.Contains(warning, kept.Reason) {
-			t.Fatalf("warning %q lacks %s", warning, kept.Ref)
+		if !kept.Unconfirmed || !strings.Contains(kept.Reason, "fixture push failure") || !strings.Contains(kept.Reason, "fixture listing failure") {
+			t.Fatalf("kept ref %+v", kept)
 		}
 	}
-	if strings.Count(warning, "\n") != 2 {
+	warning := report.Warning()
+	if !strings.Contains(warning, delivery) || !strings.Contains(warning, "could not confirm") || !strings.Contains(warning, "deletion unconfirmed") {
 		t.Fatalf("warning %q", warning)
+	}
+	if card, err := f.a.Project.Show(ctx, task); err != nil || card.State != "done" {
+		t.Fatalf("card after an unconfirmed cleanup: %+v %v", card.State, err)
 	}
 }

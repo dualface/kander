@@ -63,7 +63,12 @@ func (r EvidenceCleanupReport) Warning() string {
 	if len(r.Kept) == 0 {
 		return ""
 	}
-	lines := []string{config.Text("remote.evidence_cleanup_kept", len(r.Kept))}
+	summary := "remote.evidence_cleanup_kept"
+	if slices.ContainsFunc(r.Kept, func(kept KeptEvidenceRef) bool { return kept.Unconfirmed }) {
+		// Some deletions may have happened: the summary claims no outcome.
+		summary = "remote.evidence_cleanup_unsettled"
+	}
+	lines := []string{config.Text(summary, len(r.Kept))}
 	for _, kept := range r.Kept {
 		id := "remote.evidence_cleanup_kept_ref"
 		if kept.Unconfirmed {

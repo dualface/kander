@@ -4,5 +4,6 @@
   "remote.evidence_cleanup_kept_ref": "{{.V0}}: {{.V1}}",
   "remote.evidence_cleanup_scope_invalid": "サービスが無効なクリーンアップ範囲を返しました",
   "remote.evidence_cleanup_unconfirmed_ref": "{{.V0}}: 削除は未確認です。リモートを再度一覧できませんでした: {{.V1}}",
-  "remote.evidence_cleanup_scope_unknown": "リモートを一覧できませんでした。次の証跡 ref を確認してください（* で終わるパターンはカードの全世代を含みます）:"
+  "remote.evidence_cleanup_scope_unknown": "リモートを一覧できませんでした。次の証跡 ref を確認してください（* で終わるパターンはカードの全世代を含みます）:",
+  "remote.evidence_cleanup_unsettled": "警告: 完了クリーンアップは共通リモートの証跡 ref {{.V0}} 個が削除されたことを確認できませんでした。カードは done のままです:"
 }
