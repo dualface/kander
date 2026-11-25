@@ -72,7 +72,7 @@ func TestSealedPlanRefusalNamesTheSealAndTheWayOut(t *testing.T) {
 		t.Fatal("sealed plan took a new batch")
 	}
 	want := t2("board.review_plan_sealed", p.PlanID)
-	if !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), sealedRule) {
+	if !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), sealedRule) || !strings.Contains(err.Error(), "append-cycle-batch") {
 		t.Fatalf("sealed refusal does not name the seal and the rule: %v", err)
 	}
 	if strings.Contains(err.Error(), "CAS") {

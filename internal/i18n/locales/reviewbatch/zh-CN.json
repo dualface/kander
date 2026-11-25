@@ -61,5 +61,5 @@
   "review.fix_commit_next": "下一步：若 rebase 改写了修复提交，由作者为所列的每条记录追加更正记录：previous_record_id 指向所列记录，status 不变，fix_commit 改为承载同一修复的改写后提交（用 git patch-id --stable 比较）。用 kander notify --kind sync 派发该请求，更正后先重新运行 kander review aggregate，再关闭。参见 snippets/execute-group-member.md \"Author Records After a Rebase\"。",
   "review.fix_commit_not_later": "fix_commit 就是所属运行的审核提交 {{.V0}}；修复必须是之后的提交",
   "board.review_plan_revision_conflict": "审核计划 {{.V0}} 当前为 revision {{.V2}}，请求期望的是 revision {{.V1}}：重新读取 reviews/plan.json（kander show --document reviews/plan.json <task-id>），按它重建请求",
-  "board.review_plan_sealed": "审核计划 {{.V0}} 已封存，不再接受新批次。计划成员在已关闭的最终目标上完成；之后的提交或契约改动放到新卡中，并建立新卡自己的计划（KANDER-REVIEW-RULES.md \"Carrying Conclusions Forward\"）"
+  "board.review_plan_sealed": "审核计划 {{.V0}} 已封存，不接受带 seal 的新批次，也不接受成员不欠批次的新批次。若 kander review progress 把所请求批次中的某个成员列为 append-cycle-batch，去掉 seal 后重新提交该批次。否则计划成员在已关闭的最终目标上完成；之后的提交或契约改动放到新卡中，并建立新卡自己的计划（KANDER-REVIEW-RULES.md \"Carrying Conclusions Forward\"）"
 }
