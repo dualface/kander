@@ -374,3 +374,115 @@ func TestRegistrationRefusesARestoredBoardWithoutTouchingIt(t *testing.T) {
 		t.Fatalf("refusal changed the directory: %v -> %v", before, after)
 	}
 }
+
+const boundRemote = "https://github.com/example/golf.git"
+
+func readRegistryText(t *testing.T, dir string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(dir, "projects.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func TestRegistrationBindsTheFirstRemoteOfAnUnboundProject(t *testing.T) {
+	dir := t.TempDir()
+	s := openIdentityServer(t, dir, nil)
+	registerName(t, s, "golf")
+	info, created, err := s.register(api.RegisterProject{Name: "golf", Remote: boundRemote})
+	if err != nil || created || info.Remote != boundRemote {
+		t.Fatalf("bind: %+v created=%v err=%v", info, created, err)
+	}
+	if !strings.Contains(readRegistryText(t, dir), boundRemote) {
+		t.Fatal("projects.json does not store the bound remote")
+	}
+	s.Close()
+	reopened := openIdentityServer(t, dir, nil)
+	defer reopened.Close()
+	found, err := reopened.projectByName("golf")
+	if err != nil || found.Remote != boundRemote {
+		t.Fatalf("after restart: %+v, %v", found, err)
+	}
+}
+
+func TestRegistrationKeepsABoundRemote(t *testing.T) {
+	dir := t.TempDir()
+	s := openIdentityServer(t, dir, nil)
+	defer s.Close()
+	if _, _, err := s.register(api.RegisterProject{Name: "golf", Remote: boundRemote}); err != nil {
+		t.Fatal(err)
+	}
+	before := readRegistryText(t, dir)
+	if info, _, err := s.register(api.RegisterProject{Name: "golf", Remote: boundRemote}); err != nil || info.Remote != boundRemote {
+		t.Fatalf("same remote: %+v, %v", info, err)
+	}
+	_, _, err := s.register(api.RegisterProject{Name: "golf", Remote: "https://github.com/example/tennis.git"})
+	var apiErr *api.Error
+	if !errors.As(err, &apiErr) || apiErr.Code != api.CodeProjectMismatch {
+		t.Fatalf("another remote: %v", err)
+	}
+	if after := readRegistryText(t, dir); after != before {
+		t.Fatalf("projects.json changed:\n%s\nwant\n%s", after, before)
+	}
+}
+
+func TestRemoteBindingFailureKeepsTheProjectUnbound(t *testing.T) {
+	dir := t.TempDir()
+	s := openIdentityServer(t, dir, nil)
+	defer s.Close()
+	registerName(t, s, "golf")
+	before := readRegistryText(t, dir)
+	s.registryFault = func() error { return errors.New("injected registry write failure") }
+	if _, _, err := s.register(api.RegisterProject{Name: "golf", Remote: boundRemote}); err == nil {
+		t.Fatal("binding succeeded although projects.json could not be written")
+	}
+	found, err := s.projectByName("golf")
+	if err != nil || found.Remote != "" {
+		t.Fatalf("project after a failed binding: %+v, %v", found, err)
+	}
+	if after := readRegistryText(t, dir); after != before {
+		t.Fatalf("projects.json changed:\n%s", after)
+	}
+}
+
+func TestRemoteBindingRefusesAnUnsafeRemote(t *testing.T) {
+	dir := t.TempDir()
+	s := openIdentityServer(t, dir, nil)
+	defer s.Close()
+	registerName(t, s, "golf")
+	_, _, err := s.register(api.RegisterProject{Name: "golf", Remote: "https://user:secret@github.com/example/golf.git"})
+	var apiErr *api.Error
+	if !errors.As(err, &apiErr) || apiErr.Code != api.CodeInvalidRequest {
+		t.Fatalf("unsafe remote: %v", err)
+	}
+	if found, _ := s.projectByName("golf"); found.Remote != "" {
+		t.Fatalf("unsafe remote bound: %+v", found)
+	}
+}
+
+// Every client session registers the checkout's remote (remote.Open), so the
+// next command run in a checkout binds the remote of an unbound project.
+func TestClientRegistrationBindsTheRemoteOfAnUnboundProject(t *testing.T) {
+	dir := t.TempDir()
+	s := openIdentityServer(t, dir, nil)
+	defer s.Close()
+	h := httptest.NewServer(s.Handler())
+	defer h.Close()
+	c, err := client.New(h.URL, "test-client")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Backoff = time.Millisecond
+	if _, err := c.Register(t.Context(), "golf", ""); err != nil {
+		t.Fatal(err)
+	}
+	bound, err := c.Register(t.Context(), "golf", boundRemote)
+	if err != nil || bound.Remote != boundRemote {
+		t.Fatalf("register with a remote: %+v, %v", bound, err)
+	}
+	found, err := c.ProjectByName(t.Context(), "golf")
+	if err != nil || found.Remote != boundRemote {
+		t.Fatalf("lookup: %+v, %v", found, err)
+	}
+}

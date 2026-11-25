@@ -54,6 +54,7 @@ type Server struct {
 	maintenanceChanged int
 	importFault        func(string) error
 	createFault        func(api.Task)
+	registryFault      func() error
 	data               string
 	ttl                time.Duration
 	renew              time.Duration
@@ -260,14 +261,19 @@ func (s *Server) register(req api.RegisterProject) (api.Project, bool, error) {
 		return api.Project{}, false, apiError(api.CodeInvalidRequest, "invalid project name: "+api.ProjectNameRule)
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if id, ok := s.byName[req.Name]; ok {
-		info := s.projects[id].info
+		p := s.projects[id]
+		info := p.info
+		s.mu.Unlock()
 		if req.Remote != "" && info.Remote != "" && info.Remote != req.Remote {
 			return api.Project{}, false, apiError(api.CodeProjectMismatch, "project "+req.Name+" is bound to another Git remote")
 		}
+		if req.Remote != "" && info.Remote == "" {
+			return s.bindRemote(p, req.Remote)
+		}
 		return info, false, nil
 	}
+	defer s.mu.Unlock()
 	id := projectIDFor(req.Name)
 	if other, ok := s.projects[id]; ok {
 		return api.Project{}, false, apiError(api.CodeProjectMismatch, "project "+req.Name+" derives ID "+id+", which project "+other.info.Name+" already uses")
@@ -279,14 +285,7 @@ func (s *Server) register(req api.RegisterProject) (api.Project, bool, error) {
 	if err := s.attach(info); err != nil {
 		return api.Project{}, false, err
 	}
-	reg := registry{}
-	for _, p := range s.projects {
-		stored := p.info
-		stored.BoardPath = ""
-		reg.Projects = append(reg.Projects, stored)
-	}
-	slices.SortFunc(reg.Projects, func(a, b api.Project) int { return a.CreatedAt.Compare(b.CreatedAt) })
-	if err := writeJSON(s.data, "projects.json", reg); err != nil {
+	if err := s.writeRegistry(); err != nil {
 		delete(s.projects, info.ID)
 		delete(s.byName, info.Name)
 		return api.Project{}, false, err
@@ -294,6 +293,51 @@ func (s *Server) register(req api.RegisterProject) (api.Project, bool, error) {
 	info = s.projects[info.ID].info
 	s.log.Info("project registered", "project", info.ID, "name", info.Name, "board", info.BoardPath)
 	return info, true, nil
+}
+
+// bindRemote gives a project registered without a Git remote the first remote
+// a registration brings, as a new project would have taken it. The project
+// lock comes first: request handlers read the remote under it, and they take
+// s.mu only briefly before it, never while holding it.
+func (s *Server) bindRemote(p *project, remote string) (api.Project, bool, error) {
+	if err := p.lockBoard(); err != nil {
+		return api.Project{}, false, err
+	}
+	defer p.mu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	switch p.info.Remote {
+	case remote:
+		return p.info, false, nil
+	case "":
+	default:
+		return api.Project{}, false, apiError(api.CodeProjectMismatch, "project "+p.info.Name+" is bound to another Git remote")
+	}
+	p.info.Remote = remote
+	if err := s.writeRegistry(); err != nil {
+		p.info.Remote = ""
+		return api.Project{}, false, err
+	}
+	s.log.Info("project remote bound", "project", p.info.ID, "name", p.info.Name)
+	return p.info, false, nil
+}
+
+// writeRegistry replaces projects.json with the registered projects. The
+// caller holds s.mu.
+func (s *Server) writeRegistry() error {
+	if s.registryFault != nil {
+		if err := s.registryFault(); err != nil {
+			return err
+		}
+	}
+	reg := registry{}
+	for _, p := range s.projects {
+		stored := p.info
+		stored.BoardPath = ""
+		reg.Projects = append(reg.Projects, stored)
+	}
+	slices.SortFunc(reg.Projects, func(a, b api.Project) int { return a.CreatedAt.Compare(b.CreatedAt) })
+	return writeJSON(s.data, "projects.json", reg)
 }
 
 // refuseOccupiedProjectDir lets a new registration reuse an existing project

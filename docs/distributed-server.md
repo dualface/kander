@@ -48,7 +48,7 @@ Project responses (`GET` and `POST /api/v1/projects`, and the import result) car
 
 v2 development data is not migrated. When `projects.json` holds a project whose ID is not derived from its name, or whose name breaks the rule, the server refuses to open and `kander server projects` exits nonzero; remove the data directory and import the boards again.
 
-The first registration of a name may bind a Git remote URL; a later registration with a different remote is refused with `project_mismatch`, so two repositories cannot share a board by a name collision. No record keys on a client's absolute path.
+The first registration of a name may bind a Git remote URL; a later registration with a different remote is refused with `project_mismatch`, so two repositories cannot share a board by a name collision. A project registered without a remote takes the first remote a later registration brings and writes it to `projects.json`; every client session registers the remote of its checkout, so the next command run there binds it. When that write fails, the project stays without a remote and the registration fails. No record keys on a client's absolute path.
 
 `kander server` opens the data directory, takes `server.lock`, recovers every project's interrupted board transactions (`board.RecoverTransactions`), settles claims from the committed card state, logs one `project` line per project with its name, ID and board path, and only then reports ready. Until ready, domain routes answer `not_ready` (503).
 
