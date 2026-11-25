@@ -161,7 +161,7 @@ kander dispatch show <task-id> <id>
 }
 ```
 
-缺少标识字段时，在创建任何请求或派发之前失败，并指出字段名；值不一致时指出回执中的值。完成校验在客户端进行：使用记录的工作树，清理后使用当前所在的同项目 checkout。不可变的 `refs/heads/kander/<project>/...` 证据引用不随任务分支删除。详见 [Distributed Git integration](distributed-integration.md)。
+缺少标识字段时，在创建任何请求或派发之前失败，并指出字段名；值不一致时指出回执中的值。完成校验在客户端进行：使用记录的工作树，清理后使用当前所在的同项目 checkout。`refs/heads/kander/<project>/...` 证据引用不随任务分支删除；卡片或其任务组完成后，由 Kander 的完成清理删除。详见 [Distributed Git integration](distributed-integration.md)。
 
 ### 代行收尾例外（Executor Exit Exception）
 

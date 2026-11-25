@@ -1,0 +1,9 @@
+{
+  "remote.evidence_cleanup_failed": "warning: the completion cleanup did not delete the evidence refs on the common remote; the card stays done: {{.V0}}",
+  "remote.evidence_cleanup_kept": "warning: the completion cleanup could not delete {{.V0}} evidence ref(s) on the common remote; the card stays done:",
+  "remote.evidence_cleanup_kept_ref": "{{.V0}}: {{.V1}}",
+  "remote.evidence_cleanup_scope_invalid": "the service named an invalid cleanup scope",
+  "remote.evidence_cleanup_unconfirmed_ref": "{{.V0}}: deletion unconfirmed, the remote could not be listed again: {{.V1}}",
+  "remote.evidence_cleanup_scope_unknown": "The remote was not listed; check these evidence refs (a pattern ending in * covers every generation of a card):",
+  "remote.evidence_cleanup_unsettled": "warning: the completion cleanup could not confirm that {{.V0}} evidence ref(s) on the common remote were deleted; the card stays done:"
+}

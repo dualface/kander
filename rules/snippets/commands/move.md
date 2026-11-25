@@ -58,6 +58,7 @@ kander move 20261118-example-task archived --result cancelled --reason "Cancelle
 - A claim, a reclaim, and a plain move from `todo/` to `working/` write the card's current execution record in the same transaction.
 - A move into `archived/` or `trash/` of a plan or task group member writes a member exclusion record in the same transaction. A move from `done/` into `archived/` writes none (`snippets/review-evidence-gate.md`).
 - A move into `archived/` deletes the review evidence and control records that belong only to archived cards (`KANDER-KANBAN-RULES.md` "Archived Review Evidence").
+- In distributed mode with a registered remote, a move into `done/`, a replayed one included, then runs the completion cleanup of the Git evidence refs below `refs/heads/kander/<project-id>/` (`snippets/commands/dispatch.md` "Distributed wrap-up evidence"): a standalone card's at once, a task group's once the group is finished. A cleanup that fails prints a warning with the refs it kept and the reason on standard error; the card stays in `done/` and the output and exit code are unchanged.
 
 **Reclaiming**
 

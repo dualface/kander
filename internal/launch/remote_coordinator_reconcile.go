@@ -63,10 +63,23 @@ func remoteReconcile(parent, requestCtx context.Context, session *remote.Session
 	if err != nil {
 		return checkpoint, err
 	}
-	if blocked := checkpoint.BlockedMembers(); len(blocked) > 0 && len(blocked) == len(checkpoint.Members) {
+	blocked := checkpoint.BlockedMembers()
+	if len(blocked) > 0 && len(blocked) == len(checkpoint.Members) {
 		err = &board.CoordinatorBlockedError{Group: request.GroupID, Reason: checkpoint.Members[blocked[0]].Blocked.Reason}
 	}
+	if len(blocked) == 0 {
+		// The reconcile may have written the last wrap-up Git evidence record of
+		// a finished group; its evidence refs then have no reader left.
+		if warning := cleanGroupEvidence(parent, session, request.GroupID, localCWD).Warning(); warning != "" {
+			command.Notify("evidence_cleanup", warning)
+		}
+	}
 	return checkpoint, err
+}
+
+// cleanGroupEvidence is Session.CleanGroupEvidence; tests replace it.
+var cleanGroupEvidence = func(ctx context.Context, session *remote.Session, group, dir string) remote.EvidenceCleanupReport {
+	return session.CleanGroupEvidence(ctx, group, dir)
 }
 
 // reconcileGitChecks verifies every fact in this clone under one deadline and

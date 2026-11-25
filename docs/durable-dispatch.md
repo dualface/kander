@@ -174,7 +174,7 @@ In distributed mode, which every v2 client uses (an omitted `server.url` selects
 }
 ```
 
-A missing identity field fails before any request or dispatch is created and names the field; a differing value names the receipt value. Completion is verified in the client: in the recorded worktree, or after cleanup in the current checkout of the same project. The immutable `refs/heads/kander/<project>/...` evidence refs are never deleted with task branches. See [Distributed Git integration](distributed-integration.md).
+A missing identity field fails before any request or dispatch is created and names the field; a differing value names the receipt value. Completion is verified in the client: in the recorded worktree, or after cleanup in the current checkout of the same project. The `refs/heads/kander/<project>/...` evidence refs are never deleted with task branches; Kander deletes them in the completion cleanup once the card or its group is finished. See [Distributed Git integration](distributed-integration.md).
 
 ### Wrap-up on Behalf (Executor Exit Exception)
 
