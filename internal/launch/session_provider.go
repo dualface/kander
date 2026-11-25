@@ -96,7 +96,8 @@ type sessionDiscoverer interface {
 	Interval(l sessionLaunch) time.Duration
 	Failures() discoveryFailures
 	// Persists reports whether the discovered id replaces the provisional
-	// session value of the task card.
+	// session value of the task card on every launcher; a remote start also
+	// replaces it on a launcher that marks the pane or reports the session.
 	Persists() bool
 }
 
@@ -170,7 +171,8 @@ func sessionDiscovers(p sessionProvider) bool {
 }
 
 // sessionPersists reports whether a discovered id must replace the provisional
-// task-card session value.
+// task-card session value on every launcher. A remote start also replaces it on
+// a launcher that marks the pane or reports the session.
 func sessionPersists(p sessionProvider) bool {
 	discoverer, ok := p.(sessionDiscoverer)
 	return ok && discoverer.Persists()
