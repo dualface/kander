@@ -3,6 +3,7 @@ package launch
 import (
 	"io"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
@@ -20,6 +21,10 @@ import (
 	"github.com/dualface/kander/internal/server"
 )
 
+// remoteFixtureMiddleware, when set before remoteLifecycleFixture, wraps the
+// handler of the fixture server so a test can observe or refuse its requests.
+var remoteFixtureMiddleware func(http.Handler) http.Handler
+
 func remoteLifecycleFixture(t *testing.T, slug string, origin ...string) (*config.Config, *remote.Session, api.Task, string, string) {
 	t.Helper()
 	fakeRoot, _, _ := setupBoard(t)
@@ -36,7 +41,11 @@ func remoteLifecycleFixture(t *testing.T, slug string, origin ...string) (*confi
 	if err != nil {
 		t.Fatal(err)
 	}
-	httpServer := httptest.NewServer(srv.Handler())
+	handler := srv.Handler()
+	if remoteFixtureMiddleware != nil {
+		handler = remoteFixtureMiddleware(handler)
+	}
+	httpServer := httptest.NewServer(handler)
 	t.Cleanup(func() { httpServer.Close(); _ = srv.Close() })
 	cfg := envConfig("codex", "tmux", nil)
 	cfg.Server.URL, cfg.Project.Name = httpServer.URL, "lifecycle-project"

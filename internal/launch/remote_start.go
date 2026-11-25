@@ -181,8 +181,13 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 		return result, err
 	}
 	initialSession := agentSession.Render()
-	persistSession := !input.Native && (sessionPersists(provider) || (plan.capabilities().SessionReport && sessionDiscovers(provider)))
-	discoverSession := plan.capabilities().PaneMetadata || persistSession
+	// A launch that discovers the session on a launcher that marks or reports
+	// it records the discovered id on the server card, the execution record,
+	// the journal, and the credential alike. Otherwise routing, dismiss, and
+	// native resume compare a bare agent name against the full identity.
+	caps := plan.capabilities()
+	persistSession := !input.Native && sessionDiscovers(provider) && (sessionPersists(provider) || caps.SessionReport || caps.PaneMetadata)
+	discoverSession := caps.PaneMetadata || persistSession
 	launchFacts := sessionLaunch{
 		TaskID: task.TaskID, CWD: project, Program: program,
 		Definition: sessionDef, Budget: plan.launchTimeout,

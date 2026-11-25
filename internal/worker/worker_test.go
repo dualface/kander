@@ -127,6 +127,16 @@ func (h *harness) claimed(slug string, routing ...bool) (*client.Project, remote
 
 // claimedAs is claimed with the execution ID of the claim.
 func (h *harness) claimedAs(slug, execution string, routing ...bool) (*client.Project, remote.Credential) {
+	var start *api.StartInput
+	if len(routing) != 0 && routing[0] {
+		start = &api.StartInput{Window: "tmux:$1:@1:%1", Session: "claude local-session"}
+	}
+	return h.claimedWith(slug, execution, start)
+}
+
+// claimedWith is claimedAs with the start metadata of the claim; a nil start
+// claims without routing facts.
+func (h *harness) claimedWith(slug, execution string, start *api.StartInput) (*client.Project, remote.Credential) {
 	ctx := h.t.Context()
 	p := h.project("host-a")
 	task, err := p.NewTask(ctx, "", api.NewTask{Type: "feature", Slug: slug, Title: slug, Language: "en"})
@@ -141,10 +151,7 @@ func (h *harness) claimedAs(slug, execution string, routing ...bool) (*client.Pr
 	if _, err = p.Move(ctx, "", task.TaskID, api.Move{State: "todo"}, nil); err != nil {
 		h.t.Fatal(err)
 	}
-	input := api.ClaimRequest{ClientID: "host-a", ExecutionID: execution, Owner: "claude"}
-	if len(routing) != 0 && routing[0] {
-		input.Start = &api.StartInput{Window: "tmux:$1:@1:%1", Session: "claude local-session"}
-	}
+	input := api.ClaimRequest{ClientID: "host-a", ExecutionID: execution, Owner: "claude", Start: start}
 	g, err := p.Claim(ctx, "", task.TaskID, input)
 	if err != nil {
 		h.t.Fatal(err)
