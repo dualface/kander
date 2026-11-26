@@ -2,6 +2,7 @@
 
 Before running any `kander` command in this session, read `<rules root>/snippets/commands/README.md` once. Before the first use of a command, read its contract file.
 
+`kander help --json [<command>]` prints the command index or command object as JSON.
 Global flags: `--lang`, `--json`.
 
 | Command | Purpose | Users | Contract |
@@ -14,25 +15,25 @@ Global flags: `--lang`, `--json`.
 | `uninstall` | Uninstall | user | `snippets/commands/uninstall.md` |
 | `terminal` | Launchers | user | `snippets/commands/terminal.md` |
 | `init` | Initialize | user | `snippets/commands/init.md` |
-| `list` | List cards | creator, user | `snippets/commands/list.md` |
+| `list` | Cards | creator, user | `snippets/commands/list.md` |
 | `show` | Card/revision | executors | `snippets/commands/show.md` |
-| `new` | Create card | creator | `snippets/commands/new.md` |
-| `assign` | Set assignee | user | `snippets/commands/assign.md` |
+| `new` | Create | creator | `snippets/commands/new.md` |
+| `assign` | Assignment | user | `snippets/commands/assign.md` |
 | `decision` | Decisions | user, leader, orchestrator | `snippets/commands/decision.md` |
 | `move` | Move | executor, orchestrator, creator | `snippets/commands/move.md` |
-| `pick` | Pick card | creator, orchestrator | `snippets/commands/pick.md` |
+| `pick` | Pick | creator, orchestrator | `snippets/commands/pick.md` |
 | `update` | Publish | executor, creator | `snippets/commands/update.md` |
-| `start` | Start executor | creator, orchestrator | `snippets/commands/start.md` |
-| `orchestrate` | Orchestrate cards | creator | `snippets/commands/orchestrate.md` |
-| `resume` | Resume | orchestrator (via notify), user | `snippets/commands/resume.md` |
-| `notify` | Notify executor | orchestrator | `snippets/commands/notify.md` |
+| `start` | Launch | creator, orchestrator | `snippets/commands/start.md` |
+| `orchestrate` | Orchestration | creator | `snippets/commands/orchestrate.md` |
+| `resume` | Resume | orchestrator (notify), user | `snippets/commands/resume.md` |
+| `notify` | Notification | orchestrator | `snippets/commands/notify.md` |
 | `dispatch` | Dispatch | orchestrator | `snippets/commands/dispatch.md` |
-| `dismiss` | Exit agent/container | orchestrator, user | `snippets/commands/dismiss.md` |
+| `dismiss` | Stop | orchestrator, user | `snippets/commands/dismiss.md` |
 | `check` | Validate | executor, orchestrator | `snippets/commands/check.md` |
-| `guard-write` | Pre-write check | agent hooks | `snippets/commands/guard-write.md` |
+| `guard-write` | Preflight | agent hooks | `snippets/commands/guard-write.md` |
 | `subscribe` | Events | orchestrator | `snippets/commands/subscribe.md` |
 | `coordinator` | Checkpoints | orchestrator | `snippets/commands/coordinator.md` |
-| `review` | Review evidence | main agent, orchestrator | `snippets/commands/review.md` |
+| `review` | Evidence | main agent, orchestrator | `snippets/commands/review.md` |
 | `issue` | Issues | user, issue session | `snippets/commands/issue.md` |
 
 ```text
