@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -155,6 +156,56 @@ func TestProjectGateStandsBehindArgumentsAndBeforeTheWork(t *testing.T) {
 	// Choosing from a list needs a terminal, with or without a binding.
 	for _, args := range [][]string{{"--json", "pick"}, {"--json", "start"}} {
 		if result := runKander(t, args...); result.code != 2 {
+			t.Errorf("%v: exit=%d stderr=%s", args, result.code, result.stderr)
+		}
+	}
+}
+
+// issue result refuses with its arguments every option the chosen action would not read, and a
+// missing --file for the actions that read one, so the refusal stands before the project binding;
+// the combinations each action reads pass the arguments and reach the binding check.
+func TestIssueResultRefusesOptionsTheActionIgnores(t *testing.T) {
+	unboundCheckout(t)
+	input := filepath.Join(t.TempDir(), "input.json")
+	if err := os.WriteFile(input, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	base := []string{"issue", "result", "42", "--card", sampleTask}
+	for _, refused := range []struct {
+		args          []string
+		option, needs string
+	}{
+		{[]string{"--file", input}, "--file", "--action apply|decide"},
+		{[]string{"--action", "start", "--file", input}, "--file", "--action apply|decide"},
+		{[]string{"--action", "inspect", "--file", input}, "--file", "--action apply|decide"},
+		{[]string{"--action", "apply"}, "--action apply", "--file"},
+		{[]string{"--action", "decide"}, "--action decide", "--file"},
+		{[]string{"--action", "inspect", "--agent", "claude"}, "--agent", "--action start"},
+		{[]string{"--action", "apply", "--file", input, "--agent", "claude"}, "--agent", "--action start"},
+		{[]string{"--action", "decide", "--file", input, "--agent", "claude"}, "--agent", "--action start"},
+		{[]string{"--action", "inspect", "--launcher", "tmux"}, "--launcher", "--action start"},
+		{[]string{"--action", "apply", "--file", input, "--launcher", "tmux"}, "--launcher", "--action start"},
+		{[]string{"--action", "decide", "--file", input, "--launcher", "tmux"}, "--launcher", "--action start"},
+	} {
+		args := append(slices.Clone(base), refused.args...)
+		result := runKander(t, args...)
+		refusal := "kander: " + config.Text("cli.error_flag_needs", refused.option, refused.needs)
+		if result.code != 2 || !strings.Contains(result.stderr, refusal) {
+			t.Errorf("%v: exit=%d, want 2 with %q; stderr=%s", args, result.code, refusal, result.stderr)
+		}
+		if strings.Contains(result.stderr, config.Text("remote.not_configured")) {
+			t.Errorf("%v: the binding was checked before the arguments: %s", args, result.stderr)
+		}
+	}
+	for _, accepted := range [][]string{
+		{"--action", "apply", "--file", input},
+		{"--action", "decide", "--file", input},
+		{"--action", "inspect"},
+		{"--action", "start", "--agent", "claude", "--launcher", "tmux"},
+		{"--action", "start", "--operation-id", "op-1"},
+	} {
+		args := append(slices.Clone(base), accepted...)
+		if result := runKander(t, args...); result.code != 1 || !strings.Contains(result.stderr, config.Text("remote.not_configured")) {
 			t.Errorf("%v: exit=%d stderr=%s", args, result.code, result.stderr)
 		}
 	}

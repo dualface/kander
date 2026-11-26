@@ -30,7 +30,7 @@ func newResultCommand(factory func() IssueProvider, stdout, stderr io.Writer) *c
 		if c.Flags().Changed("operation-id") && options.action != "start" {
 			return command.Usage("cli.error_flag_needs", "--operation-id", "--action start")
 		}
-		return nil
+		return refuseIgnoredResultOptions(c, options.action)
 	}
 	c.RunE = func(_ *cobra.Command, args []string) error {
 		options.hasRepo, options.number = c.Flags().Changed("repo"), issueNumber(args)
@@ -54,6 +54,27 @@ func newResultCommand(factory func() IssueProvider, stdout, stderr io.Writer) *c
 		return nil
 	})
 	return c
+}
+
+// refuseIgnoredResultOptions refuses, before the project binding is checked, every option the
+// selected action would not read, and a missing --file for the actions that read one: an agent
+// must not believe a value took effect when the action silently dropped it.
+func refuseIgnoredResultOptions(c *cobra.Command, action string) error {
+	readsFile := action == "apply" || action == "decide"
+	switch given := c.Flags().Changed("file"); {
+	case given && !readsFile:
+		return command.Usage("cli.error_flag_needs", "--file", "--action apply|decide")
+	case !given && readsFile:
+		return command.Usage("cli.error_flag_needs", "--action "+action, "--file")
+	}
+	if action != "start" {
+		for _, name := range []string{"agent", "launcher"} {
+			if c.Flags().Changed(name) {
+				return command.Usage("cli.error_flag_needs", "--"+name, "--action start")
+			}
+		}
+	}
+	return nil
 }
 
 // runResult exposes the controlled inspection, assessment and decision protocol.
