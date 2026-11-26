@@ -191,6 +191,7 @@ An older server rejects the `abandon` action (`unsupported review action`), and 
 - `board.UnlinkedReviewRuns` / `UnlinkedReviewRunsWarning`: the advisory start-time lookup of same-role runs outside a new run's predecessor chain.
 - `board.ReviewPublicationComplete`: verifies cross-card original artifacts, manifests, indexes, and predecessors; it does not judge semantic PASS.
 - `kander check`: checks both intents and indexes; a successful zero-card publication does not disappear either. It reports incomplete publications, duplicate/missing/conflicting entries, and hash, language, membership, and predecessor errors, while keeping its original state scope.
+- `board.CompactReviewRuns` / `ReviewRunCompacted` / `CompactedReviewRuns`: compaction of settled runs and its state (see "Review Run Compaction").
 
 Evidence lives in the local kanban board; it does not enter Git and is not deleted when temporary reports are cleaned up.
 
@@ -204,3 +205,65 @@ Archived cards are final (see [Card transactions](card-transactions.md)), so the
 - IDs come only from validated directory names and record fields (`ValidReviewID`, task IDs, group IDs); paths are built from the control root and the card directory, never taken from a record. A record that cannot be read or validated, an invalid ID, an unexpected directory entry, a link, or a special file keeps the item and is reported.
 - Order: the archive move stages an intent `00000000-prune-group/pending/<task>.json` in its own transaction; the cleanup merges `receipts/<task>.json` (removed run, batch, and plan IDs) for every affected card first, then deletes card copies, then control records, and removes the intents last. An interrupted or failed round leaves the intents; the next archive or `kander init` recomputes the same set and finishes it, and a repeated round removes nothing. A failure never undoes the archive: `move` still exits 0 and prints a warning.
 - `kander check` skips `REVIEWS` index entries and runs listed in the card's receipt; evidence of cards that are not archived is checked as strictly as before. The card body, `REVIEWS` index lines, `plan.md`, `report.md`, and other attachments are never removed.
+
+## Review Run Compaction
+
+A settled run keeps its conclusion, its records, and the hashes of every original, but its large files (the evidence text, the reviewer session log, the prompt, the raw output, and the frozen contexts) have no further reader. `board.CompactReviewRuns` removes them and records the removal in a compaction receipt. It has no command-line entry of its own; `kander server gc` calls it.
+
+**Entry.** `CompactReviewRuns(ctx, root, CompactionOptions{OlderThan, Now, DryRun, KanderVersion}) (CompactionReport, error)`. `OlderThan` is the retention period and must be positive; a zero `Now` means the current time. A dry run only plans: it writes no receipt and removes nothing, and only lock files may be created. `CompactionReport` lists `Runs` (`RunID`, `Files`, `Bytes`) with the files removed, or in a dry run the files that would be removed, their totals `Files` and `Bytes`, `Skipped` (`RunID`, `Conditions`, `Reason`) for every run that was kept with each condition that failed, `Warnings`, and `Err`. On unchanged data a dry run reports the same runs, files, and bytes as the run that follows it.
+
+**Settlement conditions.** A run is compacted only when all of these hold; `Skipped` names each failed one with its `CompactionCondition` number:
+
+1. `run.json` has `phase` `finalized`, or the run has an `abandonment`.
+2. `published` and `skipped_members` together cover every `task_ids` member.
+3. The batch is closed (`closures/<batch>.json` exists), or the run is abandoned.
+4. Every member card is in `done/`, `archived/`, or `trash/`; a missing or unreadable card fails it.
+5. The task group of every member that has one is settled, with the meaning of `board.GroupEvidenceSettled`: every member is final and, for a group with a checkpoint, every completed wrap-up of a done member has its wrap-up Git evidence record. An unreadable card fails it for every group.
+6. `finished_at` (for an abandoned run without it, `abandonment.abandoned_at`) is earlier than `Now` minus `OlderThan`; a run with neither fails it.
+7. The run's execution lock `locks/review-run-<run>.lock` is free. It is taken without waiting; a busy run is kept and reported.
+8. No unsettled run names the run as its `previous_run_id`. A run kept for this keeps its own predecessors as well. The locks of every successor of a run are taken too, since a gate working on a successor reads its predecessors.
+
+Condition number 9 (`CompactionRemoval`) marks a run that met every condition but kept files: an invalid receipt, a listed name that is a link or a special file, a tree that holds one, or a failed removal. Such a run is kept whole until the cause is fixed; a failed removal is finished by the next call.
+
+**Removed and kept files.**
+
+| Location | Removed | Kept |
+| --- | --- | --- |
+| `runs/<run>/inputs/` | the whole directory | — |
+| `runs/<run>/staging/` | the whole directory | — |
+| `runs/<run>/originals/` | `evidence.txt`, `error.log`, `prompt.txt`, `output.raw`, `stdout.log`, `review-context.md`, `task-context.md`, `review-contract.md` | `report.md` and every other file |
+| `runs/<run>/` | — | `run.json`, `sidecar.json`, `dispositions.json`, and every other file |
+| member card `reviews/<run>/` | the same eight names as `originals/` | `report.md`, `manifest.json`, `sidecar.json`, `assignment.json`, `dispositions/`, and every other file |
+
+The hashes of removed files stay in `run.json` and in the card manifests; neither file is rewritten. The card body and its `REVIEWS` index are never touched.
+
+**Receipt.** `.kander/groups/00000000-prune-group/compactions/<run>.json`:
+
+```json
+{
+  "schema": 1,
+  "run_id": "<run>",
+  "task_ids": ["<task>"],
+  "files": [
+    {"location": "inputs", "name": "*", "bytes": 6700000},
+    {"location": "originals", "name": "evidence.txt", "bytes": 1864640},
+    {"location": "card:<task>", "name": "evidence.txt", "bytes": 1864640}
+  ],
+  "compacted_at": "<RFC 3339 UTC>",
+  "kander_version": "<version>"
+}
+```
+
+`location` is `inputs`, `staging`, `originals`, or `card:<task>`; `inputs` and `staging` are removed as trees and recorded with the name `*`, which covers every file below them. The receipt carries no hash. A receipt is valid only when `run_id` equals its file name, `task_ids` equals the sorted `task_ids` of `run.json`, and every entry uses a known location and name. Only `CompactReviewRuns` writes it; `kander update` and the other commands cannot.
+
+**Order and locks.** Each round takes the exclusive board lock, refuses a pending transaction, plans from one snapshot, and handles at most 50 runs, so a large backlog never holds the board for long; the next round takes the lock again. Within a round it writes every receipt first (merging into an existing one, which a repeated round leaves unchanged), then removes the card copies, then the control files. Removal never goes through a board transaction, so the removed bytes never enter the journal. A failure undoes nothing: an interrupted round is finished by the next call on the same set, and a call on a fully compacted board removes nothing.
+
+**Checks.** Every integrity check relaxes only for the files a valid receipt lists: a listed file that is missing passes, a listed file that exists is still compared with its hash, and an unlisted file that is missing or changed is still damage. An invalid receipt is damage. Runs without a receipt are checked as strictly as before. `kander check` prints, for each checked card, one information line that names its compacted runs; it reports no problem for them. A prune receipt still takes precedence: when an archived card's runs are pruned, check skips them as before.
+
+**Reads and retries.** `board.ReadReviewOriginal`, `board.ReadReviewInput`, and `GET /api/v1/projects/{project}/reviews/evidence/{run}/original|input/{name}` refuse a listed file that is gone with the board code `board.review_compacted` (API code `review_compacted`, HTTP 410), never with a hash mismatch; `report.md` and the other kept files stay readable. `GET .../reviews/evidence/{run}/compaction` returns `{"compacted": <bool>}`. Reusing the run ID of a compacted run with `kander review` is refused before any authority, pin, or Git check, with `board.review_run_compacted`, and no reviewer starts; the board refuses a prepare or a new card copy of a compacted run the same way. A replay is not offered because it compares the frozen inputs that compaction removed. A new review takes a new run ID.
+
+**Publications.** `GET /api/v1/projects/{project}/publications/{id}` adds `compacted_runs` to its response: the runs the material names (`input.run_id` of `review-prepare`, the run of `review-publish:<run>`, and `run_id` or `disposition.run_id` of the interpret, map-legacy, abandon, assign, and disposition materials) that are compacted now. The field is computed per request, is never stored, and is absent when no named run is compacted. `kander review publication` prints it as `compacted_runs`.
+
+**Archive pruning.** When `PruneArchived` removes a compacted run, it removes its receipt first; the card's prune receipt already covers the run, so an interruption between the two leaves no receipt without a run. A missing `inputs/` or `staging/` is normal there.
+
+**Import.** A v1 board has no compaction receipts, and `ImportRecord` returns no key for the `compactions/` directory, so the import path is unchanged.
