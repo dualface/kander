@@ -89,6 +89,8 @@
   "launch.adopt_changed_after_marker": "{{.V0}} を採用できません。修復後の実行を確認できませんでした。次に kander check {{.V0}} を実行してください。",
   "launch.unmarked_executor_stop_first": "まず {{.V0}} の古い executor を手動で停止してください。kander resume --adopt は pane セッションを確認できず、--agent で引き継いでも古い executor は動き続けます",
   "launch.start_identity_changed": "kander resume --adopt では終わらせられません: カードの OWNER または SESSION が開始試行の記録と異なります（Kander 1.0.0 の takeover がこの状態を残します）。",
+  "launch.unresolved_pane_status": "; pane の状態: {{.V0}}",
+  "launch.unresolved_pane_blocked_hint": "（Agent が確認ダイアログまたは権限プロンプトで止まっている可能性があります）",
   "board.coordinator_missing_handoff": "コーディネーターのチェックポイント競合、または事実が無効です: execution cycle changed without lifecycle handoff",
   "board.coordinator_missing_handoff_next_step": "次の手順: reconcile はこのメンバーを受け入れられません。まずユーザーに報告して判断を仰ぎ、ユーザーが決めた後で kander coordinator recover を実行してください（snippets/failure-recovery.md「Blocked Group Members」）。"
 }
