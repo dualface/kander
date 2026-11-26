@@ -21,7 +21,7 @@ kander resume --adopt --decision <reference> <task-id>
 - `--agent <configured-agent>`: takeover by a new session (see "Taking Over with a New Session").
 - `--adopt`: keep the running executor and start nothing (see "Adopting an Unfinished Start"). It takes only the task ID and `--decision`.
 - `--decision <reference>`: the user decision. Required with `--adopt`, and with `--agent` when the current execution record is `pending` or `unresolved`. `--agent` on a `running` record may omit it. Kander records the reference and does not verify it.
-- `--launcher <launcher>`: as for `start`.
+- `--launcher <launcher>`: as for `start`. Follow `snippets/commands/start.md` "Choosing the Launcher".
 - `--dispatch-id`, `--kind fix|sync|wrap-up`, `--base <full-SHA>`, `--evidence-file <JSON>`: durable dispatch (`snippets/commands/dispatch.md`).
 
 ## Preconditions

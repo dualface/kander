@@ -25,6 +25,7 @@ kander issue result NUMBER --card TASK_ID [--repo HOST/OWNER/REPO] [--agent NAME
 - `import NUMBER [--repo ...] [--comments] [--type feature|bug|chore|research] [--large] [--language LANG] [--json]`: create a card from an issue.
 - `triage NUMBER [--card TASK_ID] [--repo ...] [--agent NAME] [--launcher NAME]`: start a triage session.
 - `result NUMBER --card TASK_ID [--repo ...] [--agent NAME] [--launcher NAME] [--action start|inspect|apply|decide] [--file JSON]`: reconcile the completed result of the issue's work set (the anchor card plus its `SOURCE_ISSUE` siblings, `KANDER-ISSUE-RULES.md` "Completed Result Reconciliation"). `--card` is always the anchor card.
+- `--launcher NAME`: for `triage` and `result`, follow `snippets/commands/start.md` "Choosing the Launcher".
 
 ## Preconditions
 
