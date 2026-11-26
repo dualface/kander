@@ -5,5 +5,8 @@
   "launch.integration_preflight_path": "An absolute preflight request path is required",
   "launch.integration_preflight_git": "wrap_up.git is required",
   "launch.integration_preflight_cwd": "An absolute integration checkout path is required",
-  "launch.integration_preflight_range": "The candidate range differs from the closed review plan"
+  "launch.integration_preflight_range": "The candidate range differs from the closed review plan",
+  "launch.start_base_group_invalid": "invalid TASK_GROUP value {{.V0}}: a task group ID has the form YYYYMMDD-<slug>-group",
+  "launch.start_base_main_in_develop_mode": "INTEGRATION_TARGET main is not allowed when git.branch_mode is main-develop: main advances only from develop. Remove the field or name another branch, then retry.",
+  "remote.start_branch_missing": "the start branch {{.V0}} does not exist on the registered remote; Kander does not fall back to another branch. Push the branch, or fix INTEGRATION_TARGET or git.branch_mode, then retry."
 }

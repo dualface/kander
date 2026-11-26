@@ -120,6 +120,23 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 	if problem := cfg.Rules.CheckTaskGroup(taskGroupFrom(original)); problem != nil {
 		return result, problem
 	}
+	// A new execution starts from the start branch on the registered remote,
+	// resolved before the claim so a refusal leaves the card in todo with no
+	// generation, baseline, worktree or task branch. A takeover keeps the base
+	// its restart chose.
+	startBase := ""
+	if !input.Takeover && session.Info.Remote != "" {
+		branch, err := startBranch(cfg, original)
+		if err != nil {
+			return result, err
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		startBase, err = session.ResolveStartBase(ctx, cwd, branch)
+		cancel()
+		if err != nil {
+			return result, err
+		}
+	}
 	var restart remoteRestart
 	if input.Takeover {
 		ctx, cancel := call()
@@ -335,7 +352,11 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 		if restart.SourceDir != "" {
 			sourceDir = restart.SourceDir
 		}
-		baseline, workspaceErr := session.PublishBaseline(ctx, sourceDir, task.TaskID, restart.Base, credential)
+		base := restart.Base
+		if !input.Takeover {
+			base = startBase
+		}
+		baseline, workspaceErr := session.PublishBaseline(ctx, sourceDir, task.TaskID, base, credential)
 		var workspace remote.ExecutionWorktree
 		if workspaceErr == nil {
 			workspace, workspaceErr = session.PrepareWorktree(ctx, sourceDir, baseline.Commit, credential)
