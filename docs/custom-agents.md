@@ -84,12 +84,16 @@ the dialect's object, or reuses the baseline pane delivery rules if the
 dialect has none. Its optional `complete` screen match can also contain
 `{name}` (escaped as literal text inside a regular expression). Without a
 completion match, Kander looks for the ready composer again after a short
-pause without the command left in the draft. `after_argv: true` preserves the
+pause without a new rename draft. Screen matches see the original backend
+output, including terminal line endings. An acknowledgement must be new
+relative to the pre-rename screen, and does not override draft evidence.
+`after_argv: true` preserves the
 initial prompt argument. Use it only for a client verified to handle the
 rename command locally without interfering with that first prompt.
 Keep the default when the client must be renamed while idle, before it
-receives its first prompt. Supply a `ready.match` for launchers without OSC
-7501 status and `blocked` matches for startup dialogs that may appear.
+receives its first prompt. Match the available composer in `ready.match`
+for launchers without OSC 7501 status. Supply `blocked` matches for startup
+dialogs that may appear.
 
 These are trusted CLI declarations. Verify the command and readiness against
 the actual CLI version before enabling renaming for an agent. In particular,
