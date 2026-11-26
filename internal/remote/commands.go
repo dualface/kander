@@ -474,6 +474,27 @@ type moveOptions struct {
 	revision, epoch                                          uint64
 }
 
+// claimFlags are the move options a claim (`--owner`) would drop: the claim request carries
+// only the owner and the decision, so these are refused instead of being ignored.
+var claimFlags = []string{"expect-revision", "result", "reason", "duplicate-of", "delivery-commit", "disposition"}
+
+// claimFlagConflict refuses --owner outside a claim into working, and a claim combined with an
+// option it would not use. A flag counts as given when it is on the command line, even empty.
+func claimFlagConflict(c *cobra.Command, state string) error {
+	if !c.Flags().Changed("owner") {
+		return nil
+	}
+	if state != "working" {
+		return command.Usage("cli.error_flag_needs", "--owner", "target state working")
+	}
+	for _, name := range claimFlags {
+		if c.Flags().Changed(name) {
+			return command.Usage("cli.error_flags_exclusive", "--owner, --"+name)
+		}
+	}
+	return nil
+}
+
 func runMove(task, state string, o moveOptions) error {
 	authorization, authErr := executionAuthorization(o.dispatchID, o.epoch)
 	if authErr != nil {
@@ -481,6 +502,9 @@ func runMove(task, state string, o moveOptions) error {
 	}
 	if authorization.DispatchID != "" && o.owner != "" {
 		return command.Usage("cli.error_flags_exclusive", "--dispatch-id, --owner")
+	}
+	if err := claimFlagConflict(o.cmd, state); err != nil {
+		return err
 	}
 
 	ctx, cancel := commandContext()
