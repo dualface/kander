@@ -101,7 +101,7 @@ jobs:
       - uses: actions/setup-go@v5
         if: steps.mode.outputs.build == 'true'
         with:
-          go-version-file: go.mod
+          go-version: '1.27.3'
 
       - name: Embedded line endings
         if: steps.mode.outputs.build == 'true'
