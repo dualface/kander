@@ -68,7 +68,8 @@ func (p *project) unlockBoard() {
 	if importLockedAt.IsZero() && len(p.indexDirty) == 0 && !p.indexFull && !p.indexRebuilding.Load() {
 		return
 	}
-	defer clear(p.indexDirty)
+	// A closure, because the lease pause below can create the map.
+	defer func() { clear(p.indexDirty) }()
 	if p.importBroken {
 		p.indexRebuilding.Store(true)
 		p.wakeIndexRebuild()

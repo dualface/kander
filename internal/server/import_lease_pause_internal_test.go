@@ -139,20 +139,22 @@ func TestImportRoutesPauseActiveLeases(t *testing.T) {
 }
 
 // A publication that fails and cannot be recovered in process leaves the
-// project closed, and no lease file is written.
+// project closed, and no lease file is written, although the published board
+// holds the active claim.
 func TestImportBrokenWritesNoLease(t *testing.T) {
 	r := newPauseRig(t)
-	before := scanImportTestTree(t, r.p.board)
+	claim := r.claimFile()
 	source, _ := newImportFixture(t, "broken-incoming")
+	advanced := false
 	r.s.importFault = func(step string) error {
-		if step != "backup-renamed" {
+		if step != "recorded" {
 			return nil
 		}
-		r.now.Add(int64(pauseHeld))
-		// A changed staging tree makes in-process recovery refuse too.
-		if err := os.WriteFile(filepath.Join(r.p.root, "board.import", "tampered.md"), []byte("x\n"), 0o600); err != nil {
-			t.Error(err)
+		if !advanced {
+			advanced = true
+			r.now.Add(int64(pauseHeld))
 		}
+		// The in-process recovery reaches the same step and fails too.
 		return errors.New("publication step failed")
 	}
 	if _, err := r.s.Import("demo", "", source); err == nil {
@@ -161,11 +163,8 @@ func TestImportBrokenWritesNoLease(t *testing.T) {
 	if !r.p.importBroken {
 		t.Fatal("unrecovered publication left the project open")
 	}
-	if _, err := os.Lstat(r.p.board); !os.IsNotExist(err) {
-		t.Fatalf("a lease write created the board path: %v", err)
-	}
-	if after := scanImportTestTree(t, filepath.Join(r.p.root, "board.before-import")); after.digest != before.digest {
-		t.Fatal("the original board changed")
+	if !bytes.Equal(r.claimFile(), claim) {
+		t.Fatal("a closed project had its lease written")
 	}
 }
 
@@ -226,4 +225,23 @@ func TestImportRecoveryFailureWritesNoLease(t *testing.T) {
 	if staged.digest != pending.stagedDigest() {
 		t.Fatal("a lease write changed the published board the intent names")
 	}
+}
+
+// The first import after a restart creates the dirty index set while it
+// pauses the leases; the release still refreshes and clears it.
+func TestImportPauseLeavesNoDirtyIndexRows(t *testing.T) {
+	r := newPauseRig(t)
+	r.restart()
+	source, _ := newImportFixture(t, "after-restart")
+	r.holdAt("prepared", nil)
+	if _, err := r.s.Import("demo", "", source); err != nil {
+		t.Fatal(err)
+	}
+	r.p.mu.Lock()
+	dirty := len(r.p.indexDirty)
+	r.p.mu.Unlock()
+	if dirty != 0 {
+		t.Fatalf("%d refreshed index rows stayed dirty", dirty)
+	}
+	r.assertPaused()
 }
