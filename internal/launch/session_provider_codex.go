@@ -83,13 +83,39 @@ func (s codexScanner) Candidates(ctx context.Context) ([]string, error) {
 // AdoptionScan proves a session without a pre-launch snapshot. It requires the
 // task prefix in the first user message so a session that later discussed
 // this task cannot become a candidate.
-func (p codexSessionProvider) AdoptionScan(task, cwd string, floor time.Time) (sessionScan, error) {
+func (p codexSessionProvider) AdoptionScan(task, cwd, taskFile string, floor time.Time) (sessionScan, error) {
 	scan, err := p.rolloutScan(task, cwd, floor)
 	if err != nil {
 		return nil, err
 	}
 	scan.firstUserOnly = true
+	if taskFile != "" {
+		scan.prefixes, err = adoptionTaskFilePrefixes(task, taskFile)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return codexScanner{scan}, nil
+}
+
+func adoptionTaskFilePrefixes(task, taskFile string) ([]string, error) {
+	paths, err := currentInstallPaths()
+	if err != nil {
+		return nil, err
+	}
+	var prefixes []string
+	for _, kind := range []string{"start", "resume", "takeover"} {
+		head, err := promptHead(paths, kind, task, "", 0)
+		if err != nil {
+			return nil, err
+		}
+		instruction, err := taskFileInstruction(paths, head, taskFile)
+		if err != nil {
+			return nil, err
+		}
+		prefixes = append(prefixes, instruction)
+	}
+	return prefixes, nil
 }
 
 // codexRolloutNameSkew bounds how far the wall-clock time in a rollout file
@@ -371,20 +397,38 @@ func (s *codexRolloutScan) readSession(ctx context.Context, observed process.Ope
 			}
 		}
 		if record.Type == "response_item" && record.Payload.Role == "user" {
+			contextOnly := len(record.Payload.Content) > 0
 			for _, content := range record.Payload.Content {
 				if content.Type == "input_text" || content.Type == "text" {
+					if s.firstUserOnly && isCodexStartupContext(content.Text) {
+						continue
+					}
 					session.bound = startsWithAny(content.Text, s.prefixes)
 					if session.bound || s.firstUserOnly {
 						return session, nil
 					}
+				} else {
+					contextOnly = false
 				}
 			}
-			if s.firstUserOnly {
+			if s.firstUserOnly && !contextOnly {
 				return session, nil
 			}
 		}
 	}
 	return session, nil
+}
+
+// Codex includes injected startup context as user-role response items, but
+// it is not a user_message event. Ignore only its recognizable wrappers.
+func isCodexStartupContext(text string) bool {
+	text = strings.TrimSpace(text)
+	if strings.HasPrefix(text, "<environment_context>") && strings.HasSuffix(text, "</environment_context>") {
+		return true
+	}
+	rest, ok := strings.CutPrefix(text, "# AGENTS.md instructions")
+	return ok && (strings.HasPrefix(rest, " for ") || strings.HasPrefix(rest, "\n\n")) &&
+		strings.Contains(rest, "\n<INSTRUCTIONS>\n") && strings.HasSuffix(rest, "</INSTRUCTIONS>")
 }
 
 // rolloutCreatedAt parses the session creation time of a session_meta header.

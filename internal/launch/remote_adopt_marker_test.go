@@ -49,18 +49,23 @@ type fastCodexDiscovery struct{ codexSessionProvider }
 func (fastCodexDiscovery) Wait(sessionLaunch) time.Duration     { return 40 * time.Millisecond }
 func (fastCodexDiscovery) Interval(sessionLaunch) time.Duration { return 10 * time.Millisecond }
 
-func TestRemoteAdoptsCodexAfterRolloutAppears(t *testing.T) {
-	skipOnWindows(t)
-	launcher := registerAdoptionProgramBackend(t)
-	t.Setenv(remote.EnvExecutionID, "")
-	updates := observeExecutionUpdates(t, nil)
-	_, session, task, _, fakeRoot := remoteLifecycleFixture(t, "late-codex-adopt")
+func simulateLateCodexRollout(t *testing.T) {
+	t.Helper()
 	const mode = "hook:codex-rollout"
 	previous := sessionProviders[mode]
 	sessionProviders[mode] = fastCodexDiscovery{}
 	t.Cleanup(func() { sessionProviders[mode] = previous })
 	t.Setenv("KANBAN_TMUX_SKIP_CODEX_ROLLOUT", "1")
 	t.Setenv("KANBAN_TMUX_CURRENT_COMMAND", "codex")
+}
+
+func TestRemoteAdoptsCodexAfterRolloutAppears(t *testing.T) {
+	skipOnWindows(t)
+	launcher := registerAdoptionProgramBackend(t)
+	t.Setenv(remote.EnvExecutionID, "")
+	updates := observeExecutionUpdates(t, nil)
+	_, session, task, _, fakeRoot := remoteLifecycleFixture(t, "late-codex-adopt")
+	simulateLateCodexRollout(t)
 	_, err := StartRemote("codex", launcher, task.TaskID)
 	requireUnresolved(t, err)
 	if !strings.HasPrefix(err.Error(), "started-unresolved: "+task.TaskID+" ") {

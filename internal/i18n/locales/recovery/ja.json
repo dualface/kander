@@ -81,6 +81,7 @@
   "launch.adopt_marker_written": "session-marker-written: {{.V0}} window={{.V1}} session={{.V2}}",
   "launch.adopt_unmarked_pane": "{{.V0}} を採用できません。pane セッションを復元できません。次に {{.V1}}。その後 kander resume {{.V0}} --agent <agent> --decision <reference> --message <message> で引き継いでください。",
   "launch.adopt_session_unproven": "{{.V0}} を採用できません。タスク、起動ディレクトリ、起動時刻の範囲に一致する Codex セッションは {{.V1}} 件です。必要なのはちょうど 1 件です。次に {{.V2}}。その後引き継いでください。",
+  "launch.adopt_launch_receipt_missing": "共有起動ディレクトリで現在の実行のタスクファイルを証明する起動記録がありません",
   "launch.adopt_session_scan_failed": "{{.V0}} を採用できません。セッションの検索に失敗しました（{{.V1}}）。次に {{.V2}}。その後引き継いでください。",
   "launch.adopt_marker_write_failed": "{{.V0}} を採用できません。{{.V1}} のセッションマーカーを読み取りまたは書き込みできませんでした（{{.V2}}）。次に {{.V3}}。その後引き継いでください。",
   "launch.adopt_marker_conflict": "{{.V0}} を採用できません。{{.V1}} のマーカーが確認済みのセッションと一致しません。マーカーは変更されていません。次に {{.V2}}。その後引き継いでください。",

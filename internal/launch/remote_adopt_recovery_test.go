@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/dualface/kander/v2/api"
 	"github.com/dualface/kander/v2/internal/board"
 	"github.com/dualface/kander/v2/internal/client"
+	"github.com/dualface/kander/v2/internal/command/commandtest"
 	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/remote"
 )
@@ -113,9 +115,10 @@ func (f paneAdoptionFixture) assertNoAdoptionWrites(t *testing.T, before api.Exe
 func TestRemoteAdoptsUnmarkedForegroundProcessPane(t *testing.T) {
 	f := setupPaneAdoption(t, "tmux", "codex", true)
 	f.rollout(t, "tmux-codex")
-	code, _, diagnostics := runTestAdoption(f.task)
-	if code != 0 {
-		t.Fatalf("adopt failed (%d): %s", code, diagnostics)
+	code, out, diagnostics := runTestAdoption(f.task, "--json")
+	want := `{"action":"adopt","task_id":"` + f.task + `"}` + "\n"
+	if code != 0 || out != want || diagnostics != "" {
+		t.Fatalf("adopt did not keep its JSON result while writing the marker: (%d) %q %q", code, out, diagnostics)
 	}
 	f.assertMarker(t, "tmux-codex", true)
 	state, credential := adoptionState(t, f.service, f.task)
@@ -269,6 +272,16 @@ func TestRemoteAdoptionRefusesMarkerWriteFailureOrConflict(t *testing.T) {
 			}
 			f.assertMarker(t, marker, !conflict)
 			f.assertNoAdoptionWrites(t, before)
+			if !conflict {
+				t.Setenv("KANBAN_TMUX_PANE_SETOPT_FAIL", "")
+				code, _, diagnostics := runTestAdoption(f.task)
+				if code != 0 {
+					t.Fatalf("retry after marker write failure: (%d) %q", code, diagnostics)
+				}
+				f.assertMarker(t, "proven-session", true)
+				after, credential := adoptionState(t, f.service, f.task)
+				requireRepairedAdoption(t, f.service, after, credential, "proven-session")
+			}
 		})
 	}
 }
@@ -312,6 +325,107 @@ func TestRemoteAdoptionRechecksSessionAfterRolloutScan(t *testing.T) {
 	}
 }
 
+func TestRemoteAdoptionKeepsCheckHintOnTakeoverResponse(t *testing.T) {
+	var armed atomic.Bool
+	var reads atomic.Int32
+	remoteFixtureMiddleware = func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if armed.Load() && r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/execution") && reads.Add(1) == 2 {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusConflict)
+				_ = json.NewEncoder(w).Encode(api.Error{Code: api.CodeTakenOver, Message: "another generation owns the execution"})
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+	t.Cleanup(func() { remoteFixtureMiddleware = nil })
+	f := setupPaneAdoption(t, "", "codex", false)
+	before, _ := adoptionState(t, f.service, f.task)
+	f.rollout(t, "proven-session")
+	armed.Store(true)
+	code, out, diagnostics := runTestAdoption(f.task, "--json")
+	var result struct{ Error api.Error }
+	if err := json.Unmarshal([]byte(diagnostics), &result); err != nil {
+		t.Fatal(err)
+	}
+	if code != 1 || out != "" || result.Error.Code != api.CodeTakenOver ||
+		!strings.Contains(result.Error.Message, config.Text("launch.adopt_changed_before_marker", f.task)) {
+		t.Fatalf("adopt lost the check hint or changed the error code: (%d) %q %q", code, out, diagnostics)
+	}
+	f.assertMarker(t, "", false)
+	f.assertNoAdoptionWrites(t, before)
+}
+
+func TestRemoteAdoptionBindsSharedDirectoryTakeoverToItsTaskFile(t *testing.T) {
+	skipOnWindows(t)
+	t.Setenv(remote.EnvExecutionID, "")
+	launcher := registerAdoptionProgramBackend(t)
+	_, service, task, _, fakeRoot := remoteLifecycleFixture(t, "shared-directory-takeover")
+	simulateLateCodexRollout(t)
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = StartRemote("codex", launcher, task.TaskID)
+	requireUnresolved(t, err)
+	old := markRemoteExecutorStopped(t, service, task.TaskID)
+	launchFile := func(credential remote.Credential) string {
+		t.Helper()
+		file, err := service.TaskLaunchFile(t.Context(), credential)
+		if err != nil || file == "" {
+			t.Fatalf("launch receipt found = %v, error = %v", file != "", err)
+		}
+		return file
+	}
+	oldFile := launchFile(old)
+	oldCreated := time.Now().UTC()
+	code, out, diagnostics := commandtest.Capture(func() int {
+		return RunResumeRemote([]string{task.TaskID, "--agent", "codex", "--launcher", launcher, "--decision", "old executor stopped", "--message", "Take over after the stop"})
+	})
+	if code != 3 || !strings.Contains(out+diagnostics, "started-unresolved:") {
+		t.Fatalf("takeover did not reach an unresolved start: (%d) %q %q", code, out, diagnostics)
+	}
+	before, current := adoptionState(t, service, task.TaskID)
+	currentFile := launchFile(current)
+	if current.Generation != old.Generation+1 || current.Worktree != "" || oldFile == currentFile {
+		t.Fatal("the fixture did not start the next generation in the same directory with a new task file")
+	}
+	writeRollout := func(id, file, kind string, created time.Time) {
+		t.Helper()
+		paths, err := currentInstallPaths()
+		if err != nil {
+			t.Fatal(err)
+		}
+		head, err := promptHead(paths, kind, task.TaskID, "", 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		instruction, err := taskFileInstruction(paths, head, file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeTestRollout(t, id, cwd, instruction, created)
+	}
+	writeRollout("old-rollout", oldFile, "start", oldCreated)
+	code, _, diagnostics = runTestAdoption(task.TaskID)
+	if code == 0 || !strings.Contains(diagnostics, config.Text("launch.unmarked_executor_stop_first", current.Window)) {
+		t.Fatalf("the old rollout was not refused: (%d) %q", code, diagnostics)
+	}
+	f := paneAdoptionFixture{service: service, task: task.TaskID, cwd: cwd, credential: current,
+		markerPath: filepath.Join(fakeRoot, "tmux.log.pane-session"), setOptPath: filepath.Join(fakeRoot, "tmux.log.pane-setopt")}
+	f.assertMarker(t, "", false)
+	f.assertNoAdoptionWrites(t, before)
+	writeRollout("current-rollout", currentFile, "takeover", time.Now().UTC())
+	code, _, diagnostics = runTestAdoption(task.TaskID)
+	if code != 0 {
+		t.Fatalf("current rollout was not adopted: (%d) %q", code, diagnostics)
+	}
+	f.assertMarker(t, "current-rollout", true)
+	after, credential := adoptionState(t, service, task.TaskID)
+	requireRepairedAdoption(t, service, after, credential, "current-rollout")
+}
+
 func TestRemoteAdoptionRetriesWithoutRepeatingCompletedWrites(t *testing.T) {
 	t.Run("server session write failed", func(t *testing.T) {
 		var refuse atomic.Bool
@@ -353,6 +467,25 @@ func TestRemoteAdoptionRetriesWithoutRepeatingCompletedWrites(t *testing.T) {
 			t.Fatal(err)
 		}
 		requireRetryAdoption(t, f, "retry-local")
+	})
+	t.Run("adopt update refused", func(t *testing.T) {
+		var refuse atomic.Bool
+		observeExecutionUpdates(t, func(u api.ExecutionUpdate) bool {
+			return u.Action == api.ExecutionAdopt && refuse.CompareAndSwap(true, false)
+		})
+		f := setupPaneAdoption(t, "", "codex", false)
+		f.rollout(t, "retry-adopt")
+		refuse.Store(true)
+		code, _, _ := runTestAdoption(f.task)
+		if code == 0 {
+			t.Fatal("adopt succeeded even though the server refused it")
+		}
+		state, credential := adoptionState(t, f.service, f.task)
+		if state.Record.Session != "codex retry-adopt" || state.Record.Status != board.ExecutionUnresolved || credential.Session != "codex retry-adopt" {
+			t.Fatal("expected completed session repair without adoption")
+		}
+		f.assertMarker(t, "retry-adopt", true)
+		requireRetryAdoption(t, f, "retry-adopt")
 	})
 }
 

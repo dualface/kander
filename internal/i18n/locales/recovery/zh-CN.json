@@ -81,6 +81,7 @@
   "launch.adopt_marker_written": "session-marker-written: {{.V0}} window={{.V1}} session={{.V2}}",
   "launch.adopt_unmarked_pane": "无法采用 {{.V0}}：无法找回 pane 会话。下一步：{{.V1}}，再用 kander resume {{.V0}} --agent <agent> --decision <reference> --message <message> 接管。",
   "launch.adopt_session_unproven": "无法采用 {{.V0}}：任务、启动目录和启动时间范围内匹配的 Codex 会话有 {{.V1}} 个，必须恰好有 1 个。下一步：{{.V2}}，再接管。",
+  "launch.adopt_launch_receipt_missing": "共享启动目录中缺少能证明当前执行任务文件的启动回执",
   "launch.adopt_session_scan_failed": "无法采用 {{.V0}}：会话查找失败（{{.V1}}）。下一步：{{.V2}}，再接管。",
   "launch.adopt_marker_write_failed": "无法采用 {{.V0}}：无法读取或写入 {{.V1}} 中的会话标记（{{.V2}}）。下一步：{{.V3}}，再接管。",
   "launch.adopt_marker_conflict": "无法采用 {{.V0}}：{{.V1}} 中的标记与已证实的会话不符。标记未改动。下一步：{{.V2}}，再接管。",

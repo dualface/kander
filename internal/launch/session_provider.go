@@ -112,7 +112,7 @@ type sessionAllocatorChecker interface {
 // already names the session.
 type sessionMarkerRepairer interface {
 	sessionProvider
-	AdoptionScan(task, cwd string, floor time.Time) (sessionScan, error)
+	AdoptionScan(task, cwd, taskFile string, floor time.Time) (sessionScan, error)
 }
 
 var sessionProviders = map[string]sessionProvider{}

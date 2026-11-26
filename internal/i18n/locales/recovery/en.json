@@ -81,6 +81,7 @@
   "launch.adopt_marker_written": "session-marker-written: {{.V0}} window={{.V1}} session={{.V2}}",
   "launch.adopt_unmarked_pane": "{{.V0}} cannot be adopted: the pane session cannot be recovered. Next step: {{.V1}}, then take over with kander resume {{.V0}} --agent <agent> --decision <reference> --message <message>.",
   "launch.adopt_session_unproven": "{{.V0}} cannot be adopted: {{.V1}} Codex sessions match the task, launch directory, and start-time window. Exactly one is required. Next step: {{.V2}}, then take over.",
+  "launch.adopt_launch_receipt_missing": "the current execution has no launch receipt proving its task file in the shared launch directory",
   "launch.adopt_session_scan_failed": "{{.V0}} cannot be adopted: the session lookup failed ({{.V1}}). Next step: {{.V2}}, then take over.",
   "launch.adopt_marker_write_failed": "{{.V0}} cannot be adopted: the session marker at {{.V1}} could not be read or written ({{.V2}}). Next step: {{.V3}}, then take over.",
   "launch.adopt_marker_conflict": "{{.V0}} cannot be adopted: the marker at {{.V1}} does not match the proven session. The marker was not changed. Next step: {{.V2}}, then take over.",

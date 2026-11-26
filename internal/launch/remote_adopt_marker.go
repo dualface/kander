@@ -2,7 +2,6 @@ package launch
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -49,7 +48,7 @@ func repairRemoteAdoptSession(ctx context.Context, cfg *config.Config, cwd strin
 		if !ok {
 			return false, launchError("launch.adopt_unmarked_pane", task, stop)
 		}
-		reference, err = scanRemoteAdoptSession(ctx, repairer, credential, state.Task.Text, cwd, stop)
+		reference, err = scanRemoteAdoptSession(ctx, repairer, service, *credential, state, cwd, stop)
 		if err != nil {
 			return false, err
 		}
@@ -116,17 +115,30 @@ func probeRemoteAdoptPane(ctx context.Context, backend terminal.Backend, pane st
 	return conn, facts, err
 }
 
-func scanRemoteAdoptSession(ctx context.Context, repairer sessionMarkerRepairer, credential *remote.Credential, card, cwd, stop string) (string, error) {
+func scanRemoteAdoptSession(ctx context.Context, repairer sessionMarkerRepairer, service *remote.Session, credential remote.Credential, state api.ExecutionState, cwd, stop string) (string, error) {
 	task := credential.TaskID
-	floor, err := remoteAdoptSessionFloor(board.MetadataFrom(card, board.FieldStartedAt))
+	floor, err := remoteAdoptSessionFloor(board.MetadataFrom(state.Task.Text, board.FieldStartedAt))
 	if err != nil {
 		return "", launchError("launch.adopt_session_scan_failed", task, err.Error(), stop)
 	}
 	launchDir := credential.Worktree
+	var taskFile string
 	if launchDir == "" {
 		launchDir = remote.ProjectDir(cwd)
+		// Takeovers keep STARTED_AT and can reuse this directory. The task
+		// file in the new execution's prompt distinguishes it from older
+		// rollouts even when the current rollout has not appeared.
+		if credential.Generation > 1 || state.Record.Kind == board.ExecutionTakeover {
+			taskFile, err = service.TaskLaunchFile(ctx, credential)
+			if err != nil {
+				return "", launchError("launch.adopt_session_scan_failed", task, err.Error(), stop)
+			}
+			if taskFile == "" {
+				return "", launchError("launch.adopt_session_scan_failed", task, t("launch.adopt_launch_receipt_missing"), stop)
+			}
+		}
 	}
-	scan, err := repairer.AdoptionScan(task, launchDir, floor)
+	scan, err := repairer.AdoptionScan(task, launchDir, taskFile, floor)
 	if err != nil {
 		return "", launchError("launch.adopt_session_scan_failed", task, err.Error(), stop)
 	}
@@ -156,7 +168,9 @@ func recheckRemoteAdoption(ctx context.Context, service *remote.Session, credent
 		key = "launch.adopt_changed_before_marker"
 	}
 	if err != nil {
-		return api.ExecutionState{}, errors.Join(launchError(key, credential.TaskID), err)
+		code, detail := command.Describe(err)
+		message := t(key, credential.TaskID) + "\n" + detail
+		return api.ExecutionState{}, &command.Failure{Code: code, Message: message, Err: err}
 	}
 	if current.Record.ID != before.Record.ID || current.Record.Status != before.Record.Status ||
 		current.Task.State != before.Task.State || beforeRepair && current.Task.Revision != before.Task.Revision ||
