@@ -208,13 +208,15 @@ func (p *project) copyImport(ctx context.Context, source, staging string, plan i
 		}
 	}
 	slices.Sort(dirs)
+	// A large board has tens of thousands of directories: stop between them
+	// as the file copy stops between files.
 	for _, rel := range slices.Compact(dirs) {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err := fs.EnsurePrivateDirectory(p.root, filepath.Join(staging, filepath.FromSlash(rel)), true); err != nil {
 			return err
 		}
-	}
-	if err := ctx.Err(); err != nil {
-		return err
 	}
 	if err := p.copyImportFiles(ctx, staging, jobs, progress, totalBytes); err != nil {
 		return err

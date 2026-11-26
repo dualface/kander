@@ -1,14 +1,17 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/dualface/kander/v2/api"
 	"github.com/dualface/kander/v2/internal/fs"
 )
 
@@ -124,4 +127,52 @@ func idleCardDir(t *testing.T, source string) string {
 		t.Fatalf("backlog: %v %v", entries, err)
 	}
 	return "backlog/" + entries[0].Name()
+}
+
+func TestLocalImportKeepsAPOSIXNameWithABackslash(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a backslash separates path components on Windows")
+	}
+	s, h := openTest(t, t.TempDir(), nil)
+	defer h.Close()
+	defer s.Close()
+	source := v1Board(t)
+	rel := idleCardDir(t, source) + `/run\output.txt`
+	writeImportFixture(t, source, rel, "evidence")
+	assertImportedAsIs(t, s, source, rel)
+}
+
+func TestImportCanceledWhilePreparingTheStagingDirectories(t *testing.T) {
+	data := t.TempDir()
+	s, h := openTest(t, data, nil)
+	defer h.Close()
+	defer s.Close()
+	copied := false
+	s.importFault = func(step string) error {
+		if step == "copying" {
+			copied = true
+		}
+		return nil
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	// The copy phase is reported before its directories are created. A
+	// directory created after the cancellation would fail on this file,
+	// which holds the name of the first one, instead of ending as a
+	// cancellation.
+	report := func(p api.ImportProgress) {
+		if p.Phase == api.ImportPhaseCopy {
+			cancel()
+			if err := os.WriteFile(filepath.Join(projectRoot(data, "demo"), "board.import", ".kander"), nil, 0o600); err != nil {
+				t.Error(err)
+			}
+		}
+	}
+	_, err := s.ImportWithProgress(ctx, "demo", "", v1Board(t), report)
+	wantImportCanceled(t, err, importCancelCaller)
+	if copied {
+		t.Fatal("a file was handed out after the cancellation")
+	}
+	assertNothingPublished(t, s, "demo")
+	assertNoStaging(t, data, "demo")
 }
