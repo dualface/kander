@@ -120,14 +120,17 @@ func readUploadManifest(r io.Reader, limits uploadLimits) (api.ImportUploadManif
 	body := &io.LimitedReader{R: read, N: int64(size)}
 	d := json.NewDecoder(body)
 	d.DisallowUnknownFields()
+	// When the body failed rather than its JSON, keep the cause for the log.
 	if err := decodeUploadManifest(d, &m, limits); err != nil {
-		if read.err != nil {
-			// The body failed, not its JSON: keep the cause for the log.
-			return m, uploadReceiveFailed("manifest", read.err)
+		if cause := read.failure(body.N); cause != nil {
+			return m, uploadReceiveFailed("manifest", cause)
 		}
 		return m, err
 	}
 	if _, err := d.Token(); err != io.EOF || body.N != 0 {
+		if cause := read.failure(body.N); cause != nil {
+			return m, uploadReceiveFailed("manifest", cause)
+		}
 		return m, invalidUpload()
 	}
 	if err := checkUploadManifest(m, limits); err != nil {
@@ -291,16 +294,33 @@ func declaredUploadBytes(m api.ImportUploadManifest) int64 {
 	return total
 }
 
-// readFailure remembers the first read error other than the end of input.
+// readFailure remembers the first read error of a framed read, and whether
+// the input ended.
 type readFailure struct {
 	r   io.Reader
 	err error
+	eof bool
 }
 
 func (f *readFailure) Read(p []byte) (int, error) {
 	n, err := f.r.Read(p)
-	if err != nil && err != io.EOF && f.err == nil {
+	switch {
+	case err == io.EOF:
+		f.eof = true
+	case err != nil && f.err == nil:
 		f.err = err
 	}
 	return n, err
+}
+
+// failure is the read error, or io.ErrUnexpectedEOF when the input ended
+// with missing bytes of the frame left; nil when the bytes arrived.
+func (f *readFailure) failure(missing int64) error {
+	switch {
+	case f.err != nil:
+		return f.err
+	case f.eof && missing > 0:
+		return io.ErrUnexpectedEOF
+	}
+	return nil
 }

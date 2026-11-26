@@ -274,3 +274,46 @@ func TestUploadOfMoreFilesThanTheOldDefaultLimit(t *testing.T) {
 	sameImportOutcome(t, expected, uploaded)
 	assertUploadClean(t, s.data, "demo")
 }
+
+// stallAfter returns data, then err.
+type stallAfter struct {
+	data []byte
+	err  error
+}
+
+func (r *stallAfter) Read(p []byte) (int, error) {
+	if len(r.data) == 0 {
+		return 0, r.err
+	}
+	n := copy(p, r.data)
+	r.data = r.data[n:]
+	return n, nil
+}
+
+func TestUploadManifestReadFailuresKeepTheirCause(t *testing.T) {
+	m := uploadFixtureManifest("backlog/fixture.md", "abc")
+	whole := packUpload(t, m, "")
+	stalled := errors.New("read deadline 5d1c")
+	// The JSON is complete, but its frame declares one more byte of trailing
+	// white space that never arrives.
+	padded := append([]byte(nil), whole...)
+	padded[3]++
+	for name, tc := range map[string]struct {
+		body []byte
+		err  error
+		want error
+	}{
+		"stall inside the JSON":     {whole[:len(whole)/2], stalled, stalled},
+		"truncated inside the JSON": {whole[:len(whole)/2], io.EOF, io.ErrUnexpectedEOF},
+		"stall after the JSON":      {padded, stalled, stalled},
+		"truncated after the JSON":  {padded, io.EOF, io.ErrUnexpectedEOF},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := readUploadManifest(&stallAfter{data: tc.body, err: tc.err}, defaultUploadLimits())
+			var refused *uploadReceiveError
+			if !errors.As(err, &refused) || refused.stage != "manifest" || !errors.Is(err, tc.want) || !api.IsCode(err, api.CodeBoardRejected) {
+				t.Fatalf("manifest failure: %#v", err)
+			}
+		})
+	}
+}
