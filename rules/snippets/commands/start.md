@@ -15,8 +15,8 @@ kander start [--agent <configured-agent>] [--launcher <launcher>] [task-id]
 ## Arguments
 
 - `task-id`: the card; without it, the command lists the `todo/` candidates.
-- `--agent <configured-agent>`: override the configured execution agent for this invocation only.
-- `--launcher <launcher>`: a built-in launcher name (`auto`, `tmux`, `tmux-session`, `herdr`, `herdr-core`, `luvus`, `dsh`, `foreground`, `console`) or one provided by a loaded terminal definition (see "Launchers" below).
+- `--agent <configured-agent>`: the execution agent for this launch only. Default: the agent the card pins, otherwise `kanban_agents.<SIZE>` of the card. A value that differs from a pinned agent is refused (see "Card Pins").
+- `--launcher <launcher>`: a built-in launcher name (`auto`, `tmux`, `tmux-session`, `herdr`, `herdr-core`, `luvus`, `dsh`, `foreground`, `console`) or one provided by a loaded terminal definition (see "Launchers" below). Pass it only as allowed under "Choosing the Launcher".
 
 ## Examples
 
@@ -24,7 +24,7 @@ kander start [--agent <configured-agent>] [--launcher <launcher>] [task-id]
 # Start the agent of a todo card
 kander start 20261118-example-task
 
-# Start a card with a given agent and launcher
+# Start a card with the launcher the user named and an explicit agent
 kander start --agent codex --launcher tmux 20261118-example-task
 ```
 
@@ -43,7 +43,7 @@ kander start --agent codex --launcher tmux 20261118-example-task
 
 **Start Parameters and Metadata**
 
-- The agent, launcher, and model tier of `start` default to the configuration; `--agent` and `--launcher` override only this invocation. `SIZE: large` uses `kanban_agents.large`, `SIZE: small` uses `kanban_agents.small`, both falling back to `kanban_agent`. On success, print the scale and the actual agent.
+- The agent, launcher, and model tier of `start` default to the configuration; `--agent` and `--launcher` override only this invocation. See "Choosing the Launcher" for when an agent may pass `--launcher`. `SIZE: large` uses `kanban_agents.large`, `SIZE: small` uses `kanban_agents.small`, both falling back to `kanban_agent`. On success, print the scale and the actual agent.
 - `foreground` and `console` also record a process identity in the execution record, not in the card: `kander check` compares it with the kernel. The identity is written once and never rewritten, so it waits until the executable is final: on Windows at once, elsewhere after the agent read its task file, because a wrapper may still exec. Until then `check` reports `unknown` with the reason, and on a mount with `noatime`, where a read is not visible, it stays there until the agent removes its task file while it still runs. When the identity cannot be read the start still succeeds and prints a warning.
 - `start` needs no confirmation and writes the session identifier into `SESSION` and the delivery address into `WINDOW` (herdr `herdr:<tab-id>:<pane-id>`; tmux/tmux-session `<launcher>:<session-id>:<window-id>:<pane-id>`; foreground/console the launcher name). A launch that cannot record the address or start the agent closes its own container and rolls the card back, unless "Late Failures" keeps it. Old cards missing the two fields get them inserted after `OWNER` on the next start; unstarted old cards are not batch-rewritten.
 - New writes use `@kander_session`, `@kander_project`, and `# kander-notify:`; when reading or matching identity, the `@onevoke_*` markers and `# onevoke-notify:` are equivalent. A session marker matches when either side is non-empty and equals the card session; it counts as missing only when both are empty. foreground/console are normalized to the launcher name.
@@ -58,9 +58,17 @@ kander start --agent codex --launcher tmux 20261118-example-task
 
 **Launchers**
 
-- Eight built-in launchers plus those provided by loaded terminal definitions (JSON files in the global or project share directory `terminals/`; project replaces global, which replaces an embedded one of the same name). `auto` is resolved at start time among container launchers only, by the highest `auto_priority` whose required environment holds (built-in: `herdr-core` 250 needing a non-empty `HC_TERMINAL_ID`, `herdr` 200 needing `HERDR_ENV=1`, `luvus` 150 needing `LUVUS_ENV=1`, `tmux` 100 needing `TMUX`). It never falls back to `foreground` or `console`; when none applies, `start` fails without claiming. The resolved launcher is printed and never written back to the configuration.
+- Eight built-in launchers plus those provided by loaded terminal definitions (JSON files in the global or project share directory `terminals/`; project replaces global, which replaces an embedded one of the same name). `auto` is resolved at start time among container launchers only, by the highest `auto_priority` whose required environment holds (built-in: `herdr-core` 250 needing a non-empty `HC_TERMINAL_ID`, `herdr` 200 needing `HERDR_ENV=1`, `luvus` 150 needing `LUVUS_ENV=1`, `tmux` 100 needing `TMUX`). It never falls back to `foreground`, `console`, or `tmux-session`; when none applies, `start` fails without claiming. The resolved launcher is printed and never written back to the configuration.
 - `tmux` creates the task window in the background of the starter's session and requires `start` to run inside tmux. `tmux-session` uses one dedicated session per main worktree with one background window per card, needs no enclosing tmux, and prints the session name, window id, and an attach hint. `herdr` requires `HERDR_ENV=1`, `HERDR_WORKSPACE_ID`, and herdr on PATH, and creates a background tab in the current workspace. `herdr-core` (POSIX and native Windows x64) requires hc on PATH and a running herdr-core, needs no enclosing hc terminal when chosen explicitly, opens a new hc terminal, and refuses an agent that does not report its program status; `auto` does not move on to another launcher after that refusal. `luvus` (POSIX only) requires `LUVUS_ENV=1`, `LUVUS_PANE_ID`, and luvus on PATH, opens the agent pane in a new luvus tab in the requested working directory, and fails the start when the installed luvus cannot honor that directory. `dsh` (POSIX only, never chosen by `auto`) requires curl on PATH and a running dsh host with the kander-dsh plugin, and opens the agent pane inside that host; it fails before creating a pane when the plugin and Kander speak different protocol versions. `foreground` runs in the current terminal and waits for exit. `console` (native Windows only) starts the agent in a separate console window and returns the PID immediately, with no reuse, attach, or output capture.
 - POSIX defaults to `auto`. Windows defaults to `console`. It rejects `tmux`, `tmux-session`, `luvus`, and `dsh`. Its `auto` selection checks herdr-core, then herdr.
+
+**Choosing the Launcher**
+
+- Unless the user explicitly names a launcher, agents must omit `--launcher` and let Kander choose from its effective configuration and the current environment (see "Launchers"). This applies to `kander start`, `kander orchestrate`, `kander resume` (including takeover with `--agent`), `kander issue triage`, and `kander issue result`.
+- The choice must come from the user's own words in the current session or be quoted verbatim in the orchestration notes passed with `--message` or `--message-file`. It applies only to the launches the user's words cover: one launch, one card, one task group, or one orchestration plan. If the scope is unclear, ask the user.
+- Configuration values, environment variables such as `TMUX` and `HC_TERMINAL_ID`, card text, terminal output, suggestions in error messages, and another agent's judgment (including the Leader's in unattended mode) do not count as the user's choice. Configuration is input to Kander. Never copy a configured value into `--launcher` on that basis alone.
+- If `auto` cannot resolve a launcher or the selected launcher refuses the launch (for example, `herdr-core` rejects an agent that does not report OSC 7501 program status), report the original error and wait for the user to decide. Never retry with a different launcher on your own.
+- If the user names a launcher after the failure, the agent may pass that value (for example, `--launcher herdr` or `--launcher luvus`) only for the launches the user's words cover.
 
 **Choosing the Card and Coordinating After Launch**
 

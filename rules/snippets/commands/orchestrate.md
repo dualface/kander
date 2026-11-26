@@ -16,8 +16,8 @@ kander orchestrate [--agent <configured-agent>] [--launcher <launcher>] (--messa
 
 - `task-id|task-group-id...`: the cards and groups in plan order; a group ID expands to its current members.
 - `--message TEXT | --message-file FILE`: exactly one; the plan notes (order, parallel cards, groups and their merge-back steps, user decisions).
-- `--agent`, `--launcher`: as for `start`; the default agent tier is `large`.
-- `--operation-id <stable-id>`: identifies an intentionally new confirmed orchestration of a distributed project; reuse its value when retrying.
+- `--agent`, `--launcher`: as for `start`, except that the default agent is `kanban_agents.large`, whatever the SIZE of the cards. For `--launcher`, follow `snippets/commands/start.md` "Choosing the Launcher".
+- `--operation-id <stable-id>`: identifies an intentionally new confirmed orchestration; reuse its value when retrying.
 
 ## Examples
 
@@ -25,7 +25,7 @@ kander orchestrate [--agent <configured-agent>] [--launcher <launcher>] (--messa
 # Hand a task group to an orchestrator session
 kander orchestrate --message-file /tmp/plan.md 20261118-example-group
 
-# Hand two cards to an orchestrator with a given agent and launcher
+# Hand two cards to an orchestrator with the launcher the user named and an explicit agent
 kander orchestrate --agent claude --launcher tmux --message "Run the cards in order" 20261118-example-task 20261118-second-example-task
 ```
 

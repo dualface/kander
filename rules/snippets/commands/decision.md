@@ -14,7 +14,7 @@ kander decision mode <task-id> <leader|assignee>
 
 ## Arguments
 
-- `task-id`: the canonical card ID.
+- `task-id`: the card.
 - `--kind`: `human` for a decision by the recorded person, or `leader` for a decision under a recorded user authorization.
 - `--file`: a path to one UTF-8 JSON object, at most 1 MiB. The object contains `question`, `options` (an array of objects with `key` and `label`, or an empty array for free text), `answer` (the selected key or the free text), and `channel` (`web`, `cli`, `pane`, or `notify`). `recorded_by` defaults to the Git `user.name` when empty or omitted. The embedding host's attribution takes precedence. For `leader` also include `authorization` with `granted_by`, verbatim `wording`, and `date` in YYYY-MM-DD.
 - `leader`, `assignee`: the decision mode. `leader` allows authorized delegation and is the default when the header is missing. `assignee` reserves the decision for the assigned person.

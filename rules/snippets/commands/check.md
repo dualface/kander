@@ -17,7 +17,7 @@ kander check overlap --source <ref> [--head <ref>]
 ## Arguments
 
 - `check [--all] [task-id ...]`: validate the board or the named cards; `--all` includes `done/` and `archived/`.
-- `check delivery --base <ref> [--commit <ref>]`: `git diff --check` and line-count candidates of `base..commit`; `--commit` defaults to `HEAD`.
+- `check delivery --base <ref> [--commit <ref>]`: `git diff --check` of `base..commit`, plus the files that the range adds with more than 1000 lines or grows past 1000 lines. `--base` is a commit or ref that must be an ancestor of `--commit`; `--commit` defaults to `HEAD`.
 - `check overlap --source <ref> [--head <ref>]`: paths changed on both sides of the merge base; `--head` defaults to `HEAD`.
 
 ## Examples

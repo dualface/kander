@@ -15,7 +15,7 @@ kander init [--server <URL>] [--project <name>] [project-path]
 ## Arguments
 
 - `project-path`: checkout whose project binding to initialize; default is the current checkout.
-- `--server <URL>`, `--project <name>`: the binding fields to save; see "Binding fields" below.
+- `--server <URL>`, `--project <name>`: the Kander server URL and the service project name to bind. They are saved as `server.url` and `project.name` in the checkout's `.kander-config.json`, and every later command in that checkout uses them, `kander server import` included. See "Binding fields" below.
 
 ## Examples
 
@@ -34,7 +34,7 @@ kander init --server http://127.0.0.1:7878 --project demo /tmp/checkout
 
 ## Effects
 
-- Registers or reads the service project, verifies its canonical Git origin, and sparsely saves explicitly requested binding fields.
+- Registers or reads the service project, binds or checks its Git remote against the exact text `git remote get-url origin` prints for the checkout, and sparsely saves explicitly requested binding fields.
 - Never creates or recovers local `kanban/`, changes Git excludes, migrates cards, or prunes evidence. `KANBAN_DIR` does not select a client board.
 
 ## Output
@@ -53,6 +53,6 @@ Pause every executor and external writer first, then run `kander server stop`: a
 
 ## Binding fields
 
-The optional URL and name are validated with the normal configuration schema. The client checks protocol compatibility, registers the project with its canonical Git origin and saves only the requested binding fields in the project's sparse `.kander-config.json`. A concurrent overlay edit refuses the save. Repeating the binding returns the same project. Different checkout paths do not affect project identity. A name already bound to another origin is refused.
+The optional URL and name are validated with the normal configuration schema. The client checks protocol compatibility, registers the project with the checkout's `origin` URL, compared as exact text, and saves only the requested binding fields in the project's sparse `.kander-config.json`. A concurrent overlay edit refuses the save. Repeating the binding returns the same project. Different checkout paths do not affect project identity. A name already bound to another origin is refused.
 
 Without these flags, `init` uses the existing binding at the selected project path. A missing project name fails with `kander init --project <name>`. An unreachable loopback service is started automatically, without a question, when the project board directory already exists in the default data directory, for every caller including Agents, `--json` and callers without a terminal; the command then continues and reports the start as a notice. Without that directory, an interactive caller is offered startup with the storage paths and default `[Y/n]`, and an Agent or noninteractive caller fails with `kander server start` and the data directory. When a process holds the data directory lock and the service stays unreachable, nothing is started and the command fails with an unreachable error that names the lock. Remote unavailable services fail and are never started. No path falls back to local storage.

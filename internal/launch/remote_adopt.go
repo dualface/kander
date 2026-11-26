@@ -52,10 +52,33 @@ func commandRemoteAdopt(cfg *config.Config, task, decision string) error {
 	if !state.Record.StartUnfinished() {
 		return launchError("board.adopt_needs_unfinished_start", task, state.Record.Status)
 	}
-	if credential.Session == "" || credential.Session != board.MetadataFrom(state.Task.Text, board.FieldSession) || credential.Window != board.MetadataFrom(state.Task.Text, board.FieldWindow) {
+	cardSession := board.MetadataFrom(state.Task.Text, board.FieldSession)
+	if credential.Session == "" || credential.Window != board.MetadataFrom(state.Task.Text, board.FieldWindow) {
 		return launchError("launch.start_identity_changed")
 	}
-	presence := observeLocalExecution(ctx, credential)
+	if credential.Session != cardSession {
+		// Only an earlier repair that wrote the server but not the local
+		// credential can be reconciled. The pane must corroborate it below.
+		parsed := parseSessionValue(cardSession)
+		if parsed == nil || parsed.Reference == "" || parsed.Agent != credential.Session {
+			return launchError("launch.start_identity_changed")
+		}
+	}
+	presence, unmarked := observeLocalExecutionEvidence(ctx, credential)
+	if presence.Status != "alive" && !unmarked {
+		return launchError("launch.adopt_liveness_unconfirmed", task, presence.Status, presence.Reason)
+	}
+	repaired, err := repairRemoteAdoptSession(ctx, cfg, cwd, session, state, &credential)
+	if err != nil {
+		return err
+	}
+	if repaired {
+		state, err = recheckRemoteAdoption(ctx, session, credential, state, credential.Session, false)
+		if err != nil {
+			return err
+		}
+		presence = observeLocalExecution(ctx, credential)
+	}
 	if presence.Status != "alive" {
 		return launchError("launch.adopt_liveness_unconfirmed", task, presence.Status, presence.Reason)
 	}
@@ -71,18 +94,25 @@ func commandRemoteAdopt(cfg *config.Config, task, decision string) error {
 
 // observeLocalExecution never reads a card path or searches a foreign pane.
 func observeLocalExecution(ctx context.Context, credential remote.Credential) api.AgentObservation {
+	presence, _ := observeLocalExecutionEvidence(ctx, credential)
+	return presence
+}
+
+// observeLocalExecutionEvidence also preserves the narrow proof that a
+// foreground-process backend found the right agent but lacks the pane marker.
+func observeLocalExecutionEvidence(ctx context.Context, credential remote.Credential) (api.AgentObservation, bool) {
 	result := api.AgentObservation{Status: "unknown", ObservedAt: time.Now().UTC()}
 	if credential.AgentPID > 0 {
 		if credential.AgentStart == "" || credential.BootID == "" {
-			return result
+			return result, false
 		}
 		boot, err := process.BootIdentity()
 		if err != nil {
-			return result
+			return result, false
 		}
 		if !process.SameBoot(credential.BootID, boot) {
 			result.Status = "stopped"
-			return result
+			return result, false
 		}
 		facts, err := process.ObserveProcess(ctx, credential.AgentPID)
 		if errors.Is(err, process.ErrProcessGone) || err == nil && facts.Start != credential.AgentStart {
@@ -90,7 +120,7 @@ func observeLocalExecution(ctx context.Context, credential remote.Credential) ap
 		} else if err == nil {
 			result.Status = "alive"
 		}
-		return result
+		return result, false
 	}
 	reports := liveness.ObserveAgentStatus(ctx, []liveness.AgentStatusInput{{TaskID: credential.TaskID, Session: credential.Session, Window: credential.Window}}, liveness.BatchOptions{})
 	if len(reports) == 1 {
@@ -102,6 +132,7 @@ func observeLocalExecution(ctx context.Context, credential remote.Credential) ap
 		if report.Status == liveness.Stopped || report.Status == liveness.IdentityMismatch {
 			result.Status = "stopped"
 		}
+		return result, report.Status == liveness.Unknown && report.Evidence != nil && report.Evidence.Unmarked
 	}
-	return result
+	return result, false
 }

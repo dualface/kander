@@ -15,7 +15,7 @@ kander dismiss [--timeout SECONDS] <task-id>
 ## Arguments
 
 - `task-id`: a card in `done/` or `archived/`.
-- `--timeout SECONDS`: greater than 60; default 120.
+- `--timeout SECONDS`: how long to wait for the agent to exit, in seconds, more than 60; default 120.
 
 ## Examples
 

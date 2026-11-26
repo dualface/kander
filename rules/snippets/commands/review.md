@@ -27,12 +27,17 @@ kander review <plan|extend-plan|assign|disposition|interpret|advance|close|aband
 
 ## Arguments
 
-- `[agent]`: an optional configured agent with a review template.
+- `[agent]`: the reviewer agent for this run. The first positional argument is taken as the agent when it names a configured agent with a review template. A configured agent that cannot be used is refused, and so is a first argument that is neither such an agent nor an absolute path when the second argument is an absolute path. Without `[agent]`, Kander selects the reviewer from the card pins and the `reviewers` configuration.
 - `--task <id>`: repeated; binds the run to cards.
 - `--run-id <id>`, `--batch-id <id>`, `--previous-run-id <id>`: identify the run, its batch, and the predecessor of an incremental round.
 - `--requirements-file <JSON>`: names the batch requirements for a new batch.
 - `--advance-file <JSON>`: advances the batch target.
-- `<CWD> <base-commit> <commit> <role> <task-goal|absolute-spec-path> [review-context] [reviewed-commit]`: the positional arguments of a reviewer run, after its flags.
+- `<CWD>`: the absolute path of the worktree to review; a relative path is refused.
+- `<base-commit>`, `<commit>`: the reviewed range `base-commit..commit`; each is a commit or a ref that Git resolves in `<CWD>`, such as `origin/v2` or `HEAD`.
+- `<role>`: the reviewer role, `PMQA` or `Security`, case-insensitive. The older names `PM`, `QA`, `CSA`, and `Hacker` are accepted only when the batch requirements mark that role `required`, or for a run that already exists.
+- `<task-goal|absolute-spec-path>`: the goal text, or the absolute path of a card `spec.md` that holds it.
+- `[review-context]`: text added to the reviewer's task context, such as the previous round's findings and how they were handled (`KANDER-REVIEW-RULES.md` "Preconditions and Execution").
+- `[reviewed-commit]`: for an incremental round, the commit this role reviewed in the previous round; a first round omits it.
 - `plan`, `extend-plan`, `assign`, `disposition`, `interpret`, `map-legacy`, `abandon`, `aggregate`, `advance`, `close`, `progress`, `publication`: select an evidence subcommand; each takes an absolute CWD and a JSON file or an ID as shown in Syntax.
 - `publication`: the subcommand that reads the stored material of a joint publication before a holder confirms it; it is read-only and needs no credential (`## Distributed holder confirmation (v2)`).
 - `confirm`: the subcommand that confirms a prepared publication as its holder; the confirmation binds the task revision, the execution generation, and the digest of the material; see "Additional Syntax".

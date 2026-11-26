@@ -20,6 +20,19 @@ The help of every command is generated from its contract file, `rules/snippets/c
 - `worker` is an internal command without a contract. `kander worker --help` prints one line that says so.
 - The command order of the index is the order of the command table of `rules/snippets/commands/README.md`, with `request` after `notify`.
 
+## Argument entries
+
+An argument entry gives an agent what it needs to pass the value correctly. Where it applies, the entry states, in this order:
+
+- what the value names, and what it does not name when another concept of the same scene uses a similar word (a Git remote is not the Kander server);
+- the value format;
+- the default, and the configuration key it comes from;
+- when the argument is required;
+- the arguments it needs or excludes;
+- whether an argument that does not apply is refused or has no effect.
+
+A free-text reference, such as `--decision <reference>`, says that Kander stores it without checking it. An example never shows a value that looks like an identifier Kander would look up when Kander does not look it up.
+
 ## Requests
 
 | Request | Result |

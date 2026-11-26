@@ -21,9 +21,11 @@ kander coordinator remove-member <absolute-request.json>
 - `show <group-id>`: print the committed checkpoint.
 - `claim <absolute-claim.json>`: group_id, expected_revision, expected_epoch, owner, unique token, basis, and the complete member list.
 - `reconcile <absolute-observations.json>`: group_id, expected_revision, the authority from the claim, a members object keyed by task ID (each with its card revision and, when bound, dispatch_id, epoch, base, and completed delivery_commit), and an optional absolute `cwd` for read-only Git verification.
-- `recover <absolute-request.json>`: group_id, member, expected_revision, expected_epoch, decision (the user decision reference), and reason. All six are required. The member's column selects the mode.
+- `recover <absolute-request.json>`: group_id, member, expected_revision, expected_epoch, decision (free text that cites the user's decision; not the ID of a `kander decision` record), and reason. All six are required. The member's column selects the mode.
 - `remove-member <absolute-request.json>`: the same six fields. `member` is the card that leaves the group.
 - `release --end-execution <absolute-release.json>`: `group_id`, `reason`, and `decision`. `--end-execution` confirms that the release is final for this coordinator execution; it belongs to `release` only and comes before the path.
+- `integrate <absolute-integration.json>`: integrate a reviewed commit into its target branch; the input fields and the containment rules are under "Additional Syntax".
+- `integration-show <target-ref>`: print the public integration record of a target; `<target-ref>` is a full branch ref such as `refs/heads/develop`.
 
 ## Examples
 

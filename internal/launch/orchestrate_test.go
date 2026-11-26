@@ -101,7 +101,7 @@ func TestStartOrchestratorLaunchesSessionWithoutBoardWrites(t *testing.T) {
 	if strings.Index(body, secondID) > strings.Index(body, firstID) {
 		t.Fatalf("prompt lost the plan order:\n%s", body)
 	}
-	if args := mustRead(t, filepath.Join(root, "tmux.log")); !strings.Contains(args, "orchestrate-"+secondID) {
+	if args := mustRead(t, filepath.Join(root, "tmux.log")); !strings.Contains(args, "or-"+secondID) {
 		t.Fatalf("tmux=%s", args)
 	}
 	if !strings.Contains(lastCommand(t, root), "claude") {
@@ -265,11 +265,15 @@ func TestOrchestratorPromptFallsBackToConfiguredLanguageWhenCardsDisagree(t *tes
 }
 
 func TestOrchestratorWindowNameIsBounded(t *testing.T) {
-	if name := orchestratorWindowName("20260913-short-task"); name != "orchestrate-20260913-short-task" {
+	if name := orchestratorWindowName("20260913-short-task"); name != "or-20260913-short-task" {
 		t.Fatalf("name=%s", name)
 	}
 	if name := orchestratorWindowName("20260913-" + strings.Repeat("a", 80) + "-task"); len([]rune(name)) > 50 || strings.HasSuffix(name, "-") {
 		t.Fatalf("name=%s", name)
+	}
+	stem := "20260913-" + strings.Repeat("a", 37)
+	if got, want := orchestratorWindowName(stem+"-task"), "or-"+stem; got != want {
+		t.Fatalf("label trimmed at a dash: got %q, want %q", got, want)
 	}
 }
 

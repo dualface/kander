@@ -57,6 +57,15 @@ func remoteLifecycleFixture(t *testing.T, slug string, origin ...string) (*confi
 	if err != nil {
 		t.Fatal(err)
 	}
+	card := remoteLifecycleTodo(t, session, slug)
+	previousWorker := ensureRemoteWorker
+	ensureRemoteWorker = func(string) (string, error) { return "", nil }
+	t.Cleanup(func() { ensureRemoteWorker = previousWorker })
+	return cfg, session, card, forbidden, fakeRoot
+}
+
+func remoteLifecycleTodo(t *testing.T, session *remote.Session, slug string) api.Task {
+	t.Helper()
 	card, err := session.Project.NewTask(t.Context(), "", api.NewTask{Type: "feature", Slug: slug, Title: "Verify remote lifecycle", Language: "en"})
 	if err != nil {
 		t.Fatal(err)
@@ -72,10 +81,7 @@ func remoteLifecycleFixture(t *testing.T, slug string, origin ...string) (*confi
 	if err != nil {
 		t.Fatal(err)
 	}
-	previousWorker := ensureRemoteWorker
-	ensureRemoteWorker = func(string) (string, error) { return "", nil }
-	t.Cleanup(func() { ensureRemoteWorker = previousWorker })
-	return cfg, session, card, forbidden, fakeRoot
+	return card
 }
 
 func TestRemoteAdoptionProvesLocalProcessWithoutReadingBoard(t *testing.T) {
