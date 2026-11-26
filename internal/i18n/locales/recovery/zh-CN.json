@@ -89,6 +89,8 @@
   "launch.adopt_changed_after_marker": "无法采用 {{.V0}}：无法确认修复后的执行。下一步：运行 kander check {{.V0}}。",
   "launch.unmarked_executor_stop_first": "先手动停止 {{.V0}} 中的旧 executor：kander resume --adopt 无法核实 pane 会话，用 --agent 接管仍会留下旧 executor 运行",
   "launch.start_identity_changed": "kander resume --adopt 无法结束它：卡片上的 OWNER 或 SESSION 与启动尝试的记录不同（Kander 1.0.0 的 takeover 会留下这种情况）。",
+  "launch.unresolved_pane_status": "；pane 状态：{{.V0}}",
+  "launch.unresolved_pane_blocked_hint": "（Agent 可能停在确认框或权限提示上）",
   "board.coordinator_missing_handoff": "编排检查点冲突或事实无效：execution cycle changed without lifecycle handoff",
   "board.coordinator_missing_handoff_next_step": "下一步：reconcile 无法接受这个成员。先请示用户并报告；用户决定后，再执行 kander coordinator recover（snippets/failure-recovery.md「Blocked Group Members」）。"
 }

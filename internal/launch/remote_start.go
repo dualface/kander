@@ -493,7 +493,7 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 		if err != nil {
 			reason = err.Error()
 		}
-		reason = issue.Sanitize(reason)
+		reason = unresolvedReason(reason, unresolvedPaneStatus(plan, failure.Outcome.Pane))
 		window := credential.Window
 		if failure.Outcome.Container != "" {
 			window = locationOf(plan, failure.Outcome)

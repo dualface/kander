@@ -89,6 +89,8 @@
   "launch.adopt_changed_after_marker": "{{.V0}} cannot be adopted: the repaired execution could not be confirmed. Next step: run kander check {{.V0}}.",
   "launch.unmarked_executor_stop_first": "stop the old executor at {{.V0}} by hand first: kander resume --adopt cannot verify the pane session, and a takeover with --agent leaves the old executor running",
   "launch.start_identity_changed": "kander resume --adopt cannot end it: the card shows another OWNER or SESSION than the attempt recorded, which a takeover by Kander 1.0.0 leaves.",
+  "launch.unresolved_pane_status": "; pane status: {{.V0}}",
+  "launch.unresolved_pane_blocked_hint": " (the agent may be stopped at a confirmation dialog or a permission prompt)",
   "board.coordinator_missing_handoff": "Coordinator checkpoint conflict or invalid facts: execution cycle changed without lifecycle handoff",
   "board.coordinator_missing_handoff_next_step": "Next step: reconcile cannot accept this member. Report it and ask the user first; only after the user decides, run kander coordinator recover (snippets/failure-recovery.md \"Blocked Group Members\")."
 }
