@@ -91,7 +91,9 @@ done
 
 # v2.Y.Z or v2.Y.Z-(alpha|beta|rc).N, the same pattern the Release workflow
 # accepts; the formula's bare version is this with the leading v stripped.
-if ! printf '%s' "$version" | grep -Eq '^v2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.(0|[1-9][0-9]*))?$'; then
+# Bash matches the whole value, as the workflow does; grep would match one
+# line of a value with an embedded newline.
+if ! [[ "$version" =~ ^v2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.(0|[1-9][0-9]*))?$ ]]; then
 	die "version must look like v2.0.0 or v2.0.0-beta.1, got: $version"
 fi
 bare_version="${version#v}"

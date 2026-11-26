@@ -482,7 +482,7 @@ func TestReleaseVersionChannels(t *testing.T) {
 
 	t.Run("versions outside 2.x are rejected", func(t *testing.T) {
 		rig := newGateRig(t)
-		for _, bad := range []string{"v1.6.4", "v3.0.0", "v2.0.0-dev", "v2.0.0-beta", "v2.0.0-beta.01", "v2.0.0-preview.1", "2.0.0"} {
+		for _, bad := range []string{"v1.6.4", "v3.0.0", "v2.0.0-dev", "v2.0.0-beta", "v2.0.0-beta.01", "v2.0.0-preview.1", "2.0.0", "v2.0.0-beta.1\n", "v2.0.0\nv2.0.0"} {
 			code, stderr := rig.run(t, nil, bad)
 			if code == 0 || !strings.Contains(stderr, "version must look like v2.0.0 or v2.0.0-beta.1") {
 				t.Errorf("%s: exit code = %d; stderr:\n%s", bad, code, stderr)
