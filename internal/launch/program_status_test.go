@@ -46,7 +46,7 @@ func programStatusFixture(t *testing.T, launcher string) (root, bin, hcLog strin
 	hcLog = writeFakeHC(t, bin, root)
 	cfg = envConfig("plaincli", launcher, nil)
 	cfg.ChatAgent = "plaincli"
-	cfg.Agents = map[string]config.AgentDefinition{"plaincli": plainAgent(bin)}
+	cfg.Agents["plaincli"] = plainAgent(bin)
 	loadEffective = func() (*config.Config, error) { return cfg, nil }
 	return root, bin, hcLog, cfg
 }

@@ -3,6 +3,7 @@
 ## Unreleased
 
 - `kander orchestrate` names new terminal tabs and windows `or-<first task ID>`, leaving more room for the task ID.
+- Supported interactive agents automatically get session names derived from their terminal labels, so their sessions are easier to find in the agents' own resume lists.
 
 ## v2.0.0-beta.2 — 2026-11-26
 

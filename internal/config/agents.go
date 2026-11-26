@@ -26,6 +26,8 @@ type AgentDefinition struct {
 	PromptDelivery *PromptDelivery         `json:"prompt_delivery,omitempty"`
 	Review         *AgentReview            `json:"review,omitempty"`
 	ExitCommand    *string                 `json:"exit_command,omitempty"`
+	RenameCommand  *string                 `json:"rename_command,omitempty"`
+	RenameDelivery *RenameDelivery         `json:"rename_delivery,omitempty"`
 	ProgramStatus  *ProgramStatus          `json:"program_status,omitempty"`
 	// ConfigDir relocates a built-in agent's global config directory for rules
 	// installation; only the scope config file's value takes effect.
@@ -111,8 +113,8 @@ func AgentNames(cfg *Config) []string {
 func HasAgent(cfg *Config, name string) bool { return contains(AgentNames(cfg), name) }
 
 // AgentFor returns a detached definition with defaults resolved. Session
-// mode and exit_command come from the named overlay, then the dialect's
-// embedded definition, then generated / unset.
+// settings and interactive commands come from the named overlay, then the
+// dialect's embedded definition.
 func AgentFor(cfg *Config, name string) AgentDefinition {
 	var d AgentDefinition
 	if cfg != nil {
@@ -177,6 +179,15 @@ func AgentFor(cfg *Config, name string) AgentDefinition {
 			d.ExitCommand = &cmd
 		}
 	}
+	if emb, ok := embeddedByName(d.Dialect); ok {
+		if d.RenameCommand == nil && emb.RenameCommand != "" {
+			cmd := string(emb.RenameCommand)
+			d.RenameCommand = &cmd
+		}
+		if d.RenameDelivery == nil {
+			d.RenameDelivery = cloneRenameDelivery(emb.RenameDelivery)
+		}
+	}
 	if d.ProgramStatus == nil {
 		if emb, ok := embeddedByName(d.Dialect); ok {
 			d.ProgramStatus = cloneProgramStatus(emb.ProgramStatus)
@@ -212,7 +223,9 @@ func cloneAgent(d AgentDefinition) AgentDefinition {
 	d.Review = cloneReview(d.Review)
 	d.Session = cloneSession(d.Session)
 	d.PromptDelivery = clonePromptDelivery(d.PromptDelivery)
-	d.ExitCommand = cloneExitCommand(d.ExitCommand)
+	d.ExitCommand = cloneCommandText(d.ExitCommand)
+	d.RenameCommand = cloneCommandText(d.RenameCommand)
+	d.RenameDelivery = cloneRenameDelivery(d.RenameDelivery)
 	d.ProgramStatus = cloneProgramStatus(d.ProgramStatus)
 	if d.InstallRules != nil {
 		v := *d.InstallRules
@@ -257,7 +270,7 @@ func cloneSession(src *AgentSessionDefinition) *AgentSessionDefinition {
 	return &out
 }
 
-func cloneExitCommand(src *string) *string {
+func cloneCommandText(src *string) *string {
 	if src == nil {
 		return nil
 	}
@@ -368,7 +381,7 @@ func validateAgentEntry(name string, value any) (d AgentDefinition, reason strin
 			return d, "", agentDefinitionError(name, Text("config.agent_config_dir_fixed"))
 		}
 	}
-	for _, key := range []string{"args", "session", "prompt_delivery", "review", "program_status"} {
+	for _, key := range []string{"args", "session", "prompt_delivery", "review", "program_status", "rename_delivery"} {
 		if v, exists := fields[key]; exists {
 			if _, ok := asObject(v); !ok {
 				return d, "", agentDefinitionError(name, Text("config.agent_object"))
@@ -404,6 +417,15 @@ func validateAgentEntry(name string, value any) (d AgentDefinition, reason strin
 		if !ok || !validExitCommandText(s) {
 			return d, "", agentDefinitionError(name, Text("config.agent_exit_command"))
 		}
+	}
+	if v, exists := fields["rename_command"]; exists {
+		s, ok := v.(string)
+		if !ok || !validRenameCommand(s) {
+			return d, "", agentDefinitionError(name, Text("config.agent_rename_command"))
+		}
+	}
+	if err := validateRenameDelivery(name, d.RenameDelivery); err != nil {
+		return d, "", err
 	}
 	if d.Session != nil && d.Session.Mode == "" {
 		return d, "", agentDefinitionError(name, Text("config.agent_session"))

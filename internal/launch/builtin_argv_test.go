@@ -150,7 +150,7 @@ func TestBuiltinAgentArgumentsMatchPreChangeOutput(t *testing.T) {
 	}
 }
 
-func TestBuiltinStartKeepsPromptOnArgvAndDoesNotDeliverToPane(t *testing.T) {
+func TestBuiltinStartWithRenameDisabledKeepsPromptOnArgv(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("tmux fakes are POSIX")
 	}

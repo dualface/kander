@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
 	"github.com/dualface/kander/v2/internal/command/commandtest"
 	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/process"
@@ -28,6 +29,51 @@ func remoteGitFixture(t *testing.T, slug string) (*remote.Session, api.Task, str
 	lifecycleGit(t, source, "clone", "--bare", source, bare)
 	_, session, task, forbidden, _ := remoteLifecycleFixture(t, slug, bare)
 	return session, task, forbidden
+}
+
+func TestRemoteNativeResumeRenamesExactlyOnce(t *testing.T) {
+	skipOnWindows(t)
+	session, card, _ := remoteGitFixture(t, "native-session-rename")
+	cfg, err := loadEffective()
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := "/rename {name}"
+	cfg.Agents["claude"] = config.AgentDefinition{
+		RenameCommand: &command,
+		RenameDelivery: &config.RenameDelivery{
+			Ready: &config.PromptReady{Match: "RENAME_READY", TimeoutMS: 1000},
+		},
+	}
+	t.Setenv("KANBAN_TMUX_PANE_OUTPUT", "RENAME_READY")
+	root, err := session.LocalDataRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("KANBAN_LAUNCH_CWD", filepath.Join(root, "worktrees", card.TaskID, "g1"))
+	if _, err := StartRemote("claude", "tmux", card.TaskID); err != nil {
+		t.Fatal(err)
+	}
+	prior := markRemoteExecutorStopped(t, session, card.TaskID)
+	log := os.Getenv("KANBAN_TMUX_LOG") + ".send-keys"
+	want := strings.ReplaceAll(command, "{name}", sessionName(windowName(board.Entry{TaskID: card.TaskID}, card.Text)))
+	before := mustRead(t, log)
+	if strings.Count(before, want+"\n") != 1 {
+		t.Fatalf("start delivered %q, want one %q", before, want)
+	}
+	t.Setenv("KANBAN_LAUNCH_CWD", filepath.Join(root, "worktrees", card.TaskID, "g2"))
+	if code := RunResumeRemote([]string{card.TaskID, "--message", "Continue this session"}); code != 0 {
+		t.Fatalf("resume exit %d", code)
+	}
+	after := mustRead(t, log)
+	round, ok := strings.CutPrefix(after, before)
+	if !ok || strings.Count(round, want+"\n") != 1 {
+		t.Fatalf("resume delivered %q, want one %q", round, want)
+	}
+	current, ok, err := session.Credential(card.TaskID)
+	if err != nil || !ok || current.Generation != prior.Generation+1 || current.Session != prior.Session {
+		t.Fatalf("native resume did not keep the agent session: found=%t error=%v", ok, err)
+	}
 }
 
 func markRemoteExecutorStopped(t *testing.T, session *remote.Session, task string) remote.Credential {

@@ -52,6 +52,42 @@ An entrance returns `ExecutionResult.Advanced`: the card revision or column diff
 - The container shell parses the agent command. POSIX uses sh quoting and rejects carriage return, line feed, and NUL. On Windows, the herdr pane and the shell herdr-core starts use PowerShell. The typed line carries argv in variables that `cmd.exe` expands. PowerShell values are single-quoted with all five single-quote characters (U+0027, U+2018, U+2019, U+201A, U+201B) doubled. Before creating a Windows container, Kander rejects control characters (C0, DEL, C1) in the command values and the forwarded `KANBAN_DIR`, `KANDER_CONFIG`, `KANDER_LANG`, and `KANDER_CLIENT_HOME`. The line editor interprets those characters as keys.
 - A native `.exe` in a Windows pane uses `cmd.exe /d /s /v:on /c`. The delayed `!VAR!` references insert the arguments after cmd.exe parses the command, and the native program reads a backslash followed by a double quote as a literal double quote. A `.cmd` or `.bat` uses `/v:off`, `%VAR%`, and doubled quotes so the encoding survives the script's reparse of `%*`. An argument with an odd number of double quotes can still split differently if the batch script forwards it to a program that uses older C runtime rules.
 
+## Interactive Session Naming
+
+With a nonempty `rename_command`, Kander attempts one local slash command
+inside each newly launched interactive agent. This includes card starts,
+native resumes and takeovers, the process-recovery path of notify,
+orchestration, Chat, and issue triage and result. Sending a message to an
+already running session and starting a non-interactive reviewer do not
+rename. Kander uses the existing launch label to derive the session name
+and uses the backend's pane text operation, not a shell command or a startup
+`--name` argument. The [agent definition](custom-agents.md#interactive-session-names)
+describes the filter and matching rules.
+
+For an agent that must be idle for renaming, a container launch leaves the
+initial prompt out of argv and waits for the interactive composer. A matching
+startup dialog takes precedence over readiness, even on a program-status
+launcher. Kander types nothing while the dialog remains. If it clears and the
+composer becomes ready, Kander sends the rename command, checks for the
+configured acknowledgement or the ready composer with no pending rename
+draft, then sends the prompt. If the startup budget expires, Kander types
+nothing and fails with `launch.pane_ready_blocked` for a detected dialog or
+`launch.pane_ready_timeout` otherwise. These failures use the pane-prompt
+rollback path and do not publish `WINDOW` before the prompt.
+
+A definition with `rename_delivery.after_argv` keeps the prompt in argv. It
+uses the same readiness observations but skips renaming with one warning if
+the pane is blocked or does not become ready. Otherwise it sends the rename
+command without resending the prompt. Program-status launchers require a
+matching app and idle or done status, or working status for this explicit
+after-argv policy, as well as any configured screen match.
+
+An unsuccessful rename or a missing acknowledgement after three seconds
+warns without failing the launch. `foreground` and `console` retain their
+original arguments and warn because there is no pane to type into. Without a
+rename command, the original delivery mode and readiness behavior are
+unchanged, including the existing pane-prompt behavior of Droid and Kimi.
+
 ## Launchers
 
 - Eight built-in launchers, plus the launchers provided by loaded terminal definitions (JSON files in the global or project share directory `terminals/`; the project copy replaces the global one, which replaces an embedded one of the same name). `auto` is resolved at start time and never written back to the configuration.
