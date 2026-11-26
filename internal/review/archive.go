@@ -1,6 +1,7 @@
 package review
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -309,13 +310,21 @@ func (a *archiveExecution) publish() int {
 	}
 	return run.ExitCode
 }
-func (a *archiveExecution) snapshotRuntime(runtime string) error {
+func (a *archiveExecution) snapshotRuntime(runtime string, evidence evidenceResult) error {
 	for _, name := range []string{"prompt.txt", config.ReviewContractFilename, "evidence.txt"} {
 		data, err := fs.ReadRegularFile(runtime, filepath.Join(runtime, name))
 		if err != nil {
 			return err
 		}
 		if err = a.backend().Artifact(a.run.RunID, name, data); err != nil {
+			var size *artifactTooLargeError
+			if errors.As(err, &size) {
+				source := ""
+				if name == "evidence.txt" {
+					source = evidence.largest
+				}
+				return newGate(2, "review.artifact_request_too_large", size.name, size.rawBytes, size.requestBytes, size.limit, source)
+			}
 			return err
 		}
 	}

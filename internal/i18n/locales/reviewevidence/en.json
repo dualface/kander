@@ -1,0 +1,4 @@
+{
+  "review.artifact_request_too_large": "Review artifact {{.V0}} ({{.V1}} raw bytes) needs a {{.V2}}-byte request, exceeding the {{.V3}}-byte limit.{{if .V4}} Largest content source: {{.V4}}.{{end}} Mark large generated files with -diff in .gitattributes or $GIT_COMMON_DIR/info/attributes, or narrow the review scope, then retry with a new run ID.",
+  "review.evidence_metadata_unavailable": "Could not match review diff metadata for {{.V0}} ({{.V1}} blocks, {{.V2}} entries). Omitted blocks in this section have headers only."
+}

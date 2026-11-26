@@ -22,6 +22,7 @@ var argumentPattern = regexp.MustCompile(`\.V([0-9]+)`)
 // testCatalogFiles mirrors i18n.catalogFiles; every language is the concatenation
 // of its general catalog and its topic catalogs, and duplicates are rejected.
 var testCatalogFiles = []string{
+	"locales/reviewevidence/%s.json",
 	"locales/install/%s.json",
 	"locales/mouse/%s.json",
 	"locales/doctor/%s.json",

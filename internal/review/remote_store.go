@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"reflect"
 
@@ -176,8 +177,29 @@ func (s *remoteReviewStore) runtime(run, action string, payload any, out any) er
 func (s *remoteReviewStore) Update(run board.ReviewRun) error {
 	return s.runtime(run.RunID, "update", run, nil)
 }
+
+type artifactTooLargeError struct {
+	name                          string
+	rawBytes, requestBytes, limit int
+}
+
+func (e *artifactTooLargeError) Error() string {
+	return fmt.Sprintf("%s: %d raw bytes, %d request bytes exceed the %d-byte limit",
+		e.name, e.rawBytes, e.requestBytes, e.limit)
+}
+
 func (s *remoteReviewStore) Artifact(id, name string, data []byte) error {
-	return s.runtime(id, "artifact", api.ReviewArtifact{Name: name, Data: data, Digest: board.ReviewDigest(data)}, nil)
+	payload := api.ReviewArtifact{Name: name, Data: data, Digest: board.ReviewDigest(data)}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	if len(encoded) > artifactRequestLimit {
+		return &artifactTooLargeError{name: name, rawBytes: len(data), requestBytes: len(encoded), limit: artifactRequestLimit}
+	}
+	// Pass the already encoded request through the client without encoding
+	// the artifact's base64 data a second time.
+	return s.runtime(id, "artifact", json.RawMessage(encoded), nil)
 }
 func (s *remoteReviewStore) Finalize(run board.ReviewRun, report []byte) (board.ReviewRun, error) {
 	dir, err := s.Staging(run.RunID)

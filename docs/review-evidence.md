@@ -86,6 +86,22 @@ reviews/<run_id>/
   interpretation.json # optional receiver reading, separately published after the run
 ```
 
+`evidence.txt` retains full diffs when they fit. A file diff over 1 MiB is
+replaced in place by headers and a bounded, line-truncated preview when
+metadata can be matched, or by headers alone. Both PATCH and FIX RANGE PATCH
+count toward the 16 MiB evidence target. If the smallest representation
+cannot meet that target but fits the upload budget, Kander uses the larger
+budget. It shortens or omits more diffs only when doing so saves space,
+including the index entry. The final `=== OMITTED DIFFS ===` section lists
+each omission, its section, path, size, reason, available Git metadata, and a
+command for inspecting the diff. These files remain in scope. Start with
+`--stat` and inspect relevant hunks or truncate long lines.
+
+Before launching the reviewer in distributed mode, Kander checks each of the
+three artifact request bodies against the service limit. If one is still too
+large, the localized error identifies the artifact, its size and the request
+limit, the largest evidence source when applicable, and how to retry.
+
 process-evidence.json holds the bounded process group member records and the cleanup result, in the format of [Process Group Member Records](review-runtime-isolation.md#process-group-member-records). It is written to staging when the process tree is collected, frozen with the other originals, and covered by the manifest hashes. It is optional: a run without it, such as any run of an older binary, stays valid. A run with it is rejected by older binaries, which do not know the file.
 
 raw/log files are stored as-is, including invalid UTF-8. report.md stores the valid result text without rewriting line endings or content; a JSON Reviewer's original JSON is stored separately as output.raw. When there is no valid report, no report.md is fabricated and the index points to output.raw. Failure evidence may contain empty files; the sidecar states explicitly that the run did not start or failed, and an empty file does not indicate success.

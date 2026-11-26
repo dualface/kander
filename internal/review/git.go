@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/fs"
 )
 
@@ -83,54 +85,82 @@ func runtimeEqualFold() bool {
 	return os.PathSeparator == '\\'
 }
 
-func writeEvidence(ctx reviewContext, runtime, path string) error {
-	commands := []struct {
-		heading string
-		args    []string
-	}{
-		{"\n=== COMMITS ===\n", []string{"log", "--no-ext-diff", "--no-textconv", "--format=fuller", "--no-patch", ctx.base + ".." + ctx.commit}},
-		{"\n=== FILE LEDGER ===\n", []string{"diff", "--no-ext-diff", "--no-textconv", "--find-renames", "--name-status", ctx.base + ".." + ctx.commit}},
-		{"\n=== PATCH ===\n", []string{"diff", "--no-ext-diff", "--no-textconv", "--find-renames", "--patch", ctx.base + ".." + ctx.commit}},
-		{"\n=== COMMIT TREE ===\n", []string{"ls-tree", "-r", ctx.commit}},
-	}
+func writeEvidence(ctx reviewContext, runtime, path string) (evidenceResult, error) {
+	intro := "Review range: " + ctx.base + ".." + ctx.commit + "\n"
 	if ctx.reviewed != "" {
-		fixRange := ctx.reviewed + ".." + ctx.commit
-		commands = append(commands,
-			struct {
-				heading string
-				args    []string
-			}{"\n=== FIX RANGE COMMITS ===\n", []string{"log", "--no-ext-diff", "--no-textconv", "--format=fuller", "--no-patch", fixRange}},
-			struct {
-				heading string
-				args    []string
-			}{"\n=== FIX RANGE FILE LEDGER ===\n", []string{"diff", "--no-ext-diff", "--no-textconv", "--find-renames", "--name-status", fixRange}},
-			struct {
-				heading string
-				args    []string
-			}{"\n=== FIX RANGE PATCH ===\n", []string{"diff", "--no-ext-diff", "--no-textconv", "--find-renames", "--patch", fixRange}},
-		)
+		intro += "Incremental re-review; fix range: " + ctx.reviewed + ".." + ctx.commit + "\n"
 	}
-	var b strings.Builder
-	b.WriteString("Review range: " + ctx.base + ".." + ctx.commit + "\n")
+
+	run := func(args []string) (string, error) { return evidenceGit(ctx.root, args) }
+	baseSections, err := evidenceRange(run, ctx.base, ctx.commit, "")
+	if err != nil {
+		return evidenceResult{}, err
+	}
+	tree, err := evidenceGit(ctx.root, []string{"ls-tree", "-r", ctx.commit})
+	if err != nil {
+		return evidenceResult{}, err
+	}
+	sections := append(baseSections, evidenceSection{name: "COMMIT TREE", text: tree})
 	if ctx.reviewed != "" {
-		b.WriteString("Incremental re-review; fix range: " + ctx.reviewed + ".." + ctx.commit + "\n")
-	}
-	for _, command := range commands {
-		stdout, stderr, code, err := gitCommand(command.args, ctx.root, "")
+		fixSections, err := evidenceRange(run, ctx.reviewed, ctx.commit, "FIX RANGE ")
 		if err != nil {
-			return err
+			return evidenceResult{}, err
 		}
-		if code != 0 {
-			msg := strings.TrimSpace(stderr)
-			if msg == "" {
-				msg = "failed to create review evidence"
-			}
-			return newGateMsg(2, msg)
-		}
-		b.WriteString(command.heading)
-		b.WriteString(stdout)
+		sections = append(sections, fixSections...)
 	}
-	return fs.WriteTextAtomic(runtime, path, b.String(), false)
+	text, result := renderEvidence(intro, sections, evidenceLimits{
+		file: evidenceFileLimit, total: evidenceTotalLimit, hard: evidenceHardLimit,
+	})
+	return result, fs.WriteTextAtomic(runtime, path, text, false)
+}
+
+func evidenceRange(run func([]string) (string, error), from, to, prefix string) ([]evidenceSection, error) {
+	revisions := from + ".." + to
+	log, err := run([]string{"log", "--no-ext-diff", "--no-textconv", "--format=fuller", "--no-patch", revisions})
+	if err != nil {
+		return nil, err
+	}
+	ledger, err := run(evidenceDiffArgs("--name-status", revisions))
+	if err != nil {
+		return nil, err
+	}
+	text, err := run(evidenceDiffArgs("--patch", revisions))
+	if err != nil {
+		return nil, err
+	}
+	raw, err := run(evidenceDiffArgs("--raw", "-z", "--no-abbrev", revisions))
+	if err != nil {
+		return nil, err
+	}
+	numstat, err := run(evidenceDiffArgs("--numstat", "-z", revisions))
+	if err != nil {
+		return nil, err
+	}
+	section := prefix + "PATCH"
+	patch, warning, blocks, entries := collectEvidencePatch(section, from, to, text, raw, numstat)
+	if warning != "" {
+		command.Notify("review_evidence_metadata_unavailable", config.Text("review.evidence_metadata_unavailable", section, blocks, entries))
+	}
+	return []evidenceSection{
+		{name: prefix + "COMMITS", text: log},
+		{name: prefix + "FILE LEDGER", text: ledger},
+		{name: section, patch: patch},
+	}, nil
+}
+
+func evidenceGit(root string, args []string) (string, error) {
+	stdout, stderr, code, err := gitCommand(args, root, "")
+	if err != nil {
+		return "", err
+	}
+	if code != 0 {
+		msg := strings.TrimSpace(stderr)
+		if msg == "" {
+			msg = "failed to create review evidence"
+		}
+		return "", newGateMsg(2, msg)
+	}
+	return stdout, nil
 }
 
 func targetIsUnchanged(ctx reviewContext) bool {

@@ -28,76 +28,18 @@ func TestRemoteArchiveCLIUsesServiceWithoutLocalBoard(t *testing.T) {
 	t.Run("pending upload after outage", func(t *testing.T) { remoteArchiveCLI(t, true) })
 }
 func remoteArchiveCLI(t *testing.T, interrupted bool) {
-	h := newCodexHarness(t)
-	t.Chdir(h.repo)
-	useServer(t)
-	t.Setenv(board.EnvBoardDir, filepath.Join(h.root, "forbidden-board"))
-	t.Setenv(remote.EnvClientHome, filepath.Join(h.root, "client"))
-	srv, err := server.Open(server.Options{DataDir: filepath.Join(h.root, "server"), Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer srv.Close()
-	handler := srv.Handler()
 	var failFinalize atomic.Bool
 	failFinalize.Store(interrupted)
-	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h, session, task, requirements := remoteReviewHarness(t, func(w http.ResponseWriter, r *http.Request) bool {
 		if failFinalize.Load() && strings.HasSuffix(r.URL.Path, "/finalize") {
 			w.Header().Set(api.HeaderProtocol, strconv.Itoa(api.ProtocolVersion))
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
 			_, _ = w.Write([]byte(`{"code":"not_ready","message":"injected upload outage"}`))
-			return
+			return true
 		}
-		handler.ServeHTTP(w, r)
-	}))
-	defer httpServer.Close()
-	var cfg map[string]any
-	configPath := os.Getenv(config.EnvConfig)
-	if err := json.Unmarshal([]byte(readFile(t, configPath)), &cfg); err != nil {
-		t.Fatal(err)
-	}
-	cfg["server"] = map[string]string{"url": httpServer.URL}
-	cfg["project"] = map[string]string{"name": "review-demo"}
-	data, err := json.Marshal(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(configPath, data, 0600); err != nil {
-		t.Fatal(err)
-	}
-	effective, err := config.Load(false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	session, err := remote.Open(t.Context(), effective, h.repo)
-	if err != nil {
-		t.Fatal(err)
-	}
-	task, err := session.Project.NewTask(t.Context(), "", api.NewTask{Type: "chore", Slug: "remote-review", Title: "Remote review", Language: "en"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := strings.ReplaceAll(task.Text, "<FILL_IN>", "filled")
-	text = strings.Replace(text, "## DISCUSSION\n", "## DISCUSSION\n\nSELF_REVIEW: PASS\n", 1)
-	if _, err := session.Project.PutDocument(t.Context(), "", task.TaskID, api.Document{Path: "spec.md", Text: text, ExpectedRevision: task.Revision}, nil); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := session.Project.Move(t.Context(), "", task.TaskID, api.Move{State: "todo"}, nil); err != nil {
-		t.Fatal(err)
-	}
-	grant, err := session.Project.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{ClientID: session.Client.ClientID(), ExecutionID: "review-execution", Owner: "codex"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	credential := remote.Credential{ServerURL: session.ServerURL, ClientID: session.Client.ClientID(), ProjectID: session.Info.ID, TaskID: task.TaskID, ExecutionID: grant.Claim.ExecutionID, Generation: grant.Claim.Generation, Token: grant.Token, RenewedAt: grant.Claim.RenewedAt, TTL: grant.TTL, RenewInterval: grant.RenewInterval}
-	if err := session.SaveCredential(credential); err != nil {
-		t.Fatal(err)
-	}
-	requirements := filepath.Join(h.root, "requirements.json")
-	if err := os.WriteFile(requirements, []byte(`{"PMQA":"required","Security":"N/A: project"}`), 0600); err != nil {
-		t.Fatal(err)
-	}
+		return false
+	})
 	report := "Remote report\n" + emptyStructuredReview
 	t.Setenv("FAKE_CODEX_REPORT", report)
 	args := []string{"codex", "--task", task.TaskID, "--run-id", "remote-run", "--batch-id", "remote-batch", "--requirements-file", requirements, h.repo, h.base, h.head, "PMQA", "Frozen remote task"}
@@ -160,4 +102,72 @@ func remoteArchiveCLI(t *testing.T, interrupted bool) {
 			t.Fatalf("created a local board: %s %v", path, err)
 		}
 	}
+}
+
+func remoteReviewHarness(t *testing.T, intercept func(http.ResponseWriter, *http.Request) bool) (*reviewHarness, *remote.Session, api.Task, string) {
+	t.Helper()
+	h := newCodexHarness(t)
+	t.Chdir(h.repo)
+	useServer(t)
+	t.Setenv(board.EnvBoardDir, filepath.Join(h.root, "forbidden-board"))
+	t.Setenv(remote.EnvClientHome, filepath.Join(h.root, "client"))
+	srv, err := server.Open(server.Options{DataDir: filepath.Join(h.root, "server"), Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = srv.Close() })
+	handler := srv.Handler()
+	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if intercept == nil || !intercept(w, r) {
+			handler.ServeHTTP(w, r)
+		}
+	}))
+	t.Cleanup(httpServer.Close)
+	var cfg map[string]any
+	configPath := os.Getenv(config.EnvConfig)
+	if err := json.Unmarshal([]byte(readFile(t, configPath)), &cfg); err != nil {
+		t.Fatal(err)
+	}
+	cfg["server"] = map[string]string{"url": httpServer.URL}
+	cfg["project"] = map[string]string{"name": "review-demo"}
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	effective, err := config.Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := remote.Open(t.Context(), effective, h.repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := session.Project.NewTask(t.Context(), "", api.NewTask{Type: "chore", Slug: "remote-review", Title: "Remote review", Language: "en"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := strings.ReplaceAll(task.Text, "<FILL_IN>", "filled")
+	text = strings.Replace(text, "## DISCUSSION\n", "## DISCUSSION\n\nSELF_REVIEW: PASS\n", 1)
+	if _, err := session.Project.PutDocument(t.Context(), "", task.TaskID, api.Document{Path: "spec.md", Text: text, ExpectedRevision: task.Revision}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := session.Project.Move(t.Context(), "", task.TaskID, api.Move{State: "todo"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	grant, err := session.Project.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{ClientID: session.Client.ClientID(), ExecutionID: "review-execution", Owner: "codex"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	credential := remote.Credential{ServerURL: session.ServerURL, ClientID: session.Client.ClientID(), ProjectID: session.Info.ID, TaskID: task.TaskID, ExecutionID: grant.Claim.ExecutionID, Generation: grant.Claim.Generation, Token: grant.Token, RenewedAt: grant.Claim.RenewedAt, TTL: grant.TTL, RenewInterval: grant.RenewInterval}
+	if err := session.SaveCredential(credential); err != nil {
+		t.Fatal(err)
+	}
+	requirements := filepath.Join(h.root, "requirements.json")
+	if err := os.WriteFile(requirements, []byte(`{"PMQA":"required","Security":"N/A: project"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	return h, session, task, requirements
 }

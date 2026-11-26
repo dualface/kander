@@ -1,7 +1,12 @@
 # Kander Review Contract
 
 The COMMIT TREE in the evidence file is the authority for which paths belong to the target commit.
-Ignore worktree paths absent from it unless the caller explicitly names them as task context or a role report.
+Ignore worktree paths absent from it unless the caller explicitly names them as task context or a role report.{{if .OmittedDiffs}}
+
+Some file diffs are omitted or shown only as previews. See the `=== OMITTED DIFFS ===` index at the end of the evidence file.
+These files remain in scope. Use the listed commands to inspect the diffs or read the files in the review worktree.
+Start with `--stat` and inspect relevant hunks or truncate long lines. Do not print an entire omitted diff.
+{{end}}
 
 {{.Scope}}
 

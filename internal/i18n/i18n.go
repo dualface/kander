@@ -19,6 +19,7 @@ var catalogs embed.FS
 
 // catalogFiles are loaded into one bundle; the file's base name picks the language.
 var catalogFiles = []string{
+	"locales/reviewevidence/en.json", "locales/reviewevidence/zh-CN.json", "locales/reviewevidence/ja.json",
 	"locales/decision/en.json", "locales/decision/zh-CN.json", "locales/decision/ja.json",
 	"locales/mouse/en.json", "locales/mouse/zh-CN.json", "locales/mouse/ja.json",
 	"locales/install/en.json", "locales/install/zh-CN.json", "locales/install/ja.json",
