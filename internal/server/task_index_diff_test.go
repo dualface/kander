@@ -112,7 +112,7 @@ func (s *Server) IndexDifferentialHandler(t *testing.T) http.Handler {
 				if err != nil {
 					t.Errorf("%s %s: %v", r.Pattern, r.PathValue("action"), err)
 				} else {
-					t.Logf("index differential: %s (action %s)", r.Pattern, r.PathValue("action"))
+					recordIndexCoverage(r.Pattern, r.PathValue("action"))
 				}
 			}
 		}

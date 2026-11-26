@@ -32,6 +32,39 @@ func TestTaskIndexAfterDispatchReauthorization(t *testing.T) {
 	}
 }
 
+func TestTaskIndexAfterDispatchSettlement(t *testing.T) {
+	f := newFixture(t)
+	p := f.project("host-a")
+	task := withTaskBranch(t, p, todoTask(t, p, "indexed-settlement"))
+	grant, err := claim(t, p, task.TaskID, "host-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	proof := client.Claim{Token: grant.Token, Generation: grant.Claim.Generation}
+	input := board.DispatchInput{ID: "indexed-settlement", TaskID: task.TaskID, Kind: "sync", Message: "Synchronize the branch", Base: strings.Repeat("a", 40)}
+	round, err := p.DispatchAction(t.Context(), "", task.TaskID, "prepare", api.DispatchCommand{Input: &input, CardRevision: grant.Task.Revision}, proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Move(t.Context(), "", task.TaskID, api.Move{State: "working", Authorization: round.Authorization}, &proof); err != nil {
+		t.Fatal(err)
+	}
+	commit := strings.Repeat("b", 40)
+	stageDelivery(t, p, grant, commit)
+	reviewed, err := p.Move(t.Context(), "", task.TaskID, api.Move{State: "review", DeliveryCommit: commit, Authorization: round.Authorization}, &proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	completed, err := p.Dispatch(t.Context(), task.TaskID, input.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settled, err := p.DispatchAction(t.Context(), "", task.TaskID, "settle", api.DispatchCommand{DispatchID: input.ID, Revision: completed.Revision}, proof)
+	if err != nil || settled.Settlement == nil || settled.Settlement.CardRevision != reviewed.Revision+1 {
+		t.Fatalf("settlement: %+v %v", settled, err)
+	}
+}
+
 func TestDispatchServiceKeepsOwnershipAndBusinessEpochAsSeparateFences(t *testing.T) {
 	f := newFixture(t)
 	a, b := f.project("host-a"), f.project("host-b")

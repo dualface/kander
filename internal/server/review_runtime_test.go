@@ -80,6 +80,21 @@ func TestReviewRuntimeUploadsExactOriginalsAndRetriesAfterRestart(t *testing.T) 
 	if err := json.Unmarshal(raw, &unchanged); err != nil || unchanged.Phase != "prepared" {
 		t.Fatalf("corrupt upload finalized: %+v %v", unchanged, err)
 	}
+	artifact := api.ReviewArtifact{Name: "prompt.txt", Data: []byte("fixture review prompt")}
+	artifact.Digest = board.ReviewDigest(artifact.Data)
+	if _, err := p.ReviewRuntime(t.Context(), "artifact", run.RunID, "artifact", artifact, &proof); err != nil {
+		t.Fatal(err)
+	}
+	running := run
+	running.Phase, running.LaunchStatus = "running", "started"
+	raw, err = p.ReviewRuntime(t.Context(), "running", run.RunID, "update", running, &proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var updated board.ReviewRun
+	if err := json.Unmarshal(raw, &updated); err != nil || updated.Phase != running.Phase || updated.LaunchStatus != running.LaunchStatus {
+		t.Fatalf("runtime phase update: %+v %v", updated, err)
+	}
 	raw, err = p.ReviewRuntime(t.Context(), "finalize", run.RunID, "finalize", request, &proof)
 	if err != nil {
 		t.Fatal(err)
