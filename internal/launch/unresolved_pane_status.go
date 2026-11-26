@@ -8,11 +8,13 @@ import (
 	"github.com/dualface/kander/v2/internal/probe"
 )
 
+// unresolvedPaneStatusTimeout bounds the one pane read of an unresolved
+// start. It stays below probe.DefaultCommandTimeout: the read only adds a
+// diagnostic and must not hold up the started-unresolved result. A variable
+// so tests can expire it.
+var unresolvedPaneStatusTimeout = 3 * time.Second
+
 const (
-	// unresolvedPaneStatusTimeout bounds the one pane read of an unresolved
-	// start. It stays below probe.DefaultCommandTimeout: the read only adds a
-	// diagnostic and must not hold up the started-unresolved result.
-	unresolvedPaneStatusTimeout = 3 * time.Second
 	// unresolvedPaneStatusMaxBytes bounds the terminal-reported status value
 	// quoted in the reason; the value is untrusted terminal data.
 	unresolvedPaneStatusMaxBytes = 32
@@ -34,7 +36,9 @@ func unresolvedPaneStatus(plan LaunchPlan, pane string) string {
 	ctx, cancel := probe.TimeoutContext(unresolvedPaneStatusTimeout)
 	defer cancel()
 	facts, err := plan.backend().PaneFacts(ctx, probeConn(plan), pane)
-	if err != nil || facts.Gone {
+	// A declarative step may absorb its own deadline (on_error: continue) and
+	// still return earlier facts; a read past the bound counts as no status.
+	if err != nil || ctx.Err() != nil || facts.Gone {
 		return ""
 	}
 	status := truncateUTF8(issue.Sanitize(facts.AgentStatus), unresolvedPaneStatusMaxBytes)
