@@ -75,11 +75,12 @@ func TestRemoteAdoptsCodexAfterRolloutAppears(t *testing.T) {
 	if err != nil || before.Status != board.ExecutionUnresolved {
 		t.Fatalf("execution before adoption = %q, error = %v", before.Status, err)
 	}
-	prompt := codexPromptPrefixes(task.TaskID)[0]
 	currentDir, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
 	}
+	_, initialCredential := adoptionState(t, session, task.TaskID)
+	prompt := testAdoptionLaunchPrompt(t, session, initialCredential, "start")
 	writeLaunchRollout(t, sessionLaunch{CWD: currentDir, Prompt: prompt})
 	code, out, diagnostics := runTestAdoption(task.TaskID)
 	if code != 0 {

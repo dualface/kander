@@ -125,17 +125,15 @@ func scanRemoteAdoptSession(ctx context.Context, repairer sessionMarkerRepairer,
 	var taskFile string
 	if launchDir == "" {
 		launchDir = remote.ProjectDir(cwd)
-		// Takeovers keep STARTED_AT and can reuse this directory. The task
-		// file in the new execution's prompt distinguishes it from older
-		// rollouts even when the current rollout has not appeared.
-		if credential.Generation > 1 || state.Record.Kind == board.ExecutionTakeover {
-			taskFile, err = service.TaskLaunchFile(ctx, credential)
-			if err != nil {
-				return "", launchError("launch.adopt_session_scan_failed", task, err.Error(), stop)
-			}
-			if taskFile == "" {
-				return "", launchError("launch.adopt_session_scan_failed", task, t("launch.adopt_launch_receipt_missing"), stop)
-			}
+		// A shared directory can hold older rollouts from this task or
+		// the same task ID in another project. Only the task file in the
+		// current execution's prompt distinguishes them.
+		taskFile, err = service.TaskLaunchFile(ctx, credential)
+		if err != nil {
+			return "", launchError("launch.adopt_session_scan_failed", task, err.Error(), stop)
+		}
+		if taskFile == "" {
+			return "", launchError("launch.adopt_session_scan_failed", task, t("launch.adopt_launch_receipt_missing"), stop)
 		}
 	}
 	scan, err := repairer.AdoptionScan(task, launchDir, taskFile, floor)

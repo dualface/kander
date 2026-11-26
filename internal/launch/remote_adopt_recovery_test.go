@@ -24,6 +24,7 @@ type paneAdoptionFixture struct {
 	service    *remote.Session
 	task       string
 	cwd        string
+	prompt     string
 	markerPath string
 	setOptPath string
 	credential remote.Credential
@@ -79,12 +80,27 @@ func setupPaneAdoption(t *testing.T, launcher, sessionValue string, worktree boo
 	}, *credential.Claim()); err != nil {
 		t.Fatal(err)
 	}
-	return paneAdoptionFixture{service, task.TaskID, cwd, filepath.Join(fakeRoot, "tmux.log.pane-session"), filepath.Join(fakeRoot, "tmux.log.pane-setopt"), credential}
+	prompt := codexPromptPrefixes(task.TaskID)[0]
+	if !worktree && sessionValue == "codex" {
+		receipt, _, err := service.BeginAction("task-launch", task.TaskID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		receipt.Value.TaskID, receipt.Value.ExecutionID = task.TaskID, credential.ExecutionID
+		receipt.Value.Window, receipt.Value.TaskFile = window, filepath.Join(t.TempDir(), "this-execution.md")
+		err = errors.Join(receipt.Save(), receipt.Close())
+		if err != nil {
+			t.Fatal(err)
+		}
+		prompt = testAdoptionLaunchPrompt(t, service, credential, "start")
+	}
+	return paneAdoptionFixture{service: service, task: task.TaskID, cwd: cwd, prompt: prompt, credential: credential,
+		markerPath: filepath.Join(fakeRoot, "tmux.log.pane-session"), setOptPath: filepath.Join(fakeRoot, "tmux.log.pane-setopt")}
 }
 
 func (f paneAdoptionFixture) rollout(t *testing.T, id string) {
 	t.Helper()
-	writeTestRollout(t, id, f.cwd, codexPromptPrefixes(f.task)[0], time.Now().UTC())
+	writeTestRollout(t, id, f.cwd, f.prompt, time.Now().UTC())
 }
 
 func (f paneAdoptionFixture) assertMarker(t *testing.T, want string, wrote bool) {
@@ -138,18 +154,18 @@ func TestRemoteAdoptionRequiresOneMatchingRollout(t *testing.T) {
 			f.rollout(t, "second")
 		}, key: "launch.adopt_session_unproven", detail: "2"},
 		{name: "other directory", change: func(t *testing.T, f paneAdoptionFixture, _ api.ExecutionState) {
-			writeTestRollout(t, "other-cwd", t.TempDir(), codexPromptPrefixes(f.task)[0], time.Now().UTC())
+			writeTestRollout(t, "other-cwd", t.TempDir(), f.prompt, time.Now().UTC())
 		}, key: "launch.adopt_session_unproven", detail: "0"},
 		{name: "other task", change: func(t *testing.T, f paneAdoptionFixture, _ api.ExecutionState) {
 			path := writeTestRollout(t, "other-task", f.cwd, "A different task prompt", time.Now().UTC())
-			appendRolloutPrompt(t, path, codexPromptPrefixes(f.task)[0])
+			appendRolloutPrompt(t, path, f.prompt)
 		}, key: "launch.adopt_session_unproven", detail: "0"},
 		{name: "before floor", change: func(t *testing.T, f paneAdoptionFixture, state api.ExecutionState) {
 			floor, err := remoteAdoptSessionFloor(board.MetadataFrom(state.Task.Text, board.FieldStartedAt))
 			if err != nil {
 				t.Fatal(err)
 			}
-			writeTestRollout(t, "old", f.cwd, codexPromptPrefixes(f.task)[0], floor.Add(-time.Minute))
+			writeTestRollout(t, "old", f.cwd, f.prompt, floor.Add(-time.Minute))
 		}, key: "launch.adopt_session_unproven", detail: "0"},
 		{name: "read failure", change: func(t *testing.T, _ paneAdoptionFixture, _ api.ExecutionState) {
 			dir := filepath.Join(codexSessionsRoot(), filepath.FromSlash(time.Now().UTC().Format("2006/01/02")))
@@ -370,15 +386,7 @@ func TestRemoteAdoptionBindsSharedDirectoryTakeoverToItsTaskFile(t *testing.T) {
 	_, err = StartRemote("codex", launcher, task.TaskID)
 	requireUnresolved(t, err)
 	old := markRemoteExecutorStopped(t, service, task.TaskID)
-	launchFile := func(credential remote.Credential) string {
-		t.Helper()
-		file, err := service.TaskLaunchFile(t.Context(), credential)
-		if err != nil || file == "" {
-			t.Fatalf("launch receipt found = %v, error = %v", file != "", err)
-		}
-		return file
-	}
-	oldFile := launchFile(old)
+	oldPrompt := testAdoptionLaunchPrompt(t, service, old, "start")
 	oldCreated := time.Now().UTC()
 	code, out, diagnostics := commandtest.Capture(func() int {
 		return RunResumeRemote([]string{task.TaskID, "--agent", "codex", "--launcher", launcher, "--decision", "old executor stopped", "--message", "Take over after the stop"})
@@ -387,27 +395,11 @@ func TestRemoteAdoptionBindsSharedDirectoryTakeoverToItsTaskFile(t *testing.T) {
 		t.Fatalf("takeover did not reach an unresolved start: (%d) %q %q", code, out, diagnostics)
 	}
 	before, current := adoptionState(t, service, task.TaskID)
-	currentFile := launchFile(current)
-	if current.Generation != old.Generation+1 || current.Worktree != "" || oldFile == currentFile {
-		t.Fatal("the fixture did not start the next generation in the same directory with a new task file")
+	currentPrompt := testAdoptionLaunchPrompt(t, service, current, "takeover")
+	if current.Generation != old.Generation+1 || current.Worktree != "" {
+		t.Fatal("the fixture did not start the next generation in the shared directory")
 	}
-	writeRollout := func(id, file, kind string, created time.Time) {
-		t.Helper()
-		paths, err := currentInstallPaths()
-		if err != nil {
-			t.Fatal(err)
-		}
-		head, err := promptHead(paths, kind, task.TaskID, "", 0)
-		if err != nil {
-			t.Fatal(err)
-		}
-		instruction, err := taskFileInstruction(paths, head, file)
-		if err != nil {
-			t.Fatal(err)
-		}
-		writeTestRollout(t, id, cwd, instruction, created)
-	}
-	writeRollout("old-rollout", oldFile, "start", oldCreated)
+	writeTestRollout(t, "old-rollout", cwd, oldPrompt, oldCreated)
 	code, _, diagnostics = runTestAdoption(task.TaskID)
 	if code == 0 || !strings.Contains(diagnostics, config.Text("launch.unmarked_executor_stop_first", current.Window)) {
 		t.Fatalf("the old rollout was not refused: (%d) %q", code, diagnostics)
@@ -416,7 +408,7 @@ func TestRemoteAdoptionBindsSharedDirectoryTakeoverToItsTaskFile(t *testing.T) {
 		markerPath: filepath.Join(fakeRoot, "tmux.log.pane-session"), setOptPath: filepath.Join(fakeRoot, "tmux.log.pane-setopt")}
 	f.assertMarker(t, "", false)
 	f.assertNoAdoptionWrites(t, before)
-	writeRollout("current-rollout", currentFile, "takeover", time.Now().UTC())
+	writeTestRollout(t, "current-rollout", cwd, currentPrompt, time.Now().UTC())
 	code, _, diagnostics = runTestAdoption(task.TaskID)
 	if code != 0 {
 		t.Fatalf("current rollout was not adopted: (%d) %q", code, diagnostics)
@@ -424,6 +416,82 @@ func TestRemoteAdoptionBindsSharedDirectoryTakeoverToItsTaskFile(t *testing.T) {
 	f.assertMarker(t, "current-rollout", true)
 	after, credential := adoptionState(t, service, task.TaskID)
 	requireRepairedAdoption(t, service, after, credential, "current-rollout")
+}
+
+func TestRemoteAdoptionCannotUseAnotherProjectsRollout(t *testing.T) {
+	skipOnWindows(t)
+	t.Setenv(remote.EnvExecutionID, "")
+	const slug = "same-task-across-projects"
+	launcher := registerAdoptionProgramBackend(t)
+	cfg, first, task, _, fakeRoot := remoteLifecycleFixture(t, slug)
+	simulateLateCodexRollout(t)
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = StartRemote("codex", launcher, task.TaskID)
+	requireUnresolved(t, err)
+	_, old := adoptionState(t, first, task.TaskID)
+	oldPrompt := testAdoptionLaunchPrompt(t, first, old, "start")
+	oldCreated := time.Now().UTC()
+
+	cfg.Project.Name = "rebound-project"
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	second, err := remote.Open(t.Context(), cfg, cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := remoteLifecycleTodo(t, second, slug)
+	if task.TaskID != next.TaskID || first.Info.ID == second.Info.ID {
+		t.Fatal("expected the same task ID in two projects")
+	}
+	_, err = StartRemote("codex", launcher, next.TaskID)
+	requireUnresolved(t, err)
+	before, current := adoptionState(t, second, next.TaskID)
+	currentPrompt := testAdoptionLaunchPrompt(t, second, current, "start")
+	if current.Generation != 1 || current.Worktree != "" || currentPrompt == oldPrompt {
+		t.Fatal("expected the first execution on the rebound project to have its own task file")
+	}
+	f := paneAdoptionFixture{service: second, task: next.TaskID, cwd: cwd, prompt: currentPrompt, credential: current,
+		markerPath: filepath.Join(fakeRoot, "tmux.log.pane-session"), setOptPath: filepath.Join(fakeRoot, "tmux.log.pane-setopt")}
+	writeTestRollout(t, "other-project-rollout", cwd, oldPrompt, oldCreated)
+	code, _, diagnostics := runTestAdoption(next.TaskID)
+	if code == 0 || !strings.Contains(diagnostics, config.Text("launch.unmarked_executor_stop_first", current.Window)) {
+		t.Fatalf("another project's rollout was not refused: (%d) %q", code, diagnostics)
+	}
+	f.assertMarker(t, "", false)
+	f.assertNoAdoptionWrites(t, before)
+	f.rollout(t, "rebound-project-rollout")
+	code, _, diagnostics = runTestAdoption(next.TaskID)
+	if code != 0 {
+		t.Fatalf("current project's rollout was not adopted: (%d) %q", code, diagnostics)
+	}
+	f.assertMarker(t, "rebound-project-rollout", true)
+	after, credential := adoptionState(t, second, next.TaskID)
+	requireRepairedAdoption(t, second, after, credential, "rebound-project-rollout")
+}
+
+func testAdoptionLaunchPrompt(t *testing.T, service *remote.Session, credential remote.Credential, kind string) string {
+	t.Helper()
+	file, err := service.TaskLaunchFile(t.Context(), credential)
+	if err != nil || file == "" {
+		t.Fatalf("launch receipt found = %v, error = %v", file != "", err)
+	}
+	paths, err := currentInstallPaths()
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, err := promptHead(paths, kind, credential.TaskID, "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	instruction, err := taskFileInstruction(paths, head, file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return instruction
 }
 
 func TestRemoteAdoptionRetriesWithoutRepeatingCompletedWrites(t *testing.T) {
