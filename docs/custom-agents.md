@@ -85,10 +85,13 @@ dialect has none. Its optional `complete` screen match can also contain
 `{name}` (escaped as literal text inside a regular expression). Without a
 completion match, Kander looks for the ready composer again after a short
 pause without a new rename draft. Screen matches see the original backend
-output, including terminal line endings. An acknowledgement needs new text
-or a new adjacent command echo relative to the pre-rename screen. A command
-echo can distinguish a new acknowledgement when an older one scrolls out.
-Only that echo is excluded from the draft check.
+output, including terminal line endings. After successful delivery, Kander can
+exclude one command echo next to a fresh acknowledgement from the draft
+check. An acknowledgement on an unchanged row cannot hide an adjacent draft.
+If the number of matches does not increase, a repeated acknowledgement and
+its echo must appear below the retained viewport lines after an older match
+scrolls out. After a delivery error, no acknowledgement can hide a visible
+rename draft.
 `after_argv: true` preserves the
 initial prompt argument. Use it only for a client verified to handle the
 rename command locally without interfering with that first prompt.

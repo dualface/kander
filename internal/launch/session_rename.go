@@ -3,6 +3,7 @@ package launch
 import (
 	"context"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -174,15 +175,22 @@ func (p renameProbe) waitComplete(command, before string, sent bool) (confirmed,
 	if p.complete == nil || !sent {
 		sleepFn(2 * notifyPollInterval)
 	}
-	oldAcknowledgements := p.acknowledgements(before, command)
+	var oldAcknowledgements []renameAcknowledgement
+	if sent {
+		oldAcknowledgements = p.acknowledgements(before, command)
+	}
 	for deadline.After(nowFn()) && ctx.Err() == nil {
 		clean = false
 		if view, ready, blocker, ok := p.observe(ctx); ok {
 			output, blocked = view, blocker
 			if ready && ctx.Err() == nil && deadline.After(nowFn()) {
-				ack, fresh := newRenameAcknowledgement(oldAcknowledgements, p.acknowledgements(view, command))
-				if fresh && ack.echo != "" {
-					view = view[:ack.echoStart] + view[ack.lineStart:]
+				fresh := false
+				if sent && p.complete != nil {
+					var ack renameAcknowledgement
+					ack, fresh = newRenameAcknowledgement(before, view, oldAcknowledgements, p.acknowledgements(view, command))
+					if fresh && ack.hasEcho() {
+						view = view[:ack.echoStart] + view[ack.lineStart:]
+					}
 				}
 				clean = !renameDraftVisible(before, view, command)
 				if clean && (!sent || p.complete == nil || fresh) {
@@ -199,10 +207,12 @@ func (p renameProbe) waitComplete(command, before string, sent bool) (confirmed,
 
 type renameAcknowledgement struct {
 	text      string
-	echo      string
 	echoStart int
 	lineStart int
+	row       int
 }
+
+func (ack renameAcknowledgement) hasEcho() bool { return ack.echoStart < ack.lineStart }
 
 func (p renameProbe) acknowledgements(view, command string) []renameAcknowledgement {
 	if p.complete == nil {
@@ -219,11 +229,14 @@ func (p renameProbe) acknowledgements(view, command string) []renameAcknowledgem
 		// the acknowledgement by its content, not by that delimiter.
 		start := bounds[1] - len(content)
 		line := strings.LastIndexByte(view[:start], '\n') + 1
-		ack := renameAcknowledgement{text: strings.TrimSpace(content), lineStart: line}
+		ack := renameAcknowledgement{
+			text: strings.TrimSpace(content), echoStart: line, lineStart: line,
+			row: strings.Count(view[:line], "\n"),
+		}
 		if line > 0 {
 			previous := strings.LastIndexByte(view[:line-1], '\n') + 1
 			if echo := strings.TrimSpace(view[previous : line-1]); strings.HasSuffix(echo, command) {
-				ack.echo, ack.echoStart = echo, previous
+				ack.echoStart = previous
 			}
 		}
 		result = append(result, ack)
@@ -231,35 +244,69 @@ func (p renameProbe) acknowledgements(view, command string) []renameAcknowledgem
 	return result
 }
 
-// A new adjacent echo and acknowledgement can establish completion even when
-// an older acknowledgement scrolls out of the visible pane. An unchanged
-// pair cannot explain a new draft. At most one echo is excluded from checking.
-func newRenameAcknowledgement(before, after []renameAcknowledgement) (renameAcknowledgement, bool) {
-	if len(after) == 0 {
+// A stationary acknowledgement cannot distinguish an adjacent draft from an
+// echo. With no additional match, only a pair appended after retained screen
+// lines can replace an acknowledgement that scrolled out. At most one echo
+// is excluded from the draft check.
+func newRenameAcknowledgement(before, after string, old, current []renameAcknowledgement) (renameAcknowledgement, bool) {
+	if len(current) == 0 {
 		return renameAcknowledgement{}, false
 	}
 	texts := make(map[string]int)
-	pairs := make(map[[2]string]int)
-	for _, ack := range before {
-		texts[ack.text]++
-		if ack.echo != "" {
-			pairs[[2]string{ack.text, ack.echo}]++
-		}
+	firstRows := make(map[string]int)
+	type position struct {
+		text string
+		row  int
 	}
+	positions := make(map[position]bool)
+	for _, ack := range old {
+		if texts[ack.text] == 0 {
+			firstRows[ack.text] = ack.row
+		}
+		texts[ack.text]++
+		positions[position{ack.text, ack.row}] = true
+	}
+	var dropped, retained int
+	var comparedScroll bool
 	var result renameAcknowledgement
-	for _, ack := range after {
+	for _, ack := range current {
 		texts[ack.text]--
 		fresh := texts[ack.text] < 0
-		if ack.echo != "" {
-			key := [2]string{ack.text, ack.echo}
-			pairs[key]--
-			fresh = pairs[key] < 0
+		if ack.hasEcho() {
+			if positions[position{ack.text, ack.row}] {
+				continue
+			}
+			if !fresh {
+				if !comparedScroll {
+					dropped, retained = renameScrollOverlap(before, after)
+					comparedScroll = true
+				}
+				fresh = retained > 0 && firstRows[ack.text] < dropped && ack.row > retained
+			}
 		}
-		if fresh && (result.echo == "" || ack.echo != "") {
+		if fresh && (!result.hasEcho() || ack.hasEcho()) {
 			result = ack
 		}
 	}
 	return result, result.text != ""
+}
+
+// Match the longest nonblank suffix of the old viewport against the start of
+// the new one. Require lines to leave the top and new lines to enter the
+// bottom. Normalize line endings only for this comparison, not screen rules.
+func renameScrollOverlap(before, after string) (dropped, retained int) {
+	lines := func(view string) []string {
+		return strings.Split(strings.TrimRight(strings.ReplaceAll(view, "\r\n", "\n"), "\n"), "\n")
+	}
+	old, current := lines(before), lines(after)
+	for first := 1; first < len(old); first++ {
+		kept := old[first:]
+		if len(kept) < len(current) && slices.Equal(kept, current[:len(kept)]) &&
+			slices.ContainsFunc(kept, func(line string) bool { return strings.TrimSpace(line) != "" }) {
+			return first, len(kept)
+		}
+	}
+	return 0, 0
 }
 
 func renameDraftVisible(before, current, command string) bool {
