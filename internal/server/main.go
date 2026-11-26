@@ -97,11 +97,15 @@ func NewImportCommand() *cobra.Command {
 	c.Flags().StringVar(&o.name, "project", "", "")
 	c.Flags().StringVar(&o.remote, "remote", "", "")
 	c.Flags().StringVar(&o.from, "from", "", "")
+	c.Flags().BoolVar(&o.skipConflicts, "skip-conflicts", false, "")
 	return c
 }
 
 // importOptions are the flags of `kander server import`.
-type importOptions struct{ data, name, remote, from string }
+type importOptions struct {
+	data, name, remote, from string
+	skipConflicts            bool
+}
 
 // importCommand runs the import with its streams and interrupt source given. A receive on
 // signals is one Ctrl+C.
@@ -132,7 +136,9 @@ func importCommand(o importOptions, stdout, stderr io.Writer, tty bool, signals 
 	}
 	interrupt := watchImportInterrupt(report, signals)
 	defer interrupt.stop()
-	result, online, err := importBoard(interrupt.ctx, dir, *name, *remoteURL, source, importRun{logger: logger, report: report.Report, offline: &interrupt.offline})
+	result, online, err := importBoard(interrupt.ctx, dir, *name, *remoteURL, source, importRun{
+		logger: logger, report: report.Report, offline: &interrupt.offline, skipConflicts: o.skipConflicts,
+	})
 	report.Finish()
 	if err != nil {
 		if interrupt.cancelled() {
@@ -232,9 +238,10 @@ var importTarget = func() (string, error) {
 // importRun carries what an import reports to. offline is set once the import
 // runs in this process, which decides how an interrupt is handled.
 type importRun struct {
-	logger  *slog.Logger
-	report  func(api.ImportProgress)
-	offline *atomic.Bool
+	logger        *slog.Logger
+	report        func(api.ImportProgress)
+	offline       *atomic.Bool
+	skipConflicts bool
 }
 
 // importOpen opens the data directory for an offline import; tests replace it.
@@ -243,6 +250,7 @@ var importOpen = Open
 // importBoard imports offline under the data directory lock, or through the
 // running server that holds it, and says which one it used.
 func importBoard(ctx context.Context, dir, name, remote, source string, run importRun) (result api.ImportResult, online bool, err error) {
+	request := api.ImportRequest{Project: name, Remote: remote, From: source, SkipConflicts: run.skipConflicts}
 	s, err := importOpen(Options{DataDir: dir, Logger: run.logger, Version: version.String()})
 	if err == nil {
 		defer s.Close()
@@ -251,7 +259,7 @@ func importBoard(ctx context.Context, dir, name, remote, source string, run impo
 		}
 		ctx, cancel := context.WithTimeout(ctx, ImportTimeout)
 		defer cancel()
-		result, err = s.ImportWithProgress(ctx, name, remote, source, run.report)
+		result, err = s.importV1Board(ctx, request, run.report)
 		return result, false, err
 	}
 	if !errors.Is(err, ErrDataDirInUse) {
@@ -261,6 +269,6 @@ func importBoard(ctx context.Context, dir, name, remote, source string, run impo
 	if err != nil {
 		return api.ImportResult{}, true, err
 	}
-	result, err = servicectl.Import(ctx, target, dir, api.ImportRequest{Project: name, Remote: remote, From: source}, run.report)
+	result, err = servicectl.Import(ctx, target, dir, request, run.report)
 	return result, true, err
 }

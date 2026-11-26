@@ -15,25 +15,34 @@ const DefaultRenewInterval = 15 * time.Second
 // absolute path on the server host; the route accepts only loopback peers with
 // the administration token, as shutdown does.
 type ImportRequest struct {
-	Project string `json:"project"`
-	Remote  string `json:"remote,omitempty"`
-	From    string `json:"from"`
+	Project       string `json:"project"`
+	Remote        string `json:"remote,omitempty"`
+	From          string `json:"from"`
+	SkipConflicts bool   `json:"skip_conflicts,omitzero"`
 }
 
 // ImportResult describes one board import. Source is the absolute source path
 // of this request, also when the snapshot was imported earlier. Snapshot is the
-// digest of the source board; the published board equals it except for the
-// SIZE lines listed in DefaultedSize. DefaultedSize and Warnings are the same
-// for an earlier import of the same snapshot.
+// digest of the source board, and Files and Tasks count its entries before
+// conflict handling. The same snapshot returns the earlier import outcome.
 type ImportResult struct {
-	Project       Project         `json:"project"`
-	Source        string          `json:"source"`
-	Files         int             `json:"files"`
-	Tasks         int             `json:"tasks"`
-	Snapshot      string          `json:"snapshot"`
-	Existing      bool            `json:"existing,omitzero"`
-	DefaultedSize []string        `json:"defaulted_size,omitempty"`
-	Warnings      []ImportWarning `json:"warnings,omitempty"`
+	Project          Project          `json:"project"`
+	Source           string           `json:"source"`
+	Files            int              `json:"files"`
+	Tasks            int              `json:"tasks"`
+	Snapshot         string           `json:"snapshot"`
+	Existing         bool             `json:"existing,omitzero"`
+	DefaultedSize    []string         `json:"defaulted_size,omitempty"`
+	Warnings         []ImportWarning  `json:"warnings,omitempty"`
+	AddedTasks       int              `json:"added_tasks,omitzero"`
+	ExistingTasks    []string         `json:"existing_tasks,omitempty"`
+	SkippedConflicts []ImportConflict `json:"skipped_conflicts,omitempty"`
+}
+
+// ImportConflict names a task or a producer's shared record skipped in a merge.
+type ImportConflict struct {
+	Kind string `json:"kind"`
+	ID   string `json:"id"`
 }
 
 // ImportWarning is a board check problem the import accepted because every

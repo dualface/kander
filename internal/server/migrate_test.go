@@ -77,13 +77,6 @@ func TestImportFillsAnEmptyProjectAndKeepsTheSource(t *testing.T) {
 	if err != nil || !again.Existing || again.Snapshot != result.Snapshot {
 		t.Fatalf("the same snapshot imports once: %+v %v", again, err)
 	}
-	if _, err := board.NewTask(source, "chore", "later", "Later", "en", false); err != nil {
-		t.Fatal(err)
-	}
-	_, err = s.Import("demo", "git@example.invalid:demo.git", source)
-	if !api.IsCode(err, api.CodeProjectNotEmpty) {
-		t.Fatalf("a changed board never merges into a project with tasks: %v", err)
-	}
 
 	c, _ := client.New(h.URL, "host-b")
 	p := c.Project(result.Project.ID)

@@ -16,7 +16,9 @@ import (
 // their total size.
 type treeScan struct {
 	files  []string
+	dirs   []string
 	sums   map[string][sha256.Size]byte
+	sizes  map[string]int64
 	digest string
 	bytes  int64
 }
@@ -26,7 +28,7 @@ type treeScan struct {
 // board operation does. count, when set, is called after each digested file
 // with the files and bytes done and the file total.
 func scanTree(root string, count func(done, total int, bytes int64)) (treeScan, error) {
-	var files []string
+	var files, dirs []string
 	var walk func(rel string) error
 	walk = func(rel string) error {
 		entries, err := fs.ListDirectory(root, filepath.Join(root, rel))
@@ -37,6 +39,7 @@ func scanTree(root string, count func(done, total int, bytes int64)) (treeScan, 
 			child := filepath.Join(rel, e.Name)
 			switch e.Kind {
 			case fs.KindDirectory:
+				dirs = append(dirs, filepath.ToSlash(child))
 				if err := walk(child); err != nil {
 					return err
 				}
@@ -52,7 +55,8 @@ func scanTree(root string, count func(done, total int, bytes int64)) (treeScan, 
 		return treeScan{}, err
 	}
 	slices.Sort(files)
-	scan := treeScan{files: files, sums: make(map[string][sha256.Size]byte, len(files))}
+	slices.Sort(dirs)
+	scan := treeScan{files: files, dirs: dirs, sums: make(map[string][sha256.Size]byte, len(files)), sizes: make(map[string]int64, len(files))}
 	h := sha256.New()
 	for i, rel := range files {
 		data, err := fs.ReadRegularFile(root, filepath.Join(root, filepath.FromSlash(rel)))
@@ -61,7 +65,8 @@ func scanTree(root string, count func(done, total int, bytes int64)) (treeScan, 
 		}
 		sum := sha256.Sum256(data)
 		scan.sums[rel] = sum
-		scan.bytes += int64(len(data))
+		scan.sizes[rel] = int64(len(data))
+		scan.bytes += scan.sizes[rel]
 		fmt.Fprintf(h, "%s\x00%x\n", rel, sum)
 		if count != nil {
 			count(i+1, len(files), scan.bytes)

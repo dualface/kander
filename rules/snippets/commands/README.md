@@ -2,7 +2,7 @@
 
 Before running any `kander` command in this session, read `<rules root>/snippets/commands/README.md` once. Before the first use of a command, read its contract file.
 
-`kander help --json [<command>]` prints the command index or command object as JSON.
+`kander help --json [<command>]` prints the index or command as JSON.
 Global flags: `--lang`, `--json`.
 
 | Command | Purpose | Users | Contract |
@@ -42,7 +42,7 @@ kander server start [--data DIR] [--listen ADDR] [--ttl D] [--renew D] [--foregr
 kander server stop
 kander server restart
 kander server status
-kander server import [--data DIR] --project NAME [--remote URL] [--from KANBAN_DIR]
+kander server import [--data DIR] --project NAME [--remote URL] [--from KANBAN_DIR] [--skip-conflicts]
 kander server maintain [--data DIR] --project NAME [--maintenance]
 kander server projects [--data DIR]
 kander doctor

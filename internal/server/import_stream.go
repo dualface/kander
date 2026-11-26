@@ -33,7 +33,7 @@ func (s *Server) importRoute(r *http.Request) outcome {
 	ctx, cancel := context.WithTimeout(r.Context(), ImportTimeout)
 	if !strings.Contains(r.Header.Get("Accept"), api.ImportStreamType) {
 		defer cancel()
-		value, err := s.ImportContext(ctx, req.Project, req.Remote, req.From)
+		value, err := s.importV1Board(ctx, req, nil)
 		return result(http.StatusOK, value, err)
 	}
 	return outcome{stream: func(w http.ResponseWriter) int {
@@ -65,7 +65,7 @@ func (s *Server) streamImport(ctx context.Context, w http.ResponseWriter, r *htt
 			}
 		}
 	}()
-	value, err := s.ImportWithProgress(ctx, req.Project, req.Remote, req.From, latest.put)
+	value, err := s.importV1Board(ctx, req, latest.put)
 	close(finished)
 	<-stopped
 	if err != nil {

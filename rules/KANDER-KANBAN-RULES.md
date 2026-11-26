@@ -22,7 +22,7 @@ KANBAN_DIR="$MAIN_WORKTREE/kanban"
 
 Create, query, and move cards only through `kander`, never by direct file operations. For edits and upgrades, see "Entries and Documents" and "Task Scale and Grouping".
 
-Before running any `kander` command in this session, read `<rules root>/snippets/commands/README.md` once. Before the first use of a command, read its contract file. `kander <command> --help` prints the contract summary, syntax, and examples.
+Before running any `kander` command in this session, read `<rules root>/snippets/commands/README.md` once. Before the first use of a command, read its contract file. `kander <command> --help` shows the command contract.
 
 ```text
 kander config
@@ -30,7 +30,7 @@ kander server start [--data DIR] [--listen ADDR] [--ttl D] [--renew D] [--foregr
 kander server stop
 kander server restart
 kander server status
-kander server import [--data DIR] --project NAME [--remote URL] [--from KANBAN_DIR]
+kander server import [--data DIR] --project NAME [--remote URL] [--from KANBAN_DIR] [--skip-conflicts]
 kander server maintain [--data DIR] --project NAME [--maintenance]
 kander server projects [--data DIR]
 kander doctor
