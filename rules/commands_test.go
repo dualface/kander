@@ -164,7 +164,17 @@ func TestEveryContractDescribesItsJSONOutput(t *testing.T) {
 	}
 }
 
-// The global flags are named in the README once, and no Syntax line repeats --json.
+func TestCommandIndexMentionsJSONHelp(t *testing.T) {
+	readme, err := File("snippets/commands/README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(readme), "kander help --json [<command>]") {
+		t.Fatal("the README does not mention kander help --json [<command>]")
+	}
+}
+
+// The global flags are named in the README, and no Syntax line repeats --json.
 func TestGlobalJSONFlagIsNotInASyntaxLine(t *testing.T) {
 	readme, _ := File("snippets/commands/README.md")
 	if !strings.Contains(string(readme), "--json") {
