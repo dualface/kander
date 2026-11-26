@@ -83,6 +83,13 @@ func envConfig(agent, launcher string, agents map[string]string) *config.Config 
 	}
 	cfg.KanbanAgents = agents
 	cfg.Launcher = launcher
+	// The baseline launch fixtures do not emulate the interactive composers.
+	// Rename-specific tests opt in and furnish their own readiness evidence.
+	cfg.Agents = make(map[string]config.AgentDefinition, len(config.ExecutionAgents))
+	for _, name := range config.ExecutionAgents {
+		empty := ""
+		cfg.Agents[name] = config.AgentDefinition{RenameCommand: &empty}
+	}
 	return cfg
 }
 

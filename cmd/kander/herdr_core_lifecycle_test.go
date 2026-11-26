@@ -169,7 +169,9 @@ func TestWindowsHerdrCoreLifecycle(t *testing.T) {
 	cfg.KanbanAgent = "claude"
 	cfg.KanbanAgents = map[string]string{"large": "claude", "small": "claude"}
 	cfg.Launcher = "herdr-core"
-	cfg.Agents = map[string]config.AgentDefinition{"claude": {Path: agent}}
+	// The fake pane reports process status but does not render a composer.
+	renameDisabled := ""
+	cfg.Agents = map[string]config.AgentDefinition{"claude": {Path: agent, RenameCommand: &renameDisabled}}
 	service := commandService(t, cfg)
 	if _, err := config.Save(cfg); err != nil {
 		t.Fatal(err)

@@ -60,6 +60,56 @@ Neither the allocate command nor the argument templates use shell interpolation;
 
 ## Session Policies
 
+### Interactive session names
+
+An agent can declare `rename_command`, for example `"/rename {name}"`. It
+must be a single line containing the literal placeholder `{name}`, with no
+control characters, Unicode format characters, or Unicode line or paragraph
+separators. Kander rejects invalid values in both built-in and user definitions.
+A missing field inherits the built-in command of the effective dialect, if
+there is one. A scope setting replaces that default, and a project overlay
+replaces the scope setting. An explicit empty string disables renaming without
+changing how that agent normally receives its prompt.
+
+Kander substitutes the filtered terminal label for every `{name}`. Unicode
+letters (L*), combining marks (M*) and decimal digits (Nd), plus `-`, `_` and
+`.`, are retained. Control and format characters (Cc and Cf) are removed.
+Everything else becomes `-`. Repeated hyphens collapse and leading and trailing
+hyphens are removed. This does not change the terminal label itself.
+
+`rename_delivery` can describe the interactive composer separately from
+`prompt_delivery`. It uses the same `ready` and `blocked` structures and
+supports literal matches or the `regex:` prefix. Omitting the object inherits
+the dialect's object, or reuses the baseline pane delivery rules if the
+dialect has none. Its optional `complete` screen match can also contain
+`{name}` (escaped as literal text inside a regular expression). Without a
+completion match, Kander looks for the ready composer again after a short
+pause without a new rename draft. Screen matches see the original backend
+output, including terminal line endings. After successful delivery, Kander can
+exclude one command echo next to a fresh acknowledgement from the draft
+check. An acknowledgement that stays in place cannot hide an adjacent draft.
+If a new acknowledgement uses the same row as an older one, the retained
+viewport lines must show that the older match moved higher on the screen.
+If the number of matches does not increase, a repeated acknowledgement and
+its echo must appear below the retained viewport lines after an older match
+scrolls out. Both checks apply when one older match moves and another scrolls
+out. After a delivery error, no acknowledgement can hide a visible rename
+draft.
+`after_argv: true` preserves the
+initial prompt argument. Use it only for a client verified to handle the
+rename command locally without interfering with that first prompt.
+Keep the default when the client must be renamed while idle, before it
+receives its first prompt. Match the available composer in `ready.match`
+for launchers without OSC 7501 status. Supply `blocked` matches for startup
+dialogs that may appear.
+
+These are trusted CLI declarations. Verify the command and readiness against
+the actual CLI version before enabling renaming for an agent. In particular,
+confirm that the CLI treats the command as local, not as a message to the
+model. See [launch and delivery](launch-and-delivery.md#interactive-session-naming).
+
+### Session identity
+
 - `generated`: generates a UUID and saves it to the card's SESSION, for use by `{session}` and resume.
 - `allocated`: first executes the `session.allocate` argv (the first element is the program), waiting at most 10 seconds; successful output must be a single ID, or a top-level JSON string field designated via `session.json_field`. An ID accepts only 1–128 letters, digits, `.`, `_`, `:`, and `-`. Program failure, invalid output, and timeout are all reported before the task is claimed.
 - `hook:<name>`: names a registered Go hook when argv templates cannot express how the CLI creates or discovers a session. The built-in names are listed in the [Hook Catalog](#hook-catalog). An unregistered name (or any other unregistered `session.mode`) does not fail the load: the agent becomes unavailable, the rest of the configuration applies, and using the agent fails with the agent name and the mode; see [Configuration written by a newer version](config-forward-compat.md). Codex uses `hook:codex-rollout`.

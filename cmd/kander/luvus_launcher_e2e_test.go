@@ -82,6 +82,9 @@ func TestLuvusLauncherStart(t *testing.T) {
 	cfg.KanbanAgent = "claude"
 	cfg.KanbanAgents = map[string]string{"large": "claude", "small": "claude"}
 	cfg.Launcher = "auto"
+	// The fixture exercises pane placement with a shell, not an agent editor.
+	renameDisabled := ""
+	cfg.Agents = map[string]config.AgentDefinition{"claude": {RenameCommand: &renameDisabled}}
 	service := commandService(t, cfg)
 	if _, err := config.Save(cfg); err != nil {
 		t.Fatal(err)

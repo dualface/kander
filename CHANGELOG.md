@@ -9,6 +9,7 @@
 - Feature (v2, request cards) — Task creation accepts a description through the API or `kander new --description-file`. Kander stores the submitter's text as a protected `request.md` in the same transaction as the new card. The task list and embedded access facts distinguish request cards from ordinary cards.
 
 - `kander orchestrate` names new terminal tabs and windows `or-<first task ID>`, leaving more room for the task ID.
+- Supported interactive agents automatically get session names derived from their terminal labels, so their sessions are easier to find in the agents' own resume lists.
 
 ## v2.0.0-beta.2 — 2026-11-26
 

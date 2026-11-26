@@ -367,6 +367,9 @@ func fakeMuxFixture(t *testing.T) fakeMux {
 	cfg.KanbanAgent = "claude"
 	cfg.KanbanAgents = map[string]string{"large": "claude", "small": "claude"}
 	cfg.Launcher = "fakemux"
+	// The fake pane runs no interactive composer.
+	renameDisabled := ""
+	cfg.Agents = map[string]config.AgentDefinition{"claude": {RenameCommand: &renameDisabled}}
 	service := commandService(t, cfg)
 	if _, err := config.Save(cfg); err != nil {
 		t.Fatal(err)
