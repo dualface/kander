@@ -5,14 +5,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/i18n"
 )
-
-// workerReasonLimit mirrors the worker's blockReasonLimit: a longer reason is
-// truncated in the blocked state, its logs and its observation.
-const workerReasonLimit = 512
 
 // recordTerminalCalls replaces the fake herdr with one that only records its
 // argv, so a test can prove the resolution never called the terminal.
@@ -149,17 +146,53 @@ func TestRequestBlockReasonsFitTheWorkerReasonLimit(t *testing.T) {
 			i18n.Text(lang, "notify.request_session_without_id", "codex"),
 			i18n.Text(lang, "notify.request_session_mode_none", "codex"),
 			marker(i18n.Text(lang, "notify.session_uncertain_task_pane", i18n.Text(lang, "terminal.session_identity_missing"))),
-			marker(i18n.Text(lang, "notify.session_mismatch_task_pane", reference, reference)),
 			marker(i18n.Text(lang, "launch.tmux_pane_has_no_session_marker", "t1nx")),
-			marker(i18n.Text(lang, "launch.tmux_session_mismatch_task_pane", reference, reference)),
 		}
 		for _, reason := range reasons {
-			if len(reason) > workerReasonLimit {
+			if len(reason) > requestReasonLimit {
 				t.Errorf("%s reason has %d bytes: %s", lang, len(reason), reason)
 			}
 			if strings.Contains(reason, "notify.") || strings.Contains(reason, "launch.") {
 				t.Errorf("%s reason renders a message ID: %s", lang, reason)
 			}
 		}
+	}
+}
+
+// A session mismatch whose reverse lookup finds no pane composes the probe and
+// the lookup diagnostics; the hint still ends the reason whole and within the
+// worker limit, in every language, on both kinds of backend.
+func TestResolveRequestKeepsTheMarkerHintWholeAfterAFailedLookup(t *testing.T) {
+	const card, pane = "0d6a5f3e-5b8c-4c1e-9a7d-2f4b8e1c6a90", "7c1b9e2a-3d4f-4a6b-8c9d-0e1f2a3b4c5d"
+	for _, lang := range []string{"en", "cn", "ja"} {
+		for _, window := range []string{"herdr:w1:t9:w1:p9", "tmux:$1:@1:%1"} {
+			t.Run(lang+"/"+window, func(t *testing.T) {
+				_, _ = setupBoard(t)
+				t.Setenv(config.EnvLang, lang)
+				config.ApplyLanguageArgument([]string{"kander", "--lang", lang})
+				t.Setenv("KANBAN_HERDR_SESSION", pane)
+				t.Setenv("KANBAN_TMUX_PANE_SESSION", pane)
+				t.Setenv("KANBAN_TMUX_LIST_PANES", "")
+				_, err := resolveRequest(window, "claude "+card)
+				if err == nil {
+					t.Fatal("the resolution must fail")
+				}
+				if len(err.Error()) > requestReasonLimit || !strings.HasSuffix(err.Error(), markerHint()) {
+					t.Fatalf("reason has %d bytes or lost its hint: %s", len(err.Error()), err)
+				}
+			})
+		}
+	}
+}
+
+func TestSessionMarkerReasonShortensOnlyTheFailureText(t *testing.T) {
+	_, _ = setupBoard(t)
+	short := "pane gone"
+	if got, want := sessionMarkerReason(short), config.Text("notify.request_session_marker_hint", short); got != want {
+		t.Fatalf("a short failure text changed: %q", got)
+	}
+	got := sessionMarkerReason(strings.Repeat("界", requestReasonLimit))
+	if len(got) > requestReasonLimit || !strings.HasSuffix(got, markerHint()) || !utf8.ValidString(got) {
+		t.Fatalf("reason has %d bytes, lost its hint, or split a character: %q", len(got), got)
 	}
 }
