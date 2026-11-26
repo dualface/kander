@@ -35,7 +35,7 @@ func ConfirmRequest(root, id string, input ConfirmInput, extensions ...Transacti
 }
 
 func checkConfirmation(s Snapshot) error {
-	if !isRequestCard(s.Text) {
+	if !IsRequestCard(s.Text) {
 		return kanbanError("board.confirm_requires_request_card")
 	}
 	if s.Entry.State != "backlog" {

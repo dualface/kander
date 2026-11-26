@@ -56,6 +56,10 @@ func readJournalRecord(root string, file journalFile) (r OperationRecord, err er
 	if err != nil {
 		return r, err
 	}
+	return decodeJournalRecord(data, file)
+}
+
+func decodeJournalRecord(data []byte, file journalFile) (r OperationRecord, err error) {
 	if err = json.Unmarshal(data, &r); err != nil {
 		return r, err
 	}
@@ -63,6 +67,28 @@ func readJournalRecord(root string, file journalFile) (r OperationRecord, err er
 		return r, kanbanError("board.transaction_invalid", file.name)
 	}
 	return r, nil
+}
+
+// RequirePublishedOperation checks an operation ID taken from a result staged
+// inside that operation. A prepared record cannot leave the pending partition
+// until it is marked committed. Absence is normal after partitioning or pruning
+// a committed record, so old durable results remain replayable.
+func RequirePublishedOperation(root, id string) error {
+	file := journalFile{name: id + ".json", partition: "pending"}
+	if !journalName.MatchString(file.name) {
+		return kanbanError("board.transaction_invalid", id)
+	}
+	return withJournalLock(root, true, func() error {
+		data, found, err := fs.ReadRegularFileIfExists(root, file.path(root))
+		if err != nil || !found {
+			return err
+		}
+		r, err := decodeJournalRecord(data, file)
+		if err == nil && r.Phase == "prepared" {
+			return kanbanError("board.transaction_pending", id)
+		}
+		return err
+	})
 }
 
 func readPendingRecords(root string, warnings ...*WarningLog) ([]OperationRecord, error) {

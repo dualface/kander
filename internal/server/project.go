@@ -405,6 +405,11 @@ func (p *project) move(key, id string, req api.Move, h holder) outcome {
 		if err != nil || t.State != req.State || req.ExpectedRevision == nil || t.Revision <= *req.ExpectedRevision {
 			return outcome{}, false
 		}
+		// Only confirmation can admit a request card. Its result cannot
+		// prove that a different move committed.
+		if req.State == "todo" && board.IsRequestCard(t.Text) {
+			return outcome{}, false
+		}
 		return outcome{status: http.StatusOK, body: t}, true
 	}
 	return p.idempotent(key, "move:"+id, req, run, applied)

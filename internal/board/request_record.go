@@ -10,7 +10,8 @@ const (
 	maxRequestDescriptionBytes = 65536
 )
 
-func isRequestCard(text string) bool {
+// IsRequestCard reports whether the card header names a request record.
+func IsRequestCard(text string) bool {
 	return MetadataFrom(text, FieldRequest) != ""
 }
 

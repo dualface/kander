@@ -1,6 +1,8 @@
 package server
 
 import (
+	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -8,6 +10,8 @@ import (
 	"github.com/dualface/kander/v2/internal/board"
 	"github.com/dualface/kander/v2/internal/config"
 )
+
+const confirmOperation = "confirm:"
 
 func confirmRequest(p *project, r *http.Request) outcome {
 	var req api.Confirm
@@ -39,13 +43,15 @@ func (p *project) confirm(key, id string, req api.Confirm, actor string) outcome
 		return outcome{err: err}
 	}
 	defer p.unlockBoard()
-	operation := "confirm:" + id
+	operation := confirmOperation + id
 	// A retry must match both what the client sent and who the host attributed it to.
 	request := struct {
 		Input api.Confirm
 		Actor string
 	}{req, actor}
+	ran := false
 	run := func() outcome {
+		ran = true
 		var task api.Task
 		extension := p.taskTransaction(key, operation, request, id, nil, nil, false, func(_ *board.Transaction, staged *api.Task) error {
 			task = *staged
@@ -55,9 +61,23 @@ func (p *project) confirm(key, id string, req api.Confirm, actor string) outcome
 		if err := board.ConfirmRequest(p.board, id, input, extension); err != nil {
 			return outcome{err: err}
 		}
-		p.changed(id, 0)
 		return outcome{status: http.StatusOK, body: task}
 	}
 	// A successful board transaction already contains the exact completed receipt.
-	return p.idempotent(key, operation, request, run, func() (outcome, bool) { return outcome{}, false })
+	out := p.idempotent(key, operation, request, run, func() (outcome, bool) { return outcome{}, false })
+	if ran && out.err == nil && out.status == http.StatusOK {
+		p.changed(id, 0)
+	}
+	return out
+}
+
+func (p *project) requirePublishedConfirmation(id string, body json.RawMessage) error {
+	var task api.Task
+	if err := json.Unmarshal(body, &task); err != nil {
+		return err
+	}
+	if task.TaskID != id || task.OperationID == "" {
+		return errors.New("confirmation receipt does not identify its board operation")
+	}
+	return board.RequirePublishedOperation(p.board, task.OperationID)
 }

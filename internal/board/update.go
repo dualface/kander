@@ -290,7 +290,7 @@ func UpdateDocument(root, id string, o UpdateOptions) error {
 		if _, err = documentPath(s.Entry, o.Document); err != nil {
 			return err
 		}
-		if strings.EqualFold(o.Document, requestDocument) && isRequestCard(s.Text) {
+		if strings.EqualFold(o.Document, requestDocument) && IsRequestCard(s.Text) {
 			return withUpdateHint(kanbanError("board.transaction_managed", o.Document), "board.update_hint_request")
 		}
 		for _, part := range strings.Split(strings.ToLower(o.Document), "/") {

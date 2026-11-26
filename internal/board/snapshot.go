@@ -190,7 +190,7 @@ func moveWithOptions(entry Entry, root, target string, options MoveOptions, exte
 			if e := checkConfirmation(s); e != nil {
 				return e
 			}
-		} else if entry.State == "backlog" && target == "todo" && isRequestCard(s.Text) {
+		} else if entry.State == "backlog" && target == "todo" && IsRequestCard(s.Text) {
 			return kanbanError("board.confirmation_required")
 		}
 		// Report the final state before dispatch staging can fail with a less

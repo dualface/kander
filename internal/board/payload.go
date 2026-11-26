@@ -92,7 +92,7 @@ func TaskSummaryOf(entry Entry, text string) TaskSummary {
 		TaskGroup:    taskGroupFrom(text),
 		Owner:        MetadataFrom(text, FieldOwner),
 		Submitter:    MetadataFrom(text, FieldSubmitter),
-		Request:      isRequestCard(text),
+		Request:      IsRequestCard(text),
 		Assignee:     MetadataFrom(text, FieldAssignee),
 		DecisionMode: DecisionModeOf(text),
 		CreatedAt:    MetadataFrom(text, FieldCreatedAt),

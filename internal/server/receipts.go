@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/dualface/kander/v2/api"
@@ -71,7 +72,7 @@ func (p *project) idempotent(key, operation string, request any, run func() outc
 			return outcome{err: &api.Error{Code: api.CodeIdempotencyMismatch, Message: "idempotency key reused with a different request"}}
 		}
 		if r.Status == receiptDone {
-			return outcome{status: r.HTTP, body: r.Body}
+			return p.replayReceipt(r)
 		}
 		// Earlier creation intents did not bind a result to the card redo.
 		// Their mutable board state cannot prove whether creation committed.
@@ -105,7 +106,7 @@ func (p *project) finish(rel string, r receipt, out outcome) outcome {
 		if committed.Operation != r.Operation || committed.Digest != r.Digest {
 			return outcome{err: apiError(api.CodeIdempotencyMismatch, "receipt changed during its operation")}
 		}
-		return outcome{status: committed.HTTP, body: committed.Body}
+		return p.replayReceipt(committed)
 	}
 
 	status, body := out.status, out.body
@@ -125,4 +126,13 @@ func (p *project) finish(rel string, r receipt, out outcome) outcome {
 		return outcome{err: err}
 	}
 	return outcome{status: status, body: json.RawMessage(data)}
+}
+
+func (p *project) replayReceipt(r receipt) outcome {
+	if id, confirm := strings.CutPrefix(r.Operation, confirmOperation); confirm && r.HTTP == http.StatusOK {
+		if err := p.requirePublishedConfirmation(id, r.Body); err != nil {
+			return outcome{err: err}
+		}
+	}
+	return outcome{status: r.HTTP, body: r.Body}
 }
