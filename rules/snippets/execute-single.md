@@ -31,7 +31,7 @@ kander move <task-id> working --owner <agent>
 
 ## Distributed Mode
 
-Distributed mode is the v2 client mode, where `server.url` is configured and the board lives in `kander server`. `kander coordinator integrate` (purpose `deliver`, `snippets/commands/coordinator.md`) accepts only a contributing card that is in `review/` and has a published delivery of its current claim generation. A standalone card therefore publishes its delivery by moving into `review/` before it integrates. In this order:
+Distributed mode is the mode every v2 client uses: the board lives in `kander server`, at the configured `server.url` or, when it is omitted, the default loopback server. `kander coordinator integrate` (purpose `deliver`, `snippets/commands/coordinator.md`) accepts only a contributing card that is in `review/` and has a published delivery of its current claim generation. A standalone card therefore publishes its delivery by moving into `review/` before it integrates. In this order:
 
 1. Verify the integration authorization and every gate first (`KANDER-GIT-RULES.md` "Commit and Push", `snippets/git-integrate.md`, and any pause, acceptance, or PR requirement). While one is unmet, keep the card in `working/`, record the pending items, and report.
 2. Close the review plan: sealed, with every batch closed (`snippets/review-evidence-gate.md`). The target of its last batch is the closed review target `C`, a full Git SHA. Never rebase or amend the task branch after this point (`snippets/git-sync.md`).
