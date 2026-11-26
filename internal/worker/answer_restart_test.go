@@ -38,6 +38,8 @@ func TestRestartReplaysTheCommittedFallback(t *testing.T) {
 	if rig.g.audited(fallback.key) != 1 {
 		t.Fatalf("the fallback key is audited once: %d", rig.g.audited(fallback.key))
 	}
+	// The rebuilt typed note is the one sent before the restart.
+	requireOneAttempt(t, "the typed note", rig.g.sendsOf(rig.r.ID, typedNote))
 	rig.h.workAfter(answerBackoffMax)
 	rig.h.workAfter(answerBackoffMax)
 	if got := len(rig.g.sendsOf(rig.r.ID, ackedNote)); got != results+1 {
@@ -74,6 +76,13 @@ func TestRestartReplaysTheTypedNoteBeforeTheResult(t *testing.T) {
 		t.Fatalf("the new loop rebuilds the typed note two revisions back: %v", typed)
 	}
 	requireOneAttempt(t, "the typed note", typed)
+	// The rebuilt result is the fallback that committed before the restart:
+	// the first result was refused, and every later one is that fallback.
+	results := rig.g.sendsOf(rig.r.ID, ackedNote)
+	if len(results) != 3 || results[1].status != http.StatusOK {
+		t.Fatalf("the committed fallback is rebuilt once: %v", results)
+	}
+	requireOneAttempt(t, "the result", results[1:])
 	if rig.g.audited(typed[0].key) != 1 {
 		t.Fatalf("the typed key is audited once: %d", rig.g.audited(typed[0].key))
 	}

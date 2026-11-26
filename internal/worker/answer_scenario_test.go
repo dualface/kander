@@ -123,6 +123,7 @@ func TestScenarioPReplaysTheFallbackAfterTheHolderAnswered(t *testing.T) {
 		t.Fatalf("the fallback is replayed once after the holder answered: %v", replays)
 	}
 	requireOneAttempt(t, "the fallback", rig.g.sendsOf(rig.r.ID, ackedNote)[1:])
+	requireOneAttempt(t, "the typed note", rig.g.sendsOf(rig.r.ID, typedNote))
 	if rig.g.audited(fallback.key) != 1 {
 		t.Fatalf("the fallback key is audited once: %d", rig.g.audited(fallback.key))
 	}
@@ -150,6 +151,7 @@ func TestFallbackFailedBeforeCommitIsDroppedAfterTheHolderAnswered(t *testing.T)
 		t.Fatalf("the replay of the fallback gets a revision conflict: %v", replays)
 	}
 	requireOneAttempt(t, "the fallback", replays)
+	requireOneAttempt(t, "the typed note", rig.g.sendsOf(rig.r.ID, typedNote))
 	if len(rig.h.openAttempts(rig.c)) != 0 {
 		t.Fatalf("the fallback is dropped: %+v", rig.h.openAttempts(rig.c))
 	}
