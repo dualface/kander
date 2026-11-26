@@ -428,7 +428,7 @@ The server logs JSON lines with method, path, status, client ID, operation ID (d
 
 ## Migrating a v1 board
 
-`kander server import [--data DIR] --project NAME [--remote URL] [--from KANBAN_DIR] [--skip-conflicts]` imports one v1 board into an empty project or merges it into an existing project. Before running it, stop the v1 executing agents and other writers of the source board, as for `kander server maintain`. The server itself does not need to stop.
+`kander server import [--data DIR] --project NAME [--git-remote GIT-URL] [--from V1-BOARD-DIR] [--skip-conflicts]` imports one v1 board into an empty project or merges it into an existing project. Before running it, stop the v1 executing agents and other writers of the source board, as for `kander server maintain`. The server itself does not need to stop.
 
 - Without `--from`, the command locates the source as v1 commands do: `KANBAN_DIR`, then the main worktree's `kanban/`, then an upward search from the current directory. A relative `--from` is resolved in the command's directory. The located path must be an existing directory; otherwise the command fails and asks for `--from`. Links are refused later by the board reads.
 - The effective `server.url` selects the path, including any project configuration override. A non-loopback URL always uploads the client’s board to that server. It does not read, create or lock a local server data directory. Supplying `--data` in this mode is a usage error (exit 2) before any request. When the remote server returns 404 or 405, upgrade the server and retry.

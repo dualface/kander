@@ -21,8 +21,7 @@ kander new [--large] [--language <agent language>] [--description-file <UTF8-fil
 ## Arguments
 
 - `type`: `feature`, `bug`, `chore`, or `research`.
-- `slug`: lowercase ASCII letters, digits, and hyphens; the task ID becomes `YYYYMMDD-<slug>-task`.
-- `title...`: the remaining words form the title.
+- `slug`: groups of lowercase ASCII letters and digits joined by single hyphens, with no hyphen at either end; the task ID becomes `YYYYMMDD-<slug>-task`.
 - `--large`: `SIZE: large` (large-task documents, `report.md` required for completion). Default is `small`.
 - `--language <agent language>`: the card `LANGUAGE`; default is the configured `agent_language`.
 - `--description-file <UTF8-file>`: read the submitter's description from this file, at most once. The file must contain non-blank UTF-8 text and be at most 131072 bytes before normalization.

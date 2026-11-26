@@ -9,17 +9,18 @@ Dispatches items back to the original executing agent. It is the single interfac
 ## Syntax
 
 ```text
-kander notify [--pane HERDR-PANE-ID] [--timeout SECONDS] (--message TEXT | --message-file FILE) [--dispatch-id <id>] [--kind fix|sync|wrap-up] [--base <full-SHA>] [--evidence-file <JSON>] <task-id>
+kander notify [--pane PANE] [--timeout SECONDS] (--message TEXT | --message-file FILE) [--dispatch-id <id>] [--kind fix|sync|wrap-up] [--base <full-SHA>] [--evidence-file <JSON>] <task-id>
 ```
 
 ## Arguments
 
 - `task-id`: the card.
 - `--message TEXT | --message-file FILE`: exactly one, non-empty, written in the card's `LANGUAGE`.
-- `--timeout SECONDS`: greater than 60; default 120.
-- `--pane HERDR-PANE-ID`: explicit delivery target; no reverse lookup is performed.
-- `--dispatch-id`, `--kind fix|sync|wrap-up`, `--base <full-SHA>`, `--evidence-file <JSON>`: durable dispatch (`snippets/commands/dispatch.md`).
-- `fix|sync|review|stop`: with `request`, the kind of work the proposal asks for.
+- `--timeout SECONDS`: for a durable dispatch (any of `--dispatch-id`, `--kind`, `--base`, `--evidence-file`), how long the executing agent has to accept the round, in seconds. The value must be more than 60 and at most 86400; default 120. A plain message only checks the value and does not use it.
+- `--pane PANE`: the pane address that this host recorded for the card's current execution: the pane of its `WINDOW`, or the launcher's opaque address. It confirms the delivery target and selects no other pane; a pane of another execution or host is refused. No reverse lookup is performed.
+- `--dispatch-id`, `--kind fix|sync|wrap-up`, `--evidence-file <JSON>`: select durable dispatch (`snippets/commands/dispatch.md`).
+- `--base <full-SHA>`: the full commit SHA that the dispatched round is bound to: the current target of the review batch for `fix` and `sync`, the `source_commit` of the wrap-up evidence for `wrap-up`. Without it, Kander uses the `HEAD` of the task worktree that this host records for the card, otherwise the `HEAD` of the current directory; pass it explicitly. It is not the `--base <ref>` of `kander check delivery`.
+- `fix|sync|review|stop|note`: with `request`, the kind of work the proposal asks for; `note` carries a message and asks for no work. A request is a proposal that the holder answers, not a durable dispatch: `kander request <task-id> fix` is not `kander notify --kind fix`.
 - `message...`: with `request`, the text of the proposal.
 - `list`, `show`, `answer`: the subcommands of `request`: list the requests of a card, print one request, and answer one as the live holder.
 - `request-id`: the request that `request show` prints or `request answer` answers.

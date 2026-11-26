@@ -15,6 +15,7 @@ import (
 
 	"github.com/dualface/kander/v2/api"
 	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/command/commandtest"
 	"github.com/dualface/kander/v2/internal/config"
 )
 
@@ -373,4 +374,19 @@ func runImportCommandForTest(o importOptions, stdout, stderr io.Writer, tty bool
 		panic(err)
 	}
 	return importCommand(o, target, stdout, stderr, tty, signals)
+}
+
+// TestImportCommandSendsTheGitRemoteFlagAsTheRequestRemote parses a real command line, so
+// the flag name `--git-remote` reaches api.ImportRequest.Remote and binds the project.
+func TestImportCommandSendsTheGitRemoteFlagAsTheRequestRemote(t *testing.T) {
+	source := v1Board(t)
+	useImportTarget(t, "http://127.0.0.1:1")
+	const remote = "https://example.com/demo.git"
+	code, stdout, stderr := commandtest.Capture(func() int {
+		return commandtest.Run(NewImportCommand(), "--data", t.TempDir(), "--project", "demo", "--git-remote", remote, "--from", source)
+	})
+	var result api.ImportResult
+	if err := json.Unmarshal([]byte(stdout), &result); code != 0 || err != nil || result.Project.Remote != remote {
+		t.Fatalf("import: code=%d remote=%q err=%v stdout=%q stderr=%q", code, result.Project.Remote, err, stdout, stderr)
+	}
 }

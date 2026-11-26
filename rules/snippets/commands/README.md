@@ -43,7 +43,7 @@ kander server start [--data DIR] [--listen ADDR] [--ttl D] [--renew D] [--foregr
 kander server stop
 kander server restart
 kander server status
-kander server import [--data DIR] --project NAME [--remote URL] [--from KANBAN_DIR] [--skip-conflicts]
+kander server import [--data DIR] --project NAME [--git-remote GIT-URL] [--from V1-BOARD-DIR] [--skip-conflicts]
 kander server maintain [--data DIR] --project NAME [--maintenance]
 kander server projects [--data DIR]
 kander doctor
@@ -66,9 +66,9 @@ kander confirm <task-id> --expect-revision <revision>
 kander update <task-id> --document <relative-path> --file <UTF8-input> --expect-revision <revision> [--contract-decision-file <UTF8-decision>] [--dispatch-id <id> --execution-epoch <epoch>]
 kander start [--agent <configured-agent>] [--launcher <launcher>] [task-id]
 kander orchestrate [--agent <configured-agent>] [--launcher <launcher>] (--message TEXT | --message-file FILE) <task-id|task-group-id>...
-kander resume [--agent <configured-agent> [--decision <reference>]] [--timeout SECONDS] (--message TEXT | --message-file FILE) [--launcher <launcher>] [--dispatch-id <id>] [--kind fix|sync|wrap-up] [--base <full-SHA>] [--evidence-file <JSON>] <task-id>
+kander resume [--agent <configured-agent>] [--decision <reference>] [--timeout SECONDS] (--message TEXT | --message-file FILE) [--launcher <launcher>] [--dispatch-id <id>] [--kind fix|sync|wrap-up] [--base <full-SHA>] [--evidence-file <JSON>] <task-id>
 kander resume --adopt --decision <reference> <task-id>
-kander notify [--pane HERDR-PANE-ID] [--timeout SECONDS] (--message TEXT | --message-file FILE) [--dispatch-id <id>] [--kind fix|sync|wrap-up] [--base <full-SHA>] [--evidence-file <JSON>] <task-id>
+kander notify [--pane PANE] [--timeout SECONDS] (--message TEXT | --message-file FILE) [--dispatch-id <id>] [--kind fix|sync|wrap-up] [--base <full-SHA>] [--evidence-file <JSON>] <task-id>
 kander dispatch prepare <absolute-UTF8-intent.json>
 kander dispatch authorize-wrap-up <absolute-UTF8-request.json>
 kander dispatch show <task-id> <dispatch-id>

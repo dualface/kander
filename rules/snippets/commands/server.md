@@ -11,7 +11,7 @@ kander server start [--data DIR] [--listen ADDR] [--ttl D] [--renew D] [--foregr
 kander server stop
 kander server restart
 kander server status
-kander server import [--data DIR] --project NAME [--remote URL] [--from KANBAN_DIR] [--skip-conflicts]
+kander server import [--data DIR] --project NAME [--git-remote GIT-URL] [--from V1-BOARD-DIR] [--skip-conflicts]
 kander server maintain [--data DIR] --project NAME [--maintenance]
 kander server projects [--data DIR]
 ```
@@ -30,8 +30,8 @@ kander server projects [--data DIR]
 - `projects`: list the registry without writing or requiring a running server.
 - `--foreground`: with `start`, serve in this process instead of detaching.
 - `--project NAME`: the service project name that `import` and `maintain` act on, the name a bound checkout holds in `project.name`. Required; it is not read from the configuration.
-- `--remote URL`: with `import`, the Git remote URL of the project's repository. It is not the address of the Kander server (see `import`). A project without a remote is bound to it; a project bound to another remote refuses the import. Use the exact text that `git remote get-url origin` prints in the checkouts of the project, or omit it: the first command run from such a checkout binds the project.
-- `--from KANBAN_DIR`: with `import`, the directory of the paused v1 board (the `kanban/` directory itself); a relative path is resolved in the current directory. Default: see `import`.
+- `--git-remote GIT-URL`: with `import`, the Git remote URL of the project's repository. It is not the address of the Kander server (see `import`). A project without a remote is bound to it; a project bound to another remote refuses the import. Use the exact text that `git remote get-url origin` prints in the checkouts of the project, or omit it: the first command run from such a checkout binds the project.
+- `--from V1-BOARD-DIR`: with `import`, the directory of the paused v1 board (the `kanban/` directory itself); a relative path is resolved in the current directory. Default: see `import`.
 - `--skip-conflicts`: with `import`, keep the destination versions of conflicting cards and shared records and merge the rest. Without it, any conflict rejects the entire import.
 - `--maintenance`: with `maintain`, acknowledge that all writers and executors are paused.
 
@@ -55,6 +55,9 @@ kander server import --project demo --from /tmp/kanban
 
 # Import into the configured remote or local server, keeping destination versions on conflict
 kander server import --project demo --from /tmp/historical-kanban --skip-conflicts
+
+# Import a v1 board and bind the project to its Git remote
+kander server import --project demo --from /tmp/kanban --git-remote https://example.com/demo.git
 
 # Maintain legacy file cards of a project offline
 kander server maintain --project demo --maintenance
