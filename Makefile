@@ -8,7 +8,7 @@ LDFLAGS ?=
 # succeeds with --always (short hash only); treat that like "no tag" and use
 # dev, matching a non-git directory where describe fails.
 VERSION ?= $(shell if git describe --tags >/dev/null 2>&1; then git describe --tags --always; else echo dev; fi)
-VERSION_PACKAGE := github.com/dualface/kander/internal/version
+VERSION_PACKAGE := github.com/dualface/kander/v2/internal/version
 VERSION_LDFLAGS := -X $(VERSION_PACKAGE).Version=$(VERSION)
 
 ifeq ($(OS),Windows_NT)

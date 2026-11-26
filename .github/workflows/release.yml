@@ -42,7 +42,7 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
 
-          VERSION_PACKAGE=github.com/dualface/kander/internal/version
+          VERSION_PACKAGE=github.com/dualface/kander/v2/internal/version
           LDFLAGS="-s -w -X ${VERSION_PACKAGE}.Version=${VERSION}"
 
           mkdir -p dist

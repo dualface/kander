@@ -18,7 +18,7 @@ if not defined VERSION (
     )
 )
 
-set "VERSION_PACKAGE=github.com/dualface/kander/internal/version"
+set "VERSION_PACKAGE=github.com/dualface/kander/v2/internal/version"
 
 go build -ldflags "-X %VERSION_PACKAGE%.Version=%VERSION%" -o kander.exe ./cmd/kander
 if errorlevel 1 exit /b 1

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Breaking (v2, Go module path) — The Go module is now `github.com/dualface/kander/v2`. Embedders must require that module and import `github.com/dualface/kander/v2/api`, `github.com/dualface/kander/v2/server`, `github.com/dualface/kander/v2/client`, and `github.com/dualface/kander/v2/cli`. The `v2.0.0-beta.1` tag predates the change and cannot be required under either path. Use a later 2.x tag or a pseudo-version for a later commit on `v2`. Builds that inject the version with `-ldflags -X` must use `github.com/dualface/kander/v2/internal/version.Version`. Go silently ignores the old path and the binary reports `dev`. The executable, its commands, the `/api/v1` protocol, and the 1.x releases from `main` are unchanged.
+
 ## v2.0.0-beta.1 — 2026-11-26
 
 - Feature (v2, self-update channels) — The TUI update check of a 2.x binary follows its release channel. A prerelease (`2.Y.Z-alpha.N`, `-beta.N`, or `-rc.N`) now checks for updates and installs only a newer 2.x prerelease; a `2.Y.Z` release installs only a newer 2.x release, even when GitHub's Latest is a 1.x release. The two channels never cross, so moving from a beta to `2.0.0` needs one manual reinstall. Development builds, git describe builds, versions with build metadata, and non-2.x versions never check. The check reads one page of the GitHub releases list instead of `releases/latest`. A Homebrew install on the prerelease channel neither checks nor updates, because the tap carries releases only. One machine has one global `kander`: installing v2 replaces 1.x.

@@ -142,7 +142,7 @@ jobs:
         env:
           VERSION: ${{ steps.mode.outputs.version }}
         run: |
-          $ldflags = "-s -w -X github.com/dualface/kander/internal/version.Version=$env:VERSION"
+          $ldflags = "-s -w -X github.com/dualface/kander/v2/internal/version.Version=$env:VERSION"
           foreach ($arch in 'amd64', 'arm64') {
             $env:CGO_ENABLED = '0'; $env:GOOS = 'windows'; $env:GOARCH = $arch
             go build -trimpath -ldflags $ldflags -o "msix-bin/$arch/kander.exe" ./cmd/kander

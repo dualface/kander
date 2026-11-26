@@ -1,6 +1,6 @@
 # Embedding Kander v2
 
-Another Go module can import `github.com/dualface/kander/api`, `server`, `client`, and `cli`. Pin the Kander revision used by the host and update them together. The Go embedding API does not promise backward compatibility. The standalone executable and its unhooked `/api/v1` service keep their existing behavior.
+Another Go module can import `github.com/dualface/kander/v2/api`, `github.com/dualface/kander/v2/server`, `github.com/dualface/kander/v2/client`, and `github.com/dualface/kander/v2/cli`. Require `github.com/dualface/kander/v2` in `go.mod` with `go get github.com/dualface/kander/v2@<commit or tag>`. The `v2.0.0-beta.1` tag was cut before the module path changed and cannot be required. Use a later 2.x tag or a pseudo-version for a later commit on `v2`. Pin the Kander revision used by the host and update them together. The Go embedding API does not promise backward compatibility. The standalone executable and its unhooked `/api/v1` service keep their existing behavior.
 
 ## Open the server
 

@@ -3,7 +3,7 @@ module example.com/kander-embedder
 go 1.25.0
 
 require (
-	github.com/dualface/kander v0.0.0
+	github.com/dualface/kander/v2 v2.0.0
 	github.com/spf13/cobra v1.10.2
 )
 
@@ -61,4 +61,4 @@ require (
 	modernc.org/sqlite v1.59.0 // indirect
 )
 
-replace github.com/dualface/kander => ../..
+replace github.com/dualface/kander/v2 => ../..

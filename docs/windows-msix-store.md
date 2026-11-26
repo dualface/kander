@@ -43,7 +43,7 @@ pwsh packaging/msix/build-msix.ps1 -Version 1.0.0 -BinDir bin -OutDir out
 pwsh packaging/msix/build-msix.ps1 -Version 1.0.0 -BinDir bin -OutDir out -TestIdentity -TestSign
 ```
 
-- `-BinDir` holds `amd64\kander.exe` and `arm64\kander.exe`, built with `-ldflags "-X github.com/dualface/kander/internal/version.Version=<X.Y.Z>"`. `-Arches` narrows the architectures (default `amd64 arm64`).
+- `-BinDir` holds `amd64\kander.exe` and `arm64\kander.exe`, built with `-ldflags "-X github.com/dualface/kander/v2/internal/version.Version=<X.Y.Z>"`. `-Arches` narrows the architectures (default `amd64 arm64`).
 - Without `-TestIdentity`, a missing package identity value fails the build; there are no defaults.
 - Version mapping: kander `X.Y.Z` becomes MSIX `X.Y.Z.0`. The Store requires revision 0, every part at most 65535, and a first part above 0; customers receive an update only when its version is higher than the one they have. A Store build therefore rejects a kander version whose first part is 0 (every `0.Y.Z` release); a sideload test bundle may keep it. Prerelease versions (with `-`) are rejected.
 - `-ValidateOnly` checks the version and identity, prints the MSIX version, and builds nothing; the workflow uses it to check these rules on every run.

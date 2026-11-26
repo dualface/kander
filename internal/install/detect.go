@@ -97,7 +97,7 @@ func looksLikeModule(dir string) bool {
 		return false
 	}
 	line, _, _ := splitFirstLine(data)
-	return line == "module github.com/dualface/kander"
+	return line == "module github.com/dualface/kander/v2"
 }
 
 func splitFirstLine(data []byte) (string, []byte, bool) {
