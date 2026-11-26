@@ -229,9 +229,15 @@ func TestCheckUpdateRejectsBadReleaseList(t *testing.T) {
 	if _, ok := updateAssetName(runtime.GOOS, runtime.GOARCH); !ok {
 		t.Skipf("no release asset for %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
-	oversized := `[{"tag_name":"v2.0.1","body":"` + strings.Repeat("x", maxReleaseList) + `"}]`
+	// A complete entry, so only the size cap can refuse it.
+	oversized := `[{"tag_name":"v2.0.1","draft":false,"prerelease":false,"body":"` + strings.Repeat("x", maxReleaseList) + `"}]`
+	for _, current := range []string{"2.0.0", "2.0.0-beta.1"} {
+		stubUpdateCheck(t, current, directExecutable, oversized)
+		if info, err := CheckUpdate(t.Context()); err == nil || !strings.Contains(err.Error(), "exceeds size limit") || info != nil {
+			t.Fatalf("oversized/%s: info=%+v err=%v", current, info, err)
+		}
+	}
 	for name, body := range map[string]string{
-		"oversized": oversized,
 		"not json":  "<html>",
 		"object":    `{"tag_name":"v2.0.1","draft":false,"prerelease":false}`,
 		"null":      `null`,
@@ -239,6 +245,7 @@ func TestCheckUpdateRejectsBadReleaseList(t *testing.T) {
 		"no draft":  `[{"tag_name":"v2.0.1","prerelease":false}]`,
 		"null flag": `[{"tag_name":"v2.0.1","draft":false,"prerelease":null}]`,
 		"no tag":    `[{"draft":false,"prerelease":false}]`,
+		"empty tag": `[{"tag_name":"v2.0.1","draft":false,"prerelease":false},{"tag_name":"","draft":false,"prerelease":false}]`,
 		"bad item":  `[{"tag_name":"v2.0.1","draft":false,"prerelease":false},{"tag_name":7,"draft":false,"prerelease":false}]`,
 	} {
 		for _, current := range []string{"2.0.0", "2.0.0-beta.1"} {

@@ -51,8 +51,8 @@ type releaseEntry struct {
 
 // newestInChannel decodes one releases list page and returns the highest
 // version newer than current (bare) in current's channel, or "" when none
-// is. The page must be a JSON array whose every item carries a string
-// tag_name and boolean draft and prerelease; anything else fails the whole
+// is. The page must be a JSON array whose every item carries a non-empty
+// string tag_name and boolean draft and prerelease; anything else fails the whole
 // check instead of being read in part. A candidate must be published, carry
 // a v-prefixed tag of the same channel, and have a GitHub prerelease flag
 // that agrees with that channel.
@@ -69,7 +69,7 @@ func newestInChannel(body []byte, current string) (string, error) {
 		return "", errors.New("decode release list: not a JSON array")
 	}
 	for i, release := range releases {
-		if release == nil || release.TagName == nil || release.Draft == nil || release.Prerelease == nil {
+		if release == nil || release.TagName == nil || *release.TagName == "" || release.Draft == nil || release.Prerelease == nil {
 			return "", fmt.Errorf("decode release list: item %d lacks tag_name, draft, or prerelease", i)
 		}
 	}
