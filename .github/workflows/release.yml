@@ -24,9 +24,12 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # The v2 branch releases only 2.x: v2.Y.Z, or a prerelease
+      # v2.Y.Z-(alpha|beta|rc).N. scripts/release.sh checks the same pattern,
+      # and the self-update channels of internal/install accept only these.
       - name: Validate release tag
         run: |
-          [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
+          [[ "${GITHUB_REF_NAME}" =~ ^v2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.(0|[1-9][0-9]*))?$ ]]
 
       - name: Test
         run: |
@@ -71,9 +74,10 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: kander ${{ env.VERSION }}
           generate_release_notes: true
-          # A tag with a suffix (v2.0.0-alpha.N) is a prerelease. It never
-          # becomes the latest release, so the stable update check of v1
-          # clients (releases/latest) never offers it.
+          # A tag with a suffix (v2.Y.Z-alpha|beta|rc.N) is a prerelease. It
+          # never becomes the latest release, so the update check of v1
+          # clients (releases/latest) never offers it; v2 prerelease clients
+          # find it in the releases list.
           prerelease: ${{ contains(github.ref_name, '-') }}
           make_latest: ${{ !contains(github.ref_name, '-') }}
           files: |

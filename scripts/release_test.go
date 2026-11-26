@@ -3,6 +3,7 @@ package scripts
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -66,7 +67,7 @@ func TestReleaseSkipTapExitStatus(t *testing.T) {
 		if err := os.WriteFile(checksums, nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
-		code, stderr := runRelease(t, dir, "--skip-tap", "--checksums", checksums, "v0.0.0")
+		code, stderr := runRelease(t, dir, "--skip-tap", "--checksums", checksums, "v2.0.0")
 		if code != 0 {
 			t.Fatalf("exit code = %d, want 0; stderr:\n%s", code, stderr)
 		}
@@ -78,7 +79,7 @@ func TestReleaseSkipTapExitStatus(t *testing.T) {
 	t.Run("missing checksums file fails", func(t *testing.T) {
 		dir := newWorkTree(t)
 		missing := filepath.Join(t.TempDir(), "missing.txt")
-		code, stderr := runRelease(t, dir, "--skip-tap", "--checksums", missing, "v0.0.0")
+		code, stderr := runRelease(t, dir, "--skip-tap", "--checksums", missing, "v2.0.0")
 		if code == 0 {
 			t.Fatalf("exit code = 0, want nonzero; stderr:\n%s", stderr)
 		}
@@ -89,9 +90,9 @@ func TestReleaseSkipTapExitStatus(t *testing.T) {
 }
 
 // gateRig is a release.sh fixture that reaches the local test gate: a bare
-// repository as origin, a work tree on main whose HEAD equals origin/main and
-// whose CHANGELOG.md names the version, and a fake go and gh at the front of
-// PATH. Nothing here touches the real HOME, network, or repository tags.
+// repository as origin, a work tree on a release branch whose HEAD equals the
+// origin branch and whose CHANGELOG.md names the version, and a fake go and gh
+// at the front of PATH. Nothing here touches the real HOME, network, or repository tags.
 type gateRig struct {
 	work      string   // work tree release.sh runs in
 	origin    string   // bare repository acting as origin
@@ -100,7 +101,14 @@ type gateRig struct {
 	callerEnv []string // environment of the script, minus per-test additions
 }
 
-const gateVersion = "v0.0.1"
+const (
+	gateVersion       = "v2.0.0"
+	gatePrerelease    = "v2.0.0-beta.1"
+	prereleaseBranch  = "v2"
+	tapSkippedNotice  = "prereleases never reach the tap"
+	tapChecksumsStep  = "reading checksums.txt"
+	changelogTemplate = "# Changelog\n\n## %s — 2026-01-01\n\n- first\n"
+)
 
 // fakeGo records every call: its arguments and the variables the gate is meant
 // to control. It answers `go env NAME...` with the value of FAKE_NAME. A
@@ -151,7 +159,16 @@ esac
 exit 1
 `
 
+// newGateRig builds the release fixture on main with gateVersion at the top of
+// CHANGELOG.md.
 func newGateRig(t *testing.T) *gateRig {
+	t.Helper()
+	return newGateRigOn(t, "main", gateVersion)
+}
+
+// newGateRigOn builds the release fixture on branch, with changelogVersion at
+// the top of CHANGELOG.md.
+func newGateRigOn(t *testing.T, branch, changelogVersion string) *gateRig {
 	t.Helper()
 	root := t.TempDir()
 	rig := &gateRig{
@@ -192,16 +209,16 @@ func newGateRig(t *testing.T) *gateRig {
 	}
 
 	rig.git(t, root, "init", "-q", "--bare", rig.origin)
-	rig.git(t, root, "-C", rig.origin, "symbolic-ref", "HEAD", "refs/heads/main")
+	rig.git(t, root, "-C", rig.origin, "symbolic-ref", "HEAD", "refs/heads/"+branch)
 	rig.git(t, root, "clone", "-q", rig.origin, rig.work)
-	rig.git(t, rig.work, "checkout", "-q", "-b", "main")
-	changelog := "# Changelog\n\n## " + gateVersion + " — 2026-01-01\n\n- first\n"
+	rig.git(t, rig.work, "checkout", "-q", "-b", branch)
+	changelog := fmt.Sprintf(changelogTemplate, changelogVersion)
 	if err := os.WriteFile(filepath.Join(rig.work, "CHANGELOG.md"), []byte(changelog), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	rig.git(t, rig.work, "add", "CHANGELOG.md")
 	rig.git(t, rig.work, "commit", "-q", "-m", "changelog")
-	rig.git(t, rig.work, "push", "-q", "origin", "main")
+	rig.git(t, rig.work, "push", "-q", "origin", branch)
 	return rig
 }
 
@@ -222,11 +239,18 @@ func (r *gateRig) git(t *testing.T, dir string, args ...string) string {
 // right after the tag is pushed and the fake gh reports the release assets.
 func (r *gateRig) release(t *testing.T, extra []string, args ...string) (int, string) {
 	t.Helper()
+	return r.run(t, extra, append([]string{"--skip-tap"}, args...)...)
+}
+
+// run is release without the implied --skip-tap. The fake gh cannot serve
+// checksums.txt, so a run that reaches the tap step fails.
+func (r *gateRig) run(t *testing.T, extra []string, args ...string) (int, string) {
+	t.Helper()
 	script, err := filepath.Abs("release.sh")
 	if err != nil {
 		t.Fatalf("resolve release.sh: %v", err)
 	}
-	cmd := exec.Command("bash", append([]string{script, "--skip-tap"}, args...)...)
+	cmd := exec.Command("bash", append([]string{script}, args...)...)
 	cmd.Dir = r.work
 	cmd.Env = append(append([]string{}, r.callerEnv...), extra...)
 	var stderr bytes.Buffer
@@ -440,5 +464,83 @@ func TestReleaseLocalGate(t *testing.T) {
 			t.Errorf("local tags = %q, want %q", got, gateVersion)
 		}
 		rig.requireNoLeftovers(t)
+	})
+}
+
+// TestReleaseVersionChannels covers the 2.x version rules: the script accepts
+// only v2.Y.Z and v2.Y.Z-(alpha|beta|rc).N, cuts a prerelease from the v2
+// branch only, and never lets a prerelease reach the Homebrew tap.
+func TestReleaseVersionChannels(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("release.sh is a maintainer bash script; not run on Windows")
+	}
+	for _, tool := range []string{"bash", "git", "awk", "sh"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skipf("release.sh needs %s, which is not on PATH", tool)
+		}
+	}
+
+	t.Run("versions outside 2.x are rejected", func(t *testing.T) {
+		rig := newGateRig(t)
+		for _, bad := range []string{"v1.6.4", "v3.0.0", "v2.0.0-dev", "v2.0.0-beta", "v2.0.0-beta.01", "v2.0.0-preview.1", "2.0.0"} {
+			code, stderr := rig.run(t, nil, bad)
+			if code == 0 || !strings.Contains(stderr, "version must look like v2.0.0 or v2.0.0-beta.1") {
+				t.Errorf("%s: exit code = %d; stderr:\n%s", bad, code, stderr)
+			}
+		}
+		if got := rig.originTags(t); got != "" {
+			t.Errorf("origin tags = %q, want none", got)
+		}
+	})
+
+	t.Run("prerelease outside the v2 branch is rejected", func(t *testing.T) {
+		rig := newGateRigOn(t, "main", gatePrerelease)
+		code, stderr := rig.run(t, nil, "--no-test", gatePrerelease)
+		if code == 0 || !strings.Contains(stderr, "releases are cut from v2, current branch is main") {
+			t.Fatalf("exit code = %d; stderr:\n%s", code, stderr)
+		}
+		if got := rig.originTags(t); got != "" {
+			t.Errorf("origin tags = %q, want none", got)
+		}
+	})
+
+	t.Run("prerelease changelog error points at the v2 branch", func(t *testing.T) {
+		rig := newGateRigOn(t, prereleaseBranch, "v2.0.0-beta.0")
+		code, stderr := rig.run(t, nil, "--no-test", gatePrerelease)
+		if code == 0 || !strings.Contains(stderr, "commit it on v2, and push v2") || strings.Contains(stderr, "develop") {
+			t.Fatalf("exit code = %d; stderr:\n%s", code, stderr)
+		}
+	})
+
+	t.Run("prerelease on v2 tags and skips the tap", func(t *testing.T) {
+		rig := newGateRigOn(t, prereleaseBranch, gatePrerelease)
+		code, stderr := rig.run(t, nil, gatePrerelease)
+		if code != 0 {
+			t.Fatalf("exit code = %d, want 0; stderr:\n%s", code, stderr)
+		}
+		if _, calls := rig.splitCalls(t); len(calls) != 2 {
+			t.Errorf("fake go recorded %d gate calls, want 2 (vet, test): %v", len(calls), calls)
+		}
+		if !strings.Contains(stderr, tapSkippedNotice) || strings.Contains(stderr, tapChecksumsStep) {
+			t.Errorf("prerelease reached the tap step; stderr:\n%s", stderr)
+		}
+		if got := rig.localTags(t); got != gatePrerelease {
+			t.Errorf("local tags = %q, want %q", got, gatePrerelease)
+		}
+		if !strings.Contains(rig.originTags(t), "refs/tags/"+gatePrerelease) {
+			t.Errorf("origin lacks tag %s", gatePrerelease)
+		}
+		rig.requireNoLeftovers(t)
+	})
+
+	t.Run("skip-tag prerelease skips the tap", func(t *testing.T) {
+		rig := newGateRigOn(t, prereleaseBranch, gatePrerelease)
+		code, stderr := rig.run(t, nil, "--skip-tag", gatePrerelease)
+		if code != 0 || !strings.Contains(stderr, tapSkippedNotice) || strings.Contains(stderr, tapChecksumsStep) {
+			t.Fatalf("exit code = %d; stderr:\n%s", code, stderr)
+		}
+		if got := rig.originTags(t); got != "" {
+			t.Errorf("origin tags = %q, want none with --skip-tag", got)
+		}
 	})
 }

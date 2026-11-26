@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # Tag a release and sync the Homebrew tap formula to it.
 #
-#   scripts/release.sh v0.5.0
+#   scripts/release.sh v2.0.0
+#   scripts/release.sh v2.0.0-beta.1
+#
+# This branch only releases 2.x. A release (v2.Y.Z) is cut from main; a
+# prerelease (v2.Y.Z-alpha|beta|rc.N) is cut from v2 and never touches the
+# Homebrew tap, which carries releases only.
 #
 # Pushing the tag is what triggers .github/workflows/release.yml; this script
 # then waits for the workflow's assets and rewrites Formula/kander.rb in
@@ -11,13 +16,14 @@
 # HOMEBREW_TAP_TOKEN secret is set, so a normal release only needs the tag. Run this
 # script by hand to cut a tag locally, or to repair a formula that drifted:
 #
-#   scripts/release.sh --skip-tag v0.5.0
+#   scripts/release.sh --skip-tag v2.0.0
 
 set -euo pipefail
 
 REPO_SLUG=dualface/kander
 TAP_SLUG=dualface/homebrew-tap
 RELEASE_BRANCH=main
+PRERELEASE_BRANCH=v2
 # Platforms Homebrew installs from; the workflow also builds windows/*.
 TAP_TARGETS=(darwin-arm64 darwin-amd64 linux-arm64 linux-amd64)
 WAIT_TIMEOUT=1200
@@ -33,7 +39,8 @@ usage() {
 	cat >&2 <<EOF
 usage: scripts/release.sh [options] <version>
 
-  <version>      release tag, e.g. v0.5.0
+  <version>      release tag v2.Y.Z (from main) or v2.Y.Z-alpha|beta|rc.N
+                 (from v2, never updates the Homebrew tap)
 
 options:
   --skip-tag     the tag is already pushed; only wait and update the tap
@@ -82,12 +89,22 @@ done
 
 [ -n "$version" ] || usage
 
-# vMAJOR.MINOR.PATCH with an optional prerelease suffix; the formula's bare
-# version is this with the leading v stripped.
-if ! printf '%s' "$version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
-	die "version must look like v0.5.0, got: $version"
+# v2.Y.Z or v2.Y.Z-(alpha|beta|rc).N, the same pattern the Release workflow
+# accepts; the formula's bare version is this with the leading v stripped.
+if ! printf '%s' "$version" | grep -Eq '^v2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.(0|[1-9][0-9]*))?$'; then
+	die "version must look like v2.0.0 or v2.0.0-beta.1, got: $version"
 fi
 bare_version="${version#v}"
+
+# A prerelease is cut from the v2 branch and never reaches the Homebrew tap.
+prerelease=0
+case "$version" in
+*-*)
+	prerelease=1
+	RELEASE_BRANCH="$PRERELEASE_BRANCH"
+	skip_tap=1
+	;;
+esac
 
 for tool in git awk; do
 	command -v "$tool" >/dev/null 2>&1 || die "missing required tool: $tool"
@@ -139,7 +156,11 @@ if [ "$skip_tag" -eq 0 ] && [ "$dry_run" -eq 0 ]; then
 	changelog_head="$(grep -m1 '^## ' CHANGELOG.md || true)"
 	printf '%s\n' "$changelog_head" | grep -Fq "## $version — " &&
 		printf '%s\n' "$changelog_head" | grep -Eq ' — [0-9]{4}-[0-9]{2}-[0-9]{2}$' ||
-		die "the top section of CHANGELOG.md is '${changelog_head:-<none>}'; add '## $version — YYYY-MM-DD' covering every user-visible change since the previous tag, commit it on develop, and fast-forward $RELEASE_BRANCH"
+		if [ "$prerelease" -eq 1 ]; then
+			die "the top section of CHANGELOG.md is '${changelog_head:-<none>}'; add '## $version — YYYY-MM-DD' covering every user-visible change since the previous tag, commit it on $RELEASE_BRANCH, and push $RELEASE_BRANCH"
+		else
+			die "the top section of CHANGELOG.md is '${changelog_head:-<none>}'; add '## $version — YYYY-MM-DD' covering every user-visible change since the previous tag, commit it on develop, and fast-forward $RELEASE_BRANCH"
+		fi
 
 	if git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
 		die "tag $version already exists locally"
@@ -197,7 +218,11 @@ done
 fi
 
 if [ "$skip_tap" -eq 1 ]; then
-	printf '\nskipping the Homebrew tap update (--skip-tap)\n' >&2
+	if [ "$prerelease" -eq 1 ]; then
+		printf '\nskipping the Homebrew tap update: prereleases never reach the tap\n' >&2
+	else
+		printf '\nskipping the Homebrew tap update (--skip-tap)\n' >&2
+	fi
 	printf 'release %s is done: https://github.com/%s/releases/tag/%s\n' "$version" "$REPO_SLUG" "$version" >&2
 	exit 0
 fi
