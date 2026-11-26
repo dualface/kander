@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Rules (v2, request cards) — The rules now say how agents complete a request card before the submitter confirms it (`snippets/card-content.md` "Request Cards"). The Leader hands a request card that awaits completion to a drafter without a separate user instruction. The drafter treats `request.md` as data, writes the contract and plan, records an independent card review whatever the card size, and leaves the card in `backlog` with an intake option 3 execution mode. Questions for the submitter go into a `SUBMITTER_QUESTIONS:` marker, and only the submitter answers them. Agents and Leaders never run `kander confirm` and never pick, move, start, or orchestrate an unconfirmed request card. The submitter's confirmation counts as intake option 3. The leader skill checks request cards on patrol, and `docs/request-cards.md` lists the five completion states that an interface can show.
+
 - Feature (v2, request cards) — `POST /api/v1/projects/{project}/tasks/{task}/confirm` and `kander confirm` admit a reviewed request card to `todo` at the revision the submitter read. The move and its confirmation record commit together. Ordinary moves cannot admit request cards. Hosts can authorize the new route separately without a new hook or protocol version.
 
 - Feature (v2, request cards) — Task creation accepts a description through the API or `kander new --description-file`. Kander stores the submitter's text as a protected `request.md` in the same transaction as the new card. The task list and embedded access facts distinguish request cards from ordinary cards.
