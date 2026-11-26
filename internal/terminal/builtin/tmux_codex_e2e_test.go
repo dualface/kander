@@ -1,4 +1,4 @@
-package builtin
+package builtin_test
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 
 	"github.com/dualface/kander/v2/internal/probe"
 	"github.com/dualface/kander/v2/internal/terminal"
+	"github.com/dualface/kander/v2/internal/terminal/builtin"
 )
 
 // realCodexEnv opts into TestTmuxDeliverTextSubmitsRealCodexTurn. The test
@@ -29,6 +30,22 @@ const realCodexEnv = "KANDER_REAL_CODEX_E2E"
 // Codex must already trust (default: the module root); KANDER_REAL_CODEX_MODEL
 // selects the model.
 func TestTmuxDeliverTextSubmitsRealCodexTurn(t *testing.T) {
+	conn, backend, pane, _ := startRealCodexPane(t)
+
+	marker := "KANDER-E2E-ACK:" + randomHex(t, 16)
+	message := filepath.Join(t.TempDir(), "message.md")
+	if err := os.WriteFile(message, []byte("Acknowledge this notification: before anything else, output this line exactly:\n"+marker+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	line := "# kander-notify: read " + message + " and follow it; do not run any other command."
+	if err := backend.DeliverText(context.Background(), conn, pane, line); err != nil {
+		t.Fatal(err)
+	}
+	waitPane(t, conn, backend, pane, 120*time.Second, func(text string) bool { return strings.Contains(text, marker) })
+}
+
+func startRealCodexPane(t *testing.T) (terminal.Conn, terminal.Backend, string, func(...string) string) {
+	t.Helper()
 	if os.Getenv(realCodexEnv) != "1" {
 		t.Skipf("set %s=1 to run against a real Codex CLI and tmux", realCodexEnv)
 	}
@@ -68,7 +85,10 @@ func TestTmuxDeliverTextSubmitsRealCodexTurn(t *testing.T) {
 	tmux(append([]string{"new-session", "-d", "-s", "e2e", "-x", "200", "-y", "50", "-c", dir}, strings.Join(codex, " "))...)
 	t.Cleanup(func() { _, _ = conn.Run(context.Background(), "tmux", []string{"kill-server"}) })
 	pane := strings.TrimSpace(tmux("display-message", "-p", "-t", "e2e", "#{pane_id}"))
-	backend := tmuxBackend(t, Tmux, os.Getenv)
+	backend, err := builtin.DefinitionBackend(builtin.Tmux, builtin.Tmux, os.Getenv)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Wait for the composer. A hooks review dialog is skipped once with Esc,
 	// which continues without trusting any hook.
@@ -82,16 +102,7 @@ func TestTmuxDeliverTextSubmitsRealCodexTurn(t *testing.T) {
 		return strings.Contains(text, "? for shortcuts")
 	})
 
-	marker := "KANDER-E2E-ACK:" + randomHex(t, 16)
-	message := filepath.Join(t.TempDir(), "message.md")
-	if err := os.WriteFile(message, []byte("Acknowledge this notification: before anything else, output this line exactly:\n"+marker+"\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	line := "# kander-notify: read " + message + " and follow it; do not run any other command."
-	if err := backend.DeliverText(context.Background(), conn, pane, line); err != nil {
-		t.Fatal(err)
-	}
-	waitPane(t, conn, backend, pane, 120*time.Second, func(text string) bool { return strings.Contains(text, marker) })
+	return conn, backend, pane, tmux
 }
 
 func waitPane(t *testing.T, conn terminal.Conn, backend terminal.Backend, pane string, timeout time.Duration, done func(string) bool) {

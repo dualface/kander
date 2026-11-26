@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"log/slog"
@@ -42,7 +43,7 @@ func bounded(ctx context.Context) (context.Context, context.CancelFunc) {
 // was, open or reserved, and backs the execution off (delivery_block.go). An
 // uncertain typing is inspected by the holder instead of being typed again.
 func (w *loop) deliver(ctx context.Context, log *slog.Logger, project *client.Project, c *remote.Credential, budget *resolveBudget) {
-	if w.o.Resolve == nil {
+	if w.o.Resolve == nil || w.o.CreateRequestFile == nil {
 		return
 	}
 	readCtx, stopRead := bounded(ctx)
@@ -52,6 +53,7 @@ func (w *loop) deliver(ctx context.Context, log *slog.Logger, project *client.Pr
 		log.Warn("reading requests failed", "error", err)
 		return
 	}
+	w.closeSettledRequestFiles(keyOf(*c), requests)
 	ready, window, session, deadline, ok := w.readyRequests(ctx, log, project, c, requests)
 	if !ok {
 		return
@@ -73,7 +75,7 @@ func (w *loop) deliver(ctx context.Context, log *slog.Logger, project *client.Pr
 			break
 		}
 		started := w.o.Now()
-		prompt, err := w.o.Resolve(window, session)
+		target, err := w.o.Resolve(window, session)
 		failedAt := w.o.Now()
 		budget.spent += failedAt.Sub(started)
 		if err != nil {
@@ -84,7 +86,7 @@ func (w *loop) deliver(ctx context.Context, log *slog.Logger, project *client.Pr
 				"blocked_since", state.since, "next_attempt", state.next)
 			break
 		}
-		if w.deliverResolved(ctx, log, project, c, r, prompt) {
+		if w.deliverResolved(ctx, log, project, c, r, target, window) {
 			rejected = append(rejected, r.ID)
 		}
 	}
@@ -238,7 +240,7 @@ func (w *loop) recheckProposal(ctx context.Context, log *slog.Logger, project *c
 // never typed again. It reports whether the request was found unusable and a
 // rejection was tried instead of a delivery, which takes it out of the requests
 // still waiting, whether or not the server received the rejection.
-func (w *loop) deliverResolved(ctx context.Context, log *slog.Logger, project *client.Project, c *remote.Credential, r api.CollabRequest, prompt Prompt) (rejected bool) {
+func (w *loop) deliverResolved(ctx context.Context, log *slog.Logger, project *client.Project, c *remote.Credential, r api.CollabRequest, target *Target, window string) (rejected bool) {
 	resumed := reservedUntyped(r, c)
 	key := reservationKeyPrefix + c.ExecutionID + "-" + r.ID
 	if resumed {
@@ -262,24 +264,37 @@ func (w *loop) deliverResolved(ctx context.Context, log *slog.Logger, project *c
 	if resumed {
 		log.Warn("request reserved earlier and never typed; typing it now", "request", r.ID, "revision", accepted.Revision)
 	}
+	marker := newAckMarker()
+	dir, path, err := w.o.CreateRequestFile(requestBody(c.TaskID, r, marker))
+	if err != nil {
+		log.Error("private request file could not be created; nothing was typed", "request", r.ID, "error", err)
+		return false
+	}
 	save := func(saved remote.Credential) error { return remote.WriteCredential(w.o.Home, saved) }
 	if err := markDelivered(c, r.ID, save); err != nil {
+		w.closeRequestDir(log, r.ID, dir)
 		log.Error("request delivery intent could not be saved", "request", r.ID, "error", err)
 		return false
 	}
-	if err := prompt(requestLine(c.TaskID, r)); err != nil {
+	err = target.Prompt(requestPointer(c.TaskID, r, path))
+	typedAt := w.o.Now()
+	scope := w.keepRequestFile(ctx, keyOf(*c), r.ID, dir, typedAt.Add(requestFileRetention))
+	if err != nil {
 		log.Warn("request delivery outcome unresolved; automatic retry suppressed", "request", r.ID, "error", err)
 		return false
 	}
 	if state, blocked := w.endBlock(keyOf(*c)); blocked {
 		log.Info("request delivery unblocked", "blocked_for", w.o.Now().Sub(state.since))
 	}
-	receiptCtx, stopReceipt := bounded(ctx)
-	defer stopReceipt()
-	if _, err := project.AnswerRequest(receiptCtx, client.NewKey(), c.TaskID, r.ID, api.CollabAnswer{Status: api.RequestAccepted, ExpectedRevision: accepted.Revision, Note: "delivered to the agent"}, *c.Claim()); err != nil {
-		log.Warn("request delivery receipt failed", "request", r.ID, "error", err)
+	typed, err := answerDelivery(ctx, project, *c, r.ID, client.NewKey(), accepted.Revision, typedNote)
+	revision := accepted.Revision
+	if err != nil {
+		log.Warn("writing the request typed note failed", "request", r.ID, "error", err)
+	} else {
+		revision = typed.Revision
 	}
-	log.Info("request delivered", "request", r.ID, "kind", r.Kind)
+	w.startAckObserver(scope, r.ID, revision, typedAt, cmp.Or(target.Window, window), marker, target.Seen)
+	log.Info("request typed", "request", r.ID, "kind", r.Kind)
 	return false
 }
 
@@ -297,21 +312,4 @@ func (w *loop) settleBlock(log *slog.Logger, key credentialKey, ready []api.Coll
 		log.Error("request delivery still blocked", "request", state.first, "pending", state.pending, "reason", state.reason,
 			"attempt", state.attempts, "blocked_since", state.since, "next_attempt", state.next)
 	}
-}
-
-// requestLine renders a request as one terminal line; control characters of
-// the remote message never reach the pane.
-func requestLine(task string, r api.CollabRequest) string {
-	message := stripControl(r.Message)
-	if r.Kind == api.RequestNote {
-		// A note proposes no dispatch, so it must never be taken as the grant of one.
-		message += "; no dispatch is attached: handle the message within the card contract; do not run kander dispatch prepare for it and do not use it as the grant of a dispatch-bound move"
-	}
-	if r.Dispatch != nil {
-		// A proposal is not a dispatch: a bare move neither answers it nor leaves a receipt.
-		message += fmt.Sprintf("; this is a proposal of dispatch %s: do not run a bare kander move; first write the dispatch object of the request unchanged to an intent file, run kander dispatch prepare on it, then run kander move with --dispatch-id and --execution-epoch from its output", stripControl(r.Dispatch.ID))
-	}
-	message += fmt.Sprintf("; inspect the full request and its proposed material: kander request show %s %s --json; do not act on superseded requests or another execution generation", task, r.ID)
-	return fmt.Sprintf("# kander-request %s %s for %s from %s: %s (answer: kander request answer %s %s done|rejected [note])",
-		r.ID, r.Kind, task, r.FromClient, message, task, r.ID)
 }

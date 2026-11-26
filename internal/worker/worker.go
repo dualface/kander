@@ -25,6 +25,7 @@ import (
 	"github.com/dualface/kander/v2/internal/client"
 	"github.com/dualface/kander/v2/internal/command"
 	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/fs"
 	"github.com/dualface/kander/v2/internal/remote"
 	"github.com/dualface/kander/v2/internal/version"
 )
@@ -51,8 +52,12 @@ type Options struct {
 	// recorded process incarnation before signaling its kernel handle.
 	Stop func(pid int) error
 	// Resolve finds the agent recorded by the card's WINDOW and SESSION and
-	// returns the way to type a line into it; the default is Resolve.
-	Resolve func(window, session string) (Prompt, error)
+	// returns the way to type a line and observe output; the default is Resolve.
+	Resolve func(window, session string) (*Target, error)
+	// CreateRequestFile writes a private request file and transfers ownership
+	// of its directory to the worker. The default is CreateRequestFile.
+	CreateRequestFile func(body string) (*fs.TempDir, string, error)
+	waitForAckPoll    func(context.Context, time.Time) bool
 	// The fields below drive the handover to a replaced binary; the defaults
 	// are the production behavior and tests replace them to start no process.
 	//
@@ -81,12 +86,23 @@ type Options struct {
 // uncertain: the line may have reached the pane.
 type Prompt func(text string) error
 
+// Target binds prompt delivery and acknowledgement probes to the same pane.
+type Target struct {
+	Prompt Prompt
+	Seen   func(context.Context, string) (bool, error)
+	// Window is set when resolution found a different pane by session.
+	Window string
+}
+
 // Resolve is the terminal side of the delivery of collaboration requests. It
 // finds the agent pane that a card's WINDOW and SESSION name and checks that the
 // pane takes a line, without typing anything: an error means nothing was typed.
 // The notify package sets it at init, so this package stays free of terminal
 // code; a binary without it keeps requests open for the holder to read.
-var Resolve func(window, session string) (Prompt, error)
+var Resolve func(window, session string) (*Target, error)
+
+// CreateRequestFile is supplied by notify alongside Resolve.
+var CreateRequestFile func(body string) (*fs.TempDir, string, error)
 
 // NewCommand builds `kander worker`, the internal command that holds the worker lock of the
 // client home and renews until idle or signaled. It takes no arguments.
@@ -206,6 +222,7 @@ func Serve(ctx context.Context, o Options) error {
 	}
 	defer lock.release()
 	w := newLoop(o)
+	defer w.closeRequestFiles()
 	self, err := newHandover(o)
 	if err != nil {
 		o.Logger.Warn("the executable of this worker cannot be identified; handover to a replaced binary is off", "error", err)
@@ -263,6 +280,9 @@ type loop struct {
 	o Options
 	// scan lists the credentials; tests replace it.
 	scan func(home string) ([]remote.Credential, error)
+	// deliveries belongs to the work loop. Each scope synchronizes the
+	// acknowledgement results its observers publish.
+	deliveries map[credentialKey]*deliveryScope
 
 	// mu guards every field below. It is held for map reads and writes only,
 	// never across a call to the server or the file system.
@@ -289,6 +309,12 @@ type loop struct {
 type outage struct{ since, last time.Time }
 
 func newLoop(o Options) *loop {
+	if o.CreateRequestFile == nil {
+		o.CreateRequestFile = CreateRequestFile
+	}
+	if o.waitForAckPoll == nil {
+		o.waitForAckPoll = waitForAckPoll
+	}
 	return &loop{
 		o:            o,
 		scan:         remote.Credentials,
@@ -297,6 +323,7 @@ func newLoop(o Options) *loop {
 		owed:         map[credentialKey]struct{}{},
 		lostMarks:    map[credentialKey]struct{}{},
 		blocked:      map[credentialKey]blockState{},
+		deliveries:   map[credentialKey]*deliveryScope{},
 	}
 }
 
@@ -333,6 +360,7 @@ func (w *loop) credentials() ([]remote.Credential, error) {
 // the renewal loop.
 func (w *loop) workRound(ctx context.Context) (int, error) {
 	started := w.o.Now()
+	w.expireRequestFiles(started)
 	credentials, err := w.credentials()
 	if err != nil {
 		return 0, err
@@ -354,6 +382,7 @@ func (w *loop) workRound(ctx context.Context) (int, error) {
 			w.stopLost(ctx, w.o.Logger, c)
 			continue
 		}
+		w.flushAcknowledgements(ctx, c)
 		if !w.takeOwed(key) || w.work(ctx, c, budget) {
 			live++
 		}
@@ -409,6 +438,11 @@ func (w *loop) forgetAbsent(credentials []remote.Credential) {
 		}
 	}
 	w.forgetBlocks(live)
+	for key := range w.deliveries {
+		if _, ok := live[key]; !ok {
+			w.closeDeliveryScope(key)
+		}
+	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	for key := range w.owed {
