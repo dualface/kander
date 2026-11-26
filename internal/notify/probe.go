@@ -12,9 +12,13 @@ import (
 )
 
 // TargetProbe is the probe of a direct-delivery target: ready / busy / stale / fallback.
+// Session marks a probe that failed on the pane's session identity: a
+// reported session that differs or cannot be verified, or a session marker
+// that is missing or differs.
 type TargetProbe struct {
-	State  string
-	Detail string
+	State   string
+	Detail  string
+	Session bool
 }
 
 func probeConn(program string) terminal.Conn {
@@ -111,11 +115,11 @@ func AgentNotifyProbe(backend terminal.Backend, program, paneID string, session 
 	verdict, detail := matchSession(session, pane)
 	switch verdict {
 	case terminal.SessionDiffers:
-		return TargetProbe{State: "stale", Detail: t(
+		return TargetProbe{State: "stale", Session: true, Detail: t(
 			"notify.session_mismatch_task_pane", session.Reference, orNA(pane.AgentSession),
 		)}
 	case terminal.SessionUncertain:
-		return TargetProbe{State: "uncertain", Detail: t(
+		return TargetProbe{State: "uncertain", Session: true, Detail: t(
 			"notify.session_uncertain_task_pane", detail,
 		)}
 	}
@@ -220,12 +224,12 @@ func ProcessNotifyProbe(backend terminal.Backend, program, paneID string, sessio
 		)}
 	}
 	if facts.SessionMarker == "" {
-		return TargetProbe{State: "fallback", Detail: t(
+		return TargetProbe{State: "fallback", Session: true, Detail: t(
 			"launch.tmux_pane_has_no_session_marker", paneID,
 		)}
 	}
 	if facts.SessionMarker != session.Reference {
-		return TargetProbe{State: "stale", Detail: t(
+		return TargetProbe{State: "stale", Session: true, Detail: t(
 			"launch.tmux_session_mismatch_task_pane", session.Reference, facts.SessionMarker,
 		)}
 	}

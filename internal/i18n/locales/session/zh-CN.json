@@ -25,5 +25,8 @@
   "terminal.process_facts_invalid": "进程取证结果无效",
   "terminal.process_facts_limit": "进程取证超过 64 个进程",
   "terminal.process_facts_identity_invalid": "前台进程身份无效",
-  "launch.session_repair_directory_mismatch": "当前打开的 rollout 启动目录与本任务不匹配"
+  "launch.session_repair_directory_mismatch": "当前打开的 rollout 启动目录与本任务不匹配",
+  "notify.request_session_without_id": "卡片 SESSION 只有 Agent 名 {{.V0}}，没有会话 ID，无法核实 pane。下一步：持有方用 kander request show <task-id> <request-id> 读取请求；或先停止 pane 中的旧 Agent，再用 kander resume --agent {{.V0}} --decision <reference> --message <message> <task-id> 接管",
+  "notify.request_session_mode_none": "Agent {{.V0}} 不记录会话 ID，worker 不能直接投递。下一步：持有方用 kander request show <task-id> <request-id> 读取请求",
+  "notify.request_session_marker_hint": "{{.V0}}；卡片 SESSION 有会话 ID，但 pane 的会话标记缺失或不一致。下一步：用 kander check <task-id> 核对存活；持有方可用 kander request show <task-id> <request-id> 读取请求"
 }

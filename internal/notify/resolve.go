@@ -145,21 +145,26 @@ func ResolveTarget(window, paneOverride string, session liveness.TaskSession, ti
 		}
 		if probe.State != "stale" {
 			if err := requireReady(probe); err != nil {
-				return DirectTarget{}, err
+				return DirectTarget{}, markSessionFailure(err, probe.Session)
 			}
 			return DirectTarget{Backend: backend, Program: program, PaneID: paneID, Timeout: remaining}, nil
 		}
-		return staleLookup(probe.Detail, func() (DirectTarget, error) {
+		// A session failure of the recorded pane stays one while the reverse
+		// lookup finds no pane; once it finds one, that pane's probe decides.
+		sessionFailure := probe.Session
+		target, err := staleLookup(probe.Detail, func() (DirectTarget, error) {
 			discovered, err := liveness.ReverseLookup(context.Background(), backend, program, session)
 			if err != nil {
 				return DirectTarget{}, err
 			}
+			sessionFailure = false
 			found, finalTimeout, err := waitForTarget(func(remaining time.Duration) TargetProbe {
 				return notifyProbe(backend, program, discovered.Pane, session, remaining)
 			}, remaining)
 			if err != nil {
 				return DirectTarget{}, err
 			}
+			sessionFailure = found.Session
 			if err := requireReady(found); err != nil {
 				return DirectTarget{}, err
 			}
@@ -168,6 +173,10 @@ func ResolveTarget(window, paneOverride string, session liveness.TaskSession, ti
 				Window: terminal.FormatAddress(backend, discovered), Timeout: finalTimeout,
 			}, nil
 		})
+		if err != nil {
+			return DirectTarget{}, markSessionFailure(err, sessionFailure)
+		}
+		return target, nil
 	}
 	if window == "" {
 		agent, ok := agentBackend()
