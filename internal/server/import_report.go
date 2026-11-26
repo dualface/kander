@@ -122,6 +122,8 @@ func importProgressText(p api.ImportProgress) string {
 			return config.Text("server.import_progress_scan_count", p.Done, p.Total)
 		}
 		return config.Text("server.import_progress_scan")
+	case api.ImportPhaseUpload:
+		return config.Text("server.import_progress_upload", formatImportBytes(p.Bytes), formatImportBytes(p.TotalBytes))
 	case api.ImportPhaseCopy:
 		return config.Text("server.import_progress_copy", p.Done, p.Total, formatImportBytes(p.Bytes), formatImportBytes(p.TotalBytes))
 	case api.ImportPhaseVerify:

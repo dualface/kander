@@ -1,0 +1,263 @@
+package server
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"io"
+	"mime"
+	"net/http"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/fs"
+)
+
+const (
+	maxImportUploads = 2
+	uploadPrefix     = "upload."
+)
+
+func (s *Server) importUploadRoute(r *http.Request) outcome {
+	name := r.PathValue("name")
+	if !api.ValidProjectName(name) {
+		return outcome{err: apiError(api.CodeInvalidRequest, "invalid project name: "+api.ProjectNameRule)}
+	}
+	if mediaType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mediaType != api.ImportUploadType {
+		return outcome{err: apiError(api.CodeInvalidRequest, "unsupported board upload format")}
+	}
+	return outcome{stream: func(w http.ResponseWriter) int {
+		return s.handleImportUpload(w, r, name, defaultUploadLimits())
+	}}
+}
+
+func (s *Server) handleImportUpload(w http.ResponseWriter, r *http.Request, name string, limits uploadLimits) int {
+	received := false
+	reject := func(err error) int {
+		if !received && r.ProtoMajor == 1 {
+			// Do not drain untrusted bytes before returning an early refusal.
+			w.Header().Set("Connection", "close")
+		}
+		e := s.failure(r, err)
+		writeJSONResponse(w, e.Status, e)
+		return e.Status
+	}
+	if r.ContentLength > limits.wireBytes() {
+		return reject(uploadTooLarge())
+	}
+	s.mu.Lock()
+	if s.closing.Load() {
+		s.mu.Unlock()
+		return reject(closingError())
+	}
+	select {
+	case s.uploadSlots <- struct{}{}:
+		s.uploadWorkers.Add(1)
+		s.mu.Unlock()
+	default:
+		s.mu.Unlock()
+		return reject(apiError(api.CodeNotReady, "board upload capacity reached; retry later"))
+	}
+	defer func() {
+		<-s.uploadSlots
+		s.uploadWorkers.Done()
+	}()
+
+	ctx, cancel := context.WithTimeout(r.Context(), limits.timeout)
+	defer cancel()
+	rc := http.NewResponseController(w)
+	deadline, _ := ctx.Deadline()
+	if err := rc.SetReadDeadline(deadline); err != nil {
+		return reject(errors.New("cannot enforce board upload request deadline"))
+	}
+	shutdownApplied := make(chan struct{})
+	stopShutdown := context.AfterFunc(s.shutdown, func() {
+		defer close(shutdownApplied)
+		cancel()
+		_ = rc.SetReadDeadline(time.Now())
+	})
+	defer func() {
+		if !stopShutdown() {
+			<-shutdownApplied
+		}
+		_ = rc.SetReadDeadline(time.Time{})
+	}()
+
+	m, err := readUploadManifest(r.Body, limits)
+	if err != nil {
+		return reject(err)
+	}
+	if m.Project != name {
+		return reject(invalidUpload())
+	}
+	for _, state := range board.States {
+		if _, ok := slices.BinarySearch(m.Directories, state); !ok {
+			return reject(importRejected("source board is missing the directory " + state))
+		}
+	}
+	projectRel := filepath.Join("projects", api.ProjectDirName(name))
+	if err := ensureDir(s.data, projectRel); err != nil {
+		s.log.Error("create board upload parent", "error", err)
+		return reject(errors.New("cannot create board upload staging"))
+	}
+	stage, err := fs.CreatePrivateTempDir(filepath.Join(s.data, projectRel), uploadPrefix)
+	if err != nil {
+		s.log.Error("create board upload staging", "error", err)
+		return reject(errors.New("cannot create board upload staging"))
+	}
+	cleanStage := func() {
+		if err := stage.Close(); err != nil {
+			s.log.Error("remove board upload staging", "error", err)
+		}
+	}
+	defer cleanStage()
+	if err := receiveUpload(ctx, r.Body, stage.Path, m); err != nil {
+		return reject(err)
+	}
+	// The request is completely consumed before starting a response. This
+	// works with HTTP/1 without full duplex and treats truncation as refusal.
+	received = true
+	_ = rc.SetReadDeadline(time.Time{})
+	if err := checkImportRecordLayout(uploadPaths(m)); err != nil {
+		return reject(err)
+	}
+	if err := board.CheckRecoveredImportJournal(stage.Path); err != nil {
+		return reject(importRejected("uploaded board has invalid or unrecovered transaction history"))
+	}
+	importCtx, finish := context.WithTimeout(ctx, ImportTimeout)
+	defer finish()
+	run := func(report func(api.ImportProgress)) (api.ImportResult, error) {
+		progress := newImportEmitter(report)
+		defer progress.stop()
+		progress.phase(api.ImportPhaseLock)
+		value, err := s.importPreparedSource(importCtx, m.ImportRequest, stage.Path, m.From, m.Snapshot, progress)
+		cleanStage()
+		value.Project.BoardPath = ""
+		if err != nil {
+			err = safeUploadImportError(err, s.data, stage.Path, m.From)
+		}
+		return value, err
+	}
+	if strings.Contains(r.Header.Get("Accept"), api.ImportStreamType) {
+		return s.streamImport(w, r, run)
+	}
+	value, err := run(nil)
+	if err != nil {
+		return reject(err)
+	}
+	writeJSONResponse(w, http.StatusOK, value)
+	return http.StatusOK
+}
+
+func uploadPaths(m api.ImportUploadManifest) []string {
+	paths := make([]string, len(m.Files))
+	for i, file := range m.Files {
+		paths[i] = file.Path
+	}
+	return paths
+}
+
+func receiveUpload(ctx context.Context, body io.Reader, staging string, m api.ImportUploadManifest) error {
+	for _, rel := range m.Directories {
+		if err := ctx.Err(); err != nil {
+			return invalidUpload()
+		}
+		if err := fs.CreatePrivateDirectory(staging, filepath.Join(staging, filepath.FromSlash(rel))); err != nil {
+			if errors.Is(err, os.ErrExist) {
+				return invalidUpload()
+			}
+			return err
+		}
+	}
+	buf := make([]byte, 64<<10)
+	for _, file := range m.Files {
+		if err := ctx.Err(); err != nil {
+			return invalidUpload()
+		}
+		if err := receiveUploadFile(staging, body, file, buf); err != nil {
+			return err
+		}
+	}
+	// Demand a successful request EOF, not merely the declared file bytes.
+	// The sender emits this marker only after its final source snapshot.
+	var marker [len(api.ImportUploadComplete)]byte
+	if _, err := io.ReadFull(body, marker[:]); err != nil || string(marker[:]) != api.ImportUploadComplete {
+		return invalidUpload()
+	}
+	var extra [1]byte
+	if _, err := io.ReadFull(body, extra[:]); err != io.EOF || ctx.Err() != nil {
+		return invalidUpload()
+	}
+	return nil
+}
+
+func receiveUploadFile(root string, body io.Reader, file api.ImportUploadFile, buf []byte) error {
+	f, err := fs.CreatePrivateRegularFile(root, filepath.Join(root, filepath.FromSlash(file.Path)))
+	if err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return invalidUpload()
+		}
+		return err
+	}
+	hash := sha256.New()
+	n, copyErr := io.CopyBuffer(io.MultiWriter(f, hash), io.LimitReader(body, file.Size), buf)
+	closeErr := f.Close()
+	var diskError *os.PathError
+	if errors.As(copyErr, &diskError) || closeErr != nil {
+		return errors.Join(copyErr, closeErr)
+	}
+	if copyErr != nil || n != file.Size || hex.EncodeToString(hash.Sum(nil)) != file.SHA256 {
+		return invalidUpload()
+	}
+	return nil
+}
+
+func safeUploadImportError(err error, data, staging, source string) error {
+	e := *asAPIError(err)
+	// A target or registry diagnostic may contain a server-side path.
+	// Replace both raw and quoted spellings before returning anything.
+	e.Message = strings.NewReplacer(
+		quotedPath(staging), quotedPath(source), staging, source,
+		quotedPath(filepath.Dir(staging)), "<destination project>", filepath.Dir(staging), "<destination project>",
+		quotedPath(data), "<server data>", data, "<server data>",
+	).Replace(e.Message)
+	return &e
+}
+
+// cleanupUploads runs under the exclusive data directory lock before ready.
+// Include unregistered project roots left by a client that never reached import.
+func (s *Server) cleanupUploads() error {
+	projects := filepath.Join(s.data, "projects")
+	exists, err := fs.DirectoryExists(s.data, projects)
+	if err != nil || !exists {
+		return err
+	}
+	entries, err := fs.ListDirectory(s.data, projects)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.Kind != fs.KindDirectory {
+			continue
+		}
+		project := filepath.Join(projects, entry.Name)
+		children, err := fs.ListDirectory(s.data, project)
+		if err != nil {
+			return err
+		}
+		for _, child := range children {
+			if strings.HasPrefix(child.Name, uploadPrefix) {
+				if err := removeImportDirectory(project, filepath.Join(project, child.Name)); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}

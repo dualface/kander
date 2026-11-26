@@ -38,7 +38,9 @@ func (s *Server) importRoute(r *http.Request) outcome {
 	}
 	return outcome{stream: func(w http.ResponseWriter) int {
 		defer cancel()
-		return s.streamImport(ctx, w, r, req)
+		return s.streamImport(w, r, func(report func(api.ImportProgress)) (api.ImportResult, error) {
+			return s.importV1Board(ctx, req, report)
+		})
 	}}
 }
 
@@ -46,7 +48,7 @@ func (s *Server) importRoute(r *http.Request) outcome {
 // report, then the result or the error. Progress is coalesced: the importing
 // goroutine holds the project lock while it reports, so it must never wait for
 // a slow client, and only the latest report is kept for the writer.
-func (s *Server) streamImport(ctx context.Context, w http.ResponseWriter, r *http.Request, req api.ImportRequest) int {
+func (s *Server) streamImport(w http.ResponseWriter, r *http.Request, run func(func(api.ImportProgress)) (api.ImportResult, error)) int {
 	w.Header().Set("Content-Type", api.ImportStreamType)
 	w.WriteHeader(http.StatusOK)
 	out := &importStream{w: w, rc: http.NewResponseController(w)}
@@ -65,7 +67,7 @@ func (s *Server) streamImport(ctx context.Context, w http.ResponseWriter, r *htt
 			}
 		}
 	}()
-	value, err := s.importV1Board(ctx, req, latest.put)
+	value, err := run(latest.put)
 	close(finished)
 	<-stopped
 	if err != nil {

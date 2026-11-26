@@ -14,7 +14,7 @@ import (
 	"github.com/dualface/kander/v2/internal/fs"
 )
 
-func (p *project) planImport(source string, src treeScan, skipConflicts bool) (importStage, error) {
+func (p *project) planImport(source, displaySource string, src treeScan, skipConflicts, uploaded bool) (importStage, error) {
 	targetView, err := board.InspectImportCards(p.board)
 	if err != nil {
 		return importStage{}, err
@@ -34,6 +34,13 @@ func (p *project) planImport(source string, src treeScan, skipConflicts bool) (i
 		return importStage{}, err
 	}
 	if len(sourceView.Problems) > 0 {
+		if uploaded {
+			var paths []string
+			for _, problem := range sourceView.Problems {
+				paths = append(paths, problem.Path)
+			}
+			return importStage{}, uploadCheckRejected(displaySource, source, paths, src.files, src.dirs)
+		}
 		messages := make([]string, 0, len(sourceView.Problems))
 		for _, problem := range sourceView.Problems {
 			messages = append(messages, problem.Message)
@@ -43,7 +50,7 @@ func (p *project) planImport(source string, src treeScan, skipConflicts bool) (i
 	return planImportMerge(source, p.board, src, dst, sourceView, targetView, skipConflicts)
 }
 
-func (p *project) stageImport(ctx context.Context, source string, plan importStage, progress *importEmitter) (importPublication, error) {
+func (p *project) stageImport(ctx context.Context, source, displaySource string, plan importStage, progress *importEmitter, uploaded bool) (importPublication, error) {
 	staging := filepath.Join(p.root, "board.import")
 	releaseRemarks := p.server.routeBoardRemarks(staging)
 	defer releaseRemarks()
@@ -68,12 +75,12 @@ func (p *project) stageImport(ctx context.Context, source string, plan importSta
 		return importPublication{}, err
 	}
 	progress.phase(api.ImportPhaseCheck)
-	displayRoot := source
+	displayRoot := displaySource
 	if plan.merge {
 		displayRoot = "merged board"
 	}
 	record := importRecord{
-		Snapshot: plan.source.digest, Source: source, Files: len(plan.source.files), Tasks: plan.tasks,
+		Snapshot: plan.source.digest, Source: displaySource, Files: len(plan.source.files), Tasks: plan.tasks,
 		ImportedAt: p.server.now(), AddedTasks: plan.added, ExistingTasks: plan.existing, SkippedConflicts: plan.skipped,
 	}
 	if plan.merge {
@@ -108,11 +115,21 @@ func (p *project) stageImport(ctx context.Context, source string, plan importSta
 	if err != nil {
 		var invalid *board.Error
 		if errors.As(err, &invalid) {
+			if uploaded {
+				return importPublication{}, uploadCheckRejected(displaySource, staging, nil, nil, nil)
+			}
 			return importPublication{}, importRejected("staged board fails check; nothing was published: " + sourcePaths(invalid.Error(), staging, displayRoot) + "; " + importCheckHint)
 		}
 		return importPublication{}, fmt.Errorf("staged board check failed: %w", err)
 	}
 	if len(check.Blocking) > 0 {
+		if uploaded {
+			dirs := plan.sourceDirs
+			if !plan.merge {
+				dirs = plan.source.dirs
+			}
+			return importPublication{}, uploadCheckRejected(displaySource, staging, check.BlockingPaths, plan.sourceFiles, dirs)
+		}
 		return importPublication{}, importRejected("staged board fails check; nothing was published: " + sourcePaths(strings.Join(check.Blocking, "; "), staging, displayRoot) + "; " + importCheckHint)
 	}
 	for i := range check.Warnings {
@@ -265,4 +282,45 @@ func readScannedImportFile(root, rel string, tree treeScan) ([]byte, error) {
 		return nil, importRejected("source board changed during import; nothing was published")
 	}
 	return data, nil
+}
+
+// Board checks may quote invalid field values. An upload refusal tells the
+// caller where to investigate without including document text in an error.
+func uploadCheckRejected(source, staging string, paths, files, dirs []string) error {
+	message := fmt.Sprintf("staged board from %q fails check; nothing was published", source)
+	var affected []string
+	var detailBytes int
+	for _, path := range paths {
+		rel, err := filepath.Rel(staging, path)
+		if err != nil {
+			continue
+		}
+		rel = filepath.ToSlash(rel)
+		_, file := slices.BinarySearch(files, rel)
+		_, dir := slices.BinarySearch(dirs, rel)
+		if file || dir {
+			separator := "/"
+			if strings.Contains(source, `\`) && !strings.HasPrefix(source, "/") {
+				separator = `\`
+				rel = strings.ReplaceAll(rel, "/", separator)
+			}
+			prefix := source
+			if !strings.HasSuffix(prefix, separator) {
+				prefix += separator
+			}
+			entry := fmt.Sprintf("%q", prefix+rel)
+			detailBytes += len(entry)
+			if detailBytes > 32<<10 {
+				break
+			}
+			affected = append(affected, entry)
+			if len(affected) == 10 {
+				break
+			}
+		}
+	}
+	if len(affected) > 0 {
+		message += "; source entries: " + strings.Join(affected, ", ")
+	}
+	return importRejected(message + "; " + importCheckHint)
 }

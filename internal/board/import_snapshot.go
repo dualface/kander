@@ -54,3 +54,21 @@ func ImportCardDetails(entry Entry, raw []byte) (group, defaulted string) {
 	}
 	return TaskGroupFrom(normalized), defaulted
 }
+
+// CheckRecoveredImportJournal checks a private, immutable upload without
+// taking a lock or replaying any source transaction on the receiving host.
+func CheckRecoveredImportJournal(root string) error {
+	files, err := journalFiles(root)
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		if file.partition != "committed" {
+			return errors.New("import journal was not recovered before upload")
+		}
+		if _, err := readJournalRecord(root, file); err != nil {
+			return err
+		}
+	}
+	return nil
+}

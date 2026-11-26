@@ -74,6 +74,7 @@ func Routes() []Route {
 
 func (s *Server) registerRoutes(mux *routeTable) {
 	s.adminRoutes(mux)
+	mux.HandleFunc("POST "+api.ImportUploadRoute, s.domainWithBodyLimit(defaultUploadLimits().wireBytes(), s.importUploadRoute))
 	mux.probe("GET /api/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSONResponse(w, http.StatusOK, api.Health{Status: "alive", Ready: s.ready.Load()})
 	})
@@ -295,6 +296,10 @@ func (s *Server) projectRoute(mux *routeTable, pattern string, fn func(*project,
 // domain wraps a domain route with the protocol handshake, the readiness
 // gate, embedding hooks, the body limit, and the access log.
 func (s *Server) domain(fn func(*http.Request) outcome) http.HandlerFunc {
+	return s.domainWithBodyLimit(maxBody, fn)
+}
+
+func (s *Server) domainWithBodyLimit(bodyLimit int64, fn func(*http.Request) outcome) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		started := time.Now()
 		w.Header().Set(api.HeaderProtocol, strconv.Itoa(api.ProtocolVersion))
@@ -308,7 +313,7 @@ func (s *Server) domain(fn func(*http.Request) outcome) http.HandlerFunc {
 			if scope, err := s.authorize(r); err != nil {
 				out = outcome{err: err}
 			} else {
-				r.Body = http.MaxBytesReader(w, r.Body, maxBody)
+				r.Body = http.MaxBytesReader(w, r.Body, bodyLimit)
 				request := s.withAttribution(r)
 				if s.hooks.AuthorizeAssignment != nil && s.hooks.Authorize != nil {
 					// Keep the same scope even if the registry changes between hooks.

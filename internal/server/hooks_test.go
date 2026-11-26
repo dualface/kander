@@ -48,6 +48,11 @@ func TestEveryRegisteredRoutePassesAuthorizationExceptProbes(t *testing.T) {
 				switch part {
 				case "{project}":
 					want.Project, want.ProjectID, part = project.Name, project.ID, project.ID
+				case "{name}":
+					part = "test-name"
+					if route.Pattern == http.MethodPost+" "+api.ImportUploadRoute {
+						want.Project, want.ProjectID = part, api.ProjectID(part)
+					}
 				case "{task}":
 					want.Task, part = task, task
 				case "{group}":

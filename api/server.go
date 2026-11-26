@@ -54,6 +54,7 @@ type ImportWarning struct {
 
 // Import phases, in the order a first successful import reports them.
 const (
+	ImportPhaseUpload  = "upload"
 	ImportPhaseLock    = "lock"
 	ImportPhaseScan    = "scan"
 	ImportPhaseCopy    = "copy"

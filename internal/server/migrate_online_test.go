@@ -420,9 +420,8 @@ func TestImportCommandUsesTheServingInstance(t *testing.T) {
 	s, h := openTest(t, dir, nil)
 	defer h.Close()
 	defer s.Close()
-	useImportTarget(t, h.URL)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	result, _, err := importBoard(t.Context(), dir, "demo", "", source, importRun{logger: logger})
+	result, _, err := importBoard(t.Context(), h.URL, dir, api.ImportRequest{Project: "demo", From: source}, importRun{logger: logger})
 	if err != nil || result.Tasks != 2 || result.Source != source {
 		t.Fatalf("online command: %+v %v", result, err)
 	}
@@ -443,21 +442,19 @@ func TestImportCommandExplainsWhyItCannotImportOnline(t *testing.T) {
 
 	closed := httptest.NewServer(http.NotFoundHandler())
 	closed.Close()
-	useImportTarget(t, closed.URL)
-	if _, _, err := importBoard(t.Context(), locked, "demo", "", source, importRun{logger: logger}); err == nil || !strings.Contains(err.Error(), locked) || !strings.Contains(err.Error(), closed.URL) {
+	if _, _, err := importBoard(t.Context(), closed.URL, locked, api.ImportRequest{Project: "demo", From: source}, importRun{logger: logger}); err == nil || !strings.Contains(err.Error(), locked) || !strings.Contains(err.Error(), closed.URL) {
 		t.Fatalf("no server: %v", err)
 	}
 
-	useImportTarget(t, "http://example.invalid:7878")
-	if _, _, err := importBoard(t.Context(), locked, "demo", "", source, importRun{logger: logger}); err == nil || !strings.Contains(err.Error(), "http://example.invalid:7878") {
-		t.Fatalf("non-local: %v", err)
+	const remote = "http://example.invalid:7878"
+	if _, _, err := importBoard(t.Context(), remote, locked, api.ImportRequest{Project: "demo", From: source}, importRun{logger: logger}); err == nil || !strings.Contains(err.Error(), remote) {
+		t.Fatalf("non-loopback local control: %v", err)
 	}
 
 	serving, h := openTest(t, t.TempDir(), nil)
 	defer h.Close()
 	defer serving.Close()
-	useImportTarget(t, h.URL)
-	if _, _, err := importBoard(t.Context(), locked, "demo", "", source, importRun{logger: logger}); err == nil || !strings.Contains(err.Error(), locked) || !strings.Contains(err.Error(), serving.data) {
+	if _, _, err := importBoard(t.Context(), h.URL, locked, api.ImportRequest{Project: "demo", From: source}, importRun{logger: logger}); err == nil || !strings.Contains(err.Error(), locked) || !strings.Contains(err.Error(), serving.data) {
 		t.Fatalf("other data directory: %v", err)
 	}
 	if _, err := serving.projectByName("demo"); err == nil {
@@ -472,8 +469,7 @@ func TestImportCommandExplainsWhyItCannotImportOnline(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	defer old.Close()
-	useImportTarget(t, old.URL)
-	if _, _, err := importBoard(t.Context(), locked, "demo", "", source, importRun{logger: logger}); err == nil || !strings.Contains(err.Error(), "restart") {
+	if _, _, err := importBoard(t.Context(), old.URL, locked, api.ImportRequest{Project: "demo", From: source}, importRun{logger: logger}); err == nil || !strings.Contains(err.Error(), "restart") {
 		t.Fatalf("old server: %v", err)
 	}
 }

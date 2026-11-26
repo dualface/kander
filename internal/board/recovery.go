@@ -1,6 +1,7 @@
 package board
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/dualface/kander/v2/internal/fs"
@@ -249,8 +250,14 @@ func applyRecordWithCheckpoint(root, path string, r *OperationRecord, checkpoint
 
 // RecoverTransactions is the compatibility entrance for recovery without new
 // migrations. Init uses MigrateCards; both share the same locked recovery core.
-func RecoverTransactions(root string) (err error) {
-	locks, err := acquire(root, LockScope{ExclusiveBoard: true})
+func RecoverTransactions(root string) error {
+	return RecoverTransactionsContext(context.Background(), root)
+}
+
+// RecoverTransactionsContext bounds the wait for the recovery locks. Once a
+// journal entry starts replaying it must finish even if the caller cancels.
+func RecoverTransactionsContext(ctx context.Context, root string) (err error) {
+	locks, err := acquireContext(ctx, root, LockScope{ExclusiveBoard: true})
 	if err != nil {
 		return err
 	}
