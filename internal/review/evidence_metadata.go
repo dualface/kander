@@ -257,8 +257,8 @@ func unquoteEvidencePath(text string) (string, bool) {
 }
 
 func fallbackEvidencePath(block string) (path, oldPath string, parsed bool) {
-	header, rest, _ := strings.Cut(block, "\n")
-	header = stripEvidenceHeaderColor(header)
+	originalHeader, rest, _ := strings.Cut(block, "\n")
+	header := stripEvidenceHeaderColor(originalHeader)
 	var renamed, source, added, removed string
 	for line := range strings.SplitSeq(rest, "\n") {
 		line = stripEvidenceHeaderColor(line)
@@ -303,5 +303,5 @@ func fallbackEvidencePath(block string) (path, oldPath string, parsed bool) {
 	if equalPath != "" {
 		return equalPath, "", true
 	}
-	return strings.TrimPrefix(header, "diff --git "), "", false
+	return originalHeader, "", false
 }

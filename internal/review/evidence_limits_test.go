@@ -3,7 +3,9 @@ package review
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/dualface/kander/v2/api"
 	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 func TestEvidenceLimitsFitArtifactJSON(t *testing.T) {
@@ -177,7 +180,8 @@ func TestEvidenceFallbackPathPriority(t *testing.T) {
 		{"spaced new", "diff --git a/with space b/with space\n+++ b/with space\t\n", "with space", "", true},
 		{"spaced deletion", "diff --git a/with space b/with space\n--- a/with space\t\n+++ /dev/null\n", "with space", "", true},
 		{"quoted header", "diff --git \"a/\\303\\251\" \"b/\\303\\251\"\n", "é", "", true},
-		{"ambiguous", "diff --git a/one b/two\n", "a/one b/two", "", false},
+		{"ambiguous", "diff --git a/one b/two\n", "diff --git a/one b/two", "", false},
+		{"colored ambiguous", "\x1b[1mdiff --git a/one b/two\x1b[m\n", "\x1b[1mdiff --git a/one b/two\x1b[m", "", false},
 		{"invalid UTF-8", "diff --git \"a/\\377\" \"b/\\377\"\n", "\xff", "", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -213,4 +217,35 @@ func writeTestEvidence(t *testing.T, ctx reviewContext) (string, evidenceResult)
 		t.Fatal(err)
 	}
 	return readFile(t, path), result
+}
+
+func TestEvidenceOversizedPromptSuggestsShorterContext(t *testing.T) {
+	root := t.TempDir()
+	setupLang(t, filepath.Join(root, "config.json"))
+	size := artifactRequestLimit / 4 * 3
+	if err := os.WriteFile(filepath.Join(root, "prompt.txt"), make([]byte, size), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// An accidental upload would try to use the uninitialized session.
+	archive := archiveExecution{store: &remoteReviewStore{}}
+	err := archive.snapshotRuntime(root, evidenceResult{})
+	var gate *gateError
+	if !errors.As(err, &gate) || gate.code != 2 {
+		t.Fatalf("prompt limit did not fail as a gate error: %v", err)
+	}
+	message := gate.Error()
+	for _, want := range []string{"prompt.txt", "Shorten supplemental review context", "new run ID"} {
+		if !strings.Contains(message, want) {
+			t.Errorf("prompt limit message does not include %q: %s", want, message)
+		}
+	}
+	if strings.Contains(message, ".gitattributes") {
+		t.Errorf("prompt limit message gives unrelated evidence guidance: %s", message)
+	}
+	// review-contract.md is the other non-evidence artifact. Its advice also
+	// permits shortening custom instructions rather than changing Git config.
+	contract := config.Text("review.artifact_request_too_large", config.ReviewContractFilename, size, artifactRequestLimit+1, artifactRequestLimit, "")
+	if !strings.Contains(contract, "custom review instructions") || strings.Contains(contract, ".gitattributes") {
+		t.Errorf("wrong contract limit guidance: %s", contract)
+	}
 }

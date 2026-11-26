@@ -384,3 +384,38 @@ func TestEvidenceColorConfigKeepsFallbackBounded(t *testing.T) {
 		t.Fatalf("forced color escaped the budget: %s", item)
 	}
 }
+
+func TestEvidenceControlPathWithOnlyOneBlob(t *testing.T) {
+	root := t.TempDir()
+	gitRepo(t, root, "init", "-q")
+	base := commitFile(t, root, "base", "baseline\n", "base")
+	const name = "new\nline"
+	body := strings.Repeat("x", evidenceFileLimit) + "\n"
+	path := filepath.Join(root, name)
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Skipf("filesystem does not support the test path: %v", err)
+	}
+	gitRepo(t, root, "add", "-A")
+	gitRepo(t, root, "commit", "-qm", "add")
+	added := gitRepo(t, root, "rev-parse", "HEAD")
+	gitRepo(t, root, "rm", "--", name)
+	gitRepo(t, root, "commit", "-qm", "delete")
+	deleted := gitRepo(t, root, "rev-parse", "HEAD")
+	for _, change := range []struct{ status, from, to, blob string }{
+		{"A", base, added, "blob_after"},
+		{"D", added, deleted, "blob_before"},
+	} {
+		t.Run(change.status, func(t *testing.T) {
+			ctx := reviewContext{root: root, base: change.from, commit: change.to}
+			got, result := writeTestEvidence(t, ctx)
+			item := omittedEvidence(t, got)
+			blob := evidenceField(item, change.blob)
+			args := evidenceCommandArgs(t, evidenceField(item, "command"))
+			if result.omitted != 1 || evidenceField(item, "status") != change.status ||
+				!slices.Equal(args, []string{"cat-file", "blob", blob}) ||
+				evidenceTestGit(t, root, args) != body {
+				t.Fatalf("command does not return the only available blob: %s", item)
+			}
+		})
+	}
+}

@@ -1,4 +1,4 @@
 {
-  "review.artifact_request_too_large": "レビュー成果物 {{.V0}}（元のサイズは {{.V1}} バイト）のリクエストは {{.V2}} バイトで、上限の {{.V3}} バイトを超えています。{{if .V4}}最大の内訳は {{.V4}} です。{{end}}.gitattributes または $GIT_COMMON_DIR/info/attributes で大きな生成ファイルに -diff を設定するか、レビュー範囲を狭めてから、新しい run ID で再試行してください。",
+  "review.artifact_request_too_large": "レビュー成果物 {{.V0}}（元のサイズは {{.V1}} バイト）のリクエストは {{.V2}} バイトで、上限の {{.V3}} バイトを超えています。{{if .V4}}最大の内訳は {{.V4}} です。{{end}}{{if eq .V0 \"evidence.txt\"}}.gitattributes または $GIT_COMMON_DIR/info/attributes で大きな生成ファイルに -diff を設定するか、レビュー範囲を狭めてから、新しい run ID で再試行してください。{{else}}追加のレビューコンテキストかカスタムのレビュー指示を短くしてから、新しい run ID で再試行してください。{{end}}",
   "review.evidence_metadata_unavailable": "レビュー証拠の {{.V0}} で差分とメタデータを対応付けられませんでした（{{.V1}} ブロック、{{.V2}} 項目）。この節で省略された差分にはヘッダーだけを残します。"
 }
