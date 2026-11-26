@@ -341,7 +341,7 @@ func TestAWorkerThatStartsAgainResolvesAtOnce(t *testing.T) {
 	if _, blocked := h.blockOf(); !blocked {
 		t.Fatal("the first failure blocks")
 	}
-	h.loop = newLoop(h.workerOptions())
+	h.restartLoop()
 	pr := h.target(errNoIdentity)
 	h.workAfter(time.Second)
 	if pr.count() != 1 {

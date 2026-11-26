@@ -64,8 +64,18 @@ func newHarnessWrapped(t *testing.T, renew time.Duration, wrap func(http.Handler
 	h.srv, h.http = s, httptest.NewServer(handler)
 	t.Cleanup(func() { h.http.Close(); h.srv.Close() })
 	h.loop = newLoop(h.workerOptions())
-	t.Cleanup(h.loop.closeRequestFiles)
+	// The cleanup reads h.loop when it runs: a test may have replaced the loop.
+	t.Cleanup(func() { h.loop.closeRequestFiles() })
 	return h
+}
+
+// restartLoop replaces the harness worker with a new loop that has an empty
+// memory, as a worker that starts again would. The old loop closes its request
+// files first, as a worker does when it exits; on Windows an open request
+// directory could not be removed by the cleanup of the test.
+func (h *harness) restartLoop() {
+	h.loop.closeRequestFiles()
+	h.loop = newLoop(h.workerOptions())
 }
 
 // workerOptions are the options of the harness worker: a quiet logger, the
