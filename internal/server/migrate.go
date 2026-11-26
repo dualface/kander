@@ -57,14 +57,13 @@ func (r importRecord) result(info api.Project, source string) api.ImportResult {
 // precedes a board-exclusive snapshot; original evidence bytes are retained.
 // A durable directory publication intent is recovered before the server opens.
 func (s *Server) Import(name, remote, source string) (api.ImportResult, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), ImportTimeout)
-	defer cancel()
-	return s.ImportContext(ctx, name, remote, source)
+	return s.ImportContext(context.Background(), name, remote, source)
 }
 
-// ImportTimeout bounds the snapshot lock wait and the copy of one import.
-// The initial recovery of the source board waits for its lock without a
-// deadline, and validation and publication do not observe cancellation.
+// ImportTimeout bounds only the wait for the source board snapshot lock. The
+// initial recovery of the source board waits for its lock without a deadline;
+// the scan and the copy stop only when the caller cancels or the server shuts
+// down, and validation and publication do not observe cancellation.
 const ImportTimeout = 5 * time.Minute
 
 // ImportContext runs offline and inside a serving instance alike. While it
@@ -85,7 +84,12 @@ func (s *Server) ImportWithProgress(ctx context.Context, name, remote, source st
 	return s.importV1Board(ctx, api.ImportRequest{Project: name, Remote: remote, From: source}, report)
 }
 
-func (s *Server) importV1Board(ctx context.Context, req api.ImportRequest, report func(api.ImportProgress)) (api.ImportResult, error) {
+func (s *Server) importV1Board(ctx context.Context, req api.ImportRequest, report func(api.ImportProgress)) (result api.ImportResult, err error) {
+	defer func() {
+		if err != nil {
+			s.logImportFailure(req.Project, err)
+		}
+	}()
 	progress := newImportEmitter(report)
 	defer progress.stop()
 	progress.phase(api.ImportPhaseLock)
@@ -105,6 +109,9 @@ func (s *Server) importV1Board(ctx context.Context, req api.ImportRequest, repor
 		}
 		return api.ImportResult{}, fmt.Errorf("recover the source board first: %w", err)
 	}
+	if err := s.importCheckpoint("recovered"); err != nil {
+		return api.ImportResult{}, err
+	}
 	return s.importPreparedSource(ctx, req, source, source, "", progress)
 }
 
@@ -113,7 +120,7 @@ func (s *Server) importV1Board(ctx context.Context, req api.ImportRequest, repor
 // is never recovered on this host and no network request can supply its path.
 func (s *Server) importPreparedSource(ctx context.Context, req api.ImportRequest, source, displaySource, expected string, progress *importEmitter) (result api.ImportResult, err error) {
 	if err := ctx.Err(); err != nil {
-		return result, err
+		return result, s.classifyImportCancel(err, ctx, nil)
 	}
 	info, _, err := s.register(api.RegisterProject{Name: req.Project, Remote: req.Remote})
 	if err != nil {
@@ -140,7 +147,7 @@ func (s *Server) importPreparedSource(ctx context.Context, req api.ImportRequest
 	uploaded := expected != ""
 	prepare := func() error {
 		progress.phase(api.ImportPhaseScan)
-		src, err := scanImportTree(ctx, source, progress.counter(api.ImportPhaseScan, 0), nil)
+		src, err := scanImportTree(ctx, source, progress.counter(api.ImportPhaseScan, 0), false)
 		if err != nil {
 			return err
 		}
@@ -173,24 +180,29 @@ func (s *Server) importPreparedSource(ctx context.Context, req api.ImportRequest
 		return err
 	}
 	if !uploaded {
-		err = board.WithImportSnapshot(ctx, source, prepare)
+		// Only the lock wait has a fixed limit. The scan and the copy run
+		// under ctx, so a large board is never cut off while it progresses.
+		lockWait, cancelLockWait := context.WithTimeout(ctx, s.importLockWait)
+		err = board.WithImportSnapshot(lockWait, source, prepare)
+		err = s.classifyImportCancel(err, ctx, lockWait)
+		cancelLockWait()
 	} else {
-		err = prepare()
+		err = s.classifyImportCancel(prepare(), ctx, nil)
 	}
 	if err != nil {
-		return result, p.settleFailedImport(err, uploaded)
+		return result, p.settleFailedImport(err)
 	}
 	if pending.Schema == 0 {
 		return result, nil // Repeated snapshot: no board or event changes.
 	}
 	if err := writeJSON(p.root, filepath.Join("control", "import-pending.json"), pending); err != nil {
-		return result, p.settleFailedImport(err, uploaded)
+		return result, p.settleFailedImport(err)
 	}
 	if err := s.importCheckpoint("prepared"); err != nil {
-		return result, p.settleFailedImport(err, uploaded)
+		return result, p.settleFailedImport(err)
 	}
 	if err := p.publishImport(pending); err != nil {
-		return result, p.settleFailedImport(err, uploaded)
+		return result, p.settleFailedImport(err)
 	}
 	p.importPublished()
 	result = pending.Record.result(info, displaySource)
@@ -261,11 +273,12 @@ func quotedPath(path string) string {
 	return q[1 : len(q)-1]
 }
 
-// settleFailedImport runs under p.mu. A failure after the publication intent
-// is recovered at once so a serving project never stays without its board;
-// when that also fails, the project refuses every board request until a
-// restart retries the recovery in project.open.
-func (p *project) settleFailedImport(failure error, cleanStage bool) error {
+// settleFailedImport runs under p.mu. A failure before the publication intent
+// removes the staging copy, whichever path ran the import. A failure after
+// the intent is recovered at once so a serving project never stays without
+// its board; when that also fails, the project refuses every board request
+// until a restart retries the recovery in project.open.
+func (p *project) settleFailedImport(failure error) error {
 	if errors.Is(failure, errImportCrash) {
 		return failure
 	}
@@ -277,11 +290,7 @@ func (p *project) settleFailedImport(failure error, cleanStage bool) error {
 		return errors.Join(failure, err)
 	}
 	if !found {
-		if cleanStage {
-			if err := removeImportDirectory(p.root, filepath.Join(p.root, "board.import")); err != nil {
-				p.log().Error("remove failed board import staging", "error", err)
-			}
-		}
+		p.discardImportStaging()
 		return failure
 	}
 	if err := p.publishImport(pending); err != nil {

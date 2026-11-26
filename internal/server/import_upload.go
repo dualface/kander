@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dualface/kander/v2/api"
@@ -33,7 +34,7 @@ func (s *Server) importUploadRoute(r *http.Request) outcome {
 		return outcome{err: apiError(api.CodeInvalidRequest, "unsupported board upload format")}
 	}
 	return outcome{stream: func(w http.ResponseWriter) int {
-		return s.handleImportUpload(w, r, name, defaultUploadLimits())
+		return s.handleImportUpload(w, r, name, s.upload)
 	}}
 }
 
@@ -49,7 +50,7 @@ func (s *Server) handleImportUpload(w http.ResponseWriter, r *http.Request, name
 		return e.Status
 	}
 	if r.ContentLength > limits.wireBytes() {
-		return reject(uploadTooLarge())
+		return reject(uploadTooLarge("request bytes", r.ContentLength, limits.wireBytes()))
 	}
 	s.mu.Lock()
 	if s.closing.Load() {
@@ -69,30 +70,33 @@ func (s *Server) handleImportUpload(w http.ResponseWriter, r *http.Request, name
 		s.uploadWorkers.Done()
 	}()
 
-	ctx, cancel := context.WithTimeout(r.Context(), limits.timeout)
+	// The receive deadline starts with the fixed part, which covers the
+	// manifest, and grows with the bytes the manifest declares.
+	started := time.Now()
+	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	rc := http.NewResponseController(w)
-	deadline, _ := ctx.Deadline()
-	if err := rc.SetReadDeadline(deadline); err != nil {
+	receive, err := newUploadReceive(rc, cancel, started.Add(limits.timeout))
+	if err != nil {
 		return reject(errors.New("cannot enforce board upload request deadline"))
 	}
+	defer receive.finish()
 	shutdownApplied := make(chan struct{})
 	stopShutdown := context.AfterFunc(s.shutdown, func() {
 		defer close(shutdownApplied)
-		cancel()
-		_ = rc.SetReadDeadline(time.Now())
+		receive.stop()
 	})
 	defer func() {
 		if !stopShutdown() {
 			<-shutdownApplied
 		}
-		_ = rc.SetReadDeadline(time.Time{})
 	}()
 
 	m, err := readUploadManifest(r.Body, limits)
 	if err != nil {
 		return reject(err)
 	}
+	receive.extend(started.Add(limits.deadline(declaredUploadBytes(m))))
 	if m.Project != name {
 		return reject(invalidUpload())
 	}
@@ -111,32 +115,44 @@ func (s *Server) handleImportUpload(w http.ResponseWriter, r *http.Request, name
 		s.log.Error("create board upload staging", "error", err)
 		return reject(errors.New("cannot create board upload staging"))
 	}
-	cleanStage := func() {
-		if err := stage.Close(); err != nil {
-			s.log.Error("remove board upload staging", "error", err)
+	cleanStage := sync.OnceFunc(func() {
+		if err := s.removeUploadStage(stage); err != nil {
+			s.log.Error("remove board upload staging", "project_name", name, "error", err)
 		}
-	}
+	})
 	defer cleanStage()
-	if err := receiveUpload(ctx, r.Body, stage.Path, m); err != nil {
+	if err := receiveUpload(ctx, r.Body, stage.Path, m, receive, limits.idle); err != nil {
 		return reject(err)
 	}
 	// The request is completely consumed before starting a response. This
 	// works with HTTP/1 without full duplex and treats truncation as refusal.
 	received = true
-	_ = rc.SetReadDeadline(time.Time{})
+	receive.finish()
 	if err := checkImportRecordLayout(uploadPaths(m)); err != nil {
 		return reject(err)
 	}
 	if err := board.CheckRecoveredImportJournal(stage.Path); err != nil {
 		return reject(importRejected("uploaded board has invalid or unrecovered transaction history"))
 	}
-	importCtx, finish := context.WithTimeout(ctx, ImportTimeout)
-	defer finish()
+	// The archive is complete and owned by the server. Its import follows
+	// the rules of a local import: it is not bound by the receive deadline
+	// and stops only when the client goes away or the server shuts down.
+	importCtx, finish := context.WithCancel(r.Context())
+	stopImportShutdown := context.AfterFunc(s.shutdown, finish)
+	defer func() {
+		stopImportShutdown()
+		finish()
+	}()
 	run := func(report func(api.ImportProgress)) (api.ImportResult, error) {
 		progress := newImportEmitter(report)
 		defer progress.stop()
 		progress.phase(api.ImportPhaseLock)
 		value, err := s.importPreparedSource(importCtx, m.ImportRequest, stage.Path, m.From, m.Snapshot, progress)
+		if err != nil {
+			// Log the original error first: the client conversion below
+			// drops the text of an unclassified failure.
+			s.logImportFailure(name, err)
+		}
 		cleanStage()
 		value.Project.BoardPath = ""
 		if err != nil {
@@ -155,6 +171,19 @@ func (s *Server) handleImportUpload(w http.ResponseWriter, r *http.Request, name
 	return http.StatusOK
 }
 
+// removeUploadStaging deletes an upload staging directory whatever the
+// number of its entries. The private temporary directory cleanup has an entry
+// budget that a board upload exceeds, so the server-created contents are
+// removed first with os.RemoveAll, which does not follow links, and the
+// TempDir then removes its empty root.
+func removeUploadStaging(stage *fs.TempDir) error {
+	entries, err := os.ReadDir(stage.Path)
+	for _, entry := range entries {
+		err = errors.Join(err, os.RemoveAll(filepath.Join(stage.Path, entry.Name())))
+	}
+	return errors.Join(err, stage.Close())
+}
+
 func uploadPaths(m api.ImportUploadManifest) []string {
 	paths := make([]string, len(m.Files))
 	for i, file := range m.Files {
@@ -163,7 +192,11 @@ func uploadPaths(m api.ImportUploadManifest) []string {
 	return paths
 }
 
-func receiveUpload(ctx context.Context, body io.Reader, staging string, m api.ImportUploadManifest) error {
+// receiveUpload writes the file bodies into staging. While they arrive, a
+// stall longer than idle ends the request; after the last one, the client
+// scans its source again before the marker, so only the absolute deadline
+// applies to the marker and the end of the request.
+func receiveUpload(ctx context.Context, body io.Reader, staging string, m api.ImportUploadManifest, receive *uploadReceive, idle time.Duration) error {
 	for _, rel := range m.Directories {
 		if err := ctx.Err(); err != nil {
 			return invalidUpload()
@@ -176,14 +209,17 @@ func receiveUpload(ctx context.Context, body io.Reader, staging string, m api.Im
 		}
 	}
 	buf := make([]byte, 64<<10)
+	receive.watchIdle(idle)
+	files := uploadBodyReader{r: body, receive: receive}
 	for _, file := range m.Files {
 		if err := ctx.Err(); err != nil {
 			return invalidUpload()
 		}
-		if err := receiveUploadFile(staging, body, file, buf); err != nil {
+		if err := receiveUploadFile(staging, files, file, buf); err != nil {
 			return err
 		}
 	}
+	receive.watchIdle(0)
 	// Demand a successful request EOF, not merely the declared file bytes.
 	// The sender emits this marker only after its final source snapshot.
 	var marker [len(api.ImportUploadComplete)]byte

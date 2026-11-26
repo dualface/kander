@@ -50,6 +50,9 @@ type Options struct {
 	Version string
 	// Ready, when set, is called with the listen address once RunForeground can serve.
 	Ready func(listen string)
+	// ImportUploadLimits bound board uploads; nil uses
+	// api.DefaultImportUploadLimits.
+	ImportUploadLimits *api.ImportUploadLimits
 }
 
 // Server is one opened data directory. Open takes its exclusive lock; Close
@@ -58,6 +61,10 @@ type Server struct {
 	maintenance        *maintenanceRequest
 	maintenanceChanged int
 	importFault        func(string) error
+	importLockWait     time.Duration // ImportTimeout; tests shorten it
+	removeUploadStage  func(*fs.TempDir) error
+	syncImportStage    func(root, dir string, files, dirs []string) error
+	upload             uploadLimits
 	createFault        func(api.Task)
 	registryFault      func() error
 	indexFault         func(*project, string) error
@@ -112,11 +119,22 @@ func Open(o Options) (*Server, error) {
 	s := &Server{
 		maintenance: o.maintenance, indexFault: o.indexFault, data: o.DataDir, ttl: o.TTL, renew: o.RenewInterval, log: o.Logger, clock: o.Now, version: o.Version, hooks: o.Hooks,
 		projects: map[string]*project{}, byName: map[string]string{}, shutdown: shutdown, shutdownCancel: shutdownCancel, startedAt: time.Now().UTC(),
-		indexRetryDelay: o.indexRetryDelay,
-		remarks:         o.Remarks,
-		uploadSlots:     make(chan struct{}, maxImportUploads),
+		indexRetryDelay:   o.indexRetryDelay,
+		remarks:           o.Remarks,
+		uploadSlots:       make(chan struct{}, maxImportUploads),
+		importLockWait:    ImportTimeout,
+		removeUploadStage: removeUploadStaging,
+		syncImportStage:   fs.SyncTree,
 	}
 	s.closeOnce = sync.OnceValue(s.close)
+	upload := api.DefaultImportUploadLimits()
+	if o.ImportUploadLimits != nil {
+		upload = *o.ImportUploadLimits
+	}
+	var err error
+	if s.upload, err = newUploadLimits(upload); err != nil {
+		return nil, err
+	}
 	if s.ttl <= 0 {
 		s.ttl = DefaultTTL
 	}

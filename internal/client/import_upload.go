@@ -13,12 +13,32 @@ import (
 	"github.com/dualface/kander/v2/api"
 )
 
+// importUploadDeadline is the server's receive deadline for the declared
+// bytes, and importUploadSlack the time this client adds to it; tests
+// replace them.
+var (
+	importUploadDeadline = api.ImportUploadDeadline
+	importUploadSlack    = time.Minute
+)
+
 // UploadImport sends a single, non-replayable board archive. It never
 // redirects the board to another endpoint or retries a partial request.
-func (c *Client) UploadImport(ctx context.Context, project string, archive io.ReadCloser, progress func(api.ImportProgress)) (api.ImportResult, error) {
+// declared receives the file bytes the archive's manifest declares, once its
+// producer knows them. Until the response arrives, the request gets one
+// minute more than the server's receive deadline for those bytes; a streamed
+// response then lasts as long as its lines keep arriving.
+func (c *Client) UploadImport(ctx context.Context, project string, archive io.ReadCloser, declared <-chan int64, progress func(api.ImportProgress)) (api.ImportResult, error) {
 	var out api.ImportResult
-	ctx, cancel := context.WithTimeout(ctx, api.ImportUploadTimeout+time.Minute)
-	defer cancel()
+	started := time.Now()
+	ctx, watch := newImportWatch(ctx, importUploadDeadline(0)+importUploadSlack)
+	defer watch.stop()
+	go func() {
+		select {
+		case n := <-declared:
+			watch.limit(started, importUploadDeadline(n)+importUploadSlack)
+		case <-ctx.Done():
+		}
+	}()
 	body := &importUploadBody{Reader: archive, close: sync.OnceValue(archive.Close)}
 	stopClosing := context.AfterFunc(ctx, func() { _ = body.Close() })
 	defer stopClosing()
@@ -52,7 +72,9 @@ func (c *Client) UploadImport(ctx context.Context, project string, archive io.Re
 		if !importStreamed(resp) {
 			return out, &api.Error{Code: api.CodeInternal, Message: "unexpected board upload response"}
 		}
-		return readImportStream(resp.Body, progress)
+		watch.stream()
+		out, err := readImportStream(resp.Body, progress, watch.alive)
+		return out, watch.failure(ctx, err)
 	default:
 		e := &api.Error{Status: resp.StatusCode}
 		d := json.NewDecoder(io.LimitReader(resp.Body, importLineLimit))

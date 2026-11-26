@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -250,6 +251,7 @@ func TestUploadRejectsInvalidArchivesWithoutPublishing(t *testing.T) {
 		code    string
 		status  int
 		limited func(*uploadLimits)
+		message string
 	}
 	reject := func(manifest any, suffix string) caseData {
 		return caseData{body: packUpload(t, manifest, suffix), code: api.CodeBoardRejected, status: http.StatusUnprocessableEntity}
@@ -281,13 +283,23 @@ func TestUploadRejectsInvalidArchivesWithoutPublishing(t *testing.T) {
 	for _, rel := range []string{"/absolute", "backlog/../outside", "backlog/./fixture", "backlog//fixture", `backlog\fixture.md`, "backlog/fixture:stream", "backlog/fixture."} {
 		cases[rel] = reject(uploadFixtureManifest(rel, "abc"), "abc"+marker)
 	}
-	for name, limit := range map[string]func(*uploadLimits){
-		"files":       func(l *uploadLimits) { l.files = 0 },
-		"total bytes": func(l *uploadLimits) { l.bytes = 2 },
-		"file bytes":  func(l *uploadLimits) { l.fileBytes = 2 },
-		"manifest":    func(l *uploadLimits) { l.manifest = 3 },
+	manifestBytes, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dirs := len(m.Directories)
+	for name, limit := range map[string]struct {
+		set     func(*uploadLimits)
+		message string
+	}{
+		"files":          {func(l *uploadLimits) { l.files = 0 }, "the files limit: declared 1, limit 0"},
+		"directories":    {func(l *uploadLimits) { l.dirs = dirs - 1 }, fmt.Sprintf("the directories limit: declared %d, limit %d", dirs, dirs-1)},
+		"total bytes":    {func(l *uploadLimits) { l.bytes = 2 }, "the total bytes limit: declared 3, limit 2"},
+		"file bytes":     {func(l *uploadLimits) { l.fileBytes = 2 }, "the file bytes limit: declared 3, limit 2"},
+		"manifest bytes": {func(l *uploadLimits) { l.manifest = 3 }, fmt.Sprintf("the manifest bytes limit: declared %d, limit 3", len(manifestBytes))},
 	} {
-		cases[name] = caseData{body: packUpload(t, m, "abc"+marker), code: api.CodeInvalidRequest, status: http.StatusRequestEntityTooLarge, limited: limit}
+		cases[name] = caseData{body: packUpload(t, m, "abc"+marker), code: api.CodeInvalidRequest, status: http.StatusRequestEntityTooLarge, limited: limit.set,
+			message: "board upload exceeds " + limit.message}
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -300,7 +312,8 @@ func TestUploadRejectsInvalidArchivesWithoutPublishing(t *testing.T) {
 			} else {
 				s.Handler().ServeHTTP(out, request)
 			}
-			if out.Code != tc.status || !containsErrorCode(out.ResponseRecorder, tc.code) || strings.Contains(out.Body.String(), s.data) {
+			if out.Code != tc.status || !containsErrorCode(out.ResponseRecorder, tc.code) || strings.Contains(out.Body.String(), s.data) ||
+				!strings.Contains(out.Body.String(), tc.message) {
 				t.Fatalf("upload refusal = %d %s", out.Code, out.Body)
 			}
 			if _, err := s.projectByName("demo"); !api.IsCode(err, api.CodeNotFound) {
@@ -402,7 +415,7 @@ func TestUploadDisconnectBeforeEOFDoesNotPublishAndCanRetry(t *testing.T) {
 	defer h.Close()
 	var archive bytes.Buffer
 	request := api.ImportRequest{Project: "demo", From: source}
-	if err := writeBoardUpload(t.Context(), &archive, request, nil); err != nil {
+	if err := writeBoardUpload(t.Context(), &archive, request, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	reader, writer := io.Pipe()
@@ -413,7 +426,7 @@ func TestUploadDisconnectBeforeEOFDoesNotPublishAndCanRetry(t *testing.T) {
 	peer, _ := client.New(h.URL, "uploader")
 	result := make(chan error, 1)
 	go func() {
-		_, err := peer.UploadImport(ctx, "demo", reader, nil)
+		_, err := peer.UploadImport(ctx, "demo", reader, nil, nil)
 		result <- err
 	}()
 	if _, err := writer.Write(archive.Bytes()); err != nil {

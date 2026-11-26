@@ -66,7 +66,11 @@ const (
 	CodeIndexRebuilding      = "index_rebuilding"
 	CodeDecisionReserved     = "decision_reserved"
 	CodeConfirmationRequired = "confirmation_required"
-	CodeInternal             = "internal"
+	// CodeImportCanceled means a board import stopped before publication:
+	// the source lock wait expired, the caller went away, or the server is
+	// shutting down. Nothing was published, and the same import can run again.
+	CodeImportCanceled = "import_canceled"
+	CodeInternal       = "internal"
 )
 
 // Error is the JSON error body of every non-2xx response. BoardCode carries

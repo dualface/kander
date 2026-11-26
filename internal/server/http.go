@@ -76,7 +76,7 @@ func Routes() []Route {
 
 func (s *Server) registerRoutes(mux *routeTable) {
 	s.adminRoutes(mux)
-	mux.HandleFunc("POST "+api.ImportUploadRoute, s.domainWithBodyLimit(defaultUploadLimits().wireBytes(), s.importUploadRoute))
+	mux.HandleFunc("POST "+api.ImportUploadRoute, s.domainWithBodyLimit(s.upload.wireBytes(), s.importUploadRoute))
 	mux.probe("GET /api/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSONResponse(w, http.StatusOK, api.Health{Status: "alive", Ready: s.ready.Load()})
 	})

@@ -30,7 +30,14 @@ func (s *Server) importRoute(r *http.Request) outcome {
 	if !filepath.IsAbs(req.From) {
 		return outcome{err: apiError(api.CodeInvalidRequest, "import source must be an absolute path on the server host")}
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), ImportTimeout)
+	// The import runs until it ends, the caller goes away, or the server
+	// shuts down: Shutdown does not cancel running requests by itself.
+	ctx, cancelImport := context.WithCancel(r.Context())
+	stopShutdown := context.AfterFunc(s.shutdown, cancelImport)
+	cancel := func() {
+		stopShutdown()
+		cancelImport()
+	}
 	if !strings.Contains(r.Header.Get("Accept"), api.ImportStreamType) {
 		defer cancel()
 		value, err := s.importV1Board(ctx, req, nil)

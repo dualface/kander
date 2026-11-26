@@ -46,6 +46,7 @@ var codeStatus = map[string]int{
 	api.CodeBoardRejected:        http.StatusUnprocessableEntity,
 	api.CodeNotReady:             http.StatusServiceUnavailable,
 	api.CodeIndexRebuilding:      http.StatusServiceUnavailable,
+	api.CodeImportCanceled:       http.StatusServiceUnavailable,
 	api.CodeInternal:             http.StatusInternalServerError,
 }
 
