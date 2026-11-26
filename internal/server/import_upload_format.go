@@ -49,10 +49,8 @@ func validUploadPath(rel string) bool {
 	if len(rel) > 4096 || rel == "." || !fs.ValidPath(rel) || strings.ContainsAny(rel, "\\:<>|\"?*") {
 		return false
 	}
-	private := rel == ".kander" || strings.HasPrefix(rel, ".kander/")
 	for part := range strings.SplitSeq(rel, "/") {
-		if len(part) > 255 || (strings.HasPrefix(part, ".") && !private) ||
-			strings.HasSuffix(part, ".") || strings.HasSuffix(part, " ") || strings.ContainsFunc(part, unicode.IsControl) {
+		if len(part) > 255 || strings.HasSuffix(part, ".") || strings.HasSuffix(part, " ") || strings.ContainsFunc(part, unicode.IsControl) {
 			return false
 		}
 	}

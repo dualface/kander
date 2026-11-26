@@ -113,6 +113,14 @@ func TestUploadEmptyProjectMatchesLocalImportAndReplays(t *testing.T) {
 	source := v1Board(t)
 	defaults := stripSize(t, source)
 	closed := addClosedCard(t, source, "done", "history", true)
+	dotFiles := map[string]string{
+		"backlog/.gitkeep": "",
+		".gitignore":       "/local-cache/\n",
+		"done/.DS_Store":   "historical Finder metadata",
+	}
+	for path, contents := range dotFiles {
+		writeImportFixture(t, source, path, contents)
+	}
 	local, localHTTP := openTest(t, t.TempDir(), nil)
 	defer local.Close()
 	defer localHTTP.Close()
@@ -139,6 +147,12 @@ func TestUploadEmptyProjectMatchesLocalImportAndReplays(t *testing.T) {
 	p, err := s.project(got.Project.ID)
 	if err != nil {
 		t.Fatal(err)
+	}
+	for path, want := range dotFiles {
+		data, err := os.ReadFile(filepath.Join(p.board, filepath.FromSlash(path)))
+		if err != nil || string(data) != want {
+			t.Fatalf("imported dot file %s = %q, %v", path, data, err)
+		}
 	}
 	record, err := p.readImportRecord(got.Snapshot)
 	if err != nil || record.Source != source || record.Snapshot != got.Snapshot {
@@ -264,7 +278,7 @@ func TestUploadRejectsInvalidArchivesWithoutPublishing(t *testing.T) {
 		"link metadata":       reject(map[string]any{"project": "demo", "files": []map[string]any{{"path": "backlog/regular.md", "type": "symlink"}}}, marker),
 		"special entry":       reject(map[string]any{"project": "demo", "files": []map[string]any{{"path": "backlog/regular.md", "type": "directory"}}}, marker),
 	}
-	for _, rel := range []string{"/absolute", "backlog/../outside", "backlog/./fixture", "backlog//fixture", `backlog\fixture.md`, "backlog/fixture:stream", "backlog/.hidden"} {
+	for _, rel := range []string{"/absolute", "backlog/../outside", "backlog/./fixture", "backlog//fixture", `backlog\fixture.md`, "backlog/fixture:stream", "backlog/fixture."} {
 		cases[rel] = reject(uploadFixtureManifest(rel, "abc"), "abc"+marker)
 	}
 	for name, limit := range map[string]func(*uploadLimits){
