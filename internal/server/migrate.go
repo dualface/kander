@@ -68,8 +68,10 @@ func (s *Server) Import(name, remote, source string) (api.ImportResult, error) {
 const ImportTimeout = 5 * time.Minute
 
 // ImportContext runs offline and inside a serving instance alike. While it
-// holds p.mu, every request of the project waits; a publication that fails and
-// cannot be recovered in process closes the project until restart.
+// holds p.mu, every request of the project waits, and that time does not count
+// against the leases active when it took the lock (pauseImportLeases); a
+// publication that fails and cannot be recovered in process closes the project
+// until restart.
 func (s *Server) ImportContext(ctx context.Context, name, remote, source string) (api.ImportResult, error) {
 	return s.ImportWithProgress(ctx, name, remote, source, nil)
 }
@@ -125,6 +127,12 @@ func (s *Server) importPreparedSource(ctx context.Context, req api.ImportRequest
 		return result, err
 	}
 	defer p.unlockBoard()
+	p.beginImportPause()
+	defer func() {
+		if errors.Is(err, errImportCrash) {
+			p.importCrashed = true
+		}
+	}()
 	if err := p.recoverImport(); err != nil {
 		return result, err
 	}

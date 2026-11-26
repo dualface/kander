@@ -3,6 +3,7 @@ package server
 import (
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/dualface/kander/v2/internal/fs"
 	"github.com/dualface/kander/v2/internal/statemachine/serverclaim"
@@ -21,69 +22,106 @@ import (
 // opening, and opening it again repeats the same writes.
 func (p *project) startupLeases() error {
 	deadline := p.server.now().Add(p.server.ttl)
-	tasks, err := p.serviceNames("claims", ".json", fs.KindFile)
-	if err != nil {
-		return err
+	return p.extendActiveLeases(func(expires time.Time) (time.Time, bool) {
+		return deadline, expires.Before(deadline)
+	}, func(err error) error { return err })
+}
+
+// leaseExtension returns the new expiry of an active lease, and false to leave
+// the lease as it is.
+type leaseExtension func(expires time.Time) (time.Time, bool)
+
+// extendActiveLeases moves the expiry of every active task claim, group lease,
+// and integration target lease as extend decides. A record is active when its
+// kernel accepts the startup event: the formal model names that event for a
+// server start, and a board import that held the project lock uses it with the
+// same meaning, since in both cases the server was unavailable to the holders
+// through no fault of theirs. Only ExpiresAt changes; RenewedAt stays, since
+// no holder renewed. fail receives every error; it returns nil to go on with
+// the next record or the error to stop.
+func (p *project) extendActiveLeases(extend leaseExtension, fail func(error) error) error {
+	kinds := []struct {
+		dir, suffix string
+		kind        fs.Kind
+		extend      func(string, leaseExtension) error
+	}{
+		{"claims", ".json", fs.KindFile, p.extendClaim},
+		{"group-claims", ".json", fs.KindFile, p.extendGroupLease},
+		{"integrations", "", fs.KindDirectory, p.extendIntegrationLease},
 	}
-	for _, task := range tasks {
-		r, found, err := p.readClaim(task)
+	for _, k := range kinds {
+		names, err := p.serviceNames(k.dir, k.suffix, k.kind)
 		if err != nil {
-			return err
-		}
-		k, err := p.projectClaim(r, found, false)
-		if err != nil {
-			return err
-		}
-		if !k.step(serverclaim.Startup{}) || !r.ExpiresAt.Before(deadline) {
+			if err := fail(err); err != nil {
+				return err
+			}
 			continue
 		}
-		r.ExpiresAt = deadline
-		if err := p.writeClaim(r); err != nil {
-			return err
-		}
-	}
-	groups, err := p.serviceNames("group-claims", ".json", fs.KindFile)
-	if err != nil {
-		return err
-	}
-	for _, group := range groups {
-		r, found, err := p.readGroupClaim(group)
-		if err != nil {
-			return err
-		}
-		if !p.projectGroup(r, found, nil).step(servergrouplease.Startup{}) || !r.ExpiresAt.Before(deadline) {
-			continue
-		}
-		r.ExpiresAt = deadline
-		if err := writeJSON(p.root, servicePath(groupClaimName(group)), r); err != nil {
-			return err
-		}
-	}
-	targets, err := p.serviceNames("integrations", "", fs.KindDirectory)
-	if err != nil {
-		return err
-	}
-	for _, id := range targets {
-		record, found, err := p.readIntegration(id)
-		if err != nil {
-			return err
-		}
-		if !found {
-			continue
-		}
-		k, err := p.projectIntegration(record.Value, true, nil)
-		if err != nil {
-			return err
-		}
-		if !k.step(serverintegration.Startup{}) || !record.Value.ExpiresAt.Before(deadline) {
-			continue
-		}
-		record.Value.ExpiresAt = deadline
-		if err := writeJSON(p.root, servicePath(integrationName(id)), record); err != nil {
-			return err
+		for _, name := range names {
+			if err := k.extend(name, extend); err != nil {
+				if err := fail(err); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return nil
+}
+
+func (p *project) extendClaim(task string, extend leaseExtension) error {
+	r, found, err := p.readClaim(task)
+	if err != nil {
+		return err
+	}
+	k, err := p.projectClaim(r, found, false)
+	if err != nil {
+		return err
+	}
+	if !k.step(serverclaim.Startup{}) {
+		return nil
+	}
+	expires, ok := extend(r.ExpiresAt)
+	if !ok {
+		return nil
+	}
+	r.ExpiresAt = expires
+	return p.writeClaim(r)
+}
+
+func (p *project) extendGroupLease(group string, extend leaseExtension) error {
+	r, found, err := p.readGroupClaim(group)
+	if err != nil {
+		return err
+	}
+	if !p.projectGroup(r, found, nil).step(servergrouplease.Startup{}) {
+		return nil
+	}
+	expires, ok := extend(r.ExpiresAt)
+	if !ok {
+		return nil
+	}
+	r.ExpiresAt = expires
+	return writeJSON(p.root, servicePath(groupClaimName(group)), r)
+}
+
+func (p *project) extendIntegrationLease(id string, extend leaseExtension) error {
+	record, found, err := p.readIntegration(id)
+	if err != nil || !found {
+		return err
+	}
+	k, err := p.projectIntegration(record.Value, true, nil)
+	if err != nil {
+		return err
+	}
+	if !k.step(serverintegration.Startup{}) {
+		return nil
+	}
+	expires, ok := extend(record.Value.ExpiresAt)
+	if !ok {
+		return nil
+	}
+	record.Value.ExpiresAt = expires
+	return writeJSON(p.root, servicePath(integrationName(id)), record)
 }
 
 // serviceNames lists the entries of one kind below a service directory, with
