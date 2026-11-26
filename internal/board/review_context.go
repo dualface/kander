@@ -20,6 +20,15 @@ func ReadReviewInput(root, id, name string) (data []byte, err error) {
 		if e != nil {
 			return e
 		}
+		if !ok {
+			compacted, e := compactionLookup(tx.root, run)
+			if e != nil {
+				return e
+			}
+			if compacted(compactedInputs, name) {
+				return compactedError(id, name)
+			}
+		}
 		if !ok || ReviewDigest(data) != run.InputHashes[name] {
 			return reviewError("frozen input mismatch")
 		}

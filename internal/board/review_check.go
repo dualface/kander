@@ -264,7 +264,11 @@ func checkRunStructure(tx *Transaction, run ReviewRun, runs map[string]ReviewRun
 	if e != nil {
 		return e
 	}
-	if e = verifyReviewHashes(files, run.Hashes); e != nil {
+	compacted, e := compactionLookup(tx.root, run)
+	if e != nil {
+		return e
+	}
+	if e = verifyReviewHashes(files, run.Hashes, func(name string) bool { return compacted(compactedOriginals, name) }); e != nil {
 		return e
 	}
 	for name, hash := range run.InputHashes {

@@ -148,7 +148,11 @@ func stageReviewRunCard(tx *Transaction, current *ReviewRun, run ReviewRun, id s
 	if e != nil {
 		return e
 	}
-	if e = verifyReviewHashes(originals, run.Hashes); e != nil {
+	compacted, e := compactionLookup(tx.root, run)
+	if e != nil {
+		return e
+	}
+	if e = verifyReviewHashes(originals, run.Hashes, func(name string) bool { return compacted(compactedOriginals, name) }); e != nil {
 		return e
 	}
 	sidecar, ok, e := tx.ReadGroup(reviewControlGroup, "runs/"+runID+"/sidecar.json")
@@ -166,6 +170,10 @@ func stageReviewRunCard(tx *Transaction, current *ReviewRun, run ReviewRun, id s
 			return firstError(verified, reviewError("intent conflict"))
 		}
 		return nil
+	}
+	// A compacted run no longer holds the originals a new copy needs.
+	if e = requireNotCompacted(tx.root, run); e != nil {
+		return e
 	}
 	next, ok := stepReviewRun(state, reviewrun.Stage{SameInput: true, GroupOk: true, MemberOk: true, Integrity: true})
 	if !ok {

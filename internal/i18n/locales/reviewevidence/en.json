@@ -1,4 +1,8 @@
 {
+  "board.check_review_compacted": "{{.V0}}: compacted review runs (large evidence removed after settlement; report, records and hashes kept): {{.V1}}",
+  "board.review_compacted": "review run {{.V0}} is compacted: {{.V1}} was removed after the run settled; its hash stays recorded",
+  "board.review_run_compacted": "review run {{.V0}} is compacted: its large evidence was removed after it settled, so it cannot be prepared, published or replayed again. Its report and records stay readable; use a new run ID for a new review",
+  "remote.error_review_compacted": "the review run was compacted; its large evidence was removed after it settled",
   "review.artifact_request_too_large": "Review artifact {{.V0}} ({{.V1}} raw bytes) needs a {{.V2}}-byte request, exceeding the {{.V3}}-byte limit.{{if .V4}} Largest content source: {{.V4}}.{{end}}{{if eq .V0 \"evidence.txt\"}} The commit log or file ledger is too large. Narrow the review range, then retry with a new run ID.{{else}} Shorten supplemental review context or custom review instructions, then retry with a new run ID.{{end}}",
   "review.git_inspection_unavailable": "Reviewer {{.V0}} cannot run read-only Git in the review worktree. Choose a reviewer that can, such as claude or codex. If the card pins the reviewer in REVIEW_<ROLE>_AGENT, change the pin through a contract decision first. If the previous run used this reviewer, start a first-round review with the new reviewer and omit --previous-run-id (open a new batch if needed)."
 }

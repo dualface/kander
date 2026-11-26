@@ -149,6 +149,9 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 		return control(root, append([]string{"groups", reviewControlGroup}, parts...)...)
 	}
 	for _, id := range sortedKeys(plan.runs) {
+		// The prune receipt already covers the run, and a receipt removed first
+		// is never left behind by an interruption with no run to name it.
+		remove(compactionReceiptPath(root, id), false)
 		remove(review("runs", id), true)
 	}
 	for _, id := range sortedKeys(plan.batches) {

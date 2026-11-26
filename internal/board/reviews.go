@@ -264,6 +264,12 @@ func PrepareReviewRunWithTransaction(root string, input ReviewInput, requirement
 			// Before the members are read: a member that finished since must not hide it.
 			return abandonedRunError(run.RunID)
 		}
+		if exists {
+			// Compaction removed the inputs a replay would compare and copy.
+			if e = requireNotCompacted(root, run); e != nil {
+				return e
+			}
+		}
 		fallback := input.ReportLanguage
 		input.ReportLanguage = ""
 		if exists {
@@ -605,14 +611,21 @@ func reviewOriginals(tx *Transaction, id string, final bool) (map[string][]byte,
 	return result, nil
 }
 
-func verifyReviewHashes(files map[string][]byte, hashes map[string]string) error {
-	if len(files) != len(hashes) {
-		return reviewError("original set mismatch")
+// verifyReviewHashes compares the originals of a run with its hashes. A hashed
+// original may be missing only when compacted lists it; one that exists is
+// always hashed.
+func verifyReviewHashes(files map[string][]byte, hashes map[string]string, compacted func(name string) bool) error {
+	for name := range files {
+		if _, ok := hashes[name]; !ok {
+			return reviewError("original set mismatch")
+		}
 	}
 	for _, name := range slices.Sorted(maps.Keys(hashes)) {
-		hash := hashes[name]
 		data, ok := files[name]
-		if !ok || ReviewDigest(data) != hash {
+		if !ok && compacted(name) {
+			continue
+		}
+		if !ok || ReviewDigest(data) != hashes[name] {
 			return reviewError(name + ": hash mismatch")
 		}
 	}
@@ -725,9 +738,16 @@ func verifyCardReview(tx *Transaction, id string, manifest ReviewManifest, sidec
 	if b != string(sidecar) || ReviewDigest([]byte(b)) != manifest.SidecarHash {
 		return reviewError("sidecar hash mismatch")
 	}
+	compacted, err := compactionLookup(tx.root, ReviewRun{ReviewInput: manifest.Input})
+	if err != nil {
+		return err
+	}
 	for _, name := range slices.Sorted(maps.Keys(manifest.Hashes)) {
 		hash := manifest.Hashes[name]
 		b, err = tx.Read(id, prefix+name)
+		if errors.Is(err, os.ErrNotExist) && compacted(compactedCardPre+id, name) {
+			continue
+		}
 		if err != nil {
 			return err
 		}
@@ -831,6 +851,15 @@ func ReadReviewOriginal(root, id, name string) (data []byte, err error) {
 		data, ok, e = tx.ReadGroup(reviewControlGroup, "runs/"+id+"/originals/"+name)
 		if e != nil {
 			return e
+		}
+		if !ok {
+			compacted, e := compactionLookup(tx.root, run)
+			if e != nil {
+				return e
+			}
+			if compacted(compactedOriginals, name) {
+				return compactedError(id, name)
+			}
 		}
 		if !ok || ReviewDigest(data) != hash {
 			return reviewError("original hash mismatch")

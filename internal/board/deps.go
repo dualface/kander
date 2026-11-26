@@ -403,10 +403,35 @@ func checkBoard(root string, taskIDs []string, includeAll, importHistory bool) (
 	for _, problem := range allProblems {
 		stderr = append(stderr, t("board.invalid", problem.Message))
 	}
+	notes, err := compactionNotes(root, board, taskIDs, includeAll)
+	if err != nil {
+		return 1, "", nil, err
+	}
 	if len(allProblems) > 0 {
 		return 1, t(
 			"board.checked_valid_invalid", itoa(checked), itoa(len(allProblems)),
-		) + "\n", stderr, nil
+		) + "\n" + notes, stderr, nil
 	}
-	return 0, t("board.ok_tasks", itoa(checked)) + "\n", nil, nil
+	return 0, t("board.ok_tasks", itoa(checked)) + "\n" + notes, nil, nil
+}
+
+// compactionNotes lists, one line per checked card, the review runs whose large
+// evidence a compaction removed. It is information, never a problem.
+func compactionNotes(root string, board Board, taskIDs []string, includeAll bool) (string, error) {
+	var ids []string
+	for id, entry := range board.Entries {
+		if _, skip := deferredCheckStates[entry.State]; skip && len(taskIDs) == 0 && !includeAll {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	compacted, err := CompactedReviewRuns(root, ids)
+	if err != nil {
+		return "", err
+	}
+	var notes strings.Builder
+	for _, id := range sortedKeys(compacted) {
+		notes.WriteString(t("board.check_review_compacted", id, strings.Join(compacted[id], ", ")) + "\n")
+	}
+	return notes.String(), nil
 }
