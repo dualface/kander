@@ -278,14 +278,15 @@ func newRenameAcknowledgement(before, after string, old, current []renameAcknowl
 				comparedScroll = true
 			}
 			appended := retained > 0 && ack.row > retained
+			replacesDropped := firstRows[ack.text] < dropped
 			if sameRow {
 				shifted := ack.row - dropped
-				fresh = fresh && appended && shifted >= 0 && shifted < retained &&
+				fresh = (fresh || replacesDropped) && appended && shifted >= 0 && shifted < retained &&
 					slices.ContainsFunc(current, func(oldMatch renameAcknowledgement) bool {
 						return oldMatch.row == shifted && oldMatch.text == ack.text
 					})
 			} else {
-				fresh = appended && firstRows[ack.text] < dropped
+				fresh = appended && replacesDropped
 			}
 		}
 		if fresh && (!result.hasEcho() || ack.hasEcho()) {

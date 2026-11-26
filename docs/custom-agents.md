@@ -92,8 +92,9 @@ If a new acknowledgement uses the same row as an older one, the retained
 viewport lines must show that the older match moved higher on the screen.
 If the number of matches does not increase, a repeated acknowledgement and
 its echo must appear below the retained viewport lines after an older match
-scrolls out. After a delivery error, no acknowledgement can hide a visible
-rename draft.
+scrolls out. Both checks apply when one older match moves and another scrolls
+out. After a delivery error, no acknowledgement can hide a visible rename
+draft.
 `after_argv: true` preserves the
 initial prompt argument. Use it only for a client verified to handle the
 rename command locally without interfering with that first prompt.
