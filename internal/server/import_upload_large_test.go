@@ -99,9 +99,7 @@ func TestLargeUploadStagingIsRemovedAtEveryEnd(t *testing.T) {
 	// than overBudgetFiles files are staged when the body stops.
 	partial := archive[:len(archive)-len(api.ImportUploadComplete)-1]
 	t.Run("receive idle", func(t *testing.T) {
-		s, h := openTest(t, t.TempDir(), nil)
-		defer h.Close()
-		defer s.Close()
+		s, _, logs, _ := openLogged(t, t.TempDir())
 		limits := defaultUploadLimits()
 		limits.idle = 200 * time.Millisecond
 		url, handled := limitedUploads(t, s, limits)
@@ -117,13 +115,13 @@ func TestLargeUploadStagingIsRemovedAtEveryEnd(t *testing.T) {
 		if status := waitFor(t, handled, "the idle abort"); status != http.StatusUnprocessableEntity {
 			t.Fatalf("idle upload: handler status %d", status)
 		}
+		logs.waitContains(t, `"msg":"board upload refused","project_name":"demo","stage":"file body `)
+		logs.waitContains(t, "i/o timeout")
 		assertUploadClean(t, s.data, "demo")
 		assertNothingPublished(t, s, "demo")
 	})
 	t.Run("client disconnect", func(t *testing.T) {
-		s, h := openTest(t, t.TempDir(), nil)
-		defer h.Close()
-		defer s.Close()
+		s, _, logs, _ := openLogged(t, t.TempDir())
 		url, handled := limitedUploads(t, s, defaultUploadLimits())
 		reader, writer := io.Pipe()
 		ctx, cancel := context.WithCancel(t.Context())
@@ -135,6 +133,7 @@ func TestLargeUploadStagingIsRemovedAtEveryEnd(t *testing.T) {
 			t.Fatal("a canceled upload answered")
 		}
 		waitFor(t, handled, "the handler after the disconnect")
+		logs.waitContains(t, `"msg":"board upload refused","project_name":"demo","stage":"file body `)
 		assertUploadClean(t, s.data, "demo")
 		assertNothingPublished(t, s, "demo")
 	})

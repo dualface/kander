@@ -111,15 +111,20 @@ func readUploadManifest(r io.Reader, limits uploadLimits) (api.ImportUploadManif
 	var m api.ImportUploadManifest
 	var size uint32
 	if err := binary.Read(r, binary.BigEndian, &size); err != nil {
-		return m, invalidUpload()
+		return m, uploadReceiveFailed("manifest", err)
 	}
 	if int64(size) > int64(limits.manifest) {
 		return m, uploadTooLarge("manifest bytes", int64(size), int64(limits.manifest))
 	}
-	body := &io.LimitedReader{R: r, N: int64(size)}
+	read := &readFailure{r: r}
+	body := &io.LimitedReader{R: read, N: int64(size)}
 	d := json.NewDecoder(body)
 	d.DisallowUnknownFields()
 	if err := decodeUploadManifest(d, &m, limits); err != nil {
+		if read.err != nil {
+			// The body failed, not its JSON: keep the cause for the log.
+			return m, uploadReceiveFailed("manifest", read.err)
+		}
 		return m, err
 	}
 	if _, err := d.Token(); err != io.EOF || body.N != 0 {
@@ -284,4 +289,18 @@ func declaredUploadBytes(m api.ImportUploadManifest) int64 {
 		total += file.Size
 	}
 	return total
+}
+
+// readFailure remembers the first read error other than the end of input.
+type readFailure struct {
+	r   io.Reader
+	err error
+}
+
+func (f *readFailure) Read(p []byte) (int, error) {
+	n, err := f.r.Read(p)
+	if err != nil && err != io.EOF && f.err == nil {
+		f.err = err
+	}
+	return n, err
 }
