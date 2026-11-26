@@ -190,7 +190,7 @@ func TestARecoveredRequestWhoseTypingFailsStaysUncertain(t *testing.T) {
 // therefore types up to one renewal interval later.
 func TestAWorkerThatStartsAgainRecoversALostReservation(t *testing.T) {
 	h, _, _, reserved := lostReservation(t)
-	h.loop = newLoop(h.workerOptions())
+	h.restartLoop()
 	pr := h.target(nil)
 	h.advance(16 * time.Second)
 	if _, err := h.pass(t.Context()); err != nil {

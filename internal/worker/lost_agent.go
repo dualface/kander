@@ -19,6 +19,7 @@ var StopAgent func(context.Context, string, string) error
 
 func (w *loop) stopLost(ctx context.Context, log *slog.Logger, c remote.Credential) {
 	w.closeDeliveryScope(keyOf(c))
+	w.forgetReplays(keyOf(c))
 	if c.AgentPID == 0 && (c.Window == "" || c.Session == "") {
 		return
 	}

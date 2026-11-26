@@ -19,7 +19,15 @@ import (
 type answerTap struct {
 	mu      sync.Mutex
 	answers []api.CollabAnswer
-	fault   func(http.ResponseWriter, *http.Request, http.Handler, api.CollabAnswer) bool
+	// sends holds every answer as it arrived, for requireStableSends.
+	sends []tappedSend
+	fault func(http.ResponseWriter, *http.Request, http.Handler, api.CollabAnswer) bool
+}
+
+type tappedSend struct {
+	request, key string
+	body         []byte
+	answer       api.CollabAnswer
 }
 
 func (s *answerTap) wrap(next http.Handler) http.Handler {
@@ -34,6 +42,8 @@ func (s *answerTap) wrap(next http.Handler) http.Handler {
 			r.Body = io.NopCloser(bytes.NewReader(body))
 			s.mu.Lock()
 			s.answers = append(s.answers, answer)
+			segments := strings.Split(r.URL.Path, "/")
+			s.sends = append(s.sends, tappedSend{request: segments[len(segments)-2], key: r.Header.Get(api.HeaderIdempotencyKey), body: body, answer: answer})
 			s.mu.Unlock()
 			if s.fault != nil && s.fault(w, r, next, answer) {
 				return
@@ -53,6 +63,31 @@ func (s *answerTap) revisions(note string) []uint64 {
 		}
 	}
 	return revisions
+}
+
+// withNote returns the sends whose answer has the note, as the gateway tap
+// records them, for requireOneAttempt.
+func (s *answerTap) withNote(note string) []gatewaySend {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var found []gatewaySend
+	for _, send := range s.sends {
+		if send.answer.Note == note {
+			found = append(found, gatewaySend{request: send.request, key: send.key, body: send.body, answer: send.answer})
+		}
+	}
+	return found
+}
+
+// requireStableSends checks the replay invariant as the gateway tap does.
+func (s *answerTap) requireStableSends(t *testing.T) {
+	t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	checker := stableSends{}
+	for _, send := range s.sends {
+		checker.add(t, send.request, send.key, send.body, send.answer)
+	}
 }
 
 func denyTestAnswer(w http.ResponseWriter, status int, code string) {
@@ -184,11 +219,13 @@ func TestAcknowledgementRetriesTransientWriteFailureWithoutTyping(t *testing.T) 
 	scope := h.loop.deliveries[keyOf(c)]
 	ackResultOf(t, scope, r.ID)
 	h.workAfter(0)
-	if len(scope.snapshotResults()) != 1 || h.requests(c)[0].Note != typedNote {
+	if open := h.openAttempts(c); len(open) != 1 || open[0].kind != answerResult || h.requests(c)[0].Note != typedNote {
 		t.Fatal("transient error must retain the result for another round")
 	}
-	h.workAfter(0)
+	h.workAfter(answerBackoffFirst)
 	if len(tap.revisions(ackedNote)) != 2 || len(h.lines) != 1 || h.requests(c)[0].Note != ackedNote {
 		t.Fatal("result was not retried once without typing again")
 	}
+	requireOneAttempt(t, "the result", tap.withNote(ackedNote))
+	tap.requireStableSends(t)
 }
