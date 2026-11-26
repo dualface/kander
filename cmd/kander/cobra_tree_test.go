@@ -93,7 +93,7 @@ var samplePositionals = map[string][]string{
 	"issue show":                   {"42"},
 	"issue triage":                 {"42"},
 	"list":                         {},
-	"move":                         {sampleTask, "todo"},
+	"move":                         {sampleTask, "working"},
 	"new":                          {"chore", "slug", "A", "title"},
 	"notify":                       {sampleTask},
 	"orchestrate":                  {sampleTask},
