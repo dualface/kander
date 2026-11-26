@@ -85,27 +85,31 @@ func TestRenameLaunchDelivery(t *testing.T) {
 	const acknowledgement = "renamed kb-中文-Name_3.0"
 	const prompt = "task instruction"
 	for _, tc := range []struct {
-		name        string
-		command     string
-		mode        string
-		afterArgv   bool
-		status      bool
-		busy        bool
-		noComplete  bool
-		readyMatch  string
-		screens     []string
-		sendErr     error
-		wantSends   []string
-		wantCode    string
-		wantWarning string
-		firstReadAt int
+		name          string
+		command       string
+		mode          string
+		afterArgv     bool
+		status        bool
+		busy          bool
+		noComplete    bool
+		readyMatch    string
+		completeMatch string
+		screens       []string
+		sendErr       error
+		wantSends     []string
+		wantCode      string
+		wantWarning   string
+		firstReadAt   int
 	}{
 		{name: "no-rename-argv", mode: "argv"},
 		{name: "no-rename-pane", mode: "pane", screens: []string{"ready"}, wantSends: []string{prompt}},
 		{name: "ready", command: "/rename {name}", screens: []string{"ready", "ready\n❯ " + rename + "\n" + acknowledgement}, wantSends: []string{rename, prompt}},
 		{name: "ready-rule-keeps-trailing-newline", command: "/rename {name}", readyMatch: `regex:(?m)^ready\r?\n\z`, screens: []string{"ready\n", acknowledgement + "\nready\n"}, wantSends: []string{rename, prompt}},
+		{name: "completion-rule-with-leading-line-break", command: "/rename {name}", completeMatch: `regex:(?:^|\r?\n)renamed {name}(?:\r?\n|$)`, screens: []string{"ready", "❯ " + rename + "\r\n" + acknowledgement + "\r\nready"}, wantSends: []string{rename, prompt}},
 		{name: "unchanged-help-is-not-a-draft", command: "/rename {name}", noComplete: true, screens: []string{"Help: /rename <title>\nready", "Help: /rename <title>\nready\nstatus updated"}, wantSends: []string{rename, prompt}},
 		{name: "same-name-new-acknowledgement", command: "/rename {name}", screens: []string{"❯ " + rename + "\n" + acknowledgement + "\nready", "❯ " + rename + "\n" + acknowledgement + "\n❯ " + rename + "\n" + acknowledgement + "\nready"}, wantSends: []string{rename, prompt}},
+		{name: "same-name-acknowledgement-replaces-scrolled-one", command: "/rename {name}", screens: []string{acknowledgement + "\nready", "ready\n❯ " + rename + "\n" + acknowledgement + "\nready"}, wantSends: []string{rename, prompt}},
+		{name: "scrolled-acknowledgement-does-not-hide-another-draft", command: "/rename {name}", screens: []string{acknowledgement + "\nready", "ready\n❯ " + rename + "\n" + acknowledgement + "\nready\n❯ " + rename}, wantSends: []string{rename}, wantCode: "launch.pane_ready_timeout", wantWarning: "launch.rename_unconfirmed"},
 		{name: "same-name-stale-acknowledgement-with-draft", command: "/rename {name}", screens: []string{acknowledgement + "\nready", acknowledgement + "\nready\n❯ " + rename}, wantSends: []string{rename}, wantCode: "launch.pane_ready_timeout", wantWarning: "launch.rename_unconfirmed"},
 		{name: "scrolled-echo-is-not-proof-of-a-clean-composer", command: "/rename {name}", screens: []string{"❯ " + rename + "\n" + acknowledgement + "\nready", acknowledgement + "\nready\n❯ " + rename}, wantSends: []string{rename}, wantCode: "launch.pane_ready_timeout", wantWarning: "launch.rename_unconfirmed"},
 		{name: "fresh-acknowledgement-with-another-draft", command: "/rename {name}", screens: []string{"ready", "❯ " + rename + "\n" + acknowledgement + "\nready\n❯ " + rename}, wantSends: []string{rename}, wantCode: "launch.pane_ready_timeout", wantWarning: "launch.rename_unconfirmed"},
@@ -138,6 +142,9 @@ func TestRenameLaunchDelivery(t *testing.T) {
 				ready.Match = tc.readyMatch
 			}
 			complete := "renamed {name}"
+			if tc.completeMatch != "" {
+				complete = tc.completeMatch
+			}
 			if tc.noComplete {
 				complete = ""
 			}

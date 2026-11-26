@@ -174,22 +174,15 @@ func (p renameProbe) waitComplete(command, before string, sent bool) (confirmed,
 	if p.complete == nil || !sent {
 		sleepFn(2 * notifyPollInterval)
 	}
-	oldAcknowledgements := 0
-	if p.complete != nil {
-		oldAcknowledgements = len(p.complete.FindAllStringIndex(before, -1))
-	}
+	oldAcknowledgements := p.acknowledgements(before, command)
 	for deadline.After(nowFn()) && ctx.Err() == nil {
 		clean = false
 		if view, ready, blocker, ok := p.observe(ctx); ok {
 			output, blocked = view, blocker
 			if ready && ctx.Err() == nil && deadline.After(nowFn()) {
-				fresh := false
-				if p.complete != nil {
-					matches := p.complete.FindAllStringIndex(view, -1)
-					fresh = len(matches) > oldAcknowledgements
-					if fresh {
-						view = withoutRenameEcho(view, matches[len(matches)-1][0], command)
-					}
+				ack, fresh := newRenameAcknowledgement(oldAcknowledgements, p.acknowledgements(view, command))
+				if fresh && ack.echo != "" {
+					view = view[:ack.echoStart] + view[ack.lineStart:]
 				}
 				clean = !renameDraftVisible(before, view, command)
 				if clean && (!sent || p.complete == nil || fresh) {
@@ -204,18 +197,69 @@ func (p renameProbe) waitComplete(command, before string, sent bool) (confirmed,
 	return false, clean, output, blocked
 }
 
-// Remove at most the exact echoed command on the line before a new
-// acknowledgement. The composer and all other lines are still inspected.
-func withoutRenameEcho(view string, acknowledgement int, command string) string {
-	line := strings.LastIndexByte(view[:acknowledgement], '\n') + 1
-	if line == 0 {
-		return view
+type renameAcknowledgement struct {
+	text      string
+	echo      string
+	echoStart int
+	lineStart int
+}
+
+func (p renameProbe) acknowledgements(view, command string) []renameAcknowledgement {
+	if p.complete == nil {
+		return nil
 	}
-	previous := strings.LastIndexByte(view[:line-1], '\n') + 1
-	if !strings.HasSuffix(strings.TrimSpace(view[previous:line-1]), command) {
-		return view
+	var result []renameAcknowledgement
+	for _, bounds := range p.complete.FindAllStringIndex(view, -1) {
+		raw := view[bounds[0]:bounds[1]]
+		content := strings.TrimLeftFunc(raw, unicode.IsSpace)
+		if content == "" {
+			continue
+		}
+		// A regular expression may include the preceding line break. Locate
+		// the acknowledgement by its content, not by that delimiter.
+		start := bounds[1] - len(content)
+		line := strings.LastIndexByte(view[:start], '\n') + 1
+		ack := renameAcknowledgement{text: strings.TrimSpace(content), lineStart: line}
+		if line > 0 {
+			previous := strings.LastIndexByte(view[:line-1], '\n') + 1
+			if echo := strings.TrimSpace(view[previous : line-1]); strings.HasSuffix(echo, command) {
+				ack.echo, ack.echoStart = echo, previous
+			}
+		}
+		result = append(result, ack)
 	}
-	return view[:previous] + view[line:]
+	return result
+}
+
+// A new adjacent echo and acknowledgement can establish completion even when
+// an older acknowledgement scrolls out of the visible pane. An unchanged
+// pair cannot explain a new draft. At most one echo is excluded from checking.
+func newRenameAcknowledgement(before, after []renameAcknowledgement) (renameAcknowledgement, bool) {
+	if len(after) == 0 {
+		return renameAcknowledgement{}, false
+	}
+	texts := make(map[string]int)
+	pairs := make(map[[2]string]int)
+	for _, ack := range before {
+		texts[ack.text]++
+		if ack.echo != "" {
+			pairs[[2]string{ack.text, ack.echo}]++
+		}
+	}
+	var result renameAcknowledgement
+	for _, ack := range after {
+		texts[ack.text]--
+		fresh := texts[ack.text] < 0
+		if ack.echo != "" {
+			key := [2]string{ack.text, ack.echo}
+			pairs[key]--
+			fresh = pairs[key] < 0
+		}
+		if fresh && (result.echo == "" || ack.echo != "") {
+			result = ack
+		}
+	}
+	return result, result.text != ""
 }
 
 func renameDraftVisible(before, current, command string) bool {
