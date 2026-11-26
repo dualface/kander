@@ -6,7 +6,19 @@ How the binary installs itself and which filesystem boundaries the configuration
 
 ### Automatic updates
 
-Bare `kander` TUI startup requests the latest stable release from GitHub in the background. The request has a five-second deadline and does not delay the first screen. CLI subcommands do not perform this check.
+Bare `kander` TUI startup checks GitHub for a newer release in the background. The request has a five-second deadline and does not delay the first screen. CLI subcommands do not perform this check.
+
+The check follows the release channel of the running version:
+
+- The release channel holds `2.Y.Z`. Such a binary updates only to a newer `2.Y.Z` release whose GitHub release is not marked prerelease, even when GitHub's Latest release is a 1.x release.
+- The prerelease channel holds `2.Y.Z-alpha.N`, `2.Y.Z-beta.N`, and `2.Y.Z-rc.N` (`N` without leading zeros). Such a binary updates only to a newer 2.x prerelease whose GitHub release is marked prerelease. It is never offered a release, so moving from a prerelease to `2.0.0` takes one manual reinstall.
+- Every other version belongs to no channel and sends no update request: development builds (`dev`, `2.0.0-dev+<commit>`), git describe builds (`2.0.0-beta.1-5-g<hex>`), versions with build metadata, other prerelease names, and every major other than 2, including 1.x.
+
+Kander reads one page of the GitHub releases list (`releases?per_page=30`), not `releases/latest`, because a prerelease never becomes Latest and a later 1.x patch makes 1.x Latest again. Older entries are not compared. Drafts are ignored, and an entry whose prerelease flag does not match its tag's channel is ignored. A response above 4 MiB or one that is not a JSON array fails the check instead of being read in part. The candidate with the highest version wins.
+
+The Homebrew tap publishes only releases. A Homebrew-managed executable on the prerelease channel therefore neither checks nor applies an update; install prereleases from the GitHub release archives.
+
+One machine has one global `kander`. Installing v2 replaces the 1.x executable at the global path; when 1.x was installed with Homebrew, run `brew uninstall kander` first, otherwise PATH holds two `kander` executables.
 
 When a newer release supports the current OS and architecture, Kander waits for active dialogs and overlays to close before asking for confirmation. Homebrew-managed executables refresh the tap metadata with `brew update` and then run `brew upgrade dualface/tap/kander`, both with direct argv execution. Other installations download the fixed release archive and `checksums.txt` from GitHub, enforce response and extracted-binary size limits, verify SHA-256, reject unsafe archive entries, run the staged binary's `version` command, and atomically replace the running executable. Windows uses a rename-aside replacement and restores the original if writing the replacement fails.
 
