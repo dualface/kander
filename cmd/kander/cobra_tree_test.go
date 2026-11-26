@@ -63,6 +63,7 @@ var samplePositionals = map[string][]string{
 	"check delivery":               {},
 	"check overlap":                {},
 	"config":                       {},
+	"confirm":                      {sampleTask},
 	"coordinator claim":            {"/abs/claim.json"},
 	"coordinator integrate":        {"/abs/integration.json"},
 	"coordinator integration-show": {"refs/heads/main"},

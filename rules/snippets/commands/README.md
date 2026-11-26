@@ -2,7 +2,7 @@
 
 Before running any `kander` command in this session, read `<rules root>/snippets/commands/README.md` once. Before the first use of a command, read its contract file.
 
-`kander help --json [<command>]` prints the index or command as JSON.
+`kander help --json [<command>]` prints JSON help.
 Global flags: `--lang`, `--json`.
 
 | Command | Purpose | Users | Contract |
@@ -15,21 +15,22 @@ Global flags: `--lang`, `--json`.
 | `uninstall` | Uninstall | user | `snippets/commands/uninstall.md` |
 | `terminal` | Launchers | user | `snippets/commands/terminal.md` |
 | `init` | Initialize | user | `snippets/commands/init.md` |
-| `list` | Cards | creator, user | `snippets/commands/list.md` |
+| `list` | Cards | creator/user | `snippets/commands/list.md` |
 | `show` | Card/revision | executors | `snippets/commands/show.md` |
 | `new` | Create | creator | `snippets/commands/new.md` |
 | `assign` | Assignment | user | `snippets/commands/assign.md` |
-| `decision` | Decisions | user, leader, orchestrator | `snippets/commands/decision.md` |
-| `move` | Move | executor, orchestrator, creator | `snippets/commands/move.md` |
-| `pick` | Pick | creator, orchestrator | `snippets/commands/pick.md` |
-| `update` | Publish | executor, creator | `snippets/commands/update.md` |
-| `start` | Launch | creator, orchestrator | `snippets/commands/start.md` |
+| `decision` | Decisions | user/leader/orchestrator | `snippets/commands/decision.md` |
+| `move` | Move | executor/orchestrator/creator | `snippets/commands/move.md` |
+| `pick` | Pick | creator/orchestrator | `snippets/commands/pick.md` |
+| `confirm` | Confirm request | submitter | `snippets/commands/confirm.md` |
+| `update` | Publish | executor/creator | `snippets/commands/update.md` |
+| `start` | Launch | creator/orchestrator | `snippets/commands/start.md` |
 | `orchestrate` | Orchestration | creator | `snippets/commands/orchestrate.md` |
-| `resume` | Resume | orchestrator (notify), user | `snippets/commands/resume.md` |
+| `resume` | Resume | orchestrator (notify)/user | `snippets/commands/resume.md` |
 | `notify` | Notification | orchestrator | `snippets/commands/notify.md` |
 | `dispatch` | Dispatch | orchestrator | `snippets/commands/dispatch.md` |
-| `dismiss` | Stop | orchestrator, user | `snippets/commands/dismiss.md` |
-| `check` | Validate | executor, orchestrator | `snippets/commands/check.md` |
+| `dismiss` | Dismiss | orchestrator/user | `snippets/commands/dismiss.md` |
+| `check` | Validate | executor/orchestrator | `snippets/commands/check.md` |
 | `guard-write` | Preflight | agent hooks | `snippets/commands/guard-write.md` |
 | `subscribe` | Events | orchestrator | `snippets/commands/subscribe.md` |
 | `coordinator` | Checkpoints | orchestrator | `snippets/commands/coordinator.md` |
@@ -61,6 +62,7 @@ kander decision list <task-id>
 kander decision mode <task-id> <leader|assignee>
 kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--owner <agent> [--decision <reference>]] [--result <result>] [--reason <reason> --decision <reference>] [--duplicate-of <task-id>] [--expect-revision <revision>] [--dispatch-id <id> --execution-epoch <epoch>] [--delivery-commit <full-SHA>] [--disposition <card-relative-path>]
 kander pick [task-id]
+kander confirm <task-id> --expect-revision <revision>
 kander update <task-id> --document <relative-path> --file <UTF8-input> --expect-revision <revision> [--contract-decision-file <UTF8-decision>] [--dispatch-id <id> --execution-epoch <epoch>]
 kander start [--agent <configured-agent>] [--launcher <launcher>] [task-id]
 kander orchestrate [--agent <configured-agent>] [--launcher <launcher>] (--message TEXT | --message-file FILE) <task-id|task-group-id>...

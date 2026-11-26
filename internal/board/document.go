@@ -88,6 +88,11 @@ func TitleFrom(text string) string {
 
 // SectionBody returns the body of a ## section.
 func SectionBody(text, heading string) (string, bool) {
+	body, ok := rawSectionBody(text, heading)
+	return strings.TrimSpace(body), ok
+}
+
+func rawSectionBody(text, heading string) (string, bool) {
 	re := regexp.MustCompile(`(?m)^## ` + regexp.QuoteMeta(heading) + `\s*$`)
 	loc := re.FindStringIndex(text)
 	if loc == nil {
@@ -99,7 +104,7 @@ func SectionBody(text, heading string) (string, bool) {
 	if next != nil {
 		end = loc[1] + next[0]
 	}
-	return strings.TrimSpace(text[loc[1]:end]), true
+	return text[loc[1]:end], true
 }
 
 func resultFrom(text string) string { return MetadataFrom(text, FieldResult) }

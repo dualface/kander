@@ -60,6 +60,7 @@ type ProjectService interface {
 	Show(context.Context, string) (api.Task, error)
 	NewTask(context.Context, string, api.NewTask) (api.Task, error)
 	Assign(context.Context, string, string, api.Assign) (api.Task, error)
+	Confirm(context.Context, string, string, api.Confirm) (api.Task, error)
 	RecordDecision(context.Context, string, string, api.DecisionKind, api.DecisionInput) (api.DecisionRecord, error)
 	Decisions(context.Context, string) (api.DecisionList, error)
 	SetDecisionMode(context.Context, string, string, api.SetDecisionMode) (api.DecisionModeResult, error)

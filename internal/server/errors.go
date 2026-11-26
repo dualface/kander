@@ -21,6 +21,8 @@ var boardCodes = map[string]string{
 	"board.request_description_invalid": api.CodeInvalidRequest,
 	"board.decision_invalid":            api.CodeInvalidRequest,
 	"board.decision_reserved":           api.CodeDecisionReserved,
+	"board.confirmation_required":       api.CodeConfirmationRequired,
+	"board.confirmer_required":          api.CodeInvalidRequest,
 }
 
 var codeStatus = map[string]int{
@@ -30,6 +32,7 @@ var codeStatus = map[string]int{
 	api.CodeNotFound:             http.StatusNotFound,
 	api.CodeRevisionConflict:     http.StatusConflict,
 	api.CodeDecisionReserved:     http.StatusConflict,
+	api.CodeConfirmationRequired: http.StatusConflict,
 	api.CodeHeldByOther:          http.StatusConflict,
 	api.CodeTakenOver:            http.StatusConflict,
 	api.CodeLeaseInvalid:         http.StatusConflict,

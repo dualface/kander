@@ -11,7 +11,7 @@ import (
 
 func (s *Server) registerDecisionRoutes(mux *routeTable, task string) {
 	s.projectRoute(mux, "GET "+task+"/decisions", func(p *project, r *http.Request) outcome {
-		id, err := decisionTaskID(r.PathValue("task"))
+		id, err := canonicalTaskID(r.PathValue("task"))
 		if err != nil {
 			return outcome{err: err}
 		}
@@ -55,7 +55,7 @@ func (s *Server) registerDecisionRoutes(mux *routeTable, task string) {
 	})
 }
 
-func decisionTaskID(id string) (string, error) {
+func canonicalTaskID(id string) (string, error) {
 	canonical, err := board.NormalizeTaskID(id)
 	if err != nil {
 		return "", err
@@ -68,7 +68,7 @@ func decisionTaskID(id string) (string, error) {
 }
 
 func (p *project) writeDecision(id, key, action string, input any, status int, apply func(*board.Transaction) (any, error)) outcome {
-	if _, err := decisionTaskID(id); err != nil {
+	if _, err := canonicalTaskID(id); err != nil {
 		return outcome{err: err}
 	}
 	if err := p.lockBoard(); err != nil {

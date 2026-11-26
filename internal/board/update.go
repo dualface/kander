@@ -148,7 +148,7 @@ func validSpecUpdate(id, old, next, state, decision string) (string, error) {
 			return "", withUpdateHint(kanbanError("board.transaction_invalid", field), "board.update_hint_duplicate")
 		}
 	}
-	for _, section := range append(append([]string(nil), frozenSections...), SectionDiscussion, "REVIEWS", SectionDecisions, "DISPATCHES", "CONTRACT_DECISIONS", "LIFECYCLE_DECISION") {
+	for _, section := range append(append([]string(nil), frozenSections...), SectionDiscussion, "REVIEWS", SectionDecisions, "DISPATCHES", "CONTRACT_DECISIONS", "LIFECYCLE_DECISION", SectionConfirmations) {
 		re := regexp.MustCompile(`(?m)^## ` + regexp.QuoteMeta(section) + `[ \t\r]*$`)
 		if len(re.FindAllStringIndex(next, -1)) > 1 {
 			return "", withUpdateHint(kanbanError("board.transaction_invalid", section), "board.update_hint_duplicate")
@@ -172,7 +172,7 @@ func validSpecUpdate(id, old, next, state, decision string) (string, error) {
 			return "", withUpdateHint(kanbanError("board.transaction_managed", field), managedFieldHint(field))
 		}
 	}
-	for _, section := range []string{"REVIEWS", SectionDecisions, "DISPATCHES", "REVIEW_DISPOSITIONS", "CONTRACT_DECISIONS", "LIFECYCLE_DECISION"} {
+	for _, section := range []string{"REVIEWS", SectionDecisions, "DISPATCHES", "REVIEW_DISPOSITIONS", "CONTRACT_DECISIONS", "LIFECYCLE_DECISION", SectionConfirmations} {
 		a, ok := SectionBody(old, section)
 		b, present := SectionBody(next, section)
 		if ok != present || a != b {
@@ -240,6 +240,7 @@ var managedSectionHints = map[string]string{
 	"REVIEW_DISPOSITIONS": "board.update_hint_dispositions_section",
 	"CONTRACT_DECISIONS":  "board.update_hint_contract_decisions_section",
 	"LIFECYCLE_DECISION":  "board.update_hint_lifecycle_section",
+	SectionConfirmations:  "board.update_hint_confirmations_section",
 }
 
 // Producer-owned paths are excluded from ordinary updates and migration edits.

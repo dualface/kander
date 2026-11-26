@@ -43,13 +43,15 @@ const (
 	SectionImplementation     = "IMPLEMENTATION"
 	SectionSummary            = "SUMMARY"
 	SectionDecisions          = "DECISIONS"
+	SectionConfirmations      = "CONFIRMATIONS"
 )
 
 const (
-	MarkerSelfReview    = "SELF_REVIEW"
-	MarkerCardReview    = "CARD_REVIEW"
-	MarkerPrerequisites = "PREREQUISITES"
-	Placeholder         = "<FILL_IN>"
+	MarkerSelfReview         = "SELF_REVIEW"
+	MarkerCardReview         = "CARD_REVIEW"
+	MarkerPrerequisites      = "PREREQUISITES"
+	MarkerSubmitterQuestions = "SUBMITTER_QUESTIONS"
+	Placeholder              = "<FILL_IN>"
 )
 
 var fieldLineCache sync.Map

@@ -6,5 +6,14 @@
   "board.request_description_blank": "the text contains only whitespace",
   "board.update_hint_request": "Next step: keep the REQUEST line as kander show prints it. The request record cannot be changed after creation.",
   "remote.request_description_file_read": "Cannot open or read the request description file.",
-  "remote.request_description_file_invalid": "The request description file must contain non-blank UTF-8 text and be at most {{.V0}} bytes."
+  "remote.request_description_file_invalid": "The request description file must contain non-blank UTF-8 text and be at most {{.V0}} bytes.",
+  "board.confirmation_required": "Request cards can enter todo only through kander confirm.",
+  "board.confirm_requires_request_card": "Only a request card can be confirmed.",
+  "board.confirm_requires_backlog": "Only a request card in backlog can be confirmed.",
+  "board.request_questions_open": "There are unanswered questions for the submitter. Resolve them before confirming the request.",
+  "board.confirmer_required": "A confirmer is required.",
+  "board.update_hint_confirmations_section": "Next step: keep the CONFIRMATIONS section as kander show prints it. Only kander confirm can append a record.",
+  "remote.confirm_git_name_required": "Set Git user.name before running kander confirm.",
+  "remote.confirm_revision_required": "The expected revision must be greater than zero.",
+  "remote.confirm_record_missing": "The server response has no valid confirmation record."
 }

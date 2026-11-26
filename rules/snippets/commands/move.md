@@ -76,6 +76,7 @@ Source: moved from `KANDER-KANBAN-RULES.md` "Claiming, Starting, and Coordinatio
 
 ## Rejections
 
+- A request card entering `todo/` from `backlog/` is refused with `confirmation_required`. Only its submitter can admit it with `kander confirm`.
 - A revision conflict: read and reconcile the current document before retrying.
 - A missing gate record, an unknown state, a missing result or decision, or a plain move on a bound card.
 - A wrap-up completion whose `--delivery-commit` is not the `source_commit` of its wrap-up evidence (`board.dispatch_evidence_invalid`; the message gives the expected `source_commit` and the value passed), or that carries `--disposition` (same code; the message says a wrap-up completion takes no `--disposition` and gives the `--delivery-commit` to use). Nothing is written; run the move again with `--delivery-commit <source_commit>` and no `--disposition`.

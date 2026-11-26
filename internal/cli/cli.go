@@ -48,6 +48,7 @@ func init() {
 	Register(remote.NewUpdateCommand)
 	Register(remote.NewMoveCommand)
 	Register(remote.NewPickCommand)
+	Register(remote.NewConfirmCommand)
 	Register(remote.NewGuardWriteCommand)
 	Register(remote.NewRequestCommand)
 }

@@ -59,6 +59,10 @@ Like `Authorize`, this hook runs outside the board lock and can read `TaskAccess
 
 Task creation and issue import use this attribution to populate the immutable `SUBMITTER` header. The two decision write routes use the same attribution for `recorded_by` and also reject a blank attribution. The host can authorize human and Leader writes separately. See [Task decision records](decision-records.md). Task assignment is separate from attribution. `Authorize` receives its task scope and `AuthorizeAssignment` can check the proposed assignee.
 
+### Confirmation authorization
+
+Classify `POST /api/v1/projects/{project}/tasks/{task}/confirm` separately from ordinary moves. In `Authorize`, look up `service.TaskAccess(ctx, req.ProjectID, req.Task)` and allow confirmation only if the lookup succeeds, `TaskAccess.Request` is true, and the authenticated caller equals `TaskAccess.Submitter`. Do not allow an administrator to confirm on the submitter's behalf. A host can further restrict the session kind, for example to browser sessions. `Attribution` supplies the stored confirmation actor and overrides the request body's `confirmed_by`. A configured hook that supplies no actor or only whitespace causes `attribution_required`. Confirmation is not a decision record and does not depend on `DECISION_MODE`.
+
 ### Administration
 
 `POST /api/v1/server/shutdown` still requires a loopback peer and the private administration token even when the hook allows it. In embedded mode it cancels the service's shutdown context and wakes event readers. It does not stop the host's listener, release the data-directory lock, or exit the process. Hosts should normally deny the route and manage shutdown themselves.
@@ -99,6 +103,8 @@ Use `Project.Document(ctx, taskID, "request.md")` to read the protected
 record. `TaskSummary.Request` and `TaskAccess.Request` are both true for a
 request card and false for an ordinary card. The existing authorization and
 attribution hooks still govern creation. See [Request cards](request-cards.md).
+
+After the submitter reads the card, call `Project.Confirm(ctx, key, taskID, api.Confirm{ExpectedRevision: inspected.Revision})` on a host that supplies attribution. For an unhooked service, also set `ConfirmedBy` to the client-reported confirmer. The result is the task in `todo` with the next revision. Use the same key for retries of the same request.
 
 The public CLI builds the same tree as the standalone executable, including the bare terminal board. For example, given a transport `tunnel` and an unattached Cobra command `hostCommand`:
 

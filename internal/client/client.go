@@ -341,6 +341,13 @@ func (p *Project) Assign(ctx context.Context, key, id string, req api.Assign) (a
 	return t, err
 }
 
+// Confirm admits a request card to todo at the expected revision.
+func (p *Project) Confirm(ctx context.Context, key, id string, req api.Confirm) (api.Task, error) {
+	var t api.Task
+	err := p.c.do(ctx, call{method: http.MethodPost, path: p.path(taskPath(id, "confirm")...), body: req, key: key}, &t)
+	return t, err
+}
+
 func documentPath(path string) string {
 	parts := strings.Split(path, "/")
 	for i, part := range parts {

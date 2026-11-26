@@ -40,4 +40,5 @@ kander pick
 
 ## Rejections
 
+- A request card is refused with `confirmation_required`. Only its submitter can admit it to `todo/` with `kander confirm`.
 - A card outside `backlog/`, a failed gate, or an unknown option.

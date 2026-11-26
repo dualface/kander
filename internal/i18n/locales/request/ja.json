@@ -6,5 +6,14 @@
   "board.request_description_blank": "テキストが空白文字のみです",
   "board.update_hint_request": "次の手順：kander show に表示された REQUEST 行をそのまま保持してください。作成後のリクエスト記録は変更できません。",
   "remote.request_description_file_read": "リクエストの説明ファイルを開くか読み込むことができません。",
-  "remote.request_description_file_invalid": "リクエストの説明ファイルには空白以外の UTF-8 テキストが必要です。上限は {{.V0}} バイトです。"
+  "remote.request_description_file_invalid": "リクエストの説明ファイルには空白以外の UTF-8 テキストが必要です。上限は {{.V0}} バイトです。",
+  "board.confirmation_required": "リクエストカードを todo に移すには kander confirm が必要です。",
+  "board.confirm_requires_request_card": "確認できるのはリクエストカードだけです。",
+  "board.confirm_requires_backlog": "確認できるのは backlog にあるリクエストカードだけです。",
+  "board.request_questions_open": "提出者への未回答の質問があります。解決してからリクエストを確認してください。",
+  "board.confirmer_required": "確認者が必要です。",
+  "board.update_hint_confirmations_section": "次の手順：kander show に表示された CONFIRMATIONS セクションをそのまま保持してください。記録を追加できるのは kander confirm だけです。",
+  "remote.confirm_git_name_required": "kander confirm を実行する前に Git の user.name を設定してください。",
+  "remote.confirm_revision_required": "期待リビジョンは 0 より大きくなければなりません。",
+  "remote.confirm_record_missing": "サーバーの応答に有効な確認記録がありません。"
 }

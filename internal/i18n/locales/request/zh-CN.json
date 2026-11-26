@@ -6,5 +6,14 @@
   "board.request_description_blank": "文本仅含空白字符",
   "board.update_hint_request": "下一步：原样保留 kander show 输出的 REQUEST 行。建卡后不能修改需求记录。",
   "remote.request_description_file_read": "无法打开或读取需求描述文件。",
-  "remote.request_description_file_invalid": "需求描述文件必须包含非空白的 UTF-8 文本，且不能超过 {{.V0}} 字节。"
+  "remote.request_description_file_invalid": "需求描述文件必须包含非空白的 UTF-8 文本，且不能超过 {{.V0}} 字节。",
+  "board.confirmation_required": "需求卡只能通过 kander confirm 进入 todo。",
+  "board.confirm_requires_request_card": "只能确认需求卡。",
+  "board.confirm_requires_backlog": "只能确认 backlog 中的需求卡。",
+  "board.request_questions_open": "仍有待提交人回答的问题。请先处理，再确认需求卡。",
+  "board.confirmer_required": "必须提供确认人。",
+  "board.update_hint_confirmations_section": "下一步：原样保留 kander show 输出的 CONFIRMATIONS 段。只有 kander confirm 可以追加记录。",
+  "remote.confirm_git_name_required": "请先设置 Git 的 user.name，再运行 kander confirm。",
+  "remote.confirm_revision_required": "期望修订号必须大于零。",
+  "remote.confirm_record_missing": "服务端响应不含有效的确认记录。"
 }

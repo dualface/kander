@@ -137,6 +137,7 @@ func indexWriteRoutes() map[string]string {
 		"POST " + project + "/tasks":                              "card",
 		"PUT " + task + "/documents/{path...}":                    "card",
 		"POST " + task + "/move":                                  "card and claim",
+		"POST " + task + "/confirm":                               "card",
 		"POST " + task + "/assignee":                              "card",
 		"POST " + task + "/decisions/human":                       "card",
 		"POST " + task + "/decisions/leader":                      "card",

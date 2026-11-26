@@ -129,6 +129,8 @@ type MoveOptions struct {
 	Pruned *PruneReport
 	// start makes the claim a launcher start; only BeginTaskStart sets it.
 	start *TaskStartInput
+	// confirmation admits a request card to todo; only ConfirmRequest sets it.
+	confirmation *ConfirmInput
 }
 
 // MoveEntry preserves the existing API for callers already holding a snapshot.
@@ -137,7 +139,11 @@ func MoveEntry(entry Entry, root, target string) (Entry, error) {
 }
 
 // MoveWithOptions validates and publishes state, result and timestamps together.
-func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (moved Entry, err error) {
+func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (Entry, error) {
+	return moveWithOptions(entry, root, target, options, options.Transaction)
+}
+
+func moveWithOptions(entry Entry, root, target string, options MoveOptions, extensions ...TransactionExtension) (moved Entry, err error) {
 	if entry.Version == nil {
 		return moved, kanbanError("board.transaction_conflict", entry.TaskID)
 	}
@@ -180,6 +186,13 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 		if s.Entry.State != entry.State || s.Entry.Path != entry.Path || (entry.Version != nil && s.Revision != entry.Version.revision) || (options.ExpectedRevision != nil && s.Revision != *options.ExpectedRevision) {
 			return moveConflictError(entry, s, options)
 		}
+		if options.confirmation != nil {
+			if e := checkConfirmation(s); e != nil {
+				return e
+			}
+		} else if entry.State == "backlog" && target == "todo" && isRequestCard(s.Text) {
+			return kanbanError("board.confirmation_required")
+		}
 		// Report the final state before dispatch staging can fail with a less
 		// specific error.
 		if e := requireNotArchived(s); e != nil {
@@ -215,6 +228,12 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 		}
 		if e = validateTarget(s.Entry, target, updated); e != nil {
 			return e
+		}
+		if options.confirmation != nil {
+			updated, e = appendConfirmation(updated, *options.confirmation)
+			if e != nil {
+				return e
+			}
 		}
 		if target == "done" {
 			if _, e = validateTaskReview(tx, entry.TaskID, true); e != nil {
@@ -258,7 +277,7 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 		}
 		moved.Version = &Version{revision: s.Revision + 1, authorization: authFrom(updated), warnings: entryWarningLog(entry), fence: ExecutionFence{RecordID: tx.record.ID, Cycle: planCycle(Snapshot{Entry: s.Entry, Text: updated})}, record: tx.record.ID, pinned: true}
 		return nil
-	}, options.Transaction)
+	}, extensions...)
 	if err == nil && moved.State == "archived" && entry.State != "archived" {
 		report, e := pruneArchived(root, entryWarningLog(entry))
 		report.Err = e

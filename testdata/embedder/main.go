@@ -16,15 +16,16 @@ import (
 )
 
 var (
-	_                                                                              = api.NewTask{Description: "Example request"}
-	_ bool                                                                         = api.TaskAccess{}.Request
-	_ func(string, string) (*client.Client, error)                                 = client.New
-	_ func(*client.Client, context.Context) (api.VersionInfo, error)               = (*client.Client).Version
-	_ func(server.Options) (*server.Server, error)                                 = server.Open
-	_ func() []server.Route                                                        = server.Routes
-	_ func(context.Context, server.Assignment) error                               = server.Hooks{}.AuthorizeAssignment
-	_ error                                                                        = server.ErrAssigneeRejected
-	_ func(*client.Project, context.Context, string, string) (api.Document, error) = (*client.Project).Document
+	_                                                                                       = api.NewTask{Description: "Example request"}
+	_ func(*client.Project, context.Context, string, string, api.Confirm) (api.Task, error) = (*client.Project).Confirm
+	_ bool                                                                                  = api.TaskAccess{}.Request
+	_ func(string, string) (*client.Client, error)                                          = client.New
+	_ func(*client.Client, context.Context) (api.VersionInfo, error)                        = (*client.Client).Version
+	_ func(server.Options) (*server.Server, error)                                          = server.Open
+	_ func() []server.Route                                                                 = server.Routes
+	_ func(context.Context, server.Assignment) error                                        = server.Hooks{}.AuthorizeAssignment
+	_ error                                                                                 = server.ErrAssigneeRejected
+	_ func(*client.Project, context.Context, string, string) (api.Document, error)          = (*client.Project).Document
 	_ interface {
 		Handler() http.Handler
 		Subscribe(context.Context, string, string) (<-chan server.Notification, error)

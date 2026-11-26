@@ -66,6 +66,8 @@ func classify(err error) (code, message string, ok bool) {
 			return e.Code, config.Text("remote.error_index_rebuilding"), true
 		case api.CodeDecisionReserved:
 			return e.Code, config.Text("board.decision_reserved"), true
+		case api.CodeConfirmationRequired:
+			return e.Code, config.Text("board.confirmation_required"), true
 		}
 		if e.BoardCode != "" {
 			return e.BoardCode, e.Message, true

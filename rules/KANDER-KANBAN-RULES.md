@@ -22,7 +22,7 @@ KANBAN_DIR="$MAIN_WORKTREE/kanban"
 
 Create, query, and move cards only through `kander`, never by direct file operations. For edits and upgrades, see "Entries and Documents" and "Task Scale and Grouping".
 
-Before running any `kander` command in this session, read `<rules root>/snippets/commands/README.md` once. Before the first use of a command, read its contract file. `kander <command> --help` shows the command contract.
+Before running any `kander` command in this session, read `<rules root>/snippets/commands/README.md` once. Before the first use of a command, read its contract file. `kander <command> --help` shows its contract.
 
 ```text
 kander config
@@ -49,6 +49,7 @@ kander decision list <task-id>
 kander decision mode <task-id> <leader|assignee>
 kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--owner <agent> [--decision <reference>]] [--result <result>] [--reason <reason> --decision <reference>] [--duplicate-of <task-id>] [--expect-revision <revision>] [--dispatch-id <id> --execution-epoch <epoch>] [--delivery-commit <full-SHA>] [--disposition <card-relative-path>]
 kander pick [task-id]
+kander confirm <task-id> --expect-revision <revision>
 kander update <task-id> --document <relative-path> --file <UTF8-input> --expect-revision <revision> [--contract-decision-file <UTF8-decision>] [--dispatch-id <id> --execution-epoch <epoch>]
 kander start [--agent <configured-agent>] [--launcher <launcher>] [task-id]
 kander orchestrate [--agent <configured-agent>] [--launcher <launcher>] (--message TEXT | --message-file FILE) <task-id|task-group-id>...
@@ -93,17 +94,17 @@ kander issue triage NUMBER [--card TASK_ID] [--repo HOST/OWNER/REPO] [--agent NA
 kander issue result NUMBER --card TASK_ID [--repo HOST/OWNER/REPO] [--agent NAME] [--launcher NAME] [--action start|inspect|apply|decide] [--file JSON]
 ```
 
-A group coordinator writes review evidence without confirmation when the conditions of the review command contract hold; otherwise, for distributed holder confirmation, read the material with `kander review publication <absolute-CWD> <publication-id>`, then use `kander review confirm <absolute-CWD> <publication-id> <task-id>` as described in the review command contract.
+A group coordinator writes review evidence without confirmation when the review command contract's conditions hold; otherwise, for distributed holder confirmation, read the material with `kander review publication <absolute-CWD> <publication-id>`, then use `kander review confirm <absolute-CWD> <publication-id> <task-id>` as described in the review command contract.
 
 
-- Commands only do structural and mechanical validation; authorization, dependencies, and termination reasons are judged by the agent per this file.
+- Commands only do structural and mechanical validation; the agent judges authorization, dependencies, and termination reasons per this file.
 
 ## State Model
 
 The directory is the single source of truth for state; the card body has no `status` field.
 
 - `backlog/`: recorded but not yet committed to execution.
-- `todo/`: confirmed by the user, contract complete, not yet claimed.
+- `todo/`: confirmed by the user, contract complete, not yet claimed. For request cards, only the submitter's `kander confirm` provides this confirmation and admits the card to `todo/`.
 - `working/`: claimed and being implemented, verified, reviewed, or integrated; task group cards also return here during fix rounds and post-integration wrap-up.
 - `review/`: used by task group cards and, in distributed mode, by a single card that publishes its delivery for integration (`snippets/execute-single.md` "Distributed Mode"; the local board keeps a single card in `working/`). For a task group member, development, verification, and the task branch delivery record are complete, waiting for the orchestrator to integrate that delivery into the group branch and arrange applicable review and final integration. The state itself does not guarantee the delivery is on the group branch; the orchestrator verifies before releasing in-group dependencies. After moving in, a task group member's executing agent ends this round of response and keeps the interactive CLI session. Fixes, syncs, or wrap-up are dispatched back via `notify`. A distributed single card continues at once with its integration and completes from `review/`. The executing agent first runs the ID/epoch-bound `kander move <task-id> working --dispatch-id <id> --execution-epoch <epoch>` from the dispatch prompt, then handles them. Members of a self-executed group (`snippets/self-executed-group.md` "Self-Executed Groups") are received, moved back, and completed by the same session with plain moves.
 - `done/`: recent tasks that satisfied the completion gate.
@@ -119,6 +120,7 @@ backlog <-> todo -> working -> done -> archived        (single-card flow)
 working -> review -> done                             (distributed single card: review/ publishes the delivery that
                                                        coordinator integrate needs; a plain move returns it to working)
 
+backlog -> todo                                       request card: kander confirm only
 todo -> backlog                                       withdraw commitment, back to scheduling
 review -> working (--owner --decision)                user-authorized reclaim of an unbound card, see `snippets/commands/move.md` "Reclaiming"
 review -> working (coordinator recover)               user-decided reset of a blocked group member, see `snippets/failure-recovery.md` "Blocked Group Members"
@@ -146,7 +148,7 @@ Before creating, completing, updating, or reviewing card content, read `snippets
 - Use `update --document spec.md` for every card body. Both scales accept `plan.md`, `report.md`, and ordinary attachments, including relative subdirectories. Legacy file cards are read-only: mutation commands fail before side effects and direct the caller to offline `kander server maintain --project NAME`; never bypass this with an older binary or direct editing.
 - Paths must be canonical, relative, and free of traversal, symlinks, and reparse points. Never edit managed `reviews/`, `decisions/`, `dispatches/`, manifests, indexes, or control records through update; dedicated producers own them.
 - A request card's `request.md` is managed and cannot be written through `update`, even with a contract decision. On an ordinary card, `request.md` remains an ordinary attachment.
-- Full-body replacements preserve `LANGUAGE`, `SUBMITTER`, `REQUEST`, `ASSIGNEE`, `DECISION_MODE`, `OWNER`, `SESSION`, `WINDOW`, creation/start/completion timestamps, `RESULT`, execution metadata, and managed sections such as `REVIEWS`, `DECISIONS`, `DISPATCHES`, `REVIEW_DISPOSITIONS`, `CONTRACT_DECISIONS`, and `LIFECYCLE_DECISION`. Keep `TASK_BRANCH` and ordinary implementation and summary records current through update.
+- Full-body replacements preserve `LANGUAGE`, `SUBMITTER`, `REQUEST`, `ASSIGNEE`, `DECISION_MODE`, `OWNER`, `SESSION`, `WINDOW`, creation/start/completion timestamps, `RESULT`, execution metadata, and managed sections such as `REVIEWS`, `DECISIONS`, `DISPATCHES`, `REVIEW_DISPOSITIONS`, `CONTRACT_DECISIONS`, `CONFIRMATIONS`, and `LIFECYCLE_DECISION`. Keep `TASK_BRANCH` and ordinary implementation and summary records current through update.
 - Manual claiming uses `kander move <task-id> working --owner <agent>`, writing `OWNER` and `STARTED_AT` with the transition; `start` and `resume` own session and window metadata; dispatch-back moves to working keep the existing owner.
 - Completion uses `kander move <task-id> done --result completed`, with validation, `RESULT`, and `FINISHED_AT` in one transaction, after the summary or report was written through update. Termination uses `move <task-id> archived --result cancelled|duplicate|wontfix --reason <reason> --decision <user-decision-reference>` (`--duplicate-of <replacement-id>` for duplicate); archiving a completed card uses `--result completed` with reason and decision reference; trash uses `move <task-id> trash --result trashed --reason <reason> --decision <user-decision-reference>`. These references record the authorization basis; the tool does not verify user intent. `--expect-revision` is available on move when the transition must match a previously read snapshot.
 - After a card enters todo, its contract stays frozen even if withdrawn to backlog. A user-authorized contract change uses update with `--contract-decision-file <UTF8-decision>` and the expected revision; Kander records the decision and old/new frozen fields in the protected `CONTRACT_DECISIONS` section. This never authorizes changing managed metadata or language.

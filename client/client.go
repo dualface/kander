@@ -85,6 +85,12 @@ func (p *Project) Assign(ctx context.Context, key, id string, req api.Assign) (a
 	return p.impl.Assign(ctx, key, id, req)
 }
 
+// Confirm admits a request card to todo at the expected revision. Reuse key
+// when retrying the same operation. An empty key generates a new key for this call.
+func (p *Project) Confirm(ctx context.Context, key, id string, req api.Confirm) (api.Task, error) {
+	return p.impl.Confirm(ctx, key, id, req)
+}
+
 // Events reads project events after cursor, waiting up to wait on the server.
 func (p *Project) Events(ctx context.Context, cursor string, wait time.Duration) (api.EventPage, error) {
 	return p.impl.Events(ctx, cursor, wait)

@@ -65,6 +65,7 @@ const (
 	CodeNotReady             = "not_ready"
 	CodeIndexRebuilding      = "index_rebuilding"
 	CodeDecisionReserved     = "decision_reserved"
+	CodeConfirmationRequired = "confirmation_required"
 	CodeInternal             = "internal"
 )
 
@@ -277,6 +278,14 @@ type Move struct {
 	Decision         string                       `json:"decision,omitempty"`
 	DuplicateOf      string                       `json:"duplicate_of,omitempty"`
 	ExpectedRevision *uint64                      `json:"expected_revision,omitempty"`
+}
+
+// Confirm is POST /api/v1/projects/{project}/tasks/{task}/confirm. It admits a
+// request card from backlog to todo at the revision the submitter read.
+type Confirm struct {
+	ExpectedRevision uint64 `json:"expected_revision"`
+	// ConfirmedBy is reported by the client and replaced by an Attribution hook when set.
+	ConfirmedBy string `json:"confirmed_by,omitempty"`
 }
 
 // ClaimRequest is POST .../tasks/{task}/claim: an atomic todo -> working
