@@ -363,10 +363,10 @@ func orchestrateSnippets(tasks []OrchestrateTask) []snippetRef {
 	return refs
 }
 
-// orchestratorWindowName names the container after the first card in plan
-// order, capped at 50 runes like every other launch container name.
+// orchestratorWindowName prefixes the first card ID in plan order with or-,
+// capped at 50 runes like every other launch container name.
 func orchestratorWindowName(firstTaskID string) string {
-	name := []rune("orchestrate-" + firstTaskID)
+	name := []rune("or-" + firstTaskID)
 	if len(name) > 50 {
 		name = name[:50]
 	}

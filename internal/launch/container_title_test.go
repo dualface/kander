@@ -110,7 +110,7 @@ func TestStartPlacesContainerWithLabel(t *testing.T) {
 }
 
 // An orchestrator sets no display title either; its tab is named by the
-// orchestrate- label.
+// or- label.
 func TestOrchestratorPlacesContainerWithLabel(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("tmux fakes are POSIX")
@@ -126,7 +126,7 @@ func TestOrchestratorPlacesContainerWithLabel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantPlacement(t, probe, "orchestrate-"+second)
+	wantPlacement(t, probe, "or-"+second)
 	if len(result.Warnings) != 0 {
 		t.Fatalf("warnings=%q", result.Warnings)
 	}

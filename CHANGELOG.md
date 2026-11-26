@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `kander orchestrate` names new terminal tabs and windows `or-<first task ID>`, leaving more room for the task ID.
+
 ## v2.0.0-beta.2 — 2026-11-26
 
 - Fix (v2, review evidence) — The evidence file of `kander review` now lists only the review range, the fix range of an incremental re-review, and the commits and file ledger of each range. It no longer embeds the patch, the fix-range patch, or the commit tree. Reviewers read diffs with read-only Git in the reviewed worktree, and the review contract tells them how to inspect large or generated files with bounded output. Before, a change to a large generated file (for example a bundle with an inline source map) produced evidence over the server's 32 MiB request limit, and a remote review failed before the reviewer started with `review runtime I/O failed … request body is too large`. Artifact uploads are now checked for size before they are sent, and an oversized upload is refused with a localized message that names the file and suggests a smaller review range with a new run ID. Built-in reviewers that cannot run Git (`agy`, `grok`, `kimi`, `opencode`) are refused before a new run starts; recovering an existing run ID is unchanged. On Windows, a codex reviewer gets a `safe.directory` entry for the reviewed worktree only. Review contracts installed by earlier versions still render.
