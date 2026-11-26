@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.0.0-beta.1 — 2026-11-26
 
 - Feature (v2, self-update channels) — The TUI update check of a 2.x binary follows its release channel. A prerelease (`2.Y.Z-alpha.N`, `-beta.N`, or `-rc.N`) now checks for updates and installs only a newer 2.x prerelease; a `2.Y.Z` release installs only a newer 2.x release, even when GitHub's Latest is a 1.x release. The two channels never cross, so moving from a beta to `2.0.0` needs one manual reinstall. Development builds, git describe builds, versions with build metadata, and non-2.x versions never check. The check reads one page of the GitHub releases list instead of `releases/latest`. A Homebrew install on the prerelease channel neither checks nor updates, because the tap carries releases only. One machine has one global `kander`: installing v2 replaces 1.x.
 - Release (v2) — The Release workflow and `scripts/release.sh` on `v2` accept only `v2.Y.Z` and `v2.Y.Z-(alpha|beta|rc).N`. A prerelease tag is cut from the `v2` branch and never updates the Homebrew tap; a release tag is still cut from `main`.
