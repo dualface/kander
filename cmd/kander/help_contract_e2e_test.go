@@ -314,7 +314,7 @@ func TestHelpJSONListsSubcommands(t *testing.T) {
 			t.Errorf("subcommand %v has no usage", sub["name"])
 		}
 	}
-	if want := []string{"start", "stop", "restart", "status", "import", "maintain", "projects"}; !slices.Equal(names, want) {
+	if want := []string{"start", "stop", "restart", "status", "import", "maintain", "projects", "gc"}; !slices.Equal(names, want) {
 		t.Fatalf("subcommands %v, want %v", names, want)
 	}
 	if plain := decodeObject(t, runKander(t, "help", "--json", "version").stdout); len(plain["subcommands"].([]any)) != 0 {

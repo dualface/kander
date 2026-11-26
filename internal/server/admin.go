@@ -57,6 +57,9 @@ func (s *Server) adminRoutes(mux *routeTable) {
 	// Import changes board data, so unlike shutdown it passes the protocol
 	// handshake and the readiness gate of domain().
 	mux.HandleFunc("POST /api/v1/server/import", s.domain(s.importRoute))
+	// gc removes board data, so like import it passes the handshake and the
+	// readiness gate; the route itself requires the administration token.
+	mux.HandleFunc("POST /api/v1/server/gc", s.domain(s.gcRoute))
 }
 
 func (s *Server) authorizedAdmin(fn http.HandlerFunc) http.HandlerFunc {

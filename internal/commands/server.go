@@ -55,6 +55,7 @@ func NewServerCommand(runForeground func(context.Context, server.Options, string
 		server.NewImportCommand(),
 		server.NewMaintainCommand(),
 		server.NewProjectsCommand(),
+		server.NewGCCommand(),
 	)
 }
 

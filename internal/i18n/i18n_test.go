@@ -64,6 +64,7 @@ var testCatalogFiles = []string{
 	"locales/jsonoutput/%s.json",
 	"locales/forwardcompat/%s.json",
 	"locales/evidencecleanup/%s.json",
+	"locales/gc/%s.json",
 }
 
 func readCatalog(t *testing.T, name string) map[string]string {

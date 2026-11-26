@@ -102,3 +102,83 @@ type ServerInfo struct {
 	StartedAt time.Time `json:"started_at"`
 	Projects  int       `json:"projects"`
 }
+
+// ServerGCRequest asks a running local server to reclaim its data. Like
+// import, the route accepts only loopback peers with the administration
+// token. An empty Project means every registered project. OlderThan is a Go
+// duration of at least one hour; LogKeep is the number of bytes of server.log
+// to keep, at least 1 MiB. A dry run only plans.
+type ServerGCRequest struct {
+	Project   string `json:"project,omitempty"`
+	DryRun    bool   `json:"dry_run,omitzero"`
+	OlderThan string `json:"older_than"`
+	LogKeep   int64  `json:"log_keep"`
+}
+
+// ServerGCReport is the plan of a dry run or the outcome of a gc. Projects
+// lists every project the request covered, in name order. Log is nil when the
+// request covered one project only. Errors lists failures outside a project.
+type ServerGCReport struct {
+	DryRun   bool              `json:"dry_run"`
+	Projects []ServerGCProject `json:"projects"`
+	Log      *ServerGCLog      `json:"log,omitempty"`
+	Errors   []string          `json:"errors,omitempty"`
+}
+
+// ServerGCProject is the outcome of one project. Errors lists the failures
+// that stopped a category of this project; Warnings lists damaged records the
+// categories skipped. Kept entries and errors make the command exit 1.
+type ServerGCProject struct {
+	Name       string             `json:"name"`
+	Compaction ServerGCCompaction `json:"compaction"`
+	Receipts   ServerGCReceipts   `json:"receipts"`
+	Warnings   []string           `json:"warnings,omitempty"`
+	Errors     []string           `json:"errors,omitempty"`
+}
+
+// ServerGCCompaction counts the review runs compacted (or, in a dry run, to
+// compact) and the files and bytes their compaction removes.
+type ServerGCCompaction struct {
+	Runs  int            `json:"runs"`
+	Files int            `json:"files"`
+	Bytes int64          `json:"bytes"`
+	Kept  []ServerGCKept `json:"kept,omitempty"`
+}
+
+// ServerGCReceipts counts the idempotency receipts deleted (or, in a dry run,
+// to delete) and their bytes.
+type ServerGCReceipts struct {
+	Files int            `json:"files"`
+	Bytes int64          `json:"bytes"`
+	Kept  []ServerGCKept `json:"kept,omitempty"`
+}
+
+// ServerGCKept is a candidate a gc kept, with the reason.
+type ServerGCKept struct {
+	ID     string `json:"id"`
+	Reason string `json:"reason"`
+}
+
+// ServerGCLog is the server.log trim. Size is the size before the trim, Bytes
+// the bytes moved out of server.log into server.log.1.gz (0 when the log is
+// not larger than the limit). Kept, when set, says why a due trim failed.
+type ServerGCLog struct {
+	Path  string `json:"path"`
+	Size  int64  `json:"size"`
+	Bytes int64  `json:"bytes"`
+	Kept  string `json:"kept,omitempty"`
+}
+
+// Incomplete reports whether a gc kept a candidate or met an error, which
+// makes the command exit 1.
+func (r ServerGCReport) Incomplete() bool {
+	if len(r.Errors) > 0 || r.Log != nil && r.Log.Kept != "" {
+		return true
+	}
+	for _, p := range r.Projects {
+		if len(p.Errors) > 0 || len(p.Compaction.Kept) > 0 || len(p.Receipts.Kept) > 0 {
+			return true
+		}
+	}
+	return false
+}

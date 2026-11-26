@@ -84,6 +84,9 @@ type Server struct {
 	indexWorkers       sync.WaitGroup
 	uploadWorkers      sync.WaitGroup
 	uploadSlots        chan struct{}
+	// gcBusy admits one gc at a time; gcWorkers lets Close wait for it.
+	gcBusy    atomic.Bool
+	gcWorkers sync.WaitGroup
 
 	mu       sync.Mutex
 	projects map[string]*project
@@ -196,6 +199,8 @@ func (s *Server) close() error {
 	}
 	s.mu.Unlock()
 	s.uploadWorkers.Wait()
+	// A gc stops at its next batch once shutdown is cancelled above.
+	s.gcWorkers.Wait()
 	var err error
 	for _, p := range projects {
 		p.mu.Lock()

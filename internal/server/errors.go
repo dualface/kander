@@ -49,6 +49,7 @@ var codeStatus = map[string]int{
 	api.CodeNotReady:             http.StatusServiceUnavailable,
 	api.CodeIndexRebuilding:      http.StatusServiceUnavailable,
 	api.CodeReviewCompacted:      http.StatusGone,
+	api.CodeGCRunning:            http.StatusConflict,
 	api.CodeInternal:             http.StatusInternalServerError,
 }
 

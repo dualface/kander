@@ -46,6 +46,7 @@ kander server status
 kander server import [--data DIR] --project NAME [--remote URL] [--from KANBAN_DIR] [--skip-conflicts]
 kander server maintain [--data DIR] --project NAME [--maintenance]
 kander server projects [--data DIR]
+kander server gc [--data DIR] [--project NAME] [--dry-run] [--yes] [--older-than D] [--log-keep SIZE]
 kander doctor
 kander version
 kander install

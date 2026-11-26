@@ -69,7 +69,9 @@ const (
 	// CodeReviewCompacted means a settled review run was compacted, so the
 	// evidence file or the replay the request needs was removed on purpose.
 	CodeReviewCompacted = "review_compacted"
-	CodeInternal        = "internal"
+	// CodeGCRunning means the server already runs a gc; one runs at a time.
+	CodeGCRunning = "gc_running"
+	CodeInternal  = "internal"
 )
 
 // Error is the JSON error body of every non-2xx response. BoardCode carries

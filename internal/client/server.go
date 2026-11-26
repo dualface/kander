@@ -160,3 +160,59 @@ func readImportStream(body io.Reader, progress func(api.ImportProgress)) (api.Im
 	}
 	return out, &TransportError{Err: err}
 }
+
+// gcTimeout bounds one gc call. A gc of a large data directory runs far longer
+// than the default 90-second client timeout; the server finishes a gc whose
+// client went away, so a timeout here does not tell how far it got.
+var gcTimeout = 30 * time.Minute
+
+// ErrGCUnsupported reports a running server that predates server gc.
+var ErrGCUnsupported = errors.New("the running server does not support server gc")
+
+// ServerGC asks a local server to plan (DryRun) or run a gc. Like Shutdown it
+// never follows redirects, so the administration token reaches only this
+// endpoint.
+func (c *Client) ServerGC(ctx context.Context, token string, in api.ServerGCRequest) (api.ServerGCReport, error) {
+	var out api.ServerGCReport
+	payload, err := json.Marshal(in)
+	if err != nil {
+		return out, err
+	}
+	u := *c.base
+	u.Path += "/api/v1/server/gc"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(payload))
+	if err != nil {
+		return out, err
+	}
+	req.Header.Set(api.HeaderProtocol, strconv.Itoa(api.ProtocolVersion))
+	req.Header.Set(api.HeaderClientID, c.clientID)
+	req.Header.Set(api.HeaderAdminToken, token)
+	req.Header.Set("Content-Type", "application/json")
+	h := *c.http
+	h.Timeout = gcTimeout
+	h.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	resp, err := h.Do(req)
+	if err != nil {
+		return out, &TransportError{Err: err}
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
+	if err != nil {
+		return out, &TransportError{Err: err}
+	}
+	if resp.StatusCode != http.StatusOK {
+		e := &api.Error{Status: resp.StatusCode}
+		if json.Unmarshal(data, e) == nil && e.Code != "" {
+			return out, e
+		}
+		if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusMethodNotAllowed {
+			return out, ErrGCUnsupported
+		}
+		e.Code, e.Message = api.CodeInternal, strings.TrimSpace(string(data))
+		return out, e
+	}
+	if err := json.Unmarshal(data, &out); err != nil {
+		return out, fmt.Errorf("server answer is malformed: %w", err)
+	}
+	return out, nil
+}
