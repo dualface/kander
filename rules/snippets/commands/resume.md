@@ -4,7 +4,7 @@ Source: moved from `KANDER-KANBAN-RULES.md` "Command Contract" ("Resuming the Or
 
 ## Purpose and users
 
-Wakes the original executing agent of a `working/` or `review/` card with a message. With `--agent` it hands the card to a brand-new session (a user-authorized takeover); with `--adopt` it keeps the running executor of an unfinished start. Used by the orchestrator only through `notify`, which chooses resumption itself; used directly by the user.
+Sends a message to the original executing agent of a `working/` or `review/` card. While the executor runs, or its state is unknown, the message is queued as by `notify`. When this host confirmed the executor stopped after a finished start, the card's own agent session continues in a new execution generation (a native continuation). With `--agent` it hands the card to a brand-new session (a user-authorized takeover); with `--adopt` it keeps the running executor of an unfinished start. The orchestrator sends messages and dispatch rounds with `notify`, which only queues them and never continues a stopped executor: after a stop, the host that holds the execution runs `resume` itself. Used by the orchestrator and directly by the user.
 
 ## Syntax
 
