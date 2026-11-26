@@ -195,6 +195,7 @@ var companionFlags = map[string][]string{
 	"cursor":          {"--limit", "5"},
 	"dispatch-id":     {"--execution-epoch", "2"},
 	"execution-epoch": {"--dispatch-id", "d1"},
+	"file":            {"--action", "apply"},
 }
 
 func sampleArguments(t *testing.T, leaf leafCommand) []string {
