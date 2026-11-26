@@ -5,6 +5,8 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/dualface/kander/api"
@@ -20,7 +22,7 @@ type Options struct {
 	TTL time.Duration
 	// RenewInterval is the recommended interval between lease renewals.
 	RenewInterval time.Duration
-	// Logger receives server diagnostics.
+	// Logger receives server diagnostics and board remarks.
 	Logger *slog.Logger
 	// Version is the build identifier reported by the service.
 	Version string
@@ -34,6 +36,11 @@ type Hooks struct {
 	// Authorize is called once for an eligible request before any board access.
 	// A nil hook allows the request. An error denies it without exposing its text.
 	Authorize func(context.Context, Request) error
+	// AuthorizeAssignment runs after route authorization and assignee
+	// validation, before board locking or idempotency handling, even on replay.
+	// ErrAssigneeRejected maps to HTTP 400, other errors to HTTP 403.
+	// The response never includes the host's error text.
+	AuthorizeAssignment func(context.Context, Assignment) error
 	// Attribution takes the accepted request's context and reports the host's
 	// caller identity. When set, a false result denies attributed operations
 	// instead of falling back to a caller-supplied value.
@@ -57,6 +64,37 @@ type Request struct {
 	Task string
 	// Group is the matched group ID, or empty when not scoped to a group.
 	Group string
+}
+
+// Assignment describes the assignee value proposed by an assignment request.
+type Assignment struct {
+	// Request is the same route scope supplied to Authorize.
+	Request Request
+	// Assignee is the validated, normalized value that would be written.
+	Assignee string
+}
+
+// ErrAssigneeRejected reports that the host rejected the assignee as invalid.
+// Return it, or wrap it, from Hooks.AuthorizeAssignment to deny with HTTP 400.
+var ErrAssigneeRejected = core.ErrAssigneeRejected
+
+// Route describes one pattern registered by Handler.
+type Route struct {
+	// Pattern is the registered method and path template.
+	Pattern string
+	// Authorized reports whether eligible requests pass through Authorize.
+	Authorized bool
+}
+
+// Routes returns a fresh list of the patterns Handler registers, in registration
+// order. It does not open a data directory.
+func Routes() []Route {
+	inventory := core.Routes()
+	routes := make([]Route, len(inventory))
+	for i, r := range inventory {
+		routes[i] = Route(r)
+	}
+	return routes
 }
 
 // Notification contains a project event or a reset of the subscriber's view.
@@ -84,9 +122,25 @@ func Open(options Options) (*Server, error) {
 			return authorize(ctx, Request(r))
 		}
 	}
+	if authorize := options.Hooks.AuthorizeAssignment; authorize != nil {
+		hooks.AuthorizeAssignment = func(ctx context.Context, a core.Assignment) error {
+			return authorize(ctx, Assignment{Request: Request(a.Request), Assignee: a.Assignee})
+		}
+	}
+	logger := options.Logger
+	if logger == nil {
+		logger = slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	}
 	s, err := core.Open(core.Options{
 		DataDir: options.DataDir, TTL: options.TTL, RenewInterval: options.RenewInterval,
-		Logger: options.Logger, Version: options.Version, Hooks: hooks,
+		Logger: logger, Version: options.Version, Hooks: hooks,
+		Remarks: func(code, text string) {
+			level := slog.LevelWarn
+			if code == "board_journal_partitioned" {
+				level = slog.LevelInfo
+			}
+			logger.Log(context.Background(), level, "board remark", "code", code, "text", strings.TrimRight(text, "\r\n"))
+		},
 	})
 	if err != nil {
 		return nil, err

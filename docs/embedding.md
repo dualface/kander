@@ -6,6 +6,8 @@ Another Go module can import `github.com/dualface/kander/api`, `server`, `client
 
 Call `server.Open(server.Options{DataDir: absolutePath, Hooks: hooks})`. It takes the exclusive data-directory lock and recovers projects before returning. It does not start a listener, register signals, or exit the process. Zero lease durations use the normal service defaults. Set `Version` if the host needs to identify its embedded build in the version response.
 
+Board remarks from opening and registering projects, serving requests, and online imports go to the instance's `Options.Logger`. Each record has the message `board remark` and the attributes `code` and `text`. The text has trailing line breaks removed. The code `board_journal_partitioned` logs at Info, and all other remark codes log at Warn. A nil logger uses the default JSON logger on stderr.
+
 Authenticate requests in the host and store the authenticated identity in their contexts. Wrap `service.Handler()` with that middleware and mount it at the root of the service URL space. For a prefixed mount, strip the prefix before invoking the Kander handler.
 
 `service.Close()` waits for operations holding a project lock before releasing the data-directory lock. New project requests and those still waiting for a project lock receive `not_ready`. Stop accepting requests and drain in-flight handlers before calling `Close` if you want to avoid those failures.
@@ -20,7 +22,9 @@ The host owns authentication, accounts, permissions, and audit policy. A handler
 
 Use `Request.Pattern` as the route-level policy key. It is the registered Go HTTP pattern, such as `POST /api/v1/projects/{project}/tasks`, not the concrete request URL. Reject unknown patterns by default. `Request.Method` is the actual request method, so a HEAD request matched by a GET route still reports HEAD.
 
-`Request.ProjectID`, `Task`, and `Group` come from the matching path parameters. `Request.Project` is the registered project name resolved from that ID without accessing the board. It is empty when the route has no project parameter or the ID is unknown. The hook does not receive query strings, request bodies, headers, or board-derived membership. In particular, `GET /api/v1/projects`, `POST /api/v1/projects`, and `POST /api/v1/server/import` have no path-bound project and need a host-level policy.
+`server.Routes()` lists the patterns registered by `Handler()` without opening a data directory. A route's `Authorized` flag means eligible requests go through `Hooks.Authorize` if it is set. Compare your policy table with `Routes()` in a test so that a Kander upgrade cannot silently leave a new pattern unclassified.
+
+`Request.ProjectID`, `Task`, and `Group` come from the matching path parameters. `Request.Project` is the registered project name resolved from that ID without accessing the board. It is empty when the route has no project parameter or the ID is unknown. `Authorize` does not receive query strings, request bodies, headers, or board-derived membership. In particular, `GET /api/v1/projects`, `POST /api/v1/projects`, and `POST /api/v1/server/import` have no path-bound project and need a host-level policy.
 
 These project routes can select tasks via the body without a `{task}` path parameter. Authorize them at project scope, not for any one task. The table uses the common prefix `/api/v1/projects/{project}`.
 
@@ -37,6 +41,14 @@ These project routes can select tasks via the body without a `{task}` path param
 
 The same project-level limit applies to routes that resolve task membership from a review plan, run, batch, publication, issue, or integration record. The `POST /groups/{group}/claim`, `/facts`, `/reconcile`, `/remove-member`, and `/recover` routes expose the group scope but not individual members selected in their bodies. Project list, creation and event routes are not scoped to a task. The host must not infer task permission from an ID found outside the matched route metadata.
 
+### Assignment authorization
+
+`Hooks.AuthorizeAssignment(ctx, assignment)` is optional and applies only to `POST /tasks/{task}/assignee` under a project. It runs after route authorization and decoding, but before taking the board lock or handling idempotency. `assignment.Request` is the same scope as in `Authorize`. `assignment.Assignee` is the normalized value that would be written, or the empty string to clear the assignment. A malformed body or an assignee that fails the board's validation does not call the hook.
+
+Return or wrap `server.ErrAssigneeRejected` to deny with HTTP 400 and `invalid_request`. Other errors deny with HTTP 403 and `forbidden`. The response never includes the hook's error text. A denial does not modify the board or write a receipt. The hook runs again on idempotent replay. A denial then takes precedence over the stored response and leaves that receipt unchanged.
+
+Like `Authorize`, this hook runs outside the board lock and can read `TaskAccess`. Task facts can change after the hook returns. Include `expected_revision` to reject the write if the task changes between the revision you checked and the write.
+
 ### Caller attribution
 
 `Hooks.Attribution(ctx)` takes the accepted request's context. Operations that need an attribution use these rules:
@@ -45,7 +57,7 @@ The same project-level limit applies to routes that resolve task membership from
 2. Hook returns `(value, true)`. Use that value even if the client reports something else.
 3. Hook returns `(_, false)`. Refuse the attributed operation with HTTP 403 and code `attribution_required`. Never fall back to the client value.
 
-Task creation and issue import use this attribution to populate the immutable `SUBMITTER` header. The two decision write routes use the same attribution for `recorded_by` and also reject a blank attribution. The host can authorize human and Leader writes separately. See [Task decision records](decision-records.md). Task assignment is a separate write through `POST /tasks/{task}/assignee` under the project route. The authorization hook receives its matched task scope and can decide who may assign or clear the responsible person.
+Task creation and issue import use this attribution to populate the immutable `SUBMITTER` header. The two decision write routes use the same attribution for `recorded_by` and also reject a blank attribution. The host can authorize human and Leader writes separately. See [Task decision records](decision-records.md). Task assignment is separate from attribution. `Authorize` receives its task scope and `AuthorizeAssignment` can check the proposed assignee.
 
 ### Administration
 
@@ -54,8 +66,8 @@ Task creation and issue import use this attribution to populate the immutable `S
 ## Read task access facts in process
 
 `service.TaskAccess(ctx, projectID, taskID)` reads the task's submitter,
-assignee, decision mode, state, and revision. It may be called from `Hooks.Authorize`
-without invoking that hook again or reading the card files. A missing
+assignee, decision mode, state, and revision. It may be called from either
+authorization hook without invoking the hooks again or reading the card files. A missing
 project or task returns `not_found`. An untrusted index refuses the
 query with `index_rebuilding` until reconciliation succeeds. Host
 policy should deny access when the query returns any error.
@@ -78,6 +90,8 @@ The typed client keeps `Project.List(ctx, state)` for an unpaginated list.
 Use `Project.ListWithOptions(ctx, api.TaskListOptions{...})` for filters,
 title search, and page continuations. The host should pin its client and
 server revisions together before using the new query options.
+
+Use `Project.Document(ctx, taskID, path)` to read `spec.md`, `plan.md`, `report.md`, or an attachment at a path relative to the card directory. A missing document returns an `*api.Error` with the code `not_found`.
 
 The public CLI builds the same tree as the standalone executable, including the bare terminal board. For example, given a transport `tunnel` and an unattached Cobra command `hostCommand`:
 

@@ -23,6 +23,11 @@ func personField(field, value string) (string, error) {
 	return value, nil
 }
 
+// NormalizeAssignee validates and trims the value stored in ASSIGNEE.
+func NormalizeAssignee(value string) (string, error) {
+	return personField(FieldAssignee, value)
+}
+
 // Assign changes only ASSIGNEE. It is a board management write independent of
 // the executing agent, so neither a dispatch nor a contract decision is needed.
 func Assign(root, id, assignee string, expected *uint64, extension TransactionExtension) error {
@@ -30,7 +35,7 @@ func Assign(root, id, assignee string, expected *uint64, extension TransactionEx
 	if err != nil {
 		return err
 	}
-	assignee, err = personField(FieldAssignee, assignee)
+	assignee, err = NormalizeAssignee(assignee)
 	if err != nil {
 		return err
 	}

@@ -82,6 +82,8 @@ func (s *Server) ImportWithProgress(ctx context.Context, name, remote, source st
 	if importPathsOverlap(source, s.data) {
 		return result, apiError(api.CodeInvalidRequest, "source board and server data directories must not overlap")
 	}
+	releaseSourceRemarks := s.routeBoardRemarks(source)
+	defer releaseSourceRemarks()
 	if err := board.RecoverTransactions(source); err != nil {
 		return result, fmt.Errorf("recover the source board first: %w", err)
 	}
@@ -132,6 +134,8 @@ func (s *Server) ImportWithProgress(ctx context.Context, name, remote, source st
 			return err
 		}
 		staging := filepath.Join(p.root, "board.import")
+		releaseStagingRemarks := s.routeBoardRemarks(staging)
+		defer releaseStagingRemarks()
 		if err := removeImportDirectory(p.root, staging); err != nil {
 			return err
 		}

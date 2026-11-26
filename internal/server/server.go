@@ -43,6 +43,8 @@ type Options struct {
 	RenewInterval   time.Duration
 	Logger          *slog.Logger
 	Hooks           Hooks
+	// Remarks receives board remarks for this instance when set.
+	Remarks func(code, text string)
 	// Now overrides the clock in tests.
 	Now     func() time.Time
 	Version string
@@ -64,6 +66,7 @@ type Server struct {
 	ttl                time.Duration
 	renew              time.Duration
 	log                *slog.Logger
+	remarks            func(code, text string)
 	clock              func() time.Time
 	version            string
 	hooks              Hooks
@@ -108,6 +111,7 @@ func Open(o Options) (*Server, error) {
 		maintenance: o.maintenance, indexFault: o.indexFault, data: o.DataDir, ttl: o.TTL, renew: o.RenewInterval, log: o.Logger, clock: o.Now, version: o.Version, hooks: o.Hooks,
 		projects: map[string]*project{}, byName: map[string]string{}, shutdown: shutdown, shutdownCancel: shutdownCancel, startedAt: time.Now().UTC(),
 		indexRetryDelay: o.indexRetryDelay,
+		remarks:         o.Remarks,
 	}
 	s.closeOnce = sync.OnceValue(s.close)
 	if s.ttl <= 0 {
@@ -195,6 +199,9 @@ func (s *Server) close() error {
 	}
 	// A publisher can start a worker only before this project-lock barrier.
 	s.indexWorkers.Wait()
+	for _, p := range projects {
+		p.releaseRemarks()
+	}
 	if s.lock != nil {
 		err = errors.Join(err, s.lock.Unlock())
 		s.lock = nil
@@ -279,13 +286,21 @@ func (s *Server) attach(info api.Project) error {
 		return err
 	}
 	info.BoardPath = filepath.Join(root, "board")
-	p := &project{server: s, info: info, root: root, board: info.BoardPath}
+	p := &project{server: s, info: info, root: root, board: info.BoardPath, releaseRemarks: s.routeBoardRemarks(info.BoardPath)}
 	if err := p.open(); err != nil {
+		p.releaseRemarks()
 		return err
 	}
 	s.projects[info.ID] = p
 	s.byName[info.Name] = info.ID
 	return nil
+}
+
+func (s *Server) routeBoardRemarks(root string) func() {
+	if s.remarks == nil {
+		return func() {}
+	}
+	return board.RouteRemarks(root, s.remarks)
 }
 
 // register returns the project of name, creating it on first use. The remote
@@ -328,6 +343,7 @@ func (s *Server) register(req api.RegisterProject) (api.Project, bool, error) {
 	}
 	if err := s.writeRegistry(); err != nil {
 		err = errors.Join(err, s.projects[info.ID].index.Close())
+		s.projects[info.ID].releaseRemarks()
 		delete(s.projects, info.ID)
 		delete(s.byName, info.Name)
 		return api.Project{}, false, err

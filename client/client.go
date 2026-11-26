@@ -67,6 +67,11 @@ func (p *Project) Show(ctx context.Context, id string) (api.Task, error) {
 	return p.impl.Show(ctx, id)
 }
 
+// Document reads a card document at a path relative to the card directory.
+func (p *Project) Document(ctx context.Context, id, path string) (api.Document, error) {
+	return p.impl.Document(ctx, id, path)
+}
+
 // NewTask creates a backlog task. Reuse key when retrying the same operation.
 // An empty key generates a new key for this call.
 func (p *Project) NewTask(ctx context.Context, key string, req api.NewTask) (api.Task, error) {

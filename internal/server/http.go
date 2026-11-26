@@ -26,14 +26,19 @@ func (s *Server) Handler() http.Handler {
 }
 
 type route struct {
-	pattern string
-	handler http.HandlerFunc
+	pattern    string
+	handler    http.HandlerFunc
+	authorized bool
 }
 
 // routeTable is the inventory used to mount and verify the same set of routes.
 type routeTable []route
 
 func (t *routeTable) HandleFunc(pattern string, handler http.HandlerFunc) {
+	*t = append(*t, route{pattern: pattern, handler: handler, authorized: true})
+}
+
+func (t *routeTable) probe(pattern string, handler http.HandlerFunc) {
 	*t = append(*t, route{pattern: pattern, handler: handler})
 }
 
@@ -51,19 +56,35 @@ func (s *Server) routes() routeTable {
 	return table
 }
 
+// Route describes the method and path pattern and whether it uses authorization.
+type Route struct {
+	Pattern    string
+	Authorized bool
+}
+
+// Routes returns a fresh inventory from the same registrations as Handler.
+func Routes() []Route {
+	table := (&Server{}).routes()
+	routes := make([]Route, 0, len(table))
+	for _, r := range table {
+		routes = append(routes, Route{Pattern: r.pattern, Authorized: r.authorized})
+	}
+	return routes
+}
+
 func (s *Server) registerRoutes(mux *routeTable) {
 	s.adminRoutes(mux)
-	mux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, r *http.Request) {
+	mux.probe("GET /api/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSONResponse(w, http.StatusOK, api.Health{Status: "alive", Ready: s.ready.Load()})
 	})
-	mux.HandleFunc("GET /api/v1/ready", func(w http.ResponseWriter, r *http.Request) {
+	mux.probe("GET /api/v1/ready", func(w http.ResponseWriter, r *http.Request) {
 		if !s.ready.Load() {
 			writeJSONResponse(w, http.StatusServiceUnavailable, api.Health{Status: "starting"})
 			return
 		}
 		writeJSONResponse(w, http.StatusOK, api.Health{Status: "ready", Ready: true})
 	})
-	mux.HandleFunc("GET /api/v1/version", func(w http.ResponseWriter, r *http.Request) {
+	mux.probe("GET /api/v1/version", func(w http.ResponseWriter, r *http.Request) {
 		writeJSONResponse(w, http.StatusOK, api.VersionInfo{Protocol: api.ProtocolVersion, MinProtocol: api.MinProtocolVersion, ServerVersion: s.version})
 	})
 	mux.HandleFunc("GET /api/v1/projects", s.domain(func(r *http.Request) outcome {
@@ -135,6 +156,9 @@ func (s *Server) registerRoutes(mux *routeTable) {
 	s.projectRoute(mux, "POST "+task+"/assignee", func(p *project, r *http.Request) outcome {
 		var req api.Assign
 		if err := decode(r, &req); err != nil {
+			return outcome{err: err}
+		}
+		if err := s.authorizeAssignment(r, req.Assignee); err != nil {
 			return outcome{err: err}
 		}
 		return p.assign(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("task"), req)
@@ -281,11 +305,16 @@ func (s *Server) domain(fn func(*http.Request) outcome) http.HandlerFunc {
 		case !s.ready.Load():
 			out = outcome{err: apiError(api.CodeNotReady, "server is recovering")}
 		default:
-			if err := s.authorize(r); err != nil {
+			if scope, err := s.authorize(r); err != nil {
 				out = outcome{err: err}
 			} else {
 				r.Body = http.MaxBytesReader(w, r.Body, maxBody)
-				out = fn(s.withAttribution(r))
+				request := s.withAttribution(r)
+				if s.hooks.AuthorizeAssignment != nil && s.hooks.Authorize != nil {
+					// Keep the same scope even if the registry changes between hooks.
+					request = request.WithContext(context.WithValue(request.Context(), requestScopeKey{}, scope))
+				}
+				out = fn(request)
 			}
 		}
 		status := out.status

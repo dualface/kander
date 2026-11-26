@@ -25,10 +25,10 @@ func journalWarningLog(logs []*WarningLog) *WarningLog {
 	return nil
 }
 
-func journalWarning(message string, logs ...*WarningLog) {
+func journalWarning(root, message string, logs ...*WarningLog) {
 	log := journalWarningLog(logs)
 	if log == nil {
-		Remark("board_warning", message+"\n")
+		remark(root, "board_warning", message+"\n")
 		return
 	}
 	log.mu.Lock()

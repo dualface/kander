@@ -61,7 +61,7 @@ func (s *Server) adminRoutes(mux *routeTable) {
 
 func (s *Server) authorizedAdmin(fn http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := s.authorize(r); err != nil {
+		if _, err := s.authorize(r); err != nil {
 			writeJSONResponse(w, err.Status, err)
 			return
 		}

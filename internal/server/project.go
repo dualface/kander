@@ -21,13 +21,14 @@ import (
 // so ownership checks, board transactions, receipts, and events of one
 // project never interleave.
 type project struct {
-	mu     sync.Mutex
-	server *Server
-	info   api.Project
-	root   string
-	board  string
-	events *eventLog
-	starts map[string]startCursor
+	mu             sync.Mutex
+	server         *Server
+	info           api.Project
+	root           string
+	board          string
+	events         *eventLog
+	starts         map[string]startCursor
+	releaseRemarks func()
 	// importBroken is guarded by mu. It is set when a board import failed
 	// after its publication intent and in-process recovery failed too.
 	importBroken bool

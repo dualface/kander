@@ -26,6 +26,6 @@ func migrationStructure(root string, b Board, changes bool) error {
 	if !harmless {
 		return kanbanError("board.migration_structure", strings.Join(messages, "\n"))
 	}
-	Remark("board_invalid_entries", t("board.kander_warning_ignored_invalid_entries_run_kander_check_for", itoa(len(b.Problems))))
+	remark(root, "board_invalid_entries", t("board.kander_warning_ignored_invalid_entries_run_kander_check_for", itoa(len(b.Problems))))
 	return nil
 }

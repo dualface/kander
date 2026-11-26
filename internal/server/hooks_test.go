@@ -37,15 +37,12 @@ func TestEveryRegisteredRoutePassesAuthorizationExceptProbes(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := s.Handler()
-	exempt := map[string]bool{
-		"GET /api/v1/health": true, "GET /api/v1/ready": true, "GET /api/v1/version": true,
-	}
 	const task, group = "20261125-route-test-task", "20261125-route-test-group"
-	for _, route := range s.routes() {
-		t.Run(route.pattern, func(t *testing.T) {
+	for _, route := range Routes() {
+		t.Run(route.Pattern, func(t *testing.T) {
 			calls = nil
-			method, path, _ := strings.Cut(route.pattern, " ")
-			want := Request{Pattern: route.pattern, Method: method}
+			method, path, _ := strings.Cut(route.Pattern, " ")
+			want := Request{Pattern: route.Pattern, Method: method}
 			var parts []string
 			for part := range strings.SplitSeq(path, "/") {
 				switch part {
@@ -72,11 +69,10 @@ func TestEveryRegisteredRoutePassesAuthorizationExceptProbes(t *testing.T) {
 			r.Header.Set(api.HeaderProtocol, strconv.Itoa(api.ProtocolVersion))
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, r)
-			if r.Pattern != route.pattern {
-				t.Fatalf("request matched %q instead of %q", r.Pattern, route.pattern)
+			if r.Pattern != route.Pattern {
+				t.Fatalf("request matched %q instead of %q", r.Pattern, route.Pattern)
 			}
-			if exempt[route.pattern] {
-				delete(exempt, route.pattern)
+			if !route.Authorized {
 				if w.Code != http.StatusOK || len(calls) != 0 {
 					t.Fatalf("probe response = %d, authorization calls = %v", w.Code, calls)
 				}
@@ -92,8 +88,27 @@ func TestEveryRegisteredRoutePassesAuthorizationExceptProbes(t *testing.T) {
 			}
 		})
 	}
-	if len(exempt) != 0 || s.shutdown.Err() != nil {
-		t.Fatalf("missing probes = %v, denied shutdown = %v", exempt, s.shutdown.Err())
+	if s.shutdown.Err() != nil {
+		t.Fatalf("denied shutdown = %v", s.shutdown.Err())
+	}
+}
+
+func TestRouteInventoryMatchesHandlerRegistrations(t *testing.T) {
+	registered := make(map[string]bool)
+	for _, r := range (&Server{}).routes() {
+		if registered[r.pattern] {
+			t.Fatalf("duplicate registration %q", r.pattern)
+		}
+		registered[r.pattern] = true
+	}
+	for _, route := range Routes() {
+		if !registered[route.Pattern] {
+			t.Fatalf("unregistered or duplicate inventory pattern %q", route.Pattern)
+		}
+		delete(registered, route.Pattern)
+	}
+	if len(registered) != 0 {
+		t.Errorf("registrations missing from the inventory: %v", registered)
 	}
 }
 

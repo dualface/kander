@@ -12,14 +12,14 @@ import (
 // storage and metadata scans. Migration staging evidence is retained separately.
 const committedJournalRetention = 100
 
-func warnJournalCleanup(err error, warnings ...*WarningLog) {
+func warnJournalCleanup(root string, err error, warnings ...*WarningLog) {
 	if err != nil {
-		journalWarning(t("board.journal_cleanup_warning", err.Error()), warnings...)
+		journalWarning(root, t("board.journal_cleanup_warning", err.Error()), warnings...)
 	}
 }
 
 func pruneJournal(root string) {
-	warnJournalCleanup(withJournalLock(root, false, func() error {
+	warnJournalCleanup(root, withJournalLock(root, false, func() error {
 		return pruneCommitted(root, func(string) error { return nil })
 	}))
 }

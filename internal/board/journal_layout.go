@@ -78,7 +78,7 @@ func readPendingRecords(root string, warnings ...*WarningLog) ([]OperationRecord
 		}
 	}
 	if legacy {
-		journalWarning(t("board.journal_legacy"), warnings...)
+		journalWarning(root, t("board.journal_legacy"), warnings...)
 	}
 	for _, file := range files {
 		if file.partition == "committed" {
@@ -152,7 +152,7 @@ func partitionJournalWithCheckpoint(root string, records []OperationRecord, opti
 		return nil
 	})
 	if err == nil {
-		Remark("board_journal_partitioned", t("board.journal_partitioned", itoa(count))+"\n")
+		remark(root, "board_journal_partitioned", t("board.journal_partitioned", itoa(count))+"\n")
 	}
 	return err
 }
@@ -172,7 +172,7 @@ func commitOperation(root, path string, record *OperationRecord, checkpoint func
 				return err
 			}
 		}
-		warnJournalCleanup(pruneCommitted(root, checkpoint), warnings...)
+		warnJournalCleanup(root, pruneCommitted(root, checkpoint), warnings...)
 		return nil
 	})
 }
