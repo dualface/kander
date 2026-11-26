@@ -4,7 +4,7 @@ Source: moved from `KANDER-KANBAN-RULES.md` "Command Contract" ("Notify and Reco
 
 ## Purpose and users
 
-Dispatches items back to the original executing agent. It is the single interface the orchestrator uses for review findings (`--kind fix`), task branch synchronization (`--kind sync`), and post-integration wrap-up (`--kind wrap-up`). The orchestrator does not call `resume` separately; resumption is chosen inside `notify`.
+Dispatches items back to the original executing agent. It is the single interface the orchestrator uses for review findings (`--kind fix`), task branch synchronization (`--kind sync`), and post-integration wrap-up (`--kind wrap-up`). It queues a request that the worker of the host holding the execution delivers; it starts and recovers no agent. A stopped executor continues only through `kander resume`.
 
 ## Syntax
 
@@ -58,14 +58,14 @@ kander request answer 20261118-example-task request-1 done "Fixed in the latest 
 
 **Delivery and Recovery**
 
-- Delivery goes to the card `WINDOW`, else a session reverse lookup; `--pane` does not change the target. The target must prove the card's session identity and be idle, done, or working (a working agent handles the message after its current turn). Any other live state is busy per the probe classification below and never recovers, while an unusable target falls back to recovery. Session markers avoid misdelivery within same-user permissions and are not a security boundary.
-- The agent receives only one line starting with `# kander-notify:` (also recognized as `# onevoke-notify:`) naming the message file; the file starts with the acknowledgement line the agent outputs exactly before anything else. A successful delivery returns success without moving the card; the message for a `review/` card is prefixed with the requirement to perform the `review -> working` move first (plain for an unbound message, ID/epoch-bound for a durable dispatch). A marker timeout only warns "delivered, not confirmed within timeout" and recovers no second process.
-- No direct channel, or a failed probe or delivery make the command recover the original session internally; when both paths fail it exits non-zero with both reasons and the card is unchanged. A card on `foreground` or `console` has no direct channel and no recovery (`snippets/commands/resume.md` "Foreground and Console Have No Native Resume"), and a recovery through either launcher is refused too, so the command fails with the next step and no second executor starts.
+- The command checks the card and the options, queues the request, and returns: exit 0 means the request is queued, not delivered. The worker of the host that holds the execution delivers it to the card `WINDOW`, else a session reverse lookup; `--pane` does not change the target. The target must prove the card's session identity and be idle, done, or working (a working agent handles the message after its current turn). Any other state leaves the request queued per the probe classification below. Session markers avoid misdelivery within same-user permissions and are not a security boundary.
+- The agent receives only one line starting with `# kander-notify:` (also recognized as `# onevoke-notify:`) naming the message file; the file starts with the acknowledgement line the agent outputs exactly before anything else. Delivery does not move the card; the message for a `review/` card is prefixed with the requirement to perform the `review -> working` move first (plain for an unbound message, ID/epoch-bound for a durable dispatch). The request notes record the typing and the acknowledgement (see "Distributed requests"); a missing acknowledgement starts no second process.
+- A target that cannot be resolved leaves the request open, and the worker tries again later and logs why; read the state with `kander request show <task-id> <request-id>`. Nothing recovers the original session: continue a stopped executor with `kander resume` (`snippets/commands/resume.md` "Distributed restart and explicit release"). A card on `foreground` or `console` has no pane to deliver to (`snippets/commands/resume.md` "Foreground and Console Have No Native Resume").
 - Neither `notify` nor `resume` moves the card. In the unbound compatibility flow, the notified or woken executing agent itself performs `review -> working` with a plain `kander move <task-id> working` before handling the items; that move is the legacy "received and started" acknowledgement. Durable dispatch instead requires its atomic accepted receipt.
 
 **Probe Classification**
 
-- When the worker probes the recorded `WINDOW`, it distinguishes four target classes. A ready target: the agent is idle, done, or working. A working agent receives the message and handles it after its current turn. A busy target: the agent is alive but in any other state, such as blocked on a dialog. The worker probes for at most 10 seconds and types nothing; the request stays queued and the worker tries again later. A stale address: the pane is gone or its identity mismatches. A unique session reverse lookup rewrites the address and delivers; old tmux cards with an empty `WINDOW` get no lookup. A failed lookup: 0 or multiple hits. Recovery runs through the existing chain and reports both reasons. This classification takes precedence over `snippets/failure-recovery.md` "Failure Recovery".
+- When the worker probes the recorded `WINDOW`, it distinguishes four target classes. A ready target: the agent is idle, done, or working. A working agent receives the message and handles it after its current turn. A busy target: the agent is alive but in any other state, such as blocked on a dialog. The worker probes for at most 10 seconds and types nothing; the request stays queued and the worker tries again later. A stale address: the pane is gone or its identity mismatches. A unique session reverse lookup delivers to the pane it finds; old tmux cards with an empty `WINDOW` get no lookup. A failed lookup: 0 or multiple hits. The request stays open, and the worker tries again later. This classification takes precedence over `snippets/failure-recovery.md` "Failure Recovery".
 
 **Codex Session Identity**
 
@@ -73,13 +73,13 @@ kander request answer 20261118-example-task request-1 done "Fixed in the latest 
 
 ## Output
 
-- Delivery and confirmation results; a generated dispatch ID before any send when omitted; after recovery or takeover the new container address, which is also written back to `WINDOW`. The object is the collaboration request (`id`, `task_id`, `kind`, `message`, `status`, `target_generation`, `revision`, `created_at`, `updated_at`, and when present `note`, `dispatch`, `card_revision`), with and without `--json`.
+- The queued request, not a delivery result: its `status` and `note` tell the delivery later (see "Distributed requests"), and a dispatch ID that Kander generated is in `dispatch`. The object is the collaboration request (`id`, `task_id`, `kind`, `message`, `status`, `target_generation`, `revision`, `created_at`, `updated_at`, and when present `note`, `dispatch`, `card_revision`), with and without `--json`.
 
 ## Rejections
 
 - A card claimed or reclaimed with `--owner`: it has no executor session. The refusal comes before any dispatch binds and names `snippets/failure-recovery.md`.
 - A card whose start attempt has not ended (current execution record `pending` or `unresolved`): the refusal comes before any dispatch binds, and the error names `kander resume <task-id> --adopt --decision <reference>` and `kander resume <task-id> --agent <agent> --decision <reference>` (`snippets/commands/start.md` "Late Failures"). For an unmarked pane or an old card shape it names only the takeover (`snippets/commands/resume.md` "Adopting an Unfinished Start").
-- Both reasons when direct delivery and recovery fail; dispatch conflicts per `snippets/commands/dispatch.md`.
+- Dispatch conflicts per `snippets/commands/dispatch.md`. A target that cannot be resolved is not a refusal: the request is queued.
 - A card in `review/` that belongs to a task group or carries a binding, with no dispatch option: the error gives the `--kind` usage. `notify` never turns such a message into a fix dispatch.
 - A missing or doubled message, a timeout of 60 seconds or less, a missing task ID, or an unknown option is a usage error.
 
