@@ -5,8 +5,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http/httptest"
-	"os/exec"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -20,43 +18,22 @@ import (
 )
 
 func TestTmuxWorkerSubmitsRealCodexRequests(t *testing.T) {
-	conn, backend, pane, tmux := startRealCodexPane(t)
-	// The production resolver runs tmux itself. Route its commands to the
-	// test socket rather than to the user's tmux server.
-	t.Setenv("TMUX", strings.TrimSpace(tmux("display-message", "-p", "-t", pane, "#{socket_path},#{pid},0")))
-	t.Setenv("TMUX_PANE", pane)
-	ref := "request-test-" + randomHex(t, 4)
-	tmux("set-option", "-p", "-t", pane, "@kander_session", ref)
-	window := "tmux:" + strings.TrimSpace(tmux("display-message", "-p", "-t", pane, "#{session_id}:#{window_id}:#{pane_id}"))
-
-	isWorking := func(text string) bool {
-		return strings.Contains(text, "esc to interrupt") || strings.Contains(text, "Working (")
-	}
 	t.Run("idle with 12 KiB of Chinese", func(t *testing.T) {
+		_, _, pane, tmux := startRealCodexPane(t)
+		window, ref := routeWorkerToTestPane(t, pane, tmux)
 		deliverRealCodexRequest(t, window, ref, strings.Repeat("中", 4096), worker.Resolve)
 	})
 	t.Run("busy with another turn", func(t *testing.T) {
-		if _, err := exec.LookPath("ps"); err != nil {
-			t.Skipf("ps is needed to verify that Codex is still executing: %v", err)
+		// Start the unrelated turn from argv. It isn't itself a test of the
+		// worker's typing, and must not depend on a previous turn settling.
+		const initial = "Run sleep 25 in the shell now to simulate ongoing work. Then reply with BUSY-TURN-ENDED."
+		conn, backend, pane, tmux := startRealCodexPane(t, initial)
+		window, ref := routeWorkerToTestPane(t, pane, tmux)
+		busy := func(text string) bool {
+			return strings.Contains(text, "background terminal running") ||
+				strings.Contains(text, "esc to interrupt")
 		}
-		waitPane(t, conn, backend, pane, 30*time.Second, func(text string) bool {
-			return !isWorking(text) && strings.Contains(text, "? for shortcuts")
-		})
-		if err := backend.DeliverText(t.Context(), conn, pane, "Run sleep 25 in the shell now to simulate ongoing work. Then reply with BUSY-TURN-ENDED."); err != nil {
-			t.Fatal(err)
-		}
-		pid := strings.TrimSpace(tmux("display-message", "-p", "-t", pane, "#{pane_pid}"))
-		runningCtx, stop := context.WithTimeout(t.Context(), 30*time.Second)
-		defer stop()
-		poll := time.NewTicker(100 * time.Millisecond)
-		defer poll.Stop()
-		for !paneRunningSleep(runningCtx, pid) {
-			select {
-			case <-runningCtx.Done():
-				t.Fatal("Codex did not start the shell sleep")
-			case <-poll.C:
-			}
-		}
+		waitPane(t, conn, backend, pane, 30*time.Second, busy)
 		resolveWhileBusy := func(window, session string) (*worker.Target, error) {
 			target, err := worker.Resolve(window, session)
 			if err != nil {
@@ -64,10 +41,24 @@ func TestTmuxWorkerSubmitsRealCodexRequests(t *testing.T) {
 			}
 			prompt := target.Prompt
 			target.Prompt = func(line string) error {
-				if !paneRunningSleep(t.Context(), pid) {
-					t.Error("Codex had already finished the ongoing turn before worker delivery")
+				// The footer can disappear briefly between model and tool
+				// events. Look for a live turn again immediately before typing.
+				ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+				defer cancel()
+				ticker := time.NewTicker(100 * time.Millisecond)
+				defer ticker.Stop()
+				for {
+					text, err := backend.ReadOutput(ctx, conn, pane)
+					if err == nil && busy(text) {
+						return prompt(line)
+					}
+					select {
+					case <-ctx.Done():
+						t.Error("Codex had no ongoing turn when the worker tried to type")
+						return ctx.Err()
+					case <-ticker.C:
+					}
 				}
-				return prompt(line)
 			}
 			return target, nil
 		}
@@ -75,34 +66,16 @@ func TestTmuxWorkerSubmitsRealCodexRequests(t *testing.T) {
 	})
 }
 
-// The Codex footer can change between model and tool events. Check the actual
-// shell command under the dedicated pane's process instead of relying on it.
-func paneRunningSleep(ctx context.Context, panePID string) bool {
-	out, err := exec.CommandContext(ctx, "ps", "-A", "-o", "pid=,ppid=,args=").Output()
-	if err != nil {
-		return false
-	}
-	parents := map[string]string{}
-	var sleeps []string
-	for line := range strings.SplitSeq(string(out), "\n") {
-		f := strings.Fields(line)
-		if len(f) < 3 {
-			continue
-		}
-		parents[f[0]] = f[1]
-		if slices.Equal(f[2:], []string{"sleep", "25"}) {
-			sleeps = append(sleeps, f[0])
-		}
-	}
-	for _, pid := range sleeps {
-		for pid != "" && pid != "0" {
-			if pid == panePID {
-				return true
-			}
-			pid = parents[pid]
-		}
-	}
-	return false
+func routeWorkerToTestPane(t *testing.T, pane string, tmux func(...string) string) (window, ref string) {
+	t.Helper()
+	// The production resolver runs tmux itself. Route its commands to the
+	// test socket rather than to the user's tmux server.
+	t.Setenv("TMUX", strings.TrimSpace(tmux("display-message", "-p", "-t", pane, "#{socket_path},#{pid},0")))
+	t.Setenv("TMUX_PANE", pane)
+	ref = "request-test-" + randomHex(t, 4)
+	tmux("set-option", "-p", "-t", pane, "@kander_session", ref)
+	window = "tmux:" + strings.TrimSpace(tmux("display-message", "-p", "-t", pane, "#{session_id}:#{window_id}:#{pane_id}"))
+	return window, ref
 }
 
 func deliverRealCodexRequest(t *testing.T, window, ref, message string, resolve func(string, string) (*worker.Target, error)) {

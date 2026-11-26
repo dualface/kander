@@ -44,7 +44,7 @@ func TestTmuxDeliverTextSubmitsRealCodexTurn(t *testing.T) {
 	waitPane(t, conn, backend, pane, 120*time.Second, func(text string) bool { return strings.Contains(text, marker) })
 }
 
-func startRealCodexPane(t *testing.T) (terminal.Conn, terminal.Backend, string, func(...string) string) {
+func startRealCodexPane(t *testing.T, initialPrompt ...string) (terminal.Conn, terminal.Backend, string, func(...string) string) {
 	t.Helper()
 	if os.Getenv(realCodexEnv) != "1" {
 		t.Skipf("set %s=1 to run against a real Codex CLI and tmux", realCodexEnv)
@@ -66,6 +66,7 @@ func startRealCodexPane(t *testing.T) (terminal.Conn, terminal.Backend, string, 
 	if model := os.Getenv("KANDER_REAL_CODEX_MODEL"); model != "" {
 		codex = append(codex, "--model", model)
 	}
+	codex = append(codex, initialPrompt...)
 
 	// A private tmux server keeps the test away from the user's sessions.
 	socket := "kander-e2e-" + randomHex(t, 4)
@@ -82,7 +83,7 @@ func startRealCodexPane(t *testing.T) (terminal.Conn, terminal.Backend, string, 
 		}
 		return result.Stdout
 	}
-	tmux(append([]string{"new-session", "-d", "-s", "e2e", "-x", "200", "-y", "50", "-c", dir}, strings.Join(codex, " "))...)
+	tmux(append([]string{"new-session", "-d", "-s", "e2e", "-x", "200", "-y", "50", "-c", dir}, codex...)...)
 	t.Cleanup(func() { _, _ = conn.Run(context.Background(), "tmux", []string{"kill-server"}) })
 	pane := strings.TrimSpace(tmux("display-message", "-p", "-t", "e2e", "#{pane_id}"))
 	backend, err := builtin.DefinitionBackend(builtin.Tmux, builtin.Tmux, os.Getenv)
@@ -99,7 +100,7 @@ func startRealCodexPane(t *testing.T) (terminal.Conn, terminal.Backend, string, 
 			skipped = true
 			return false
 		}
-		return strings.Contains(text, "? for shortcuts")
+		return strings.Contains(text, "? for shortcuts") || strings.Contains(text, "esc to interrupt")
 	})
 
 	return conn, backend, pane, tmux
