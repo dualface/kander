@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -82,6 +83,50 @@ func decodeAction(data []byte, kind string) (LocalAction, error) {
 // has no receipt yet. A receipt is written atomically, so the read never sees a partial one.
 func (s *Session) PeekAction(kind string, logical any) (action LocalAction, found bool, err error) {
 	return peekAction(s.Home, filepath.Join(s.Home, "projects", projectNamespace(s.ServerURL, s.Info.ID)), kind, logical)
+}
+
+// TaskLaunchFile finds the one receipt for the current physical launch when
+// its original invocation arguments are unavailable. The task file name binds
+// the prompt to this execution. The lookup neither opens the task file nor
+// returns the claim data stored in the receipt.
+func (s *Session) TaskLaunchFile(ctx context.Context, credential Credential) (string, error) {
+	dir := filepath.Join(s.Home, "projects", projectNamespace(s.ServerURL, s.Info.ID), "launch-actions")
+	entries, err := fs.ListDirectory(s.Home, dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	var taskFile string
+	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		if !strings.HasSuffix(entry.Name, ".json") {
+			continue
+		}
+		data, found, err := fs.ReadRegularFileIfExists(s.Home, filepath.Join(dir, entry.Name))
+		if err != nil {
+			return "", err
+		}
+		if !found {
+			continue
+		}
+		var action LocalAction
+		if err := json.Unmarshal(data, &action); err != nil {
+			return "", errors.New(config.Text("remote.launch_receipt_damaged"))
+		}
+		if action.Kind != "task-launch" || action.ExecutionID != credential.ExecutionID {
+			continue
+		}
+		if taskFile != "" || action.Schema != 1 || action.TaskID != credential.TaskID ||
+			action.Window != credential.Window || !filepath.IsAbs(action.TaskFile) {
+			return "", errors.New(config.Text("remote.launch_receipt_damaged"))
+		}
+		taskFile = action.TaskFile
+	}
+	return taskFile, nil
 }
 
 func peekAction(home, root, kind string, logical any) (action LocalAction, found bool, err error) {
