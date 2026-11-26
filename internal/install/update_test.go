@@ -114,7 +114,9 @@ func stubUpdateCheck(t *testing.T, current, executable, body string) *int {
 	var requests int
 	updateCheckHTTPClient = &http.Client{Transport: updateRoundTrip(func(request *http.Request) (*http.Response, error) {
 		requests++
-		if request.URL.String() != releaseListURL {
+		// Spelled out rather than taken from releaseListURL, so a regression
+		// of that constant fails here.
+		if request.URL.String() != "https://api.github.com/repos/dualface/kander/releases?per_page=30" {
 			return nil, fmt.Errorf("unexpected request %s", request.URL)
 		}
 		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Request: request}, nil
@@ -192,11 +194,12 @@ func TestCheckUpdateSeparatesV2Prereleases(t *testing.T) {
 		{"numeric prerelease order", "2.0.0-rc.9", []string{"v2.0.0-rc.10 pre"}, "2.0.0-rc.10"},
 		{"draft prerelease", "2.0.0-beta.1", []string{"v2.0.0-beta.2 draft pre"}, ""},
 		{"prerelease tag without prerelease flag", "2.0.0-beta.1", []string{"v2.0.0-beta.2"}, ""},
+		{"tags need exactly one leading v", "2.0.0-beta.1", []string{"vv2.0.0-beta.2 pre", "2.0.0-beta.3 pre"}, ""},
 	})
 }
 
 func TestCheckUpdateSkipsVersionsOutsideChannels(t *testing.T) {
-	for _, current := range []string{"2.0.0-dev+612d677", "2.0.0-beta.1-5-gabc1234", "2.0.0+build.1", "1.6.3", "3.0.0", "2.0.0-beta", "2.0.0-beta.01", "2.0.0-preview.1"} {
+	for _, current := range []string{"vv2.0.0", "2.0.0-dev+612d677", "2.0.0-beta.1-5-gabc1234", "2.0.0+build.1", "1.6.3", "3.0.0", "2.0.0-beta", "2.0.0-beta.01", "2.0.0-preview.1"} {
 		requests := stubUpdateCheck(t, current, directExecutable, releaseList("v2.0.1", "v2.0.0-beta.9 pre"))
 		if info, err := CheckUpdate(t.Context()); err != nil || info != nil || *requests != 0 {
 			t.Fatalf("%s: info=%+v err=%v requests=%d", current, info, err, *requests)
@@ -231,6 +234,12 @@ func TestCheckUpdateRejectsBadReleaseList(t *testing.T) {
 		"oversized": oversized,
 		"not json":  "<html>",
 		"object":    `{"tag_name":"v2.0.1","draft":false,"prerelease":false}`,
+		"null":      `null`,
+		"null item": `[{"tag_name":"v2.0.1","draft":false,"prerelease":false},null]`,
+		"no draft":  `[{"tag_name":"v2.0.1","prerelease":false}]`,
+		"null flag": `[{"tag_name":"v2.0.1","draft":false,"prerelease":null}]`,
+		"no tag":    `[{"draft":false,"prerelease":false}]`,
+		"bad item":  `[{"tag_name":"v2.0.1","draft":false,"prerelease":false},{"tag_name":7,"draft":false,"prerelease":false}]`,
 	} {
 		for _, current := range []string{"2.0.0", "2.0.0-beta.1"} {
 			stubUpdateCheck(t, current, directExecutable, body)
@@ -258,6 +267,7 @@ func TestApplyUpdateRefusesOtherChannels(t *testing.T) {
 		{"2.0.0", "2.0.1-beta.1", directExecutable, "release channel"},
 		{"2.0.0", "2.0.1+build.1", directExecutable, "release channel"},
 		{"2.0.0", "3.0.0", directExecutable, "release channel"},
+		{"2.0.0", "v2.0.1", directExecutable, "release channel"},
 		{"dev", "2.0.1", directExecutable, "release channel"},
 		{"2.0.0", "2.0.0", directExecutable, "not newer"},
 		{"2.0.0-beta.2", "2.0.0-beta.1", directExecutable, "not newer"},

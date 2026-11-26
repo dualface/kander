@@ -191,6 +191,8 @@ func ApplyUpdate(ctx context.Context, info UpdateInfo) (UpdateResult, error) {
 	if Packaged() {
 		return UpdateResult{}, errStoreManaged()
 	}
+	// info.Version is the bare version CheckUpdate returned; a leading v is
+	// outside every channel, so the download tag is always "v" + info.Version.
 	current := strings.TrimPrefix(version.String(), "v")
 	channel := channelOf(current)
 	if channel == channelNone || channelOf(info.Version) != channel {
