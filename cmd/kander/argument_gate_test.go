@@ -210,3 +210,32 @@ func TestIssueResultRefusesOptionsTheActionIgnores(t *testing.T) {
 		}
 	}
 }
+
+// move refuses --owner outside a claim into working, and a claim with an option it would drop,
+// with its arguments, so the refusal is exit 2 with the Syntax lines in an unbound checkout too;
+// the combinations a claim and an archive read reach the binding check.
+func TestMoveRefusesClaimOptionsBeforeTheProjectBinding(t *testing.T) {
+	unboundCheckout(t)
+	for _, extra := range [][]string{
+		{"todo", "--owner", "codex"},
+		{"working", "--owner", "codex", "--expect-revision", "3"},
+		{"working", "--owner", "codex", "--result", "completed"},
+		{"working", "--owner", "codex", "--reason", "r"},
+		{"working", "--owner", "codex", "--duplicate-of", sampleTask},
+		{"working", "--owner", "codex", "--delivery-commit", strings.Repeat("a", 40)},
+		{"working", "--owner", "codex", "--disposition", "reviews/a.json"},
+	} {
+		result := runKander(t, append([]string{"move", sampleTask}, extra...)...)
+		if result.code != 2 || !strings.Contains(result.stderr, "--owner") || !strings.Contains(result.stderr, "kander move <task-id>") || strings.Contains(result.stderr, config.Text("remote.not_configured")) {
+			t.Errorf("%v: exit=%d stderr=%s", extra, result.code, result.stderr)
+		}
+	}
+	for _, accepted := range [][]string{
+		{"working", "--owner", "codex", "--decision", "d"},
+		{"archived", "--result", "cancelled", "--reason", "r", "--decision", "d"},
+	} {
+		if result := runKander(t, append([]string{"move", sampleTask}, accepted...)...); result.code != 1 || !strings.Contains(result.stderr, config.Text("remote.not_configured")) {
+			t.Errorf("%v: exit=%d stderr=%s", accepted, result.code, result.stderr)
+		}
+	}
+}

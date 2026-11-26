@@ -447,8 +447,11 @@ func NewMoveCommand() *cobra.Command {
 	c := command.RequireProject(&cobra.Command{
 		Use:  "move <task-id> <state>",
 		Args: command.Args(2, 2),
-		PreRunE: func(c *cobra.Command, _ []string) error {
-			return command.Together(c, "dispatch-id", "execution-epoch")
+		PreRunE: func(c *cobra.Command, args []string) error {
+			if err := command.Together(c, "dispatch-id", "execution-epoch"); err != nil {
+				return err
+			}
+			return validateMoveFlags(o, args[1])
 		},
 	})
 	c.RunE = func(_ *cobra.Command, args []string) error { return runMove(args[0], args[1], o) }
@@ -495,17 +498,22 @@ func claimFlagConflict(c *cobra.Command, state string) error {
 	return nil
 }
 
-func runMove(task, state string, o moveOptions) error {
-	authorization, authErr := executionAuthorization(o.dispatchID, o.epoch)
-	if authErr != nil {
-		return command.UsageText(authErr.Error())
+// validateMoveFlags refuses a malformed move command line in PreRunE, before the project
+// binding is checked, so it is a usage error (exit 2) in a bound and an unbound checkout alike.
+func validateMoveFlags(o moveOptions, state string) error {
+	authorization, err := executionAuthorization(o.dispatchID, o.epoch)
+	if err != nil {
+		return command.UsageText(err.Error())
 	}
 	if authorization.DispatchID != "" && o.owner != "" {
 		return command.Usage("cli.error_flags_exclusive", "--dispatch-id, --owner")
 	}
-	if err := claimFlagConflict(o.cmd, state); err != nil {
-		return err
-	}
+	return claimFlagConflict(o.cmd, state)
+}
+
+func runMove(task, state string, o moveOptions) error {
+	// validateMoveFlags already refused a malformed authorization.
+	authorization, _ := executionAuthorization(o.dispatchID, o.epoch)
 
 	ctx, cancel := commandContext()
 	defer cancel()
