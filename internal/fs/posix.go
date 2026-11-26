@@ -173,6 +173,14 @@ func readFD(fd int) ([]byte, error) {
 }
 
 func writeFD(fd int, data []byte) error {
+	if err := writeAllFD(fd, data); err != nil {
+		return err
+	}
+	return unix.Fsync(fd)
+}
+
+// writeAllFD writes data without flushing it to stable storage.
+func writeAllFD(fd int, data []byte) error {
 	for len(data) > 0 {
 		n, err := unix.Write(fd, data)
 		if n > 0 {
@@ -185,7 +193,7 @@ func writeFD(fd int, data []byte) error {
 			return unix.EIO
 		}
 	}
-	return unix.Fsync(fd)
+	return nil
 }
 
 // ReadRegularFile reads a regular file relative to a protected root without following links.
