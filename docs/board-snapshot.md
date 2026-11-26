@@ -44,6 +44,7 @@ Every key is always present. A string field without a value is `""`.
 | `task_group`  | string         | the `TASK_GROUP` field (legacy discussion line included) |
 | `owner`       | string         | the `OWNER` field (executing agent)                    |
 | `submitter`   | string         | the `SUBMITTER` field (submission identity)           |
+| `request`     | boolean        | true for a [request card](request-cards.md)           |
 | `assignee`    | string         | the `ASSIGNEE` field (responsible person)              |
 | `decision_mode` | string       | effective decision mode, `leader` or `assignee`       |
 | `session`     | string         | the `SESSION` field                                    |

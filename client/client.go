@@ -72,7 +72,8 @@ func (p *Project) Document(ctx context.Context, id, path string) (api.Document, 
 	return p.impl.Document(ctx, id, path)
 }
 
-// NewTask creates a backlog task. Reuse key when retrying the same operation.
+// NewTask creates a backlog task, with a protected request.md record when
+// req.Description is non-empty. Reuse key when retrying the same operation.
 // An empty key generates a new key for this call.
 func (p *Project) NewTask(ctx context.Context, key string, req api.NewTask) (api.Task, error) {
 	return p.impl.NewTask(ctx, key, req)

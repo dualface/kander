@@ -13,13 +13,14 @@ import (
 // listed here is a domain rejection (CodeBoardRejected); the client renders
 // it from BoardCode with the same localized text as the v1 command.
 var boardCodes = map[string]string{
-	"board.transaction_conflict": api.CodeRevisionConflict,
-	"board.transaction_pending":  api.CodeNotReady,
-	"board.task_does_not_exist":  api.CodeNotFound,
-	"board.invalid_task_id":      api.CodeInvalidRequest,
-	"board.person_field_invalid": api.CodeInvalidRequest,
-	"board.decision_invalid":     api.CodeInvalidRequest,
-	"board.decision_reserved":    api.CodeDecisionReserved,
+	"board.transaction_conflict":        api.CodeRevisionConflict,
+	"board.transaction_pending":         api.CodeNotReady,
+	"board.task_does_not_exist":         api.CodeNotFound,
+	"board.invalid_task_id":             api.CodeInvalidRequest,
+	"board.person_field_invalid":        api.CodeInvalidRequest,
+	"board.request_description_invalid": api.CodeInvalidRequest,
+	"board.decision_invalid":            api.CodeInvalidRequest,
+	"board.decision_reserved":           api.CodeDecisionReserved,
 }
 
 var codeStatus = map[string]int{

@@ -1,0 +1,10 @@
+{
+  "board.request_description_invalid": "Invalid request description: {{.V0}}.",
+  "board.request_description_utf8": "the text is not valid UTF-8",
+  "board.request_description_size": "the normalized text exceeds {{.V0}} bytes",
+  "board.request_description_control": "the text contains a disallowed control character",
+  "board.request_description_blank": "the text contains only whitespace",
+  "board.update_hint_request": "Next step: keep the REQUEST line as kander show prints it. The request record cannot be changed after creation.",
+  "remote.request_description_file_read": "Cannot open or read the request description file.",
+  "remote.request_description_file_invalid": "The request description file must contain non-blank UTF-8 text and be at most {{.V0}} bytes."
+}

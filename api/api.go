@@ -187,6 +187,7 @@ type TaskSummary struct {
 	TaskGroup    string       `json:"task_group"`
 	Owner        string       `json:"owner"`
 	Submitter    string       `json:"submitter"`
+	Request      bool         `json:"request"`
 	Assignee     string       `json:"assignee"`
 	DecisionMode DecisionMode `json:"decision_mode"`
 	CreatedAt    string       `json:"created_at"`
@@ -225,6 +226,7 @@ const MaxTaskListLimit = 1000
 // host authorization policy can read from its embedded server.
 type TaskAccess struct {
 	Submitter    string       `json:"submitter"`
+	Request      bool         `json:"request"`
 	Assignee     string       `json:"assignee"`
 	DecisionMode DecisionMode `json:"decision_mode"`
 	State        string       `json:"state"`
@@ -239,6 +241,8 @@ type NewTask struct {
 	Language  string `json:"language"`
 	Large     bool   `json:"large,omitzero"`
 	Submitter string `json:"submitter,omitempty"`
+	// Description is the submitter's text. A non-empty value creates a protected request.md record.
+	Description string `json:"description,omitempty"`
 }
 
 // Assign is POST /api/v1/projects/{project}/tasks/{task}/assignee.

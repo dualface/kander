@@ -29,6 +29,7 @@ type ListTask struct {
 	TaskGroup    string       `json:"task_group"`
 	Owner        string       `json:"owner"`
 	Submitter    string       `json:"submitter"`
+	Request      bool         `json:"request"`
 	Assignee     string       `json:"assignee"`
 	DecisionMode DecisionMode `json:"decision_mode"`
 	Session      string       `json:"session"`

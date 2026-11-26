@@ -75,7 +75,7 @@ func (s *Session) ListView(ctx context.Context, allowStale bool) (board.BoardVie
 	for _, item := range list.Tasks {
 		summary := board.TaskSummary{
 			TaskID: item.TaskID, Title: item.Title, State: item.State, Kind: item.Kind, Type: item.Type, TaskGroup: item.TaskGroup,
-			Owner: item.Owner, Submitter: item.Submitter, Assignee: item.Assignee, DecisionMode: item.DecisionMode, CreatedAt: item.CreatedAt, StartedAt: item.StartedAt,
+			Owner: item.Owner, Submitter: item.Submitter, Request: item.Request, Assignee: item.Assignee, DecisionMode: item.DecisionMode, CreatedAt: item.CreatedAt, StartedAt: item.StartedAt,
 			CompletedAt: item.CompletedAt, Time: item.Time, Result: item.Result,
 		}
 		if item.Claim != nil {

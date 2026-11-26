@@ -23,7 +23,7 @@ var contractTemplates = template.Must(
 type templateFields struct {
 	Type, Size, TaskGroup, Language, CreatedAt, Owner, Session, Window string
 	StartedAt, FinishedAt, TaskBranch, Result                          string
-	Submitter, Assignee, DecisionMode                                  string
+	Submitter, Request, Assignee, DecisionMode                         string
 }
 
 type templateSections struct {
@@ -45,6 +45,7 @@ type templateData struct {
 	LanguageConstraint  string
 	Created             string
 	Submitter           string
+	RequestDocument     string
 	DefaultDecisionMode DecisionMode
 	Placeholder         string
 	F                   templateFields
@@ -63,7 +64,7 @@ func newTemplateData(title, taskType, language, created string) templateData {
 		Placeholder:         Placeholder,
 		F: templateFields{
 			Type: FieldType, Size: FieldSize, TaskGroup: FieldTaskGroup, Language: FieldLanguage, CreatedAt: FieldCreatedAt,
-			Submitter: FieldSubmitter, Assignee: FieldAssignee, DecisionMode: FieldDecisionMode,
+			Submitter: FieldSubmitter, Request: FieldRequest, Assignee: FieldAssignee, DecisionMode: FieldDecisionMode,
 			Owner: FieldOwner, Session: FieldSession, Window: FieldWindow,
 			StartedAt: FieldStartedAt, FinishedAt: FieldFinishedAt,
 			TaskBranch: FieldTaskBranch, Result: FieldResult,
@@ -89,9 +90,12 @@ func renderTemplate(name string, data templateData) string {
 }
 
 // renderContract renders the card skeleton; language is the agent communication language recorded in the LANGUAGE field.
-func renderContract(title, taskType, language, submitter string) string {
+func renderContract(title, taskType, language, submitter string, request bool) string {
 	data := newTemplateData(title, typeNames[taskType], language, nowStamp())
 	data.Submitter = submitter
+	if request {
+		data.RequestDocument = requestDocument
+	}
 	return renderTemplate("contract.md.tmpl", data)
 }
 

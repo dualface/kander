@@ -21,6 +21,7 @@ type TaskSummary struct {
 	TaskGroup        string       `json:"task_group"`
 	Owner            string       `json:"owner"`
 	Submitter        string       `json:"submitter"`
+	Request          bool         `json:"request"`
 	Assignee         string       `json:"assignee"`
 	DecisionMode     DecisionMode `json:"decision_mode"`
 	CreatedAt        string       `json:"created_at"`
@@ -91,6 +92,7 @@ func TaskSummaryOf(entry Entry, text string) TaskSummary {
 		TaskGroup:    taskGroupFrom(text),
 		Owner:        MetadataFrom(text, FieldOwner),
 		Submitter:    MetadataFrom(text, FieldSubmitter),
+		Request:      isRequestCard(text),
 		Assignee:     MetadataFrom(text, FieldAssignee),
 		DecisionMode: DecisionModeOf(text),
 		CreatedAt:    MetadataFrom(text, FieldCreatedAt),

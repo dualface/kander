@@ -216,7 +216,7 @@ func (p *project) newTask(key string, req api.NewTask, submitter string) outcome
 			return p.stageOperationReceiptStatus(tx, key, "new", req, http.StatusCreated, created)
 		}}
 		_, err := board.NewTaskWithTransaction(p.board, board.NewTaskInput{
-			Kind: req.Type, Slug: req.Slug, Title: req.Title, Language: req.Language, Large: req.Large, Submitter: submitter,
+			Kind: req.Type, Slug: req.Slug, Title: req.Title, Language: req.Language, Large: req.Large, Submitter: submitter, Description: req.Description,
 		}, extension)
 		if err != nil {
 			return outcome{err: err}

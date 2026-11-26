@@ -275,7 +275,7 @@ func runShow(task, document string, withDocument bool) error {
 // NewNewCommand builds kander new.
 func NewNewCommand() *cobra.Command {
 	var large bool
-	var language string
+	var language, descriptionFile string
 	c := command.RequireProject(&cobra.Command{
 		Use: "new <feature|bug|chore|research> <slug> <title...>",
 		Args: func(c *cobra.Command, args []string) error {
@@ -289,14 +289,41 @@ func NewNewCommand() *cobra.Command {
 		},
 	})
 	c.RunE = func(_ *cobra.Command, args []string) error {
-		return runNew(args[0], args[1], strings.Join(args[2:], " "), large, language, c.Flags().Changed("language"))
+		var description string
+		if descriptionFile != "" {
+			var err error
+			description, err = readDescriptionFile(descriptionFile)
+			if err != nil {
+				return fail(err)
+			}
+		}
+		return runNew(args[0], args[1], strings.Join(args[2:], " "), large, language, c.Flags().Changed("language"), description)
 	}
 	c.Flags().BoolVar(&large, "large", false, "")
 	c.Flags().StringVar(&language, "language", "", "")
+	command.OnceNonEmpty(c.Flags(), &descriptionFile, "description-file", "")
 	return c
 }
 
-func runNew(kind, slug, title string, large bool, language string, languageGiven bool) error {
+func readDescriptionFile(path string) (string, error) {
+	// A CRLF file can be twice the size of its normalized contents.
+	const maxBytes = 131072
+	f, err := os.Open(path)
+	if err != nil {
+		return "", errors.New(config.Text("remote.request_description_file_read"))
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, maxBytes+1))
+	if err != nil {
+		return "", errors.New(config.Text("remote.request_description_file_read"))
+	}
+	if len(data) > maxBytes || !utf8.Valid(data) || len(bytes.TrimSpace(data)) == 0 {
+		return "", errors.New(config.Text("remote.request_description_file_invalid", maxBytes))
+	}
+	return string(data), nil
+}
+
+func runNew(kind, slug, title string, large bool, language string, languageGiven bool, description string) error {
 	ctx, cancel := commandContext()
 	defer cancel()
 	s, cfg, err := open(ctx)
@@ -316,7 +343,7 @@ func runNew(kind, slug, title string, large bool, language string, languageGiven
 		return fail(err)
 	}
 	t, err := s.Project.NewTask(ctx, client.NewKey(), api.NewTask{
-		Type: kind, Slug: slug, Title: title, Language: language, Large: large, Submitter: GitSubmitter(ctx),
+		Type: kind, Slug: slug, Title: title, Language: language, Large: large, Submitter: GitSubmitter(ctx), Description: description,
 	})
 	if err != nil {
 		return fail(err)

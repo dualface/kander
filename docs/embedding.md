@@ -66,7 +66,8 @@ Task creation and issue import use this attribution to populate the immutable `S
 ## Read task access facts in process
 
 `service.TaskAccess(ctx, projectID, taskID)` reads the task's submitter,
-assignee, decision mode, state, and revision. It may be called from either
+assignee, decision mode, state, revision, and whether it is a request card
+(`TaskAccess.Request`). It may be called from either
 authorization hook without invoking the hooks again or reading the card files. A missing
 project or task returns `not_found`. An untrusted index refuses the
 query with `index_rebuilding` until reconciliation succeeds. Host
@@ -92,6 +93,12 @@ title search, and page continuations. The host should pin its client and
 server revisions together before using the new query options.
 
 Use `Project.Document(ctx, taskID, path)` to read `spec.md`, `plan.md`, `report.md`, or an attachment at a path relative to the card directory. A missing document returns an `*api.Error` with the code `not_found`.
+
+Set `api.NewTask.Description` in `Project.NewTask` to create a request card.
+Use `Project.Document(ctx, taskID, "request.md")` to read the protected
+record. `TaskSummary.Request` and `TaskAccess.Request` are both true for a
+request card and false for an ordinary card. The existing authorization and
+attribution hooks still govern creation. See [Request cards](request-cards.md).
 
 The public CLI builds the same tree as the standalone executable, including the bare terminal board. For example, given a transport `tunnel` and an unattached Cobra command `hostCommand`:
 

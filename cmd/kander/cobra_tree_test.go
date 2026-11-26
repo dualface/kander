@@ -139,7 +139,7 @@ var samplePositionals = map[string][]string{
 var sampleValues = map[string]string{
 	"action": "inspect", "advance-file": "advance.json", "agent": "claude", "assignee": "alice", "base": "abc123", "batch-id": "batch-1",
 	"card": sampleTask, "commit": "HEAD", "contract-decision-file": "decision.md", "cursor": "opaque", "data": "/tmp/data", "decision": "ref-1",
-	"delivery-commit": "abc123", "disposition": "reviews/a.json", "dispatch-id": "dispatch-1", "document": "plan.md",
+	"delivery-commit": "abc123", "description-file": "description.md", "disposition": "reviews/a.json", "dispatch-id": "dispatch-1", "document": "plan.md",
 	"duplicate-of": sampleTask, "evidence-file": "evidence.json", "execution-epoch": "2", "expect-revision": "3",
 	"file": "input.md", "from": "/tmp/board", "group": "20261125-example-group", "head": "HEAD", "heartbeat": "5", "kind": "fix", "label": "bug",
 	"language": "en", "launcher": "herdr", "limit": "5", "listen": "127.0.0.1:7878", "message": "hello",

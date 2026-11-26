@@ -10,6 +10,7 @@ import (
 // Language must already satisfy config.ValidateAgentLanguage.
 type NewTaskInput struct {
 	Kind, Slug, Title, Language, Submitter string
+	Description                            string
 	Large                                  bool
 }
 
@@ -28,6 +29,10 @@ func newTask(tx *Transaction, root string, input NewTaskInput) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	description, err := normalizeRequestDescription(input.Description)
+	if err != nil {
+		return "", err
+	}
 	board, err := scan(root)
 	if err != nil {
 		return "", err
@@ -39,7 +44,7 @@ func newTask(tx *Transaction, root string, input NewTaskInput) (string, error) {
 	if _, ok := board.Blocked[taskID]; ok {
 		return "", kanbanError("board.task_already_exists", taskID)
 	}
-	contract := renderContract(title, kind, input.Language, submitter)
+	contract := renderContract(title, kind, input.Language, submitter, description != "")
 
 	taskKind := "small"
 	target := filepath.Join(root, "backlog", taskID)
@@ -55,7 +60,16 @@ func newTask(tx *Transaction, root string, input NewTaskInput) (string, error) {
 	if err := tx.touch(taskID); err != nil {
 		return "", err
 	}
-	rel, _ := filepath.Rel(root, target)
+	rel, err := filepath.Rel(root, target)
+	if err != nil {
+		return "", err
+	}
+	if description != "" {
+		// Recovery writes files before creating spec.md, so the marker never
+		// becomes visible ahead of its record.
+		tx.record.Directories = append(tx.record.Directories, rel)
+		tx.record.Files = append(tx.record.Files, FileChange{Path: filepath.Join(rel, requestDocument), After: description})
+	}
 	tx.record.Entries = append(tx.record.Entries, EntryChange{To: rel, Kind: "large", Text: contract})
 	tx.SetOperationResult(Snapshot{
 		Entry: Entry{TaskID: taskID, State: "backlog", Path: target, Document: filepath.Join(target, "spec.md"), Kind: taskKind},

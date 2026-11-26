@@ -16,6 +16,8 @@ import (
 )
 
 var (
+	_                                                                              = api.NewTask{Description: "Example request"}
+	_ bool                                                                         = api.TaskAccess{}.Request
 	_ func(string, string) (*client.Client, error)                                 = client.New
 	_ func(*client.Client, context.Context) (api.VersionInfo, error)               = (*client.Client).Version
 	_ func(server.Options) (*server.Server, error)                                 = server.Open

@@ -7,7 +7,7 @@ import (
 
 func TestDecisionModeHeaderAndLegacyDefault(t *testing.T) {
 	for _, text := range []string{
-		renderContract("New card", "chore", "en", "Example"),
+		renderContract("New card", "chore", "en", "Example", false),
 		renderImportedContract(ImportRequest{Title: "Imported card", Kind: "chore", Language: "en"}, "small"),
 	} {
 		if mode := MetadataFrom(text, FieldDecisionMode); mode != string(DecisionModeLeader) {

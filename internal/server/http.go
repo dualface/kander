@@ -9,9 +9,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/dualface/kander/v2/api"
 	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/i18n"
 )
 
 // maxBody bounds one request body; card documents and reports stay far below.
@@ -119,8 +121,8 @@ func (s *Server) registerRoutes(mux *routeTable) {
 		return result(http.StatusOK, list, err)
 	})
 	s.projectRoute(mux, "POST /api/v1/projects/{project}/tasks", func(p *project, r *http.Request) outcome {
-		var req api.NewTask
-		if err := decode(r, &req); err != nil {
+		req, err := decodeNewTask(r)
+		if err != nil {
 			return outcome{err: err}
 		}
 		submitter, err := attribution(r, req.Submitter)
@@ -346,6 +348,28 @@ func (s *Server) failure(r *http.Request, err error) *api.Error {
 		s.log.Error("request failed", "method", r.Method, "path", r.URL.Path, "operation", r.Header.Get(api.HeaderOperationID), "error", err)
 	}
 	return e
+}
+
+func decodeNewTask(r *http.Request) (api.NewTask, error) {
+	// Decode the description separately so JSON's replacement of invalid UTF-8
+	// cannot silently change the submitter's text. Other fields decode as before.
+	var wire struct {
+		api.NewTask
+		Description json.RawMessage `json:"description"`
+	}
+	if err := decode(r, &wire); err != nil {
+		return api.NewTask{}, err
+	}
+	if len(wire.Description) != 0 {
+		if !utf8.Valid(wire.Description) {
+			reason := i18n.Text("en", "board.request_description_utf8")
+			return api.NewTask{}, apiError(api.CodeInvalidRequest, i18n.Text("en", "board.request_description_invalid", reason))
+		}
+		if err := json.Unmarshal(wire.Description, &wire.NewTask.Description); err != nil {
+			return api.NewTask{}, apiError(api.CodeInvalidRequest, "malformed request body")
+		}
+	}
+	return wire.NewTask, nil
 }
 
 func decode(r *http.Request, value any) error {

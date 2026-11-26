@@ -16,6 +16,7 @@ const (
 	FieldLanguage     = "LANGUAGE"
 	FieldCreatedAt    = "CREATED_AT"
 	FieldSubmitter    = "SUBMITTER"
+	FieldRequest      = "REQUEST"
 	FieldAssignee     = "ASSIGNEE"
 	FieldDecisionMode = "DECISION_MODE"
 	FieldOwner        = "OWNER"

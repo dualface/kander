@@ -83,7 +83,8 @@ Startup reconciles every row against the canonical board after file
 transaction recovery, claim reconciliation and startup lease extension,
 before readiness. It restores missing and differing rows and removes
 orphaned rows. A missing or corrupt index, or one with an unsupported SQLite format, is
-recreated from the same scan. An online import reconciles the published
+recreated from the same scan. Format 3 adds the `request` column, so a
+format 2 index is rebuilt on startup. An online import reconciles the published
 board after its claims and event reset as part of the import. Other board
 reads such as `snapshot` and `check` keep their existing file-based paths.
 
@@ -124,7 +125,7 @@ All routes live below `/api/v1`. Every domain request sends `Kander-Protocol: <n
 | `GET /health`, `GET /ready`, `GET /version` | Liveness, readiness, protocol range |
 | `GET /projects?name=`, `POST /projects` | Resolve or register a project |
 | `GET /projects/{p}/tasks` | Indexed task list with filters, title search, pagination, and claim views |
-| `POST /projects/{p}/tasks` | `kander new` |
+| `POST /projects/{p}/tasks` | `kander new`, with an optional request description |
 | `GET /projects/{p}/tasks/{t}` | `kander show` |
 | `POST /projects/{p}/tasks/{t}/assignee` | Change or clear the person responsible for the card with `kander assign` |
 | `GET /projects/{p}/tasks/{t}/decisions` | List the task's human and delegated decisions |
@@ -159,6 +160,14 @@ Pending receipts now carry schema 1. An older prototype's unversioned pending cr
 ### Documents
 
 `PUT .../documents/{path}` carries the full text, its SHA-256, the expected card revision, and an optional contract decision. The server checks the digest of the received bytes before publishing, so an interrupted upload never becomes a visible partial document. Publication goes through `board.UpdateDocument`, which keeps every v1 rule: frozen contract fields, managed fields, managed paths, line endings.
+
+### Request records
+
+`POST /projects/{p}/tasks` accepts an optional `description`. Kander writes
+it as the protected `request.md` attachment and marks the card with
+`REQUEST: request.md` in the same transaction as creation. The REST task list
+and the embedded `TaskAccess.Request` identify request cards. See
+[Request cards](request-cards.md) for validation, protection, and compatibility.
 
 ### Submitter and assignee
 

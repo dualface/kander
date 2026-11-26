@@ -28,7 +28,7 @@ func (p *project) scanList(ctx context.Context) (api.TaskList, error) {
 	for _, t := range view.Tasks {
 		s := api.TaskSummary{
 			TaskID: t.TaskID, Title: t.Title, State: t.State, Kind: t.Kind, Type: t.Type, Session: t.Session, Window: t.Window,
-			TaskGroup: t.TaskGroup, Owner: t.Owner, Submitter: t.Submitter, Assignee: t.Assignee, DecisionMode: t.DecisionMode, CreatedAt: t.CreatedAt,
+			TaskGroup: t.TaskGroup, Owner: t.Owner, Submitter: t.Submitter, Request: t.Request, Assignee: t.Assignee, DecisionMode: t.DecisionMode, CreatedAt: t.CreatedAt,
 			StartedAt: t.StartedAt, CompletedAt: t.CompletedAt, Time: t.Time, Result: t.Result,
 		}
 		snapshot, err := board.ReadSnapshot(p.board, t.TaskID)

@@ -1,0 +1,10 @@
+{
+  "board.request_description_invalid": "リクエストの説明が無効です。{{.V0}}。",
+  "board.request_description_utf8": "テキストが有効な UTF-8 ではありません",
+  "board.request_description_size": "正規化後のテキストが {{.V0}} バイトを超えています",
+  "board.request_description_control": "許可されていない制御文字が含まれています",
+  "board.request_description_blank": "テキストが空白文字のみです",
+  "board.update_hint_request": "次の手順：kander show に表示された REQUEST 行をそのまま保持してください。作成後のリクエスト記録は変更できません。",
+  "remote.request_description_file_read": "リクエストの説明ファイルを開くか読み込むことができません。",
+  "remote.request_description_file_invalid": "リクエストの説明ファイルには空白以外の UTF-8 テキストが必要です。上限は {{.V0}} バイトです。"
+}

@@ -104,7 +104,7 @@ type UpdateOptions struct {
 	Authorization    ExecutionAuthorization
 }
 
-var managedFields = []string{FieldOwner, FieldSession, FieldWindow, FieldStartedAt, FieldFinishedAt, FieldResult, FieldLanguage, FieldCreatedAt, FieldSubmitter, FieldAssignee, FieldDecisionMode, "REVISION", "OPERATION_ID", "EXECUTION_EPOCH", "DISPATCH_ID", "REVIEWS"}
+var managedFields = []string{FieldOwner, FieldSession, FieldWindow, FieldStartedAt, FieldFinishedAt, FieldResult, FieldLanguage, FieldCreatedAt, FieldSubmitter, FieldRequest, FieldAssignee, FieldDecisionMode, "REVISION", "OPERATION_ID", "EXECUTION_EPOCH", "DISPATCH_ID", "REVIEWS"}
 var frozenSections = []string{SectionGoal, SectionUserDecisions, SectionExpectedOutcome, SectionAcceptanceCriteria, SectionOutOfScope}
 
 func frozenContract(text string) map[string]string {
@@ -223,6 +223,8 @@ func managedFieldHint(field string) string {
 		return "board.update_hint_submitter"
 	case FieldAssignee:
 		return "board.update_hint_assignee"
+	case FieldRequest:
+		return "board.update_hint_request"
 	case FieldDecisionMode:
 		return "board.update_hint_decision_mode"
 	case "DISPATCH_ID", "EXECUTION_EPOCH":
@@ -286,6 +288,9 @@ func UpdateDocument(root, id string, o UpdateOptions) error {
 		}
 		if _, err = documentPath(s.Entry, o.Document); err != nil {
 			return err
+		}
+		if strings.EqualFold(o.Document, requestDocument) && isRequestCard(s.Text) {
+			return withUpdateHint(kanbanError("board.transaction_managed", o.Document), "board.update_hint_request")
 		}
 		for _, part := range strings.Split(strings.ToLower(o.Document), "/") {
 			if managedDocumentPart(part) {

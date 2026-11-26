@@ -207,6 +207,8 @@ Go runtime writes of configuration, board migration, the review runtime, Git exc
 
 ## Documentation Index
 
+- [Request cards](docs/request-cards.md): optional creation descriptions, protected request records, validation, and list and access facts.
+
 - [Review disposition and completion gate](docs/review-disposition.md): plans, unplanned batch resolution, receiver interpretation of readable reports, author records, batch aggregation, Git evidence, and the done gate.
 - [Review evidence and recovery](docs/review-evidence.md): run/batch identity, originals, per-card publication, indexes, and consumption interfaces.
 - [Card transactions and recovery](docs/card-transactions.md): lock order, revisions, controlled commands, the multi-file publication interface, and the recovery format.

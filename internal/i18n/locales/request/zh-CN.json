@@ -1,0 +1,10 @@
+{
+  "board.request_description_invalid": "需求描述无效：{{.V0}}。",
+  "board.request_description_utf8": "文本不是有效的 UTF-8",
+  "board.request_description_size": "规范化后的文本超过 {{.V0}} 字节",
+  "board.request_description_control": "文本含有不允许的控制字符",
+  "board.request_description_blank": "文本仅含空白字符",
+  "board.update_hint_request": "下一步：原样保留 kander show 输出的 REQUEST 行。建卡后不能修改需求记录。",
+  "remote.request_description_file_read": "无法打开或读取需求描述文件。",
+  "remote.request_description_file_invalid": "需求描述文件必须包含非空白的 UTF-8 文本，且不能超过 {{.V0}} 字节。"
+}

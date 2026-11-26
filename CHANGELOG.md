@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Feature (v2, request cards) — Task creation accepts a description through the API or `kander new --description-file`. Kander stores the submitter's text as a protected `request.md` in the same transaction as the new card. The task list and embedded access facts distinguish request cards from ordinary cards.
+
 - Feature (v2, remote board import) — `kander server import` uploads a client's paused v1 board when the effective `server.url` is not loopback, with the same merge and conflict rules. The command rejects `--data` in this mode and does not open local server storage. Loopback import is unchanged. The upload endpoint uses the existing trusted-network boundary rather than the management key. It accepts up to 100,000 files and 100,000 directories, 2 GiB of files, 64 MiB per file, and a 64 MiB manifest within 30 minutes. Interrupted or inconsistent uploads do not publish a board.
 
 - Feature (v2, board import) — `kander server import` can merge a paused v1 board into a non-empty project, offline or through the running local server. It skips identical cards, preserves destination bytes, and rejects conflicting tasks and records unless `--skip-conflicts` keeps the destination versions and imports the rest. Results report `added_tasks`, `existing_tasks` and `skipped_conflicts` when applicable. The server checks the whole merged board, publishes it atomically, and remembers each source snapshot separately. Requests to that project wait during import. Other projects stay available.

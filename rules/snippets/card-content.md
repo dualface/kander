@@ -65,6 +65,10 @@ Read this file before creating, completing, updating, or reviewing a card. It de
 <actual results, deviations, unresolved issues, and acceptance conclusion; leave empty before completion>
 ```
 
+### Request Record
+
+On a request card, Kander writes the optional header line `- REQUEST: request.md` immediately after `SUBMITTER` at creation. The record is the submitter's own words. Read it with `kander show --document request.md <task-id>`. Agents must not rewrite it. `USER_DECISIONS` may quote it verbatim and cite `request.md` as the source.
+
 ### Large Task Documents
 
 - `SIZE: large` selects the large-task contract. `spec.md` holds the metadata and the contract sections `GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `THREAT_MODEL`, `OUT_OF_SCOPE`, `DISCUSSION`. Plan content and storage follow "Required Plan for New Cards". `report.md` is created on completion, never empty, with actual changes, final commits, verification, deviations, unresolved issues, risks, and the acceptance conclusion. Read `plan.md`, `report.md`, and any other attachment with `kander show --document <relative-path> <task-id>`.
