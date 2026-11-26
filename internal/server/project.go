@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/dualface/kander/v2/api"
 	"github.com/dualface/kander/v2/internal/board"
@@ -32,6 +33,11 @@ type project struct {
 	// importBroken is guarded by mu. It is set when a board import failed
 	// after its publication intent and in-process recovery failed too.
 	importBroken bool
+	// importLockedAt and importCrashed are guarded by mu and set only by a
+	// board import while it holds mu; unlockBoard reads and clears them to
+	// pause the lease clock for that span (pauseImportLeases).
+	importLockedAt time.Time
+	importCrashed  bool
 	// Index state is protected by mu, except the fail-closed read gate.
 	index           *taskindex.Store
 	indexDirty      map[string]struct{}

@@ -64,7 +64,8 @@ func (p *project) markIndexTask(id string) {
 // paired with stale index rows, even when an operation returns a domain error.
 func (p *project) unlockBoard() {
 	defer p.mu.Unlock()
-	if len(p.indexDirty) == 0 && !p.indexFull && !p.indexRebuilding.Load() {
+	importLockedAt := p.takeImportPause()
+	if importLockedAt.IsZero() && len(p.indexDirty) == 0 && !p.indexFull && !p.indexRebuilding.Load() {
 		return
 	}
 	defer clear(p.indexDirty)
@@ -82,6 +83,11 @@ func (p *project) unlockBoard() {
 			p.indexRebuilding.Store(false)
 			p.wakeIndexRebuild()
 		}
+	}
+	// After the full reconciliation, so the pause covers it too, and before
+	// the refresh, which publishes the rows of the claims it rewrites.
+	if !importLockedAt.IsZero() {
+		p.pauseImportLeases(importLockedAt)
 	}
 	if !p.indexRebuilding.Load() && len(p.indexDirty) > 0 {
 		if err := p.refreshIndex(); err != nil {
