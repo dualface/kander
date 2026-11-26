@@ -2,14 +2,11 @@ package worker
 
 import (
 	"context"
-	"errors"
 	"maps"
 	"slices"
-	"strconv"
 	"time"
 
 	"github.com/dualface/kander/v2/api"
-	"github.com/dualface/kander/v2/internal/client"
 	"github.com/dualface/kander/v2/internal/remote"
 )
 
@@ -25,7 +22,6 @@ const (
 
 type ackResult struct {
 	revision uint64
-	key      string
 	typedAt  time.Time
 	window   string
 	note     string
@@ -50,7 +46,7 @@ func (w *loop) startAckObserver(scope *deliveryScope, id string, revision uint64
 		// File removal cancels first and then takes mu to delete the
 		// result, so cancellation cannot leave a result behind.
 		if ctx.Err() == nil {
-			scope.results[id] = ackResult{revision: revision, key: client.NewKey(), typedAt: typedAt, window: window, note: note}
+			scope.results[id] = ackResult{revision: revision, typedAt: typedAt, window: window, note: note}
 		}
 	}()
 }
@@ -107,22 +103,13 @@ func (s *deliveryScope) snapshotResults() map[string]ackResult {
 	return maps.Clone(s.results)
 }
 
-func answerDelivery(ctx context.Context, project *client.Project, c remote.Credential, id, key string, revision uint64, note string) (api.CollabRequest, error) {
-	ctx, cancel := bounded(ctx)
-	defer cancel()
-	answer := api.CollabAnswer{Status: api.RequestAccepted, ExpectedRevision: revision, Note: note}
-	return project.AnswerRequest(ctx, key, c.TaskID, id, answer, *c.Claim())
-}
-
-// flushAcknowledgements runs in the work loop, not in the observers. Only
-// transient failures keep a result for a later round, within the file lifetime.
+// flushAcknowledgements runs in the work loop, not in the observers, once per
+// round for each credential of a task. It rebuilds the answers of the
+// credential once per process, replays the open answers whose backoff has
+// elapsed, and then sends the results the observers published for request
+// files still retained.
 func (w *loop) flushAcknowledgements(ctx context.Context, c remote.Credential) {
-	scope := w.deliveries[keyOf(c)]
-	if scope == nil || ctx.Err() != nil {
-		return
-	}
-	results := scope.snapshotResults()
-	if len(results) == 0 {
+	if ctx.Err() != nil || c.ResourceKind == "group" || c.ResourceKind == "integration" {
 		return
 	}
 	log := w.credentialLog(c)
@@ -132,7 +119,18 @@ func (w *loop) flushAcknowledgements(ctx context.Context, c remote.Credential) {
 		return
 	}
 	project := cl.Project(c.ProjectID)
-	for id, result := range results {
+	w.rebuildAnswers(ctx, log, project, c)
+	w.replayAnswers(ctx, log, project, c)
+	scope := w.deliveries[keyOf(c)]
+	if scope == nil {
+		return
+	}
+	results := scope.snapshotResults()
+	for _, id := range slices.Sorted(maps.Keys(results)) {
+		if ctx.Err() != nil {
+			return
+		}
+		result := results[id]
 		file, retained := scope.files[id]
 		if !retained {
 			continue
@@ -141,66 +139,11 @@ func (w *loop) flushAcknowledgements(ctx context.Context, c remote.Credential) {
 			w.closeRequestFile(scope, id)
 			continue
 		}
-		applied, err := w.writeAcknowledgement(ctx, project, c, id, result)
-		if ctx.Err() != nil {
-			return
-		}
-		if err != nil {
-			if acknowledgementRefused(err) {
-				scope.dropResult(id)
-				log.Debug("request acknowledgement refused", "request", id, "error", err)
-			} else {
-				log.Warn("writing the request acknowledgement failed; retrying later", "request", id, "error", err)
-			}
-			continue
-		}
 		scope.dropResult(id)
-		if applied && result.note == ackedNote {
-			log.Info("request acknowledged", "request", id)
-		} else if applied {
-			log.Warn("request not acknowledged", "request", id, "reason", unconfirmedNote,
-				"typed_at", result.typedAt, "window", ackWindow, "target", result.window)
-		}
+		body := api.CollabAnswer{Status: api.RequestAccepted, ExpectedRevision: result.revision, Note: result.note}
+		w.submitAnswer(ctx, log, project, c, &answerAttempt{
+			request: id, kind: answerResult, key: contentKey(c.ExecutionID, id, body), body: body,
+			typedAt: result.typedAt, window: result.window,
+		})
 	}
-}
-
-func acknowledgementRefused(err error) bool {
-	var failure *api.Error
-	if !errors.As(err, &failure) {
-		return false
-	}
-	switch failure.Code {
-	case api.CodeLeaseInvalid, api.CodeTakenOver, api.CodeClaimRequired, api.CodeHeldByOther, api.CodeNotFound:
-		return true
-	default:
-		return false
-	}
-}
-
-func (w *loop) writeAcknowledgement(ctx context.Context, project *client.Project, c remote.Credential, id string, result ackResult) (bool, error) {
-	_, err := answerDelivery(ctx, project, c, id, result.key, result.revision, result.note)
-	if !api.IsCode(err, api.CodeRevisionConflict) {
-		return err == nil, err
-	}
-	readCtx, stopRead := bounded(ctx)
-	requests, err := project.Requests(readCtx, c.TaskID)
-	stopRead()
-	if err != nil {
-		return false, err
-	}
-	w.closeSettledRequestFiles(keyOf(c), requests)
-	i := slices.IndexFunc(requests, func(r api.CollabRequest) bool { return r.ID == id })
-	if i == -1 {
-		return false, nil
-	}
-	current := requests[i]
-	if current.TargetGeneration != c.Generation || current.Status != api.RequestAccepted ||
-		(current.Note != typedNote && current.Note != reservationNote) {
-		return false, nil
-	}
-	// Keep the idempotency key for this revision if a retry's response is
-	// lost. The original key is bound to a different expected revision.
-	key := result.key + "-" + strconv.FormatUint(current.Revision, 10)
-	_, err = answerDelivery(ctx, project, c, id, key, current.Revision, result.note)
-	return err == nil, err
 }

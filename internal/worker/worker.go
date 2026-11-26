@@ -283,6 +283,9 @@ type loop struct {
 	// deliveries belongs to the work loop. Each scope synchronizes the
 	// acknowledgement results its observers publish.
 	deliveries map[credentialKey]*deliveryScope
+	// replays belongs to the work loop: the open managed answers of each
+	// credential (answer_replay.go).
+	replays map[credentialKey]*replayTable
 
 	// mu guards every field below. It is held for map reads and writes only,
 	// never across a call to the server or the file system.
@@ -324,6 +327,7 @@ func newLoop(o Options) *loop {
 		lostMarks:    map[credentialKey]struct{}{},
 		blocked:      map[credentialKey]blockState{},
 		deliveries:   map[credentialKey]*deliveryScope{},
+		replays:      map[credentialKey]*replayTable{},
 	}
 }
 
@@ -426,8 +430,8 @@ func (w *loop) takeOwed(key credentialKey) bool {
 }
 
 // forgetAbsent drops the bookkeeping of credentials that no longer exist. A lost
-// credential keeps its marks but loses its delivery state: its agent is stopped,
-// so nothing is delivered to it any more.
+// credential keeps its marks but loses its delivery state and its open answers:
+// its agent is stopped, so nothing is delivered or answered for it any more.
 func (w *loop) forgetAbsent(credentials []remote.Credential) {
 	present := make(map[credentialKey]struct{}, len(credentials))
 	live := make(map[credentialKey]struct{}, len(credentials))
@@ -441,6 +445,11 @@ func (w *loop) forgetAbsent(credentials []remote.Credential) {
 	for key := range w.deliveries {
 		if _, ok := live[key]; !ok {
 			w.closeDeliveryScope(key)
+		}
+	}
+	for key := range w.replays {
+		if _, ok := live[key]; !ok {
+			w.forgetReplays(key)
 		}
 	}
 	w.mu.Lock()

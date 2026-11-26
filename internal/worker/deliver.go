@@ -147,22 +147,23 @@ func (w *loop) readyRequests(ctx context.Context, log *slog.Logger, project *cli
 // rejectUnusable answers a dispatch proposal that cannot be delivered any more
 // with a rejection, and reports whether the proposal is unusable: its acceptance
 // window has elapsed on the server clock of the task read, or it binds an
-// earlier card version. The rejection itself may fail; that is logged, and the
-// result does not depend on it. Any other request is left alone.
+// earlier card version. The rejection is a managed answer: a failed one stays in
+// the replay table, and while it is open no other rejection of the request is
+// sent. The result does not depend on it. Any other request is left alone.
 func (w *loop) rejectUnusable(ctx context.Context, log *slog.Logger, project *client.Project, c *remote.Credential, r api.CollabRequest, task api.Task) bool {
 	if r.Dispatch == nil {
 		return false
+	}
+	if w.replayTableOf(keyOf(*c)).pending(r.ID, answerRejection) != nil {
+		return true
 	}
 	if !r.Dispatch.ConfirmBy.IsZero() && !task.ObservedAt.Before(r.Dispatch.ConfirmBy) {
 		w.rejectExpired(ctx, log, project, c, r)
 		return true
 	}
 	if r.CardRevision != task.Revision {
-		answerCtx, stopAnswer := bounded(ctx)
-		defer stopAnswer()
-		if _, err := project.AnswerRequest(answerCtx, "stale-"+c.ExecutionID+"-"+r.ID, c.TaskID, r.ID, api.CollabAnswer{Status: api.RequestRejected, ExpectedRevision: r.Revision, Note: staleNote}, *c.Claim()); err != nil {
-			log.Warn("rejecting stale dispatch proposal failed", "request", r.ID, "error", err)
-		}
+		body := api.CollabAnswer{Status: api.RequestRejected, ExpectedRevision: r.Revision, Note: staleNote}
+		w.submitAnswer(ctx, log, project, *c, &answerAttempt{request: r.ID, kind: answerRejection, key: staleKey(c.ExecutionID, r.ID), body: body})
 		return true
 	}
 	return false
@@ -178,11 +179,8 @@ func (w *loop) rejectExpired(ctx context.Context, log *slog.Logger, project *cli
 		note += fmt.Sprintf("; delivery was blocked before sending since %s: %s", state.since.UTC().Format(time.RFC3339), state.reason)
 		log.Warn("dispatch proposal expired while request delivery was blocked", "request", r.ID, "blocked_since", state.since, "reason", state.reason)
 	}
-	answerCtx, stopAnswer := bounded(ctx)
-	defer stopAnswer()
-	if _, err := project.AnswerRequest(answerCtx, expiredKey(c.ExecutionID, r.ID, note), c.TaskID, r.ID, api.CollabAnswer{Status: api.RequestRejected, ExpectedRevision: r.Revision, Note: note}, *c.Claim()); err != nil {
-		log.Warn("rejecting expired dispatch proposal failed", "request", r.ID, "error", err)
-	}
+	body := api.CollabAnswer{Status: api.RequestRejected, ExpectedRevision: r.Revision, Note: note}
+	w.submitAnswer(ctx, log, project, *c, &answerAttempt{request: r.ID, kind: answerRejection, key: expiredKey(c.ExecutionID, r.ID, note), body: body})
 }
 
 // reservedUntyped reports a request this worker reserved and never typed, the
@@ -286,11 +284,13 @@ func (w *loop) deliverResolved(ctx context.Context, log *slog.Logger, project *c
 	if state, blocked := w.endBlock(keyOf(*c)); blocked {
 		log.Info("request delivery unblocked", "blocked_for", w.o.Now().Sub(state.since))
 	}
-	typed, err := answerDelivery(ctx, project, *c, r.ID, client.NewKey(), accepted.Revision, typedNote)
+	body := api.CollabAnswer{Status: api.RequestAccepted, ExpectedRevision: accepted.Revision, Note: typedNote}
+	typed, outcome, _ := w.submitAnswer(ctx, log, project, *c, &answerAttempt{request: r.ID, kind: answerTyped, key: contentKey(c.ExecutionID, r.ID, body), body: body})
+	// Without a 2xx the typed note may or may not be committed: the result
+	// expects the reservation revision, and its fallback covers a committed
+	// typed note.
 	revision := accepted.Revision
-	if err != nil {
-		log.Warn("writing the request typed note failed", "request", r.ID, "error", err)
-	} else {
+	if outcome == answerSent {
 		revision = typed.Revision
 	}
 	w.startAckObserver(scope, r.ID, revision, typedAt, cmp.Or(target.Window, window), marker, target.Seen)

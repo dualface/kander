@@ -19,7 +19,9 @@ import (
 type answerTap struct {
 	mu      sync.Mutex
 	answers []api.CollabAnswer
-	fault   func(http.ResponseWriter, *http.Request, http.Handler, api.CollabAnswer) bool
+	// bodies holds the raw body of every answer by its idempotency key.
+	bodies map[string][][]byte
+	fault  func(http.ResponseWriter, *http.Request, http.Handler, api.CollabAnswer) bool
 }
 
 func (s *answerTap) wrap(next http.Handler) http.Handler {
@@ -34,6 +36,11 @@ func (s *answerTap) wrap(next http.Handler) http.Handler {
 			r.Body = io.NopCloser(bytes.NewReader(body))
 			s.mu.Lock()
 			s.answers = append(s.answers, answer)
+			if s.bodies == nil {
+				s.bodies = map[string][][]byte{}
+			}
+			key := r.Header.Get(api.HeaderIdempotencyKey)
+			s.bodies[key] = append(s.bodies[key], body)
 			s.mu.Unlock()
 			if s.fault != nil && s.fault(w, r, next, answer) {
 				return
@@ -53,6 +60,20 @@ func (s *answerTap) revisions(note string) []uint64 {
 		}
 	}
 	return revisions
+}
+
+// requireStableSends checks that every send of one key carries the same body.
+func (s *answerTap) requireStableSends(t *testing.T) {
+	t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for key, bodies := range s.bodies {
+		for _, body := range bodies[1:] {
+			if !bytes.Equal(body, bodies[0]) {
+				t.Fatalf("key %s was sent with two bodies: %s and %s", key, bodies[0], body)
+			}
+		}
+	}
 }
 
 func denyTestAnswer(w http.ResponseWriter, status int, code string) {
@@ -184,11 +205,12 @@ func TestAcknowledgementRetriesTransientWriteFailureWithoutTyping(t *testing.T) 
 	scope := h.loop.deliveries[keyOf(c)]
 	ackResultOf(t, scope, r.ID)
 	h.workAfter(0)
-	if len(scope.snapshotResults()) != 1 || h.requests(c)[0].Note != typedNote {
+	if open := h.openAttempts(c); len(open) != 1 || open[0].kind != answerResult || h.requests(c)[0].Note != typedNote {
 		t.Fatal("transient error must retain the result for another round")
 	}
-	h.workAfter(0)
+	h.workAfter(answerBackoffFirst)
 	if len(tap.revisions(ackedNote)) != 2 || len(h.lines) != 1 || h.requests(c)[0].Note != ackedNote {
 		t.Fatal("result was not retried once without typing again")
 	}
+	tap.requireStableSends(t)
 }
