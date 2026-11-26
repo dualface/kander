@@ -335,6 +335,11 @@ func TestKimiReviewDefinitionUsesAgentFile(t *testing.T) {
 	if settings.homePolicy != config.ReviewHomeOptional || len(settings.promptFiles) != 1 {
 		t.Fatalf("settings %+v", settings)
 	}
+	for _, want := range []string{"name: kander-reviewer", "tools: [Read, Grep, Glob]", "disallowedTools", "Bash", "AgentSwarm"} {
+		if !strings.Contains(settings.promptFiles[0].Template, want) {
+			t.Errorf("Kimi's embedded read-only profile lacks %q", want)
+		}
+	}
 	ctx := reviewContext{
 		agent: "kimi", settings: settings, root: "/work",
 		program:         process.AgentProgram{Path: "/bin/reviewer"},

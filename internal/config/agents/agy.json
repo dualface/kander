@@ -19,6 +19,7 @@
   "supports_effort": true,
   "prompt_delivery": {"mode": "argv"},
   "review": {
+    "git_inspection": false,
     "last_message_report": true,
     "cwd": "root",
     "home_policy": "optional",

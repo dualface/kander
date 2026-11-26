@@ -168,12 +168,12 @@ func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os
 		}
 		taskContext = "Authoritative spec file: " + snapshot + ". Read it completely before reviewing."
 	}
-	evidence, err := writeEvidence(ctx, runtime, evidenceFile)
+	largestEvidenceSection, err := writeEvidence(ctx, runtime, evidenceFile)
 	if err != nil {
 		fail(err)
 		return exitCode
 	}
-	contract, err := buildReviewContract(ctx, evidence.omitted != 0)
+	contract, err := buildReviewContract(ctx)
 	if err != nil {
 		fail(err)
 		return exitCode
@@ -305,7 +305,7 @@ func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os
 	}
 
 	if ctx.archive != nil {
-		if err = ctx.archive.snapshotRuntime(runtime, evidence); err != nil {
+		if err = ctx.archive.snapshotRuntime(runtime, largestEvidenceSection); err != nil {
 			fail(err)
 			return exitCode
 		}

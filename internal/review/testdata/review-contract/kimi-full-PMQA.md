@@ -1,9 +1,22 @@
 # Kander Review Contract
 
-The COMMIT TREE in the evidence file is the authority for which paths belong to the target commit.
-Ignore worktree paths absent from it unless the caller explicitly names them as task context or a role report.
+The files tracked by the target commit (`git ls-tree -r --name-only <commit>`) determine which paths belong to it.
+Ignore other worktree paths unless the caller explicitly names them as task context or a role report.
 
-Review the complete code state against the task context, not merely the review diff. Report only issues introduced, worsened, or concealed by that range. Use unchanged surrounding code only to establish context and impact; omit unrelated pre-existing issues. Use range metadata and the patch as navigation. Follow only code, contracts, dependencies, consumers, configuration, generated sources, and tests that can materially affect the task. Map relevant subsystems and end-to-end data or control flows, including affected siblings and reachable failure paths. Stop when every explicit or logically necessary requirement, changed behavior, and affected task-relevant consumer is supported by evidence or marked Unverifiable. Do not continue into an unrelated repository-wide audit.
+## Inspecting Diffs With Git
+
+The evidence file lists commit ranges, commit logs, and changed files. It does not contain diffs.
+Run read-only Git commands in the worktree named in the bootstrap. If your current directory is elsewhere, use `git -C "<worktree>"`.
+On a first review inspect `<base>..<commit>`. On an incremental re-review inspect the fix range `<reviewed>..<commit>` and use the full review range only for context. Take the exact SHAs from the evidence file.
+
+- Always pass `--no-ext-diff --no-textconv` to `git diff`, `git log`, and `git show`.
+- Start with `git diff --no-ext-diff --no-textconv --stat <range>` or use `--numstat`. Before printing a file's diff, check the blob size with `git cat-file -s <commit>:<path>`, at both ends of the range where the path exists.
+- Exclude huge generated files from a range-wide diff with a pathspec such as `-- ':(exclude)<path>'`. When such a file matters, inspect only relevant hunks or truncate long lines. Do not print multi-megabyte diffs in full.
+- Run only Git commands that do not write. Do not run checkout, reset, stash, commit, fetch, gc, or other commands that change the repository or worktree.
+- If Git reports dubious ownership, retry with `git -c safe.directory="<worktree>"` using the bootstrap path, for that command only.
+- If Git remains unavailable, say so in the report and mark any conclusion that depends on the diff Unverifiable.
+
+Review the complete code state against the task context, not merely the review diff. Report only issues introduced, worsened, or concealed by that range. Use unchanged surrounding code only to establish context and impact; omit unrelated pre-existing issues. Use the evidence file's range metadata and the diffs inspected with Git as navigation. Follow only code, contracts, dependencies, consumers, configuration, generated sources, and tests that can materially affect the task. Map relevant subsystems and end-to-end data or control flows, including affected siblings and reachable failure paths. Stop when every explicit or logically necessary requirement, changed behavior, and affected task-relevant consumer is supported by evidence or marked Unverifiable. Do not continue into an unrelated repository-wide audit.
 
 A first-round report is complete when every gate finding has evidence and the NON-BLOCKING section is within its limit. Do not pad the report with restated requirement rows, file inventories, or pre-existing conditions.
 

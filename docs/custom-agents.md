@@ -186,7 +186,7 @@ Review invocation is declared, not hard-coded:
 - `review.output` is the shared output spec. Review only accepts `source` `stdout` or `file`. Do not repeat the field set or success-condition rules here; see `docs/output-parsing.md`. When `success` is omitted, Kander requires exit status 0 and a non-empty extracted report.
 - `review.path` is the optional review executable. Built-in names ignore a user `agents.<name>.path` overlay and use `<NAME>_REVIEW_BIN`, then the embedded `path`. Custom names use `review.path` and otherwise fall back to `path`.
 
-Read-only isolation for a custom reviewer is the definition author's responsibility. Kander still creates the result file, validates the parsed report, and keeps the review-private directories isolated.
+Read-only isolation for a custom reviewer is the definition author's responsibility. Its tools must be able to run read-only Git in the review worktree because the evidence lists commit ranges, logs, and changed files without including diffs. Kander still creates the result file, validates the parsed report, and keeps the review-private directories isolated.
 
 `review_stages` is stored per task scale, matching `kanban_agents`:
 
@@ -223,6 +223,8 @@ The embedded definitions also carry fields a user `agents.<name>` overlay cannot
 
 Each entry is a plain group name without `\`, `/`, or `@`, unique case-insensitively. At review time a name must resolve to a local group of this machine's account domain; builtin and well-known groups fail the review and an unresolved name is skipped. On Windows such a reviewer also gets the task spec snapshotted into the runtime regardless of `review.snapshot_spec`. Only the embedded `codex.json` declares it; POSIX ignores it. See [Review runtime isolation](review-runtime-isolation.md#runtime-directory-contract).
 
+On Windows, Kander appends the review worktree to the reviewer's `GIT_CONFIG_PARAMETERS` as a single `safe.directory` entry. This allows the sandbox account to pass Git's ownership check for that worktree without changing persistent Git configuration.
+
 `review.last_message_report` is a boolean inside the embedded `review` object. When it is `true`, the generated `review-contract.md` of that reviewer adds the output contract that makes the final message the complete report (`rules/templates/review/last-message-output.md`). The built-in `claude`, `cursor`, `grok`, `kimi`, `droid`, and `agy` definitions declare it; the others do not, and an absent field means `false`:
 
 ```json
@@ -232,6 +234,8 @@ Each entry is a plain group name without `\`, `/`, or `@`, unique case-insensiti
 ```
 
 The value is read from the built-in definition of the agent with exactly that name, through `config.EmbeddedReviewLastMessageReport`. It never comes from a user overlay and is not inherited through `dialect`. A user definition that overrides `agents.claude.review` therefore keeps the output contract, and a custom agent with `dialect: claude` does not get it; such an agent that needs the convention writes it in its own prompt text. The field lives only on the embedded wrapper of the review object, not on `AgentReview`, so a user `agents.<name>.review.last_message_report` is an ignored key: the configuration stays valid, `kander config` and `kander doctor` list the key as ignored, and the contract does not change. Opening the field to user definitions is a separate decision that needs a minimum-version note in `CHANGELOG.md`.
+
+`review.git_inspection` is a boolean read only from the embedded definition of the exact reviewer name. It defaults to `true`, including for custom names, and is not inherited through `dialect`. The built-in `agy`, `grok`, `kimi`, and `opencode` definitions set it to `false`. New runs with those names are rejected before preparation even if a user overlay enables shell access. Setting the field in a user overlay has no effect. Same-ID recovery for existing runs remains available.
 
 ### Rules integration providers
 

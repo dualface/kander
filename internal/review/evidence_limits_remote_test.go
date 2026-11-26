@@ -49,7 +49,7 @@ func TestEvidenceRemoteFullAndIncremental(t *testing.T) {
 		}
 		return string(data)
 	}
-	checkReview := func(run string, sections ...string) {
+	checkReview := func(run string) {
 		t.Helper()
 		status, err := store.Run(run)
 		if err != nil || status.ExecutionStatus != "ok" || status.LaunchStatus != "started" || !status.Published[task.TaskID] {
@@ -59,37 +59,18 @@ func TestEvidenceRemoteFullAndIncremental(t *testing.T) {
 			t.Fatalf("reviewer did not run: %v", err)
 		}
 		readOriginal(run, "prompt.txt")
-		contract := readOriginal(run, config.ReviewContractFilename)
-		if !strings.Contains(contract, "These files remain in scope") || !strings.Contains(contract, "--stat") {
-			t.Fatal("review contract did not include inspection guidance")
-		}
+		readOriginal(run, config.ReviewContractFilename)
 		evidence := readOriginal(run, "evidence.txt")
-		item := omittedEvidence(t, evidence)
-		items := strings.Split(strings.TrimPrefix(item, "- section: "), "\n- section: ")
-		if len(items) != len(sections) || !strings.Contains(evidence, evidenceOmissionNotice(len(sections))) {
-			t.Fatalf("wrong omission count: %s", item)
+		if len(evidence) >= 64<<10 {
+			t.Errorf("evidence is %d bytes, want less than 64 KiB", len(evidence))
 		}
-		for i, section := range sections {
-			item := "- section: " + items[i]
-			if evidenceField(item, "section") != section || evidenceField(item, "shown") != "preview" ||
-				evidenceField(item, "path") != `"generated.js"` || evidenceField(item, "numstat") != "1\t1" ||
-				evidenceField(item, "status") != "M" || len(evidenceField(item, "blob_before")) != 40 ||
-				len(evidenceField(item, "blob_after")) != 40 || evidenceField(item, "reason") != "per-file limit" {
-				t.Fatalf("incomplete omission: %s", item)
-			}
-			_, patch, found := strings.Cut(evidence, evidenceHeading(section))
-			patch, _, _ = strings.Cut(patch, "\n=== ")
-			if !found || !strings.Contains(patch, "@@ -1 +1 @@") || strings.Contains(patch, large) {
-				t.Fatalf("%s has no bounded hunk", section)
-			}
-			for line := range strings.SplitSeq(patch, "\n") {
-				if len(line)+1 > evidencePreviewLine {
-					t.Fatalf("%s has a %d-byte line", section, len(line))
-				}
-			}
+		if !strings.Contains(evidence, "M\t"+path+"\n") ||
+			strings.Contains(evidence, strings.Repeat("a", 64)) ||
+			strings.Contains(evidence, "=== PATCH ===") || strings.Contains(evidence, "=== FIX RANGE PATCH ===") {
+			t.Error("evidence must list the generated file without including its diff")
 		}
 	}
-	checkReview("first", "PATCH")
+	checkReview("first")
 
 	assignment := board.ReviewAssignment{RunID: "first", BatchID: "remote-batch", Author: "tester",
 		Basis: "empty structured report", Items: map[string][]string{}}
@@ -102,12 +83,6 @@ func TestEvidenceRemoteFullAndIncremental(t *testing.T) {
 	advance := board.ReviewAdvance{PreviousTarget: h.head, Target: target, Reason: "fix generated line",
 		Deliveries: map[string]string{target: task.TaskID}}
 	advanceFile := writeEvidenceTestJSON(t, h.root, "advance.json", advance)
-	ctx := reviewContext{root: h.repo, base: h.base, commit: target, reviewed: h.head}
-	full := []byte(originalEvidence(t, ctx))
-	unbounded, err := json.Marshal(api.ReviewArtifact{Name: "evidence.txt", Data: full, Digest: board.ReviewDigest(full)})
-	if err != nil || len(unbounded) <= artifactRequestLimit {
-		t.Fatalf("regression fixture would not exceed limit without omissions: %d bytes (%v)", len(unbounded), err)
-	}
 	if err := os.Remove(h.argvLog); err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +92,7 @@ func TestEvidenceRemoteFullAndIncremental(t *testing.T) {
 	if code, _, stderr := captureRun(t, args); code != 0 {
 		t.Fatalf("incremental remote review: %d %s", code, stderr)
 	}
-	checkReview("incremental", "PATCH", "FIX RANGE PATCH")
+	checkReview("incremental")
 }
 
 func TestEvidenceRemoteArtifactLimitMatchesHandler(t *testing.T) {
@@ -138,17 +113,19 @@ func TestEvidenceRemoteArtifactLimitMatchesHandler(t *testing.T) {
 	if _, fresh, err := store.Prepare(input, requirements, nil, originals, "test"); err != nil || !fresh {
 		t.Fatalf("prepare: fresh=%v %v", fresh, err)
 	}
-	if err := store.Artifact(input.RunID, "evidence.txt", make([]byte, evidenceHardLimit)); err != nil {
-		t.Fatalf("service did not accept evidence at the hard limit: %v", err)
-	}
-
 	payload := api.ReviewArtifact{Name: "evidence.txt", Data: []byte{}, Digest: strings.Repeat("0", 64)}
 	empty, err := json.Marshal(payload)
 	if err != nil {
 		t.Fatal(err)
 	}
-	size := ((artifactRequestLimit-len(empty))/4 + 1) * 3
-	payload.Data = make([]byte, size)
+	// Base64 sizes grow in multiples of four. Exercise the closest payloads
+	// to the boundary on each side, not merely a comfortably smaller request.
+	size := (artifactRequestLimit - len(empty)) / 4 * 3
+	if err := store.Artifact(input.RunID, "evidence.txt", make([]byte, size)); err != nil {
+		t.Fatalf("service did not accept evidence at the request limit: %v", err)
+	}
+
+	payload.Data = make([]byte, size+3)
 	payload.Digest = board.ReviewDigest(payload.Data)
 	body, err := json.Marshal(payload)
 	if err != nil || len(body) <= artifactRequestLimit || len(body) > artifactRequestLimit+4 {
@@ -170,8 +147,6 @@ func TestEvidenceRemoteOversizeFailsBeforeReviewLaunch(t *testing.T) {
 		}
 		return false
 	})
-	// An incompressible evidence budget would also fail, but a fixed log
-	// section is cheaper to construct than millions of small Git tree entries.
 	size := artifactRequestLimit/4*3 + 1
 	message := filepath.Join(h.root, "message.txt")
 	if err := os.WriteFile(message, []byte(strings.Repeat("m", size)), 0o600); err != nil {
@@ -182,7 +157,8 @@ func TestEvidenceRemoteOversizeFailsBeforeReviewLaunch(t *testing.T) {
 	args := []string{"codex", "--task", task.TaskID, "--run-id", "oversized", "--batch-id", "oversized-batch",
 		"--requirements-file", requirements, h.repo, h.base, h.head, "PMQA", "Frozen remote task"}
 	code, _, stderr := captureRun(t, args)
-	if code != 2 || artifactRequests.Load() != 2 || !strings.Contains(stderr, "Largest content source: COMMITS") {
+	if code != 2 || artifactRequests.Load() != 2 || !strings.Contains(stderr, "Largest content source: COMMITS") ||
+		!strings.Contains(stderr, "Narrow the review range, then retry with a new run ID") || strings.Contains(stderr, "-diff") {
 		t.Fatalf("preflight: exit %d, %d requests, %s", code, artifactRequests.Load(), stderr)
 	}
 	if _, err := os.Stat(h.argvLog); !errors.Is(err, os.ErrNotExist) {
@@ -196,14 +172,14 @@ func TestEvidenceRemoteOversizeFailsBeforeReviewLaunch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rawBytes := len(originalEvidence(t, reviewContext{root: h.repo, base: h.base, commit: h.head}))
+	rawBytes := len(expectedRangeEvidence(t, reviewContext{root: h.repo, base: h.base, commit: h.head}))
 	empty, err := json.Marshal(api.ReviewArtifact{Name: "evidence.txt", Data: []byte{}, Digest: strings.Repeat("0", 64)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := config.Text("review.artifact_request_too_large", "evidence.txt", rawBytes,
 		len(empty)+base64.StdEncoding.EncodedLen(rawBytes), artifactRequestLimit, fmt.Sprintf("COMMITS (%d bytes)",
-			len(evidenceTestGit(t, h.repo, []string{"log", "--no-ext-diff", "--no-textconv", "--format=fuller", "--no-patch", h.base + ".." + h.head}))))
+			len(evidenceTestGit(t, h.repo, "log", "--no-ext-diff", "--no-textconv", "--format=fuller", "--no-patch", h.base+".."+h.head))))
 	if run.FailureReason != want || !strings.Contains(stderr, want) || run.ExecutionStatus != "not_started" {
 		t.Fatalf("wrong final diagnostic (%s): %s (want %s)", run.ExecutionStatus, run.FailureReason, want)
 	}

@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"unicode/utf8"
 
@@ -13,6 +14,20 @@ import (
 	"github.com/dualface/kander/v2/internal/fs"
 	"github.com/dualface/kander/v2/internal/process"
 )
+
+const gitConfigParameters = "GIT_CONFIG_PARAMETERS"
+
+func addReviewGitSafeDirectory(goos string, readGroups []string, worktree string, env map[string]string) {
+	if goos != "windows" || len(readGroups) == 0 {
+		return
+	}
+	// Use Git's legacy single-quoted key=value format, also parsed by older Git.
+	entry := "'safe.directory=" + strings.ReplaceAll(worktree, "'", `'\''`) + "'"
+	if current := env[gitConfigParameters]; current != "" {
+		entry = current + " " + entry
+	}
+	env[gitConfigParameters] = entry
+}
 
 func flattenEnv(env map[string]string) []string {
 	out := make([]string, 0, len(env))
@@ -25,15 +40,19 @@ func flattenEnv(env map[string]string) []string {
 func reviewerArguments(ctx reviewContext, runtime, outputFile, promptFile string) (process.ProcessInvocation, string, error) {
 	settings := ctx.settings
 	environment := map[string]string{}
-	for _, kv := range os.Environ() {
-		k, v, ok := strings.Cut(kv, "=")
-		if !ok {
-			environment[kv] = ""
-			continue
+	setEnv := func(key, value string) {
+		if goruntime.GOOS == "windows" {
+			switch strings.ToUpper(key) {
+			case gitConfigParameters, "GIT_OPTIONAL_LOCKS":
+				key = strings.ToUpper(key)
+			}
 		}
-		environment[k] = v
+		environment[key] = value
 	}
-	environment["GIT_OPTIONAL_LOCKS"] = "0"
+	for _, kv := range os.Environ() {
+		k, v, _ := strings.Cut(kv, "=")
+		setEnv(k, v)
+	}
 	home, err := filepath.Abs(settings.reviewHome)
 	if err != nil {
 		home = settings.reviewHome
@@ -64,8 +83,10 @@ func reviewerArguments(ctx reviewContext, runtime, outputFile, promptFile string
 		if expErr != nil {
 			return process.ProcessInvocation{}, "", newGateMsg(2, expErr.Error())
 		}
-		environment[key] = expanded
+		setEnv(key, expanded)
 	}
+	environment["GIT_OPTIONAL_LOCKS"] = "0"
+	addReviewGitSafeDirectory(goruntime.GOOS, reviewReadGroups(ctx.agent), ctx.gitWorktree, environment)
 	cwd := runtime
 	if settings.cwd == config.ReviewCWDRoot {
 		cwd = ctx.root

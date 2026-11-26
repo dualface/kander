@@ -62,6 +62,7 @@ type reviewContext struct {
 	agent           string
 	settings        agentSettings
 	root            string
+	gitWorktree     string // Git's own spelling of the worktree root, for safe.directory.
 	base            string
 	commit          string
 	role            string

@@ -14,6 +14,7 @@ import (
 const reviewTemplatesDir = "templates/review"
 
 type reviewContractData struct {
+	// Deprecated: retained only for previously installed templates. Always false.
 	OmittedDiffs              bool
 	Role                      string
 	Scope                     string
@@ -78,7 +79,7 @@ func lastMessageOutputContract() (string, error) {
 	return strings.TrimSpace(text), err
 }
 
-func buildReviewContract(ctx reviewContext, omittedDiffs bool) (string, error) {
+func buildReviewContract(ctx reviewContext) (string, error) {
 	qualityReview := ctx.role == "PMQA" || ctx.role == "QA"
 	scopeTemplate := "scope-full.md"
 	if ctx.reviewed != "" {
@@ -118,7 +119,7 @@ func buildReviewContract(ctx reviewContext, omittedDiffs bool) (string, error) {
 		return "", err
 	}
 	return renderReviewTemplate("review-contract.md", reviewContractData{
-		OmittedDiffs:              omittedDiffs,
+		OmittedDiffs:              false,
 		Role:                      ctx.role,
 		Scope:                     scope,
 		RoleRules:                 roles,

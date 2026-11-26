@@ -86,21 +86,23 @@ reviews/<run_id>/
   interpretation.json # optional receiver reading, separately published after the run
 ```
 
-`evidence.txt` retains full diffs when they fit. A file diff over 1 MiB is
-replaced in place by headers and a bounded, line-truncated preview when
-metadata can be matched, or by headers alone. Both PATCH and FIX RANGE PATCH
-count toward the 16 MiB evidence target. If the smallest representation
-cannot meet that target but fits the upload budget, Kander uses the larger
-budget. It shortens or omits more diffs only when doing so saves space,
-including the index entry. The final `=== OMITTED DIFFS ===` section lists
-each omission, its section, path, size, reason, available Git metadata, and a
-command for inspecting the diff. These files remain in scope. Start with
-`--stat` and inspect relevant hunks or truncate long lines.
+`evidence.txt` lists the review range, its commit log and changed-file ledger.
+An incremental run also lists the fix range and its own log and ledger. The
+original Git log and file-ledger commands do not disable Git colors, so explicit
+settings such as `color.ui=always` can leave ANSI escapes in the evidence.
+
+New evidence has no diffs or commit tree. The reviewer uses read-only Git in
+the worktree named in the bootstrap and follows the contract's guidance for
+bounded diff inspection. A new run using the built-in agy, grok, kimi, or
+opencode definition is rejected before preparation because those reviewers
+cannot run Git. Existing run IDs can still be retried for recovery, and
+archived evidence is not rewritten.
 
 Before launching the reviewer in distributed mode, Kander checks each of the
-three artifact request bodies against the service limit. If one is still too
+three artifact request bodies against the service limit. If one is too
 large, the localized error identifies the artifact, its size and the request
-limit, the largest evidence source when applicable, and how to retry.
+limit, the largest evidence section when applicable, and how to retry. If
+the evidence is too large, narrow the review range and retry with a new run ID.
 
 process-evidence.json holds the bounded process group member records and the cleanup result, in the format of [Process Group Member Records](review-runtime-isolation.md#process-group-member-records). It is written to staging when the process tree is collected, frozen with the other originals, and covered by the manifest hashes. It is optional: a run without it, such as any run of an older binary, stays valid. A run with it is rejected by older binaries, which do not know the file.
 

@@ -55,6 +55,7 @@
     ]
   },
   "review": {
+    "git_inspection": false,
     "last_message_report": true,
     "cwd": "root",
     "home_env": "KIMI_CODE_HOME",

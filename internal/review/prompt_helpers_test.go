@@ -17,7 +17,7 @@ func mustBuildPrompt(t *testing.T, ctx reviewContext, evidence, task string) str
 
 func mustBuildContract(t *testing.T, ctx reviewContext) string {
 	t.Helper()
-	text, err := buildReviewContract(ctx, false)
+	text, err := buildReviewContract(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

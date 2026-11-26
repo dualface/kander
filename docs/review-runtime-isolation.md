@@ -7,33 +7,32 @@ How `kander review` keeps a reviewer read-only and how the review runtime is pro
 - Reviewers are the built-in agents plus any configured agent that declares a review template (`args.review` together with `review.*`). The public review entry on all platforms is `kander review` under the command root, which enters the single gate implementation.
 - On Windows, the reviewer `.exe` is preferred. When only `.cmd`/`.bat` exists, the launch goes through an explicit `cmd.exe /d /s /v:off /c` and the argument encoding of that reviewer's adapter layer. This is not a general invocation contract for arbitrary batch scripts.
 - Built-in isolation arguments live on each agent's definition. A custom reviewer's read-only posture is the definition author's responsibility; Kander still validates the result and isolates review-private directories. Apart from the CLI and isolation arguments declared for that reviewer, every review rule is identical for all reviewers.
+- New runs require a reviewer that can run read-only Git in the review worktree. The evidence contains commit ranges, logs, and changed files, so the reviewer retrieves diffs with Git. The embedded `review.git_inspection` flag disables new runs for agy, grok, kimi, and opencode because their tool policies do not allow Git. The rejection happens before preparation and does not affect same-ID recovery.
 
 | reviewer | argument | CLI | isolation |
 | -------- | -------- | --- | --------- |
 | Codex | `codex` | `codex` | from the embedded definition |
 | Claude | `claude` | `claude` | from the embedded definition |
-| Grok | `grok` | `grok` | from the embedded definition |
+| Grok | `grok` | `grok` | no new runs |
 | Cursor | `cursor` | `cursor-agent` | from the embedded definition |
 | Pi | `pi` | `pi` | from the embedded definition |
 | Devin | `devin` | `devin` | from the embedded definition |
-| OpenCode | `opencode` | `opencode` | from the embedded definition |
-| Kimi | `kimi` | `kimi` | from the embedded definition |
+| OpenCode | `opencode` | `opencode` | no new runs |
+| Kimi | `kimi` | `kimi` | no new runs |
 | Droid | `droid` | `droid` | from the embedded definition |
-| Antigravity CLI | `agy` | `agy` | from the embedded definition |
+| Antigravity CLI | `agy` | `agy` | no new runs |
 | custom | the agent name | `review.path` or `path` | author's responsibility |
 
 ## Per-Reviewer Posture
 
-- Codex and Grok use sandbox-enforced read-only isolation: Codex runs a read-only shell inside the target worktree.
-- Claude and Grok run in an out-of-tree runtime; Grok exposes only read and search tools, while Claude runs fully authorized with its full toolset minus `Edit` and `Write` and relies on that plus the prompt for read-only. Claude's out-of-tree spec is first snapshotted into a runtime exclusive to the current user; the original parent directory is not authorized. Claude's review inherits the caller's environment for its configuration: Kander does not set `CLAUDE_CONFIG_DIR`, so Claude reads its default configuration files; `review.home_env` still names that variable only to locate and validate the review home.
+- Codex runs a sandbox-enforced read-only shell inside the target worktree. On Windows, Kander appends a `safe.directory` entry for that worktree to the reviewer process's `GIT_CONFIG_PARAMETERS` when its embedded definition declares `review_windows_read_groups`. This lets the separate sandbox account pass Git's ownership check for that worktree without changing persistent Git configuration. If the reviewer shell does not inherit the setting, the contract gives a per-command `-c safe.directory` fallback.
+- Claude runs in an out-of-tree runtime with its full toolset minus `Edit` and `Write` and relies on that plus the prompt for read-only. Claude's out-of-tree spec is first snapshotted into a runtime exclusive to the current user; the original parent directory is not authorized. Claude's review inherits the caller's environment for its configuration: Kander does not set `CLAUDE_CONFIG_DIR`, so Claude reads its default configuration files; `review.home_env` still names that variable only to locate and validate the review home.
 - Cursor passes `--yolo` to approve tool calls without an interactive prompt and isolates configuration and session into the runtime; read-only relies on the prompt and post-run worktree verification, with no upfront blocking and no detection of out-of-tree writes.
 - Pi runs without session persistence and uses its default tools and resource loading, including extensions, skills, prompt templates, and themes. Read-only inspection relies on the prompt and post-run worktree verification, not a CLI tool allowlist.
 - Devin runs non-interactive print mode under `--permission-mode dangerous`, which auto-approves every tool call instead of prompting; `--respect-workspace-trust false` skips the workspace-trust dialog. There is no enforced read-only sandbox. Read-only relies on the prompt and on the post-run check of the Git-visible state of the target worktree. That check does not detect writes outside the worktree or to ignored paths inside it.
-- OpenCode runs `opencode run --pure --format json` with `OPENCODE_PERMISSION` set to a literal JSON policy that denies every action (`"*": "deny") and allows only `read`, `glob`, `grep`, `list`, and `external_directory` (the last so the reviewer can read the runtime bootstrap outside the worktree); it never passes `--auto`, so nothing is auto-approved. Read-only relies on that deny-first policy plus the prompt.
-- Kimi runs `kimi --prompt <instruction> --output-format stream-json` under a `kimi-reviewer.md` agent file rendered into the runtime and passed through `--agent-file`; the file allowlists `tools: [Read, Grep, Glob]` and denies shell, write/edit, subagent, and interaction tools, so the reviewer has no write, execute, or delegate capability. It never passes `--auto`/`--yolo`, and `--add-dir` exposes only the private runtime to the reviewer. Read-only relies on that tool policy plus the prompt.
 - Droid runs `droid exec --output-format json` at its default autonomy, which is read-only: reading, searching, and shell commands Droid classifies as non-modifying are allowed, while an edit or a command it classifies as modifying ends the run with `is_error` and fails the review. It never passes `--auto` or `--skip-permissions-unsafe`. Read-only relies on that autonomy level plus the prompt.
-- Antigravity CLI runs `agy --mode plan --output-format json --print <instruction ...>`: plan mode, plus a `--settings` policy that denies `write_file(*)`, `command(*)`, `mcp(*)`, `read_url(*)`, and `execute_url(*)`, so the reviewer has no write, shell, MCP, or network capability. `--add-dir` adds the private runtime and, when it exists, the installed Kander rules directory (`{rules_dir}`), because agy loads a global rules file that references the rules root; the reviewer can therefore read the rules directory, and the `--print` text tells it to skip executor setup, global workflow files, and planning artifacts. The run is accepted only when the JSON result has `status` `SUCCESS` and a non-empty `response`, which carries the final message. The design was verified on `agy` 1.5.13; an agy that does not know `--settings` fails at start and never runs with weaker isolation. Read-only relies on that policy plus the prompt.
-- For Claude, Cursor, Pi, Devin, OpenCode, Kimi, Droid, and Antigravity CLI the post-run check sees only the Git-visible state of the target worktree: writes outside that worktree and to ignored paths inside it are not detected. Worktree verification never fails a review for writes to paths excluded by `.gitignore`.
+- The built-in policies that prevent shell access remain unchanged. Grok exposes only read and search tools in its out-of-tree runtime. OpenCode uses a deny-first `OPENCODE_PERMISSION` policy that allows only `read`, `glob`, `grep`, `list`, and `external_directory`. Kimi's `kimi-reviewer.md` allows only `Read`, `Grep`, and `Glob`. Antigravity CLI's `--settings` policy denies shell commands even in plan mode.
+- The post-run check sees only the Git-visible state of the target worktree: writes outside that worktree and to ignored paths inside it are not detected. Worktree verification never fails a review for writes to paths excluded by `.gitignore`.
 - Isolation arguments are never replaced or loosened to unify implementations or accommodate Windows.
 
 ## Prompt Delivery

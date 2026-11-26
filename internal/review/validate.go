@@ -84,7 +84,8 @@ func validateContextMode(agent string, arguments []string, replay bool, scale st
 	if rootCode != 0 {
 		return reviewContext{}, newGate(2, "review.cwd_is_not_inside_a_git_worktree", cwdText)
 	}
-	rootResolved, resErr := filepath.EvalSymlinks(strings.TrimRight(rootOut, "\r\n"))
+	gitWorktree := strings.TrimRight(rootOut, "\r\n")
+	rootResolved, resErr := filepath.EvalSymlinks(gitWorktree)
 	if resErr != nil {
 		return reviewContext{}, newGate(2, "review.cwd_is_not_inside_a_git_worktree", cwdText)
 	}
@@ -218,6 +219,7 @@ func validateContextMode(agent string, arguments []string, replay bool, scale st
 		agent:          agent,
 		settings:       settings,
 		root:           root,
+		gitWorktree:    gitWorktree,
 		base:           base,
 		commit:         commit,
 		role:           role,

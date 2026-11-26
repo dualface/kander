@@ -331,7 +331,7 @@ exit 3
 }
 
 func TestBuiltinReviewStdinAndPromptBytes(t *testing.T) {
-	for _, agent := range []string{"codex", "claude", "cursor", "grok"} {
+	for _, agent := range []string{"codex", "claude", "cursor"} {
 		t.Run(agent, func(t *testing.T) {
 			var h *reviewHarness
 			var promptPath string
@@ -344,9 +344,6 @@ func TestBuiltinReviewStdinAndPromptBytes(t *testing.T) {
 				promptPath = h.promptLog
 			case "cursor":
 				h = newCursorHarness(t)
-				promptPath = h.promptLog
-			case "grok":
-				h = newGrokHarness(t)
 				promptPath = h.promptLog
 			}
 			code, _, err := h.review(agent, "PMQA", "确认改动正确")
@@ -361,22 +358,9 @@ func TestBuiltinReviewStdinAndPromptBytes(t *testing.T) {
 				"codex":  "Use only read-only filesystem and shell operations needed to inspect code.",
 				"claude": "Use only read-only inspection: read, search, and shell commands that do not write.",
 				"cursor": "Prefer read-only inspection.",
-				"grok":   "Use only read_file, grep, and list_dir to inspect code.",
 			}[agent]
 			if !strings.Contains(prompt, wantInspection) {
 				t.Fatalf("prompt missing inspection: %s", prompt)
-			}
-			if agent == "grok" {
-				argv := strings.Split(strings.TrimRight(readFile(t, h.argvLog), "\n"), "\n")
-				if !contains(argv, "--prompt-file") {
-					t.Fatalf("argv=%v", argv)
-				}
-			} else {
-				instruction := mustInstruction(t, "Perform the QA review.", "dummy")
-				prefix, _, _ := strings.Cut(instruction, "dummy")
-				if prefix == "" || !strings.Contains(prefix, "Perform the QA review") {
-					t.Fatalf("instruction %q", instruction)
-				}
 			}
 		})
 	}

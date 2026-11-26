@@ -178,6 +178,8 @@ func (s *remoteReviewStore) Update(run board.ReviewRun) error {
 	return s.runtime(run.RunID, "update", run, nil)
 }
 
+const artifactRequestLimit = 32 << 20 // Mirrors internal/server maxBody.
+
 type artifactTooLargeError struct {
 	name                          string
 	rawBytes, requestBytes, limit int

@@ -310,7 +310,7 @@ func (a *archiveExecution) publish() int {
 	}
 	return run.ExitCode
 }
-func (a *archiveExecution) snapshotRuntime(runtime string, evidence evidenceResult) error {
+func (a *archiveExecution) snapshotRuntime(runtime, largestEvidenceSection string) error {
 	for _, name := range []string{"prompt.txt", config.ReviewContractFilename, "evidence.txt"} {
 		data, err := fs.ReadRegularFile(runtime, filepath.Join(runtime, name))
 		if err != nil {
@@ -321,7 +321,7 @@ func (a *archiveExecution) snapshotRuntime(runtime string, evidence evidenceResu
 			if errors.As(err, &size) {
 				source := ""
 				if name == "evidence.txt" {
-					source = evidence.largest
+					source = largestEvidenceSection
 				}
 				return newGate(2, "review.artifact_request_too_large", size.name, size.rawBytes, size.requestBytes, size.limit, source)
 			}

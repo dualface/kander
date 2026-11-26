@@ -118,6 +118,10 @@ func runReview(options archiveOptions, args []string) (exitCode int) {
 			return 1
 		}
 	}
+	if !replay && !config.EmbeddedReviewGitInspection(agent) {
+		userError(config.Text("review.git_inspection_unavailable", agent))
+		return 2
+	}
 	if len(options.tasks) > 0 {
 		rest, err = hydrateIncremental(archiveRoot, options, rest, replay, stores...)
 		if err != nil {

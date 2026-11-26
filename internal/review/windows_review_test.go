@@ -270,18 +270,14 @@ func TestWindowsClaudeIsolationArgv(t *testing.T) {
 	leftoverRuntimes(t, h.tmp, "claude-review.")
 }
 
-func TestWindowsGrokIsolationArgv(t *testing.T) {
+func TestWindowsGrokCannotStartNewRun(t *testing.T) {
 	h := newWindowsHarness(t, "grok")
 	code, _, err := h.review("grok", "PMQA", "确认改动正确")
-	if code != 0 {
+	if code != 2 || !strings.Contains(err, "grok cannot run read-only Git") {
 		t.Fatalf("code=%d err=%s", code, err)
 	}
-	argv := h.argv()
-	assertArg(t, argv, "--sandbox", "read-only")
-	for _, flag := range []string{"--no-memory", "--no-subagents"} {
-		if !contains(argv, flag) {
-			t.Fatalf("missing %s in %v", flag, argv)
-		}
+	if _, err := os.Stat(h.argvLog); !os.IsNotExist(err) {
+		t.Fatalf("reviewer launched: %v", err)
 	}
 }
 

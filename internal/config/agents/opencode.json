@@ -47,6 +47,7 @@
     "mode": "argv"
   },
   "review": {
+    "git_inspection": false,
     "env": {
       "OPENCODE_PERMISSION": "{{\"*\":\"deny\",\"read\":\"allow\",\"glob\":\"allow\",\"grep\":\"allow\",\"list\":\"allow\",\"external_directory\":\"allow\"}}"
     },

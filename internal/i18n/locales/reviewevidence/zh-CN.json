@@ -1,4 +1,4 @@
 {
-  "review.artifact_request_too_large": "审核产物 {{.V0}} 原始大小为 {{.V1}} 字节，请求体为 {{.V2}} 字节，超过 {{.V3}} 字节上限。{{if .V4}}最大内容来源：{{.V4}}。{{end}}{{if eq .V0 \"evidence.txt\"}}请在 .gitattributes 或 $GIT_COMMON_DIR/info/attributes 中给大型生成文件设置 -diff，或缩小审核范围，然后使用新的 run ID 重试。{{else}}请缩短补充审核上下文或自定义审核指令，然后使用新的 run ID 重试。{{end}}",
-  "review.evidence_metadata_unavailable": "审核证据 {{.V0}} 的差异与元数据无法对应（{{.V1}} 个差异块，{{.V2}} 个条目）。该节中被省略的差异只保留头行。"
+  "review.artifact_request_too_large": "审核产物 {{.V0}} 原始大小为 {{.V1}} 字节，请求体为 {{.V2}} 字节，超过 {{.V3}} 字节上限。{{if .V4}}最大内容来源：{{.V4}}。{{end}}{{if eq .V0 \"evidence.txt\"}}审核区间的提交日志或文件清单过大。请缩小审核区间，再使用新的 run ID 重试。{{else}}请缩短补充审核上下文或自定义审核指令，然后使用新的 run ID 重试。{{end}}",
+  "review.git_inspection_unavailable": "审核人 {{.V0}} 无法在审核 worktree 中运行只读 Git。请改用支持只读 Git 的审核人，例如 claude 或 codex。如果卡片通过 REVIEW_<ROLE>_AGENT 固定了审核人，请先通过契约决定修改固定项。如果上一轮使用了该审核人，请改用新审核人发起首轮审核，不带 --previous-run-id（必要时新开批次）。"
 }
