@@ -29,6 +29,8 @@ type project struct {
 	events         *eventLog
 	starts         map[string]startCursor
 	releaseRemarks func()
+	// receiptReadFault injects a post-operation receipt read failure in tests.
+	receiptReadFault func(string) error
 	// importBroken is guarded by mu. It is set when a board import failed
 	// after its publication intent and in-process recovery failed too.
 	importBroken bool

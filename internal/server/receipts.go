@@ -98,7 +98,7 @@ func (p *project) finish(rel string, r receipt, out outcome) outcome {
 	// Domain producers may already have committed their exact response with
 	// the mutation. Never replace it with a later observation after unlock.
 	var committed receipt
-	found, err := readJSON(p.root, rel, &committed)
+	found, err := p.readReceiptAfterOperation(rel, &committed)
 	if err != nil {
 		return outcome{err: err}
 	}
@@ -126,6 +126,15 @@ func (p *project) finish(rel string, r receipt, out outcome) outcome {
 		return outcome{err: err}
 	}
 	return outcome{status: status, body: json.RawMessage(data)}
+}
+
+func (p *project) readReceiptAfterOperation(rel string, target *receipt) (bool, error) {
+	if p.receiptReadFault != nil {
+		if err := p.receiptReadFault(rel); err != nil {
+			return false, err
+		}
+	}
+	return readJSON(p.root, rel, target)
 }
 
 func (p *project) replayReceipt(r receipt) outcome {

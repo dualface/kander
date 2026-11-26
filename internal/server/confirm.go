@@ -49,26 +49,28 @@ func (p *project) confirm(key, id string, req api.Confirm, actor string) outcome
 		Input api.Confirm
 		Actor string
 	}{req, actor}
-	ran := false
 	run := func() outcome {
-		ran = true
 		var task api.Task
 		extension := p.taskTransaction(key, operation, request, id, nil, nil, false, func(_ *board.Transaction, staged *api.Task) error {
 			task = *staged
 			return nil
 		})
 		input := board.ConfirmInput{ExpectedRevision: req.ExpectedRevision, ConfirmedBy: actor, At: p.server.now()}
-		if err := board.ConfirmRequest(p.board, id, input, extension); err != nil {
-			return outcome{err: err}
+		err := board.ConfirmRequest(p.board, id, input, extension)
+		committed := err == nil
+		if err != nil && task.OperationID != "" {
+			// Partitioning can fail after the commit marker is durable. A
+			// snapshot refuses a prepared operation and must name this write.
+			snapshot, readErr := board.ReadSnapshot(p.board, id)
+			committed = readErr == nil && snapshot.OperationID == task.OperationID
 		}
-		return outcome{status: http.StatusOK, body: task}
+		if committed {
+			p.changed(id, 0)
+		}
+		return result(http.StatusOK, task, err)
 	}
 	// A successful board transaction already contains the exact completed receipt.
-	out := p.idempotent(key, operation, request, run, func() (outcome, bool) { return outcome{}, false })
-	if ran && out.err == nil && out.status == http.StatusOK {
-		p.changed(id, 0)
-	}
-	return out
+	return p.idempotent(key, operation, request, run, func() (outcome, bool) { return outcome{}, false })
 }
 
 func (p *project) requirePublishedConfirmation(id string, body json.RawMessage) error {

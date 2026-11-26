@@ -4,12 +4,10 @@ package server
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -33,15 +31,7 @@ func TestConfirmDoesNotReplayReceiptBeforeBoardCommit(t *testing.T) {
 	cursor := proj.events.cursor()
 	const key = "interrupted-confirmation"
 	post := func(s *Server) *httptest.ResponseRecorder {
-		body := fmt.Sprintf(`{"expected_revision":%d,"confirmed_by":"Alice"}`, card.Revision)
-		url := "/api/v1/projects/" + p.ID() + "/tasks/" + card.TaskID + "/confirm"
-		r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, url, strings.NewReader(body))
-		r.Header.Set(api.HeaderProtocol, strconv.Itoa(api.ProtocolVersion))
-		r.Header.Set(api.HeaderClientID, "host-a")
-		r.Header.Set(api.HeaderIdempotencyKey, key)
-		w := httptest.NewRecorder()
-		s.Handler().ServeHTTP(w, r)
-		return w
+		return postRecoveryConfirmation(t, s, p.ID(), key, card)
 	}
 	// Only the rename into todo needs write access to this directory. Validation,
 	// preparation and the earlier service receipt write can all finish.
