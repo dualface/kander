@@ -6,6 +6,8 @@ Loaded only when `rules.task_intake=true`. The execution-choice gate, including 
 
 GitHub issues follow `KANDER-ISSUE-RULES.md` for investigation, consent, and binding before this guidance applies.
 
+**Request cards.** Completing a request card (`snippets/card-content.md` "Request Cards") is card content work: present no intake options for it, and never ask the submitter to choose one. The submitter's confirmation is the option 3 choice for that card. A later start instruction for the card enters the option 3 flow below.
+
 Give intake guidance for every request expected to create, modify, delete, or regenerate code, and for every new bug or feature request, when the execution mode has not yet been explicitly chosen for that task. Judge the expected actions, not the request's label, wording, or size. This includes adjustments, refactoring, optimization, cleanup, tests, scripts, UI code, and one-line edits; phrases such as "adjust this", "change this", or "fix this" do not by themselves choose direct execution or waive intake.
 
 Before the first code write, present the intake options below and wait for the user's explicit choice. Never edit code, apply a code patch, run an automatic code fix, or run code generation while that choice is pending. Read-only investigation and planning may continue. If a task initially appeared read-only or documentation/configuration-only but later requires code changes, apply this gate before making those changes.
