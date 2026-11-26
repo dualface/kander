@@ -23,6 +23,8 @@ var boardCodes = map[string]string{
 	"board.decision_reserved":           api.CodeDecisionReserved,
 	"board.confirmation_required":       api.CodeConfirmationRequired,
 	"board.confirmer_required":          api.CodeInvalidRequest,
+	"board.review_compacted":            api.CodeReviewCompacted,
+	"board.review_run_compacted":        api.CodeReviewCompacted,
 }
 
 var codeStatus = map[string]int{
@@ -46,6 +48,7 @@ var codeStatus = map[string]int{
 	api.CodeBoardRejected:        http.StatusUnprocessableEntity,
 	api.CodeNotReady:             http.StatusServiceUnavailable,
 	api.CodeIndexRebuilding:      http.StatusServiceUnavailable,
+	api.CodeReviewCompacted:      http.StatusGone,
 	api.CodeInternal:             http.StatusInternalServerError,
 }
 

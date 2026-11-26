@@ -15,6 +15,12 @@ type ReviewPrepare struct {
 	WriterHash   string               `json:"writer_hash"`
 }
 
+// ReviewCompaction is GET .../reviews/evidence/{run}/compaction: whether a
+// settled run was compacted. An unknown run is not compacted.
+type ReviewCompaction struct {
+	Compacted bool `json:"compacted"`
+}
+
 type ReviewArtifact struct {
 	Name   string `json:"name"`
 	Data   []byte `json:"data"`

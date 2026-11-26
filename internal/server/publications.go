@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"path/filepath"
 	"slices"
@@ -109,6 +110,9 @@ func (s *Server) publicationRoutes(mux *routeTable) {
 	const base = "/api/v1/projects/{project}/publications"
 	s.projectRoute(mux, "GET "+base+"/{publication}", func(p *project, r *http.Request) outcome {
 		value, err := p.readPublication(r.PathValue("publication"))
+		if err == nil {
+			value.CompactedRuns, err = p.compactedPublicationRuns(value)
+		}
 		return result(http.StatusOK, value, err)
 	})
 	s.projectRoute(mux, "POST "+base, func(p *project, r *http.Request) outcome {
@@ -217,4 +221,45 @@ func (s *Server) publicationRoutes(mux *routeTable) {
 		})
 		return result(http.StatusOK, value, err)
 	})
+}
+
+// compactedPublicationRuns lists the runs a material names that are compacted
+// now. A review-prepare material names its run in input.run_id, a
+// review-publish:<run> operation in its name, and the interpret, map-legacy,
+// abandon, assign and disposition materials in run_id or disposition.run_id.
+// The material itself never changes; only the response shows the state.
+func (p *project) compactedPublicationRuns(value api.Publication) ([]string, error) {
+	ids := map[string]bool{}
+	if id, ok := strings.CutPrefix(value.Operation, "review-publish:"); ok {
+		ids[id] = true
+	}
+	var material struct {
+		RunID string `json:"run_id"`
+		Input struct {
+			RunID string `json:"run_id"`
+		} `json:"input"`
+		Disposition struct {
+			RunID string `json:"run_id"`
+		} `json:"disposition"`
+	}
+	// Materials that are no JSON object, such as the run ID of a publish, name no run here.
+	if json.Unmarshal(value.Payload, &material) == nil {
+		for _, id := range []string{material.RunID, material.Input.RunID, material.Disposition.RunID} {
+			ids[id] = id != ""
+		}
+	}
+	var compacted []string
+	for _, id := range slices.Sorted(maps.Keys(ids)) {
+		if !ids[id] || !board.ValidReviewID(id) {
+			continue
+		}
+		ok, err := board.ReviewRunCompacted(p.board, id)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			compacted = append(compacted, id)
+		}
+	}
+	return compacted, nil
 }

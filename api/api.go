@@ -66,7 +66,10 @@ const (
 	CodeIndexRebuilding      = "index_rebuilding"
 	CodeDecisionReserved     = "decision_reserved"
 	CodeConfirmationRequired = "confirmation_required"
-	CodeInternal             = "internal"
+	// CodeReviewCompacted means a settled review run was compacted, so the
+	// evidence file or the replay the request needs was removed on purpose.
+	CodeReviewCompacted = "review_compacted"
+	CodeInternal        = "internal"
 )
 
 // Error is the JSON error body of every non-2xx response. BoardCode carries

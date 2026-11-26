@@ -34,6 +34,9 @@ type publicationView struct {
 	Sanitized     bool                    `json:"sanitized"`
 	Members       []publicationMemberView `json:"members"`
 	Payload       any                     `json:"payload"`
+	// CompactedRuns lists the runs the material names whose large evidence a
+	// compaction removed after they settled; absent when there is none.
+	CompactedRuns []string `json:"compacted_runs,omitempty"`
 }
 
 type publicationMemberView struct {
@@ -75,6 +78,12 @@ func readPublicationView(ctx context.Context, session *remote.Session, id string
 	if err != nil {
 		return publicationView{}, err
 	}
+	return newPublicationView(publication, func(member api.PublicationMember) (bool, error) { return session.MemberStale(ctx, member) })
+}
+
+// newPublicationView builds the view of a stored publication; stale reads
+// whether a member can no longer confirm or publish it.
+func newPublicationView(publication api.Publication, stale func(api.PublicationMember) (bool, error)) (publicationView, error) {
 	var text materialText
 	view := publicationView{
 		PublicationID: text.clean(publication.ID),
@@ -85,14 +94,18 @@ func readPublicationView(ctx context.Context, session *remote.Session, id string
 		Members:       []publicationMemberView{},
 	}
 	for _, member := range publication.Members {
-		stale, err := session.MemberStale(ctx, member)
+		stale, err := stale(member)
 		if err != nil {
 			return publicationView{}, err
 		}
 		view.Members = append(view.Members, publicationMemberView{TaskID: text.clean(member.TaskID), Revision: member.Revision, Generation: member.Generation, Confirmed: remote.MemberConfirmed(publication, member), Stale: stale})
 	}
+	var err error
 	if view.Payload, err = text.payload(publication); err != nil {
 		return publicationView{}, err
+	}
+	for _, run := range publication.CompactedRuns {
+		view.CompactedRuns = append(view.CompactedRuns, text.clean(run))
 	}
 	view.Sanitized = text.replaced
 	return view, nil

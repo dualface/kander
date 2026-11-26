@@ -51,4 +51,8 @@ type Publication struct {
 	CreatedAt   time.Time                      `json:"created_at"`
 	PublishedAt time.Time                      `json:"published_at,omitzero"`
 	Result      json.RawMessage                `json:"result,omitempty"`
+	// CompactedRuns lists, in a GET response only, the review runs the
+	// material names that a compaction has since removed large evidence from.
+	// It is never stored and is no part of the confirmed material.
+	CompactedRuns []string `json:"compacted_runs,omitempty"`
 }

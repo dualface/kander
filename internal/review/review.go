@@ -80,6 +80,18 @@ func runReview(options archiveOptions, args []string) (exitCode int) {
 			userError(config.Text("review.archive_invalid", "run identity conflict"))
 			return 2
 		}
+		if exists {
+			// A compacted run lost the inputs a replay compares, so it is refused
+			// before any authority, pin or Git check, and no reviewer starts.
+			compacted, e := store.Compacted(options.runID)
+			if e == nil && compacted {
+				e = errors.New(config.Text("board.review_run_compacted", options.runID))
+			}
+			if e != nil {
+				userError(e.Error())
+				return 2
+			}
+		}
 		replay = exists
 		existing = old
 	}

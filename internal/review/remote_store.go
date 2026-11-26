@@ -299,5 +299,13 @@ func (s *remoteReviewStore) status(id string) (bool, error) {
 	}
 	return value.NeedsInterpretation, err
 }
+func (s *remoteReviewStore) Compacted(id string) (bool, error) {
+	raw, err := s.session.Project.ReviewEvidence(context.Background(), id, "compaction", "")
+	var value api.ReviewCompaction
+	if err == nil {
+		err = json.Unmarshal(raw, &value)
+	}
+	return value.Compacted, err
+}
 
 var _ reviewStore = (*remoteReviewStore)(nil)

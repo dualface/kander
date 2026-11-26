@@ -26,6 +26,7 @@ type reviewStore interface {
 	Remaining([]string) ([]string, error)
 	Complete(string) error
 	NeedsInterpretation(string) (bool, error)
+	Compacted(string) (bool, error)
 }
 
 type localReviewStore struct{ root string }
@@ -79,6 +80,10 @@ func (s localReviewStore) Complete(id string) error {
 }
 func (s localReviewStore) NeedsInterpretation(id string) (bool, error) {
 	return board.ReviewNeedsInterpretation(s.root, id)
+}
+
+func (s localReviewStore) Compacted(id string) (bool, error) {
+	return board.ReviewRunCompacted(s.root, id)
 }
 
 func selectedReviewStore(root string, stores []reviewStore) reviewStore {
