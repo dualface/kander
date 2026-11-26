@@ -68,6 +68,7 @@ The user turns unattended mode on or off explicitly, for example in the `/kander
   - Installation of an environment or tool outside the worktree.
   - A stop condition that a card (for example a watchdog card) says to report to the user.
   - A decision on a card with `DECISION_MODE: assignee`. No delegated authorization overrides this mode.
+  - Changing a card's decision mode with `kander decision mode`. Run it only when the user's own words name the card and the target mode. Delegated authorization, unattended mode, and recommended options never authorize changing the mode.
   - An item with no recommended option and no supported approach after investigation.
 
   Before one of the first five actions, check the recorded authorization. If its verbatim wording names the action and its target, follow the approved procedure. The reserved categories 1, 2, and 4 above, and the decisions that Kander rules route to the user, follow their recommended option. Examples are archiving, review round caps, numbered confirmation points, dismissing executors, takeover and adoption, `coordinator recover`, group-member removal, and frozen-contract changes. A command that needs a user decision reference (`--decision`, `--contract-decision-file`, a recovery request, a review plan `decision`) cites the unattended-mode wording and the leader's decision record.

@@ -36,6 +36,7 @@ kander decision mode 20261118-example-task assignee
 
 - The project is bound to a server. Read this command contract before sending or recording a delegated answer.
 - Writes need a card outside `archived` and `trash`. These operations do not require a claim. The embedding host can deny any of them through the matching authorization route.
+- A Leader or an orchestration session runs `mode` only when the user's explicit instruction names the card and the target mode. Delegated authorization, unattended mode, and recommended options never authorize a mode change.
 
 ## Effects
 
