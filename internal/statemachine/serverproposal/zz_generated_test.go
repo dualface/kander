@@ -5,7 +5,7 @@ package serverproposal
 import (
 	"testing"
 
-	"github.com/dualface/kander/internal/statemachine/vectortest"
+	"github.com/dualface/kander/v2/internal/statemachine/vectortest"
 )
 
 var vectorParams = []Params{

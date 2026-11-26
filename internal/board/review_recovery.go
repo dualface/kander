@@ -4,7 +4,7 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/dualface/kander/internal/statemachine/reviewobligation"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewobligation"
 )
 
 // RecoveryReview is what a reset leaves on the member's review: the roles its plan

@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 func runRemoteResume(cfg *config.Config, agent *string, launcher, task, message, messageFile string, messageSet bool, timeout float64, options DispatchOptions) int {

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 // watchedGroupBoard builds a board with one subscription member, one watched

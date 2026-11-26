@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 // Windows paths compare case-insensitively, including URI spellings of states.

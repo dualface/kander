@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/probe"
-	"github.com/dualface/kander/internal/terminal"
-	"github.com/dualface/kander/internal/terminal/builtin"
+	"github.com/dualface/kander/v2/internal/probe"
+	"github.com/dualface/kander/v2/internal/terminal"
+	"github.com/dualface/kander/v2/internal/terminal/builtin"
 )
 
 func herdrCoreE2E(t *testing.T, env map[string]string) (terminal.Backend, terminal.Conn) {

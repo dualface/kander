@@ -10,11 +10,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/fs"
-	"github.com/dualface/kander/internal/version"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/fs"
+	"github.com/dualface/kander/v2/internal/version"
 )
 
 type archiveOptions struct {

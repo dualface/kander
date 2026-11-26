@@ -16,7 +16,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/version"
+	"github.com/dualface/kander/v2/internal/version"
 )
 
 func TestUpdateAssetName(t *testing.T) {

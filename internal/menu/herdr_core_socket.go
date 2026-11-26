@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // Every hc command, `hc server status` included, starts a missing core on

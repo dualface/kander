@@ -1,9 +1,9 @@
 package menu
 
 import (
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/install"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/install"
 )
 
 // confirmationsOf is the seam of doctorJSON: tests replace it to leave the probing of the

@@ -5,7 +5,7 @@ package tui
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/dualface/kander/internal/install/installtest"
+	"github.com/dualface/kander/v2/internal/install/installtest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,9 +18,9 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"golang.org/x/sys/unix"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/client"
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/client"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // ptySession runs kander inside a pseudo-terminal and answers capability queries like a real terminal would,

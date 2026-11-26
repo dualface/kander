@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 // Exercise OSC reports, labels, foreground facts and delivery against hc's

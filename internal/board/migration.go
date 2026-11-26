@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 // FormMigration is a redo operation owned by the normal board journal. Staging

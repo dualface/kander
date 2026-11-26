@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 func TestJournalPartitionCrashChild(t *testing.T) {

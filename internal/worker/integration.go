@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 // An integration lease belongs to the command process that can push the ref.

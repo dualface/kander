@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 // fakeTarget is the target resolution of a test: it fails with err while err is set,

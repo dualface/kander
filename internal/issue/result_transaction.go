@@ -4,7 +4,7 @@ import (
 	"errors"
 	"os"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 // ReadResultWorkInTransaction repeats work-set identity, readiness and evidence

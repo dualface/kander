@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 // RetainedExecution keeps routing and workspace facts after the secret is

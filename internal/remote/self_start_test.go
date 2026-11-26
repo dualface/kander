@@ -12,13 +12,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/client"
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/command/commandtest"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/fs"
-	"github.com/dualface/kander/internal/servicectl"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/client"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/command/commandtest"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/fs"
+	"github.com/dualface/kander/v2/internal/servicectl"
 )
 
 // forbiddenInput fails the test when anything reads a question answer.

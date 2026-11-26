@@ -9,7 +9,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 func readConfigBytes(path string) ([]byte, error) {

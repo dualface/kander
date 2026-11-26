@@ -1,7 +1,7 @@
 package launch
 
 import (
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // Error is a displayable failure of start/resume.

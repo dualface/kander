@@ -4,11 +4,11 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 // launchResult is the result object of kander start and kander resume when they launch an

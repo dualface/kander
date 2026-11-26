@@ -3,7 +3,7 @@ package remote
 import (
 	"testing"
 
-	"github.com/dualface/kander/api"
+	"github.com/dualface/kander/v2/api"
 )
 
 func TestClientIDPersists(t *testing.T) {

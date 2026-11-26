@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/statemachine/serverintegration"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/statemachine/serverintegration"
 )
 
 // The integration decisions are made by the generated kernel in

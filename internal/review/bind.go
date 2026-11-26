@@ -1,5 +1,5 @@
 package review
 
-import "github.com/dualface/kander/internal/cli"
+import "github.com/dualface/kander/v2/internal/cli"
 
 func init() { cli.Register(NewCommand) }

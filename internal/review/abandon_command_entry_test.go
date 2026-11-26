@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 // abandonRequest is the request `kander review abandon` reads for run.

@@ -10,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/fs"
-	rk "github.com/dualface/kander/internal/statemachine/issueresult"
-	dk "github.com/dualface/kander/internal/statemachine/issueresultdecision"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/fs"
+	rk "github.com/dualface/kander/v2/internal/statemachine/issueresult"
+	dk "github.com/dualface/kander/v2/internal/statemachine/issueresultdecision"
 )
 
 // Refinement tests of the issue result kernels: for every entrance that runs a

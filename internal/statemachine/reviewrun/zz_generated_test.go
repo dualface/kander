@@ -5,7 +5,7 @@ package reviewrun
 import (
 	"testing"
 
-	"github.com/dualface/kander/internal/statemachine/vectortest"
+	"github.com/dualface/kander/v2/internal/statemachine/vectortest"
 )
 
 var phaseNames = [PhaseCount]string{"none", "prepared", "launching", "running", "collecting", "cleaning", "finalized", "other"}

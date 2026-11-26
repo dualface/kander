@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
-	"github.com/dualface/kander/internal/focus"
+	"github.com/dualface/kander/v2/internal/focus"
 )
 
 func focusTestApp() *App {

@@ -10,8 +10,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 // add_members is a joint review write: the coordinator of the group asks for the

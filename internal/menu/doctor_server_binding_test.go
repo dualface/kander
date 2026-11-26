@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // The doctor repair path must keep a valid server binding in the scope file and

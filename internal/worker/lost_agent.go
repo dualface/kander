@@ -9,8 +9,8 @@ import (
 	"log/slog"
 	"slices"
 
-	"github.com/dualface/kander/internal/process"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/internal/process"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 // StopAgent is provided by the terminal layer. It verifies the locally recorded

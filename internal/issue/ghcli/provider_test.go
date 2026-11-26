@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/issue"
-	"github.com/dualface/kander/internal/issue/ghcli/ghclitest"
+	"github.com/dualface/kander/v2/internal/issue"
+	"github.com/dualface/kander/v2/internal/issue/ghcli/ghclitest"
 )
 
 type fakeResponse struct {

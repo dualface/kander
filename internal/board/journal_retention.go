@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 // Keep 100 recent commits for local diagnosis while bounding normal journal

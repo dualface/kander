@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // NewGuardWriteCommand builds kander guard-write, an advisory guard for client-side writes.

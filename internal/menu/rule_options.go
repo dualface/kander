@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // SetRules keeps both configuration UIs on the same validation and copy boundary.

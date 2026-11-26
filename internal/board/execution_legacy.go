@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 // legacyRecordID is a stable identity for a record that exists only in memory.

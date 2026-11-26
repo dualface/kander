@@ -8,11 +8,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/client"
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/probe"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/client"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/probe"
 )
 
 // GitSubmitter reads the Git name in the current working directory. Keep

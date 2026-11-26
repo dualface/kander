@@ -2,11 +2,11 @@
 package commands
 
 import (
-	_ "github.com/dualface/kander/internal/check"
-	_ "github.com/dualface/kander/internal/launch"
-	_ "github.com/dualface/kander/internal/liveness"
-	_ "github.com/dualface/kander/internal/notify"
-	_ "github.com/dualface/kander/internal/review"
-	_ "github.com/dualface/kander/internal/takeover"
-	_ "github.com/dualface/kander/internal/tui"
+	_ "github.com/dualface/kander/v2/internal/check"
+	_ "github.com/dualface/kander/v2/internal/launch"
+	_ "github.com/dualface/kander/v2/internal/liveness"
+	_ "github.com/dualface/kander/v2/internal/notify"
+	_ "github.com/dualface/kander/v2/internal/review"
+	_ "github.com/dualface/kander/v2/internal/takeover"
+	_ "github.com/dualface/kander/v2/internal/tui"
 )

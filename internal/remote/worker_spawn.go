@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/dualface/kander/internal/fs"
-	"github.com/dualface/kander/internal/process"
-	"github.com/dualface/kander/internal/version"
+	"github.com/dualface/kander/v2/internal/fs"
+	"github.com/dualface/kander/v2/internal/process"
+	"github.com/dualface/kander/v2/internal/version"
 )
 
 // WorkerLockName is the lock one worker per client home holds while it runs.

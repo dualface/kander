@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // These checks apply only to new closures. Historical verification retains the

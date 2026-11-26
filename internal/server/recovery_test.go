@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/client"
 )
 
 func openTest(t *testing.T, dir string, now func() time.Time) (*Server, *httptest.Server) {

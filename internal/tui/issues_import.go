@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/dualface/kander/internal/issue"
+	"github.com/dualface/kander/v2/internal/issue"
 )
 
 // Import and launch settle together even if the user closes the overlay. The

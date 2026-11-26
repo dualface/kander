@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/fs"
-	"github.com/dualface/kander/internal/probe"
-	"github.com/dualface/kander/internal/remote"
-	"github.com/dualface/kander/internal/version"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/fs"
+	"github.com/dualface/kander/v2/internal/probe"
+	"github.com/dualface/kander/v2/internal/remote"
+	"github.com/dualface/kander/v2/internal/version"
 )
 
 const (

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	dispatchkernel "github.com/dualface/kander/internal/statemachine/dispatch"
+	dispatchkernel "github.com/dualface/kander/v2/internal/statemachine/dispatch"
 )
 
 // DispatchIntegration is produced by the Git-aware launch layer. Board verifies

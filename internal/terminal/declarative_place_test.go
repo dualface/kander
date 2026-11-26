@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/terminal/terminaltest"
+	"github.com/dualface/kander/v2/internal/terminal/terminaltest"
 )
 
 func placeBackend(t *testing.T, hook string, change func(root map[string]any)) *DeclarativeBackend {

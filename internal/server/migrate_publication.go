@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 // importPublication is control/import-pending.json. StagedDigest is the digest

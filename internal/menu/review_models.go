@@ -1,6 +1,6 @@
 package menu
 
-import "github.com/dualface/kander/internal/config"
+import "github.com/dualface/kander/v2/internal/config"
 
 // setReviewRoleSelection writes both values with their owner. Project edits also
 // pin the reviewer so later Global changes cannot reinterpret these overrides.

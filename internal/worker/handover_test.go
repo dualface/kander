@@ -18,11 +18,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/api"
-	kfs "github.com/dualface/kander/internal/fs"
-	"github.com/dualface/kander/internal/process"
-	"github.com/dualface/kander/internal/remote"
-	"github.com/dualface/kander/internal/version"
+	"github.com/dualface/kander/v2/api"
+	kfs "github.com/dualface/kander/v2/internal/fs"
+	"github.com/dualface/kander/v2/internal/process"
+	"github.com/dualface/kander/v2/internal/remote"
+	"github.com/dualface/kander/v2/internal/version"
 )
 
 const (

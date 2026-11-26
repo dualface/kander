@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/terminal/builtin"
+	"github.com/dualface/kander/v2/internal/terminal/builtin"
 )
 
 // TestEmbeddedLuvusConformance runs the embedded luvus definition against the

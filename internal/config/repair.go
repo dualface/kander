@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 // RepairResult records what doctor changed in the on-disk config, without holding any config value.

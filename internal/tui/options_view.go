@@ -8,7 +8,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/dualface/kander/internal/version"
+	"github.com/dualface/kander/v2/internal/version"
 )
 
 // innerWidth is the number of writable columns inside the popup border; rendering and measuring must use the same value.

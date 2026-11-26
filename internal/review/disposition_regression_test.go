@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 func commandOK(t *testing.T, args ...string) string {

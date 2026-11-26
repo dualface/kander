@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 func gitCommand(arguments []string, cwd, inputText string) (stdout, stderr string, code int, err error) {

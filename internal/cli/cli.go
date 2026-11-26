@@ -12,13 +12,13 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/install"
-	"github.com/dualface/kander/internal/menu"
-	"github.com/dualface/kander/internal/remote"
-	"github.com/dualface/kander/internal/terminalcheck"
-	"github.com/dualface/kander/internal/version"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/install"
+	"github.com/dualface/kander/v2/internal/menu"
+	"github.com/dualface/kander/v2/internal/remote"
+	"github.com/dualface/kander/v2/internal/terminalcheck"
+	"github.com/dualface/kander/v2/internal/version"
 )
 
 // builders construct the top-level commands. A tree is built for every Run, so no flag state

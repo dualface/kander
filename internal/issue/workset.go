@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 // sourceIssueLine is the sibling marker of KANDER-ISSUE-RULES.md. A line

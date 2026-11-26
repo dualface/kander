@@ -9,9 +9,9 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/menu"
-	"github.com/dualface/kander/internal/terminal/builtin"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/menu"
+	"github.com/dualface/kander/v2/internal/terminal/builtin"
 )
 
 // formBinding holds the mutable values bound to a Huh form. Huh needs stable pointers,

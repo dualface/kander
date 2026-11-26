@@ -2,13 +2,13 @@ package worker
 
 import (
 	"errors"
-	"github.com/dualface/kander/api"
+	"github.com/dualface/kander/v2/api"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 func TestWorkerStopsLateAgentFactsWithoutRepeatingUncertainEffect(t *testing.T) {

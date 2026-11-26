@@ -1,7 +1,7 @@
 package server
 
 import (
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 	"net/http"
 )
 

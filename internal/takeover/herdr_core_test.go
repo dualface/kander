@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/launch"
+	"github.com/dualface/kander/v2/internal/launch"
 )
 
 // writeFakeHC installs an hc whose terminal t8 runs claude with session s1

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/probe"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/probe"
 )
 
 // Bounds keep the search for a replayed range finite. A range or a target

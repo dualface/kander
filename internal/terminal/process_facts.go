@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // ForegroundProcess identifies a process the backend observes in a pane's job.

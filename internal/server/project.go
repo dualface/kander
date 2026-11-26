@@ -10,10 +10,10 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/server/taskindex"
-	"github.com/dualface/kander/internal/statemachine/serverclaim"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/server/taskindex"
+	"github.com/dualface/kander/v2/internal/statemachine/serverclaim"
 )
 
 // project is one registered project: its board below the data directory and

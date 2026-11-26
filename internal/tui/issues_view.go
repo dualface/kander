@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/dualface/kander/internal/issue"
+	"github.com/dualface/kander/v2/internal/issue"
 )
 
 // issuesLayout is the shared geometry of the issues overlay. Rendering, list

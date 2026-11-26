@@ -3,7 +3,7 @@ package notify
 import (
 	"context"
 
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 // AgentPrompt delivers the body to the agent TUI already running in the pane, without using pane run.

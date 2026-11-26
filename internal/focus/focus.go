@@ -7,10 +7,10 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/probe"
-	"github.com/dualface/kander/internal/terminal"
-	_ "github.com/dualface/kander/internal/terminal/builtin"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/probe"
+	"github.com/dualface/kander/v2/internal/terminal"
+	_ "github.com/dualface/kander/v2/internal/terminal/builtin"
 )
 
 // Result distinguishes a completed switch from a failure, with a localized notice.

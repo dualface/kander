@@ -8,8 +8,8 @@ import (
 	"embed"
 	"path"
 
-	"github.com/dualface/kander/internal/terminal"
-	"github.com/dualface/kander/internal/terminal/direct"
+	"github.com/dualface/kander/v2/internal/terminal"
+	"github.com/dualface/kander/v2/internal/terminal/direct"
 )
 
 // Launcher names and tool constants of the embedded definitions, for the

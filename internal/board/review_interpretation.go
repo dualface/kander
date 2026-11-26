@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/statemachine/reviewfindings"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewfindings"
 )
 
 // FindingsSchemaReceiver keeps report formatting separate from execution facts.

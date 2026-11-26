@@ -1,8 +1,8 @@
 package menu
 
 import (
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/install"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/install"
 )
 
 // rulesIntegration reports whether the agent rules file references the Kander entry of the scope.

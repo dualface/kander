@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // codexScanFixture returns the sessions root and launch directory of a fresh board.

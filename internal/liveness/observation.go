@@ -1,6 +1,6 @@
 package liveness
 
-import "github.com/dualface/kander/internal/board"
+import "github.com/dualface/kander/v2/internal/board"
 
 // ObservationIdentity binds a result to its input, not to a later card with the
 // same task ID. These fields are correlation evidence, not authentication.

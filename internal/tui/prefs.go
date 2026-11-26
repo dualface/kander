@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // uiPrefs is the UI preference view used inside the TUI; persistence goes through config.json alone.

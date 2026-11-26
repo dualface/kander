@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/liveness"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/liveness"
 
 	"golang.org/x/sys/unix"
 )

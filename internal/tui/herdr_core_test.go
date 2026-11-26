@@ -9,8 +9,8 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 // A herdr-core card is observed like a herdr or luvus card: its terminal

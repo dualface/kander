@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // The golden transcripts pin what install, doctor and uninstall write and print for every

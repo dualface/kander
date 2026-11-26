@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/install/installtest"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/install/installtest"
 )
 
 func hasWarning(lines []ReportLine) bool {

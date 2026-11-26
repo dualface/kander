@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 // refusalDelay is the time the server takes to refuse the forged renewal.

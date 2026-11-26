@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 // fakeLuvusScript answers the luvus CLI commands of the embedded definition.

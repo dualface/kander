@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/install"
-	"github.com/dualface/kander/internal/probe"
-	"github.com/dualface/kander/internal/process"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/install"
+	"github.com/dualface/kander/v2/internal/probe"
+	"github.com/dualface/kander/v2/internal/process"
 )
 
 type agentState struct {

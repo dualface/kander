@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/issue"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/issue"
 )
 
 // exitUnresolved separates an unresolved start from a failed one (1) and a usage

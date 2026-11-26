@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 func TestRemoteLostClaimResponseRecoversOriginalKeyWithoutLaunching(t *testing.T) {

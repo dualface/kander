@@ -1,6 +1,6 @@
 package liveness
 
-import "github.com/dualface/kander/internal/command/commandtest"
+import "github.com/dualface/kander/v2/internal/command/commandtest"
 
 // parseSubscribeArgs runs the argument handling of kander subscribe on args and returns the
 // subscription it would start, or the report of the argument error.

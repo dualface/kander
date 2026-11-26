@@ -5,8 +5,8 @@ import (
 	"errors"
 	"path/filepath"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 // ExecutionContext retains launcher facts before an orchestrator claims a

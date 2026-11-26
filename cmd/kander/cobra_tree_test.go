@@ -14,12 +14,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"github.com/dualface/kander/internal/cli"
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/command/commandtest"
-	"github.com/dualface/kander/internal/remote"
-	"github.com/dualface/kander/internal/servicectl"
-	"github.com/dualface/kander/rules"
+	"github.com/dualface/kander/v2/internal/cli"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/command/commandtest"
+	"github.com/dualface/kander/v2/internal/remote"
+	"github.com/dualface/kander/v2/internal/servicectl"
+	"github.com/dualface/kander/v2/rules"
 )
 
 const sampleTask = "20261118-sample-task"

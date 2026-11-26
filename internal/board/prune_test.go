@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 // pruneCard creates a working directory card, optionally in a task group.

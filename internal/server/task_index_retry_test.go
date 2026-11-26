@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/api"
+	"github.com/dualface/kander/v2/api"
 )
 
 func TestTaskIndexWriteWakesWaitingRebuild(t *testing.T) {

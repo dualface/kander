@@ -3,7 +3,7 @@ package review
 import (
 	"strings"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 func parseReviewRole(roleInput string) (string, bool) {

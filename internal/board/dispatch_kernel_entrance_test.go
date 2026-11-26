@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	dispatchkernel "github.com/dualface/kander/internal/statemachine/dispatch"
+	dispatchkernel "github.com/dualface/kander/v2/internal/statemachine/dispatch"
 )
 
 // projectDispatchAt is the slot of card id with the record named record (none

@@ -10,10 +10,10 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/i18n"
-	"github.com/dualface/kander/internal/server/taskindex"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/i18n"
+	"github.com/dualface/kander/v2/internal/server/taskindex"
 )
 
 const taskListRoute = "GET /api/v1/projects/{project}/tasks"

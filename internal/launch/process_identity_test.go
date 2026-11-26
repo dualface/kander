@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/liveness"
-	"github.com/dualface/kander/internal/process"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/liveness"
+	"github.com/dualface/kander/v2/internal/process"
 )
 
 func stillRunning() bool { return true }

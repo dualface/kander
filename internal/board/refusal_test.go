@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/statemachine/reviewplan"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewplan"
 )
 
 // english renders the refusal texts in English so the tests can name the values.

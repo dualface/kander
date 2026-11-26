@@ -3,9 +3,9 @@ package board
 import (
 	"math"
 
-	"github.com/dualface/kander/internal/statemachine/coordinator"
-	"github.com/dualface/kander/internal/statemachine/coordmember"
-	"github.com/dualface/kander/internal/statemachine/wrapupwitness"
+	"github.com/dualface/kander/v2/internal/statemachine/coordinator"
+	"github.com/dualface/kander/v2/internal/statemachine/coordmember"
+	"github.com/dualface/kander/v2/internal/statemachine/wrapupwitness"
 )
 
 // The accept and refuse decisions of a coordinator checkpoint are made by three

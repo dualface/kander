@@ -9,14 +9,14 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/focus"
-	"github.com/dualface/kander/internal/install"
-	"github.com/dualface/kander/internal/issue"
-	"github.com/dualface/kander/internal/launch"
-	"github.com/dualface/kander/internal/liveness"
-	"github.com/dualface/kander/internal/menu"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/focus"
+	"github.com/dualface/kander/v2/internal/install"
+	"github.com/dualface/kander/v2/internal/issue"
+	"github.com/dualface/kander/v2/internal/launch"
+	"github.com/dualface/kander/v2/internal/liveness"
+	"github.com/dualface/kander/v2/internal/menu"
 )
 
 type copyFn func(string) (bool, string)

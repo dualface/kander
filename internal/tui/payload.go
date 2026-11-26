@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 func loadBoardPayload(root string) (BoardPayload, error) {

@@ -3,7 +3,7 @@
 package servicectl
 
 import (
-	"github.com/dualface/kander/api"
+	"github.com/dualface/kander/v2/api"
 	"net"
 	"net/url"
 	"os"

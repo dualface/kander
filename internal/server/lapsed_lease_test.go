@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/client"
 )
 
 // lapsedTask claims a todo task for host-a and lets its lease lapse.

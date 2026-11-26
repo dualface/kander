@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/command"
+	"github.com/dualface/kander/v2/internal/command"
 )
 
 const (

@@ -4,9 +4,9 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // Message renders one issue error as a localized, actionable sentence without

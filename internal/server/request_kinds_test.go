@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 // The server stores and lists the kinds a client sends: a note without a

@@ -3,9 +3,9 @@ package launch
 import (
 	"context"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/liveness"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/liveness"
 )
 
 // DispatchOptions opt working/generic messages into the durable protocol. A

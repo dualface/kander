@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // rulesEntryTokenRE extracts a path token ending in KANDER-AGENTS.md. The character class is

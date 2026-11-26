@@ -5,10 +5,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/dualface/kander/internal/launch"
-	"github.com/dualface/kander/internal/probe"
-	"github.com/dualface/kander/internal/terminal"
-	"github.com/dualface/kander/internal/terminal/builtin"
+	"github.com/dualface/kander/v2/internal/launch"
+	"github.com/dualface/kander/v2/internal/probe"
+	"github.com/dualface/kander/v2/internal/terminal"
+	"github.com/dualface/kander/v2/internal/terminal/builtin"
 )
 
 // exitResponseBackend makes the malformed response arrive after the exit prompt.

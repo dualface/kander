@@ -20,8 +20,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/dualface/kander/internal/fs"
-	"github.com/dualface/kander/rules"
+	"github.com/dualface/kander/v2/internal/fs"
+	"github.com/dualface/kander/v2/rules"
 )
 
 const (

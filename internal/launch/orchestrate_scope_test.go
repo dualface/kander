@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // orchestrateGroupBoard builds a board holding a two-member group plus one card

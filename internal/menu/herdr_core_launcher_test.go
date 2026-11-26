@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // fakeHC answers --version only: doctor must not ask hc about the core,

@@ -5,11 +5,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/process"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/process"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 func remoteOrchestrateBoard(ctx context.Context, cfg *config.Config) (board.Board, *remote.Session, string, error) {

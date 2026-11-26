@@ -9,8 +9,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/dualface/kander/internal/fs"
-	"github.com/dualface/kander/internal/statemachine/executionledger"
+	"github.com/dualface/kander/v2/internal/fs"
+	"github.com/dualface/kander/v2/internal/statemachine/executionledger"
 )
 
 type claimRecord struct {

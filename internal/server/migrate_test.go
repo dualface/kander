@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/client"
 )
 
 // v1Board builds a v1 board with a backlog card and a working card.

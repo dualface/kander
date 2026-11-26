@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/server"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/server"
 )
 
 const ignoredLogMessage = "the configuration holds a setting this version ignores"

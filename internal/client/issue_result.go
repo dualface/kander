@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/dualface/kander/api"
+	"github.com/dualface/kander/v2/api"
 )
 
 func (p *Project) IssueResult(ctx context.Context, input api.IssueResultQuery) (api.IssueResultState, error) {

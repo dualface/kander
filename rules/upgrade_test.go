@@ -10,9 +10,9 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/install"
-	"github.com/dualface/kander/rules"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/install"
+	"github.com/dualface/kander/v2/rules"
 )
 
 // The archive preserves the four changed official rule files byte-for-byte from

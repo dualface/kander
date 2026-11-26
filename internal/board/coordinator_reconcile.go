@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"strconv"
 
-	"github.com/dualface/kander/internal/statemachine/wrapupwitness"
+	"github.com/dualface/kander/v2/internal/statemachine/wrapupwitness"
 )
 
 // reconcileCoordinatorMember judges one member alone. The mirror kernel decides

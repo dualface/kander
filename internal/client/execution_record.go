@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 func (p *Project) ExecutionRecord(ctx context.Context, task string) (board.ExecutionRecord, error) {

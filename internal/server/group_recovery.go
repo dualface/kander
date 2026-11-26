@@ -7,10 +7,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/statemachine/serverclaim"
-	"github.com/dualface/kander/internal/statemachine/servergrouplease"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/statemachine/serverclaim"
+	"github.com/dualface/kander/v2/internal/statemachine/servergrouplease"
 )
 
 func errOwnedRecoveryNotStopped() error {

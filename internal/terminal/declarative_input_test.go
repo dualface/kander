@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/probe"
+	"github.com/dualface/kander/v2/internal/probe"
 )
 
 func TestDeclarativeLiteralInput(t *testing.T) {

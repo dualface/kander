@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/launch"
-	"github.com/dualface/kander/internal/process"
-	"github.com/dualface/kander/internal/terminal"
-	"github.com/dualface/kander/internal/worker"
+	"github.com/dualface/kander/v2/internal/launch"
+	"github.com/dualface/kander/v2/internal/process"
+	"github.com/dualface/kander/v2/internal/terminal"
+	"github.com/dualface/kander/v2/internal/worker"
 )
 
 func init() { worker.StopAgent = stopWorkerAgent }

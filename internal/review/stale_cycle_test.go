@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 const staleCycleGroup = "20260907-stale-group"

@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/probe"
-	"github.com/dualface/kander/internal/process"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/probe"
+	"github.com/dualface/kander/v2/internal/process"
 )
 
 // A session provider owns how one session mechanism names the session of an

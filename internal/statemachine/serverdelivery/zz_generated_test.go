@@ -5,7 +5,7 @@ package serverdelivery
 import (
 	"testing"
 
-	"github.com/dualface/kander/internal/statemachine/vectortest"
+	"github.com/dualface/kander/v2/internal/statemachine/vectortest"
 )
 
 var recNames = [RecCount]string{"none", "delivery", "baseline"}

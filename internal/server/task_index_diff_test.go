@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 // scanList is the file-scan implementation used before SQLite. It is kept

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // stubStartupBackground pins the one-time startup probe and clears any runtime

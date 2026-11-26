@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 const leaderPID = 4242

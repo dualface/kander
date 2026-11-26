@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/probe"
-	"github.com/dualface/kander/internal/terminal/terminaltest"
+	"github.com/dualface/kander/v2/internal/probe"
+	"github.com/dualface/kander/v2/internal/terminal/terminaltest"
 )
 
 // agentPaneFacts reads the herdr style pane get response: agent identity,

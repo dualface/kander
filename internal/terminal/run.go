@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/probe"
+	"github.com/dualface/kander/v2/internal/probe"
 )
 
 // ProbeRunner bounds a command with the caller deadline or the default probe

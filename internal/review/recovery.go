@@ -4,7 +4,7 @@ import (
 	"context"
 	"reflect"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 // VerifyClosedReviewGit rechecks historical closure edges and mechanical diffs

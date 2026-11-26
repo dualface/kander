@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 type identityBackend struct {

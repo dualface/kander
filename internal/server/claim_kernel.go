@@ -5,8 +5,8 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/statemachine/serverclaim"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/statemachine/serverclaim"
 )
 
 // The claim record decisions are made by the generated kernel in

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // A takeover of 1.0.0 left the start attempt pending under a card that names the

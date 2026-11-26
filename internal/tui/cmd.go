@@ -10,15 +10,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/cli"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/install"
-	"github.com/dualface/kander/internal/issue"
-	"github.com/dualface/kander/internal/launch"
-	"github.com/dualface/kander/internal/menu"
-	"github.com/dualface/kander/internal/remote"
-	"github.com/dualface/kander/internal/version"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/cli"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/install"
+	"github.com/dualface/kander/v2/internal/issue"
+	"github.com/dualface/kander/v2/internal/launch"
+	"github.com/dualface/kander/v2/internal/menu"
+	"github.com/dualface/kander/v2/internal/remote"
+	"github.com/dualface/kander/v2/internal/version"
 )
 
 func init() {

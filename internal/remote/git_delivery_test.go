@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/client"
-	"github.com/dualface/kander/internal/remote"
-	"github.com/dualface/kander/internal/server"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/client"
+	"github.com/dualface/kander/v2/internal/remote"
+	"github.com/dualface/kander/v2/internal/server"
 )
 
 func deliveryGit(t *testing.T, dir string, args ...string) string {

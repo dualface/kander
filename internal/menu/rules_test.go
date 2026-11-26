@@ -1,13 +1,13 @@
 package menu
 
 import (
-	"github.com/dualface/kander/internal/install/installtest"
+	"github.com/dualface/kander/v2/internal/install/installtest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 func writeRulesFile(t *testing.T, path, contents string) {

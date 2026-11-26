@@ -10,10 +10,10 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/client"
-	"github.com/dualface/kander/internal/issue"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/client"
+	"github.com/dualface/kander/v2/internal/issue"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 func TestIssueResultPublishedReceiptSurvivesResponseLossAndServerRestart(t *testing.T) {

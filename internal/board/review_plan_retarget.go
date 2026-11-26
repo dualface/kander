@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/dualface/kander/internal/statemachine/reviewplan"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewplan"
 )
 
 // ReviewBatchRetarget corrects the base and target of a planned batch that never

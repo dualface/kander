@@ -9,10 +9,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/i18n"
-	"github.com/dualface/kander/internal/issue"
-	"github.com/dualface/kander/internal/launch"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/i18n"
+	"github.com/dualface/kander/v2/internal/issue"
+	"github.com/dualface/kander/v2/internal/launch"
 )
 
 func missingBoardApp(t *testing.T) *App {

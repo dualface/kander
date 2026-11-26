@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 // renewConcurrency is the most renewals in flight at once. The server

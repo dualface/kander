@@ -9,10 +9,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/command/commandtest"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/command/commandtest"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 // fakeReceipts is the read-only view of the receipts that refuseBeforeSession reads.

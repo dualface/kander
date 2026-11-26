@@ -1,9 +1,9 @@
 package builtin
 
 import (
-	"github.com/dualface/kander/internal/terminal"
-	"github.com/dualface/kander/internal/terminal/herdr"
-	"github.com/dualface/kander/internal/terminal/herdrcore"
+	"github.com/dualface/kander/v2/internal/terminal"
+	"github.com/dualface/kander/v2/internal/terminal/herdr"
+	"github.com/dualface/kander/v2/internal/terminal/herdrcore"
 )
 
 type builtinHook struct {

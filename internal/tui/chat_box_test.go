@@ -9,9 +9,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/focus"
-	"github.com/dualface/kander/internal/launch"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/focus"
+	"github.com/dualface/kander/v2/internal/launch"
 )
 
 // chatApp builds a board app with fake chat bindings. start answers every

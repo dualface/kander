@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dualface/kander/internal/command"
+	"github.com/dualface/kander/v2/internal/command"
 )
 
 // Run executes c under a fresh root with args and returns the process exit code.

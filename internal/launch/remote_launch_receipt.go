@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/client"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/process"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/client"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/process"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 func recoverRemoteLaunch(ctx context.Context, service *remote.Session, journal *remote.ActionJournal) error {

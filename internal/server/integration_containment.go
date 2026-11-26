@@ -3,7 +3,7 @@ package server
 import (
 	"reflect"
 
-	"github.com/dualface/kander/api"
+	"github.com/dualface/kander/v2/api"
 )
 
 // integrationContainmentEdges checks that the containment fields of a request

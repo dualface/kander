@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 // ExecutionWorktree is host-private routing data. Each generation owns a new

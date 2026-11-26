@@ -1,6 +1,6 @@
 package tui
 
-import "github.com/dualface/kander/internal/config"
+import "github.com/dualface/kander/v2/internal/config"
 
 func (p *optionsPanel) scopeTUI() config.TUI {
 	if p.session != nil && p.session.Config != nil {

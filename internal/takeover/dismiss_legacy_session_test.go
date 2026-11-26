@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 // legacyCodexDismiss is a done card of a Codex execution that a remote start

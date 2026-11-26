@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/issue"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/issue"
 )
 
 func TestIssueResultDoneDispatchAndConfirmation(t *testing.T) {

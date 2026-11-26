@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // RulesChange is the change an install would make to one file of the rules injection.

@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // SelectTask preserves the interactive pick/start selection over a service

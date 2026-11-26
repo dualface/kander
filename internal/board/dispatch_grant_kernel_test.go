@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	dispatchkernel "github.com/dualface/kander/internal/statemachine/dispatch"
+	dispatchkernel "github.com/dualface/kander/v2/internal/statemachine/dispatch"
 )
 
 // The wrap-up grant and the settlement of a completed binding are decided by the

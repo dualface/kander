@@ -8,11 +8,11 @@ import (
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/launch"
-	"github.com/dualface/kander/internal/remote"
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/launch"
+	"github.com/dualface/kander/v2/internal/remote"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 type startRequest struct {

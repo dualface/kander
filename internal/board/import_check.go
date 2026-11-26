@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 // ImportFinding is one board check problem that an import accepts: every card

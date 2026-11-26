@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"reflect"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 func (p *project) groupWrite(key, operation, group string, request any, h holder, apply func(board.TransactionExtension) (board.CoordinatorCheckpoint, error)) outcome {

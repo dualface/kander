@@ -7,8 +7,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/client"
 )
 
 // errTargetMoved reports that the target changed while a new attempt was being

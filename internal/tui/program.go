@@ -10,7 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"golang.org/x/term"
 
-	"github.com/dualface/kander/internal/install"
+	"github.com/dualface/kander/v2/internal/install"
 )
 
 // mouseButtons is a terminal-library-independent button set, so tests can build events directly.

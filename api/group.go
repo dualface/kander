@@ -1,6 +1,6 @@
 package api
 
-import "github.com/dualface/kander/internal/board"
+import "github.com/dualface/kander/v2/internal/board"
 
 // GroupClaim binds the public checkpoint identity to a private coordinator
 // lease. The checkpoint token itself remains a public session label.

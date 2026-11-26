@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/probe"
+	"github.com/dualface/kander/v2/internal/probe"
 )
 
 // Runner executes one argv command. Callers choose the runner per call site so

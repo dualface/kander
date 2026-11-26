@@ -3,7 +3,7 @@ package board
 import (
 	"context"
 
-	"github.com/dualface/kander/internal/statemachine/cardlifecycle"
+	"github.com/dualface/kander/v2/internal/statemachine/cardlifecycle"
 )
 
 // Scan reads a coordinated committed view with blocking lock acquisition.

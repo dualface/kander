@@ -1,7 +1,7 @@
 // Package flow describes configured execution and review assignments without performing actions.
 package flow
 
-import "github.com/dualface/kander/internal/config"
+import "github.com/dualface/kander/v2/internal/config"
 
 // Review stage names, in the order the review rules run them.
 const (

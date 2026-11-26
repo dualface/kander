@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/statemachine/reviewrun"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewrun"
 )
 
 // runStates is the kernel state of one run as each member sees it, with the

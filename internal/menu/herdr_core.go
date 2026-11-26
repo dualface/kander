@@ -3,9 +3,9 @@ package menu
 import (
 	"strings"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/terminal"
-	"github.com/dualface/kander/internal/terminal/builtin"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/terminal"
+	"github.com/dualface/kander/v2/internal/terminal/builtin"
 )
 
 // herdrCoreUnsupported reports whether the active definition, which a user

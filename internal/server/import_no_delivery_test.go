@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 // A v1 board whose unfinished card holds the closure of a no-delivery batch

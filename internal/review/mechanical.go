@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 func verifyMechanicalGit(cwd string, v board.ReviewBatchView, r board.ReviewCloseRequest) ([]board.ReviewMechanicalGit, error) {

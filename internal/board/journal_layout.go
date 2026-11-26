@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 var journalName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*\.json$`)

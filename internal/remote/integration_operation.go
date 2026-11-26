@@ -8,9 +8,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/client"
-	"github.com/dualface/kander/internal/process"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/client"
+	"github.com/dualface/kander/v2/internal/process"
 )
 
 // confirmObservations bounds how often a confirmation observes a target that

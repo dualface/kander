@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 // ExtensionStatus reports what InspectExtension or EnsureExtension found at one

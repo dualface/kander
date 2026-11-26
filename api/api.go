@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 // ProtocolVersion is the wire protocol this build speaks. MinProtocolVersion is

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 func TestSubscriptionPendingExecutorExits(t *testing.T) {

@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/client"
-	"github.com/dualface/kander/internal/server"
-	"github.com/dualface/kander/internal/statemachine/serverintegration"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/client"
+	"github.com/dualface/kander/v2/internal/server"
+	"github.com/dualface/kander/v2/internal/statemachine/serverintegration"
 )
 
 // integrationProbe projects the integration record of the target v2 before and

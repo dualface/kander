@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 // pruneControlGroup holds archive cleanup intents and per-card receipts.

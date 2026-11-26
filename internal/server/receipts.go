@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dualface/kander/api"
+	"github.com/dualface/kander/v2/api"
 )
 
 // receipt is the durable outcome of one idempotent write. A pending receipt

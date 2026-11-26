@@ -12,7 +12,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dualface/kander/api"
+	"github.com/dualface/kander/v2/api"
 )
 
 const configBoardPath = "/srv/kander/projects/golf-625fe74cad4600b5/board"

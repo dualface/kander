@@ -3,7 +3,7 @@ package tui
 import (
 	"github.com/charmbracelet/huh"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // noteUnknownKanbanAgent shows the legacy kanban_agent when it names an agent this

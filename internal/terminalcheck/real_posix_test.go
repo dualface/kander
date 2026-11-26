@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/terminal/builtin"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/terminal/builtin"
 )
 
 func TestEmbeddedTmuxConformance(t *testing.T) {

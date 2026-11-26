@@ -13,9 +13,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/client"
-	"github.com/dualface/kander/server"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/client"
+	"github.com/dualface/kander/v2/server"
 )
 
 type transportFunc func(*http.Request) (*http.Response, error)

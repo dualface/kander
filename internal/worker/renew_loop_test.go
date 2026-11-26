@@ -14,9 +14,9 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/client"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/client"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 // waitCap bounds every wait on a channel event. It only matters when the test

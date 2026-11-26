@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 const pinHeader = "# Card\n\n- TYPE: Chore\n- SIZE: small\n- OWNER:\n- RESULT:\n"

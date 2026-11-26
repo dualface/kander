@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/command/commandtest"
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/command/commandtest"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 func TestEveryBackendMethodHasCheck(t *testing.T) {

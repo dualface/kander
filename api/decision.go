@@ -1,6 +1,6 @@
 package api
 
-import "github.com/dualface/kander/internal/board"
+import "github.com/dualface/kander/v2/internal/board"
 
 type (
 	DecisionMode          = board.DecisionMode

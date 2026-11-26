@@ -3,11 +3,11 @@ package notify
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/dualface/kander/internal/cli"
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/launch"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/internal/cli"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/launch"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 func init() {

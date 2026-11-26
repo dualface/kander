@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/probe"
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/probe"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 func TestHerdrCoreListProtocol(t *testing.T) {

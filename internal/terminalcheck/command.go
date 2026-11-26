@@ -8,10 +8,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/terminal"
-	_ "github.com/dualface/kander/internal/terminal/builtin"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/terminal"
+	_ "github.com/dualface/kander/v2/internal/terminal/builtin"
 )
 
 // NewCommand builds kander terminal, whose list and test subcommands never require or create

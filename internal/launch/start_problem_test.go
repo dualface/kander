@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 const startProblemCard = "# Start problem\n\n- TYPE: Feature\n- SIZE: small\n- TASK_GROUP: GROUP\n- LANGUAGE: en\n\n" +

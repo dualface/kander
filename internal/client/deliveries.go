@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/dualface/kander/api"
+	"github.com/dualface/kander/v2/api"
 )
 
 func (p *Project) PublishDelivery(ctx context.Context, key string, input api.DeliveryEvidence, proof Claim) (api.DeliveryEvidence, error) {

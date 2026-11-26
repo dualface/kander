@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/probe"
-	"github.com/dualface/kander/internal/process"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/probe"
+	"github.com/dualface/kander/v2/internal/process"
 )
 
 // errorRule is one parsed errors.gone or errors.meta_missing rule.

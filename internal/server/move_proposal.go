@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 // refuseBareMoveOfProposal is the guard of a plain move from review into

@@ -4,9 +4,9 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/remote"
-	"github.com/dualface/kander/internal/version"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/remote"
+	"github.com/dualface/kander/v2/internal/version"
 )
 
 // reportBackgroundWorker reports the v2 background worker of this client and

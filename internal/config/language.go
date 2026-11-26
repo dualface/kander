@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"github.com/dualface/kander/internal/i18n"
+	"github.com/dualface/kander/v2/internal/i18n"
 )
 
 var (

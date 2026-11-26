@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/dualface/kander/internal/issue/ghcli/ghclitest"
+	"github.com/dualface/kander/v2/internal/issue/ghcli/ghclitest"
 )
 
 // TestMain turns the test binary into the fake `gh`/`git` program when a parent

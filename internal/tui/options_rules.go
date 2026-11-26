@@ -4,7 +4,7 @@ import (
 	"reflect"
 
 	"github.com/charmbracelet/huh"
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // The workflow presets only manage this list; standalone modules are rendered separately and take part in neither preset application nor matching.

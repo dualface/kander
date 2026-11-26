@@ -4,7 +4,7 @@ import (
 	"math"
 	"slices"
 
-	"github.com/dualface/kander/internal/statemachine/executionledger"
+	"github.com/dualface/kander/v2/internal/statemachine/executionledger"
 )
 
 // The execution ledger decisions of a card are made by the generated kernel in

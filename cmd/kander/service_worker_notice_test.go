@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/remote"
-	"github.com/dualface/kander/internal/version"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/remote"
+	"github.com/dualface/kander/v2/internal/version"
 )
 
 // The fixture runs a worker that holds worker.lock and records this binary's

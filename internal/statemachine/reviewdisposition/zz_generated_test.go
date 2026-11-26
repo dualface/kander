@@ -5,7 +5,7 @@ package reviewdisposition
 import (
 	"testing"
 
-	"github.com/dualface/kander/internal/statemachine/vectortest"
+	"github.com/dualface/kander/v2/internal/statemachine/vectortest"
 )
 
 var statusNames = [StatusCount]string{"confirmed", "fixed", "rejected", "unverifiable", "waived", "deferred", "withdrawn", "other"}

@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/remote"
-	"github.com/dualface/kander/internal/server"
-	"github.com/dualface/kander/internal/worker"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/remote"
+	"github.com/dualface/kander/v2/internal/server"
+	"github.com/dualface/kander/v2/internal/worker"
 )
 
 func commandService(t *testing.T, cfg *config.Config) *remote.Session {

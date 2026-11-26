@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 // paneEntryTimeout is the budget of the whole pane watch of one launch when

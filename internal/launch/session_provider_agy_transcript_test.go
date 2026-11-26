@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 const agyTestPrompt = "Read the UTF-8 task file /tmp/kander-task-start-123.md and follow it."

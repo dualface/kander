@@ -11,9 +11,9 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/focus"
-	"github.com/dualface/kander/internal/launch"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/focus"
+	"github.com/dualface/kander/v2/internal/launch"
 )
 
 // translate reaches the catalog helper from tests that shadow t.

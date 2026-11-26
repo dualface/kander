@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/probe"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/probe"
 )
 
 const (

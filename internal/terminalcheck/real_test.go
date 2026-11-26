@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/terminal/builtin"
+	"github.com/dualface/kander/v2/internal/terminal/builtin"
 )
 
 func TestEmbeddedHerdrConformance(t *testing.T) {

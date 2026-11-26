@@ -8,8 +8,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/menu"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/menu"
 )
 
 // optionTitle appends ":" after a field name. Existing trailing colons or spaces are trimmed first.

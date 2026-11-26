@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/probe"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/probe"
 )
 
 // GitCommandTimeout bounds one Git process of this package. Tests replace it;

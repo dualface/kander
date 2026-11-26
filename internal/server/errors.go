@@ -4,9 +4,9 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/issue"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/issue"
 )
 
 // boardCodes maps board message keys to stable API codes. A board key not

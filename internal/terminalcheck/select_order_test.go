@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 // Pins the selection order documented in docs/terminal-definitions.md:

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 // The local board path remains available for historical machine-path evidence.

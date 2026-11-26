@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 const mechanicalTaskID = "20260907-archive-test-task"

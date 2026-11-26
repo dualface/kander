@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/client"
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/client"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // AggregateReview publishes the disposition view of batch and returns the

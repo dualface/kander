@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/rules"
+	"github.com/dualface/kander/v2/rules"
 )
 
 // The Output section of the review contract defines every object of the evidence results on a

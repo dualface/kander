@@ -7,9 +7,9 @@ import (
 	"encoding/json"
 	"path/filepath"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/fs"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/fs"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 // StartResult starts a distinct read/remote-result session, never a card claim.

@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/fs"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/fs"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 func readRecord(t *testing.T, home string) remote.WorkerRecord {

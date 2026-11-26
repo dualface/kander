@@ -13,9 +13,9 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 const sharingTask = "20261119-credential-sharing-task"

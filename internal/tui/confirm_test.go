@@ -7,10 +7,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/issue"
-	"github.com/dualface/kander/internal/launch"
-	"github.com/dualface/kander/internal/menu"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/issue"
+	"github.com/dualface/kander/v2/internal/launch"
+	"github.com/dualface/kander/v2/internal/menu"
 )
 
 func TestConfirmKeyAction(t *testing.T) {

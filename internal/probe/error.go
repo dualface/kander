@@ -3,7 +3,7 @@ package probe
 import (
 	"context"
 	"errors"
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // Error is a displayable failure of pane fact collection; it carries no delivery or liveness policy.

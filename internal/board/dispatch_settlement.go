@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"time"
 
-	dispatchkernel "github.com/dualface/kander/internal/statemachine/dispatch"
+	dispatchkernel "github.com/dualface/kander/v2/internal/statemachine/dispatch"
 )
 
 // DispatchSettlement ends a completed binding. The dispatch stays completed and

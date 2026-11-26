@@ -12,7 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 // CheckReviewEvidence checks both indexes and intents, so a run that failed

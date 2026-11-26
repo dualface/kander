@@ -11,9 +11,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/fs"
-	rk "github.com/dualface/kander/internal/statemachine/issueresult"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/fs"
+	rk "github.com/dualface/kander/v2/internal/statemachine/issueresult"
 )
 
 type ResultStore struct {

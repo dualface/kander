@@ -1,6 +1,6 @@
 package api
 
-import "github.com/dualface/kander/internal/board"
+import "github.com/dualface/kander/v2/internal/board"
 
 // DispatchCommand names one controlled producer. Ownership lease generation
 // and business dispatch epoch are independent fences.

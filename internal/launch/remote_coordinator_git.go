@@ -3,10 +3,10 @@ package launch
 import (
 	"context"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/remote"
-	"github.com/dualface/kander/internal/review"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/remote"
+	"github.com/dualface/kander/v2/internal/review"
 )
 
 func verifyRemoteCoordinatorGitFacts(ctx context.Context, s *remote.Session, cwd string, facts board.CoordinatorGitFacts) error {

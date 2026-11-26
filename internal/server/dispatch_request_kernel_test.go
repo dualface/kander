@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/client"
-	"github.com/dualface/kander/internal/statemachine/serverproposal"
-	"github.com/dualface/kander/internal/statemachine/serverrequest"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/client"
+	"github.com/dualface/kander/v2/internal/statemachine/serverproposal"
+	"github.com/dualface/kander/v2/internal/statemachine/serverrequest"
 )
 
 // preparedHolder is a claimed task whose execution is confirmed and whose task

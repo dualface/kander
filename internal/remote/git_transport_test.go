@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 func expiredContext(t *testing.T) context.Context {

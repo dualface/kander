@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/launch"
+	"github.com/dualface/kander/v2/internal/launch"
 )
 
 // herdr has a native Windows build, so cleanup no longer short-circuits to N/A

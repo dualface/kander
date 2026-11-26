@@ -6,8 +6,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/dualface/kander/internal/statemachine/cardlifecycle"
-	"github.com/dualface/kander/internal/statemachine/executionledger"
+	"github.com/dualface/kander/v2/internal/statemachine/cardlifecycle"
+	"github.com/dualface/kander/v2/internal/statemachine/executionledger"
 )
 
 // Recovery modes. The column of the member selects the mode.

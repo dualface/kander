@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/dualface/kander/internal/statemachine/reviewrun"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewrun"
 )
 
 // The accepted and refused decisions of a review run (its preparation, phase

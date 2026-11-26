@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/probe"
-	"github.com/dualface/kander/internal/terminal"
-	"github.com/dualface/kander/internal/terminal/terminaltest"
+	"github.com/dualface/kander/v2/internal/probe"
+	"github.com/dualface/kander/v2/internal/terminal"
+	"github.com/dualface/kander/v2/internal/terminal/terminaltest"
 )
 
 func herdrCoreBackendForTest(t *testing.T, env map[string]string) terminal.Backend {

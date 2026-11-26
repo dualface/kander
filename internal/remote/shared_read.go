@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 // On Windows an atomic replacement keeps a temporary handle with DELETE access

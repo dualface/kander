@@ -3,9 +3,9 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/dualface/kander/internal/issue"
-	"github.com/dualface/kander/internal/issue/ghcli"
-	"github.com/dualface/kander/internal/worker"
+	"github.com/dualface/kander/v2/internal/issue"
+	"github.com/dualface/kander/v2/internal/issue/ghcli"
+	"github.com/dualface/kander/v2/internal/worker"
 )
 
 // IssueProvider builds the GitHub CLI provider. The TUI reuses this factory so

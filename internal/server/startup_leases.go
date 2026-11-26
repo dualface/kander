@@ -4,10 +4,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dualface/kander/internal/fs"
-	"github.com/dualface/kander/internal/statemachine/serverclaim"
-	"github.com/dualface/kander/internal/statemachine/servergrouplease"
-	"github.com/dualface/kander/internal/statemachine/serverintegration"
+	"github.com/dualface/kander/v2/internal/fs"
+	"github.com/dualface/kander/v2/internal/statemachine/serverclaim"
+	"github.com/dualface/kander/v2/internal/statemachine/servergrouplease"
+	"github.com/dualface/kander/v2/internal/statemachine/serverintegration"
 )
 
 // startupLeases gives every active lease of the project (task claims, group

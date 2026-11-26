@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // importLineInterval spaces the counts of one phase on a stderr that is not a

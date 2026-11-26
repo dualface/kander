@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/process"
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/process"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 // startupDirectoryCases are directories a container cannot start in. Each one

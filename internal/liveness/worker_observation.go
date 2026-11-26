@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/remote"
-	"github.com/dualface/kander/internal/worker"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/remote"
+	"github.com/dualface/kander/v2/internal/worker"
 )
 
 func init() { worker.ObserveAgent = observeWorkerAgent }

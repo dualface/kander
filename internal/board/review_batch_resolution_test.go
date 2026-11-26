@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 const strayBatchID = "stray-b2"

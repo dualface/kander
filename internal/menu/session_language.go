@@ -4,7 +4,7 @@ import (
 	"maps"
 	"reflect"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // LanguageState is a snapshot of the interface language in both Options edit buffers:

@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/statemachine/serverclaim"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/statemachine/serverclaim"
 )
 
 // claimRecord is the server-side ownership of one task. It lives outside the

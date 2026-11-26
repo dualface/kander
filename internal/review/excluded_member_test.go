@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 // The review command itself, not only the board, continues a batch for the

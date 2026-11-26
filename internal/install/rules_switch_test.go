@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // writeScopeSwitches saves a scope config with the given switches at the global config path.

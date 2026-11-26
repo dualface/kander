@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/dualface/kander/internal/process"
+	"github.com/dualface/kander/v2/internal/process"
 )
 
 const (

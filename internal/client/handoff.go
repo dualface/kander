@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/dualface/kander/api"
+	"github.com/dualface/kander/v2/api"
 )
 
 // Handoff lets the current holder restart its stopped executor on the same

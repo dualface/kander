@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/rules"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/rules"
 )
 
 // helpSchemaVersion is the schema_version of the help JSON objects (docs/command-help.md).

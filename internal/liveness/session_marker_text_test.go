@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/i18n"
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/i18n"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 const missingSessionIdentityKey = "liveness.session_identity_was_not_reported_direct_delivery_is_unavailable"

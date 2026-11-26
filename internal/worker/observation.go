@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/process"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/process"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 // ObserveAgent is provided by the terminal observation layer. It observes only

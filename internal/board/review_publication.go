@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"slices"
 
-	"github.com/dualface/kander/internal/statemachine/reviewrun"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewrun"
 )
 
 // PublishReviewRun preserves the standalone board's per-card recovery contract.

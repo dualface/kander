@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/dualface/kander/internal/launch"
+	"github.com/dualface/kander/v2/internal/launch"
 )
 
 type chatPhase int

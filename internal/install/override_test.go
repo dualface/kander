@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // codexOverrideSetup prepares a global scope where codex is a covered agent and returns the

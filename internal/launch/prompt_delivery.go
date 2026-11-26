@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 func applyAgentDelivery(plan *LaunchPlan, cfg *config.Config, agent string) error {

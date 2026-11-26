@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/statemachine/reviewplan"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewplan"
 )
 
 type ReviewBatchAdvance struct {

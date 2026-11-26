@@ -5,7 +5,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/dualface/kander/rules"
+	"github.com/dualface/kander/v2/rules"
 )
 
 // ReadRulesFile returns the installed copy of the rules-root file name (a slash-separated

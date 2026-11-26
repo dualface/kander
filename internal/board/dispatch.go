@@ -11,7 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	dispatchkernel "github.com/dualface/kander/internal/statemachine/dispatch"
+	dispatchkernel "github.com/dualface/kander/v2/internal/statemachine/dispatch"
 )
 
 // DispatchState separates durable business receipts from uncertain transport.

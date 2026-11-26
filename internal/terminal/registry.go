@@ -5,7 +5,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // Auto is the launcher name resolved at start time rather than a backend.

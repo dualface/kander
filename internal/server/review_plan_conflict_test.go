@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/client"
 )
 
 // A plan that reuses the batch ID of another plan is refused as board_rejected

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 // ScanContext captures all states, documents and revisions under shared locks.

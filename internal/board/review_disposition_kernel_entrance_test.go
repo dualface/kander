@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/statemachine/reviewdisposition"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewdisposition"
 )
 
 // pairStateOf is the kernel state of one finding and card as the ledger and the

@@ -2,7 +2,7 @@ package board
 
 import (
 	"errors"
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 // WithDispatchDelivery serializes transport attempts, never an Agent session.

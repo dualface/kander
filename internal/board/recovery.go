@@ -3,7 +3,7 @@ package board
 import (
 	"errors"
 	"fmt"
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/fs"
 	"os"
 	"path/filepath"
 	"strings"

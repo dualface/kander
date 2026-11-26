@@ -10,8 +10,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/command"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/command"
 )
 
 // projectList is the --json output of `kander server projects`.

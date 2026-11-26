@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dualface/kander/internal/statemachine/wrapupwitness"
+	"github.com/dualface/kander/v2/internal/statemachine/wrapupwitness"
 )
 
 // WrapUpGitEvidence records that the Git facts of one wrap-up held once. It lives

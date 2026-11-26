@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 // The internal worker takes no flag at all, global ones included, wherever they stand.

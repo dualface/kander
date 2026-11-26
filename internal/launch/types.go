@@ -4,14 +4,14 @@ import (
 	"os"
 	"time"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/probe"
-	"github.com/dualface/kander/internal/process"
-	"github.com/dualface/kander/internal/terminal"
-	_ "github.com/dualface/kander/internal/terminal/builtin"
-	"github.com/dualface/kander/internal/terminal/direct"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/probe"
+	"github.com/dualface/kander/v2/internal/process"
+	"github.com/dualface/kander/v2/internal/terminal"
+	_ "github.com/dualface/kander/v2/internal/terminal/builtin"
+	"github.com/dualface/kander/v2/internal/terminal/direct"
 )
 
 const (

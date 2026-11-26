@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 // writePiSessionFile writes a pi-style session JSONL: a session header first

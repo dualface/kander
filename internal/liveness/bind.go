@@ -3,8 +3,8 @@ package liveness
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/dualface/kander/internal/cli"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/internal/cli"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 func init() {

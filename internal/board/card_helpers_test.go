@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // The board tests drive the card library through these helpers. Each one makes

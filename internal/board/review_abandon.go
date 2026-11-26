@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/statemachine/reviewrun"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewrun"
 )
 
 // ReviewAbandonRequest retires a finalized run that no process can publish any

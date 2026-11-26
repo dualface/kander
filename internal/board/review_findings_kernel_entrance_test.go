@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/statemachine/reviewfindings"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewfindings"
 )
 
 // findingsStateOf is the kernel state of one run as the persisted records hold

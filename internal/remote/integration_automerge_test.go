@@ -14,8 +14,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 // mergeIdentity isolates Git and gives the first clone the identity the merge

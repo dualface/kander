@@ -3,7 +3,7 @@ package remote
 import (
 	"context"
 
-	"github.com/dualface/kander/api"
+	"github.com/dualface/kander/v2/api"
 )
 
 // IsolateGitConfig lets the tests of package remote_test share the Git

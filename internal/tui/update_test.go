@@ -8,7 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/dualface/kander/internal/install"
+	"github.com/dualface/kander/v2/internal/install"
 )
 
 func updateTestApp() *App {

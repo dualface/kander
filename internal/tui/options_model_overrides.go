@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/menu"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/menu"
 )
 
 // Model edits may pin the agent and the paired field, even when the edited

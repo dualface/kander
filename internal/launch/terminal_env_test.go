@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/dualface/kander/internal/terminal/terminaltest"
+	"github.com/dualface/kander/v2/internal/terminal/terminaltest"
 )
 
 func TestMain(m *testing.M) {

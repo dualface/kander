@@ -13,8 +13,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/fs"
 	_ "modernc.org/sqlite"
 )
 

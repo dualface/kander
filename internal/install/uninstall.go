@@ -14,10 +14,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/config"
-	kfs "github.com/dualface/kander/internal/fs"
-	"github.com/dualface/kander/rules"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/config"
+	kfs "github.com/dualface/kander/v2/internal/fs"
+	"github.com/dualface/kander/v2/rules"
 )
 
 // UninstallAction is what kander uninstall does with one path.

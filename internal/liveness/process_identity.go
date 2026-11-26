@@ -5,10 +5,10 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/probe"
-	"github.com/dualface/kander/internal/process"
-	"github.com/dualface/kander/internal/terminal/direct"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/probe"
+	"github.com/dualface/kander/v2/internal/process"
+	"github.com/dualface/kander/v2/internal/terminal/direct"
 )
 
 // processProbe is the kernel side of the identity check; tests replace it.

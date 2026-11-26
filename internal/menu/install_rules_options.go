@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/install"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/install"
 )
 
 // InstallRules returns the rules-injection switches of the scope buffer.

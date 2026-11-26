@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/probe"
+	"github.com/dualface/kander/v2/internal/probe"
 )
 
 // A step with unset_env runs only through RunEnv: a Run that fails the test

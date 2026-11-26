@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 func transactionCard(t *testing.T, root, slug string, large bool) Snapshot {

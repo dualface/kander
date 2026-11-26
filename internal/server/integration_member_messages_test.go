@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/client"
 )
 
 func TestIntegrationRefusalNamesTheMemberWhoseReviewIsNotClosed(t *testing.T) {

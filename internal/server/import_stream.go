@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dualface/kander/api"
+	"github.com/dualface/kander/v2/api"
 )
 
 // importWriteTimeout bounds one write to a streaming client, so a client that

@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"slices"
 
-	rk "github.com/dualface/kander/internal/statemachine/issueresult"
-	dk "github.com/dualface/kander/internal/statemachine/issueresultdecision"
+	rk "github.com/dualface/kander/v2/internal/statemachine/issueresult"
+	dk "github.com/dualface/kander/v2/internal/statemachine/issueresultdecision"
 )
 
 // The shell of the issue result kernels (formal/KanderFormal/Machines/IssueResult.lean

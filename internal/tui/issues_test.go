@@ -9,8 +9,8 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/issue"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/issue"
 )
 
 type fakeIssues struct {

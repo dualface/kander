@@ -8,7 +8,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/dualface/kander/internal/issue"
+	"github.com/dualface/kander/v2/internal/issue"
 )
 
 // The REST schema is pinned: GitHub keeps a version available for at least 24

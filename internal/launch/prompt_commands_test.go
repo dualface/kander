@@ -10,11 +10,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/cli"
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/command/commandtest"
-	"github.com/dualface/kander/internal/issue"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/cli"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/command/commandtest"
+	"github.com/dualface/kander/v2/internal/issue"
 )
 
 // promptCommand finds the command lines in a rendered prompt: an occurrence of "kander

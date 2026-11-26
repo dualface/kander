@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 // The launcher gate. With --json a launcher that takes the terminal is refused, but only by a

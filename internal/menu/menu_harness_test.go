@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/install/installtest"
-	"github.com/dualface/kander/internal/terminal/terminaltest"
+	"github.com/dualface/kander/v2/internal/install/installtest"
+	"github.com/dualface/kander/v2/internal/terminal/terminaltest"
 )
 
 var testKander string

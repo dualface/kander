@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/server"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/server"
 )
 
 func openEmbedded(t *testing.T, options server.Options) *server.Server {

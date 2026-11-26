@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/api"
-	core "github.com/dualface/kander/internal/server"
+	"github.com/dualface/kander/v2/api"
+	core "github.com/dualface/kander/v2/internal/server"
 )
 
 // Options configure an embedded instance. DataDir must be an absolute path.

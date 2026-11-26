@@ -10,10 +10,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dualface/kander/internal/client"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/remote"
-	"github.com/dualface/kander/internal/server"
+	"github.com/dualface/kander/v2/internal/client"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/remote"
+	"github.com/dualface/kander/v2/internal/server"
 )
 
 // kander init writes server.url and project.name into the project overlay; keys of a newer

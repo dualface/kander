@@ -2,7 +2,7 @@ package remote
 
 import (
 	"errors"
-	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/v2/internal/client"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/api"
+	"github.com/dualface/kander/v2/api"
 )
 
 func TestCredentialWritersPreserveLauncherAndWorkerFacts(t *testing.T) {

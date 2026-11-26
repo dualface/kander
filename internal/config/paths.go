@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 var gitOverrideVars = []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"}

@@ -7,7 +7,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 func refreshFrom(ctx context.Context, root string, snap summarySnapshot, strong bool) (BoardView, SummaryStats, map[string]cachedCard, error) {

@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/cli"
-	"github.com/dualface/kander/internal/command/commandtest"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/cli"
+	"github.com/dualface/kander/v2/internal/command/commandtest"
 )
 
 func TestDecisionThroughCLI(t *testing.T) {

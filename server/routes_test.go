@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/dualface/kander/server"
+	"github.com/dualface/kander/v2/server"
 )
 
 func TestRoutesAreIndependentAndMarkOnlyProbesExempt(t *testing.T) {

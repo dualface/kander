@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 const reviewControlGroup = "00000000-review-archive-group"

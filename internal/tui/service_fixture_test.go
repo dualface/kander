@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/server"
-	"github.com/dualface/kander/internal/version"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/server"
+	"github.com/dualface/kander/v2/internal/version"
 )
 
 func newTUIService(t *testing.T, source string) string {

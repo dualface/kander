@@ -3,7 +3,7 @@ package review
 import (
 	"errors"
 
-	"github.com/dualface/kander/internal/command/commandtest"
+	"github.com/dualface/kander/v2/internal/command/commandtest"
 )
 
 // parseArchiveOptions runs the argument handling of the review command on args and returns the

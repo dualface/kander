@@ -3,7 +3,7 @@ package issue
 import (
 	"context"
 
-	rk "github.com/dualface/kander/internal/statemachine/issueresult"
+	rk "github.com/dualface/kander/v2/internal/statemachine/issueresult"
 )
 
 // ValidateResultStore is shared by local recovery and the service's controlled

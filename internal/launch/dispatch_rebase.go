@@ -4,8 +4,8 @@ import (
 	"context"
 	"os/exec"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 // Compare complete patches, preserving whitespace, context, modes and binary

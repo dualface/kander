@@ -3,7 +3,7 @@ package api
 import (
 	"time"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 // SnapshotQuery selects a coordinated read. Nil tasks captures the entire

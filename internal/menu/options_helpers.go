@@ -5,9 +5,9 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/terminal/builtin"
-	"github.com/dualface/kander/internal/terminal/direct"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/terminal/builtin"
+	"github.com/dualface/kander/v2/internal/terminal/direct"
 )
 
 func choicesWithCurrent(choices []Choice, current string) []Choice {

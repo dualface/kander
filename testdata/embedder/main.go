@@ -9,10 +9,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/cli"
-	"github.com/dualface/kander/client"
-	"github.com/dualface/kander/server"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/cli"
+	"github.com/dualface/kander/v2/client"
+	"github.com/dualface/kander/v2/server"
 )
 
 var (

@@ -5,10 +5,10 @@ import (
 	"errors"
 	"time"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/liveness"
-	"github.com/dualface/kander/internal/probe"
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/liveness"
+	"github.com/dualface/kander/v2/internal/probe"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 // TargetProbe is the probe of a direct-delivery target: ready / busy / stale / fallback.

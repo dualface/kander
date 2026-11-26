@@ -1,6 +1,6 @@
 package tui
 
-import "github.com/dualface/kander/internal/config"
+import "github.com/dualface/kander/v2/internal/config"
 
 func t(id string, args ...any) string {
 	return config.Text(id, args...)

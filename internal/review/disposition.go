@@ -2,15 +2,15 @@ package review
 
 import (
 	"context"
-	"github.com/dualface/kander/internal/command"
+	"github.com/dualface/kander/v2/internal/command"
 	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // runDisposition runs one evidence command once the arguments and the

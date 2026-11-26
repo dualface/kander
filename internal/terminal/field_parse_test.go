@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/process"
-	"github.com/dualface/kander/internal/terminal/terminaltest"
+	"github.com/dualface/kander/v2/internal/process"
+	"github.com/dualface/kander/v2/internal/terminal/terminaltest"
 )
 
 func TestScopedJSONFieldValidation(t *testing.T) {

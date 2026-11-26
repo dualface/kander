@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/servicectl"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/servicectl"
 )
 
 func TestLocalServerQuestionPrecedesTUIAndOutlives15Seconds(t *testing.T) {

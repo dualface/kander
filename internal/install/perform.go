@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/fs"
-	"github.com/dualface/kander/rules"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/fs"
+	"github.com/dualface/kander/v2/rules"
 )
 
 // Request is a complete, non-interactive installation request.

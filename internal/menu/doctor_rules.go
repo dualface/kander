@@ -3,8 +3,8 @@ package menu
 import (
 	"strconv"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/install"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/install"
 )
 
 // confirmModifiedRules asks once whether the locally modified rule files listed just above

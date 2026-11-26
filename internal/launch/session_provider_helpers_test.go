@@ -3,8 +3,8 @@ package launch
 import (
 	"time"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/process"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/process"
 )
 
 // The helpers below drive the session provider entry points the way the

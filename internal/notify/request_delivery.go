@@ -4,8 +4,8 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/dualface/kander/internal/liveness"
-	"github.com/dualface/kander/internal/worker"
+	"github.com/dualface/kander/v2/internal/liveness"
+	"github.com/dualface/kander/v2/internal/worker"
 )
 
 // The background worker delivers collaboration requests through the same

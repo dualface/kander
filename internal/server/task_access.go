@@ -3,9 +3,9 @@ package server
 import (
 	"context"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/i18n"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/i18n"
 )
 
 func (s *Server) TaskAccess(ctx context.Context, projectID, task string) (api.TaskAccess, error) {

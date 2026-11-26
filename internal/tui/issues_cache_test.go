@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/dualface/kander/internal/issue"
+	"github.com/dualface/kander/v2/internal/issue"
 )
 
 // issuesClock controls the app clock so the debounce is deterministic: the

@@ -4,8 +4,8 @@ import (
 	"context"
 	"os"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 // The commands that need a board reach it through these entrances. The client

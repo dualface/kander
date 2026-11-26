@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 const planText = "# 计划\n\n- 第一步\n- 最后一行没有换行"

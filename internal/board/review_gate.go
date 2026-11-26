@@ -3,8 +3,8 @@ package board
 import (
 	"errors"
 	"fmt"
-	"github.com/dualface/kander/internal/fs"
-	"github.com/dualface/kander/internal/statemachine/reviewobligation"
+	"github.com/dualface/kander/v2/internal/fs"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewobligation"
 	"os"
 	"reflect"
 	"slices"

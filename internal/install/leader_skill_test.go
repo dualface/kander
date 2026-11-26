@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/skills"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/skills"
 )
 
 func assertSkill(t *testing.T, dir string) {

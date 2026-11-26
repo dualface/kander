@@ -7,10 +7,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/process"
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/process"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 // Test seams: imageCanChange stands for a platform without exec.

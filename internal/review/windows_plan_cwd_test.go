@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 const windowsEmptyStructuredReview = "```kander-findings\n{\"FINDINGS\":[],\"NON_BLOCKING\":[]}\n```"

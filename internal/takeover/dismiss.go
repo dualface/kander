@@ -3,12 +3,12 @@ package takeover
 import (
 	"context"
 
-	"github.com/dualface/kander/internal/launch"
-	"github.com/dualface/kander/internal/liveness"
-	"github.com/dualface/kander/internal/notify"
-	"github.com/dualface/kander/internal/probe"
-	"github.com/dualface/kander/internal/remote"
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/launch"
+	"github.com/dualface/kander/v2/internal/liveness"
+	"github.com/dualface/kander/v2/internal/notify"
+	"github.com/dualface/kander/v2/internal/probe"
+	"github.com/dualface/kander/v2/internal/remote"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 func reverseLookupStale[T any](detail string, lookup func() (T, error)) (T, error) {

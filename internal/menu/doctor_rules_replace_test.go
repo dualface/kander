@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/rules"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/rules"
 )
 
 // stubModifiedRuleConfirm swaps the interactive decision seam for a fixed answer.

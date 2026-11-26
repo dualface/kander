@@ -3,7 +3,7 @@ package install
 import (
 	"errors"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // packaged reports MSIX package identity; tests replace it to exercise the

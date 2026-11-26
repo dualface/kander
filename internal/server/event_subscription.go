@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 
-	"github.com/dualface/kander/api"
+	"github.com/dualface/kander/v2/api"
 )
 
 const subscriptionBuffer = 64

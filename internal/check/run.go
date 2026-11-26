@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/liveness"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/liveness"
 )
 
 // NewCommand builds kander check. The Git analyzers delivery and overlap run locally and

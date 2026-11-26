@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dualface/kander/internal/statemachine/reviewdisposition"
-	"github.com/dualface/kander/internal/statemachine/reviewfindings"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewdisposition"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewfindings"
 )
 
 // The decisions about where the findings of a review run come from, how they

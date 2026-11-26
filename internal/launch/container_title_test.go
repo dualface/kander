@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 // titleBackend is the tmux backend under another launcher name. It records the

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 func prepareSubscriptionDispatch(t *testing.T, root, id, kind string, deadline time.Duration) board.Dispatch {

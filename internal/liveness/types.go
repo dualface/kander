@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/dualface/kander/internal/config"
-	_ "github.com/dualface/kander/internal/terminal/builtin"
+	"github.com/dualface/kander/v2/internal/config"
+	_ "github.com/dualface/kander/v2/internal/terminal/builtin"
 )
 
 const (

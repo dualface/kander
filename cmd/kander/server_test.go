@@ -19,14 +19,14 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/client"
-	"github.com/dualface/kander/internal/command/commandtest"
-	"github.com/dualface/kander/internal/commands"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/server"
-	"github.com/dualface/kander/internal/servicectl"
-	"github.com/dualface/kander/internal/terminal/terminaltest"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/client"
+	"github.com/dualface/kander/v2/internal/command/commandtest"
+	"github.com/dualface/kander/v2/internal/commands"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/server"
+	"github.com/dualface/kander/v2/internal/servicectl"
+	"github.com/dualface/kander/v2/internal/terminal/terminaltest"
 )
 
 // Re-enter the real command implementation in a child process. The child is

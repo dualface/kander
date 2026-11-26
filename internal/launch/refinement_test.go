@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/issue"
-	"github.com/dualface/kander/internal/process"
+	"github.com/dualface/kander/v2/internal/issue"
+	"github.com/dualface/kander/v2/internal/process"
 )
 
 func TestRefinementLaunchUsesCardLanguageAndLimitedAuthority(t *testing.T) {

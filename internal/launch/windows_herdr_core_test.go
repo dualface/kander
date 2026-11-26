@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/process"
-	"github.com/dualface/kander/internal/terminal"
-	"github.com/dualface/kander/internal/terminal/builtin"
-	"github.com/dualface/kander/internal/terminal/terminaltest"
+	"github.com/dualface/kander/v2/internal/process"
+	"github.com/dualface/kander/v2/internal/terminal"
+	"github.com/dualface/kander/v2/internal/terminal/builtin"
+	"github.com/dualface/kander/v2/internal/terminal/terminaltest"
 )
 
 // A control character in any value of the typed line fails the launch before

@@ -3,8 +3,8 @@ package config
 import (
 	"path/filepath"
 
-	"github.com/dualface/kander/internal/process"
-	"github.com/dualface/kander/rules"
+	"github.com/dualface/kander/v2/internal/process"
+	"github.com/dualface/kander/v2/rules"
 )
 
 // commandContractsDir is the rules-root directory that holds one contract file per command.

@@ -11,7 +11,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/dualface/kander/internal/process"
+	"github.com/dualface/kander/v2/internal/process"
 	"golang.org/x/sys/windows"
 )
 

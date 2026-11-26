@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/probe"
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/probe"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 // These argv values are the herdr Go backend's contract at 2de9628.

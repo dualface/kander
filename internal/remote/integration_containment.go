@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/dualface/kander/api"
+	"github.com/dualface/kander/v2/api"
 )
 
 // integrationContainment decides how the reviewed commit reaches the observed

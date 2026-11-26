@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 func archiveHarness(t *testing.T) (*reviewHarness, string, []string) {

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/probe"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/probe"
 )
 
 // autoMergeRefPrefix holds the private ref that keeps a generated merge alive

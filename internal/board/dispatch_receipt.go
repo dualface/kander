@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	dispatchkernel "github.com/dualface/kander/internal/statemachine/dispatch"
+	dispatchkernel "github.com/dualface/kander/v2/internal/statemachine/dispatch"
 )
 
 // requireExecution checks a write of the executor against the card's binding

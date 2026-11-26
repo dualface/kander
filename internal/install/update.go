@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/version"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/version"
 )
 
 // The check reads one page of the releases list instead of releases/latest:

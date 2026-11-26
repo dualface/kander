@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 const legacySpec = "# 旧卡\n\n- 类型: Bug\n- SIZE: small\n- 创建时间: 2026-09-01 03:00\n- 结果:\n\n## 任务目标\n\n目标\n"

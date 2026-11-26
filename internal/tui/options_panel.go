@@ -9,8 +9,8 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/menu"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/menu"
 )
 
 // The sections of the options panel. The root form is a Select that opens the matching section form.

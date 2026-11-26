@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dualface/kander/internal/issue"
-	"github.com/dualface/kander/internal/launch"
+	"github.com/dualface/kander/v2/internal/issue"
+	"github.com/dualface/kander/v2/internal/launch"
 )
 
 // takeoverState confirms investigation or completed-result reconciliation.

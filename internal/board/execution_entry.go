@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/dualface/kander/internal/fs"
-	"github.com/dualface/kander/internal/statemachine/executionledger"
+	"github.com/dualface/kander/v2/internal/fs"
+	"github.com/dualface/kander/v2/internal/statemachine/executionledger"
 )
 
 // ErrExecutionSuperseded reports that a takeover, an adoption or a reclaim ended

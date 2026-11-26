@@ -10,7 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/dualface/kander/internal/liveness"
+	"github.com/dualface/kander/v2/internal/liveness"
 )
 
 const (

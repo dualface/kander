@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/dualface/kander/internal/statemachine/reviewplan"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewplan"
 )
 
 // A refusal of a request that carries an expected value names the value the

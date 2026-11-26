@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 // clockEvents records delivery and runs the test's callback from the output worker.

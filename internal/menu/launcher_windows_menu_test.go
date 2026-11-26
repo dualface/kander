@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // writeFakeExecutable only has to be discoverable by lookPath; it never runs.

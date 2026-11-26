@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/fs"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/fs"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 // The two local evidence files one takeover session is pointed at. The JSON

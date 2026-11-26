@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/statemachine/cardlifecycle"
-	"github.com/dualface/kander/internal/statemachine/executionledger"
+	"github.com/dualface/kander/v2/internal/statemachine/cardlifecycle"
+	"github.com/dualface/kander/v2/internal/statemachine/executionledger"
 )
 
 // kernelView is the projection of one card into both kernels.

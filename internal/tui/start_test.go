@@ -9,9 +9,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/launch"
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/launch"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 func startTestApp(state string) *App {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 // moveCard moves one card of the current test board and reports a failure on

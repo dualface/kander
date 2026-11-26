@@ -1,9 +1,9 @@
 package server
 
 import (
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/statemachine/serverproposal"
-	"github.com/dualface/kander/internal/statemachine/serverrequest"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/statemachine/serverproposal"
+	"github.com/dualface/kander/v2/internal/statemachine/serverrequest"
 )
 
 // The collaboration request decisions are made by the generated kernel in

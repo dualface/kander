@@ -5,9 +5,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/probe"
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/probe"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 // ReportSession performs the socket handshake and verifies the reported identity.

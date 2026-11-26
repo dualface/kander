@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dualface/kander/internal/command/commandtest"
+	"github.com/dualface/kander/v2/internal/command/commandtest"
 )
 
 type resultCommandProvider struct {

@@ -1,8 +1,8 @@
 package launch
 
 import (
-	"github.com/dualface/kander/internal/command/commandtest"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/internal/command/commandtest"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 // The tests drive each command the way the binary does, with the arguments after its name.

@@ -5,9 +5,9 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/install"
-	"github.com/dualface/kander/internal/version"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/install"
+	"github.com/dualface/kander/v2/internal/version"
 )
 
 // Seams for tests: the inventory, deletion, brew upgrade, and the choice prompt

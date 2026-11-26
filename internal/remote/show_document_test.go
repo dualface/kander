@@ -10,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/command/commandtest"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/version"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/command/commandtest"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/version"
 )
 
 // showDocumentFixture serves one card document and runs RunShow against it.

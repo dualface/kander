@@ -3,7 +3,7 @@ package install
 import (
 	"path/filepath"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // DisabledReaders lists the embedded agents that read the rules file target and have

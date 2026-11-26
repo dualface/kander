@@ -6,9 +6,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/dualface/kander/internal/statemachine/cardlifecycle"
-	"github.com/dualface/kander/internal/statemachine/reviewobligation"
-	"github.com/dualface/kander/internal/statemachine/reviewplan"
+	"github.com/dualface/kander/v2/internal/statemachine/cardlifecycle"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewobligation"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewplan"
 )
 
 // ReviewExclusion is the producer record of a plan or task group member that left

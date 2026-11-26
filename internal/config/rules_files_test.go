@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/rules"
+	"github.com/dualface/kander/v2/rules"
 )
 
 func TestReadRulesFileWarnsOnlyOnFallback(t *testing.T) {

@@ -5,7 +5,7 @@ package reviewplan
 import (
 	"testing"
 
-	"github.com/dualface/kander/internal/statemachine/vectortest"
+	"github.com/dualface/kander/v2/internal/statemachine/vectortest"
 )
 
 func encodeBoolArray(v []bool) string {

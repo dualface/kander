@@ -8,9 +8,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dualface/kander/client"
-	core "github.com/dualface/kander/internal/cli"
-	_ "github.com/dualface/kander/internal/commands"
+	"github.com/dualface/kander/v2/client"
+	core "github.com/dualface/kander/v2/internal/cli"
+	_ "github.com/dualface/kander/v2/internal/commands"
 )
 
 // Options let the host extend the command tree and install a process-wide

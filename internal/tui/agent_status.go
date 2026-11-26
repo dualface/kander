@@ -10,8 +10,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/dualface/kander/internal/liveness"
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/liveness"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 // agentStatusInterval is the fixed period of the automatic agent status

@@ -4,10 +4,10 @@ import (
 	"context"
 	"strings"
 
-	"github.com/dualface/kander/internal/launch"
-	"github.com/dualface/kander/internal/notify"
-	"github.com/dualface/kander/internal/probe"
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/launch"
+	"github.com/dualface/kander/v2/internal/notify"
+	"github.com/dualface/kander/v2/internal/probe"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 func closed(oldWindow, channel, container string) launch.CleanupResult {

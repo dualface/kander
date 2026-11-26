@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/api"
+	"github.com/dualface/kander/v2/api"
 )
 
 // reviewCall sends one review write with claim to a server that answers

@@ -10,7 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/dualface/kander/internal/launch"
+	"github.com/dualface/kander/v2/internal/launch"
 	"github.com/muesli/termenv"
 )
 

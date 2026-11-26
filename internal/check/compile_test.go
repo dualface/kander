@@ -7,12 +7,12 @@ import (
 )
 
 func TestPackageDoesNotImportTUI(t *testing.T) {
-	data, err := exec.Command("go", "list", "-deps", "-f", "{{.ImportPath}}", "github.com/dualface/kander/internal/check").Output()
+	data, err := exec.Command("go", "list", "-deps", "-f", "{{.ImportPath}}", "github.com/dualface/kander/v2/internal/check").Output()
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, line := range strings.Split(string(data), "\n") {
-		if line == "github.com/dualface/kander/internal/tui" {
+		if line == "github.com/dualface/kander/v2/internal/tui" {
 			t.Fatal("internal/check must not import internal/tui")
 		}
 	}

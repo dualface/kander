@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/dualface/kander/api"
+	"github.com/dualface/kander/v2/api"
 )
 
 // RecordDecision writes to the route reserved for the selected decision kind.

@@ -9,9 +9,9 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/i18n"
-	"github.com/dualface/kander/internal/launch"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/i18n"
+	"github.com/dualface/kander/v2/internal/launch"
 )
 
 func emptyBoardApp(t *testing.T) *App {

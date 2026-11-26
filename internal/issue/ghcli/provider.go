@@ -9,7 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/dualface/kander/internal/issue"
+	"github.com/dualface/kander/v2/internal/issue"
 )
 
 // Environment variables GitHub CLI itself defines; Kander reads them but never

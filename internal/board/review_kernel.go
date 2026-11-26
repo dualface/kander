@@ -3,8 +3,8 @@ package board
 import (
 	"slices"
 
-	"github.com/dualface/kander/internal/statemachine/reviewobligation"
-	"github.com/dualface/kander/internal/statemachine/reviewplan"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewobligation"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewplan"
 )
 
 // The review obligation and review plan decisions are made by the generated

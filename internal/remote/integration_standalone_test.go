@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/i18n"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/i18n"
 )
 
 // closedPlanFixture leaves a standalone card in working with the task branch

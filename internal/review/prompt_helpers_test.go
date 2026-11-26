@@ -3,7 +3,7 @@ package review
 import (
 	"testing"
 
-	"github.com/dualface/kander/internal/process"
+	"github.com/dualface/kander/v2/internal/process"
 )
 
 func mustBuildPrompt(t *testing.T, ctx reviewContext, evidence, task string) string {

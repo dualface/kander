@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dualface/kander/internal/process"
+	"github.com/dualface/kander/v2/internal/process"
 )
 
 // cursorSessionProvider creates the chat that becomes the session with

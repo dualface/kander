@@ -8,8 +8,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/dualface/kander/internal/fs"
-	"github.com/dualface/kander/internal/statemachine/cardlifecycle"
+	"github.com/dualface/kander/v2/internal/fs"
+	"github.com/dualface/kander/v2/internal/statemachine/cardlifecycle"
 )
 
 func baseEntryName(e Entry) string { return filepath.Base(e.Path) }

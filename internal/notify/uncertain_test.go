@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/liveness"
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/liveness"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 func writeNotifySessionFile(t *testing.T, id string) string {

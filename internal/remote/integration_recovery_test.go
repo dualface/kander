@@ -14,8 +14,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 func integrationDropAction(t *testing.T, action string, enabled *atomic.Bool) func(http.ResponseWriter, *http.Request, http.Handler) bool {

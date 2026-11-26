@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/statemachine/coordinator"
-	"github.com/dualface/kander/internal/statemachine/coordmember"
-	"github.com/dualface/kander/internal/statemachine/wrapupwitness"
+	"github.com/dualface/kander/v2/internal/statemachine/coordinator"
+	"github.com/dualface/kander/v2/internal/statemachine/coordmember"
+	"github.com/dualface/kander/v2/internal/statemachine/wrapupwitness"
 )
 
 // The tests of this file drive each production entrance that runs a coordinator

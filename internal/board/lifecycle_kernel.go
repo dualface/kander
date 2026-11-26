@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/dualface/kander/internal/statemachine/cardlifecycle"
+	"github.com/dualface/kander/v2/internal/statemachine/cardlifecycle"
 )
 
 // The column, contract freezing, and member exclusion decisions of a card are

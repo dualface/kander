@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // Refusal conditions of the retained-execution checks. Each names one catalog

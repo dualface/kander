@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
-	"github.com/dualface/kander/internal/launch"
+	"github.com/dualface/kander/v2/internal/launch"
 )
 
 var hexColorPattern = regexp.MustCompile(`^#[0-9a-f]{6}$`)

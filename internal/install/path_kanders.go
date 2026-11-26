@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 // PathKanderBinary is one distinct kander executable reachable through PATH.

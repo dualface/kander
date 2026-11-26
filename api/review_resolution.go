@@ -1,6 +1,6 @@
 package api
 
-import "github.com/dualface/kander/internal/board"
+import "github.com/dualface/kander/v2/internal/board"
 
 // ReviewResolution binds client Git verification to the exact historical
 // plan, batch and report hashes returned by the read-only facts producer.

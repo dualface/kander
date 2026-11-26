@@ -3,16 +3,16 @@ package tui
 import (
 	"context"
 	"errors"
-	"github.com/dualface/kander/internal/cli"
-	"github.com/dualface/kander/internal/issue"
+	"github.com/dualface/kander/v2/internal/cli"
+	"github.com/dualface/kander/v2/internal/issue"
 	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/launch"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/launch"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 // attachRemoteBoard binds display and mutations to the REST service. The

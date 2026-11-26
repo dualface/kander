@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 // The usage error of an unknown request kind lists every kind the command accepts, in every

@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // isolateOverlay keeps tests that load configuration away from an inherited

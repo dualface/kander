@@ -3,7 +3,7 @@ package server
 import (
 	"math"
 
-	sk "github.com/dualface/kander/internal/statemachine/issueresultsave"
+	sk "github.com/dualface/kander/v2/internal/statemachine/issueresultsave"
 )
 
 // The shell of the issue result resource kernel

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dualface/kander/internal/statemachine/reviewplan"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewplan"
 )
 
 // retargetWorld plans b1 (a..b) and b2 (b..c), both with every role N/A.

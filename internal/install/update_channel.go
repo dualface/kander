@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/dualface/kander/internal/version"
+	"github.com/dualface/kander/v2/internal/version"
 )
 
 // updateChannel is the release line a running binary follows. Each 2.x

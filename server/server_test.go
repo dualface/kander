@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/server"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/server"
 )
 
 func TestEmbeddedHandlerAuthorizesBeforeWritingAndPublishesEvent(t *testing.T) {

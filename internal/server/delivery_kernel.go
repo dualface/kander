@@ -1,8 +1,8 @@
 package server
 
 import (
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/statemachine/serverdelivery"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/statemachine/serverdelivery"
 )
 
 // The delivery decisions are made by the generated kernel in

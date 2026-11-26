@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/cli"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/rules"
+	"github.com/dualface/kander/v2/internal/cli"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/rules"
 )
 
 // visibleLeaves lists the command paths that have a contract: every leaf but the internal worker.

@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dualface/kander/api"
-	core "github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/v2/api"
+	core "github.com/dualface/kander/v2/internal/client"
 )
 
 // SetDefaultTransport installs the transport for subsequent New calls

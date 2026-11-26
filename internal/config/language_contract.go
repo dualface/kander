@@ -3,7 +3,7 @@ package config
 import (
 	"strings"
 
-	"github.com/dualface/kander/internal/i18n"
+	"github.com/dualface/kander/v2/internal/i18n"
 )
 
 // LanguageConstraint renders the persistent communication requirement from the

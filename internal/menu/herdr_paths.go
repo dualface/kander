@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/dualface/kander/internal/terminal/builtin"
+	"github.com/dualface/kander/v2/internal/terminal/builtin"
 )
 
 // herdrDefaultBinaries lists where the official herdr installer puts the binary,

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dualface/kander/internal/process"
+	"github.com/dualface/kander/v2/internal/process"
 )
 
 // json_regex limits a field regex to the JSON value at one exact path.

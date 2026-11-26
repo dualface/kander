@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	"github.com/dualface/kander/internal/flow"
+	"github.com/dualface/kander/v2/internal/flow"
 )
 
 // flowText keeps rendering independent of the active locale.

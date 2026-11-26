@@ -3,7 +3,7 @@ package board
 import (
 	"testing"
 
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/fs"
 	"golang.org/x/sys/windows"
 )
 

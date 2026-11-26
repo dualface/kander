@@ -13,11 +13,11 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/client"
-	"github.com/dualface/kander/internal/remote"
-	"github.com/dualface/kander/internal/server"
-	"github.com/dualface/kander/internal/worker"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/client"
+	"github.com/dualface/kander/v2/internal/remote"
+	"github.com/dualface/kander/v2/internal/server"
+	"github.com/dualface/kander/v2/internal/worker"
 )
 
 type eventFixture struct {

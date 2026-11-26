@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/liveness"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/liveness"
 )
 
 // observedDispatchExit shares the on-behalf wrap-up standard: the observation

@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/fs"
-	"github.com/dualface/kander/internal/issue"
+	"github.com/dualface/kander/v2/internal/fs"
+	"github.com/dualface/kander/v2/internal/issue"
 )
 
 // Provider command defaults. Every one of them can be lowered by Options and is

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 // commandStart starts one card of a local board and reports the result the

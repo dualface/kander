@@ -11,9 +11,9 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/issue"
-	sk "github.com/dualface/kander/internal/statemachine/issueresultsave"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/issue"
+	sk "github.com/dualface/kander/v2/internal/statemachine/issueresultsave"
 )
 
 // A save of the central result record runs the issue result kernels of the

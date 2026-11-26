@@ -11,9 +11,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/dualface/kander/internal/board"
-	rk "github.com/dualface/kander/internal/statemachine/issueresult"
-	dk "github.com/dualface/kander/internal/statemachine/issueresultdecision"
+	"github.com/dualface/kander/v2/internal/board"
+	rk "github.com/dualface/kander/v2/internal/statemachine/issueresult"
+	dk "github.com/dualface/kander/v2/internal/statemachine/issueresultdecision"
 )
 
 // InspectResult refreshes complete evidence and reconciles uncertain writes.

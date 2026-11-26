@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // AgentConfigEnvNames lists every environment variable that relocates the

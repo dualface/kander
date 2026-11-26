@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 // pinnedArchiveHarness pins the PMQA reviewer on the archive card, requires both

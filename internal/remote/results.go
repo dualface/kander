@@ -1,8 +1,8 @@
 package remote
 
 import (
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/command"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/command"
 )
 
 // taskRef is the result object of a command that creates or moves one card.

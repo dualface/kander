@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-const module = "github.com/dualface/kander/"
+const module = "github.com/dualface/kander/v2/"
 
 // deps lists the transitive imports of a package with the Go toolchain.
 func deps(t *testing.T, pkg string) []string {

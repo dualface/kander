@@ -3,8 +3,8 @@ package launch
 import (
 	"strings"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 func metadataFrom(text, name string) string {

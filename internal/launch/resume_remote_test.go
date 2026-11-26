@@ -13,11 +13,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/command/commandtest"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/process"
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/command/commandtest"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/process"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 func remoteGitFixture(t *testing.T, slug string) (*remote.Session, api.Task, string) {

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/statemachine/reviewobligation"
-	"github.com/dualface/kander/internal/statemachine/reviewplan"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewobligation"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewplan"
 )
 
 // ReviewPlanExtension appends one batch after the prior closure, seals the

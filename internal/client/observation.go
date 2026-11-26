@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/dualface/kander/api"
+	"github.com/dualface/kander/v2/api"
 )
 
 func (p *Project) ObserveAgent(ctx context.Context, key, task string, observation api.AgentObservation, proof Claim) (api.ClaimView, error) {

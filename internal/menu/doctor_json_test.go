@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/command"
-	"github.com/dualface/kander/internal/command/commandtest"
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/install"
+	"github.com/dualface/kander/v2/internal/command"
+	"github.com/dualface/kander/v2/internal/command/commandtest"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/install"
 )
 
 func runDoctorJSON(t *testing.T) (int, string, string) {

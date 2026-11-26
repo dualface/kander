@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/client"
-	"github.com/dualface/kander/internal/statemachine/serverclaim"
-	"github.com/dualface/kander/internal/statemachine/servergrouplease"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/client"
+	"github.com/dualface/kander/v2/internal/statemachine/serverclaim"
+	"github.com/dualface/kander/v2/internal/statemachine/servergrouplease"
 )
 
 // The coordinator write authority adds no state of its own: the group lease

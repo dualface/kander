@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/v2/internal/remote"
 )
 
 // handoverRig sets up a worker that is about to hand over: the executable is

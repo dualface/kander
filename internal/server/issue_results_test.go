@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/issue"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/issue"
 )
 
 func TestIssueResultCASAcrossClientsPublishesOnlyOnce(t *testing.T) {

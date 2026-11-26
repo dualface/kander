@@ -11,9 +11,9 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/menu"
-	"github.com/dualface/kander/internal/version"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/menu"
+	"github.com/dualface/kander/v2/internal/version"
 )
 
 func uiText(id string) string {

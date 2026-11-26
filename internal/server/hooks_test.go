@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/api"
+	"github.com/dualface/kander/v2/api"
 )
 
 func TestEveryRegisteredRoutePassesAuthorizationExceptProbes(t *testing.T) {

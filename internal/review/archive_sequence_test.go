@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/statemachine/reviewrun"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/statemachine/reviewrun"
 )
 
 // recordingStore records the calls of the execution driver that change a run:

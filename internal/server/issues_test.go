@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/issue"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/issue"
 )
 
 func TestRemoteIssueImportIsAtomicAndUniqueAcrossClients(t *testing.T) {

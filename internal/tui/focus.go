@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
-	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/focus"
+	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/focus"
 )
 
 type focusFn func(context.Context, string) focus.Result

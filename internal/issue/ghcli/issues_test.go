@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/issue"
+	"github.com/dualface/kander/v2/internal/issue"
 )
 
 const listTimestamp = `"2026-09-11T02:03:04Z"`

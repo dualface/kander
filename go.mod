@@ -1,4 +1,4 @@
-module github.com/dualface/kander
+module github.com/dualface/kander/v2
 
 go 1.25.0
 

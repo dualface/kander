@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/dualface/kander/api"
-	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/client"
 )
 
 func (s *Session) publishIntegrationSource(ctx context.Context, dir string, journal *ActionJournal, state *integrationOperation, attempt *integrationAttempt, current api.Integration, proof client.Claim) error {

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 // WorkerRun says whether a worker runs for a client home.

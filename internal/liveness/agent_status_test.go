@@ -8,8 +8,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 // fakeAgentBackend answers agent lists and pane facts from memory and counts

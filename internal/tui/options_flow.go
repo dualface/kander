@@ -3,9 +3,9 @@ package tui
 import (
 	"strings"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/flow"
-	"github.com/dualface/kander/internal/menu"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/flow"
+	"github.com/dualface/kander/v2/internal/menu"
 )
 
 func (p *optionsPanel) openFlow() {

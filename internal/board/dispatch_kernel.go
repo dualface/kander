@@ -3,7 +3,7 @@ package board
 import (
 	"time"
 
-	dispatchkernel "github.com/dualface/kander/internal/statemachine/dispatch"
+	dispatchkernel "github.com/dualface/kander/v2/internal/statemachine/dispatch"
 )
 
 // The acceptance and refusal decisions of the dispatch rounds of a card are

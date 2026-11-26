@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/probe"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/probe"
 )
 
 // AgentPane is one agent pane reported by an agent list, with the same
