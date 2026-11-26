@@ -17,7 +17,7 @@ kander subscribe [--follow] [--refresh SECONDS] [--heartbeat SECONDS] (<task-gro
 - `--follow`: keep writing events until the command is stopped, a terminal event, or a failure; it never exits because all cards are done. Without it the command writes the `snapshot`, then exits with status 0 after the first wake-up event: `state-change`, `task-update`, `membership-change`, `member-blocked`, `heartbeat`, `snapshot-reset`, `coordinator-change`, `claim-change`, or a `dispatch-attention` that names a dispatch (ID and epoch) not already `confirmation_overdue` in this subscription's `snapshot`. It writes every event of that refresh before it exits. A terminal event, an output failure, or a signal ends it as under `--follow`.
 - `<task-group> <task-id>...`: the group and its complete member set; the command validates ownership.
 - `--watch <task-id|task-group-id>`: one external card or group, repeated once per direct reference and re-expanded on each observation; alone it monitors standalone cards without a group. Each reference needs its own `--watch`.
-- `--refresh SECONDS`: default 1.
+- `--refresh SECONDS`: the interval between two reads of the board state, a number greater than 0; default 1. A read that times out on the board lock is retried after this interval.
 - `--heartbeat SECONDS`: default 900; the heartbeat starts after the snapshot is queued and restarts only after each heartbeat is queued.
 
 ## Examples

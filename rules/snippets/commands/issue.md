@@ -19,14 +19,15 @@ kander issue result NUMBER --card TASK_ID [--repo HOST/OWNER/REPO] [--agent NAME
 
 ## Arguments
 
-- `repo [--repo HOST/OWNER/REPO]`: show the resolved repository.
-- `list [--repo ...] [--state open|closed|all] [--label NAME] [--search TEXT] [--limit N]`: list issues.
+- `repo [--repo HOST/OWNER/REPO]`: show the resolved repository. Without `--repo`, every `issue` subcommand uses the repository resolved from the checkout's Git remotes.
+- `list [--repo ...] [--state open|closed|all] [--label NAME] [--search TEXT] [--limit N]`: list issues. `--state` defaults to `open`. `--label` may repeat, up to 20 distinct labels compared without case, and an issue must carry every label. `--search` is GitHub issue search text added to the query; it is not the literal title match of `kander list --search`. `--limit` is 1 to 200; default 30.
 - `show NUMBER [--repo ...] [--comments]`: print one issue.
-- `import NUMBER [--repo ...] [--comments] [--type feature|bug|chore|research] [--large] [--language LANG]`: create a card from an issue.
+- `import NUMBER [--repo ...] [--comments] [--type feature|bug|chore|research] [--large] [--language LANG]`: create a card from an issue. `--comments` also reads the issue comments. Without `--type`, the type comes from the issue labels. `--large` and `--language` work as for `kander new`.
 - `triage NUMBER [--card TASK_ID] [--repo ...] [--agent NAME] [--launcher NAME]`: start a triage session.
-- `result NUMBER --card TASK_ID [--repo ...] [--agent NAME] [--launcher NAME] [--action start|inspect|apply|decide] [--file JSON]`: reconcile the completed result of the issue's work set (the anchor card plus its `SOURCE_ISSUE` siblings, `KANDER-ISSUE-RULES.md` "Completed Result Reconciliation"). `--card` is always the anchor card.
-- `--launcher NAME`: for `triage` and `result`, follow `snippets/commands/start.md` "Choosing the Launcher".
-- `--operation-id <stable-id>`: with `result` in a distributed project, distinguishes an intentionally new result session; see "Additional Syntax".
+- `result NUMBER --card TASK_ID [--repo ...] [--agent NAME] [--launcher NAME] [--action start|inspect|apply|decide] [--file JSON]`: reconcile the completed result of the issue's work set (the anchor card plus its `SOURCE_ISSUE` siblings, `KANDER-ISSUE-RULES.md` "Completed Result Reconciliation"). `--card` is always the anchor card. `--action` defaults to `start`. `--file JSON` is the input of `apply` and `decide`, at most 64 KiB; `start` and `inspect` do not read it.
+- `--agent NAME`: for `triage` and `result`, a configured execution agent; default `kanban_agents.small`.
+- `--launcher NAME`: for `triage` and `result`; default the configured `launcher`. Follow `snippets/commands/start.md` "Choosing the Launcher".
+- `--operation-id <stable-id>`: with `result` and `--action start` (the default), distinguishes an intentionally new result session; see "Additional Syntax".
 
 ## Examples
 
@@ -77,7 +78,7 @@ Human-readable lines. With `--json`, one object:
 ## Additional Syntax
 
 ```text
-kander issue result <number> --repo <repository> --card <task-id> [--action start] [--agent <name>] [--launcher <name>] [--operation-id <stable-id>]
+kander issue result NUMBER --card TASK_ID [--repo HOST/OWNER/REPO] [--agent NAME] [--launcher NAME] [--action start] [--operation-id <stable-id>]
 ```
 
 In a distributed project, result inspection, publication intent, decisions and recovery records use the service's independent CAS resource. A changed work-set digest or result version refuses the save before any external write. Comment and close intents commit before calling the provider. Unknown effects remain uncertain until complete remote observations reconcile their exact body and numeric identity. Closing still needs separate explicit consent for the current issue state.

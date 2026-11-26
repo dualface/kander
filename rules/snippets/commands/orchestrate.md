@@ -16,8 +16,8 @@ kander orchestrate [--agent <configured-agent>] [--launcher <launcher>] (--messa
 
 - `task-id|task-group-id...`: the cards and groups in plan order; a group ID expands to its current members.
 - `--message TEXT | --message-file FILE`: exactly one; the plan notes (order, parallel cards, groups and their merge-back steps, user decisions).
-- `--agent`, `--launcher`: as for `start`; the default agent tier is `large`. For `--launcher`, follow `snippets/commands/start.md` "Choosing the Launcher".
-- `--operation-id <stable-id>`: identifies an intentionally new confirmed orchestration of a distributed project; reuse its value when retrying.
+- `--agent`, `--launcher`: as for `start`, except that the default agent is `kanban_agents.large`, whatever the SIZE of the cards. For `--launcher`, follow `snippets/commands/start.md` "Choosing the Launcher".
+- `--operation-id <stable-id>`: identifies an intentionally new confirmed orchestration; reuse its value when retrying.
 
 ## Examples
 

@@ -15,7 +15,7 @@ kander start [--agent <configured-agent>] [--launcher <launcher>] [task-id]
 ## Arguments
 
 - `task-id`: the card; without it, the command lists the `todo/` candidates.
-- `--agent <configured-agent>`: override the configured execution agent for this invocation only.
+- `--agent <configured-agent>`: the execution agent for this launch only. Default: the agent the card pins, otherwise `kanban_agents.<SIZE>` of the card. A value that differs from a pinned agent is refused (see "Card Pins").
 - `--launcher <launcher>`: a built-in launcher name (`auto`, `tmux`, `tmux-session`, `herdr`, `herdr-core`, `luvus`, `dsh`, `foreground`, `console`) or one provided by a loaded terminal definition (see "Launchers" below). Pass it only as allowed under "Choosing the Launcher".
 
 ## Examples

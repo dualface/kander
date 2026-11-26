@@ -21,7 +21,7 @@ kander dispatch settle <task-id> <dispatch-id> <dispatch-revision>
 - `prepare <absolute-UTF8-intent.json>`: create an intent without sending, or check a candidate with the read-only `kind: check-integration` input below. Use `notify` for a wrap-up dispatch.
 - `authorize-wrap-up <absolute-UTF8-request.json>`: the on-behalf wrap-up grant.
 - `show <task-id> <dispatch-id>`: print the dispatch and its receipts.
-- `fail|cancel <task-id> <dispatch-id> <dispatch-revision> <reason> [--decision <reference>]`: record the terminal decision and release the binding. An accepted round requires `--decision`.
+- `fail|cancel <task-id> <dispatch-id> <dispatch-revision> <reason> [--decision <reference>]`: record the terminal decision and release the binding. An accepted round requires `--decision`. `--decision <reference>` is free text that cites the user's decision: who decided, when, and the words. Kander stores it without checking it; it is not the ID of a `kander decision` record.
 - `settle <task-id> <dispatch-id> <dispatch-revision>`: end the binding of a completed round of the current execution cycle.
 
 ## Examples
@@ -43,7 +43,7 @@ kander dispatch show 20261118-example-task dispatch-1
 kander dispatch fail 20261118-example-task dispatch-1 3 "The agent stopped"
 
 # Cancel an accepted dispatch after a user decision
-kander dispatch cancel 20261118-example-task dispatch-1 3 "Replaced by a new round" --decision user-2026-11-19
+kander dispatch cancel 20261118-example-task dispatch-1 3 "Replaced by a new round" --decision "user 2026-11-19: replace this round"
 
 # End the binding of a completed round
 kander dispatch settle 20261118-example-task dispatch-1 3

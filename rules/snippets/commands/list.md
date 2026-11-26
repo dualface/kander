@@ -25,7 +25,7 @@ kander list [--agent-status] [--assignee NAME] [--submitter NAME] [--group ID] [
 - `--search TEXT`: literal title substring, with case-insensitive ASCII letters. Three or more Unicode characters use a trigram index. Shorter terms still match.
 - `--limit N`: page size, an integer from 1 to 1000. Without it, return all matching cards.
 - `--cursor TOKEN`: continue with the token from the previous page. Keep the same filters and supply `--limit`.
-- `--agent-status`: with the global `--json` only; observe the executing agent of every `working` or `review` card with a non-empty `WINDOW`.
+- `--agent-status`: observe the executing agent of every `working` or `review` card with a non-empty `WINDOW`. It works only with the global `--json`; without `--json` it has no effect.
 
 ## Examples
 
