@@ -90,6 +90,14 @@ The request kind follows the dispatch. A notify without dispatch options is a `n
 
 The worker resolves the target pane first, which types nothing, and reserves delivery only after that succeeded and while that version and generation remain current. Stale or expired proposals are rejected without typing. Formal preparation by the holder verifies the original proposal and acknowledges it in the dispatch transaction. A plain `kander move <task-id> working` of a task group card in `review/` is refused while the request kernel would still accept such a proposal for `kander dispatch prepare`: the holder runs `kander dispatch prepare` for it, or answers it `rejected`, first (`snippets/commands/dispatch.md`). Inspect the full request with `kander request show <task-id> <request-id>`; do not act on a superseded request or one for another execution generation.
 
+The worker types a short pointer to a private request file. Its notes distinguish terminal input from a business receipt:
+
+- `typed into the agent pane; waiting for the agent's acknowledgement` means the line was typed but may still be a draft.
+- `submitted: the agent acknowledged the request file` means the agent read the file and the worker saw its marker in the pane.
+- `typed into the agent pane but not acknowledged within 120s: the agent may be busy with the message queued, or the line may still sit in its input box` means the worker did not see the marker in time.
+
+For an unconfirmed request, check the pane first. The agent may be busy and the request may still be queued. Do not resend it immediately. If the line is stuck as a draft, have the holder or user handle it in that pane. If it needs to be sent again, use a new request. The worker does not retype the line or press Enter again.
+
 When a new proposal is a `fix` dispatch, the server checks its `evidence.fix` before it creates the request, with the check that `kander dispatch prepare` runs at the holder (`snippets/commands/dispatch.md`). A failed check creates no proposal: the command exits nonzero and prints every problem at once, one line each. A line that belongs to a finding starts with `<run_id>/<finding_id>`, names the field, and gives the provided and the expected value; every missing author original is one line with `finding.run_id`, `finding.finding_id`, `record_id`, `author` and `artifact.path`. The lines never carry the text, the evidence or the basis of a finding. Correct the evidence file and run `kander notify` again without `--dispatch-id`, or with a new dispatch ID: the refused ID keeps its stored refusal, so changed evidence under it is an `idempotency_mismatch`. The holder's `prepare` still checks again and refuses what changed after the creation.
 
 **Holder steps for a proposal**

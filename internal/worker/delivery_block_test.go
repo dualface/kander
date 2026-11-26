@@ -36,7 +36,7 @@ func (h *harness) target(err error) *fakeTarget {
 	return p
 }
 
-func (p *fakeTarget) resolve(window, session string) (Prompt, error) {
+func (p *fakeTarget) resolve(window, session string) (*Target, error) {
 	p.mu.Lock()
 	p.calls = append(p.calls, p.h.now())
 	err, cost := p.err, p.cost
@@ -47,7 +47,7 @@ func (p *fakeTarget) resolve(window, session string) (Prompt, error) {
 	if err != nil {
 		return nil, err
 	}
-	return func(text string) error {
+	return &Target{Prompt: func(text string) error {
 		if p.onType != nil {
 			p.onType()
 		}
@@ -55,7 +55,7 @@ func (p *fakeTarget) resolve(window, session string) (Prompt, error) {
 		defer p.mu.Unlock()
 		p.typed = append(p.typed, text)
 		return p.typeErr
-	}, nil
+	}}, nil
 }
 
 func (p *fakeTarget) set(err error) {
@@ -240,7 +240,7 @@ func TestRecoveryReservesThenTypesOnceThenAcknowledges(t *testing.T) {
 	if atTyping.Status != api.RequestAccepted || !strings.Contains(atTyping.Note, "reserved") {
 		t.Fatalf("the request is reserved before it is typed: %+v", atTyping)
 	}
-	if final := h.requests(c)[0]; final.Status != api.RequestAccepted || final.Note != "delivered to the agent" {
+	if final := h.requests(c)[0]; final.Status != api.RequestAccepted || final.Note != typedNote {
 		t.Fatalf("the final answer: %+v", final)
 	}
 	if _, blocked := h.blockOf(); blocked {
@@ -319,15 +319,15 @@ func TestReservationFollowsASlowResolution(t *testing.T) {
 	_, c := h.claimed("slow-resolution", true)
 	h.request(c, "x")
 	typed := atomic.Int32{}
-	h.loop.o.Resolve = func(string, string) (Prompt, error) {
+	h.loop.o.Resolve = func(string, string) (*Target, error) {
 		time.Sleep(2 * renew)
-		return func(string) error { typed.Add(1); return nil }, nil
+		return &Target{Prompt: func(string) error { typed.Add(1); return nil }}, nil
 	}
 	h.advance(2 * renew)
 	if _, err := h.pass(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if request := h.requests(c)[0]; typed.Load() != 1 || request.Status != api.RequestAccepted || request.Note != "delivered to the agent" {
+	if request := h.requests(c)[0]; typed.Load() != 1 || request.Status != api.RequestAccepted || request.Note != typedNote {
 		t.Fatalf("typed=%d request=%+v", typed.Load(), request)
 	}
 }

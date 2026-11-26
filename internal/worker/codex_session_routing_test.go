@@ -22,7 +22,7 @@ func TestCodexExecutionWithTheConfirmedSessionGetsRequestsDelivered(t *testing.T
 	pr, sink := h.target(nil), h.logs()
 	var resolved [][2]string
 	resolve := pr.resolve
-	h.loop.o.Resolve = func(w, s string) (Prompt, error) {
+	h.loop.o.Resolve = func(w, s string) (*Target, error) {
 		resolved = append(resolved, [2]string{w, s})
 		return resolve(w, s)
 	}
@@ -33,7 +33,7 @@ func TestCodexExecutionWithTheConfirmedSessionGetsRequestsDelivered(t *testing.T
 	if len(pr.typedLines()) == 0 || !slices.Contains(h.credential().Delivered, r.ID) {
 		t.Fatalf("the request was not delivered: typed=%q delivered=%v", pr.typedLines(), h.credential().Delivered)
 	}
-	if delivered := sink.findAll("request delivered"); len(delivered) != 1 || delivered[0]["request"] != r.ID {
+	if delivered := sink.findAll("request typed"); len(delivered) != 1 || delivered[0]["request"] != r.ID {
 		t.Fatalf("delivery log=%v", delivered)
 	}
 	if differs := sink.findAll("request routing differs from this execution's local facts"); len(differs) != 0 {

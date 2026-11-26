@@ -132,7 +132,7 @@ func TestALostReservationIsRecoveredAndTypedOnce(t *testing.T) {
 	if atTyping.Revision != reserved.Revision {
 		t.Fatalf("the confirmation changed the request before typing: revision %d, reserved at %d", atTyping.Revision, reserved.Revision)
 	}
-	if final := h.requests(c)[0]; final.Status != api.RequestAccepted || final.Note != "delivered to the agent" {
+	if final := h.requests(c)[0]; final.Status != api.RequestAccepted || final.Note != typedNote {
 		t.Fatalf("the final answer: %+v", final)
 	}
 	if loss.count() != 1 {
@@ -368,7 +368,7 @@ func TestAReservedRequestWhoseTargetCannotBeResolvedWaitsAsPending(t *testing.T)
 	if len(pr.typedLines()) != 1 {
 		t.Fatalf("the first attempt after the cause is gone types the request once: %q", pr.typedLines())
 	}
-	if final := h.requests(c)[0]; final.Status != api.RequestAccepted || final.Note != "delivered to the agent" {
+	if final := h.requests(c)[0]; final.Status != api.RequestAccepted || final.Note != typedNote {
 		t.Fatalf("the final answer: %+v", final)
 	}
 }
@@ -399,7 +399,7 @@ func TestAReservedProposalThatTurnsUnusableBeforeTypingIsRejectedWithoutTyping(t
 					}
 				}
 				if phase == "resolution" {
-					h.loop.o.Resolve = func(window, session string) (Prompt, error) {
+					h.loop.o.Resolve = func(window, session string) (*Target, error) {
 						apply()
 						return pr.resolve(window, session)
 					}

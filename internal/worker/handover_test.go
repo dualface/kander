@@ -170,18 +170,19 @@ func (r *rig) writeExecutable(content string) {
 
 func (r *rig) options() Options {
 	return Options{
-		Home:   r.home,
-		Tick:   5 * time.Millisecond,
-		Logger: slog.New(slog.NewJSONHandler(r.sink, nil)),
-		Now:    r.now,
-		Stop:   func(int) error { return nil },
-		Resolve: func(window, session string) (Prompt, error) {
-			return func(text string) error {
+		Home:              r.home,
+		CreateRequestFile: testRequestFiles(r.t),
+		Tick:              5 * time.Millisecond,
+		Logger:            slog.New(slog.NewJSONHandler(r.sink, nil)),
+		Now:               r.now,
+		Stop:              func(int) error { return nil },
+		Resolve: func(window, session string) (*Target, error) {
+			return &Target{Prompt: func(text string) error {
 				r.mu.Lock()
 				defer r.mu.Unlock()
 				r.delivered = append(r.delivered, text)
 				return nil
-			}, nil
+			}}, nil
 		},
 		Executable: func() (string, error) { return r.exe, nil },
 		Identity: func(path string) (os.FileInfo, error) {
@@ -323,6 +324,13 @@ func TestHandoverToTheReplacedBinary(t *testing.T) {
 	done := r.serve(ctx)
 	r.advance(16 * time.Second)
 	waitFor(t, "the first delivery", func() bool { return r.deliveries() == 1 })
+	r.mu.Lock()
+	line := r.delivered[0]
+	r.mu.Unlock()
+	oldDir := filepath.Dir(pathFromRequestPointer(t, line))
+	if _, err := os.Stat(oldDir); err != nil {
+		t.Fatalf("request file was not kept before handover: %v", err)
+	}
 
 	r.writeExecutable("v2")
 	select {
@@ -333,6 +341,7 @@ func TestHandoverToTheReplacedBinary(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("the worker did not hand over")
 	}
+	requireRequestDirRemoved(t, oldDir)
 	if got := r.spawns.Load(); got != 1 || spawnHome != r.home || spawnExe != r.exe {
 		t.Fatalf("one start with the recorded path and home expected: n=%d home=%q exe=%q", got, spawnHome, spawnExe)
 	}

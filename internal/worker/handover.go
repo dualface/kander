@@ -234,6 +234,7 @@ func (w *loop) tryHandover(ctx context.Context, h *handover, lock *workerLock) (
 		err = w.confirm(ctx, next)
 	}
 	if err == nil {
+		w.closeRequestFiles()
 		log.Info("worker handed over", "old_version", version.String(), "new_pid", next.PID())
 		return handoverDone, nil
 	}

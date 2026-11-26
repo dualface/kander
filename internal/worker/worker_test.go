@@ -2,10 +2,12 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/dualface/kander/v2/api"
 	"github.com/dualface/kander/v2/internal/client"
+	kfs "github.com/dualface/kander/v2/internal/fs"
 	"github.com/dualface/kander/v2/internal/remote"
 	"github.com/dualface/kander/v2/internal/server"
 )
@@ -61,6 +64,7 @@ func newHarnessWrapped(t *testing.T, renew time.Duration, wrap func(http.Handler
 	h.srv, h.http = s, httptest.NewServer(handler)
 	t.Cleanup(func() { h.http.Close(); h.srv.Close() })
 	h.loop = newLoop(h.workerOptions())
+	t.Cleanup(h.loop.closeRequestFiles)
 	return h
 }
 
@@ -72,18 +76,37 @@ func (h *harness) workerOptions() Options {
 		defer h.mu.Unlock()
 		h.stopped = append(h.stopped, pid)
 		return nil
-	}, Resolve: h.resolveRecording}
+	}, Resolve: h.resolveRecording, CreateRequestFile: testRequestFiles(h.t)}
+}
+
+func testRequestFiles(t *testing.T) func(string) (*kfs.TempDir, string, error) {
+	t.Helper()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return func(body string) (*kfs.TempDir, string, error) {
+		dir, err := kfs.CreatePrivateTempDir(root, "request-")
+		if err != nil {
+			return nil, "", err
+		}
+		path := filepath.Join(dir.Path, "request.md")
+		if err := kfs.WriteTextAtomic(dir.Path, path, body, false); err != nil {
+			return nil, "", errors.Join(err, dir.Close())
+		}
+		return dir, path, nil
+	}
 }
 
 // resolveRecording is the default target resolution of the harness: it always
 // resolves, and the prompt it returns records the lines typed.
-func (h *harness) resolveRecording(window, session string) (Prompt, error) {
-	return func(text string) error {
+func (h *harness) resolveRecording(window, session string) (*Target, error) {
+	return &Target{Prompt: func(text string) error {
 		h.mu.Lock()
 		defer h.mu.Unlock()
 		h.lines = append(h.lines, text)
 		return nil
-	}, nil
+	}}, nil
 }
 
 // pass is one tick of the worker with the loops run in turn: the renewals
@@ -281,7 +304,7 @@ func TestWorkerDeliversRequestsOnce(t *testing.T) {
 	if len(h.lines) != 1 || !strings.Contains(h.lines[0], r.ID) || strings.Contains(h.lines[0], "\n") {
 		t.Fatalf("one single-line delivery expected: %q", h.lines)
 	}
-	if !strings.HasSuffix(h.lines[0], "done|rejected [note])") {
+	if !strings.HasSuffix(h.lines[0], "kander request show "+c.TaskID+" "+r.ID+" --json") {
 		t.Fatalf("worker appended text after the request protocol: %q", h.lines[0])
 	}
 	requests, err := b.Requests(t.Context(), c.TaskID)
