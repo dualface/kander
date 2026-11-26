@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: '1.27.3'
       - name: Delivery and overlap tests
         run: |
           go test ./internal/check -count=1
@@ -111,7 +111,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: '1.27.3'
       # Any failure of the decision leaves its output unset, and the search then
       # runs.
       - name: Decide whether the model search runs
