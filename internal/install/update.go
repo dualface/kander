@@ -8,7 +8,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -27,16 +26,23 @@ import (
 	"github.com/dualface/kander/internal/version"
 )
 
+// The check reads one page of the releases list instead of releases/latest:
+// a prerelease never becomes latest, and a later 1.x patch takes latest back
+// from 2.x. One page of 30 entries (the GitHub default) reaches far past the
+// newest release of either 2.x channel, and older entries are never
+// compared. A measured 70-entry page with bodies and assets was about
+// 950 KB, so 30 entries are about 460 KB; the 4 MiB cap keeps a full page
+// with eightfold headroom and fails instead of parsing a truncated page.
 const (
-	latestReleaseURL = "https://api.github.com/repos/dualface/kander/releases/latest"
-	maxReleaseJSON   = 1 << 20
-	maxChecksums     = 1 << 20
-	maxArchive       = 128 << 20
-	maxUpdateBinary  = 128 << 20
-	maxDiagnostic    = 64 << 10
+	releaseListURL  = "https://api.github.com/repos/dualface/kander/releases?per_page=30"
+	maxReleaseList  = 4 << 20
+	maxChecksums    = 1 << 20
+	maxArchive      = 128 << 20
+	maxUpdateBinary = 128 << 20
+	maxDiagnostic   = 64 << 10
 )
 
-// UpdateInfo describes one newer stable release compatible with this binary.
+// UpdateInfo describes one newer release in the running binary's channel.
 type UpdateInfo struct {
 	Current   string
 	Version   string
@@ -59,6 +65,7 @@ var (
 	updateCheckHTTPClient    = newUpdateHTTPClient(5 * time.Second)
 	updateDownloadHTTPClient = newUpdateHTTPClient(10 * time.Minute)
 	updateLookPath           = exec.LookPath
+	updateExecutable         = os.Executable
 	runBrew                  = runBrewCommand
 	probeBinary              = validateUpdateBinary
 )
@@ -98,47 +105,55 @@ func updateAssetName(goos, goarch string) (string, bool) {
 	return "kander-" + goos + "-" + goarch + ext, true
 }
 
-// CheckUpdate queries the latest stable GitHub release. No update is (nil, nil).
-// A Microsoft Store install never checks: the Store delivers its updates.
+// CheckUpdate returns the newest GitHub release in the running binary's
+// channel (see channelOf). No update is (nil, nil). A binary outside every
+// channel never sends a request. A Microsoft Store install never checks: the
+// Store delivers its updates. A Homebrew install on the prerelease channel
+// never checks either, because the tap publishes only releases.
 func CheckUpdate(ctx context.Context) (*UpdateInfo, error) {
 	if Packaged() {
 		return nil, nil
 	}
-	current := version.String()
-	if !version.Valid(current) || strings.Contains(strings.TrimPrefix(current, "v"), "-") {
+	current := strings.TrimPrefix(version.String(), "v")
+	channel := channelOf(current)
+	if channel == channelNone {
 		return nil, nil
 	}
 	asset, ok := updateAssetName(runtime.GOOS, runtime.GOARCH)
 	if !ok {
 		return nil, nil
 	}
-	checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	body, err := updateGet(checkCtx, updateCheckHTTPClient, latestReleaseURL, maxReleaseJSON)
+	resolved, err := resolvedExecutable()
 	if err != nil {
 		return nil, err
 	}
-	var release struct {
-		TagName    string `json:"tag_name"`
-		Draft      bool   `json:"draft"`
-		Prerelease bool   `json:"prerelease"`
-	}
-	if err := json.Unmarshal(body, &release); err != nil {
-		return nil, fmt.Errorf("decode latest release: %w", err)
-	}
-	target := strings.TrimPrefix(strings.TrimSpace(release.TagName), "v")
-	if release.Draft || release.Prerelease || !version.Valid(target) || strings.Contains(target, "-") || version.Compare(target, current) <= 0 {
+	brew := isBrewManaged(resolved)
+	if brew && channel == channelPrerelease {
 		return nil, nil
 	}
-	exe, err := os.Executable()
+	checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	body, err := updateGet(checkCtx, updateCheckHTTPClient, releaseListURL, maxReleaseList)
 	if err != nil {
-		return nil, fmt.Errorf("resolve current executable: %w", err)
+		return nil, err
+	}
+	target, err := newestInChannel(body, current)
+	if err != nil || target == "" {
+		return nil, err
+	}
+	return &UpdateInfo{Current: current, Version: target, AssetName: asset, Brew: brew}, nil
+}
+
+func resolvedExecutable() (string, error) {
+	exe, err := updateExecutable()
+	if err != nil {
+		return "", fmt.Errorf("resolve current executable: %w", err)
 	}
 	resolved, err := filepath.EvalSymlinks(exe)
 	if err != nil {
 		resolved = exe
 	}
-	return &UpdateInfo{Current: current, Version: target, AssetName: asset, Brew: isBrewManaged(resolved)}, nil
+	return resolved, nil
 }
 
 func updateGet(ctx context.Context, client *http.Client, rawURL string, limit int64) ([]byte, error) {
@@ -176,25 +191,26 @@ func ApplyUpdate(ctx context.Context, info UpdateInfo) (UpdateResult, error) {
 	if Packaged() {
 		return UpdateResult{}, errStoreManaged()
 	}
-	if !version.Valid(info.Version) || strings.Contains(info.Version, "-") {
-		return UpdateResult{}, errors.New("invalid update version")
+	current := strings.TrimPrefix(version.String(), "v")
+	channel := channelOf(current)
+	if channel == channelNone || channelOf(info.Version) != channel {
+		return UpdateResult{}, errors.New("update version is not in the running version's release channel")
 	}
-	if current := version.String(); version.Valid(current) && version.Compare(info.Version, current) <= 0 {
+	if version.Compare(info.Version, current) <= 0 {
 		return UpdateResult{}, errors.New("update is not newer than the running version")
 	}
 	expectedAsset, ok := updateAssetName(runtime.GOOS, runtime.GOARCH)
 	if !ok || info.AssetName != expectedAsset {
 		return UpdateResult{}, errors.New("update asset does not match this platform")
 	}
-	exe, err := os.Executable()
+	resolved, err := resolvedExecutable()
 	if err != nil {
-		return UpdateResult{}, fmt.Errorf("resolve current executable: %w", err)
-	}
-	resolved, err := filepath.EvalSymlinks(exe)
-	if err != nil {
-		resolved = exe
+		return UpdateResult{}, err
 	}
 	info.Brew = isBrewManaged(resolved)
+	if info.Brew && channel == channelPrerelease {
+		return UpdateResult{}, errors.New("Homebrew publishes no prereleases; reinstall from the GitHub release to update a prerelease")
+	}
 	if info.Brew {
 		return applyBrewUpdate(ctx, info)
 	}
