@@ -25,5 +25,8 @@
   "terminal.process_facts_invalid": "プロセス情報が無効です",
   "terminal.process_facts_limit": "プロセス情報が 64 件を超えています",
   "terminal.process_facts_identity_invalid": "フォアグラウンドプロセスの識別情報が無効です",
-  "launch.session_repair_directory_mismatch": "開いている rollout の起動ディレクトリがこのタスクと一致しません"
+  "launch.session_repair_directory_mismatch": "開いている rollout の起動ディレクトリがこのタスクと一致しません",
+  "notify.request_session_without_id": "カードの SESSION にはエージェント名 {{.V0}} だけがあり、セッション ID がないため pane を確認できません。次の手順: 保持者が kander request show <task-id> <request-id> で要求を読みます。または pane の旧エージェントを先に停止し、kander resume --agent {{.V0}} --decision <reference> --message <message> <task-id> で引き継ぎます",
+  "notify.request_session_mode_none": "エージェント {{.V0}} はセッション ID を記録しないため、worker は直接配信できません。次の手順: 保持者が kander request show <task-id> <request-id> で要求を読みます",
+  "notify.request_session_marker_hint": "{{.V0}}。カードの SESSION にはセッション ID がありますが、pane のセッションマーカーが欠落しているか一致しません。次の手順: kander check <task-id> で生存を確認します。保持者は kander request show <task-id> <request-id> で要求を読めます"
 }
