@@ -197,11 +197,22 @@ func TestRemoteStartRefusesAMissingStartBranchBeforeTheClaim(t *testing.T) {
 
 func TestRemoteStartRefusesMainInMainDevelopModeBeforeTheClaim(t *testing.T) {
 	skipOnWindows(t)
-	f := newStartBaseFixture(t)
-	card := f.todo(t, "start-base-main", "- INTEGRATION_TARGET: main")
-	t.Setenv("KANBAN_LAUNCH_CWD", f.worktree(t, card.TaskID))
-	_, err := StartRemote("claude", "tmux", card.TaskID)
-	f.refused(t, card.TaskID, err, "main-develop")
+	for _, tc := range []struct {
+		name   string
+		header []string
+	}{
+		{"standalone", []string{"- INTEGRATION_TARGET: main"}},
+		// The group branch exists on the remote; the member is refused anyway.
+		{"group-member", []string{"- TASK_GROUP: " + startBaseGroup, "- INTEGRATION_TARGET: main"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newStartBaseFixture(t)
+			card := f.todo(t, "start-base-main", tc.header...)
+			t.Setenv("KANBAN_LAUNCH_CWD", f.worktree(t, card.TaskID))
+			_, err := StartRemote("claude", "tmux", card.TaskID)
+			f.refused(t, card.TaskID, err, "main-develop")
+		})
+	}
 }
 
 func TestRemoteStartNeverPublishesTheCallersUnpushedCommit(t *testing.T) {
