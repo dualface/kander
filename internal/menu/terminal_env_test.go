@@ -3,6 +3,7 @@
 package menu
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -14,6 +15,7 @@ func TestMain(m *testing.M) {
 	terminaltest.ClearEnv()
 	leave, err := enterNeutralDir()
 	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 	code := m.Run()

@@ -1,6 +1,7 @@
 package menu
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -18,9 +19,12 @@ var packageDir string
 // to the main worktree's .kander-config.json (through git, or by walking up
 // when a test hides git from PATH). config.Load would merge a developer's own
 // overlay over the configuration a test writes, so results would differ
-// between a checkout with an overlay and CI without one. A fresh temporary
-// directory has no overlay on either lookup path. The returned function
-// removes that directory.
+// between a checkout with an overlay and CI without one. The new directory is
+// created under os.TempDir; when TMPDIR points inside a project, the
+// directory would still resolve to that project's overlay, so it must be its
+// own overlay root with no overlay file, or the run stops with an error that
+// names the project root instead of failing assertions later. The returned
+// function returns to the package directory and removes the temporary one.
 func enterNeutralDir() (func(), error) {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -31,11 +35,33 @@ func enterNeutralDir() (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := os.Chdir(dir); err != nil {
-		_ = os.RemoveAll(dir)
+	remove := func() { _ = os.RemoveAll(dir) }
+	if err := requireNeutral(dir); err != nil {
+		remove()
 		return nil, err
 	}
-	return func() { _ = os.RemoveAll(dir) }, nil
+	if err := os.Chdir(dir); err != nil {
+		remove()
+		return nil, err
+	}
+	// Windows cannot remove the current directory, so leave it first.
+	return func() {
+		_ = os.Chdir(packageDir)
+		remove()
+	}, nil
+}
+
+// requireNeutral reports an error unless dir resolves to itself as the overlay
+// project root and holds no overlay file.
+func requireNeutral(dir string) error {
+	location, err := config.ResolveOverlayLocation(dir)
+	if err != nil {
+		return err
+	}
+	if location.ProjectRoot != dir || location.Exists {
+		return fmt.Errorf("temporary directory %s resolves to the project overlay root %s; set TMPDIR outside any Git worktree or Kander project", dir, location.ProjectRoot)
+	}
+	return nil
 }
 
 // isolateOverlay keeps a test that loads configuration away from an inherited

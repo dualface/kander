@@ -5,6 +5,7 @@ package menu
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -44,6 +45,7 @@ func TestMain(m *testing.M) {
 	}
 	leave, err := enterNeutralDir()
 	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		_ = os.RemoveAll(dir)
 		os.Exit(1)
 	}
