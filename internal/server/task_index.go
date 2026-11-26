@@ -15,7 +15,11 @@ import (
 	"github.com/dualface/kander/internal/server/taskindex"
 )
 
-const indexIOTimeout = 2 * time.Minute
+const (
+	indexIOTimeout    = 2 * time.Minute
+	indexRetryInitial = time.Second
+	indexRetryMax     = time.Minute
+)
 
 func rebuildingError() *api.Error {
 	return apiError(api.CodeIndexRebuilding, i18n.Text("en", "remote.error_index_rebuilding"))
@@ -66,6 +70,7 @@ func (p *project) unlockBoard() {
 	defer clear(p.indexDirty)
 	if p.importBroken {
 		p.indexRebuilding.Store(true)
+		p.wakeIndexRebuild()
 		return
 	}
 	if p.indexFull {
@@ -75,6 +80,7 @@ func (p *project) unlockBoard() {
 		} else {
 			clear(p.indexDirty)
 			p.indexRebuilding.Store(false)
+			p.wakeIndexRebuild()
 		}
 	}
 	if !p.indexRebuilding.Load() && len(p.indexDirty) > 0 {
@@ -94,33 +100,74 @@ func (p *project) invalidateIndex(err error) {
 }
 
 func (p *project) startIndexRebuild() {
-	if p.indexRunning || p.server.shutdown.Err() != nil {
+	if p.server.closing.Load() || p.server.shutdown.Err() != nil {
 		return
 	}
-	p.indexRunning = true
-	p.server.indexWorkers.Go(func() {
-		// Give readers a stable failure while rebuilding instead of letting them
-		// wait behind the board scan and use a previous index.
-		var faultErr error
-		if fault := p.server.indexFault; fault != nil {
-			faultErr = fault(p, "rebuild")
-		}
-		p.mu.Lock()
-		defer p.mu.Unlock()
-		p.indexRunning = false
-		if p.server.shutdown.Err() != nil || !p.indexRebuilding.Load() || p.importBroken {
+	if p.indexWake != nil {
+		p.wakeIndexRebuild()
+		return
+	}
+	wake := make(chan struct{}, 1)
+	p.indexWake = wake
+	p.server.indexWorkers.Go(func() { p.rebuildIndex(wake) })
+}
+
+// wakeIndexRebuild coalesces requests arriving while a rebuild is in progress.
+// The caller holds the project lock.
+func (p *project) wakeIndexRebuild() {
+	select {
+	case p.indexWake <- struct{}{}:
+	default:
+	}
+}
+
+func (p *project) rebuildIndex(wake <-chan struct{}) {
+	for attempt, delay := 1, indexRetryInitial; ; attempt, delay = attempt+1, min(delay*2, indexRetryMax) {
+		err := p.tryIndexRebuild()
+		if err == nil {
 			return
 		}
-		if faultErr != nil {
-			p.log().Error("task index rebuild failed", "error", faultErr)
+		p.log().Error("task index rebuild failed", "attempt", attempt, "error", err)
+		wait := delay
+		if retryDelay := p.server.indexRetryDelay; retryDelay != nil {
+			wait = retryDelay(attempt)
+		}
+		timer := time.NewTimer(wait)
+		select {
+		case <-timer.C:
+		case <-wake:
+		case <-p.server.shutdown.Done():
+			timer.Stop()
+			p.mu.Lock()
+			p.indexWake = nil
+			p.mu.Unlock()
 			return
 		}
-		if err := p.reconcileIndex(); err != nil {
-			p.log().Error("task index rebuild failed", "error", err)
-			return
-		}
+		timer.Stop()
+	}
+}
+
+// A nil result ends this worker's ownership of retries while it still holds
+// the project lock. A subsequent invalidation can then start a new worker.
+func (p *project) tryIndexRebuild() error {
+	var err error
+	if fault := p.server.indexFault; fault != nil && p.server.shutdown.Err() == nil {
+		err = fault(p, "rebuild")
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.server.closing.Load() || p.server.shutdown.Err() != nil || !p.indexRebuilding.Load() || p.importBroken {
+		p.indexWake = nil
+		return nil
+	}
+	if err == nil {
+		err = p.reconcileIndex()
+	}
+	if err == nil {
 		p.indexRebuilding.Store(false)
-	})
+		p.indexWake = nil
+	}
+	return err
 }
 
 func (p *project) refreshIndex() error {
@@ -239,6 +286,9 @@ func (p *project) indexRow(view board.Board, id string) (taskindex.Row, error) {
 }
 
 func (p *project) lockIndex() error {
+	if p.server.closing.Load() {
+		return closingError()
+	}
 	// Do not wait for a long scan once the index is known to be untrusted.
 	if p.indexRebuilding.Load() {
 		return rebuildingError()

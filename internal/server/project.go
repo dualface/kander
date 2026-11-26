@@ -35,17 +35,20 @@ type project struct {
 	index           *taskindex.Store
 	indexDirty      map[string]struct{}
 	indexFull       bool
-	indexRunning    bool
+	indexWake       chan struct{} // Non-nil while a rebuild worker owns retries.
 	indexRebuilding atomic.Bool
 }
 
 func (p *project) log() *slog.Logger { return p.server.log.With("project", p.info.ID) }
 
-// lockBoard takes mu for board access. Requests that queued behind a failed
-// import observe importBroken only after they hold mu, so none of them reaches
-// a board directory the failed publication left behind.
+// lockBoard takes mu for board access. Check closure and import failure after
+// acquiring it so an already queued request cannot reach the board.
 func (p *project) lockBoard() error {
 	p.mu.Lock()
+	if p.server.closing.Load() {
+		p.mu.Unlock()
+		return closingError()
+	}
 	if p.importBroken {
 		p.mu.Unlock()
 		return apiError(api.CodeNotReady, "project "+p.info.Name+" has an unfinished board import; restart the server to recover it")

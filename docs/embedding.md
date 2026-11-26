@@ -6,7 +6,9 @@ Another Go module can import `github.com/dualface/kander/api`, `server`, `client
 
 Call `server.Open(server.Options{DataDir: absolutePath, Hooks: hooks})`. It takes the exclusive data-directory lock and recovers projects before returning. It does not start a listener, register signals, or exit the process. Zero lease durations use the normal service defaults. Set `Version` if the host needs to identify its embedded build in the version response.
 
-Authenticate requests in the host and store the authenticated identity in their contexts. Wrap `service.Handler()` with that middleware and mount it at the root of the service URL space. For a prefixed mount, strip the prefix before invoking the Kander handler. Stop accepting requests and drain in-flight handlers before calling `service.Close()` to release the lock.
+Authenticate requests in the host and store the authenticated identity in their contexts. Wrap `service.Handler()` with that middleware and mount it at the root of the service URL space. For a prefixed mount, strip the prefix before invoking the Kander handler.
+
+`service.Close()` waits for operations holding a project lock before releasing the data-directory lock. New project requests and those still waiting for a project lock receive `not_ready`. Stop accepting requests and drain in-flight handlers before calling `Close` if you want to avoid those failures.
 
 The host owns authentication, accounts, permissions, and audit policy. A handler without hooks trusts its network, the same as the standalone service.
 

@@ -116,6 +116,9 @@ func (s *Server) Subscribe(ctx context.Context, projectID, cursor string) (<-cha
 	})
 }
 
-// Close releases the data directory lock and cancels subscriptions. The host
-// must stop serving and drain active requests before calling Close.
+// Close cancels subscriptions and rejects new project operations, including
+// those still waiting for a project lock, with not_ready. It waits for
+// operations already holding project locks before releasing the data
+// directory lock. The host should stop accepting requests and drain handlers
+// first to avoid failing queued requests.
 func (s *Server) Close() error { return s.impl.Close() }

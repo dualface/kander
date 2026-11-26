@@ -71,9 +71,12 @@ being appended. If refresh fails or a file publication has an uncertain
 outcome, the project marks the index untrusted before the request returns.
 A committed write keeps its original outcome. While the index is untrusted,
 both the REST list and the embedded `Server.TaskAccess` return
-`index_rebuilding` (HTTP 503 for REST) with no result. A background
-reconciliation can restore the index. If reconciliation fails, the index
-stays unavailable. Later project operations or a restart can retry it.
+`index_rebuilding` (HTTP 503 for REST) immediately, with no result. The
+background worker retries failed reconciliation automatically, even without
+requests. Its delay starts at 1 second and doubles after each failure up to
+1 minute. A project operation such as a write can wake a waiting worker for
+an immediate retry. Retries stop on success, service shutdown, or an
+unfinished board import that requires a restart to recover.
 
 Startup reconciles every row against the canonical board after file
 transaction recovery, claim reconciliation and startup lease extension,

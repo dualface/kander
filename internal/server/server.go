@@ -35,13 +35,14 @@ const (
 
 // Options configure one server instance.
 type Options struct {
-	maintenance   *maintenanceRequest
-	indexFault    func(*project, string) error
-	DataDir       string
-	TTL           time.Duration
-	RenewInterval time.Duration
-	Logger        *slog.Logger
-	Hooks         Hooks
+	maintenance     *maintenanceRequest
+	indexFault      func(*project, string) error
+	indexRetryDelay func(attempt int) time.Duration
+	DataDir         string
+	TTL             time.Duration
+	RenewInterval   time.Duration
+	Logger          *slog.Logger
+	Hooks           Hooks
 	// Now overrides the clock in tests.
 	Now     func() time.Time
 	Version string
@@ -58,6 +59,7 @@ type Server struct {
 	createFault        func(api.Task)
 	registryFault      func() error
 	indexFault         func(*project, string) error
+	indexRetryDelay    func(attempt int) time.Duration
 	data               string
 	ttl                time.Duration
 	renew              time.Duration
@@ -74,6 +76,8 @@ type Server struct {
 	lock               *fs.ExclusiveLock
 	lockFile           *os.File
 	ready              atomic.Bool
+	closing            atomic.Bool
+	closeOnce          func() error
 	indexWorkers       sync.WaitGroup
 
 	mu       sync.Mutex
@@ -103,7 +107,9 @@ func Open(o Options) (*Server, error) {
 	s := &Server{
 		maintenance: o.maintenance, indexFault: o.indexFault, data: o.DataDir, ttl: o.TTL, renew: o.RenewInterval, log: o.Logger, clock: o.Now, version: o.Version, hooks: o.Hooks,
 		projects: map[string]*project{}, byName: map[string]string{}, shutdown: shutdown, shutdownCancel: shutdownCancel, startedAt: time.Now().UTC(),
+		indexRetryDelay: o.indexRetryDelay,
 	}
+	s.closeOnce = sync.OnceValue(s.close)
 	if s.ttl <= 0 {
 		s.ttl = DefaultTTL
 	}
@@ -162,18 +168,33 @@ func Open(o Options) (*Server, error) {
 	return s, nil
 }
 
-// Close releases the data directory lock.
-func (s *Server) Close() error {
+// Close waits for operations holding a project lock and rejects later project
+// operations with not_ready before releasing the data directory lock.
+func (s *Server) Close() error { return s.closeOnce() }
+
+func (s *Server) close() error {
+	s.closing.Store(true)
 	s.ready.Store(false)
 	s.shutdownCancel()
-	s.indexWorkers.Wait()
-	var err error
+	// Registration holds mu through publication. Snapshot its projects, then
+	// release mu before taking project locks because bindRemote takes them first.
+	s.mu.Lock()
+	projects := make([]*project, 0, len(s.projects))
 	for _, p := range s.projects {
+		projects = append(projects, p)
+	}
+	s.mu.Unlock()
+	var err error
+	for _, p := range projects {
+		p.mu.Lock()
 		if p.index != nil {
 			err = errors.Join(err, p.index.Close())
 			p.index = nil
 		}
+		p.mu.Unlock()
 	}
+	// A publisher can start a worker only before this project-lock barrier.
+	s.indexWorkers.Wait()
 	if s.lock != nil {
 		err = errors.Join(err, s.lock.Unlock())
 		s.lock = nil
@@ -183,6 +204,10 @@ func (s *Server) Close() error {
 		s.lockFile = nil
 	}
 	return err
+}
+
+func closingError() *api.Error {
+	return apiError(api.CodeNotReady, "server is shutting down")
 }
 
 type registry struct {
@@ -273,6 +298,10 @@ func (s *Server) register(req api.RegisterProject) (api.Project, bool, error) {
 		return api.Project{}, false, apiError(api.CodeInvalidRequest, "invalid project name: "+api.ProjectNameRule)
 	}
 	s.mu.Lock()
+	if s.closing.Load() {
+		s.mu.Unlock()
+		return api.Project{}, false, closingError()
+	}
 	if id, ok := s.byName[req.Name]; ok {
 		p := s.projects[id]
 		info := p.info

@@ -50,6 +50,8 @@ func TestTaskIndexFaultRefusesQueriesUntilReconciled(t *testing.T) {
 	defer releaseRebuild()
 	var once sync.Once
 	var failed atomic.Bool
+	var attempts atomic.Int32
+	s.indexRetryDelay = func(int) time.Duration { return 5 * time.Millisecond }
 	s.indexFault = func(_ *project, phase string) error {
 		switch phase {
 		case "update":
@@ -57,6 +59,11 @@ func TestTaskIndexFaultRefusesQueriesUntilReconciled(t *testing.T) {
 				return errors.New("injected SQLite write failure")
 			}
 		case "rebuild":
+			if attempts.Add(1) <= 2 {
+				return errors.New("injected rebuild failure")
+			}
+		case "reconcile":
+			// Hold the project lock to prove queries fail without waiting for it.
 			once.Do(func() { close(reached); <-release })
 		}
 		return nil
@@ -65,16 +72,26 @@ func TestTaskIndexFaultRefusesQueriesUntilReconciled(t *testing.T) {
 	if err != nil || next.Revision != task.Revision+1 {
 		t.Fatalf("committed assignment: %+v, %v", next, err)
 	}
-	waitFor(t, reached, "background index rebuild")
-	if _, err := p.List(t.Context(), ""); !api.IsCode(err, api.CodeIndexRebuilding) {
+	waitFor(t, reached, "automatic rebuild after two failures")
+	listErr := make(chan error, 1)
+	go func() {
+		_, err := p.List(t.Context(), "")
+		listErr <- err
+	}()
+	if err := waitFor(t, listErr, "list during reconciliation"); !api.IsCode(err, api.CodeIndexRebuilding) {
 		t.Fatalf("list must fail closed: %v", err)
 	}
-	if access, err := s.TaskAccess(t.Context(), info.ID, task.TaskID); access != (api.TaskAccess{}) || !api.IsCode(err, api.CodeIndexRebuilding) {
-		t.Fatalf("access must fail closed: %+v, %v", access, err)
+	type accessResult struct {
+		access api.TaskAccess
+		err    error
 	}
-	shown, err := p.Show(t.Context(), task.TaskID)
-	if err != nil || shown.Revision != next.Revision {
-		t.Fatalf("canonical write was not retained: %+v, %v", shown, err)
+	accessDone := make(chan accessResult, 1)
+	go func() {
+		access, err := s.TaskAccess(t.Context(), info.ID, task.TaskID)
+		accessDone <- accessResult{access, err}
+	}()
+	if result := waitFor(t, accessDone, "task access during reconciliation"); result.access != (api.TaskAccess{}) || !api.IsCode(result.err, api.CodeIndexRebuilding) {
+		t.Fatalf("access must fail closed: %+v, %v", result.access, result.err)
 	}
 	releaseRebuild()
 	s.indexWorkers.Wait()
