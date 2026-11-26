@@ -28,6 +28,11 @@ type Options struct {
 	Version string
 	// Hooks supply optional host authorization and attribution.
 	Hooks Hooks
+	// ImportUploadLimits bound the board uploads of the import route, both
+	// the request body and the manifest. Nil uses
+	// api.DefaultImportUploadLimits. Every field must be positive and
+	// Manifest must fit in 32 bits, or Open fails.
+	ImportUploadLimits *api.ImportUploadLimits
 }
 
 // Hooks provide the host's request policy and caller identity.
@@ -133,7 +138,7 @@ func Open(options Options) (*Server, error) {
 	}
 	s, err := core.Open(core.Options{
 		DataDir: options.DataDir, TTL: options.TTL, RenewInterval: options.RenewInterval,
-		Logger: logger, Version: options.Version, Hooks: hooks,
+		Logger: logger, Version: options.Version, Hooks: hooks, ImportUploadLimits: options.ImportUploadLimits,
 		Remarks: func(code, text string) {
 			level := slog.LevelWarn
 			if code == "board_journal_partitioned" {

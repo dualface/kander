@@ -5,9 +5,12 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"path"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/dualface/kander/v2/api"
 	"github.com/dualface/kander/v2/internal/board"
@@ -15,6 +18,24 @@ import (
 )
 
 func (p *project) planImport(source, displaySource string, src treeScan, skipConflicts, uploaded bool) (importStage, error) {
+	plan, err := p.planImportCopy(source, displaySource, src, skipConflicts, uploaded)
+	if err != nil {
+		return plan, err
+	}
+	plan.source = src
+	return plan, nil
+}
+
+// planImportCopy plans from the copied part of the source; planImport then
+// restores the whole source the snapshot describes.
+func (p *project) planImportCopy(source, displaySource string, src treeScan, skipConflicts, uploaded bool) (importStage, error) {
+	copied, remnants := withoutRemnants(src)
+	plan, err := p.planImportFiles(source, displaySource, copied, skipConflicts, uploaded)
+	plan.copied, plan.remnants = copied, remnants
+	return plan, err
+}
+
+func (p *project) planImportFiles(source, displaySource string, src treeScan, skipConflicts, uploaded bool) (importStage, error) {
 	targetView, err := board.InspectImportCards(p.board)
 	if err != nil {
 		return importStage{}, err
@@ -98,7 +119,7 @@ func (p *project) stageImport(ctx context.Context, source, displaySource string,
 			if err != nil {
 				return importPublication{}, err
 			}
-			if err := verifyDefaultedTree(source, plan.source, staged, defaults); err != nil {
+			if err := verifyDefaultedTree(source, plan.copied, staged, defaults); err != nil {
 				return importPublication{}, err
 			}
 		}
@@ -135,7 +156,7 @@ func (p *project) stageImport(ctx context.Context, source, displaySource string,
 	for i := range check.Warnings {
 		check.Warnings[i].Message = sourcePaths(check.Warnings[i].Message, staging, displayRoot)
 	}
-	record.Warnings = importWarnings(check.Warnings)
+	record.Warnings = append(plan.remnants, importWarnings(check.Warnings)...)
 	progress.phase(api.ImportPhasePublish)
 	// A non-cooperating external writer must also invalidate publication.
 	_, again, err := snapshotTree(source)
@@ -150,72 +171,55 @@ func (p *project) stageImport(ctx context.Context, source, displaySource string,
 	if err := removeImportValidationFiles(staging, staged.files, staged.digest); err != nil {
 		return importPublication{}, err
 	}
+	// The copy wrote without flushing. The staged tree changes for the last
+	// time above, and the intent recorded next names its digest, so it must
+	// be durable before the intent: a restart then publishes it unchanged.
+	if err := p.server.syncImportStage(p.root, staging, staged.files, staged.dirs); err != nil {
+		return importPublication{}, err
+	}
+	if err := p.server.importCheckpoint("synced"); err != nil {
+		return importPublication{}, err
+	}
 	return importPublication{Schema: 2, Record: record, TargetDigest: plan.target.digest, StagedDigest: staged.digest}, nil
 }
 
 func (p *project) copyImport(ctx context.Context, source, staging string, plan importStage, progress *importEmitter) error {
-	total := len(plan.sourceFiles)
-	var done int
-	var copied, totalBytes int64
+	var jobs []importCopyJob
+	var totalBytes int64
 	if plan.merge {
-		total += len(plan.target.files)
+		for _, rel := range plan.target.files {
+			jobs = append(jobs, importCopyJob{rel: rel, root: p.board})
+		}
 		totalBytes += plan.target.bytes
 	}
 	for _, rel := range plan.sourceFiles {
+		jobs = append(jobs, importCopyJob{rel: rel, root: source, scanned: &plan.source})
 		totalBytes += plan.source.sizes[rel]
 	}
-	progress.phaseCounts(api.ImportPhaseCopy, 0, total, 0, totalBytes)
-	copyFile := func(rel string, data []byte) error {
-		path := filepath.Join(staging, filepath.FromSlash(rel))
-		if err := fs.EnsurePrivateDirectory(p.root, filepath.Dir(path), true); err != nil {
-			return err
-		}
-		if err := fs.WriteBytesAtomicInherited(p.root, path, data, false); err != nil {
-			return err
-		}
-		done++
-		copied += int64(len(data))
-		progress.count(api.ImportPhaseCopy, done, total, copied, totalBytes)
-		return nil
-	}
+	progress.phaseCounts(api.ImportPhaseCopy, 0, len(jobs), 0, totalBytes)
+	var dirs []string
 	if plan.merge {
-		for _, rel := range plan.target.dirs {
-			if err := fs.EnsurePrivateDirectory(p.root, filepath.Join(staging, filepath.FromSlash(rel)), true); err != nil {
-				return err
-			}
-		}
-		for _, rel := range plan.target.files {
-			data, err := readImportFile(p.board, rel)
-			if err != nil {
-				return err
-			}
-			if err := copyFile(rel, data); err != nil {
-				return err
-			}
+		dirs = append(dirs, plan.target.dirs...)
+	}
+	dirs = append(dirs, plan.sourceDirs...)
+	for _, job := range jobs {
+		if dir := path.Dir(job.rel); dir != "." {
+			dirs = append(dirs, dir)
 		}
 	}
-	for _, rel := range plan.sourceDirs {
+	slices.Sort(dirs)
+	// A large board has tens of thousands of directories: stop between them
+	// as the file copy stops between files.
+	for _, rel := range slices.Compact(dirs) {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err := fs.EnsurePrivateDirectory(p.root, filepath.Join(staging, filepath.FromSlash(rel)), true); err != nil {
 			return err
 		}
 	}
-	if err := ctx.Err(); err != nil {
+	if err := p.copyImportFiles(ctx, staging, jobs, progress, totalBytes); err != nil {
 		return err
-	}
-	for _, rel := range plan.sourceFiles {
-		if err := p.server.importCheckpoint("copying"); err != nil {
-			return err
-		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		data, err := readScannedImportFile(source, rel, plan.source)
-		if err != nil {
-			return err
-		}
-		if err := copyFile(rel, data); err != nil {
-			return err
-		}
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -241,9 +245,140 @@ func (p *project) copyImport(ctx context.Context, source, staging string, plan i
 	return nil
 }
 
+// importCopyWorkers bounds the files read and written at once by one copy.
+var importCopyWorkers = min(8, runtime.GOMAXPROCS(0))
+
+// importCopyJob is one file to stage. A file of a scanned source must still
+// have the scanned digest; a file of the destination board is read as is.
+type importCopyJob struct {
+	rel     string
+	root    string
+	scanned *treeScan
+}
+
+func (j importCopyJob) read() ([]byte, error) {
+	if j.scanned != nil {
+		return readScannedImportFile(j.root, j.rel, *j.scanned)
+	}
+	return readImportFile(j.root, j.rel)
+}
+
+// copyImportFiles writes every job into the staging tree on a bounded pool.
+// board.import is a private, single-use directory that verify digests again
+// and stageImport makes durable as a whole before the publication intent, so
+// each file is created once, without a temporary file or a flush of its own.
+// The "copying" checkpoint runs before each source file is handed out, in
+// order, on this goroutine. The first error stops the hand-out; files already
+// handed out finish before it returns.
+func (p *project) copyImportFiles(ctx context.Context, staging string, jobs []importCopyJob, progress *importEmitter, totalBytes int64) error {
+	ctx, stop := context.WithCancelCause(ctx)
+	defer stop(nil)
+	writers := &importDirWriters{root: p.root, staging: staging, open: map[string]*importDirWriter{}}
+	defer writers.close()
+	queue := make(chan importCopyJob)
+	var (
+		workers sync.WaitGroup
+		mu      sync.Mutex
+		done    int
+		copied  int64
+	)
+	for range importCopyWorkers {
+		workers.Go(func() {
+			for job := range queue {
+				if ctx.Err() != nil {
+					continue
+				}
+				data, err := job.read()
+				if err == nil {
+					err = writers.create(job.rel, data)
+				}
+				if err != nil {
+					stop(err)
+					continue
+				}
+				// Report under one lock so the counts never go back.
+				mu.Lock()
+				done++
+				copied += int64(len(data))
+				progress.count(api.ImportPhaseCopy, done, len(jobs), copied, totalBytes)
+				mu.Unlock()
+			}
+		})
+	}
+	var handOut error
+	for _, job := range jobs {
+		if job.scanned != nil {
+			if handOut = p.server.importCheckpoint("copying"); handOut != nil {
+				break
+			}
+		}
+		select {
+		case queue <- job:
+			continue
+		case <-ctx.Done():
+		}
+		break
+	}
+	close(queue)
+	workers.Wait()
+	if handOut != nil {
+		return handOut
+	}
+	return context.Cause(ctx)
+}
+
+// importDirWriters pins staging directories, so a file is created without
+// resolving its path from the root again. Jobs arrive in path order, so the
+// files of one directory are copied together; a directory nobody uses is
+// closed once more than importOpenDirs are open, which bounds the handles.
+type importDirWriters struct {
+	root, staging string
+	mu            sync.Mutex
+	open          map[string]*importDirWriter
+}
+
+type importDirWriter struct {
+	writer *fs.DirectoryWriter
+	users  int
+}
+
+const importOpenDirs = 64
+
+func (w *importDirWriters) create(rel string, data []byte) error {
+	dir := path.Dir(rel)
+	w.mu.Lock()
+	entry, ok := w.open[dir]
+	if !ok {
+		writer, err := fs.OpenDirectoryWriter(w.root, filepath.Join(w.staging, filepath.FromSlash(dir)))
+		if err != nil {
+			w.mu.Unlock()
+			return err
+		}
+		entry = &importDirWriter{writer: writer}
+		w.open[dir] = entry
+	}
+	entry.users++
+	w.mu.Unlock()
+	err := entry.writer.CreateInherited(path.Base(rel), data)
+	w.mu.Lock()
+	entry.users--
+	if entry.users == 0 && len(w.open) > importOpenDirs {
+		_ = entry.writer.Close()
+		delete(w.open, dir)
+	}
+	w.mu.Unlock()
+	return err
+}
+
+func (w *importDirWriters) close() {
+	for _, entry := range w.open {
+		_ = entry.writer.Close()
+	}
+}
+
 func (plan importStage) verify(staged treeScan) error {
 	if !plan.merge {
-		if staged.digest == plan.source.digest {
+		if staged.digest == plan.copied.digest {
 			return nil
 		}
 		return importRejected("staged board differs from the source; nothing was published")

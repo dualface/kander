@@ -31,10 +31,12 @@ type treeScan struct {
 // board operation does. count, when set, is called after each digested file
 // with the files and bytes done and the file total.
 func scanTree(root string, count func(done, total int, bytes int64)) (treeScan, error) {
-	return scanImportTree(context.Background(), root, count, nil)
+	return scanImportTree(context.Background(), root, count, false)
 }
 
-func scanImportTree(ctx context.Context, root string, count func(done, total int, bytes int64), limits *uploadLimits) (treeScan, error) {
+// scanImportTree is scanTree that observes ctx. With uploadPaths set, every
+// path must also be valid in an upload archive.
+func scanImportTree(ctx context.Context, root string, count func(done, total int, bytes int64), uploadPaths bool) (treeScan, error) {
 	var files, dirs []string
 	var walk func(rel string) error
 	walk = func(rel string) error {
@@ -48,23 +50,17 @@ func scanImportTree(ctx context.Context, root string, count func(done, total int
 		for _, e := range entries {
 			child := filepath.Join(rel, e.Name)
 			slash := filepath.ToSlash(child)
-			if limits != nil && !validUploadPath(slash) {
+			if uploadPaths && !validUploadPath(slash) {
 				return importRejected(fmt.Sprintf("invalid source board path %q", slash))
 			}
 			switch e.Kind {
 			case fs.KindDirectory:
 				dirs = append(dirs, slash)
-				if limits != nil && len(dirs) > limits.dirs {
-					return uploadTooLarge()
-				}
 				if err := walk(child); err != nil {
 					return err
 				}
 			case fs.KindFile:
 				files = append(files, slash)
-				if limits != nil && len(files) > limits.files {
-					return uploadTooLarge()
-				}
 			default:
 				return errors.New("board entry " + child + " is not a regular file or directory")
 			}
@@ -82,17 +78,10 @@ func scanImportTree(ctx context.Context, root string, count func(done, total int
 		if err := ctx.Err(); err != nil {
 			return treeScan{}, err
 		}
-		fileLimit := int64(math.MaxInt64)
-		if limits != nil {
-			fileLimit = min(limits.fileBytes, limits.bytes-scan.bytes) + 1
-		}
 		hash := sha256.New()
-		size, err := fs.CopyRegularFile(hash, root, filepath.Join(root, filepath.FromSlash(rel)), fileLimit)
+		size, err := fs.CopyRegularFile(hash, root, filepath.Join(root, filepath.FromSlash(rel)), math.MaxInt64)
 		if err != nil {
 			return treeScan{}, err
-		}
-		if limits != nil && size == fileLimit {
-			return treeScan{}, uploadTooLarge()
 		}
 		sum := [sha256.Size]byte(hash.Sum(nil))
 		scan.sums[rel] = sum

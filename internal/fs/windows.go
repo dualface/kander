@@ -544,6 +544,17 @@ func readHandle(handle windows.Handle, path string) ([]byte, error) {
 }
 
 func writeHandle(handle windows.Handle, path string, data []byte) error {
+	if err := writeAllHandle(handle, path, data); err != nil {
+		return err
+	}
+	if err := windows.FlushFileBuffers(handle); err != nil {
+		return wrap("flush", path, err)
+	}
+	return nil
+}
+
+// writeAllHandle writes data without flushing it to stable storage.
+func writeAllHandle(handle windows.Handle, path string, data []byte) error {
 	for len(data) > 0 {
 		var done uint32
 		piece := data
@@ -557,9 +568,6 @@ func writeHandle(handle windows.Handle, path string, data []byte) error {
 			return wrap("write", path, errors.New("short write to protected file"))
 		}
 		data = data[done:]
-	}
-	if err := windows.FlushFileBuffers(handle); err != nil {
-		return wrap("flush", path, err)
 	}
 	return nil
 }

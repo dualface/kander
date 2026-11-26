@@ -149,13 +149,30 @@ func removeImportValidationFiles(staging string, original []string, expected str
 	}
 	return nil
 }
+
+// recoverImport finishes a publication whose intent is durable. Without an
+// intent, a board.import left by a failed or interrupted import can never be
+// published, so it is removed.
 func (p *project) recoverImport() error {
 	var pending importPublication
 	found, err := readJSON(p.root, filepath.Join("control", "import-pending.json"), &pending)
-	if err != nil || !found {
+	if err != nil {
 		return err
 	}
+	if !found {
+		p.discardImportStaging()
+		return nil
+	}
 	return p.publishImport(pending)
+}
+
+// discardImportStaging removes board.import when no publication intent
+// refers to it. A failed removal is logged only: the next import removes the
+// directory again before it stages a new copy.
+func (p *project) discardImportStaging() {
+	if err := removeImportDirectory(p.root, filepath.Join(p.root, "board.import")); err != nil {
+		p.log().Error("remove board import staging", "error", err)
+	}
 }
 func (p *project) publishImport(pending importPublication) error {
 	if (pending.Schema != 1 && pending.Schema != 2) || !validImportDigest(pending.Record.Snapshot) ||
