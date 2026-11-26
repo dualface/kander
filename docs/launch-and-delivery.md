@@ -56,10 +56,11 @@ An entrance returns `ExecutionResult.Advanced`: the card revision or column diff
 
 With a nonempty `rename_command`, Kander attempts one local slash command
 inside each newly launched interactive agent. This includes card starts,
-native resumes and takeovers, the process-recovery path of notify,
-orchestration, Chat, and issue triage and result. Sending a message to an
-already running session and starting a non-interactive reviewer do not
-rename. Kander uses the existing launch label to derive the session name
+native resumes and takeovers, orchestration, Chat, and issue triage and
+result. The v2 `notify` command sends a request to an existing execution
+generation. It does not restart an agent. Use `resume` to restart a stopped
+agent. A non-interactive reviewer is never renamed. Kander uses the existing
+launch label to derive the session name
 and uses the backend's pane text operation, not a shell command or a startup
 `--name` argument. The [agent definition](custom-agents.md#interactive-session-names)
 describes the filter and matching rules.
@@ -79,11 +80,17 @@ A definition with `rename_delivery.after_argv` keeps the prompt in argv. It
 uses the same readiness observations but skips renaming with one warning if
 the pane is blocked or does not become ready. Otherwise it sends the rename
 command without resending the prompt. Program-status launchers require a
-matching app and idle or done status, or working status for this explicit
-after-argv policy, as well as any configured screen match.
+matching app and idle or done status in either policy, as well as any
+configured screen match. A working status alone is not input readiness.
 
 An unsuccessful rename or a missing acknowledgement after three seconds
-warns without failing the launch. `foreground` and `console` retain their
+warns and leaves an already delivered argv prompt alone. For a pending pane
+prompt, Kander continues if the composer is ready and has no leftover rename
+draft. If the pane cannot safely accept input, Kander does not append the
+prompt to a draft or submit it into a dialog. It uses the same readiness
+failure and rollback as before the rename. A distributed orchestration or
+issue-result launch is retryable after this failure only when the prompt was
+never attempted and the pane was closed. `foreground` and `console` retain their
 original arguments and warn because there is no pane to type into. Without a
 rename command, the original delivery mode and readiness behavior are
 unchanged, including the existing pane-prompt behavior of Droid and Kimi.
@@ -232,7 +239,12 @@ An execution started before that behavior, by a remote start on a launcher with 
 
 ## Notify Probe Classes
 
-When `notify` probes the recorded `WINDOW`, it handles three classes, and this classification takes precedence over the recovery overview of the rules:
+The probe and delivery details in this and the next section describe legacy
+direct delivery. In distributed v2 the client submits a request and the
+worker resolves its existing execution. See
+[collaboration request delivery](distributed-server.md#collaboration-requests).
+
+When the legacy command probes the recorded `WINDOW`, it handles these classes:
 
 - **Ready**: the pane exists and the agent/session match; herdr additionally reports `idle`, `done`, or `working`, and tmux additionally is not in copy-mode. A `working` agent receives the prompt while its current turn runs and handles it afterwards, so the acknowledgement may arrive after `--timeout`; that only yields the delivered-but-unconfirmed warning. A durable dispatch accepted after its persisted deadline is still rejected and follows the expiry handling.
 - **Busy**: the pane exists and the agent/session match, but herdr reports any other status (such as `blocked`, which may be a permission or confirmation dialog that typed text would answer) or tmux is in copy-mode. The probe is retried at a fixed interval within the same `--timeout` budget; on timeout the command returns non-zero with "target agent busy, not delivered" and starts no recovery instance, creates no body payload, and changes neither card state nor message body; verified identity metadata may already have been repaired. A missing tmux session marker means identity cannot be proven; it counts as neither busy nor stale and goes through the recovery channel.
@@ -257,8 +269,11 @@ When `notify` probes the recorded `WINDOW`, it handles three classes, and this c
 
 ## Notify Recovery
 
-- No direct delivery channel, or a failed probe or delivery action make the command recover the original session internally. A card on `foreground` or `console` has no direct channel and no recovery ([process identity](#process-identity)), so the command fails with the next step. herdr recovery liveness follows the new-pane criteria of `resume`: the state accepts only `idle`, `working`, `blocked` and rejects `done` and `unknown`.
-- When tab/window/process cleanup after a failed recovery validation fails, it is reported together with the original error, noting that the new agent may still be alive. When both paths fail, the command exits non-zero and reports both reasons; the card body and original state are unchanged. After a successful recovery or takeover, the new container address is written back to the card `WINDOW`.
+The legacy direct-delivery command could recover a session on a new pane.
+Distributed v2 `notify` does not perform that recovery. A failed worker
+delivery does not start a second process. To restart a stopped executor,
+use [resume](#resume) or the authorized [takeover](#takeover-resume---agent)
+path, which records the new execution and its location.
 
 ## Dismiss
 

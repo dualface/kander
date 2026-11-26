@@ -86,7 +86,7 @@ dialect has none. Its optional `complete` screen match can also contain
 completion match, Kander looks for the ready composer again after a short
 pause without the command left in the draft. `after_argv: true` preserves the
 initial prompt argument. Use it only for a client verified to handle the
-rename command as a local command even while processing that first prompt.
+rename command locally without interfering with that first prompt.
 Keep the default when the client must be renamed while idle, before it
 receives its first prompt. Supply a `ready.match` for launchers without OSC
 7501 status and `blocked` matches for startup dialogs that may appear.

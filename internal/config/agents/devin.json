@@ -47,14 +47,6 @@
     }
   },
   "exit_command": "/exit",
-  "rename_command": "/rename {name}",
-  "rename_delivery": {
-    "ready": {
-      "match": "regex:(?m)^❭ Ask Devin to ",
-      "timeout_ms": 15000
-    },
-    "complete": "Session renamed to \"{name}\"."
-  },
   "program_status": {"reports": true, "app": "devin"},
   "display_name": "Devin",
   "supports_effort": false,

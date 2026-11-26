@@ -89,6 +89,7 @@ func TestRenameLaunchDelivery(t *testing.T) {
 		mode        string
 		afterArgv   bool
 		status      bool
+		busy        bool
 		screens     []string
 		sendErr     error
 		wantSends   []string
@@ -103,10 +104,13 @@ func TestRenameLaunchDelivery(t *testing.T) {
 		{name: "dialog-timeout", command: "/rename {name}", screens: []string{"ready\ntrust"}, wantCode: "launch.pane_ready_blocked"},
 		{name: "unknown-readiness-timeout", command: "/rename {name}", screens: []string{"starting"}, wantCode: "launch.pane_ready_timeout"},
 		{name: "send-failure", command: "/rename {name}", screens: []string{"ready"}, sendErr: errors.New("send failed"), wantSends: []string{rename, prompt}, wantWarning: "launch.rename_unconfirmed"},
+		{name: "enter-failure-leaves-a-draft", command: "/rename {name}", screens: []string{"ready", "ready\n/rename kb-中文"}, sendErr: errors.New("Enter failed after typing"), wantSends: []string{rename}, wantCode: "launch.pane_ready_timeout", wantWarning: "launch.rename_unconfirmed"},
 		{name: "completion-timeout", command: "/rename {name}", screens: []string{"ready"}, wantSends: []string{rename, prompt}, wantWarning: "launch.rename_unconfirmed"},
+		{name: "completion-timeout-leaves-a-draft", command: "/rename {name}", screens: []string{"ready", "ready\n" + rename}, wantSends: []string{rename}, wantCode: "launch.pane_ready_timeout", wantWarning: "launch.rename_unconfirmed"},
 		{name: "after-argv", command: "/rename {name}", afterArgv: true, screens: []string{"ready", "ready\nrenamed kb-中文-Name_3.0"}, wantSends: []string{rename}},
 		{name: "after-argv-dialog", command: "/rename {name}", afterArgv: true, screens: []string{"ready\ntrust", "ready"}, wantWarning: "launch.rename_not_ready"},
 		{name: "after-argv-not-ready", command: "/rename {name}", afterArgv: true, screens: []string{"starting"}, wantWarning: "launch.rename_not_ready"},
+		{name: "after-argv-working-status-is-not-ready", command: "/rename {name}", afterArgv: true, status: true, busy: true, screens: []string{"ready"}, wantWarning: "launch.rename_not_ready"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			freezeClock(t)
@@ -115,6 +119,9 @@ func TestRenameLaunchDelivery(t *testing.T) {
 				name: "rename-" + terminal.ProjectKey(dir), screens: tc.screens,
 				programStatus: tc.status, sendErr: tc.sendErr,
 				facts: terminal.PaneFacts{AgentApp: "sample", AgentStatus: "idle"},
+			}
+			if tc.busy {
+				b.facts.AgentStatus = "working"
 			}
 			terminal.Register(b)
 			ready := &config.PromptReady{Match: "ready", TimeoutMS: 500}

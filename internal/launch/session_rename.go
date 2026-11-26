@@ -91,8 +91,9 @@ func newRenameProbe(plan LaunchPlan, outcome LaunchOutcome, name string) (rename
 func renameAgentSession(plan LaunchPlan, outcome LaunchOutcome, label string) error {
 	name := sessionName(label)
 	probe, err := newRenameProbe(plan, outcome, name)
+	var before string
 	if err == nil {
-		err = probe.waitReady(plan.renameMovesPrompt())
+		before, err = probe.waitReady(plan.renameMovesPrompt(), "")
 	}
 	if err != nil {
 		if plan.renameMovesPrompt() {
@@ -109,28 +110,31 @@ func renameAgentSession(plan LaunchPlan, outcome LaunchOutcome, label string) er
 	ctx, cancel := context.WithTimeout(context.Background(), terminal.DefaultReadyTimeout)
 	err = plan.backend().DeliverText(ctx, boundedSpawnConn(plan), outcome.Pane, command)
 	cancel()
-	if err != nil {
-		plan.warn(t("launch.rename_unconfirmed"))
-		return nil
-	}
-	confirmed, blocked := probe.waitComplete(command)
+	confirmed, clean, output, blocked := probe.waitComplete(command, before, err == nil)
 	if !confirmed {
 		plan.warn(t("launch.rename_unconfirmed"))
+	}
+	if !plan.usesPanePrompt() || clean {
+		return nil
 	}
 	if blocked != "" && plan.renameMovesPrompt() {
 		// A dialog can also appear as the rename completes. Do not send the
 		// task prompt into it while waiting for an operator to dismiss it.
-		return probe.waitReady(true)
+		_, err := probe.waitReady(true, command)
+		return err
 	}
-	return nil
+	if blocked != "" {
+		return launchError("launch.pane_ready_blocked", blocked, output)
+	}
+	return launchError("launch.pane_ready_timeout", output)
 }
 
-func (p renameProbe) waitReady(waitBlocked bool) error {
+func (p renameProbe) waitReady(waitBlocked bool, draft string) (string, error) {
 	timeout := terminal.DefaultReadyTimeout
 	if ready := p.plan.rename.Ready; ready != nil {
 		timeout = time.Duration(ready.TimeoutMS) * time.Millisecond
 	} else if !p.plan.capabilities().ProgramStatus {
-		return launchError("launch.pane_ready_timeout", "")
+		return "", launchError("launch.pane_ready_timeout", "")
 	}
 	timeout = p.plan.launchTimeout(timeout)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -143,8 +147,8 @@ func (p renameProbe) waitReady(waitBlocked bool) error {
 			if blocked != "" && !waitBlocked {
 				break
 			}
-			if ready && ctx.Err() == nil && deadline.After(nowFn()) {
-				return nil
+			if ready && !renameDraftVisible(view, draft) && ctx.Err() == nil && deadline.After(nowFn()) {
+				return view, nil
 			}
 		}
 		if !pauseRename(ctx, deadline) {
@@ -152,34 +156,48 @@ func (p renameProbe) waitReady(waitBlocked bool) error {
 		}
 	}
 	if blocked != "" {
-		return launchError("launch.pane_ready_blocked", blocked, output)
+		return "", launchError("launch.pane_ready_blocked", blocked, output)
 	}
-	return launchError("launch.pane_ready_timeout", output)
+	return "", launchError("launch.pane_ready_timeout", output)
 }
 
-// The fallback gives the UI a short moment to handle Enter, then looks for a
-// ready composer without the command still sitting in its draft. Built-ins
-// can instead match their specific acknowledgement.
-func (p renameProbe) waitComplete(command string) (bool, string) {
+// A delivery error can leave the command in the composer (for example, tmux
+// types the text and then sends Enter). Never append the task prompt to that
+// draft. A fresh acknowledgement from a ready composer also accounts for
+// clients that echo the executed command in their visible history.
+func (p renameProbe) waitComplete(command, before string, sent bool) (confirmed, clean bool, output, blocked string) {
 	ctx, cancel := context.WithTimeout(context.Background(), renameCompletionBudget)
 	defer cancel()
 	deadline := nowFn().Add(renameCompletionBudget)
-	if p.complete == nil {
+	if p.complete == nil || !sent {
 		sleepFn(2 * notifyPollInterval)
 	}
-	var blocked string
-	for {
+	for deadline.After(nowFn()) && ctx.Err() == nil {
+		clean = false
 		if view, ready, blocker, ok := p.observe(ctx); ok {
-			blocked = blocker
-			if ready && ctx.Err() == nil && deadline.After(nowFn()) && ((p.complete != nil && p.complete(view)) ||
-				(p.complete == nil && !strings.Contains(view, command))) {
-				return true, ""
+			output, blocked = view, blocker
+			if ready && ctx.Err() == nil && deadline.After(nowFn()) {
+				clean = !renameDraftVisible(view, command)
+				if sent && p.complete != nil && view != before && p.complete(view) {
+					return true, true, output, ""
+				}
+				if clean && (!sent || p.complete == nil) {
+					return sent, true, output, ""
+				}
 			}
 		}
 		if !pauseRename(ctx, deadline) {
-			return false, blocked
+			break
 		}
 	}
+	return false, clean, output, blocked
+}
+
+func renameDraftVisible(output, command string) bool {
+	// Look for the command word, not the whole command: the name may be
+	// incomplete or wrap to the next screen line.
+	fields := strings.Fields(command)
+	return len(fields) != 0 && strings.Contains(output, fields[0])
 }
 
 func (p renameProbe) observe(ctx context.Context) (view string, ready bool, blocked string, ok bool) {
@@ -189,6 +207,7 @@ func (p renameProbe) observe(ctx context.Context) (view string, ready bool, bloc
 	if err != nil {
 		return "", false, "", false
 	}
+	output = trimNL(output)
 	for _, rule := range p.blocked {
 		if rule.match(output) {
 			return output, false, rule.reason, true
@@ -201,8 +220,7 @@ func (p renameProbe) observe(ctx context.Context) (view string, ready bool, bloc
 		facts, err := backend.PaneFacts(ctx, conn, p.outcome.Pane)
 		ready = err == nil && !facts.Gone && p.plan.programStatusApp != "" &&
 			facts.AgentApp == p.plan.programStatusApp &&
-			(facts.AgentStatus == "idle" || facts.AgentStatus == "done" ||
-				(p.plan.rename.AfterArgv && facts.AgentStatus == "working"))
+			(facts.AgentStatus == "idle" || facts.AgentStatus == "done")
 		return output, ready, "", true
 	}
 	return output, p.ready != nil, "", true

@@ -3,7 +3,6 @@ package launch
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -202,16 +201,14 @@ func startOrchestrator(request OrchestrateRequest, cfg *config.Config, loaded bo
 		if err := journal.Save(); err != nil {
 			return result, err
 		}
-		plan.beforePrompt = func() error { journal.Value.Phase = "prompt-attempted"; return journal.Save() }
-		plan.judge = func() launchVerdict { return verdictKeep }
+		bindLaunchPromptReceipt(&plan, journal)
 	}
 	// Local legacy orchestration has no card identity. Distributed sessions keep
 	// their identity in private launcher context for later coordinator leases.
 	outcome, err := launchAgent(plan, request.Root, orchestratorWindowName(tasks[0].TaskID), inv, location, paneSession, &session, service != nil)
 	if err != nil {
 		if journal != nil {
-			handedOff = true
-			return result, errors.Join(err, launchError("remote.launch_reconciliation_required", journal.Path))
+			handedOff, err = recordLaunchPromptFailure(plan, journal, err)
 		}
 		return result, err
 	}
