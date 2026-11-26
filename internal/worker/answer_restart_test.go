@@ -73,6 +73,7 @@ func TestRestartReplaysTheTypedNoteBeforeTheResult(t *testing.T) {
 	if len(typed) != 2 || typed[1].answer.ExpectedRevision != current.Revision-2 {
 		t.Fatalf("the new loop rebuilds the typed note two revisions back: %v", typed)
 	}
+	requireOneAttempt(t, "the typed note", typed)
 	if rig.g.audited(typed[0].key) != 1 {
 		t.Fatalf("the typed key is audited once: %d", rig.g.audited(typed[0].key))
 	}

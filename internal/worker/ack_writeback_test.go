@@ -65,6 +65,20 @@ func (s *answerTap) revisions(note string) []uint64 {
 	return revisions
 }
 
+// withNote returns the sends whose answer has the note, as the gateway tap
+// records them, for requireOneAttempt.
+func (s *answerTap) withNote(note string) []gatewaySend {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var found []gatewaySend
+	for _, send := range s.sends {
+		if send.answer.Note == note {
+			found = append(found, gatewaySend{request: send.request, key: send.key, body: send.body, answer: send.answer})
+		}
+	}
+	return found
+}
+
 // requireStableSends checks the replay invariant as the gateway tap does.
 func (s *answerTap) requireStableSends(t *testing.T) {
 	t.Helper()
@@ -212,5 +226,6 @@ func TestAcknowledgementRetriesTransientWriteFailureWithoutTyping(t *testing.T) 
 	if len(tap.revisions(ackedNote)) != 2 || len(h.lines) != 1 || h.requests(c)[0].Note != ackedNote {
 		t.Fatal("result was not retried once without typing again")
 	}
+	requireOneAttempt(t, "the result", tap.withNote(ackedNote))
 	tap.requireStableSends(t)
 }

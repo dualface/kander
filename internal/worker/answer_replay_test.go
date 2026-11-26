@@ -67,6 +67,7 @@ func TestTransientFailuresKeepTheAnswer(t *testing.T) {
 			if first, last := sends[0], sends[len(sends)-1]; last.at.Sub(first.at) != answerBackoffFirst {
 				t.Fatalf("the typed note is replayed after its backoff: %v", sends)
 			}
+			requireOneAttempt(t, "the typed note", sends)
 			rig.g.requireStableSends(t)
 		})
 	}
@@ -146,6 +147,7 @@ func TestAClosedRejectionIsNotRegisteredAgain(t *testing.T) {
 			if got := h.requests(c)[0]; got.Status != api.RequestOpen {
 				t.Fatalf("the proposal stays open for the holder: %+v", got)
 			}
+			requireOneAttempt(t, "the rejection", expiredSends(g, r.ID))
 			g.requireStableSends(t)
 		})
 	}
@@ -187,6 +189,8 @@ func TestTheRetentionIsCheckedBeforeEverySend(t *testing.T) {
 	if len(late) != 1 {
 		t.Fatalf("only the send that started before the limit went out: %v", late)
 	}
+	requireOneAttempt(t, "the first typed note", g.sendsOf(first.ID, typedNote))
+	requireOneAttempt(t, "the second typed note", g.sendsOf(second.ID, typedNote))
 	abandoned := sink.findAll("request answer abandoned: still unsettled after its retention")
 	if len(abandoned) != 1 || abandoned[0]["request"] == late[0].request {
 		t.Fatalf("the answer behind the slow call is abandoned unsent: %+v", abandoned)
@@ -202,6 +206,7 @@ func TestAnAnswerBacksOffBetweenSends(t *testing.T) {
 		rig.h.workAfter(time.Second)
 	}
 	sends := rig.g.sendsOf(rig.r.ID, typedNote)
+	requireOneAttempt(t, "the typed note", sends)
 	want := []time.Duration{5, 10, 20, 40, 60, 60}
 	if len(sends) != len(want)+1 {
 		t.Fatalf("%d sends in 200 seconds, want %d", len(sends), len(want)+1)
@@ -231,6 +236,7 @@ func TestAFailingAnswerWarnsAtMostEveryFiveMinutes(t *testing.T) {
 			records = append(records, record)
 		}
 	}
+	requireOneAttempt(t, "the typed note", sends)
 	if len(sends) < 20 || len(records) != len(sends) {
 		t.Fatalf("one record per failed send: %d sends, %d records", len(sends), len(records))
 	}
@@ -268,6 +274,7 @@ func TestAnAnswerIsAbandonedAfterItsRetention(t *testing.T) {
 	if got := len(rig.g.ofRequest(rig.r.ID)); got != sent {
 		t.Fatalf("an abandoned answer is not sent again: %d sends, want %d", got, sent)
 	}
+	requireOneAttempt(t, "the typed note", rig.g.sendsOf(rig.r.ID, typedNote))
 	for _, send := range rig.g.ofRequest(rig.r.ID) {
 		if !send.at.Before(first.Add(answerRetention)) {
 			t.Fatalf("a send after the retention: %v", send)
@@ -323,6 +330,7 @@ func TestAnAnswerOutlivesItsRequestFile(t *testing.T) {
 	if late == 0 {
 		t.Fatalf("the result is replayed after its file closed: %v", g.sendsOf(r.ID, ackedNote))
 	}
+	requireOneAttempt(t, "the result", g.sendsOf(r.ID, ackedNote))
 	g.requireStableSends(t)
 }
 
@@ -358,6 +366,7 @@ func TestAnswersEndWithTheirCredential(t *testing.T) {
 			if got := len(rig.g.ofRequest(rig.r.ID)); got != sent {
 				t.Fatalf("no answer follows: %d sends, want %d", got, sent)
 			}
+			requireOneAttempt(t, "the typed note", rig.g.sendsOf(rig.r.ID, typedNote))
 			rig.g.requireStableSends(t)
 		})
 	}

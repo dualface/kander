@@ -149,8 +149,8 @@ func (w *loop) readyRequests(ctx context.Context, log *slog.Logger, project *cli
 // window has elapsed on the server clock of the task read, or it binds an
 // earlier card version. The rejection is a managed answer: a failed one stays in
 // the replay table, and while it is open no other rejection of the request is
-// sent; a rejection that was refused or abandoned is not sent again either, and
-// the proposal stays open for the holder. The result does not depend on it. Any
+// sent; a rejection that was refused or abandoned is not registered again
+// either, whatever state it left on the server. The result does not depend on it. Any
 // other request is left alone.
 func (w *loop) rejectUnusable(ctx context.Context, log *slog.Logger, project *client.Project, c *remote.Credential, r api.CollabRequest, task api.Task) bool {
 	if r.Dispatch == nil {

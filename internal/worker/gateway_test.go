@@ -263,6 +263,21 @@ func managedNote(note string) bool {
 	return strings.HasPrefix(note, expiredNote)
 }
 
+// requireOneAttempt checks that every send of one logical answer attempt,
+// chosen by the test, carries the key and the raw body of its first send: a
+// replay that rebuilt both would not pass.
+func requireOneAttempt(t *testing.T, what string, sends []gatewaySend) {
+	t.Helper()
+	if len(sends) == 0 {
+		t.Fatalf("%s: no send", what)
+	}
+	for _, send := range sends[1:] {
+		if send.key != sends[0].key || !bytes.Equal(send.body, sends[0].body) {
+			t.Fatalf("%s: a send differs from the first: %v then %v", what, sends[0], send)
+		}
+	}
+}
+
 // requireContentKeys checks that every typed note and acknowledgement result
 // the worker sent for the request carries the content key of its body.
 func (g *gatewayTap) requireContentKeys(t *testing.T, c remote.Credential, request string) {

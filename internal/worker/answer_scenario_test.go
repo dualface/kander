@@ -102,6 +102,8 @@ func TestScenarioPReplaysTheCommittedFallback(t *testing.T) {
 	if len(rig.g.withKey(fallback.key)) != 2 || len(rig.h.openAttempts(rig.c)) != 0 {
 		t.Fatal("a settled fallback is not sent again")
 	}
+	requireOneAttempt(t, "the typed note", rig.g.sendsOf(rig.r.ID, typedNote))
+	requireOneAttempt(t, "the fallback", rig.g.sendsOf(rig.r.ID, ackedNote)[1:])
 	rig.requireNoRedelivery(t)
 	rig.g.requireStableSends(t)
 	rig.g.requireContentKeys(t, rig.c, rig.r.ID)
@@ -117,9 +119,10 @@ func TestScenarioPReplaysTheFallbackAfterTheHolderAnswered(t *testing.T) {
 		t.Fatal(err)
 	}
 	rig.h.workAfter(answerBackoffFirst)
-	if replays := rig.g.withKey(fallback.key); len(replays) != 2 {
+	if replays := rig.g.sendsOf(rig.r.ID, ackedNote)[1:]; len(replays) != 2 || replays[0].key != fallback.key {
 		t.Fatalf("the fallback is replayed once after the holder answered: %v", replays)
 	}
+	requireOneAttempt(t, "the fallback", rig.g.sendsOf(rig.r.ID, ackedNote)[1:])
 	if rig.g.audited(fallback.key) != 1 {
 		t.Fatalf("the fallback key is audited once: %d", rig.g.audited(fallback.key))
 	}
@@ -142,10 +145,11 @@ func TestFallbackFailedBeforeCommitIsDroppedAfterTheHolderAnswered(t *testing.T)
 		t.Fatal(err)
 	}
 	rig.h.workAfter(answerBackoffFirst)
-	replays := rig.g.withKey(fallback.key)
-	if len(replays) != 2 || replays[1].status != http.StatusConflict {
+	replays := rig.g.sendsOf(rig.r.ID, ackedNote)[1:]
+	if len(replays) != 2 || replays[0].key != fallback.key || replays[1].status != http.StatusConflict {
 		t.Fatalf("the replay of the fallback gets a revision conflict: %v", replays)
 	}
+	requireOneAttempt(t, "the fallback", replays)
 	if len(rig.h.openAttempts(rig.c)) != 0 {
 		t.Fatalf("the fallback is dropped: %+v", rig.h.openAttempts(rig.c))
 	}
@@ -217,6 +221,7 @@ func TestStaleRejectionIsReplayedAfterAFailedAudit(t *testing.T) {
 	if len(sends) != 2 || sends[0].key != "stale-"+c.ExecutionID+"-"+r.ID {
 		t.Fatalf("the stale rejection is replayed once under its key: %v", sends)
 	}
+	requireOneAttempt(t, "the stale rejection", sends)
 	if g.audited(sends[0].key) != 1 {
 		t.Fatalf("the stale key is audited once: %d", g.audited(sends[0].key))
 	}
@@ -252,6 +257,7 @@ func TestExpiredRejectionIsReplayedAfterAFailedAudit(t *testing.T) {
 	if len(sends) != 2 || sends[0].key != expiredKey(c.ExecutionID, r.ID, sends[0].answer.Note) {
 		t.Fatalf("the expired rejection is replayed once under its key: %v", sends)
 	}
+	requireOneAttempt(t, "the expired rejection", sends)
 	if g.audited(sends[0].key) != 1 {
 		t.Fatalf("the expired key is audited once: %d", g.audited(sends[0].key))
 	}
@@ -301,11 +307,7 @@ func TestAnOpenRejectionIsNotSentAgainByTheDelivery(t *testing.T) {
 	}
 	// The note of a rejection made now would carry the blocked suffix; every
 	// send is still the first rejection.
-	for _, send := range expiredSends(g, r.ID) {
-		if first := expiredSends(g, r.ID)[0]; send.key != first.key || !bytes.Equal(send.body, first.body) {
-			t.Fatalf("the replayed rejection changed: %v then %v", first, send)
-		}
-	}
+	requireOneAttempt(t, "the rejection", expiredSends(g, r.ID))
 	g.requireStableSends(t)
 }
 
@@ -352,5 +354,7 @@ func TestPureKanderLogsTheReplayedUnconfirmedFallback(t *testing.T) {
 	if unconfirmed.Load() != 3 || len(warnings) != 1 || warnings[0]["request"] != r.ID || warnings[0]["level"] != "WARN" {
 		t.Fatalf("the replay logs the unconfirmed result once: %d sends, %+v", unconfirmed.Load(), warnings)
 	}
+	requireOneAttempt(t, "the typed note", tap.withNote(typedNote))
+	requireOneAttempt(t, "the fallback", tap.withNote(unconfirmedNote)[1:])
 	tap.requireStableSends(t)
 }
