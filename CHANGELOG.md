@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Feature (v2, remote board import) — `kander server import` uploads a client's paused v1 board when the effective `server.url` is not loopback, with the same merge and conflict rules. The command rejects `--data` in this mode and does not open local server storage. Loopback import is unchanged. The upload endpoint uses the existing trusted-network boundary rather than the management key. It accepts up to 100,000 files and 100,000 directories, 2 GiB of files, 64 MiB per file, and a 64 MiB manifest within 30 minutes. Interrupted or inconsistent uploads do not publish a board.
+
+- Feature (v2, board import) — `kander server import` can merge a paused v1 board into a non-empty project, offline or through the running local server. It skips identical cards, preserves destination bytes, and rejects conflicting tasks and records unless `--skip-conflicts` keeps the destination versions and imports the rest. Results report `added_tasks`, `existing_tasks` and `skipped_conflicts` when applicable. The server checks the whole merged board, publishes it atomically, and remembers each source snapshot separately. Requests to that project wait during import. Other projects stay available.
+
 - Breaking (v2, Go module path) — The Go module is now `github.com/dualface/kander/v2`. Embedders must require that module and import `github.com/dualface/kander/v2/api`, `github.com/dualface/kander/v2/server`, `github.com/dualface/kander/v2/client`, and `github.com/dualface/kander/v2/cli`. The `v2.0.0-beta.1` tag predates the change and cannot be required under either path. Use a later 2.x tag or a pseudo-version for a later commit on `v2`. Builds that inject the version with `-ldflags -X` must use `github.com/dualface/kander/v2/internal/version.Version`. Go silently ignores the old path and the binary reports `dev`. The executable, its commands, the `/api/v1` protocol, and the 1.x releases from `main` are unchanged.
 
 ## v2.0.0-beta.1 — 2026-11-26

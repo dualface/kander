@@ -57,6 +57,12 @@ func (s *Server) requestScope(r *http.Request) Request {
 		Pattern: r.Pattern, Method: r.Method, ProjectID: matchedValue(r, "project"),
 		Task: matchedValue(r, "task"), Group: matchedValue(r, "group"),
 	}
+	if r.Pattern == http.MethodPost+" "+api.ImportUploadRoute {
+		if name := r.PathValue("name"); api.ValidProjectName(name) {
+			req.Project, req.ProjectID = name, api.ProjectID(name)
+		}
+		return req
+	}
 	if req.ProjectID != "" {
 		// Resolve only registry metadata, without opening or locking a board.
 		s.mu.Lock()

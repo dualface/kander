@@ -356,7 +356,10 @@ func TestImportRecoversAnIntentWithoutAStagedDigest(t *testing.T) {
 	if pending["staged_digest"] != pending["record"].(map[string]any)["snapshot"] {
 		t.Fatal("without defaults the staged board equals the source snapshot")
 	}
-	// An intent written before the field existed carries the digest nowhere.
+	// Schema 1 used empty_digest and its earliest form omitted staged_digest.
+	pending["schema"] = 1
+	pending["empty_digest"] = pending["target_digest"]
+	delete(pending, "target_digest")
 	delete(pending, "staged_digest")
 	if err := writeJSON(p.root, filepath.Join("control", "import-pending.json"), pending); err != nil {
 		t.Fatal(err)
@@ -445,18 +448,22 @@ func TestImportRouteStreamsAnErrorWithItsStatus(t *testing.T) {
 	if _, err := s.Import("demo", "", source); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := board.NewTask(source, "chore", "later", "Later", "en", false); err != nil {
+	view, err := board.InspectImportCards(source)
+	if err != nil {
 		t.Fatal(err)
+	}
+	for id, entry := range view.Entries {
+		editSpec(t, source, entry.State, id, func(text string) string { return text + "\nconflict\n" })
 	}
 	status, _, lines, _ := streamImport(t, h.URL, s.adminToken, fmt.Sprintf(`{"project":"demo","from":%q}`, source))
 	last := lines[len(lines)-1]
-	if status != http.StatusOK || last.Error == nil || last.Error.Code != api.CodeProjectNotEmpty || last.Status != http.StatusConflict {
+	if status != http.StatusOK || last.Error == nil || last.Error.Code != api.CodeBoardRejected || last.Status != http.StatusUnprocessableEntity {
 		t.Fatalf("status=%d last=%+v", status, last)
 	}
 	c, _ := client.New(h.URL, "host-b")
-	_, err := c.ImportWithProgress(t.Context(), s.adminToken, api.ImportRequest{Project: "demo", From: source}, func(api.ImportProgress) {})
+	_, err = c.ImportWithProgress(t.Context(), s.adminToken, api.ImportRequest{Project: "demo", From: source}, func(api.ImportProgress) {})
 	var apiErr *api.Error
-	if !errors.As(err, &apiErr) || apiErr.Code != api.CodeProjectNotEmpty || apiErr.Status != http.StatusConflict {
+	if !errors.As(err, &apiErr) || apiErr.Code != api.CodeBoardRejected || apiErr.Status != http.StatusUnprocessableEntity {
 		t.Fatalf("the client restores the status of a streamed error: %v", err)
 	}
 }

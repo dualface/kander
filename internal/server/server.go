@@ -82,6 +82,8 @@ type Server struct {
 	closing            atomic.Bool
 	closeOnce          func() error
 	indexWorkers       sync.WaitGroup
+	uploadWorkers      sync.WaitGroup
+	uploadSlots        chan struct{}
 
 	mu       sync.Mutex
 	projects map[string]*project
@@ -112,6 +114,7 @@ func Open(o Options) (*Server, error) {
 		projects: map[string]*project{}, byName: map[string]string{}, shutdown: shutdown, shutdownCancel: shutdownCancel, startedAt: time.Now().UTC(),
 		indexRetryDelay: o.indexRetryDelay,
 		remarks:         o.Remarks,
+		uploadSlots:     make(chan struct{}, maxImportUploads),
 	}
 	s.closeOnce = sync.OnceValue(s.close)
 	if s.ttl <= 0 {
@@ -148,6 +151,10 @@ func Open(o Options) (*Server, error) {
 	}
 	s.lock, s.lockFile = lock, file
 	if err := s.loadAdminToken(); err != nil {
+		s.Close()
+		return nil, err
+	}
+	if err := s.cleanupUploads(); err != nil {
 		s.Close()
 		return nil, err
 	}
@@ -188,6 +195,7 @@ func (s *Server) close() error {
 		projects = append(projects, p)
 	}
 	s.mu.Unlock()
+	s.uploadWorkers.Wait()
 	var err error
 	for _, p := range projects {
 		p.mu.Lock()

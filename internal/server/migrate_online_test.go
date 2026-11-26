@@ -89,6 +89,13 @@ func TestOnlineImportKeepsOtherProjectsServing(t *testing.T) {
 	defer h.Close()
 	defer s.Close()
 	c, _ := client.New(h.URL, "host-a")
+	demo, err := c.Register(t.Context(), "demo", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Project(demo.ID).NewTask(t.Context(), "", api.NewTask{Type: "feature", Slug: "already-there", Title: "Already there", Language: "en"}); err != nil {
+		t.Fatal(err)
+	}
 	other, err := c.Register(t.Context(), "other", "")
 	if err != nil {
 		t.Fatal(err)
@@ -124,14 +131,14 @@ func TestOnlineImportKeepsOtherProjectsServing(t *testing.T) {
 	if err := waitFor(t, done, "online import"); err != nil {
 		t.Fatal(err)
 	}
-	if result.Tasks != 2 || result.Existing || result.Source != source || result.Project.Name != "demo" {
+	if result.Tasks != 2 || result.AddedTasks != 2 || result.Existing || result.Source != source || result.Project.Name != "demo" {
 		t.Fatalf("result=%+v", result)
 	}
 	if !s.ready.Load() {
 		t.Fatal("server left the ready state")
 	}
 	list, err := c.Project(result.Project.ID).List(t.Context(), "")
-	if err != nil || len(list.Tasks) != 2 {
+	if err != nil || len(list.Tasks) != 3 {
 		t.Fatalf("imported tasks: %+v %v", list.Tasks, err)
 	}
 }
@@ -147,9 +154,12 @@ func TestOnlineImportReadsWaitForPublicationAndEventsReset(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := c.Project(info.ID)
+	if _, err := p.NewTask(t.Context(), "", api.NewTask{Type: "feature", Slug: "original", Title: "Original", Language: "en"}); err != nil {
+		t.Fatal(err)
+	}
 	before, err := p.List(t.Context(), "")
-	if err != nil || len(before.Tasks) != 0 {
-		t.Fatalf("empty project: %+v %v", before, err)
+	if err != nil || len(before.Tasks) != 1 {
+		t.Fatalf("non-empty project: %+v %v", before, err)
 	}
 	polled := make(chan api.EventPage, 1)
 	go func() {
@@ -197,7 +207,7 @@ func TestOnlineImportReadsWaitForPublicationAndEventsReset(t *testing.T) {
 	if err := waitFor(t, done, "online import"); err != nil {
 		t.Fatal(err)
 	}
-	if list := waitFor(t, read, "queued read"); len(list.Tasks) != 2 {
+	if list := waitFor(t, read, "queued read"); len(list.Tasks) != 3 {
 		t.Fatalf("queued read: %+v", list)
 	}
 	if err := project.checkIndex(t.Context()); err != nil {
@@ -304,7 +314,7 @@ func TestOnlineImportFailureClosesTheProjectWithoutTouchingItsBoard(t *testing.T
 	}
 }
 
-func TestImportIntoAProjectWithTasksDigestsTheSourceWithoutTheProjectLock(t *testing.T) {
+func TestImportRecognizesALegacyReceiptAfterANewerMerge(t *testing.T) {
 	source := v1Board(t)
 	s, err := Open(Options{DataDir: t.TempDir()})
 	if err != nil {
@@ -319,47 +329,27 @@ func TestImportIntoAProjectWithTasksDigestsTheSourceWithoutTheProjectLock(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	digests := 0
-	s.importFault = func(step string) error {
-		if step == "precheck-digest" {
-			digests++
-			if !p.mu.TryLock() {
-				return errors.New("source digested under the project lock")
-			}
-			p.mu.Unlock()
-		}
-		return nil
+	if err := os.Rename(filepath.Join(p.root, importRecordPath(first.Snapshot)), filepath.Join(p.root, "control", "import.json")); err != nil {
+		t.Fatal(err)
 	}
 	moved := filepath.Join(t.TempDir(), "kanban")
 	if err := os.CopyFS(moved, os.DirFS(source)); err != nil {
 		t.Fatal(err)
 	}
-	again, err := s.Import("demo", "", moved)
-	if err != nil || !again.Existing || again.Source != moved || again.Snapshot != first.Snapshot {
-		t.Fatalf("same snapshot elsewhere: %+v %v", again, err)
-	}
 	if _, err := board.NewTask(moved, "chore", "later", "Later", "en", false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Import("demo", "", moved); !api.IsCode(err, api.CodeProjectNotEmpty) {
-		t.Fatalf("changed snapshot: %v", err)
+	second, err := s.Import("demo", "", moved)
+	if err != nil || second.AddedTasks != 1 || second.Snapshot == first.Snapshot {
+		t.Fatalf("changed snapshot: %+v %v", second, err)
 	}
-	if digests != 2 {
-		t.Fatalf("digests=%d", digests)
-	}
-	other, err := s.Import("plain", "", v1Board(t))
-	if err != nil {
+	otherPath := filepath.Join(t.TempDir(), "kanban")
+	if err := os.CopyFS(otherPath, os.DirFS(source)); err != nil {
 		t.Fatal(err)
 	}
-	q, err := s.project(other.Project.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Remove(filepath.Join(q.root, "control", "import.json")); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Import("plain", "", source); !api.IsCode(err, api.CodeProjectNotEmpty) || digests != 2 {
-		t.Fatalf("a project with tasks and no import record: %v digests=%d", err, digests)
+	again, err := s.Import("demo", "", otherPath)
+	if err != nil || !again.Existing || again.Source != otherPath || again.Snapshot != first.Snapshot {
+		t.Fatalf("legacy snapshot elsewhere: %+v %v", again, err)
 	}
 }
 
@@ -430,9 +420,8 @@ func TestImportCommandUsesTheServingInstance(t *testing.T) {
 	s, h := openTest(t, dir, nil)
 	defer h.Close()
 	defer s.Close()
-	useImportTarget(t, h.URL)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	result, _, err := importBoard(t.Context(), dir, "demo", "", source, importRun{logger: logger})
+	result, _, err := importBoard(t.Context(), h.URL, dir, api.ImportRequest{Project: "demo", From: source}, importRun{logger: logger})
 	if err != nil || result.Tasks != 2 || result.Source != source {
 		t.Fatalf("online command: %+v %v", result, err)
 	}
@@ -453,21 +442,19 @@ func TestImportCommandExplainsWhyItCannotImportOnline(t *testing.T) {
 
 	closed := httptest.NewServer(http.NotFoundHandler())
 	closed.Close()
-	useImportTarget(t, closed.URL)
-	if _, _, err := importBoard(t.Context(), locked, "demo", "", source, importRun{logger: logger}); err == nil || !strings.Contains(err.Error(), locked) || !strings.Contains(err.Error(), closed.URL) {
+	if _, _, err := importBoard(t.Context(), closed.URL, locked, api.ImportRequest{Project: "demo", From: source}, importRun{logger: logger}); err == nil || !strings.Contains(err.Error(), locked) || !strings.Contains(err.Error(), closed.URL) {
 		t.Fatalf("no server: %v", err)
 	}
 
-	useImportTarget(t, "http://example.invalid:7878")
-	if _, _, err := importBoard(t.Context(), locked, "demo", "", source, importRun{logger: logger}); err == nil || !strings.Contains(err.Error(), "http://example.invalid:7878") {
-		t.Fatalf("non-local: %v", err)
+	const remote = "http://example.invalid:7878"
+	if _, _, err := importBoard(t.Context(), remote, locked, api.ImportRequest{Project: "demo", From: source}, importRun{logger: logger}); err == nil || !strings.Contains(err.Error(), remote) {
+		t.Fatalf("non-loopback local control: %v", err)
 	}
 
 	serving, h := openTest(t, t.TempDir(), nil)
 	defer h.Close()
 	defer serving.Close()
-	useImportTarget(t, h.URL)
-	if _, _, err := importBoard(t.Context(), locked, "demo", "", source, importRun{logger: logger}); err == nil || !strings.Contains(err.Error(), locked) || !strings.Contains(err.Error(), serving.data) {
+	if _, _, err := importBoard(t.Context(), h.URL, locked, api.ImportRequest{Project: "demo", From: source}, importRun{logger: logger}); err == nil || !strings.Contains(err.Error(), locked) || !strings.Contains(err.Error(), serving.data) {
 		t.Fatalf("other data directory: %v", err)
 	}
 	if _, err := serving.projectByName("demo"); err == nil {
@@ -482,8 +469,7 @@ func TestImportCommandExplainsWhyItCannotImportOnline(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	defer old.Close()
-	useImportTarget(t, old.URL)
-	if _, _, err := importBoard(t.Context(), locked, "demo", "", source, importRun{logger: logger}); err == nil || !strings.Contains(err.Error(), "restart") {
+	if _, _, err := importBoard(t.Context(), old.URL, locked, api.ImportRequest{Project: "demo", From: source}, importRun{logger: logger}); err == nil || !strings.Contains(err.Error(), "restart") {
 		t.Fatalf("old server: %v", err)
 	}
 }

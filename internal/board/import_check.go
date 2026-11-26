@@ -3,6 +3,7 @@ package board
 import (
 	"errors"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -24,6 +25,9 @@ type ImportCheck struct {
 	Warnings []ImportFinding
 	// Blocking holds the formatted lines CheckBoardForImport reports.
 	Blocking []string
+	// BlockingPaths contains paths and task IDs reported by the checks.
+	// It does not include their diagnostic text or parsed document values.
+	BlockingPaths []string
 }
 
 var closedImportStates = map[string]struct{}{"done": {}, "archived": {}, "trash": {}}
@@ -54,10 +58,14 @@ func classifyImportProblems(board Board, problems []Problem) ImportCheck {
 			continue
 		}
 		check.Blocking = append(check.Blocking, t("board.invalid", problem.Message))
+		check.BlockingPaths = append(check.BlockingPaths, problem.Path)
+		check.BlockingPaths = append(check.BlockingPaths, problem.RelatedPaths...)
 	}
 	// The checks walk maps, so fix the order: the same board always reports,
 	// and records, the same list.
 	sort.Strings(check.Blocking)
+	slices.Sort(check.BlockingPaths)
+	check.BlockingPaths = slices.Compact(check.BlockingPaths)
 	sort.Slice(check.Warnings, func(i, j int) bool {
 		a, b := check.Warnings[i], check.Warnings[j]
 		if joined, other := strings.Join(a.TaskIDs, ","), strings.Join(b.TaskIDs, ","); joined != other {
