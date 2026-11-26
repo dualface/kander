@@ -2,6 +2,7 @@ package fs
 
 import (
 	"path/filepath"
+	"strings"
 
 	"golang.org/x/sys/windows"
 )
@@ -48,4 +49,10 @@ func (w *DirectoryWriter) CreateInherited(name string, data []byte) error {
 	}
 	defer closeHandle(handle)
 	return writeAllHandle(handle, path, data)
+}
+
+// validChildName accepts exactly one Windows path component; openRelative
+// validates the rest of the component rules.
+func validChildName(name string) bool {
+	return name != "" && name != "." && name != ".." && !strings.ContainsAny(name, "/\\\x00")
 }

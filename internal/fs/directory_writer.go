@@ -1,7 +1,5 @@
 package fs
 
-import "strings"
-
 // DirectoryWriter creates new files in one pinned directory. It writes each
 // file once, without a temporary file and without flushing it: it is meant
 // for a private, single-use tree that the caller makes durable as a whole
@@ -23,9 +21,4 @@ func (w *DirectoryWriter) Close() error {
 	err := w.impl.close()
 	w.impl = nil
 	return err
-}
-
-// validChildName accepts exactly one path component.
-func validChildName(name string) bool {
-	return name != "" && name != "." && name != ".." && !strings.ContainsAny(name, "/\\\x00")
 }

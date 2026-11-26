@@ -4,6 +4,7 @@ package fs
 
 import (
 	"path/filepath"
+	"strings"
 
 	"golang.org/x/sys/unix"
 )
@@ -49,4 +50,10 @@ func (w *DirectoryWriter) CreateInherited(name string, data []byte) error {
 		return wrap("close", path, err)
 	}
 	return nil
+}
+
+// validChildName accepts exactly one POSIX path component. A backslash is
+// an ordinary character here, as it is for the other writes of this package.
+func validChildName(name string) bool {
+	return name != "" && name != "." && name != ".." && !strings.ContainsAny(name, "/\x00")
 }

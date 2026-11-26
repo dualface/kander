@@ -28,7 +28,13 @@ func TestDirectoryWriterCreatesNewFilesOnly(t *testing.T) {
 	if err := w.CreateInherited("spec.md", []byte("other")); !errors.Is(err, os.ErrExist) {
 		t.Fatalf("replaced an existing file: %v", err)
 	}
-	for _, name := range []string{"", ".", "..", "a/b", `a\b`} {
+	invalid := []string{"", ".", "..", "a/b"}
+	if runtime.GOOS == "windows" {
+		invalid = append(invalid, `a\b`)
+	} else if err := w.CreateInherited(`run\output.txt`, []byte("posix")); err != nil {
+		t.Fatalf("a backslash is an ordinary POSIX name character: %v", err)
+	}
+	for _, name := range invalid {
 		if err := w.CreateInherited(name, nil); err == nil {
 			t.Fatalf("created %q", name)
 		}
