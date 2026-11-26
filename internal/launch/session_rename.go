@@ -245,9 +245,9 @@ func (p renameProbe) acknowledgements(view, command string) []renameAcknowledgem
 }
 
 // A stationary acknowledgement cannot distinguish an adjacent draft from an
-// echo. With no additional match, only a pair appended after retained screen
-// lines can replace an acknowledgement that scrolled out. At most one echo
-// is excluded from the draft check.
+// echo. When a pair follows retained screen lines, the older acknowledgement
+// may have scrolled out or moved to an earlier row in the retained region.
+// At most one echo is excluded from the draft check.
 func newRenameAcknowledgement(before, after string, old, current []renameAcknowledgement) (renameAcknowledgement, bool) {
 	if len(current) == 0 {
 		return renameAcknowledgement{}, false
@@ -272,16 +272,20 @@ func newRenameAcknowledgement(before, after string, old, current []renameAcknowl
 	for _, ack := range current {
 		texts[ack.text]--
 		fresh := texts[ack.text] < 0
-		if ack.hasEcho() {
-			if positions[position{ack.text, ack.row}] {
-				continue
+		if sameRow := positions[position{ack.text, ack.row}]; ack.hasEcho() && (!fresh || sameRow) {
+			if !comparedScroll {
+				dropped, retained = renameScrollOverlap(before, after)
+				comparedScroll = true
 			}
-			if !fresh {
-				if !comparedScroll {
-					dropped, retained = renameScrollOverlap(before, after)
-					comparedScroll = true
-				}
-				fresh = retained > 0 && firstRows[ack.text] < dropped && ack.row > retained
+			appended := retained > 0 && ack.row > retained
+			if sameRow {
+				shifted := ack.row - dropped
+				fresh = fresh && appended && shifted >= 0 && shifted < retained &&
+					slices.ContainsFunc(current, func(oldMatch renameAcknowledgement) bool {
+						return oldMatch.row == shifted && oldMatch.text == ack.text
+					})
+			} else {
+				fresh = appended && firstRows[ack.text] < dropped
 			}
 		}
 		if fresh && (!result.hasEcho() || ack.hasEcho()) {

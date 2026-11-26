@@ -84,6 +84,9 @@ func TestRenameLaunchDelivery(t *testing.T) {
 	const rename = "/rename kb-中文-Name_3.0"
 	const acknowledgement = "renamed kb-中文-Name_3.0"
 	const prompt = "task instruction"
+	const history = "❯ " + rename + "\n" + acknowledgement + "\nready"
+	const beforeFixedScroll = "first\nsecond\nthird\nretained heading\nretained body\n" + history
+	const afterFixedScroll = "retained heading\nretained body\n" + history + "\n" + history
 	for _, tc := range []struct {
 		name          string
 		command       string
@@ -109,6 +112,8 @@ func TestRenameLaunchDelivery(t *testing.T) {
 		{name: "unchanged-help-is-not-a-draft", command: "/rename {name}", noComplete: true, screens: []string{"Help: /rename <title>\nready", "Help: /rename <title>\nready\nstatus updated"}, wantSends: []string{rename, prompt}},
 		{name: "same-name-new-acknowledgement", command: "/rename {name}", screens: []string{"❯ " + rename + "\n" + acknowledgement + "\nready", "❯ " + rename + "\n" + acknowledgement + "\n❯ " + rename + "\n" + acknowledgement + "\nready"}, wantSends: []string{rename, prompt}},
 		{name: "same-name-acknowledgement-replaces-scrolled-one", command: "/rename {name}", screens: []string{acknowledgement + "\nready", "ready\n❯ " + rename + "\n" + acknowledgement + "\nready"}, wantSends: []string{rename, prompt}},
+		{name: "new-acknowledgement-reuses-row-of-retained-history", command: "/rename {name}", screens: []string{beforeFixedScroll, afterFixedScroll}, wantSends: []string{rename, prompt}},
+		{name: "reused-acknowledgement-row-does-not-hide-independent-draft", command: "/rename {name}", screens: []string{beforeFixedScroll, afterFixedScroll + " ❯ " + rename}, wantSends: []string{rename}, wantCode: "launch.pane_ready_timeout", wantWarning: "launch.rename_unconfirmed"},
 		{name: "scrolled-acknowledgement-does-not-hide-another-draft", command: "/rename {name}", screens: []string{acknowledgement + "\nready", "ready\n❯ " + rename + "\n" + acknowledgement + "\nready\n❯ " + rename}, wantSends: []string{rename}, wantCode: "launch.pane_ready_timeout", wantWarning: "launch.rename_unconfirmed"},
 		{name: "same-name-stale-acknowledgement-with-draft", command: "/rename {name}", screens: []string{acknowledgement + "\nready", acknowledgement + "\nready\n❯ " + rename}, wantSends: []string{rename}, wantCode: "launch.pane_ready_timeout", wantWarning: "launch.rename_unconfirmed"},
 		{name: "scrolled-echo-is-not-proof-of-a-clean-composer", command: "/rename {name}", screens: []string{"❯ " + rename + "\n" + acknowledgement + "\nready", acknowledgement + "\nready\n❯ " + rename}, wantSends: []string{rename}, wantCode: "launch.pane_ready_timeout", wantWarning: "launch.rename_unconfirmed"},

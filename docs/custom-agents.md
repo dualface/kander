@@ -87,7 +87,9 @@ completion match, Kander looks for the ready composer again after a short
 pause without a new rename draft. Screen matches see the original backend
 output, including terminal line endings. After successful delivery, Kander can
 exclude one command echo next to a fresh acknowledgement from the draft
-check. An acknowledgement on an unchanged row cannot hide an adjacent draft.
+check. An acknowledgement that stays in place cannot hide an adjacent draft.
+If a new acknowledgement uses the same row as an older one, the retained
+viewport lines must show that the older match moved higher on the screen.
 If the number of matches does not increase, a repeated acknowledgement and
 its echo must appear below the retained viewport lines after an older match
 scrolls out. After a delivery error, no acknowledgement can hide a visible
