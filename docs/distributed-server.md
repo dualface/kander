@@ -116,6 +116,56 @@ After an explicit import, legacy file cards stay readable and read-only. Pause e
 
 Maintenance reuses the board migration redo journal, checks the final board and returns JSON with `project`, `changed_tasks`, and the final `snapshot` digest. An interrupted migration resumes from the exact prepared mapping and original operation ID. Original import identity, the source backup and historical report bytes remain unchanged. Repeating a completed migration reports zero changes. Resume writers only after success and a fresh service snapshot. This operation does not prune historical evidence. Normal startup recovers ordinary transactions but refuses an active pending form migration until explicit offline maintenance acknowledges the paused writers.
 
+## Server gc
+
+`kander server gc [--data DIR] [--project NAME] [--dry-run] [--yes] [--json] [--older-than 7d] [--log-keep 64MiB]` reclaims three kinds of server data. It first computes the plan (a dry run), prints it per project and category with counts and bytes, asks y/N on a terminal, then runs. `--older-than` takes a Go duration or `<n>d` and must be at least `1h`; `--log-keep` takes bytes or `<n>KiB|MiB|GiB` and must be at least `1MiB`. The parsers are `command.ParseRetention` and `command.ParseByteSize`, which `kander gc` reuses. The interaction and the exit codes follow `kander uninstall`: 0 when every candidate was reclaimed or there was none, 1 when the user cancelled, a candidate was kept, or the run met an error, 2 for a usage error, a missing confirmation, or a refused request. Tests and manual checks run only on copies in temporary directories.
+
+**Where it runs.** When the effective `server.url` is a loopback URL and the server there reports the same data directory, the command reads `admin-token.json` and sends `POST /api/v1/server/gc` twice: once with `dry_run: true` for the plan, once with `dry_run: false` after confirmation. Otherwise it takes `server.lock` without waiting (`OpenOfflineGC`), reads `projects.json`, and runs the same code in its own process while it holds the lock from the plan to the end; it never recovers boards or writes a control record of its own. When the lock is held it asks the loopback server again, because a server may be starting. The route accepts only a loopback peer with the administration token, like shutdown and import, and answers 403 otherwise before it reads the request. Like import it passes the protocol handshake and the readiness gate of the domain routes. One gc runs at a time in a server; a second request is refused with `gc_running` (HTTP 409). The client waits up to 30 minutes, not the 90-second default of its other calls. The gc does not follow the request: when the client disconnects or times out, the server finishes the round and logs `gc finished`; the command then says the server may still be running it. Server shutdown stops a gc between batches, never inside a log trim, and the next gc finishes the rest.
+
+Request (`api.ServerGCRequest`):
+
+```json
+{"project": "kander", "dry_run": true, "older_than": "168h0m0s", "log_keep": 67108864}
+```
+
+`project` empty means every registered project; an invalid name is `invalid_request`, an unregistered one `not_found`. `older_than` is a Go duration of at least one hour, `log_keep` at least 1 MiB.
+
+Response (`api.ServerGCReport`), also the `--json` output of the command:
+
+```json
+{
+  "dry_run": true,
+  "projects": [
+    {
+      "name": "kander",
+      "compaction": {"runs": 700, "files": 9000, "bytes": 1900000000, "kept": [{"id": "<run-id>", "reason": "<reason>"}]},
+      "receipts": {"files": 7000, "bytes": 30000000},
+      "warnings": ["<damaged record>"],
+      "errors": ["<failure that stopped a category>"]
+    }
+  ],
+  "log": {"path": "/data/server.log", "size": 1200000000, "bytes": 1140000000, "kept": "<why a due trim failed>"},
+  "errors": ["<failure outside a project>"]
+}
+```
+
+`kept` lists only kept candidates: entries that met every condition of normal operation but were kept because a protective condition failed or the removal failed. `warnings` lists damaged records a category skipped and does not change the exit code. `log` is omitted with `--project`. Empty `kept`, `warnings` and `errors` are omitted.
+
+**Review run compaction** calls `board.CompactReviewRuns` with the retention period ([Review run compaction](review-evidence.md#review-run-compaction)). A run skipped only for conditions 1, 2, 3, 7 or a failed removal is a kept candidate; a run that also fails condition 4, 5, 6 or 8 (members still open, group not settled, too recent, referenced by an unsettled successor) is no candidate.
+
+**Idempotency receipts** live in `board/.kander/groups/00000000-service-group/receipts/`. Each batch of 1000 files is read and removed under the project lock, which every write of the project also holds. Only `done` receipts are removed; a `pending` receipt marks an operation whose result is uncertain and always stays, as does a receipt without `created_at`. A liveness receipt (`observation:<task>`, `group-observation:<group>`) goes once it is 24 hours old: its only use is the replay of a late retry, and replaying an old observation would only overwrite the observation fields until the next observation. Any other receipt goes once it is older than the retention period and the object its operation names is terminal (every card in `done`, `archived` or `trash`):
+
+| Operation | Bound to |
+| --- | --- |
+| `move:`, `put:<task>:<path>`, `claim:`, `takeover:`, `execution:`, `dispatch:<task>:<action>`, `delivery:`, `assign:`, `confirm:`, `request:`, `answer:<task>:<request>`, `decision-human:`, `decision-leader:`, `decision-mode:` | the card |
+| `group-claim:`, `group-release:`, `group-reconcile:`, `group-recover:`, `group-remove-member:` | every card whose `TASK_GROUP` names the group |
+| `review-runtime:<run>:<action>`, `review-publish:<run>` | every card in the run's `task_ids` |
+| `new`, `issue-import`, `issue-result-save:`, `integration-claim:`, `integration-action:`, `review-plan` and the other review writes | nothing reliable: kept |
+
+A receipt whose card, group or run cannot be found is kept. No other record refers to a receipt by its key: the `move_receipt` of a task is stored with the card, not read from the receipt file. After a receipt is removed, a retry with the same key is a new request: the domain check answers it (a terminal card refuses a write), never with a 5xx.
+
+**`server.log`** (`servicectl.TrimLog`) is trimmed when it is larger than `--log-keep`. The kept tail starts at the first line start at or after `size - log_keep`. The head is compressed into `server.log.1.gz` (written to `server.log.1.gz.tmp` first, one generation). The tail is copied to `server.log.tail.tmp`, synced and renamed to `server.log.tail`; then `server.log` is truncated and the tail is appended back in whole lines, and `server.log.tail` is removed. The server holds the log with `O_APPEND`, so its next write lands after the truncation point. Two windows remain: lines the server writes between the end of the tail copy and the truncation are lost, and lines it writes between the truncation and the end of the append come before the kept tail. A trim interrupted before the rename leaves only `server.log.tail.tmp`, which the next trim removes. A trim interrupted after it leaves `server.log.tail`; the next trim appends it to `server.log` before anything else, so the tail is never lost, but it may then follow newer lines, or appear twice when the truncation had not happened. Trims of one process are serialized by a mutex. A dry run reads the size and changes no file. On Windows the copy-then-truncate behavior is implemented but not verified on a Windows host.
+
 ## Protocol
 
 All routes live below `/api/v1`. Every domain request sends `Kander-Protocol: <n>`; a version outside the server's `[min, current]` range is refused with `protocol_incompatible` (412) before any domain operation. `GET /api/v1/version` returns the server's range so a client can refuse an incompatible server first. The current and oldest accepted protocol are both 3. Earlier versions used `assignee` for the executing agent, so mixing them would misread that field. The client's offline board cache is separated by wire protocol so an old snapshot cannot be decoded with the new schema.
@@ -152,7 +202,7 @@ The request-card confirmation route is additive and does not change protocol 3. 
 | `POST /projects/{p}/issues/results/view`, `/save` | Completed work-set evidence and versioned result publication/decision history |
 | `GET /projects/{p}/events?cursor=&wait=` | Long-polled change log |
 
-Errors are JSON `{code, message, board_code}` with stable codes: `invalid_request`, `not_found`, `revision_conflict`, `decision_reserved`, `confirmation_required`, `held_by_other`, `taken_over`, `lease_invalid`, `lease_active`, `claim_required`, `evidence_incomplete`, `protocol_incompatible`, `idempotency_mismatch`, `project_mismatch`, `project_not_empty`, `board_rejected`, `not_ready`, `index_rebuilding`, `review_compacted`, `internal`. `review_compacted` (HTTP 410) answers a read of a review original or input that a compaction removed from a settled run, and a prepare or publication of a compacted run; see [Review run compaction](review-evidence.md#review-run-compaction). Embedding reserves `forbidden` and `attribution_required` as HTTP 403 codes for host policy and missing attribution, respectively. `board_code` carries the board package message key of a domain rejection so the client renders the same localized text as v1.
+Errors are JSON `{code, message, board_code}` with stable codes: `invalid_request`, `not_found`, `revision_conflict`, `decision_reserved`, `confirmation_required`, `held_by_other`, `taken_over`, `lease_invalid`, `lease_active`, `claim_required`, `evidence_incomplete`, `protocol_incompatible`, `idempotency_mismatch`, `project_mismatch`, `project_not_empty`, `board_rejected`, `not_ready`, `index_rebuilding`, `review_compacted`, `gc_running`, `internal`. `review_compacted` (HTTP 410) answers a read of a review original or input that a compaction removed from a settled run, and a prepare or publication of a compacted run; see [Review run compaction](review-evidence.md#review-run-compaction). `gc_running` (HTTP 409) refuses a second `POST /api/v1/server/gc` while one runs. Embedding reserves `forbidden` and `attribution_required` as HTTP 403 codes for host policy and missing attribution, respectively. `board_code` carries the board package message key of a domain rejection so the client renders the same localized text as v1.
 
 ### Idempotency
 

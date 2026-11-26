@@ -24,7 +24,7 @@ Use `Request.Pattern` as the route-level policy key. It is the registered Go HTT
 
 `server.Routes()` lists the patterns registered by `Handler()` without opening a data directory. A route's `Authorized` flag means eligible requests go through `Hooks.Authorize` if it is set. Compare your policy table with `Routes()` in a test so that a Kander upgrade cannot silently leave a new pattern unclassified.
 
-`Request.ProjectID`, `Task`, and `Group` come from the matching path parameters. `Request.Project` is the registered project name resolved from that ID without accessing the board. It is empty when the route has no project parameter or the ID is unknown. `Authorize` does not receive query strings, request bodies, headers, or board-derived membership. In particular, `GET /api/v1/projects`, `POST /api/v1/projects`, and `POST /api/v1/server/import` have no path-bound project and need a host-level policy.
+`Request.ProjectID`, `Task`, and `Group` come from the matching path parameters. `Request.Project` is the registered project name resolved from that ID without accessing the board. It is empty when the route has no project parameter or the ID is unknown. `Authorize` does not receive query strings, request bodies, headers, or board-derived membership. In particular, `GET /api/v1/projects`, `POST /api/v1/projects`, `POST /api/v1/server/import`, and `POST /api/v1/server/gc` have no path-bound project and need a host-level policy.
 
 These project routes can select tasks via the body without a `{task}` path parameter. Authorize them at project scope, not for any one task. The table uses the common prefix `/api/v1/projects/{project}`.
 

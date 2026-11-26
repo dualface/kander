@@ -8,7 +8,7 @@ Every command except the bare `kander` and the internal `worker` accepts the glo
 - **Failure.** Standard output is empty. Standard error holds one object and a newline: `{"error":{"code":"...","message":"..."}}`. The exit status is the same as without `--json`. `code` is a stable English value from the table below. `message` is the localized text of the failure and follows `--lang`; the service text of a board rejection is the one exception, see "Code priority".
 - **Notices.** A command that prints a remark on standard error without `--json` puts it in the result object as `notices`, an array of `{"code":"...","message":"..."}` (the field is left out when there is no remark). A failure that came with remarks carries them as `notices` beside `error`. `move` puts the completion report template in the field `completion_report` instead.
 - **One shape.** The forms that always print JSON (`dispatch`, `coordinator`, `notify`, bound `move`, `request show`, `subscribe`) print the same object with and without `--json`; only the place of the notices differs.
-- **A finished analysis is a result.** A command whose contract ties an exit status to a completed analysis writes the result object to standard output and exits with that status. Standard error stays empty. These are `check` (exit 1 for findings), `check delivery` and `check overlap` (exit 1), `coordinator reconcile` (exit 1 or 3), `doctor` (exit 1 for an unhealthy installation), `terminal list` and `terminal test` (exit 1), and a `review` run whose evidence reached every card (the exit status of the run). A check that could not finish is a failure.
+- **A finished analysis is a result.** A command whose contract ties an exit status to a completed analysis writes the result object to standard output and exits with that status. Standard error stays empty. These are `check` (exit 1 for findings), `check delivery` and `check overlap` (exit 1), `coordinator reconcile` (exit 1 or 3), `doctor` (exit 1 for an unhealthy installation), `terminal list` and `terminal test` (exit 1), `server gc` (exit 1 when a candidate was kept or a category failed), and a `review` run whose evidence reached every card (the exit status of the run). A check that could not finish is a failure.
 - **Not in scope.** The bare `kander` (the board) and `worker` reject `--json` as an argument error. Help is out of scope here: `--help` and `kander help` are described in [Command help](command-help.md).
 
 ## Error codes
@@ -19,7 +19,7 @@ Every command except the bare `kander` and the internal `worker` accepts the glo
 | `interactive_required` | 2 | The form needs a terminal; see "Interactive forms" |
 | `not_configured` | 1 | The checkout is not bound to a service project (`kander init`) |
 | `unreachable` | 1 | The service did not answer |
-| the service code | 1 | A service rejection: `invalid_request`, `not_found`, `revision_conflict`, `held_by_other`, `lease_invalid`, `lease_active`, `taken_over`, `claim_required`, `evidence_incomplete`, `protocol_incompatible`, `idempotency_mismatch`, `project_mismatch`, `project_not_empty`, `board_rejected`, `not_ready`, `index_rebuilding`, `decision_reserved`, `internal`, or the embedding codes `forbidden` and `attribution_required` |
+| the service code | 1 | A service rejection: `invalid_request`, `not_found`, `revision_conflict`, `held_by_other`, `lease_invalid`, `lease_active`, `taken_over`, `claim_required`, `evidence_incomplete`, `protocol_incompatible`, `idempotency_mismatch`, `project_mismatch`, `project_not_empty`, `board_rejected`, `not_ready`, `index_rebuilding`, `decision_reserved`, `gc_running`, `internal`, or the embedding codes `forbidden` and `attribution_required` |
 | the board code | 1 | A board rejection, for example `board.document_not_found` or `board.transaction_conflict`; the message keys of `internal/i18n` are the values |
 | `issue_<kind>` | 1 | A failure of the GitHub provider: `issue_invalid_query`, `issue_not_repository`, `issue_no_remote`, `issue_ambiguous_remotes`, `issue_cli_unavailable`, `issue_unauthenticated`, `issue_not_found`, `issue_rate_limited`, `issue_timeout`, and the other kinds of `internal/issue` with `-` written as `_` |
 | `check_<kind>` | 2 or 3 | An analysis of `check delivery` or `check overlap` that could not finish: `check_invalid_ref`, `check_not_ancestor`, `check_not_repository`, `check_git_unavailable`, `check_no_merge_base`, `check_output_limit`, `check_parse`, `check_internal` |
@@ -27,13 +27,15 @@ Every command except the bare `kander` and the internal `worker` accepts the glo
 | `launch_unresolved` | 3 | A start or a takeover that failed late with executor evidence; the message holds the next steps |
 | `server_not_running` | 1 | `server status` found no server |
 | `cancelled` | 130 | `server import` was interrupted |
+| `gc_timeout` | 1 | The `server gc` call timed out; the server may still run the gc |
+| the service code | 2 | `server gc` refused by the service: `invalid_request`, `not_found`, `gc_running`, or the refused administration check (HTTP 403, code `invalid_request`) |
 | `failed` | 1 | A failure without a more specific class |
 
 ### Code priority
 
 The code of a failure is the first of these that applies:
 
-1. The code the command gave it: `usage`, `interactive_required`, `launch_unresolved`, `check_<kind>`, `review_failed`, `server_not_running`, `cancelled`.
+1. The code the command gave it: `usage`, `interactive_required`, `launch_unresolved`, `check_<kind>`, `review_failed`, `server_not_running`, `cancelled`, `gc_timeout`.
 2. A service error: the board code when the service reports one, otherwise the service code. The message of a service error that carries a board code is the text the service sent; its language is decided by the service, not by `--lang`. Any other service error has a message of the client (`--lang`) followed by the service text.
 3. An unreachable service: `unreachable`.
 4. A checkout without a binding: `not_configured`.
