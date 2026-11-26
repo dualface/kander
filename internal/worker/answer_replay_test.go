@@ -44,6 +44,9 @@ func TestTransientFailuresKeepTheAnswer(t *testing.T) {
 		{"500 internal", gatewayReply{mode: gatewayRefuse, status: http.StatusInternalServerError, code: api.CodeInternal}},
 		{"403 forbidden", gatewayReply{mode: gatewayRefuse, status: http.StatusForbidden, code: api.CodeForbidden}},
 		{"transport error", gatewayReply{mode: gatewayHangUp}},
+		// A 5xx is transient whatever code its body carries.
+		{"503 with revision_conflict", gatewayReply{mode: gatewayRefuse, status: http.StatusServiceUnavailable, code: api.CodeRevisionConflict}},
+		{"502 with not_found", gatewayReply{mode: gatewayRefuse, status: http.StatusBadGateway, code: api.CodeNotFound}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rig := newReplayRig(t, "transient", func(send gatewaySend, _ int) gatewayReply {
@@ -103,6 +106,92 @@ func alwaysFailingTypedNote(t *testing.T, slug string) *replayRig {
 		}
 		return gatewayReply{}
 	})
+}
+
+// A rejection that left the table without reaching Kander leaves the proposal
+// open; the delivery of later renewals does not register it again.
+func TestAClosedRejectionIsNotRegisteredAgain(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		reply gatewayReply
+		wait  time.Duration
+	}{
+		{"refused", gatewayReply{mode: gatewayRefuse, status: http.StatusConflict, code: api.CodeEvidenceIncomplete}, 0},
+		{"abandoned", gatewayReply{mode: gatewayRefuse, status: http.StatusServiceUnavailable, code: api.CodeNotReady}, answerRetention},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := newGateway(func(send gatewaySend, _ int) gatewayReply {
+				if strings.HasPrefix(send.answer.Note, expiredNote) {
+					return tc.reply
+				}
+				return gatewayReply{}
+			})
+			h := g.harness(t)
+			_, c := h.claimed("closed-rejection-"+tc.name, true)
+			r := h.proposal(c, "closed-rejection-"+tc.name, 30*time.Second)
+			h.workAfter(31 * time.Second)
+			for left := tc.wait; left > 0; left -= answerBackoffMax {
+				h.workAfter(answerBackoffMax)
+			}
+			if len(h.openAttempts(c)) != 0 {
+				t.Fatalf("the rejection left the table: %+v", h.openAttempts(c))
+			}
+			sent := len(expiredSends(g, r.ID))
+			for range 3 {
+				h.workAfter(answerBackoffMax)
+			}
+			if got := len(expiredSends(g, r.ID)); got != sent {
+				t.Fatalf("the delivery registered the rejection again: %d sends, want %d", got, sent)
+			}
+			if got := h.requests(c)[0]; got.Status != api.RequestOpen {
+				t.Fatalf("the proposal stays open for the holder: %+v", got)
+			}
+			g.requireStableSends(t)
+		})
+	}
+}
+
+// The retention is checked before each send: a slow call earlier in the round
+// does not carry a later send past it.
+func TestTheRetentionIsCheckedBeforeEverySend(t *testing.T) {
+	var slow atomic.Bool
+	var h *harness
+	g := newGateway(func(send gatewaySend, _ int) gatewayReply {
+		if send.answer.Note == typedNote && slow.CompareAndSwap(true, false) {
+			h.advance(2 * time.Second)
+		}
+		if send.answer.Note == typedNote {
+			return gatewayReply{mode: gatewayRefuse, status: http.StatusServiceUnavailable, code: api.CodeNotReady}
+		}
+		return gatewayReply{}
+	})
+	h = g.harness(t)
+	sink := h.logs()
+	_, c := h.claimed("retention-per-send", true)
+	first, second := h.request(c, "first"), h.request(c, "second")
+	h.workAfter(16 * time.Second)
+	typedAt := h.now()
+	if open := h.openAttempts(c); len(open) != 2 {
+		t.Fatalf("both typed notes are open: %+v", open)
+	}
+	slow.Store(true)
+	h.workAfter(answerRetention - time.Second)
+	var late []gatewaySend
+	for _, request := range []string{first.ID, second.ID} {
+		for _, send := range g.sendsOf(request, typedNote) {
+			if send.at.After(typedAt) {
+				late = append(late, send)
+			}
+		}
+	}
+	if len(late) != 1 {
+		t.Fatalf("only the send that started before the limit went out: %v", late)
+	}
+	abandoned := sink.findAll("request answer abandoned: still unsettled after its retention")
+	if len(abandoned) != 1 || abandoned[0]["request"] == late[0].request {
+		t.Fatalf("the answer behind the slow call is abandoned unsent: %+v", abandoned)
+	}
+	g.requireStableSends(t)
 }
 
 func TestAnAnswerBacksOffBetweenSends(t *testing.T) {

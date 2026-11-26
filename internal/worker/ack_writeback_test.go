@@ -19,9 +19,15 @@ import (
 type answerTap struct {
 	mu      sync.Mutex
 	answers []api.CollabAnswer
-	// bodies holds the raw body of every answer by its idempotency key.
-	bodies map[string][][]byte
-	fault  func(http.ResponseWriter, *http.Request, http.Handler, api.CollabAnswer) bool
+	// sends holds every answer as it arrived, for requireStableSends.
+	sends []tappedSend
+	fault func(http.ResponseWriter, *http.Request, http.Handler, api.CollabAnswer) bool
+}
+
+type tappedSend struct {
+	request, key string
+	body         []byte
+	answer       api.CollabAnswer
 }
 
 func (s *answerTap) wrap(next http.Handler) http.Handler {
@@ -36,11 +42,8 @@ func (s *answerTap) wrap(next http.Handler) http.Handler {
 			r.Body = io.NopCloser(bytes.NewReader(body))
 			s.mu.Lock()
 			s.answers = append(s.answers, answer)
-			if s.bodies == nil {
-				s.bodies = map[string][][]byte{}
-			}
-			key := r.Header.Get(api.HeaderIdempotencyKey)
-			s.bodies[key] = append(s.bodies[key], body)
+			segments := strings.Split(r.URL.Path, "/")
+			s.sends = append(s.sends, tappedSend{request: segments[len(segments)-2], key: r.Header.Get(api.HeaderIdempotencyKey), body: body, answer: answer})
 			s.mu.Unlock()
 			if s.fault != nil && s.fault(w, r, next, answer) {
 				return
@@ -62,17 +65,14 @@ func (s *answerTap) revisions(note string) []uint64 {
 	return revisions
 }
 
-// requireStableSends checks that every send of one key carries the same body.
+// requireStableSends checks the replay invariant as the gateway tap does.
 func (s *answerTap) requireStableSends(t *testing.T) {
 	t.Helper()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for key, bodies := range s.bodies {
-		for _, body := range bodies[1:] {
-			if !bytes.Equal(body, bodies[0]) {
-				t.Fatalf("key %s was sent with two bodies: %s and %s", key, bodies[0], body)
-			}
-		}
+	checker := stableSends{}
+	for _, send := range s.sends {
+		checker.add(t, send.request, send.key, send.body, send.answer)
 	}
 }
 

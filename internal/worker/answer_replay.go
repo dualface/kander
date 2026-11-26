@@ -72,6 +72,10 @@ type answerAttempt struct {
 type replayTable struct {
 	attempts []*answerAttempt
 	rebuilt  bool
+	// closedRejections holds the requests whose rejection left the table: a
+	// rejection that was refused or abandoned leaves the proposal open, and the
+	// delivery must not register it again.
+	closedRejections map[string]struct{}
 }
 
 // contentKey is the idempotency key of a typed note or an acknowledgement
@@ -95,20 +99,22 @@ func answerBackoff(failures int) time.Duration {
 	return min(wait, answerBackoffMax)
 }
 
-// answerRefused reports a deterministic refusal of Kander: the answer was not
-// applied and sending it again changes nothing. Every other failure, an error
-// code of an embedder included, is transient.
-func answerRefused(err error) bool {
+// answerRefusal returns the code of a deterministic refusal of Kander: the
+// answer was not applied and sending it again changes nothing. Every other
+// failure is transient: a transport error, any HTTP 5xx whatever its body says
+// (an embedder may wrap an upstream body in a 503), and an error code of an
+// embedder.
+func answerRefusal(err error) (string, bool) {
 	var failure *api.Error
-	if !errors.As(err, &failure) {
-		return false
+	if !errors.As(err, &failure) || failure.Status >= 500 {
+		return "", false
 	}
 	switch failure.Code {
 	case api.CodeRevisionConflict, api.CodeLeaseInvalid, api.CodeTakenOver, api.CodeClaimRequired, api.CodeHeldByOther,
 		api.CodeNotFound, api.CodeIdempotencyMismatch, api.CodeInvalidRequest, api.CodeEvidenceIncomplete:
-		return true
+		return failure.Code, true
 	default:
-		return false
+		return "", false
 	}
 }
 
@@ -131,6 +137,19 @@ func (t *replayTable) pending(request string, kind answerKind) *answerAttempt {
 
 func (t *replayTable) remove(a *answerAttempt) {
 	t.attempts = slices.DeleteFunc(t.attempts, func(open *answerAttempt) bool { return open == a })
+	if a.kind == answerRejection {
+		if t.closedRejections == nil {
+			t.closedRejections = map[string]struct{}{}
+		}
+		t.closedRejections[a.request] = struct{}{}
+	}
+}
+
+// rejecting reports whether a rejection of the request is open or already
+// left the table, so the delivery treats the proposal as rejected.
+func (t *replayTable) rejecting(request string) bool {
+	_, closed := t.closedRejections[request]
+	return closed || t.pending(request, answerRejection) != nil
 }
 
 func (t *replayTable) replace(old, next *answerAttempt) {
@@ -152,6 +171,9 @@ const (
 	answerSent answerOutcome = iota
 	answerRefusedNow
 	answerKept
+	// answerAbandoned means the attempt reached its retention before the send;
+	// nothing was sent.
+	answerAbandoned
 	// answerDuplicate means an attempt of the same kind is already open for
 	// the request; nothing was sent.
 	answerDuplicate
@@ -173,20 +195,27 @@ func (w *loop) submitAnswer(ctx context.Context, log *slog.Logger, project *clie
 // its backoff. With fallback set, a revision conflict of an acknowledgement
 // result goes through fallBack.
 func (w *loop) sendAnswer(ctx context.Context, log *slog.Logger, project *client.Project, c remote.Credential, table *replayTable, a *answerAttempt, fallback bool) (api.CollabRequest, answerOutcome, error) {
+	// Checked before every send, not once per round: an earlier call of the
+	// same round, or the read of a fallback, can take the clock past the
+	// retention.
+	if w.abandonExpired(log, table, a) {
+		return api.CollabRequest{}, answerAbandoned, nil
+	}
 	callCtx, cancel := bounded(ctx)
 	answered, err := project.AnswerRequest(callCtx, a.key, c.TaskID, a.request, a.body, *c.Claim())
 	cancel()
+	code, refused := answerRefusal(err)
 	switch {
 	case err == nil:
 		table.remove(a)
 		w.logSettled(log, a)
 		return answered, answerSent, nil
-	case fallback && a.kind == answerResult && !a.rebuilt && api.IsCode(err, api.CodeRevisionConflict):
+	case refused && fallback && a.kind == answerResult && !a.rebuilt && code == api.CodeRevisionConflict:
 		w.fallBack(ctx, log, project, c, table, a)
 		return answered, answerRefusedNow, err
-	case answerRefused(err):
+	case refused:
 		table.remove(a)
-		if api.IsCode(err, api.CodeIdempotencyMismatch) {
+		if code == api.CodeIdempotencyMismatch {
 			log.Error("request answer key reused with another body", "request", a.request, "kind", a.kind, "key", a.key, "error", err)
 		} else {
 			log.Debug("request answer refused", "request", a.request, "kind", a.kind, "rebuilt", a.rebuilt, "error", err)
@@ -228,6 +257,18 @@ func (w *loop) logSettled(log *slog.Logger, a *answerAttempt) {
 	}
 }
 
+// abandonExpired drops an attempt once its retention, counted from its first
+// send, has passed, and reports whether it did.
+func (w *loop) abandonExpired(log *slog.Logger, table *replayTable, a *answerAttempt) bool {
+	if w.o.Now().Before(a.firstSent.Add(answerRetention)) {
+		return false
+	}
+	table.remove(a)
+	log.Warn("request answer abandoned: still unsettled after its retention", "request", a.request, "kind", a.kind,
+		"key", a.key, "first_sent", a.firstSent, "retention", answerRetention)
+	return true
+}
+
 // replayAnswers drops the attempts past their retention and sends the ones
 // whose backoff has elapsed, in the order they were added.
 func (w *loop) replayAnswers(ctx context.Context, log *slog.Logger, project *client.Project, c remote.Credential) {
@@ -235,19 +276,11 @@ func (w *loop) replayAnswers(ctx context.Context, log *slog.Logger, project *cli
 	if table == nil {
 		return
 	}
-	now := w.o.Now()
-	for _, a := range slices.Clone(table.attempts) {
-		if !now.Before(a.firstSent.Add(answerRetention)) {
-			table.remove(a)
-			log.Warn("request answer abandoned: still unsettled after its retention", "request", a.request, "kind", a.kind,
-				"key", a.key, "first_sent", a.firstSent, "retention", answerRetention)
-		}
-	}
 	for _, a := range slices.Clone(table.attempts) {
 		if ctx.Err() != nil {
 			return
 		}
-		if w.o.Now().Before(a.next) {
+		if w.abandonExpired(log, table, a) || w.o.Now().Before(a.next) {
 			continue
 		}
 		w.sendAnswer(ctx, log, project, c, table, a, true)

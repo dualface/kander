@@ -108,7 +108,7 @@ func TestRestartAfterAnOlderWorkerChangesNothing(t *testing.T) {
 		t.Fatalf("the typed note and the result are rebuilt: %v", rebuilt)
 	}
 	for _, send := range rebuilt {
-		if send.status != http.StatusConflict {
+		if send.status != http.StatusConflict || send.code != api.CodeRevisionConflict {
 			t.Fatalf("a rebuilt answer of an older worker is refused: %v", send)
 		}
 	}

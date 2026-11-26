@@ -299,6 +299,13 @@ func TestAnOpenRejectionIsNotSentAgainByTheDelivery(t *testing.T) {
 	if _, blocked := h.blockOf(); !blocked {
 		t.Fatal("the delivery blocked while the rejection was replayed")
 	}
+	// The note of a rejection made now would carry the blocked suffix; every
+	// send is still the first rejection.
+	for _, send := range expiredSends(g, r.ID) {
+		if first := expiredSends(g, r.ID)[0]; send.key != first.key || !bytes.Equal(send.body, first.body) {
+			t.Fatalf("the replayed rejection changed: %v then %v", first, send)
+		}
+	}
 	g.requireStableSends(t)
 }
 

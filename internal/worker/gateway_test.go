@@ -50,8 +50,9 @@ type gatewaySend struct {
 	body    []byte
 	answer  api.CollabAnswer
 	at      time.Time
-	// status is what the worker received.
+	// status and code are what the worker received.
 	status int
+	code   string
 }
 
 func (s gatewaySend) String() string {
@@ -114,24 +115,24 @@ func (g *gatewayTap) wrap(next http.Handler) http.Handler {
 		index := len(g.sends)
 		g.sends = append(g.sends, send)
 		g.mu.Unlock()
-		status := g.serve(w, r, next, send.key, reply)
+		status, code := g.serve(w, r, next, send.key, reply)
 		g.mu.Lock()
-		g.sends[index].status = status
+		g.sends[index].status, g.sends[index].code = status, code
 		g.mu.Unlock()
 	})
 }
 
-func (g *gatewayTap) serve(w http.ResponseWriter, r *http.Request, next http.Handler, key string, reply gatewayReply) int {
+func (g *gatewayTap) serve(w http.ResponseWriter, r *http.Request, next http.Handler, key string, reply gatewayReply) (int, string) {
 	switch reply.mode {
 	case gatewayRefuse:
 		denyTestAnswer(w, reply.status, reply.code)
-		return reply.status
+		return reply.status, reply.code
 	case gatewayHangUp:
 		conn, _, err := w.(http.Hijacker).Hijack()
 		if err == nil {
 			conn.Close()
 		}
-		return 0
+		return 0, ""
 	}
 	recorded := httptest.NewRecorder()
 	next.ServeHTTP(recorded, r)
@@ -139,10 +140,10 @@ func (g *gatewayTap) serve(w http.ResponseWriter, r *http.Request, next http.Han
 	switch {
 	case reply.mode == gatewayLostReply:
 		denyTestAnswer(w, http.StatusBadGateway, api.CodeInternal)
-		return http.StatusBadGateway
+		return http.StatusBadGateway, api.CodeInternal
 	case committed && reply.mode == gatewayAuditFails:
 		denyTestAnswer(w, http.StatusServiceUnavailable, api.CodeNotReady)
-		return http.StatusServiceUnavailable
+		return http.StatusServiceUnavailable, api.CodeNotReady
 	case committed:
 		g.mu.Lock()
 		if g.audits[key] == 0 {
@@ -155,7 +156,11 @@ func (g *gatewayTap) serve(w http.ResponseWriter, r *http.Request, next http.Han
 	}
 	w.WriteHeader(recorded.Code)
 	_, _ = w.Write(recorded.Body.Bytes())
-	return recorded.Code
+	var refusal api.Error
+	if !committed {
+		_ = json.Unmarshal(recorded.Body.Bytes(), &refusal)
+	}
+	return recorded.Code, refusal.Code
 }
 
 // sendsOf returns the sends of the request whose answer has the note.
@@ -209,18 +214,53 @@ func (g *gatewayTap) audited(key string) int {
 	return g.audits[key]
 }
 
-// requireStableSends checks the replay invariant: every send of one key
-// carries the same body, byte for byte.
+// requireStableSends checks the replay invariant in both directions: every
+// send of one key carries the same body, byte for byte, and every send of one
+// managed answer (one request and body) carries the same key.
 func (g *gatewayTap) requireStableSends(t *testing.T) {
 	t.Helper()
-	first := map[string][]byte{}
+	checker := stableSends{}
 	for _, send := range g.all() {
-		if body, seen := first[send.key]; seen && !bytes.Equal(body, send.body) {
-			t.Fatalf("key %s was sent with two bodies: %s and %s", send.key, body, send.body)
-		} else if !seen {
-			first[send.key] = send.body
-		}
+		checker.add(t, send.request, send.key, send.body, send.answer)
 	}
+}
+
+// stableSends holds the first body of each key and the first key of each
+// managed answer for requireStableSends.
+type stableSends struct {
+	bodies map[string][]byte
+	keys   map[string]string
+}
+
+func (s *stableSends) add(t *testing.T, request, key string, body []byte, answer api.CollabAnswer) {
+	t.Helper()
+	if s.bodies == nil {
+		s.bodies, s.keys = map[string][]byte{}, map[string]string{}
+	}
+	if first, seen := s.bodies[key]; seen && !bytes.Equal(first, body) {
+		t.Fatalf("key %s was sent with two bodies: %s and %s", key, first, body)
+	} else if !seen {
+		s.bodies[key] = body
+	}
+	if !managedNote(answer.Note) {
+		return
+	}
+	answerID := request + "\x00" + string(body)
+	if first, seen := s.keys[answerID]; seen && first != key {
+		t.Fatalf("answer %s of request %s was sent with two keys: %s and %s", body, request, first, key)
+	} else if !seen {
+		s.keys[answerID] = key
+	}
+}
+
+// managedNote reports whether a note is one of the managed answers; the
+// reservation and its confirmation use other keys by design.
+func managedNote(note string) bool {
+	switch note {
+	case typedNote, ackedNote, unconfirmedNote, staleNote:
+		return true
+	}
+	return strings.HasPrefix(note, expiredNote)
 }
 
 // requireContentKeys checks that every typed note and acknowledgement result
