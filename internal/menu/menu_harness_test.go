@@ -42,7 +42,13 @@ func TestMain(m *testing.M) {
 		os.Stderr.Write(out)
 		os.Exit(1)
 	}
+	leave, err := enterNeutralDir()
+	if err != nil {
+		_ = os.RemoveAll(dir)
+		os.Exit(1)
+	}
 	code := m.Run()
+	leave()
 	_ = os.RemoveAll(dir)
 	os.Exit(code)
 }

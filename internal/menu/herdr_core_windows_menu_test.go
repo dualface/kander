@@ -246,7 +246,7 @@ func TestWindowsHerdrCorePOSIXOverride(t *testing.T) {
 // the given platform line and further replacements.
 func useHerdrCoreOverride(t *testing.T, platform string, replacements ...string) {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("..", "terminal", "builtin", "definitions", "herdr-core.json"))
+	data, err := os.ReadFile(filepath.Join(packageDir, "..", "terminal", "builtin", "definitions", "herdr-core.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
