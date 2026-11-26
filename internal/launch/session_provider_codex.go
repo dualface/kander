@@ -20,7 +20,7 @@ import (
 // one rollout file per session below $CODEX_HOME/sessions; a rollout names its
 // session, its launch directory and its creation time, and its first user
 // message starts with this task's prompt. The same facts let a later adoption
-// find the session again (MarkerRepairable).
+// find the session again (AdoptionScan).
 type codexSessionProvider struct{}
 
 func init() { registerSessionProvider(codexSessionProvider{}) }
@@ -56,12 +56,20 @@ func (codexSessionProvider) Snapshot(sessionLaunch) (map[string]struct{}, error)
 
 // Scan selects the rollouts created at or after the launch whose header names
 // the launch directory and whose user prompt carries this task's prompt prefix.
-func (codexSessionProvider) Scan(l sessionLaunch, _ map[string]struct{}) (sessionScan, error) {
+func (p codexSessionProvider) Scan(l sessionLaunch, _ map[string]struct{}) (sessionScan, error) {
+	scan, err := p.rolloutScan(l.TaskID, l.CWD, l.Start)
+	if err != nil {
+		return nil, err
+	}
+	return codexScanner{scan}, nil
+}
+
+func (codexSessionProvider) rolloutScan(task, cwd string, floor time.Time) (*codexRolloutScan, error) {
 	root, err := filepath.Abs(codexSessionsRoot())
 	if err != nil {
 		return nil, err
 	}
-	return codexScanner{newCodexRolloutScan(root, codexPromptPrefixes(l.TaskID), l.Start, l.CWD)}, nil
+	return newCodexRolloutScan(root, codexPromptPrefixes(task), floor, cwd), nil
 }
 
 // codexScanner reads the clock for the shared loop; the rollout scan itself
@@ -72,9 +80,17 @@ func (s codexScanner) Candidates(ctx context.Context) ([]string, error) {
 	return s.candidates(ctx, nowFn())
 }
 
-// MarkerRepairable: a rollout names its task, its launch directory and its
-// creation time, so the launch's session can be found again.
-func (codexSessionProvider) MarkerRepairable() bool { return true }
+// AdoptionScan proves a session without a pre-launch snapshot. It requires the
+// task prefix in the first user message so a session that later discussed
+// this task cannot become a candidate.
+func (p codexSessionProvider) AdoptionScan(task, cwd string, floor time.Time) (sessionScan, error) {
+	scan, err := p.rolloutScan(task, cwd, floor)
+	if err != nil {
+		return nil, err
+	}
+	scan.firstUserOnly = true
+	return codexScanner{scan}, nil
+}
 
 // codexRolloutNameSkew bounds how far the wall-clock time in a rollout file
 // name can sit from UTC. Codex names rollouts and their date directories in its
@@ -131,11 +147,12 @@ func codexRolloutNameTime(base string) (time.Time, bool) {
 // candidate date directories and remembers every file that can never become a
 // candidate, so later polls do not open it again.
 type codexRolloutScan struct {
-	root        string
-	prefixes    []string
-	launchStart time.Time
-	cwd         string
-	settled     map[string]struct{}
+	root          string
+	prefixes      []string
+	launchStart   time.Time
+	cwd           string
+	firstUserOnly bool
+	settled       map[string]struct{}
 	// opened counts rollout files opened, for tests.
 	opened int
 }
@@ -208,7 +225,7 @@ func (s *codexRolloutScan) check(ctx context.Context, path string, entry os.DirE
 		return "", err
 	}
 	s.opened++
-	session, err := readRolloutSession(ctx, s.root, process.OpenFile{Path: path, Info: info}, s.prefixes, s.cwd)
+	session, err := s.readSession(ctx, process.OpenFile{Path: path, Info: info})
 	if err != nil {
 		var mismatch *sessionDirectoryMismatch
 		if errors.As(err, &mismatch) {
@@ -299,10 +316,10 @@ type rolloutSession struct {
 	bound bool
 }
 
-// readRolloutSession reads at most 64 records / 1 MiB of an observed rollout.
+// readSession reads at most 64 records / 1 MiB of an observed rollout.
 // A header for another launch directory returns a *sessionDirectoryMismatch.
-func readRolloutSession(ctx context.Context, root string, observed process.OpenFile, prefixes []string, cwd string) (rolloutSession, error) {
-	file, err := fs.OpenRegularFileIfExists(root, observed.Path)
+func (s *codexRolloutScan) readSession(ctx context.Context, observed process.OpenFile) (rolloutSession, error) {
+	file, err := fs.OpenRegularFileIfExists(s.root, observed.Path)
 	if err != nil || file == nil {
 		return rolloutSession{}, repairError("launch.session_repair_binding_missing")
 	}
@@ -340,23 +357,30 @@ func readRolloutSession(ctx context.Context, root string, observed process.OpenF
 			if record.Type != "session_meta" || !sessionReferenceRe.MatchString(record.Payload.ID) {
 				return rolloutSession{}, nil
 			}
-			if !matchesSessionDirectory(record.Payload.CWD, cwd) {
+			if !matchesSessionDirectory(record.Payload.CWD, s.cwd) {
 				return rolloutSession{}, &sessionDirectoryMismatch{repairError("launch.session_repair_directory_mismatch")}
 			}
 			session.id = record.Payload.ID
 			session.created = rolloutCreatedAt(record.Payload.Timestamp, record.Timestamp)
 			continue
 		}
-		if record.Type == "event_msg" && record.Payload.Type == "user_message" && startsWithAny(record.Payload.Message, prefixes) {
-			session.bound = true
-			return session, nil
+		if record.Type == "event_msg" && record.Payload.Type == "user_message" {
+			session.bound = startsWithAny(record.Payload.Message, s.prefixes)
+			if session.bound || s.firstUserOnly {
+				return session, nil
+			}
 		}
 		if record.Type == "response_item" && record.Payload.Role == "user" {
 			for _, content := range record.Payload.Content {
-				if (content.Type == "input_text" || content.Type == "text") && startsWithAny(content.Text, prefixes) {
-					session.bound = true
-					return session, nil
+				if content.Type == "input_text" || content.Type == "text" {
+					session.bound = startsWithAny(content.Text, s.prefixes)
+					if session.bound || s.firstUserOnly {
+						return session, nil
+					}
 				}
+			}
+			if s.firstUserOnly {
+				return session, nil
 			}
 		}
 	}

@@ -139,7 +139,11 @@ func (w codexRolloutWriter) Scan(l sessionLaunch, previous map[string]struct{}) 
 
 func writeLaunchRollout(t *testing.T, l sessionLaunch) {
 	t.Helper()
-	created := time.Now().UTC()
+	writeTestRollout(t, launchedCodexSession, l.CWD, l.Prompt, time.Now().UTC())
+}
+
+func writeTestRollout(t *testing.T, id, cwd, prompt string, created time.Time) string {
+	t.Helper()
 	root := filepath.Join(codexSessionsRoot(), filepath.FromSlash(created.Format("2006/01/02")))
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		t.Fatal(err)
@@ -147,16 +151,18 @@ func writeLaunchRollout(t *testing.T, l sessionLaunch) {
 	var data bytes.Buffer
 	encoder := json.NewEncoder(&data)
 	for _, record := range []any{
-		map[string]any{"type": "session_meta", "payload": map[string]any{"id": launchedCodexSession, "cwd": l.CWD, "timestamp": created.Format(time.RFC3339Nano)}},
-		map[string]any{"type": "response_item", "payload": map[string]any{"type": "message", "role": "user", "content": []any{map[string]any{"type": "input_text", "text": l.Prompt}}}},
+		map[string]any{"type": "session_meta", "payload": map[string]any{"id": id, "cwd": cwd, "timestamp": created.Format(time.RFC3339Nano)}},
+		map[string]any{"type": "response_item", "payload": map[string]any{"type": "message", "role": "user", "content": []any{map[string]any{"type": "input_text", "text": prompt}}}},
 	} {
 		if err := encoder.Encode(record); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(root, "rollout-"+launchedCodexSession+".jsonl"), data.Bytes(), 0o600); err != nil {
+	path := filepath.Join(root, "rollout-"+id+".jsonl")
+	if err := os.WriteFile(path, data.Bytes(), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	return path
 }
 
 // fakeCodexRollouts makes the next Codex launch create its rollout and returns

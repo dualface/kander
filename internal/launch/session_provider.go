@@ -20,12 +20,8 @@ import (
 // registering it (config only lists the hook names and their capability flags,
 // and the consistency test keeps both sides in step).
 //
-// This branch removed local resume, adoption and session repair, so the
-// resolver, adopter and prover capabilities of the develop branch (finding a
-// card's session again, listing adoption candidates, proving which session a
-// running process holds open) are not ported: nothing here would call them.
-// The two judgments the remaining callers need are optional capabilities
-// instead, sessionAllocatorChecker and sessionMarkerRepairer.
+// Session allocation preflight and rediscovery for remote adoption are
+// optional capabilities.
 
 // sessionLaunch carries the facts a provider may use for one launch.
 type sessionLaunch struct {
@@ -116,7 +112,7 @@ type sessionAllocatorChecker interface {
 // already names the session.
 type sessionMarkerRepairer interface {
 	sessionProvider
-	MarkerRepairable() bool
+	AdoptionScan(task, cwd string, floor time.Time) (sessionScan, error)
 }
 
 var sessionProviders = map[string]sessionProvider{}
@@ -215,8 +211,8 @@ func requireSessionAllocator(p sessionProvider, l sessionLaunch) error {
 // sessionMarkerRepairable reports whether the session marker a launch left out
 // can be written for this provider without the card naming the session.
 func sessionMarkerRepairable(p sessionProvider) bool {
-	repairer, ok := p.(sessionMarkerRepairer)
-	return ok && repairer.MarkerRepairable()
+	_, ok := p.(sessionMarkerRepairer)
+	return ok
 }
 
 // waitForSessionCandidates is the one polling loop of session discovery. It

@@ -86,7 +86,7 @@ if [ "$1" = "respawn-pane" ]; then
   printf '%s\n' "$5" > "$log.command"
   command=${5#cd -- * && }; command=${command#exec }; current=${command%% *}
   printf '%s\n' "${current##*/}" > "$log.current"
-  if [ "${current##*/}" = "codex" ]; then
+  if [ "${current##*/}" = "codex" ] && [ "${KANBAN_TMUX_SKIP_CODEX_ROLLOUT:-}" != "1" ]; then
     task=$(printf '%s\n' "$5" | grep -Eo '[0-9]{8}-[a-z0-9-]+-task' | head -n 1)
     if [ -n "$task" ]; then
       session_dir="${CODEX_HOME:-$HOME/.codex}/sessions/$(date -u +%Y/%m/%d)"
