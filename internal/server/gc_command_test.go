@@ -66,8 +66,6 @@ func TestServerGCCommandNeedsConfirmation(t *testing.T) {
 	unchanged := func(label string) {
 		t.Helper()
 		after := dataFiles(t, dir)
-		delete(after, filepath.Join(dir, "server.lock"))
-		delete(before, filepath.Join(dir, "server.lock"))
 		if !mapsEqual(before, after) {
 			t.Fatalf("%s: no data file may change", label)
 		}
