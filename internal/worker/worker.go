@@ -224,11 +224,20 @@ func Serve(ctx context.Context, o Options) error {
 	if err := os.MkdirAll(o.Home, 0o700); err != nil {
 		return err
 	}
+	started := o.Now()
 	lock := &workerLock{home: o.Home}
 	if err := lock.acquire(ctx); err != nil {
 		return err
 	}
 	defer lock.release()
+	// The stop request of kander uninstall ends the serve context like a signal. Deferred
+	// right after the lock, the request file is deleted after both loops stopped and before
+	// the lock is released.
+	stopRequest := newStopWatch(o, started)
+	defer stopRequest.finish()
+	ctx, stop := context.WithCancel(ctx)
+	defer stop()
+	go stopRequest.watch(ctx, stop)
 	w := newLoop(o)
 	defer w.closeRequestFiles()
 	self, err := newHandover(o)
@@ -265,6 +274,10 @@ func Serve(ctx context.Context, o Options) error {
 		if live > 0 {
 			idleSince = o.Now()
 		} else if o.Now().Sub(idleSince) >= o.IdleExit {
+			return nil
+		}
+		if ctx.Err() != nil {
+			// A stop request or a signal: no handover is started on the way out.
 			return nil
 		}
 		result, err := w.tryHandover(ctx, self, lock)
