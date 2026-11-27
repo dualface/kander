@@ -41,5 +41,6 @@
   "review.requirement_decision_format": "--requirement-decision の形式は ROLE=DECISION-ID です。{{.V0}} は使えません",
   "review.requirement_decision_role": "--requirement-decision のロールは PMQA または Security です。{{.V0}} は使えません",
   "review.requirement_decision_repeated": "--requirement-decision でロール {{.V0}} が複数回指定されています",
-  "review.requirement_decision_needs_requirements": "--requirement-decision は新しいバッチの要件に使うもので、--requirements-file が必要です"
+  "review.requirement_decision_needs_requirements": "--requirement-decision は新しいバッチの要件に使うもので、--requirements-file が必要です",
+  "liveness.policy_refresh_failed": "プロジェクトポリシーを再読み込みできませんでした（{{.V0}}）。ポリシーの値を使う前に kander config --json を実行してください。"
 }

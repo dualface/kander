@@ -41,5 +41,6 @@
   "review.requirement_decision_format": "--requirement-decision takes ROLE=DECISION-ID, not {{.V0}}",
   "review.requirement_decision_role": "--requirement-decision names the role PMQA or Security, not {{.V0}}",
   "review.requirement_decision_repeated": "--requirement-decision names the role {{.V0}} more than once",
-  "review.requirement_decision_needs_requirements": "--requirement-decision applies to the requirements of a new batch and needs --requirements-file"
+  "review.requirement_decision_needs_requirements": "--requirement-decision applies to the requirements of a new batch and needs --requirements-file",
+  "liveness.policy_refresh_failed": "The project policy could not be read again ({{.V0}}); run kander config --json before relying on the policy values."
 }

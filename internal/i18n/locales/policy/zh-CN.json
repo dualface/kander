@@ -41,5 +41,6 @@
   "review.requirement_decision_format": "--requirement-decision 的格式是 ROLE=DECISION-ID，不是 {{.V0}}",
   "review.requirement_decision_role": "--requirement-decision 的角色只能是 PMQA 或 Security，不是 {{.V0}}",
   "review.requirement_decision_repeated": "--requirement-decision 多次给出了角色 {{.V0}}",
-  "review.requirement_decision_needs_requirements": "--requirement-decision 只用于新批次的审核要求，需要同时给出 --requirements-file"
+  "review.requirement_decision_needs_requirements": "--requirement-decision 只用于新批次的审核要求，需要同时给出 --requirements-file",
+  "liveness.policy_refresh_failed": "无法重新读取项目策略（{{.V0}}）；使用策略值之前请先运行 kander config --json。"
 }
