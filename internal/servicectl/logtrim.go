@@ -336,10 +336,25 @@ func recoverLogTail(root, dataDir string) (int64, error) {
 	return size, appendLogTail(root, dataDir)
 }
 
+// removeLogTail removes the saved tail; tests replace it to check that no
+// handle of the tail is open then.
+var removeLogTail = fs.RemoveRegularFileIfExists
+
 // appendLogTail appends server.log.tail to the log in whole lines, so a line
 // the server writes meanwhile never splits a kept line, and then removes it.
+// The tail is closed before the removal: Windows refuses to delete a file
+// while a handle that does not share deletion is open.
 func appendLogTail(root, dataDir string) error {
 	tailPath := filepath.Join(dataDir, logTailName)
+	if err := copyLogTail(root, dataDir, tailPath); err != nil {
+		return err
+	}
+	_, err := removeLogTail(root, tailPath)
+	return err
+}
+
+// copyLogTail appends the saved tail to the log and syncs it, closing both.
+func copyLogTail(root, dataDir, tailPath string) error {
 	tail, err := fs.OpenRegularFileIfExists(root, tailPath)
 	if err != nil {
 		return err
@@ -356,11 +371,7 @@ func appendLogTail(root, dataDir string) error {
 	if err == nil {
 		err = log.Sync()
 	}
-	if err = errors.Join(err, log.Close()); err != nil {
-		return err
-	}
-	_, err = fs.RemoveRegularFileIfExists(root, tailPath)
-	return err
+	return errors.Join(err, log.Close())
 }
 
 // appendLines copies src to dst in writes of whole lines of at most about

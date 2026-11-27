@@ -3,6 +3,7 @@ package servicectl
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -190,13 +191,17 @@ func TestLogCapperHoldsTheServersLinesWhileItMovesTheTail(t *testing.T) {
 		return nil
 	}
 	t.Cleanup(func() { logTrimStep = nil })
-	c := LogCapper{DataDir: dir, Log: stderr, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
-	c.check(limit)
+	_, trimErr := trimLog(dir, limit, false, stderr)
 	logTrimStep = nil
-	for range lines {
+	// Only the writes a step started report back; a trim that failed before
+	// its steps must fail here, not wait for writes that never began.
+	for range order {
 		if err := <-written; err != nil {
 			t.Fatal(err)
 		}
+	}
+	if trimErr != nil || len(order) != len(lines) {
+		t.Fatalf("the trim must pass both steps: %d of %d, %v", len(order), len(lines), trimErr)
 	}
 	kept, err := os.ReadFile(filepath.Join(dir, LogName))
 	if err != nil {
@@ -238,5 +243,72 @@ func TestTrimLogWorksBesideTheHandleTheServerAppendsThrough(t *testing.T) {
 	kept, _ := os.ReadFile(filepath.Join(dir, LogName))
 	if !bytes.Equal(kept, data[expectedCut(data, limit):]) {
 		t.Fatal("server.log must hold the kept tail")
+	}
+}
+
+// openHandles reports whether this process holds a descriptor of path. Only
+// Linux can tell, through /proc/self/fd; elsewhere it reports false.
+func openHandles(t *testing.T, path string) bool {
+	t.Helper()
+	if runtime.GOOS != "linux" {
+		return false
+	}
+	entries, err := os.ReadDir("/proc/self/fd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if target, err := os.Readlink(filepath.Join("/proc/self/fd", e.Name())); err == nil && target == want {
+			return true
+		}
+	}
+	return false
+}
+
+// After the append the saved tail is closed and then removed, as Windows needs:
+// it refuses to delete a file while a handle that does not share deletion is
+// open. The removal here refuses the same way, so the trim must close first. A
+// second check then finds a log within the limit and appends nothing again.
+func TestLogCapperRemovesTheSavedTailAfterClosingIt(t *testing.T) {
+	data := logData(5000)
+	dir := logDir(t, data)
+	held, err := fs.OpenAppendFile(dir, filepath.Join(dir, LogName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { held.Close() })
+	stderr := NewLogWriter(held.File)
+	previous := removeLogTail
+	t.Cleanup(func() { removeLogTail = previous })
+	removeLogTail = func(root, path string) (bool, error) {
+		if openHandles(t, path) {
+			return false, fmt.Errorf("remove %s: the file is still open", path)
+		}
+		return previous(root, path)
+	}
+	limit := int64(len(data) / 4)
+	if _, err := trimLog(dir, limit, false, stderr); err != nil {
+		t.Fatalf("the first trim: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, logTailName)); !os.IsNotExist(err) {
+		t.Fatalf("the saved tail must be gone after the trim: %v", err)
+	}
+	first, err := os.ReadFile(filepath.Join(dir, LogName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(first, data[expectedCut(data, limit):]) {
+		t.Fatal("server.log must hold the kept tail once")
+	}
+	again, err := trimLog(dir, limit, false, stderr)
+	if err != nil || again.Bytes != 0 || again.Recovered != 0 {
+		t.Fatalf("a second check must find nothing to do: %+v %v", again, err)
+	}
+	if second, _ := os.ReadFile(filepath.Join(dir, LogName)); !bytes.Equal(second, first) {
+		t.Fatal("a second check must not append the tail again")
 	}
 }
