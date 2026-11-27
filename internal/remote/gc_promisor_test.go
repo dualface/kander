@@ -2,7 +2,9 @@ package remote
 
 import (
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -33,12 +35,20 @@ func TestPartialCloneReadsPromisorAsAGitBoolean(t *testing.T) {
 		{"remote.origin.promisor=0x0", false},
 		{"remote.origin.promisor=0k", false},
 		{"remote.origin.promisor=0x", true},
+		{"remote.origin.promisor=false ", true},
+		{"remote.origin.promisor= 0", false},
+		{"remote.origin.promisor=0 ", true},
 		{"remote.origin.promisor=maybe", true},
 		{"extensions.partialclone=origin", true},
 		{"extensions.partialclone=", false},
 		{"remote.origin.url=/tmp/origin.git", false},
 	} {
-		if got := partialClone("core.bare=false\n" + tc.line + "\n"); got != tc.want {
+		key, value, set := strings.Cut(tc.line, "=")
+		entry := key
+		if set {
+			entry += "\n" + value
+		}
+		if got := partialClone("core.bare\nfalse\x00" + entry + "\x00"); got != tc.want {
 			t.Errorf("%q: got %v, want %v", tc.line, got, tc.want)
 		}
 	}
@@ -72,5 +82,29 @@ func TestGCDryRunDefersAPromisorEnabledAsYes(t *testing.T) {
 	}
 	if after := gcGit(t, partial, "count-objects", "-v"); after != before {
 		t.Fatalf("the object store changed:\n%s\n%s", before, after)
+	}
+}
+
+// The value reaches the check exactly as Git stores it, also on the last
+// entry, whose trailing white space a trimmed listing would lose: Git rejects
+// "false " as a boolean, so it counts as a risk.
+func TestPartialCloneKeepsTheWhiteSpaceOfTheLastValue(t *testing.T) {
+	isolateGitConfig(t)
+	repo := t.TempDir()
+	gcGit(t, repo, "init", "-q")
+	file, err := os.OpenFile(filepath.Join(repo, ".git", "config"), os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = file.WriteString("[remote \"origin\"]\n\tpromisor = \"false \"\n")
+	if err := errors.Join(err, file.Close()); err != nil {
+		t.Fatal(err)
+	}
+	listed, err := gitCommand(t.Context(), repo, "config", "--list", "-z")
+	if err != nil || !strings.HasSuffix(listed, "remote.origin.promisor\nfalse \x00") {
+		t.Fatalf("the promisor entry must come last and keep its space: %q %v", listed, err)
+	}
+	if !partialClone(listed) {
+		t.Fatal("a value Git rejects as a boolean counts as a risk")
 	}
 }

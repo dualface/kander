@@ -164,19 +164,22 @@ func (r *gcRun) lazyFetchRisk(ctx context.Context, repo string, cache *gcReposit
 	}
 	if !cache.lazyChecked {
 		cache.lazyChecked = true
-		listed, err := r.git(ctx, repo, "config", "--list")
+		listed, err := r.git(ctx, repo, "config", "--list", "-z")
 		cache.lazyRisk = err != nil || partialClone(listed)
 	}
 	return cache.lazyRisk
 }
 
-// partialClone reports whether a `git config --list` output names a partial
+// partialClone reports whether a `git config --list -z` output names a partial
 // clone filter or a promisor remote. A promisor value counts unless Git reads
-// it as false, so a value Git would not accept counts as a risk too.
+// it as false, so a value Git would not accept counts as a risk too. The NUL
+// separated form keeps each value exactly, surrounding white space included,
+// which Git does not accept in a boolean; an entry without a newline is a key
+// without a value.
 func partialClone(listed string) bool {
-	for line := range strings.Lines(listed) {
-		key, value, set := strings.Cut(strings.TrimSpace(line), "=")
-		key = strings.ToLower(key)
+	for entry := range strings.SplitSeq(listed, "\x00") {
+		key, value, set := strings.Cut(entry, "\n")
+		key = strings.ToLower(strings.TrimSpace(key))
 		if key == "extensions.partialclone" && value != "" || strings.HasPrefix(key, "remote.") && strings.HasSuffix(key, ".promisor") && !gitFalse(value, set) {
 			return true
 		}
@@ -186,9 +189,9 @@ func partialClone(listed string) bool {
 
 // gitFalse reports whether Git reads a boolean configuration value as false:
 // "false", "no" or "off" in any case, the empty value, or an integer that is
-// zero, in the decimal, octal or hexadecimal form with the optional sign and
-// k, m or g unit Git accepts. A key without "=" (set false) has no value,
-// which Git reads as true.
+// zero, in the decimal, octal or hexadecimal form with the optional leading
+// white space, sign and k, m or g unit Git accepts. A key without a value
+// (set false) is true for Git.
 func gitFalse(value string, set bool) bool {
 	if !set {
 		return false
