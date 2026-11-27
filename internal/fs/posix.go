@@ -334,13 +334,15 @@ func MakeRegularFileReadOnly(root, path string) error {
 }
 
 // RemoveRegularFileIfExists removes one regular file without following links.
+// The type probe opens non-blocking, so a FIFO or another special file fails
+// requireRegular and stays in place instead of hanging the caller.
 func RemoveRegularFileIfExists(root, path string) (bool, error) {
 	parent, err := openPosixParent(root, path)
 	if err != nil {
 		return false, err
 	}
 	defer parent.close()
-	fd, err := openat(parent.parentFD, parent.name, unix.O_RDONLY, 0)
+	fd, err := openat(parent.parentFD, parent.name, unix.O_RDONLY|unix.O_NONBLOCK, 0)
 	if err == unix.ENOENT {
 		return false, nil
 	}
@@ -419,7 +421,10 @@ func writeBytesAtomic(root, path string, data []byte, replace bool, createMode u
 	}
 	defer parent.close()
 	var mode *uint32
-	existing, err := openat(parent.parentFD, parent.name, unix.O_RDONLY, 0)
+	// The probe of an existing target opens non-blocking: a FIFO or another
+	// special file then fails requireRegular instead of hanging the writer,
+	// which may hold a board lock. O_NONBLOCK is a no-op on a regular file.
+	existing, err := openat(parent.parentFD, parent.name, unix.O_RDONLY|unix.O_NONBLOCK, 0)
 	if err != nil && err != unix.ENOENT {
 		return mapOpenErr("write", parent.path, err)
 	}

@@ -2,6 +2,7 @@ package board
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"maps"
 	"os"
@@ -11,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // groupedCompactionBoard is a done card of group whose run settled; sibling
@@ -344,14 +347,14 @@ func TestArchivePruneRestoresTheReceiptOfARunItKeeps(t *testing.T) {
 	requirePrunedCheck(t, root, id)
 }
 
-// An archive cleanup stopped after it removed the receipts leaves their
-// backups: while another receipt of the batch stays stuck, the kept run still
-// reads as compacted, and the next rounds restore and finally remove it.
-func TestArchivePruneKeepsReceiptsAcrossAnInterruption(t *testing.T) {
-	root, id, runs := twoRoleCompactionBoard(t, "compact-halt")
+// interruptedPrune stops an archive cleanup after it removed the receipts of
+// a two-run batch: runs[0] keeps only its backup, and runs[1] has a directory
+// in place of its receipt, whose bytes data holds.
+func interruptedPrune(t *testing.T, slug string) (root, id string, runs []ReviewRun, data []byte) {
+	t.Helper()
+	root, id, runs = twoRoleCompactionBoard(t, slug)
 	compact(t, root, false)
-	kept, stuck := runs[0], runs[1]
-	receipt := compactionReceiptPath(root, stuck.RunID)
+	receipt := compactionReceiptPath(root, runs[1].RunID)
 	data, err := os.ReadFile(receipt)
 	if err != nil {
 		t.Fatal(err)
@@ -369,12 +372,22 @@ func TestArchivePruneKeepsReceiptsAcrossAnInterruption(t *testing.T) {
 	if _, err = PruneArchived(root); !errors.Is(err, halted) {
 		t.Fatalf("want the interruption, got %v", err)
 	}
+	pruneInterrupt = nil
+	return root, id, runs, data
+}
+
+// An archive cleanup stopped after it removed the receipts leaves their
+// backups: while another receipt of the batch stays stuck, the kept run still
+// reads as compacted, and the next rounds restore and finally remove it.
+func TestArchivePruneKeepsReceiptsAcrossAnInterruption(t *testing.T) {
+	root, id, runs, data := interruptedPrune(t, "compact-halt")
+	kept, stuck := runs[0], runs[1]
+	receipt := compactionReceiptPath(root, stuck.RunID)
 	requireExists(t, compactionReceiptPath(root, kept.RunID), false)
 	requireExists(t, compactionBackupPath(root, kept.RunID), true)
-	_, err = ReadReviewOriginal(root, kept.RunID, "evidence.txt")
+	_, err := ReadReviewOriginal(root, kept.RunID, "evidence.txt")
 	requireBoardCode(t, err, "board.review_compacted")
 
-	pruneInterrupt = nil
 	if report, err := PruneArchived(root); err == nil || len(report.Runs) != 0 {
 		t.Fatalf("a stuck receipt let the batch go: %+v %v", report, err)
 	}
@@ -398,4 +411,67 @@ func TestArchivePruneKeepsReceiptsAcrossAnInterruption(t *testing.T) {
 		requireExists(t, reviewPath(root, "runs", run.RunID), false)
 	}
 	requirePrunedCheck(t, root, id)
+}
+
+// A run that an interruption left with only its backup reads as compacted in
+// check, as it does with its receipt.
+func TestCompactedReviewRunsFindsARunWithOnlyItsBackup(t *testing.T) {
+	root, id, runs, _ := interruptedPrune(t, "compact-backup-only")
+	kept := runs[0]
+	compacted, err := CompactedReviewRuns(root, []string{id})
+	if err != nil || !slices.Equal(compacted[id], []string{kept.RunID}) {
+		t.Fatalf("compacted runs %v %v, want %s", compacted, err, kept.RunID)
+	}
+	_, stdout, _, err := CheckBoard(root, []string{id}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if marker := config.Text("board.check_review_compacted", id, kept.RunID); !strings.Contains(stdout, marker+"\n") {
+		t.Fatalf("check output %q lacks %q", stdout, marker)
+	}
+}
+
+// A run with both its receipt and its backup is listed once; a receipt that
+// is invalid wins over a valid backup, as for every other reader.
+func TestCompactedReviewRunsPrefersTheReceiptOverItsBackup(t *testing.T) {
+	other := func(t *testing.T, data []byte) []byte {
+		var r compactionReceipt
+		if err := json.Unmarshal(data, &r); err != nil {
+			t.Fatal(err)
+		}
+		r.TaskIDs = []string{"20260101-other-member-task"}
+		return []byte(reviewJSON(r))
+	}
+	tests := map[string]struct {
+		receipt func(t *testing.T, backup []byte) []byte
+		want    bool
+	}{
+		"valid receipt":          {func(_ *testing.T, backup []byte) []byte { return backup }, true},
+		"unparsable receipt":     {func(*testing.T, []byte) []byte { return []byte("{not json\n") }, false},
+		"receipt of other cards": {other, false},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			root, id, runs, _ := interruptedPrune(t, "compact-both")
+			kept := runs[0]
+			backup, err := os.ReadFile(compactionBackupPath(root, kept.RunID))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = os.WriteFile(compactionReceiptPath(root, kept.RunID), tc.receipt(t, backup), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			compacted, err := CompactedReviewRuns(root, []string{id})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var want []string
+			if tc.want {
+				want = []string{kept.RunID}
+			}
+			if !slices.Equal(compacted[id], want) {
+				t.Fatalf("compacted runs %v, want %v", compacted[id], want)
+			}
+		})
+	}
 }
