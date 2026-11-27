@@ -11,6 +11,7 @@ import (
 
 	"github.com/dualface/kander/v2/api"
 	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/client"
 	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/remote"
 	"github.com/dualface/kander/v2/internal/server"
@@ -273,3 +274,71 @@ func TestCoordinatorWrapUpFactsRefuseAReceiptOutsideTheSnapshotMainline(t *testi
 	}
 }
 
+// The review end-to-end case of the card, with two client homes: host A sets a
+// policy that requires PMQA for large tasks while host B's own configuration
+// skips it. B's batch that marks PMQA N/A without a decision record is
+// refused, and the same batch quoting a decision record of the card is
+// accepted and records it.
+func TestReviewPolicyOfOneHostBindsTheBatchesOfAnother(t *testing.T) {
+	url := snapshotServer(t)
+	a, _ := snapshotHost(t, url, "host-a")
+	required := config.DefaultConfig()
+	required.ReviewStages["large"]["PMQA"] = "required"
+	putTestPolicy(t, a, required)
+
+	t.Setenv(remote.EnvClientHome, filepath.Join(t.TempDir(), "host-b"))
+	local := config.DefaultConfig()
+	local.Server.URL, local.Project.Name = url, "snapshot-project"
+	local.ReviewStages["large"]["PMQA"] = "skip"
+	dir, err := filepath.Abs(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := remote.Open(t.Context(), local, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mode := config.LocalPolicyValues(local).ReviewStages["large"]["PMQA"]; mode != "skip" {
+		t.Fatalf("host B's own configuration: %s", mode)
+	}
+
+	task, err := b.Project.NewTask(t.Context(), "", api.NewTask{Type: "feature", Slug: "two-homes", Title: "Two homes", Language: "en", Large: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := strings.ReplaceAll(task.Text, "<FILL_IN>", "filled")
+	text = strings.Replace(text, "## DISCUSSION\n", "## DISCUSSION\n\nSELF_REVIEW: PASS\nCARD_REVIEW: PASS\n", 1)
+	if task, err = b.Project.PutDocument(t.Context(), "", task.TaskID, api.Document{Path: "spec.md", Text: text, ExpectedRevision: task.Revision}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = b.Project.Move(t.Context(), "", task.TaskID, api.Move{State: "todo"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	grant, err := b.Project.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{ClientID: b.Client.ClientID(), ExecutionID: "two-homes", Owner: "codex", PolicyRevision: b.PolicyRevision(), BranchMode: b.BranchMode()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	proof := client.Claim{Token: grant.Token, Generation: grant.Claim.Generation}
+	plan := board.ReviewPlan{Schema: 1, PlanID: "two-homes-plan", Author: "codex", Basis: "two homes", CWD: "project:" + b.Info.ID, ReportLanguage: "en", TaskIDs: []string{task.TaskID}, PolicyRevision: b.PolicyRevision(),
+		Batches: []board.ReviewPlanBatch{{BatchID: "two-homes-batch", TaskIDs: []string{task.TaskID}, Base: strings.Repeat("a", 40), TargetCommit: strings.Repeat("b", 40), Requirements: map[string]string{"PMQA": "N/A: host B skips it", "Security": "required"}}}}
+	_, err = b.Project.ReviewPlan(t.Context(), "two-homes-missing", plan, &proof)
+	if !api.IsCode(err, api.CodePolicyRequirementUnmet) {
+		t.Fatalf("host B's N/A without a decision: %v", err)
+	}
+	decision, err := b.Project.RecordDecision(t.Context(), "", task.TaskID, api.DecisionHuman, api.DecisionInput{Question: "Skip PMQA for this card?", Options: []api.DecisionOption{{Key: "skip", Label: "Skip"}}, Answer: "skip", Channel: "web", RecordedBy: "reported-account"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan.Batches[0].RequirementDecisions = map[string]string{"PMQA": decision.ID}
+	if _, err := b.Project.ReviewPlan(t.Context(), "two-homes-decided", plan, &proof); err != nil {
+		t.Fatalf("host B's N/A with a decision: %v", err)
+	}
+	raw, err := a.Project.ReviewResource(t.Context(), "batches", "two-homes-batch")
+	var batch board.ReviewBatch
+	if err == nil {
+		err = json.Unmarshal(raw, &batch)
+	}
+	if err != nil || batch.PolicyRevision != a.PolicyRevision() || batch.RequirementDecisions["PMQA"] != decision.ID {
+		t.Fatalf("batch read by host A: %+v %v", batch, err)
+	}
+}

@@ -15,11 +15,13 @@ import (
 )
 
 // enforcedPolicy is a policy write: the branch mode, the PMQA mode of both
-// scales (Security stays auto), and the review rule.
+// scales, the Security mode of both scales (auto when empty), and the review
+// rule.
 type enforcedPolicy struct {
 	mode               string
 	smallPMQA, largePM string
 	review             bool
+	security           string
 }
 
 // putPolicy writes values as the next policy revision and returns it.
@@ -31,9 +33,13 @@ func putPolicy(t *testing.T, p *client.Project, values enforcedPolicy) uint64 {
 	}
 	rules := config.DefaultRules(true)
 	rules[config.RuleReview] = values.review
+	security := values.security
+	if security == "" {
+		security = "auto"
+	}
 	raw, err := json.Marshal(map[string]any{
 		"git":            map[string]string{"branch_mode": values.mode},
-		"review_stages":  map[string]map[string]string{"small": {"PMQA": values.smallPMQA, "Security": "auto"}, "large": {"PMQA": values.largePM, "Security": "auto"}},
+		"review_stages":  map[string]map[string]string{"small": {"PMQA": values.smallPMQA, "Security": security}, "large": {"PMQA": values.largePM, "Security": security}},
 		"rules":          rules,
 		"agent_language": "en",
 		"issue":          map[string]string{"result_on_done": "auto"},
@@ -354,5 +360,28 @@ func TestPlanAndExtensionCheckTheBatchesTheyCreate(t *testing.T) {
 	refusal(t, err, api.CodePolicyRevisionStale, http.StatusConflict, "")
 	if _, found := r.batch(t, "appended-batch"); found {
 		t.Fatal("a refused extension created its batch")
+	}
+}
+
+// Security is checked like PMQA: a policy that requires it refuses a new
+// batch that marks it N/A without a decision record of a member, and accepts
+// and records one that quotes such a decision.
+func TestNewBatchMarkingARequiredSecurityNAQuotesADecisionRecord(t *testing.T) {
+	english(t)
+	p := newFixture(t).project("host-a")
+	revision := putPolicy(t, p, enforcedPolicy{mode: "main-develop", smallPMQA: "auto", largePM: "auto", review: true, security: "required"})
+	r := newReviewer(t, p, "security-na", revision)
+	requirements := map[string]string{"PMQA": "required", "Security": "N/A: no trust boundary changed"}
+	_, err := r.prepare(t, "", r.request("run-missing", "batch-security", requirements, nil, revision))
+	refusal(t, err, api.CodePolicyRequirementUnmet, http.StatusBadRequest, "", "requires Security for small tasks")
+	if _, found := r.batch(t, "batch-security"); found || r.runExists(t, "run-missing") {
+		t.Fatal("a refused batch was written")
+	}
+	decision := r.decide(t)
+	if _, err := r.prepare(t, "", r.request("run-decided", "batch-security", requirements, map[string]string{"Security": decision}, revision)); err != nil {
+		t.Fatal(err)
+	}
+	if batch, _ := r.batch(t, "batch-security"); batch.PolicyRevision != revision || !reflect.DeepEqual(batch.RequirementDecisions, map[string]string{"Security": decision}) {
+		t.Fatalf("batch record: %+v", batch)
 	}
 }

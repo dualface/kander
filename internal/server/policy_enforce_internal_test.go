@@ -119,3 +119,28 @@ func TestClaimsOfCardsAndGroupsClaimedBeforeSnapshotsCreateNone(t *testing.T) {
 func stageGroupClaimFile(p *project, r claimRecord) error {
 	return writeJSON(p.root, servicePath(groupClaimName(r.TaskID)), r)
 }
+
+// A batch whose members differ in SIZE takes the large stages: the policy
+// requires PMQA for large tasks only, so a batch of two small cards may mark
+// it N/A, and the same batch with a large member may not.
+func TestMixedSizeBatchUsesTheLargeStages(t *testing.T) {
+	f := newPolicyFixture(t, Hooks{})
+	written, err := f.put("policy-1", 0, policyValues("main-develop"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	small, other := f.todo("mixed-small"), f.todo("mixed-other")
+	large, err := f.project.NewTask(t.Context(), "", api.NewTask{Type: "feature", Slug: "mixed-large", Title: "Demo mixed-large", Language: "en", Large: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := f.policyProject()
+	requirements := map[string]string{"PMQA": "N/A: small cards only", "Security": "required"}
+	if _, err := p.checkNewReviewBatches(written.Revision, []newReviewBatch{{id: "small-batch", taskIDs: []string{small, other}, requirements: requirements}}); err != nil {
+		t.Fatalf("a batch of small cards under the small stages: %v", err)
+	}
+	_, err = p.checkNewReviewBatches(written.Revision, []newReviewBatch{{id: "mixed-batch", taskIDs: []string{small, large.TaskID}, requirements: requirements}})
+	if e := requireAPICode(t, err, api.CodePolicyRequirementUnmet, http.StatusBadRequest); !strings.Contains(e.Message, "requires PMQA for large tasks") {
+		t.Fatalf("mixed batch refusal: %v", e)
+	}
+}
