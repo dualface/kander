@@ -48,14 +48,15 @@ func TestKimiIsAnExecutionAndReviewAgent(t *testing.T) {
 	}
 	for _, banned := range []string{"--auto", "--yolo", "--continue"} {
 		if strings.Contains(joined, banned) {
-			t.Fatalf("review args must not widen permissions or resume: %v", d.Args.Review)
+			// kimi --prompt refuses --auto and --yolo; it approves tool calls on its own.
+			t.Fatalf("review args must not carry --auto, --yolo, or resume: %v", d.Args.Review)
 		}
 	}
 	if len(d.Review.PromptFiles) != 1 || d.Review.PromptFiles[0].Name != "kimi-reviewer" || d.Review.PromptFiles[0].Path != "kimi-reviewer.md" {
 		t.Fatalf("prompt_files=%+v", d.Review.PromptFiles)
 	}
 	template := d.Review.PromptFiles[0].Template
-	for _, want := range []string{"tools: [Read, Grep, Glob]", "disallowedTools", "Bash", "Write", "Edit", "Agent", "AgentSwarm"} {
+	for _, want := range []string{"tools: [Read, Grep, Glob, Bash]", "disallowedTools", "Write", "Edit", "Agent", "AgentSwarm"} {
 		if !strings.Contains(template, want) {
 			t.Fatalf("reviewer agent file missing %q", want)
 		}

@@ -93,10 +93,8 @@ settings such as `color.ui=always` can leave ANSI escapes in the evidence.
 
 New evidence has no diffs or commit tree. The reviewer uses read-only Git in
 the worktree named in the bootstrap and follows the contract's guidance for
-bounded diff inspection. A new run using the built-in agy, grok, kimi, or
-opencode definition is rejected before preparation because those reviewers
-cannot run Git. Existing run IDs can still be retried for recovery, and
-archived evidence is not rewritten.
+bounded diff inspection. Existing run IDs can still be retried for recovery,
+and archived evidence is not rewritten.
 
 Before launching the reviewer in distributed mode, Kander checks each of the
 three artifact request bodies against the service limit. If one is too

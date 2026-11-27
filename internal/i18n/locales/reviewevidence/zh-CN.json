@@ -3,6 +3,5 @@
   "board.review_compacted": "审核 run {{.V0}} 已压缩：{{.V1}} 在 run 结算后已删除，其哈希仍有记录",
   "board.review_run_compacted": "审核 run {{.V0}} 已压缩：结算后其大文件已删除，不能再次准备、发布或重放。报告与记录仍可读取；新的审核请使用新的 run ID",
   "remote.error_review_compacted": "审核 run 已压缩；结算后其大文件已删除",
-  "review.artifact_request_too_large": "审核产物 {{.V0}} 原始大小为 {{.V1}} 字节，请求体为 {{.V2}} 字节，超过 {{.V3}} 字节上限。{{if .V4}}最大内容来源：{{.V4}}。{{end}}{{if eq .V0 \"evidence.txt\"}}审核区间的提交日志或文件清单过大。请缩小审核区间，再使用新的 run ID 重试。{{else}}请缩短补充审核上下文或自定义审核指令，然后使用新的 run ID 重试。{{end}}",
-  "review.git_inspection_unavailable": "审核人 {{.V0}} 无法在审核 worktree 中运行只读 Git。请改用支持只读 Git 的审核人，例如 claude 或 codex。如果卡片通过 REVIEW_<ROLE>_AGENT 固定了审核人，请先通过契约决定修改固定项。如果上一轮使用了该审核人，请改用新审核人发起首轮审核，不带 --previous-run-id（必要时新开批次）。"
+  "review.artifact_request_too_large": "审核产物 {{.V0}} 原始大小为 {{.V1}} 字节，请求体为 {{.V2}} 字节，超过 {{.V3}} 字节上限。{{if .V4}}最大内容来源：{{.V4}}。{{end}}{{if eq .V0 \"evidence.txt\"}}审核区间的提交日志或文件清单过大。请缩小审核区间，再使用新的 run ID 重试。{{else}}请缩短补充审核上下文或自定义审核指令，然后使用新的 run ID 重试。{{end}}"
 }

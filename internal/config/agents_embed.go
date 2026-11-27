@@ -90,8 +90,6 @@ type embeddedReview struct {
 	// LastMessageReport marks a reviewer whose final message is the complete report,
 	// so its review contract adds the output convention for that.
 	LastMessageReport bool `json:"last_message_report,omitempty"`
-	// GitInspection defaults to true when an embedded definition does not set it.
-	GitInspection *bool `json:"git_inspection,omitzero"`
 }
 
 type embeddedAgent struct {
@@ -437,14 +435,6 @@ func ReviewWindowsReadGroups(name string) []string {
 func EmbeddedReviewLastMessageReport(name string) bool {
 	emb, ok := embeddedByName(name)
 	return ok && emb.Review.LastMessageReport
-}
-
-// EmbeddedReviewGitInspection reports whether the named built-in reviewer can
-// inspect the worktree with Git. Defaults to true, including for custom agents.
-// An overlay or dialect never contributes this value.
-func EmbeddedReviewGitInspection(name string) bool {
-	emb, ok := embeddedByName(name)
-	return !ok || emb.Review.GitInspection == nil || *emb.Review.GitInspection
 }
 
 func (e embeddedAgent) kanbanFields() map[string]string {

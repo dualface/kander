@@ -7,20 +7,20 @@ How `kander review` keeps a reviewer read-only and how the review runtime is pro
 - Reviewers are the built-in agents plus any configured agent that declares a review template (`args.review` together with `review.*`). The public review entry on all platforms is `kander review` under the command root, which enters the single gate implementation.
 - On Windows, the reviewer `.exe` is preferred. When only `.cmd`/`.bat` exists, the launch goes through an explicit `cmd.exe /d /s /v:off /c` and the argument encoding of that reviewer's adapter layer. This is not a general invocation contract for arbitrary batch scripts.
 - Built-in isolation arguments live on each agent's definition. A custom reviewer's read-only posture is the definition author's responsibility; Kander still validates the result and isolates review-private directories. Apart from the CLI and isolation arguments declared for that reviewer, every review rule is identical for all reviewers.
-- New runs require a reviewer that can run read-only Git in the review worktree. The evidence contains commit ranges, logs, and changed files, so the reviewer retrieves diffs with Git. The embedded `review.git_inspection` flag disables new runs for agy, grok, kimi, and opencode because their tool policies do not allow Git. The rejection happens before preparation and does not affect same-ID recovery.
+- New runs require a reviewer that can run read-only Git in the review worktree. The evidence contains commit ranges, logs, and changed files, so the reviewer retrieves diffs with Git. Every built-in reviewer can run shell commands for that purpose.
 
 | reviewer | argument | CLI | isolation |
 | -------- | -------- | --- | --------- |
 | Codex | `codex` | `codex` | from the embedded definition |
 | Claude | `claude` | `claude` | from the embedded definition |
-| Grok | `grok` | `grok` | no new runs |
+| Grok | `grok` | `grok` | from the embedded definition |
 | Cursor | `cursor` | `cursor-agent` | from the embedded definition |
 | Pi | `pi` | `pi` | from the embedded definition |
 | Devin | `devin` | `devin` | from the embedded definition |
-| OpenCode | `opencode` | `opencode` | no new runs |
-| Kimi | `kimi` | `kimi` | no new runs |
+| OpenCode | `opencode` | `opencode` | from the embedded definition |
+| Kimi | `kimi` | `kimi` | from the embedded definition |
 | Droid | `droid` | `droid` | from the embedded definition |
-| Antigravity CLI | `agy` | `agy` | no new runs |
+| Antigravity CLI | `agy` | `agy` | from the embedded definition |
 | custom | the agent name | `review.path` or `path` | author's responsibility |
 
 ## Per-Reviewer Posture
@@ -31,9 +31,9 @@ How `kander review` keeps a reviewer read-only and how the review runtime is pro
 - Pi runs without session persistence and uses its default tools and resource loading, including extensions, skills, prompt templates, and themes. Read-only inspection relies on the prompt and post-run worktree verification, not a CLI tool allowlist.
 - Devin runs non-interactive print mode under `--permission-mode dangerous`, which auto-approves every tool call instead of prompting; `--respect-workspace-trust false` skips the workspace-trust dialog. There is no enforced read-only sandbox. Read-only relies on the prompt and on the post-run check of the Git-visible state of the target worktree. That check does not detect writes outside the worktree or to ignored paths inside it.
 - Droid runs `droid exec --output-format json` at its default autonomy, which is read-only: reading, searching, and shell commands Droid classifies as non-modifying are allowed, while an edit or a command it classifies as modifying ends the run with `is_error` and fails the review. It never passes `--auto` or `--skip-permissions-unsafe`. Read-only relies on that autonomy level plus the prompt.
-- The built-in policies that prevent shell access remain unchanged. Grok exposes only read and search tools in its out-of-tree runtime. OpenCode uses a deny-first `OPENCODE_PERMISSION` policy that allows only `read`, `glob`, `grep`, `list`, and `external_directory`. Kimi's `kimi-reviewer.md` allows only `Read`, `Grep`, and `Glob`. Antigravity CLI's `--settings` policy denies shell commands even in plan mode.
+- Grok, OpenCode, Kimi, and Antigravity CLI can run shell commands so that they can run read-only Git; there is no sandbox and no command allowlist, so read-only relies on the prompt and on the post-run check of the Git-visible state of the target worktree, which does not detect writes outside the worktree or to ignored paths inside it. Grok runs in its out-of-tree runtime with `read_file`, `grep`, `list_dir`, and `run_terminal_cmd` under `--permission-mode bypassPermissions`, keeping its `Edit`, `Write`, and MCP deny rules and no OS sandbox. OpenCode uses a deny-first `OPENCODE_PERMISSION` policy that allows `bash`, `read`, `glob`, `grep`, `list`, and `external_directory`. Kimi's `kimi-reviewer.md` allows `Read`, `Grep`, `Glob`, and `Bash`; its non-interactive `--prompt` mode approves tool calls without asking. Antigravity CLI runs without `--mode plan`, and its `--settings` policy allows `command(*)`, because headless `agy` silently denies a command it cannot get approval for, while it still denies writes, MCP, and network tools.
 - The post-run check sees only the Git-visible state of the target worktree: writes outside that worktree and to ignored paths inside it are not detected. Worktree verification never fails a review for writes to paths excluded by `.gitignore`.
-- Isolation arguments are never replaced or loosened to unify implementations or accommodate Windows.
+- Isolation arguments come only from each reviewer's embedded definition; an invocation never replaces or loosens them to unify implementations or accommodate Windows.
 
 ## Prompt Delivery
 

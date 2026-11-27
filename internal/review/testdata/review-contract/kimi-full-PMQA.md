@@ -90,7 +90,7 @@ Example empty block:
 ## Inspection And Report
 
 Prefer exact file and line evidence. Inspect schemas, generators, and handwritten consumers before generated output when relevant.
-Use only Read, Grep, and Glob to inspect code; never modify files or run commands.
+Use Read, Grep, Glob, and Bash commands that do not write, including read-only Git in the review worktree; never create, modify, or delete any file.
 Do not modify files, the index, refs, or the worktree.
 Begin the report with Role, Commit, Task Context, and Reviewed Scope.
 Use role-prefixed stable IDs for findings and threats.
