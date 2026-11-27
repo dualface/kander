@@ -111,6 +111,7 @@ func TestUninstallPlanListsEverything(t *testing.T) {
 		config.Text("install.uninstall_plan_stop", config.Text("install.uninstall_process_server", "http://127.0.0.1:7878", "101")),
 		config.Text("install.uninstall_plan_stop", config.Text("install.uninstall_process_worker", f.bg.home, "202")),
 		config.Text("install.uninstall_plan_remove", f.entry),
+		config.Text("install.uninstall_plan_remove", RulesEntry(f.paths)),
 		config.Text("install.uninstall_plan_keep", filepath.Dir(f.paths.ConfigPath), config.Text("install.uninstall_keep_config")),
 		config.Text("install.uninstall_plan_keep", f.paths.ShareDir, config.Text("install.uninstall_keep_share")),
 		config.Text("install.uninstall_plan_keep", f.bg.dataDir, config.Text("install.uninstall_keep_server")),

@@ -1,6 +1,6 @@
 == claude-global / symlink to other file
 == claude-global / symlink to other file / apply uninstall
-apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.config/kander：配置目录\n各仓库中已提交的项目引用、任务分支与证据引用保留；需要回收时，请在卸载前运行 kander gc。\n"
+apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.agents/kander/KANDER-AGENTS.md\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.config/kander：配置目录\n各仓库中已提交的项目引用、任务分支与证据引用保留；需要回收时，请在卸载前运行 kander gc。\n"
 apply uninstall: err=false
 apply uninstall output: "已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: unchanged true
@@ -8,7 +8,7 @@ apply uninstall file <HOME>/.claude/CLAUDE.md: symlink to <HOME>/.claude/other-r
 apply uninstall file <HOME>/.claude/other-rules.txt: "# Other\n"
 == claude-global / symlink escaping the scope
 == claude-global / symlink escaping the scope / apply uninstall
-apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.config/kander：配置目录\n各仓库中已提交的项目引用、任务分支与证据引用保留；需要回收时，请在卸载前运行 kander gc。\n"
+apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.agents/kander/KANDER-AGENTS.md\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.config/kander：配置目录\n各仓库中已提交的项目引用、任务分支与证据引用保留；需要回收时，请在卸载前运行 kander gc。\n"
 apply uninstall: err=false
 apply uninstall output: "已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: unchanged true
@@ -17,7 +17,7 @@ apply uninstall file <HOME>/outside/rules.md: "# Outside\n"
 == claude-global / symlink to the rules entry
 uninstall: action=1 path=<HOME>/.claude/CLAUDE.md reason="" content=""
 == claude-global / symlink to the rules entry / apply uninstall
-apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.claude/CLAUDE.md\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.config/kander：配置目录\n各仓库中已提交的项目引用、任务分支与证据引用保留；需要回收时，请在卸载前运行 kander gc。\n"
+apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.claude/CLAUDE.md\n  删除  <HOME>/.agents/kander/KANDER-AGENTS.md\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.config/kander：配置目录\n各仓库中已提交的项目引用、任务分支与证据引用保留；需要回收时，请在卸载前运行 kander gc。\n"
 apply uninstall: err=false
 apply uninstall output: "已删除：<HOME>/.claude/CLAUDE.md\n已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: unchanged true
@@ -36,7 +36,7 @@ ensure: status=0 removed=0 inactive=false disabled=[] err=拒绝通过指向项�
 == cursor-global / symlink to other file
 uninstall: action=2 path=<HOME>/.cursor/rules/kander.mdc reason="<HOME>/.cursor/rules/kander.mdc 是符号链接；Kander 不通过链接读写 cursor 规则，请换成普通文件。" content=""
 == cursor-global / symlink to other file / apply uninstall
-apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.cursor/rules/kander.mdc：<HOME>/.cursor/rules/kander.mdc 是符号链接；Kander 不通过链接读写 cursor 规则，请换成普通文件。\n  保留  <HOME>/.config/kander：配置目录\n各仓库中已提交的项目引用、任务分支与证据引用保留；需要回收时，请在卸载前运行 kander gc。\n"
+apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.agents/kander/KANDER-AGENTS.md\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.cursor/rules/kander.mdc：<HOME>/.cursor/rules/kander.mdc 是符号链接；Kander 不通过链接读写 cursor 规则，请换成普通文件。\n  保留  <HOME>/.config/kander：配置目录\n各仓库中已提交的项目引用、任务分支与证据引用保留；需要回收时，请在卸载前运行 kander gc。\n"
 apply uninstall: err=false
 apply uninstall output: "已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: unchanged true
@@ -45,7 +45,7 @@ apply uninstall file <HOME>/.cursor/rules/other-rules.txt: "# Other\n"
 == cursor-global / symlink escaping the scope
 uninstall: action=2 path=<HOME>/.cursor/rules/kander.mdc reason="<HOME>/.cursor/rules/kander.mdc 是符号链接；Kander 不通过链接读写 cursor 规则，请换成普通文件。" content=""
 == cursor-global / symlink escaping the scope / apply uninstall
-apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.cursor/rules/kander.mdc：<HOME>/.cursor/rules/kander.mdc 是符号链接；Kander 不通过链接读写 cursor 规则，请换成普通文件。\n  保留  <HOME>/.config/kander：配置目录\n各仓库中已提交的项目引用、任务分支与证据引用保留；需要回收时，请在卸载前运行 kander gc。\n"
+apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.agents/kander/KANDER-AGENTS.md\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.cursor/rules/kander.mdc：<HOME>/.cursor/rules/kander.mdc 是符号链接；Kander 不通过链接读写 cursor 规则，请换成普通文件。\n  保留  <HOME>/.config/kander：配置目录\n各仓库中已提交的项目引用、任务分支与证据引用保留；需要回收时，请在卸载前运行 kander gc。\n"
 apply uninstall: err=false
 apply uninstall output: "已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: unchanged true
@@ -54,7 +54,7 @@ apply uninstall file <HOME>/outside/rules.md: "# Outside\n"
 == cursor-global / symlink to the rules entry
 uninstall: action=1 path=<HOME>/.cursor/rules/kander.mdc reason="" content=""
 == cursor-global / symlink to the rules entry / apply uninstall
-apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.cursor/rules/kander.mdc\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.config/kander：配置目录\n各仓库中已提交的项目引用、任务分支与证据引用保留；需要回收时，请在卸载前运行 kander gc。\n"
+apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.cursor/rules/kander.mdc\n  删除  <HOME>/.agents/kander/KANDER-AGENTS.md\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.config/kander：配置目录\n各仓库中已提交的项目引用、任务分支与证据引用保留；需要回收时，请在卸载前运行 kander gc。\n"
 apply uninstall: err=false
 apply uninstall output: "已删除：<HOME>/.cursor/rules/kander.mdc\n已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: unchanged true
@@ -72,7 +72,7 @@ detect: ok=false detail=拒绝通过指向项目外的符号链接写入: <HOME>
 ensure: status=0 removed=0 inactive=false disabled=[] err=拒绝通过指向项目外的符号链接写入: <HOME>/project/AGENTS.md
 == codex-global / symlink to other file
 == codex-global / symlink to other file / apply uninstall
-apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.config/kander：配置目录\n各仓库中已提交的项目引用、任务分支与证据引用保留；需要回收时，请在卸载前运行 kander gc。\n"
+apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.agents/kander/KANDER-AGENTS.md\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.config/kander：配置目录\n各仓库中已提交的项目引用、任务分支与证据引用保留；需要回收时，请在卸载前运行 kander gc。\n"
 apply uninstall: err=false
 apply uninstall output: "已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: unchanged true
@@ -80,7 +80,7 @@ apply uninstall file <HOME>/.codex/AGENTS.md: symlink to <HOME>/.codex/other-rul
 apply uninstall file <HOME>/.codex/other-rules.txt: "# Other\n"
 == codex-global / symlink escaping the scope
 == codex-global / symlink escaping the scope / apply uninstall
-apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.config/kander：配置目录\n各仓库中已提交的项目引用、任务分支与证据引用保留；需要回收时，请在卸载前运行 kander gc。\n"
+apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.agents/kander/KANDER-AGENTS.md\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.config/kander：配置目录\n各仓库中已提交的项目引用、任务分支与证据引用保留；需要回收时，请在卸载前运行 kander gc。\n"
 apply uninstall: err=false
 apply uninstall output: "已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: unchanged true
@@ -89,7 +89,7 @@ apply uninstall file <HOME>/outside/rules.md: "# Outside\n"
 == codex-global / symlink to the rules entry
 uninstall: action=1 path=<HOME>/.codex/AGENTS.md reason="" content=""
 == codex-global / symlink to the rules entry / apply uninstall
-apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.codex/AGENTS.md\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.config/kander：配置目录\n各仓库中已提交的项目引用、任务分支与证据引用保留；需要回收时，请在卸载前运行 kander gc。\n"
+apply uninstall plan prompt: "kander uninstall 将处理全局范围：\n  删除  <HOME>/.codex/AGENTS.md\n  删除  <HOME>/.agents/kander/KANDER-AGENTS.md\n  删除  <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件，随后删除变空的目录\n  保留  <HOME>/.config/kander：配置目录\n各仓库中已提交的项目引用、任务分支与证据引用保留；需要回收时，请在卸载前运行 kander gc。\n"
 apply uninstall: err=false
 apply uninstall output: "已删除：<HOME>/.codex/AGENTS.md\n已删除 <HOME>/.agents/kander 中 1 个 Kander 规则文件和状态文件\n"
 apply uninstall config: unchanged true

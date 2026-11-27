@@ -316,7 +316,6 @@ func printUninstallPlan(out io.Writer, plan UninstallPlan) {
 		case UninstallRemove:
 			if item.rules {
 				rulesFiles++
-				continue
 			}
 			fmt.Fprintln(out, config.Text("install.uninstall_plan_remove", item.Path))
 		}
