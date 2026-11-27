@@ -313,6 +313,12 @@ func settleCompactionBackups(root string) error {
 	return nil
 }
 
+// RequireNoPendingOperations fails with board.transaction_pending while an
+// operation record of the board at root is prepared but not applied. Recovery
+// of such a record compares the files it stages with their recorded content,
+// so maintenance outside the board transactions must not remove them first.
+func RequireNoPendingOperations(root string) error { return requireNoPendingOperations(root, nil) }
+
 func requireNoPendingOperations(root string, warnings *WarningLog) error {
 	var records []OperationRecord
 	err := withJournalLock(root, true, func() error {

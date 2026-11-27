@@ -349,6 +349,29 @@ func TestCompactionSkipsABusyRunWithoutWaiting(t *testing.T) {
 	requireNoReviewProblems(t, root, id)
 }
 
+// A settled successor whose execution lock is held keeps its predecessor as a
+// busy run (condition 7), not as one with an unsettled successor (condition 8).
+func TestCompactionReportsABusySettledSuccessorAsALock(t *testing.T) {
+	root := tempBoard(t)
+	id := pruneCard(t, root, "compact-busy-chain", "")
+	next := pruneCard(t, root, "compact-busy-chain-next", "")
+	first := settledCompactionRun(t, root, "compact-busy-chain-run", id)
+	second := settledCompactionRun(t, root, "compact-busy-chain-next-run", next)
+	editRun(t, root, second.RunID, func(r *ReviewRun) { r.PreviousRunID = first.RunID })
+	relocateCards(t, root, "done", id, next)
+	release, err := LockReviewRun(root, second.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	report := compact(t, root, false)
+	requireSkipped(t, report, first.RunID, CompactionRunLock)
+	i := slices.IndexFunc(report.Skipped, func(s SkippedRun) bool { return s.RunID == first.RunID })
+	if slices.Contains(report.Skipped[i].Conditions, CompactionSuccessor) {
+		t.Fatalf("a settled successor must not count as unsettled: %+v", report.Skipped[i])
+	}
+}
+
 func TestCompactionResumesAfterEachInterruptedStep(t *testing.T) {
 	for _, step := range []string{"receipts", "copies", "control"} {
 		t.Run(step, func(t *testing.T) {

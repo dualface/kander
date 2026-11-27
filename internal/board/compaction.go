@@ -31,7 +31,8 @@ const (
 	CompactionGroupSettled CompactionCondition = 5
 	// CompactionRetention: the run finished before the retention period.
 	CompactionRetention CompactionCondition = 6
-	// CompactionRunLock: the execution lock of the run was free.
+	// CompactionRunLock: the execution locks of the run and of every run that
+	// names it as a predecessor were free.
 	CompactionRunLock CompactionCondition = 7
 	// CompactionSuccessor: no unsettled run names the run as its predecessor.
 	CompactionSuccessor CompactionCondition = 8
@@ -208,7 +209,7 @@ func compactionRound(ctx context.Context, root string, options CompactionOptions
 			if blocker == id {
 				plan.skip(id, CompactionRunLock, "run execution lock is held: "+busy.Error())
 			} else {
-				plan.skip(id, CompactionSuccessor, "successor run "+blocker+" execution lock is held")
+				plan.skip(id, CompactionRunLock, "successor run "+blocker+" execution lock is held")
 			}
 			state.skipped[id] = *plan.skipped[id]
 			continue
