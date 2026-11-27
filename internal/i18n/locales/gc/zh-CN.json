@@ -10,6 +10,7 @@
   "gc.project_line": "项目 {{.V0}}：review run 压缩 {{.V1}} 个 run、{{.V2}} 个文件、{{.V3}}；幂等回执 {{.V4}} 个文件、{{.V5}}",
   "gc.kept_run": "  保留 review run {{.V0}}：{{.V1}}",
   "gc.kept_receipt": "  保留幂等回执 {{.V0}}：{{.V1}}",
+  "gc.receipts_settled": "  幂等回执 gc 意图：{{.V0}} 个已记录成员收尾但未删除文件（文件已不存在、已被替换、已损坏或已不再到期）",
   "gc.warning": "  警告：{{.V0}}",
   "gc.error": "  错误：{{.V0}}",
   "gc.log_line": "{{.V0}}：大小 {{.V1}}，移入 server.log.1.gz {{.V2}}",

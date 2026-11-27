@@ -293,7 +293,7 @@ func gcEmpty(r api.ServerGCReport) bool {
 		return false
 	}
 	for _, p := range r.Projects {
-		if p.Compaction.Runs > 0 || p.Receipts.Files > 0 {
+		if p.HasWork() {
 			return false
 		}
 	}
@@ -318,6 +318,9 @@ func printGCReport(w io.Writer, r api.ServerGCReport) {
 		fmt.Fprintln(w, config.Text("gc.project_line", p.Name, p.Compaction.Runs, p.Compaction.Files, command.FormatBytes(p.Compaction.Bytes), p.Receipts.Files, command.FormatBytes(p.Receipts.Bytes)))
 		for _, kept := range p.Compaction.Kept {
 			fmt.Fprintln(w, config.Text("gc.kept_run", kept.ID, oneLine(kept.Reason)))
+		}
+		if p.Receipts.Settled > 0 {
+			fmt.Fprintln(w, config.Text("gc.receipts_settled", p.Receipts.Settled))
 		}
 		for _, kept := range p.Receipts.Kept {
 			fmt.Fprintln(w, config.Text("gc.kept_receipt", kept.ID, oneLine(kept.Reason)))

@@ -37,7 +37,12 @@ func (locks *lockSet) takeSharedContext(ctx context.Context, root, path string) 
 	if err != nil {
 		return err
 	}
-	lock, err := fs.LockSharedContext(ctx, file)
+	var lock *fs.ExclusiveLock
+	if noWait(ctx) {
+		lock, err = trySharedOnce(file, path)
+	} else {
+		lock, err = fs.LockSharedContext(ctx, file)
+	}
 	if err != nil {
 		return errors.Join(err, file.Close())
 	}

@@ -10,6 +10,7 @@
   "gc.project_line": "project {{.V0}}: review run compaction {{.V1}} run(s), {{.V2}} file(s), {{.V3}}; idempotency receipts {{.V4}} file(s), {{.V5}}",
   "gc.kept_run": "  kept review run {{.V0}}: {{.V1}}",
   "gc.kept_receipt": "  kept idempotency receipt {{.V0}}: {{.V1}}",
+  "gc.receipts_settled": "  idempotency receipt gc intent: {{.V0}} recorded member(s) ended without removing a file (already gone, replaced, damaged, or no longer due)",
   "gc.warning": "  warning: {{.V0}}",
   "gc.error": "  error: {{.V0}}",
   "gc.log_line": "{{.V0}}: size {{.V1}}, moved into server.log.1.gz {{.V2}}",

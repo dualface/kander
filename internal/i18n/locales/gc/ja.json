@@ -10,6 +10,7 @@
   "gc.project_line": "プロジェクト {{.V0}}: review run の圧縮 {{.V1}} 件の run、{{.V2}} 個のファイル、{{.V3}}。冪等レシート {{.V4}} 個のファイル、{{.V5}}",
   "gc.kept_run": "  review run {{.V0}} を保持: {{.V1}}",
   "gc.kept_receipt": "  冪等レシート {{.V0}} を保持: {{.V1}}",
+  "gc.receipts_settled": "  冪等レシートの gc 意図: 記録済みメンバー {{.V0}} 件をファイルを削除せずに終了しました（既に存在しない、置き換え済み、破損、または期限外）",
   "gc.warning": "  警告: {{.V0}}",
   "gc.error": "  エラー: {{.V0}}",
   "gc.log_line": "{{.V0}}: サイズ {{.V1}}、server.log.1.gz へ移動 {{.V2}}",
