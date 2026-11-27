@@ -33,6 +33,11 @@ func TestPublicationViewMarksCompactedRuns(t *testing.T) {
 	if _, present := plain["compacted_runs"]; present {
 		t.Fatalf("an uncompacted material prints compacted_runs: %v", plain)
 	}
+	publication.CompactionErrors = map[string]string{"run-2": "invalid compaction receipt"}
+	if errs, _ := compactionView(t, publication)["compaction_errors"].(map[string]any); errs["run-2"] != "invalid compaction receipt" {
+		t.Fatalf("compaction_errors = %v", errs)
+	}
+	publication.CompactionErrors = nil
 	publication.CompactedRuns = []string{"run-1"}
 	marked := compactionView(t, publication)
 	runs, _ := marked["compacted_runs"].([]any)

@@ -55,4 +55,8 @@ type Publication struct {
 	// material names that a compaction has since removed large evidence from.
 	// It is never stored and is no part of the confirmed material.
 	CompactedRuns []string `json:"compacted_runs,omitempty"`
+	// CompactionErrors maps, in a GET response only, each run the material
+	// names whose compaction state cannot be verified to the reason; such a run
+	// is in neither list as compacted, and the material is still returned.
+	CompactionErrors map[string]string `json:"compaction_errors,omitempty"`
 }

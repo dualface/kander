@@ -111,7 +111,7 @@ func (s *Server) publicationRoutes(mux *routeTable) {
 	s.projectRoute(mux, "GET "+base+"/{publication}", func(p *project, r *http.Request) outcome {
 		value, err := p.readPublication(r.PathValue("publication"))
 		if err == nil {
-			value.CompactedRuns, err = p.compactedPublicationRuns(value)
+			value.CompactedRuns, value.CompactionErrors = p.compactedPublicationRuns(value)
 		}
 		return result(http.StatusOK, value, err)
 	})
@@ -224,8 +224,9 @@ func (s *Server) publicationRoutes(mux *routeTable) {
 }
 
 // compactedPublicationRuns lists the runs a material names that are compacted
-// now. The material itself never changes; only the response shows the state.
-func (p *project) compactedPublicationRuns(value api.Publication) ([]string, error) {
+// now, and the runs whose state cannot be verified with the reason. The
+// material itself never changes, and a damaged receipt never hides it.
+func (p *project) compactedPublicationRuns(value api.Publication) ([]string, map[string]string) {
 	ids := map[string]bool{}
 	if id, ok := strings.CutPrefix(value.Operation, "review-publish:"); ok {
 		ids[id] = true
@@ -236,19 +237,24 @@ func (p *project) compactedPublicationRuns(value api.Publication) ([]string, err
 		publicationRunReferences(material, "", ids)
 	}
 	var compacted []string
+	var failures map[string]string
 	for _, id := range slices.Sorted(maps.Keys(ids)) {
 		if !board.ValidReviewID(id) {
 			continue
 		}
 		ok, err := board.ReviewRunCompacted(p.board, id)
 		if err != nil {
-			return nil, err
+			if failures == nil {
+				failures = map[string]string{}
+			}
+			failures[id] = err.Error()
+			continue
 		}
 		if ok {
 			compacted = append(compacted, id)
 		}
 	}
-	return compacted, nil
+	return compacted, failures
 }
 
 // publicationRunReferences collects the review runs a material names at any

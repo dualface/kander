@@ -158,4 +158,18 @@ func TestRunResourceKeepsMetadataWhenTheReceiptIsInvalid(t *testing.T) {
 	if value.Compacted || !strings.Contains(value.CompactionError, "invalid compaction receipt") {
 		t.Fatalf("compaction state: compacted=%v error=%q", value.Compacted, value.CompactionError)
 	}
+	// A close material that resolves the failed run keeps its material too.
+	material := `{"request":{"batch_id":"failed-batch","resolved_failures":{"` + u.run.RunID + `":"runtime-replacement"}},"evidence":{}}`
+	members := []api.PublicationMember{{TaskID: u.grant.Task.TaskID, Revision: u.grant.Task.Revision, Generation: u.grant.Claim.Generation}}
+	prepared, err := u.p.PreparePublication(t.Context(), api.PublicationPrepare{ID: "compaction-invalid-close", Operation: "review-close:failed-batch", Payload: json.RawMessage(material), Members: members})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := u.p.Publication(t.Context(), prepared.ID)
+	if err != nil {
+		t.Fatalf("an invalid receipt hid the publication: %v", err)
+	}
+	if got.Digest != prepared.Digest || len(got.CompactedRuns) != 0 || !strings.Contains(got.CompactionErrors[u.run.RunID], "invalid compaction receipt") {
+		t.Fatalf("publication: digest %s, compacted %v, errors %v", got.Digest, got.CompactedRuns, got.CompactionErrors)
+	}
 }

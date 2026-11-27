@@ -37,6 +37,9 @@ type publicationView struct {
 	// CompactedRuns lists the runs the material names whose large evidence a
 	// compaction removed after they settled; absent when there is none.
 	CompactedRuns []string `json:"compacted_runs,omitempty"`
+	// CompactionErrors maps each named run whose compaction state the server
+	// could not verify to the reason; absent when there is none.
+	CompactionErrors map[string]string `json:"compaction_errors,omitempty"`
 }
 
 type publicationMemberView struct {
@@ -106,6 +109,12 @@ func newPublicationView(publication api.Publication, stale func(api.PublicationM
 	}
 	for _, run := range publication.CompactedRuns {
 		view.CompactedRuns = append(view.CompactedRuns, text.clean(run))
+	}
+	for run, reason := range publication.CompactionErrors {
+		if view.CompactionErrors == nil {
+			view.CompactionErrors = map[string]string{}
+		}
+		view.CompactionErrors[text.clean(run)] = text.clean(reason)
 	}
 	view.Sanitized = text.replaced
 	return view, nil
