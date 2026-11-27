@@ -441,11 +441,7 @@ func (a *App) cardMetaLine(task Task) string {
 		parts = append(parts, a.Context.sizeLabel(task.Kind))
 		groupOrType = strings.Join(parts, " / ")
 	}
-	owner := task.Owner
-	if owner == "" {
-		owner = a.Context.Unassigned
-	}
-	return compactTime(orDash(task.Time)) + " " + a.Glyphs["dot"] + " " + owner + " " + a.Glyphs["dot"] + " " + groupOrType
+	return compactTime(orDash(task.Time)) + " " + a.Glyphs["dot"] + " " + a.executionLabel(task) + " " + a.Glyphs["dot"] + " " + groupOrType
 }
 
 func orDash(value string) string {
