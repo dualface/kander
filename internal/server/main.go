@@ -75,9 +75,17 @@ func RunForeground(ctx context.Context, options Options, listen string) error {
 	if options.Ready != nil {
 		options.Ready(s.listen)
 	}
+	// A background start points stderr at <data>/server.log, which then has a
+	// size cap; the capper stops with the server and is waited for.
+	capped := make(chan struct{})
+	go func() {
+		defer close(capped)
+		servicectl.LogCapper{DataDir: s.data, Log: os.Stderr, Logger: s.log}.Run(s.shutdown)
+	}()
 	err = httpServer.Serve(listener)
 	stop()
 	<-finished
+	<-capped
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
