@@ -8,8 +8,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/dualface/kander/v2/internal/fs"
 )
@@ -306,6 +309,65 @@ func TestTrimLogRunsOneTrimAtATime(t *testing.T) {
 	}
 	if !held {
 		t.Fatal("a trim must hold the process-wide trim lock through its steps")
+	}
+}
+
+// Two trims that really overlap: the second starts while the first is inside
+// its steps, takes none of its own until the first ended, and then finds the
+// log already trimmed.
+func TestTrimLogSerializesOverlappingTrims(t *testing.T) {
+	data := logData(4000)
+	dir := logDir(t, data)
+	entered, release := make(chan struct{}), make(chan struct{})
+	var mu sync.Mutex
+	var steps []string
+	first := true
+	logTrimStep = func(step string) error {
+		mu.Lock()
+		steps = append(steps, step)
+		blocking := first && step == "tail"
+		if blocking {
+			first = false
+		}
+		mu.Unlock()
+		if blocking {
+			close(entered)
+			<-release
+		}
+		return nil
+	}
+	defer func() { logTrimStep = nil }()
+	results := make(chan LogTrim, 2)
+	go func() {
+		r, err := TrimLog(dir, 4096, false)
+		if err != nil {
+			t.Error(err)
+		}
+		results <- r
+	}()
+	<-entered
+	go func() {
+		r, err := TrimLog(dir, 4096, false)
+		if err != nil {
+			t.Error(err)
+		}
+		results <- r
+	}()
+	time.Sleep(100 * time.Millisecond)
+	mu.Lock()
+	during := slices.Clone(steps)
+	mu.Unlock()
+	close(release)
+	a, b := <-results, <-results
+	if !slices.Equal(during, []string{"archive", "tail"}) {
+		t.Fatalf("the second trim took a step while the first was inside its steps: %v", during)
+	}
+	cut := expectedCut(data, 4096)
+	if a.Bytes+b.Bytes != cut || min(a.Bytes, b.Bytes) != 0 {
+		t.Fatalf("one trim moves the head, the other finds nothing to do: %+v %+v", a, b)
+	}
+	if kept, _ := os.ReadFile(filepath.Join(dir, LogName)); !bytes.Equal(kept, data[cut:]) {
+		t.Fatal("overlapping trims must leave exactly the kept tail")
 	}
 }
 

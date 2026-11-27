@@ -329,9 +329,9 @@ func askGC(ctx context.Context) (bool, error) {
 		line string
 		err  error
 	}
-	read := make(chan answer, 1)
+	read, in := make(chan answer, 1), gcPromptIn
 	go func() {
-		line, err := bufio.NewReader(gcPromptIn).ReadString('\n')
+		line, err := bufio.NewReader(in).ReadString('\n')
 		read <- answer{line, err}
 	}()
 	var a answer
