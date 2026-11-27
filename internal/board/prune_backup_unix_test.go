@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // backupFixture is a board with archived, settled runs whose receipts the
@@ -238,5 +240,73 @@ func TestArchivePruneKeepsBackupStuckRunsWhenPlanningAgain(t *testing.T) {
 	for _, run := range []ReviewRun{a, c} {
 		requireRunPruned(t, f.root, run, false)
 		requireReceipt(t, f.root, run)
+	}
+}
+
+// A run kept for its backup whose run.json planning cannot read could still
+// exist, so the round removes nothing: its batch, closure and plan stay. Once
+// it reads again, the next round removes everything.
+func TestArchivePruneRemovesNothingWhileAStuckRunIsUnreadable(t *testing.T) {
+	f := &backupFixture{root: tempBoard(t)}
+	a := f.compactedRun(t, "backup-unread-a")
+	b := f.settledRun(t, "backup-unread-b")
+	f.archive(t)
+	f.backUp(t, a, true)
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a run.json without read permission")
+	}
+	runFile := reviewPath(f.root, "runs", a.RunID, "run.json")
+	if err := os.Chmod(runFile, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(runFile, 0o600) })
+
+	report, err := PruneArchived(f.root)
+	if err == nil || !strings.Contains(err.Error(), a.RunID) {
+		t.Fatalf("want the error of %s, got %v", a.RunID, err)
+	}
+	if len(report.Runs) != 0 || len(report.Batches) != 0 || len(report.Plans) != 0 {
+		t.Fatalf("pruned %+v while a stuck run was unreadable", report)
+	}
+	for _, run := range []ReviewRun{a, b} {
+		requireRunPruned(t, f.root, run, false)
+		requireExists(t, reviewPath(f.root, "closures", run.BatchID+".json"), true)
+	}
+	requireExists(t, compactionBackupPath(f.root, a.RunID), true)
+
+	if err = os.Chmod(runFile, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	report, err = PruneArchived(f.root)
+	if err != nil || !slices.Equal(report.Runs, []string{a.RunID, b.RunID}) {
+		t.Fatalf("retry: %+v %v", report, err)
+	}
+	requireExists(t, compactionBackupPath(f.root, a.RunID), false)
+	requirePrunedCheck(t, f.root, f.cards...)
+}
+
+// Check reads each receipt by path, so a backup directory it cannot open
+// costs no compaction line of a run whose receipt reads, and check still
+// prints its output.
+func TestCompactedReviewRunsIgnoresAnUnreadableBackupDirectory(t *testing.T) {
+	root, id, run := compactionBoard(t, "compact-unlisted")
+	compact(t, root, false)
+	if err := ensurePruneDir(root, "compaction-backups"); err != nil {
+		t.Fatal(err)
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root opens a directory without permissions")
+	}
+	if err := os.Chmod(backupDir(root), 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(backupDir(root), 0o700) })
+	compacted, err := CompactedReviewRuns(root, []string{id})
+	if err != nil || !slices.Equal(compacted[id], []string{run.RunID}) {
+		t.Fatalf("compacted runs %v %v, want %s", compacted, err, run.RunID)
+	}
+	_, stdout, _, err := CheckBoard(root, []string{id}, false)
+	if marker := config.Text("board.check_review_compacted", id, run.RunID); err != nil || !strings.Contains(stdout, marker+"\n") {
+		t.Fatalf("check output %q %v lacks %q", stdout, err, marker)
 	}
 }

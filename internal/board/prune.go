@@ -84,6 +84,9 @@ func readPruneReceipt(root, id string) (pruneReceipt, error) {
 // prunePlan is the complete deletion set computed from one board snapshot.
 type prunePlan struct {
 	runs, batches, plans, taskPlans, recoveries, exclusions, starts, dispatches, groups map[string]bool
+	// readRuns holds every run planning could read, kept or not; only those
+	// keep their batch, plan and predecessors when they are kept.
+	readRuns map[string]bool
 	// receipts maps a card to the evidence removed for it in this round.
 	receipts map[string]*pruneReceipt
 	// copies lists card-side review directories and copyFiles the plan copies;
@@ -131,6 +134,14 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 		return report, errors.Join(append(failures, err)...)
 	}
 	defer func() { err = errors.Join(err, plan.runLocks.close()) }()
+	// Keeping a run keeps its batch, plan and predecessors only when planning
+	// could read it. A run kept for its backup that planning could not read
+	// may still exist, so this round removes nothing.
+	for _, id := range sortedKeys(stuck) {
+		if !plan.readRuns[id] {
+			return report, errors.Join(append(failures, reviewError(id+": unreadable run of an unsettled compaction backup"))...)
+		}
+	}
 	if err = writePruneReceipts(root, plan); err != nil {
 		return report, errors.Join(append(failures, err)...)
 	}
@@ -458,7 +469,9 @@ func planPrune(root string, report *PruneReport, keep map[string]bool) (*prunePl
 		_, hasPlan := plans[v.PlanID]
 		plan.batches[id] = allSettled(v.TaskIDs) && (!hasPlan || plan.plans[v.PlanID])
 	}
+	plan.readRuns = map[string]bool{}
 	for id, v := range runs {
+		plan.readRuns[id] = true
 		_, hasBatch := batches[v.BatchID]
 		// Unfinished runs of final cards can never complete, so they go too,
 		// unless a review gate still holds the run's execution lock.
