@@ -41,7 +41,7 @@ Routes (both through the Authorize hook of an embedding host, like every project
 | `GET /api/v1/projects/{p}/policy` | The policy. Unset: `{"revision": 0}` with no epoch and no values. Set: `epoch`, `revision`, `values`, `updated_at`, `updated_by` |
 | `PUT /api/v1/projects/{p}/policy` | Body `{"expected_revision": N, "values": {...}, "submitter": "..."}` with an `Idempotency-Key` and a `Kander-Client-Id`. `expected_revision` is required: a missing or `null` value is `invalid_request`, and only an explicit `0` initializes the policy |
 
-The project answers of `GET /api/v1/projects?name=`, `POST /api/v1/projects`, and `GET /api/v1/projects/{p}` carry the policy in the field `policy` (revision 0 when unset), so a client gets it with its registration and sends no second request. A client reads an answer without `policy` as a server without project policies. The routes and the field are additive, as earlier additive routes were: protocol 3 stays.
+The project answers of `GET /api/v1/projects?name=`, `POST /api/v1/projects`, and `GET /api/v1/projects/{p}` carry the policy in the field `policy` (revision 0 when unset), so a client gets it with its registration and sends no second request. A client reads an answer without `policy` as a server without project policies. The routes and the field are additive, as earlier additive routes were, and did not change protocol 3 on their own; the enforcement below raised the protocol to 4.
 
 A write is a compare-and-swap on the revision. The request is checked before its idempotency receipt is written, so a refused request leaves no receipt and a corrected request may reuse its key; the rest runs under the project lock:
 
@@ -96,6 +96,41 @@ A project starts unset. While it is, every client works with its local values an
 
 The policy is readable through two routes: `GET /api/v1/projects/{p}/policy` and the project answers, among them the registration `POST /api/v1/projects`, which is not a per-project route. A host that restricts reading the policy must apply the same restriction to the registration and project lookup routes. The policy holds no credential.
 
+## Enforcement
+
+The server enforces the policy on new review batches and on first claims. It validates what the client sends and computes nothing for it.
+
+### Review batches
+
+A *new batch* is one that `kander review --requirements-file`, `kander review plan`, or `kander review extend-plan` creates; a batch that already exists is not new. Only for a new batch, under the project lock and before any receipt is written:
+
+1. The request carries `policy_revision`, which the client fills in from its policy. When the policy revision is above 0 and differs, the server answers `policy_revision_stale` (HTTP 409) and writes nothing: no batch, run, staging file, or idempotency receipt.
+2. When the revision is 0 or the policy's `rules.review` is false, no role is checked. With the review module off no review is requested automatically; `kander review` is then only an explicit call.
+3. Otherwise the scale comes from the members' `SIZE`: `large` when any member is large; a card without `SIZE` counts as small in the file form and large in the directory form. For `PMQA` and `Security`, when `review_stages.<scale>.<role>` is `required` and the requirement is `N/A: <reason>`, the request must name for that role the ID of a decision record (`kander decision record`, human or leader kind) that exists on one of the members; otherwise `policy_requirement_unmet` (HTTP 400), with a message that lists each failing role and why (no decision, or an ID on no member). A `skip` role written `required`, and an `auto` role with any valid value, pass without a decision. Extra roles in the decisions pass and are not recorded.
+4. On success the batch record stores `policy_revision` (omitted when 0) and `requirement_decisions` (only the decisions the check used; omitted when none).
+
+The decisions come from `--requirement-decision <ROLE>=<decision-id>` (repeatable, only with `--requirements-file`) or from `requirement_decisions` of a batch of `review plan` and of the `batch` of `review extend-plan`. Existing batches, historical four- and six-role batches included, are never checked again: reads, retries, incremental runs, and closing behave as before, and those batches have neither field. The policy revision is not part of the run identity (the `ReviewPrepare` identity digest), the plan and extend-plan idempotency receipts, or the joint publication material, so a retry of a run ID after a policy change returns the first result and never `idempotency_mismatch`. `kander review aggregate` shows the two fields in `batch`, and `kander review progress` lists them per planned batch in `batch_policies`.
+
+### Branch snapshot
+
+A *branch snapshot* is the branch model (`git.branch_mode` and the policy revision) the server fixes at a first claim:
+
+- **Card.** A claim (`kander start`, `kander move <task-id> working --owner`) of a card that is no task group member and has no claim record yet writes the card's snapshot in the same transaction: with a policy, its `git.branch_mode` and revision; with revision 0, the branch mode the client reports (its local effective `git.branch_mode`) and revision 0. An empty or invalid reported mode is `invalid_request` (HTTP 400). Takeovers, restarts, resumes, and later generations keep the snapshot and never read the current policy. A group member has no snapshot of its own.
+- **Group.** The first group claim (`kander coordinator claim` on a group without any group claim record) writes the group's snapshot the same way; later group claim generations keep it.
+- **Older cards and groups.** A card or group claimed before this change has a claim record but no snapshot and never gets one; it keeps taking the mainline branch from the local `git.branch_mode`.
+
+Claim and group claim requests carry `policy_revision` and `branch_mode`. Only a claim that creates a snapshot checks the revision: a policy revision above 0 that differs is `policy_revision_stale` and writes nothing, receipt included. The check runs after the receipt lookup and before the pending receipt is written, under the project lock. The revision and the branch mode are not part of the claim's idempotency digest, so a resend after a crash with the same key and a newer revision goes through the existing crash recovery, never `idempotency_mismatch`.
+
+`kander show --json` prints `claim.branch_snapshot` (`branch_mode`, `policy_revision`, `scope`: `task` for the card's own, `group` for its task group's), and `kander coordinator show` prints the group's as a top-level `branch_snapshot` next to the checkpoint fields (scope `group`); the claim grant of `kander start` and the group view and grant of the API carry it as `claim.branch_snapshot`. `kander start` (the start branch) and the dispatch evidence checks (the wrap-up `target_ref`, the integration preflight, the coordinator Git facts) take the mainline branch (`main` for `main-only`, `develop` otherwise) from the snapshot of the card or its group and do not read the local configuration; without a snapshot they behave as before. A `todo` group member without its own claim reads its group's snapshot from the group lease. A change of `git.branch_mode` therefore reaches only cards and groups first claimed afterwards.
+
+### Stale retry
+
+On `policy_revision_stale` the client reads the policy again with the policy refresh function, which updates the cache and the command's effective configuration, and sends the same request once more with the new revision and the same idempotency key. A second stale refusal exits non-zero with a message that names the server's current revision and `kander policy show`. The client never rewrites requirements: when the new policy makes them invalid the server answers `policy_requirement_unmet`, and the agent handles that per the rules. For `kander start`, whose launch journal records the claim request, the journal's policy revision and branch mode are updated atomically before the claim is sent again with the same claim key; on a first start the start branch and base are resolved again when the refreshed policy changes them.
+
+### Protocol 4
+
+Claims, group claims, and batch-creating review requests carry the policy revision, so the protocol moved from 3 to 4 (`api.ProtocolVersion` and `api.MinProtocolVersion`). A protocol 3 client would send no revision and bypass the checks, and the server decodes requests strictly, so neither side accepts the other: see [Distributed server](distributed-server.md#protocol) for the rollout order and why a server cannot go back to protocol 3.
+
 ## Later work
 
-The server does not yet enforce the policy on review batches or claims, and long-running processes (TUI, worker, `kander subscribe`) do not yet refresh it on change; both are separate task cards of the same group.
+Long-running processes (TUI, worker, `kander subscribe`) do not yet refresh the policy on change; that is a separate task card of the same group.

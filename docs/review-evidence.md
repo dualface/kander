@@ -7,12 +7,13 @@ kander review [agent] [--task <id>]...
   [--run-id <id>] --batch-id <id>
   [--previous-run-id <id>]
   [--requirements-file <absolute-json-path>]
+  [--requirement-decision <ROLE>=<decision-id>]...
   [--advance-file <absolute-json-path>]
   <CWD> <base> <commit> <role> <task-goal|absolute-spec-path>
   [review-context] [reviewed-commit]
 ```
 
-All options come before the CWD. Repeated task IDs are normalized, sorted, and deduplicated; no other option may be repeated. run/batch IDs are 1–64 lowercase ASCII letters, digits, or hyphens, with the first character restricted to a letter or digit. The run ID may be omitted; it is then generated randomly and printed to stderr. The batch ID is supplied by the caller. Timestamps carry no identity and no causal ordering.
+All options come before the CWD. Repeated task IDs are normalized, sorted, and deduplicated; `--requirement-decision` may be repeated once per role; no other option may be repeated. run/batch IDs are 1–64 lowercase ASCII letters, digits, or hyphens, with the first character restricted to a letter or digit. The run ID may be omitted; it is then generated randomly and printed to stderr. The batch ID is supplied by the caller. Timestamps carry no identity and no causal ordering.
 
 Both creating the intent and publishing to a not-yet-published card require a directory card in working/review; multiple cards must belong to the same non-empty task group and share the same language. Legacy file cards must be migrated per the init maintenance protocol. A review over a member in another state is refused as `<task-id>: working/review`; the message names the member and its state, and for a `backlog/` or `todo/` card of a task group it also names `kander coordinator remove-member` as the user's option while the card is an unstarted member. A long review does not hold the card lock; publication relocates cards by ID.
 
@@ -64,6 +65,14 @@ New `kander review` invocations and two-key batches accept only `PMQA` and `Secu
 New batches use the exact two-key requirements form shown above. Creating a four-key or six-key batch is rejected, including when appending a batch to a historical four-role plan. Unknown keys and incomplete sets are rejected.
 
 Reading, same-ID retries and close still accept exact two-key, four-key (`PM`, `QA`, `CSA`, `Hacker`) and six-key objects. Every batch keeps its frozen role set. A run is admitted only when that batch's own requirements mark the role `required`, so an open four-role batch can still finish its original roles; no conversion or prior closure is required on upgrade. Historical requirements, role order, run IDs, indexes, manifests, closures, dispositions, waivers, recovery artifacts and their hashes retain their identities. schema_version remains 1. Security supports the existing verified-finding waiver rules, as do historical CSA and Hacker records; PMQA and historical PM/QA do not. See the [completion gate](review-disposition.md) for the executing agent's dispositions and closure requirements.
+
+## Project Policy Check
+
+On a server whose project has a policy, a new batch (created by `kander review --requirements-file`, `kander review plan`, or `kander review extend-plan`) is checked against it under the project lock before any receipt is written; the rules are in [Project policy](project-policy.md#review-batches). The request carries the client's `policy_revision`: a stale one is `policy_revision_stale` (HTTP 409), and a role the policy requires that the requirements mark N/A without a decision record on a member is `policy_requirement_unmet` (HTTP 400); either writes no batch, run, staging file, or receipt. The decisions come from `--requirement-decision <ROLE>=<decision-id>` or from `requirement_decisions` of a batch of `plan` and of the `batch` of `extend-plan`.
+
+The batch record of a new batch stores `policy_revision` (omitted when 0) and `requirement_decisions` (the decisions the check used, omitted when none). The fields are not part of the run identity or of any idempotency receipt. `kander review aggregate` shows them in `batch`; `kander review progress` lists them in `batch_policies`, keyed by the planned batches that have them, and omits the field when none has.
+
+Existing batches are never checked again. A batch created before the check, including every historical four-role and six-role batch, has neither field, and reading it, retrying a run, an incremental run, and closing it behave as before.
 
 ## Original Artifacts and Schema
 
