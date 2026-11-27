@@ -72,6 +72,8 @@ func TestCompactedRunReadsAndPublicationsCarryTheState(t *testing.T) {
 	nested := map[string]string{
 		"review-close:runtime-batch": `{"request":{"batch_id":"runtime-batch","roles":{"PMQA":{"run_id":"` + u.run.RunID + `","passed_at":"b","basis":"x"}}},"evidence":{}}`,
 		"review-prepare":             `{"input":{"run_id":"runtime-next","previous_run_id":"` + u.run.RunID + `"}}`,
+		// A failed run that a close resolves names the compacted run as its key.
+		"review-close:failed-batch": `{"request":{"batch_id":"failed-batch","resolved_failures":{"` + u.run.RunID + `":"runtime-replacement"}},"evidence":{}}`,
 	}
 	var nestedIDs []string
 	for operation, material := range nested {
@@ -117,5 +119,43 @@ func TestCompactedRunReadsAndPublicationsCarryTheState(t *testing.T) {
 	for _, name := range []string{"evidence.txt", "task-context.md"} {
 		_, err = u.p.ReviewEvidence(t.Context(), u.run.RunID, "input", name)
 		expectCode(t, err, api.CodeReviewCompacted)
+	}
+}
+
+// A receipt that cannot be validated never hides the run's metadata, and the
+// compaction state it cannot prove is reported as an error.
+func TestRunResourceKeepsMetadataWhenTheReceiptIsInvalid(t *testing.T) {
+	u := finalizedUnpublished(t)
+	markCompacted(t, u, "error.log")
+	root, err := u.f.srv.BoardRoot(u.p.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, ".kander", "groups", "00000000-prune-group", "compactions", u.run.RunID+".json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var receipt map[string]any
+	if err = json.Unmarshal(data, &receipt); err != nil {
+		t.Fatal(err)
+	}
+	receipt["task_ids"] = []string{"20990101-other-task"}
+	if data, err = json.Marshal(receipt); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := u.p.ReviewResource(t.Context(), "runs", u.run.RunID)
+	if err != nil {
+		t.Fatalf("an invalid receipt hid the run: %v", err)
+	}
+	var value api.ReviewRunState
+	if err = json.Unmarshal(raw, &value); err != nil || value.RunID != u.run.RunID || value.Phase != u.run.Phase {
+		t.Fatalf("run metadata: %+v %v", value.ReviewRun, err)
+	}
+	if value.Compacted || !strings.Contains(value.CompactionError, "invalid compaction receipt") {
+		t.Fatalf("compaction state: compacted=%v error=%q", value.Compacted, value.CompactionError)
 	}
 }

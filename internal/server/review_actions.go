@@ -31,7 +31,12 @@ func (s *Server) reviewActionRoutes(mux *routeTable) {
 		}
 		state := api.ReviewRunState{ReviewRun: value}
 		if err == nil {
-			state.Compacted, err = board.ReviewRunCompacted(p.board, value.RunID)
+			// A damaged receipt never hides the run's own metadata.
+			compacted, compactionErr := board.ReviewRunCompacted(p.board, value.RunID)
+			state.Compacted = compacted
+			if compactionErr != nil {
+				state.CompactionError = compactionErr.Error()
+			}
 		}
 		return result(http.StatusOK, state, err)
 	})

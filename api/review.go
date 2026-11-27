@@ -18,10 +18,12 @@ type ReviewPrepare struct {
 // ReviewRunState is GET .../reviews/runs/{run}: the stored run and, when a
 // compaction removed its large evidence after it settled, compacted set to
 // true. A server before compaction never sends the field, which reads as not
-// compacted.
+// compacted. CompactionError names a compaction receipt that cannot be
+// validated; the run is still returned, and its compaction state is unknown.
 type ReviewRunState struct {
 	board.ReviewRun
-	Compacted bool `json:"compacted,omitempty"`
+	Compacted       bool   `json:"compacted,omitempty"`
+	CompactionError string `json:"compaction_error,omitempty"`
 }
 
 type ReviewArtifact struct {

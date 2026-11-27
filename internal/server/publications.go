@@ -255,7 +255,8 @@ func (p *project) compactedPublicationRuns(value api.Publication) ([]string, err
 // depth, by the field names the review records use for them: run_id and
 // previous_run_id (prepare input, assign, disposition, interpret, map-legacy,
 // abandon, close roles and mechanical assessments, resolve-batch findings and
-// runs), run_ids, and the keys and replacements of superseded_runs.
+// runs), run_ids, the keys and replacements of superseded_runs, and the failed
+// runs and their replacements of resolved_failures.
 func publicationRunReferences(value any, parent string, ids map[string]bool) {
 	add := func(v any) {
 		if id, ok := v.(string); ok && id != "" {
@@ -283,6 +284,9 @@ func publicationRunReferences(value any, parent string, ids map[string]bool) {
 				if run, ok := item.(map[string]any); ok {
 					add(run["replacement"])
 				}
+			case parent == "resolved_failures":
+				add(key)
+				add(item)
 			}
 			publicationRunReferences(item, key, ids)
 		}

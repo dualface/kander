@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -14,8 +15,18 @@ import (
 )
 
 // A retry with the ID of a compacted run is refused before any reviewer
-// starts, with the text that names the compaction.
+// starts, with the text that names the compaction; a receipt that cannot be
+// validated refuses it too, never reading as "not compacted".
 func TestRetryOfACompactedRunIsRefusedWithoutAReviewer(t *testing.T) {
+	for name, tasks := range map[string]func(board.ReviewRun) []string{
+		"valid receipt":   func(run board.ReviewRun) []string { return run.TaskIDs },
+		"invalid receipt": func(board.ReviewRun) []string { return []string{"20990101-other-task"} },
+	} {
+		t.Run(name, func(t *testing.T) { retryCompactedRun(t, tasks) })
+	}
+}
+
+func retryCompactedRun(t *testing.T, tasks func(board.ReviewRun) []string) {
 	h, root, args := archiveHarness(t)
 	t.Setenv("FAKE_CODEX_REPORT", emptyStructuredReview)
 	if code, _, stderr := captureRun(t, args); code != 0 {
@@ -26,7 +37,7 @@ func TestRetryOfACompactedRunIsRefusedWithoutAReviewer(t *testing.T) {
 		t.Fatal(err)
 	}
 	control := filepath.Join(root, ".kander", "groups")
-	receipt, err := json.Marshal(map[string]any{"schema": 1, "run_id": run.RunID, "task_ids": run.TaskIDs, "files": []map[string]any{{"location": "originals", "name": "evidence.txt", "bytes": 1}}, "compacted_at": "2026-11-27T00:00:00Z", "kander_version": "test"})
+	receipt, err := json.Marshal(map[string]any{"schema": 1, "run_id": run.RunID, "task_ids": tasks(run), "files": []map[string]any{{"location": "originals", "name": "evidence.txt", "bytes": 1}}, "compacted_at": "2026-11-27T00:00:00Z", "kander_version": "test"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +55,11 @@ func TestRetryOfACompactedRunIsRefusedWithoutAReviewer(t *testing.T) {
 		t.Fatal(err)
 	}
 	code, out, stderr := captureRun(t, args)
-	if code != 2 || out != "" || !strings.Contains(stderr, config.Text("board.review_run_compacted", run.RunID)) {
+	want := config.Text("board.review_run_compacted", run.RunID)
+	if !slices.Equal(tasks(run), run.TaskIDs) {
+		want = "invalid compaction receipt"
+	}
+	if code != 2 || out != "" || !strings.Contains(stderr, want) {
 		t.Fatalf("retry: %d %q %s", code, out, stderr)
 	}
 	if _, err = os.Stat(h.argvLog); !os.IsNotExist(err) {
