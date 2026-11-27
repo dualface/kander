@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"net/http"
 	"os"
 	"os/signal"
@@ -27,13 +26,16 @@ import (
 
 // GCReport is the plan or the outcome of `kander gc`: one entry per project,
 // the client project directories that match no project of the bound server,
-// the part of the local server gc, and the failures outside any project.
+// those whose project could not be confirmed, the part of the local server
+// gc, and the failures outside any project. Skipped says why nothing ran.
 type GCReport struct {
-	DryRun    bool        `json:"dry_run"`
-	Projects  []GCProject `json:"projects"`
-	Unmatched []string    `json:"unmatched,omitempty"`
-	Server    GCServer    `json:"server"`
-	Errors    []string    `json:"errors,omitempty"`
+	DryRun     bool        `json:"dry_run"`
+	Skipped    string      `json:"skipped,omitempty"`
+	Projects   []GCProject `json:"projects"`
+	Unmatched  []string    `json:"unmatched,omitempty"`
+	Unverified []GCEntry   `json:"unverified,omitempty"`
+	Server     GCServer    `json:"server"`
+	Errors     []string    `json:"errors,omitempty"`
 }
 
 // GCServer is the local server gc as `kander gc` saw it: skipped with the
@@ -45,10 +47,10 @@ type GCServer struct {
 	Report  *api.ServerGCReport `json:"report,omitempty"`
 }
 
-// Incomplete reports a kept candidate, an error, or a refused server part,
-// which makes the command exit 1.
+// Incomplete reports a kept candidate, an error, an unverified client project
+// directory, or a refused server part, which makes the command exit 1.
 func (r GCReport) Incomplete() bool {
-	if len(r.Errors) > 0 || r.Server.Refused != "" || r.Server.Error != "" || r.Server.Report != nil && r.Server.Report.Incomplete() {
+	if len(r.Errors) > 0 || len(r.Unverified) > 0 || r.Server.Refused != "" || r.Server.Error != "" || r.Server.Report != nil && r.Server.Report.Incomplete() {
 		return true
 	}
 	return slices.ContainsFunc(r.Projects, GCProject.Incomplete)
@@ -97,11 +99,11 @@ var (
 	gcInterrupt = func() (context.Context, context.CancelFunc) {
 		return signal.NotifyContext(context.Background(), os.Interrupt)
 	}
-	// gcOpen opens the bound project's session.
-	gcOpen = func() (*Session, *config.Config, error) {
-		ctx, cancel := commandContext()
+	// gcOpen opens the bound project's session without changing anything.
+	gcOpen = func(ctx context.Context) (*Session, *config.Config, error) {
+		ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 		defer cancel()
-		return open(ctx)
+		return openGC(ctx)
 	}
 	// resolveServerGC returns the gc call of the server at target, or the
 	// reason it is skipped: the server is not on a loopback address, or this
@@ -173,12 +175,15 @@ func runClientGC(o clientGCFlags, probe ExecutorProbe, stdout io.Writer) int {
 	if err != nil {
 		return command.FailStatus(2, err)
 	}
-	s, cfg, err := gcOpen()
+	ctx, stop := gcInterrupt()
+	defer stop()
+	s, cfg, err := gcOpen(ctx)
+	if errors.Is(err, errNoClientHome) {
+		return gcClientOutput(stdout, GCReport{DryRun: true, Skipped: config.Text("gc.client_no_home")})
+	}
 	if err != nil {
 		return command.Fail(err)
 	}
-	ctx, stop := gcInterrupt()
-	defer stop()
 	g := &clientGC{flags: o, sessions: []*Session{s}, request: api.ServerGCRequest{OlderThan: olderThan.String(), LogKeep: command.DefaultLogKeep}}
 	g.checkout, _ = os.Getwd()
 	g.opts = GCOptions{OlderThan: olderThan, Probe: probe, Mainline: config.MainlineBranch(cfg)}
@@ -221,7 +226,7 @@ func (g *clientGC) pass(ctx context.Context, dryRun bool, plan *GCReport) GCRepo
 		g.selectProjects(ctx, &report)
 	} else {
 		report.Server = GCServer{Skipped: plan.Server.Skipped, Refused: plan.Server.Refused, Error: plan.Server.Error}
-		report.Unmatched, report.Errors = plan.Unmatched, plan.Errors
+		report.Unmatched, report.Unverified, report.Errors = plan.Unmatched, plan.Unverified, plan.Errors
 	}
 	opts := g.opts
 	opts.DryRun, opts.Now = dryRun, gcNow()
@@ -274,11 +279,13 @@ func (g *clientGC) callServer(ctx context.Context, report *GCReport, dryRun bool
 	}
 }
 
-// selectProjects adds, with --all-projects, every project of the bound server
-// that has a client project directory here. The names come from the server
-// gc plan, the only place that lists every project; without it only the bound
-// project can be matched. The other directories are reported unmatched and
-// never changed.
+// selectProjects adds, with --all-projects, every client project directory of
+// this host whose project the bound server confirms. The directory's own
+// records name its project ID, and a read of that project, which the server's
+// access control governs, confirms it. A directory whose records name a
+// project of another server, or a project the bound server does not have, is
+// unmatched; one that names no project or whose project cannot be read is
+// unverified. Neither is changed.
 func (g *clientGC) selectProjects(ctx context.Context, report *GCReport) {
 	if !g.flags.allProjects {
 		return
@@ -290,31 +297,40 @@ func (g *clientGC) selectProjects(ctx context.Context, report *GCReport) {
 		report.Errors = append(report.Errors, err.Error())
 		return
 	}
-	local := map[string]bool{}
+	own := projectNamespace(bound.ServerURL, bound.Info.ID)
+	var names []string
 	for _, entry := range entries {
-		if entry.Kind == fs.KindDirectory {
-			local[entry.Name] = true
+		if entry.Kind == fs.KindDirectory && entry.Name != own {
+			names = append(names, entry.Name)
 		}
 	}
-	matched := map[string]bool{projectNamespace(bound.ServerURL, bound.Info.ID): true}
-	if s := report.Server.Report; s != nil {
-		for _, project := range s.Projects {
-			if project.Name == bound.Info.Name || !local[projectNamespace(bound.ServerURL, api.ProjectID(project.Name))] {
-				continue
-			}
-			info, err := bound.Client.ProjectByName(ctx, project.Name)
-			if err != nil {
-				report.Errors = append(report.Errors, project.Name+": "+err.Error())
-				continue
-			}
-			matched[projectNamespace(bound.ServerURL, info.ID)] = true
-			g.sessions = append(g.sessions, &Session{ServerURL: bound.ServerURL, Client: bound.Client, Project: bound.Client.Project(info.ID), Info: info, Home: bound.Home})
-		}
-	}
-	for _, name := range slices.Sorted(maps.Keys(local)) {
-		if !matched[name] {
+	slices.Sort(names)
+	for _, name := range names {
+		ids, foreign, err := directoryProjects(bound.Home, bound.ServerURL, name)
+		switch {
+		case err != nil:
+			report.Unverified = append(report.Unverified, GCEntry{ID: name, Reason: err.Error()})
+			continue
+		case len(ids) != 1 && foreign:
 			report.Unmatched = append(report.Unmatched, name)
+			continue
+		case len(ids) != 1:
+			report.Unverified = append(report.Unverified, GCEntry{ID: name, Reason: config.Text("gc.client_directory_unidentified")})
+			continue
 		}
+		info, err := bound.Client.Project(ids[0]).Info(ctx)
+		switch {
+		case api.IsCode(err, api.CodeNotFound):
+			report.Unmatched = append(report.Unmatched, name)
+			continue
+		case err != nil:
+			report.Unverified = append(report.Unverified, GCEntry{ID: name, Reason: err.Error()})
+			continue
+		case info.ID != ids[0]:
+			report.Unverified = append(report.Unverified, GCEntry{ID: name, Reason: config.Text("gc.client_directory_unidentified")})
+			continue
+		}
+		g.sessions = append(g.sessions, &Session{ServerURL: bound.ServerURL, Client: bound.Client, Project: bound.Client.Project(info.ID), Info: info, Home: bound.Home})
 	}
 }
 
@@ -332,12 +348,15 @@ func printClientGC(w io.Writer, r GCReport) {
 		header = "gc.plan_header"
 	}
 	fmt.Fprintln(w, config.Text(header))
+	if r.Skipped != "" {
+		fmt.Fprintln(w, config.Text("gc.client_skipped", oneLine(r.Skipped)))
+	}
 	for _, p := range r.Projects {
-		fmt.Fprintln(w, config.Text("gc.client_project_line", p.Name, p.Worktrees.Count, command.FormatBytes(p.Worktrees.Bytes), p.Branches.Count, p.ReviewRuntime.Count, command.FormatBytes(p.ReviewRuntime.Bytes), p.Journal.Count, command.FormatBytes(p.Journal.Bytes), p.EvidenceRefs.Count))
+		fmt.Fprintln(w, config.Text("gc.client_project_line", p.Name, p.Worktrees.Count, command.FormatBytes(p.Worktrees.Bytes), p.Branches.Count, p.ReviewRuntime.Count, command.FormatBytes(p.ReviewRuntime.Bytes), p.Journal.Count, command.FormatBytes(p.Journal.Bytes), p.EvidenceRefs.Count, p.TrackingRefs.Count))
 		for _, c := range []struct {
 			key      string
 			category GCCategory
-		}{{"gc.client_kept_worktree", p.Worktrees}, {"gc.client_kept_branch", p.Branches}, {"gc.client_kept_runtime", p.ReviewRuntime}, {"gc.client_kept_journal", p.Journal}, {"gc.client_kept_ref", p.EvidenceRefs}} {
+		}{{"gc.client_kept_worktree", p.Worktrees}, {"gc.client_kept_branch", p.Branches}, {"gc.client_kept_runtime", p.ReviewRuntime}, {"gc.client_kept_journal", p.Journal}, {"gc.client_kept_ref", p.EvidenceRefs}, {"gc.client_kept_tracking", p.TrackingRefs}} {
 			for _, kept := range c.category.Kept {
 				fmt.Fprintln(w, config.Text(c.key, kept.ID, oneLine(kept.Reason)))
 			}
@@ -356,6 +375,12 @@ func printClientGC(w io.Writer, r GCReport) {
 		fmt.Fprintln(w, config.Text("gc.client_unmatched"))
 		for _, name := range r.Unmatched {
 			fmt.Fprintln(w, "  "+name)
+		}
+	}
+	if len(r.Unverified) > 0 {
+		fmt.Fprintln(w, config.Text("gc.client_unverified"))
+		for _, entry := range r.Unverified {
+			fmt.Fprintln(w, "  "+entry.ID+": "+oneLine(entry.Reason))
 		}
 	}
 	printServerPart(w, r.Server)

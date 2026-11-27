@@ -73,12 +73,17 @@ func (s *Session) integrationContains(ctx context.Context, dir, source, target s
 }
 
 func gitAncestor(ctx context.Context, dir, source, target string) (bool, error) {
+	return gitAncestorEnv(ctx, dir, nil, source, target)
+}
+
+// gitAncestorEnv is gitAncestor with extra environment entries.
+func gitAncestorEnv(ctx context.Context, dir string, extra []string, source, target string) (bool, error) {
 	if !api.CommitSHA(source) || !api.CommitSHA(target) {
 		return false, integrationFailure("remote.git_full_sha")
 	}
 	ctx, cancel := context.WithTimeout(ctx, GitCommandTimeout)
 	defer cancel()
-	result, err := probe.CaptureWithEnvDirLimit(ctx, "git", []string{"merge-base", "--is-ancestor", source, target}, append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never"), dir, 1<<20)
+	result, err := probe.CaptureWithEnvDirLimit(ctx, "git", []string{"merge-base", "--is-ancestor", source, target}, append(append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never"), extra...), dir, 1<<20)
 	if err != nil {
 		return false, newGitTransportError(err)
 	}

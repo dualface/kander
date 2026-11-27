@@ -24,6 +24,10 @@ import (
 type gcRepository struct {
 	targets map[string]gcTarget
 	pruned  bool
+	// origin is why the repository's origin is not the project's common
+	// remote, or nil once it was verified; checked says it was looked at.
+	origin  error
+	checked bool
 }
 
 // gcTarget is the remote integration target of one repository: the commit
@@ -49,6 +53,7 @@ type gcWorktree struct {
 func (r *gcRun) collectWorktrees(ctx context.Context) {
 	repos := map[string]*gcRepository{}
 	evidence := map[string][]string{}
+	r.resumeRemovals(ctx, repos)
 	intents := filepath.Join(r.root, "worktree-intents")
 	for _, task := range r.listTaskDirectories(intents) {
 		summary, ok := r.terminalTask(task)
@@ -67,21 +72,17 @@ func (r *gcRun) collectWorktrees(ctx context.Context) {
 			}
 			r.collectWorktree(ctx, summary, generation, filepath.Join(intents, task, entry.Name), repos, evidence)
 		}
-		if !r.opts.DryRun {
-			r.removeEmptyDirectory(filepath.Join(intents, task))
-		}
+		r.removeEmptyDirectory(filepath.Join(intents, task))
 	}
-	if !r.opts.DryRun {
-		worktrees := filepath.Join(r.root, "worktrees")
-		for _, task := range r.listTaskDirectories(worktrees) {
-			if _, ok := r.terminalTask(task); ok {
-				r.removeEmptyDirectory(filepath.Join(worktrees, task))
-			}
+	worktrees := filepath.Join(r.root, "worktrees")
+	for _, task := range r.listTaskDirectories(worktrees) {
+		if _, ok := r.terminalTask(task); ok {
+			r.removeEmptyDirectory(filepath.Join(worktrees, task))
 		}
 	}
 	for _, dir := range slices.Sorted(maps.Keys(repos)) {
 		if repos[dir].pruned {
-			if _, err := gitCommand(ctx, dir, "worktree", "prune"); err != nil {
+			if _, err := r.git(ctx, dir, "worktree", "prune"); err != nil {
 				r.fail(err)
 			}
 		}
@@ -109,10 +110,15 @@ func (r *gcRun) listTaskDirectories(dir string) []string {
 	return tasks
 }
 
-// removeEmptyDirectory removes dir when it holds nothing.
+// removeEmptyDirectory removes dir when it holds nothing. A dry run only
+// notes that there is such a directory to remove.
 func (r *gcRun) removeEmptyDirectory(dir string) {
 	entries, err := fs.ListDirectory(r.s.Home, dir)
 	if errors.Is(err, os.ErrNotExist) || err == nil && len(entries) > 0 {
+		return
+	}
+	if err == nil && r.opts.DryRun {
+		r.work = true
 		return
 	}
 	if err == nil {
@@ -127,6 +133,24 @@ func (r *gcRun) removeEmptyDirectory(dir string) {
 func within(path, dir string) bool {
 	rel, err := filepath.Rel(dir, path)
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// physicallyWithin reports whether path is dir or below it, as written or
+// after resolving symbolic links on both sides: a working directory entered
+// through a link has a logical path that names another directory.
+func physicallyWithin(path, dir string) (bool, error) {
+	if within(path, dir) {
+		return true, nil
+	}
+	realPath, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return false, err
+	}
+	realDir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return false, err
+	}
+	return within(realPath, realDir), nil
 }
 
 // intentGeneration reads the generation of a g<n>.json intent record name.
@@ -173,9 +197,16 @@ func (r *gcRun) collectWorktree(ctx context.Context, summary api.TaskSummary, ge
 	if !finished.Before(r.cutoff) {
 		return
 	}
-	if r.opts.Checkout != "" && within(r.opts.Checkout, expected) {
-		r.report.Worktrees.keep(w.id, config.Text("gc.client_inside"))
-		return
+	if r.opts.Checkout != "" {
+		inside, err := physicallyWithin(r.opts.Checkout, expected)
+		if err != nil {
+			r.report.Worktrees.keep(w.id, config.Text("gc.client_inside_unknown", err.Error()))
+			return
+		}
+		if inside {
+			r.report.Worktrees.keep(w.id, config.Text("gc.client_inside"))
+			return
+		}
 	}
 	if !api.KnownExecutionBranch(w.intent.Branch, r.s.Info.ID, w.task, generation) {
 		r.report.Worktrees.keep(w.id, config.Text("gc.client_branch_name", w.intent.Branch))
@@ -216,27 +247,6 @@ func (r *gcRun) collectWorktree(ctx context.Context, summary api.TaskSummary, ge
 	}
 }
 
-// removeWorktree removes the registered worktree, its task branch and its
-// intent record. A failed worktree removal keeps the branch and the intent
-// and returns false.
-func (r *gcRun) removeWorktree(ctx context.Context, w gcWorktree, repo string, repos map[string]*gcRepository) bool {
-	if _, err := gitCommand(ctx, repo, "worktree", "remove", w.intent.Path); err != nil {
-		r.report.Worktrees.keep(w.id, err.Error())
-		return false
-	}
-	repos[repo].pruned = true
-	if _, err := gitCommand(ctx, repo, "branch", "-D", w.intent.Branch); err != nil {
-		r.report.Branches.keep(w.intent.Branch, err.Error())
-	} else {
-		r.report.Branches.add(0)
-	}
-	intent := filepath.Join(r.root, "worktree-intents", w.task, fmt.Sprintf("g%d.json", w.intent.Generation))
-	if _, err := fs.RemoveRegularFileIfExists(r.s.Home, intent); err != nil {
-		r.fail(err)
-	}
-	return true
-}
-
 // judgeWorktree checks the conditions that need the held lock: the card read
 // again, the claim and credential of this host, the executors, the Git state
 // of the worktree and its branch tip. It returns the reason to keep the
@@ -264,19 +274,32 @@ func (r *gcRun) judgeWorktree(ctx context.Context, w gcWorktree, repos map[strin
 	if r.repository == "" {
 		r.repository = repo
 	}
-	status, err := gitCommand(ctx, w.intent.Path, "--no-optional-locks", "status", "--porcelain", "--untracked-files=all")
+	status, err := r.git(ctx, w.intent.Path, "--no-optional-locks", "status", "--porcelain", "--untracked-files=all")
 	if err != nil {
 		return err.Error(), false, repo
 	}
 	if status != "" {
 		return config.Text("gc.client_dirty"), false, repo
 	}
-	tip, err := gitCommand(ctx, w.intent.Path, "rev-parse", "--verify", "HEAD^{commit}")
+	tip, err := r.git(ctx, w.intent.Path, "rev-parse", "--verify", "HEAD^{commit}")
 	if err != nil {
 		return err.Error(), false, repo
 	}
 	if tip == w.intent.Base {
 		return "", false, repo
+	}
+	// Integration and delivery evidence count only from the project's own
+	// common remote: a clone whose origin points elsewhere proves nothing.
+	if cache := repos[repo]; !cache.checked {
+		cache.checked = true
+		if r.s.Info.Remote == "" {
+			cache.origin = errors.New(config.Text("remote.git_remote_mismatch"))
+		} else {
+			cache.origin = verifiedRemote(ctx, repo, r.s.Info.Remote)
+		}
+	}
+	if err := repos[repo].origin; err != nil {
+		return config.Text("gc.client_origin_unverified", repo, err.Error()), false, repo
 	}
 	target, err := board.IntegrationTargetOf(card.Text)
 	if err != nil {
@@ -292,7 +315,12 @@ func (r *gcRun) judgeWorktree(ctx context.Context, w gcWorktree, repos map[strin
 	case resolved.commit != "" && !resolved.present:
 		return config.Text("gc.client_fetch_deferred", target), true, repo
 	case resolved.commit != "":
-		contained, err := gitAncestor(ctx, repo, tip, resolved.commit)
+		contained, err := r.ancestor(ctx, repo, tip, resolved.commit)
+		if err != nil && r.opts.DryRun {
+			// Without lazy fetch a partial clone may miss an object the
+			// ancestry needs; the run fetches the target first.
+			return config.Text("gc.client_fetch_deferred", target), true, repo
+		}
 		if err != nil {
 			return err.Error(), false, repo
 		}
@@ -390,12 +418,12 @@ func (r *gcRun) retainedExecutions(w gcWorktree) ([]RetainedExecution, error) {
 // When the command runs in a checkout, the worktree must share its common Git
 // directory.
 func (r *gcRun) worktreeRepository(ctx context.Context, w gcWorktree) (repo, reason string) {
-	common, err := gitCommand(ctx, w.intent.Path, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	common, err := r.git(ctx, w.intent.Path, "rev-parse", "--path-format=absolute", "--git-common-dir")
 	if err != nil {
 		return "", config.Text("gc.client_not_worktree", w.intent.Path)
 	}
 	if r.opts.Checkout != "" {
-		own, err := gitCommand(ctx, r.opts.Checkout, "rev-parse", "--path-format=absolute", "--git-common-dir")
+		own, err := r.git(ctx, r.opts.Checkout, "rev-parse", "--path-format=absolute", "--git-common-dir")
 		if err != nil {
 			return "", err.Error()
 		}
@@ -403,7 +431,7 @@ func (r *gcRun) worktreeRepository(ctx context.Context, w gcWorktree) (repo, rea
 			return "", config.Text("gc.client_repository_mismatch", common, own)
 		}
 	}
-	listing, err := gitCommand(ctx, w.intent.Path, "worktree", "list", "--porcelain", "-z")
+	listing, err := r.git(ctx, w.intent.Path, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
 		return "", err.Error()
 	}
@@ -423,7 +451,7 @@ func (r *gcRun) worktreeRepository(ctx context.Context, w gcWorktree) (repo, rea
 	if repo == "" || !registered || filepath.Clean(repo) == filepath.Clean(w.intent.Path) {
 		return "", config.Text("gc.client_not_worktree", w.intent.Path)
 	}
-	head, err := gitCommand(ctx, w.intent.Path, "symbolic-ref", "-q", "HEAD")
+	head, err := r.git(ctx, w.intent.Path, "symbolic-ref", "-q", "HEAD")
 	if err != nil || head != "refs/heads/"+w.intent.Branch {
 		return "", config.Text("gc.client_head_mismatch", head, w.intent.Branch)
 	}
@@ -439,19 +467,22 @@ func (r *gcRun) integrationTarget(ctx context.Context, repo, target string, cach
 	}
 	var resolved gcTarget
 	if r.opts.DryRun {
-		listed, err := gitCommand(ctx, repo, "ls-remote", "--refs", "origin", "refs/heads/"+target)
+		listed, err := r.git(ctx, repo, "ls-remote", "--refs", "origin", "refs/heads/"+target)
 		if err != nil {
 			resolved.err = err
 		} else if fields := strings.Fields(listed); len(fields) >= 2 && fields[1] == "refs/heads/"+target && api.CommitSHA(fields[0]) {
 			resolved.commit = fields[0]
-			_, err := gitCommand(ctx, repo, "cat-file", "-e", resolved.commit+"^{commit}")
+			_, err := r.git(ctx, repo, "cat-file", "-e", resolved.commit+"^{commit}")
 			resolved.present = err == nil
 		}
 	} else {
 		ref := "refs/remotes/origin/" + target
-		if _, err := gitCommand(ctx, repo, "fetch", "--quiet", "origin", "+refs/heads/"+target+":"+ref); err != nil {
+		// Only the one tracking ref may change: no tags follow, no configured
+		// refmap updates another ref, and nothing is pruned.
+		if _, err := r.git(ctx, repo, "-c", "fetch.prune=false", "-c", "remote.origin.prune=false", "-c", "fetch.pruneTags=false", "-c", "remote.origin.pruneTags=false",
+			"fetch", "--quiet", "--no-tags", "--no-prune", "--refmap=", "origin", "+refs/heads/"+target+":"+ref); err != nil {
 			resolved.err = err
-		} else if commit, err := gitCommand(ctx, repo, "rev-parse", "--verify", ref+"^{commit}"); err != nil {
+		} else if commit, err := r.git(ctx, repo, "rev-parse", "--verify", ref+"^{commit}"); err != nil {
 			resolved.err = err
 		} else {
 			resolved.commit, resolved.present = commit, true
@@ -467,7 +498,7 @@ func (r *gcRun) taskEvidence(ctx context.Context, repo, task string, cache map[s
 	if refs, found := cache[task]; found {
 		return refs, nil
 	}
-	listed, err := gitCommand(ctx, repo, "ls-remote", "--refs", "origin", taskEvidencePrefix(r.s.Info.ID, task)+"*")
+	listed, err := r.git(ctx, repo, "ls-remote", "--refs", "origin", taskEvidencePrefix(r.s.Info.ID, task)+"*")
 	if err != nil {
 		return nil, err
 	}

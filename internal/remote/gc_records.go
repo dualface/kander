@@ -20,9 +20,11 @@ import (
 )
 
 // collectReviewRuntime removes the local runtime directory of each review run
-// the server reports finalized or abandoned, or no longer knows. A run the
-// server no longer knows keeps its directory while a pending finalization is
-// recorded there: that finalization never reached the server.
+// that needs nothing of it any more: the server reports it abandoned, or
+// finalized and published to every member, or no longer knows it while no
+// pending finalization is recorded there. A finalized run that still has to
+// be published keeps its directory: the writer secret in it is the only one
+// the server accepts for that publication.
 func (r *gcRun) collectReviewRuntime(ctx context.Context) {
 	dir := filepath.Join(r.root, "review-runtime")
 	entries, err := fs.ListDirectory(r.s.Home, dir)
@@ -34,43 +36,18 @@ func (r *gcRun) collectReviewRuntime(ctx context.Context) {
 		return
 	}
 	for _, entry := range entries {
-		if entry.Kind != fs.KindDirectory || !board.ValidReviewID(entry.Name) {
-			continue
+		if entry.Kind == fs.KindDirectory && board.ValidReviewID(entry.Name) {
+			r.collectRuntime(ctx, entry.Name, filepath.Join(dir, entry.Name))
 		}
-		run := filepath.Join(dir, entry.Name)
-		pending, err := fs.RegularFileExists(r.s.Home, filepath.Join(run, "pending-finalization.json"))
-		if err != nil {
-			r.report.ReviewRuntime.keep(entry.Name, err.Error())
-			continue
-		}
-		raw, err := r.s.Project.ReviewResource(ctx, "runs", entry.Name)
-		switch {
-		case api.IsCode(err, api.CodeNotFound):
-			if pending {
-				r.report.ReviewRuntime.keep(entry.Name, config.Text("gc.client_runtime_pending"))
-				continue
-			}
-		case err != nil:
-			r.fail(fmt.Errorf("%s: %w", entry.Name, err))
-			continue
-		default:
-			var value board.ReviewRun
-			if err := json.Unmarshal(raw, &value); err != nil {
-				r.fail(fmt.Errorf("%s: %w", entry.Name, err))
-				continue
-			}
-			if value.Phase != "finalized" && value.Abandonment == nil {
-				continue
-			}
-		}
-		r.removeRuntime(entry.Name, run)
 	}
 }
 
-// removeRuntime removes one run directory under its runtime lock. The lock
-// file goes last, after the lock is released, so the removal also works where
-// an open file cannot be deleted.
-func (r *gcRun) removeRuntime(id, dir string) {
+// collectRuntime decides on one run directory and removes it, all under its
+// runtime lock: a reviewer takes the same lock before it prepares, finalizes
+// or publishes the run, so the pending record and the server state read here
+// cannot change before the removal. The lock file goes last, after the lock
+// is released, so the removal also works where an open file cannot be deleted.
+func (r *gcRun) collectRuntime(ctx context.Context, id, dir string) {
 	lockPath := filepath.Join(dir, "runtime.lock")
 	release, held, err := r.tryLock(lockPath)
 	if err != nil {
@@ -79,6 +56,17 @@ func (r *gcRun) removeRuntime(id, dir string) {
 	}
 	if !held {
 		r.report.ReviewRuntime.keep(id, config.Text("gc.client_locked", lockPath))
+		return
+	}
+	remove, reason, err := r.runtimeDone(ctx, id, dir)
+	if err != nil || !remove {
+		r.releaseLock(release)
+		switch {
+		case err != nil:
+			r.fail(fmt.Errorf("%s: %w", id, err))
+		case reason != "":
+			r.report.ReviewRuntime.keep(id, reason)
+		}
 		return
 	}
 	size := treeSize(dir)
@@ -100,6 +88,48 @@ func (r *gcRun) removeRuntime(id, dir string) {
 		return
 	}
 	r.report.ReviewRuntime.add(size)
+}
+
+// runtimeDone reports whether the run needs its runtime directory no more. A
+// reason is set when the directory is a candidate that stays.
+func (r *gcRun) runtimeDone(ctx context.Context, id, dir string) (bool, string, error) {
+	pending, err := fs.RegularFileExists(r.s.Home, filepath.Join(dir, "pending-finalization.json"))
+	if err != nil {
+		return false, "", err
+	}
+	raw, err := r.s.Project.ReviewResource(ctx, "runs", id)
+	if api.IsCode(err, api.CodeNotFound) {
+		if pending {
+			return false, config.Text("gc.client_runtime_pending"), nil
+		}
+		return true, "", nil
+	}
+	if err != nil {
+		return false, "", err
+	}
+	var run board.ReviewRun
+	if err := json.Unmarshal(raw, &run); err != nil {
+		return false, "", err
+	}
+	switch {
+	case run.Abandonment != nil:
+		return true, "", nil
+	case run.Phase != "finalized":
+		return false, "", nil
+	case !runPublished(run):
+		return false, config.Text("gc.client_runtime_unpublished"), nil
+	}
+	return true, "", nil
+}
+
+// runPublished reports whether a run was published into every member card.
+func runPublished(run board.ReviewRun) bool {
+	for _, id := range run.TaskIDs {
+		if !run.Published[id] {
+			return false
+		}
+	}
+	return len(run.TaskIDs) > 0
 }
 
 func (r *gcRun) removeRuntimeContents(dir string) error {
@@ -175,14 +205,22 @@ func (r *gcRun) collectJournal() {
 }
 
 func (r *gcRun) collectRecord(id, path string, terminal []string) {
-	data, record, ok := r.readRecord(path, terminal)
-	if !ok {
+	data, record, candidate, err := r.readRecord(path, terminal)
+	if err != nil {
+		r.report.Journal.keep(id, err.Error())
+		return
+	}
+	if !candidate {
 		return
 	}
 	at := record.UpdatedAt
 	if at.IsZero() {
 		info, err := os.Lstat(path)
+		if errors.Is(err, os.ErrNotExist) {
+			return
+		}
 		if err != nil {
+			r.report.Journal.keep(id, err.Error())
 			return
 		}
 		at = info.ModTime()
@@ -201,7 +239,12 @@ func (r *gcRun) collectRecord(id, path string, terminal []string) {
 	}
 	defer r.releaseLock(release)
 	// The writer may have changed the record before the lock was taken.
-	if current, _, ok := r.readRecord(path, terminal); !ok || !bytes.Equal(current, data) {
+	current, _, candidate, err := r.readRecord(path, terminal)
+	if err != nil {
+		r.report.Journal.keep(id, err.Error())
+		return
+	}
+	if !candidate || !bytes.Equal(current, data) {
 		return
 	}
 	if !r.opts.DryRun {
@@ -214,24 +257,29 @@ func (r *gcRun) collectRecord(id, path string, terminal []string) {
 }
 
 // readRecord reads a journal record and reports whether it is a candidate:
-// schema 1, a terminal phase, and a terminal card.
-func (r *gcRun) readRecord(path string, terminal []string) ([]byte, gcJournalRecord, bool) {
+// schema 1, a terminal phase, and a terminal card. A missing record is no
+// candidate; a record that cannot be read or decoded is an error.
+func (r *gcRun) readRecord(path string, terminal []string) ([]byte, gcJournalRecord, bool, error) {
 	var record gcJournalRecord
 	data, found, err := fs.ReadRegularFileIfExists(r.s.Home, path)
-	if err != nil || !found || json.Unmarshal(data, &record) != nil {
-		return nil, record, false
+	if err != nil || !found {
+		return nil, record, false, err
+	}
+	if err := json.Unmarshal(data, &record); err != nil {
+		return nil, record, false, fmt.Errorf("%s: %w", path, err)
 	}
 	if record.Schema != 1 || !slices.Contains(terminal, record.Phase) || !api.ValidIdentity(record.TaskID) {
-		return nil, record, false
+		return nil, record, false, nil
 	}
 	_, ok := r.terminalTask(record.TaskID)
-	return data, record, ok
+	return data, record, ok, nil
 }
 
 // collectEvidenceRefs deletes the Git evidence refs of terminal cards and
 // settled groups through the completion cleanup: one listing of the project's
 // evidence prefix selects the cards and groups worth asking about, and the
-// service's cleanup scope decides what is deleted.
+// service's cleanup scope decides what is deleted. Then it drops the local
+// tracking refs of evidence refs the common remote no longer holds.
 func (r *gcRun) collectEvidenceRefs(ctx context.Context) {
 	if r.s.Info.Remote == "" {
 		return
@@ -249,22 +297,16 @@ func (r *gcRun) collectEvidenceRefs(ctx context.Context) {
 		r.fail(err)
 		return
 	}
-	listed, err := gitCommand(ctx, dir, "ls-remote", "--refs", "origin", "refs/heads/kander/"+r.s.Info.ID+"/*")
+	refs, err := r.remoteEvidence(ctx, dir)
 	if err != nil {
 		r.fail(err)
 		return
 	}
-	var refs []string
+	prefix := evidenceHeads(r.s.Info.ID)
 	tasks, groups := map[string]bool{}, map[string]bool{}
 	integrations := false
-	for line := range strings.Lines(listed) {
-		_, ref, found := strings.Cut(strings.TrimSpace(line), "\t")
-		rest, ok := strings.CutPrefix(ref, "refs/heads/kander/"+r.s.Info.ID+"/")
-		if !found || !ok {
-			continue
-		}
-		refs = append(refs, ref)
-		first, _, _ := strings.Cut(rest, "/")
+	for _, ref := range refs {
+		first, _, _ := strings.Cut(strings.TrimPrefix(ref, prefix), "/")
 		if first == "integrations" {
 			integrations = true
 		} else if task, ok := r.terminalTask(first); ok {
@@ -274,10 +316,17 @@ func (r *gcRun) collectEvidenceRefs(ctx context.Context) {
 			}
 		}
 	}
+	// An integration source ref names its integration execution, not its card:
+	// a group's scope owns the sources of the group, a standalone card's scope
+	// the sources of the card.
 	if integrations {
 		for _, task := range r.tasks {
-			if gcTerminalState(task.State) && task.TaskGroup != "" {
+			switch {
+			case !gcTerminalState(task.State):
+			case task.TaskGroup != "":
 				groups[task.TaskGroup] = true
+			default:
+				tasks[task.TaskID] = true
 			}
 		}
 	}
@@ -292,11 +341,67 @@ func (r *gcRun) collectEvidenceRefs(ctx context.Context) {
 			return r.s.Project.GroupEvidenceCleanup(ctx, group)
 		}, func(ctx context.Context) EvidenceCleanupReport { return r.s.CleanGroupEvidence(ctx, group, dir) })
 	}
-	if !r.opts.DryRun && r.report.EvidenceRefs.Count > 0 {
-		prefix := "refs/heads/kander/" + r.s.Info.ID + "/*"
-		if _, err := gitCommand(ctx, dir, "fetch", "--quiet", "--prune", "origin", prefix+":refs/remotes/origin/kander/"+r.s.Info.ID+"/*"); err != nil {
+	remaining := map[string]bool{}
+	if !r.opts.DryRun && len(counted) > 0 {
+		// The cleanup deleted refs: read what the remote holds now.
+		if refs, err = r.remoteEvidence(ctx, dir); err != nil {
 			r.fail(err)
+			return
 		}
+		counted = map[string]bool{}
+	}
+	for _, ref := range refs {
+		if !counted[ref] {
+			remaining[ref] = true
+		}
+	}
+	r.collectTrackingRefs(ctx, dir, remaining)
+}
+
+// evidenceHeads is the branch prefix of the evidence refs of a project.
+func evidenceHeads(project string) string { return "refs/heads/kander/" + project + "/" }
+
+// evidenceTracking is the prefix of their tracking refs in a clone.
+func evidenceTracking(project string) string { return "refs/remotes/origin/kander/" + project + "/" }
+
+// remoteEvidence lists the evidence refs of this project on the common remote.
+func (r *gcRun) remoteEvidence(ctx context.Context, dir string) ([]string, error) {
+	prefix := evidenceHeads(r.s.Info.ID)
+	listed, err := r.git(ctx, dir, "ls-remote", "--refs", "origin", prefix+"*")
+	if err != nil {
+		return nil, err
+	}
+	var refs []string
+	for line := range strings.Lines(listed) {
+		if _, ref, found := strings.Cut(strings.TrimSpace(line), "\t"); found && strings.HasPrefix(ref, prefix) {
+			refs = append(refs, ref)
+		}
+	}
+	return refs, nil
+}
+
+// collectTrackingRefs deletes the local tracking refs below the project's
+// evidence prefix whose remote ref is gone. Each goes with update-ref and the
+// value it was read with, so no fetch runs and no other ref can change.
+func (r *gcRun) collectTrackingRefs(ctx context.Context, dir string, remote map[string]bool) {
+	tracking := evidenceTracking(r.s.Info.ID)
+	listed, err := r.git(ctx, dir, "for-each-ref", "--format=%(objectname) %(refname)", tracking)
+	if err != nil {
+		r.fail(err)
+		return
+	}
+	for line := range strings.Lines(listed) {
+		oid, ref, found := strings.Cut(strings.TrimSpace(line), " ")
+		if !found || !strings.HasPrefix(ref, tracking) || remote[evidenceHeads(r.s.Info.ID)+strings.TrimPrefix(ref, tracking)] {
+			continue
+		}
+		if !r.opts.DryRun {
+			if _, err := r.git(ctx, dir, "update-ref", "-d", ref, oid); err != nil {
+				r.report.TrackingRefs.keep(ref, config.Text("gc.client_remove_failed", err.Error()))
+				continue
+			}
+		}
+		r.report.TrackingRefs.add(0)
 	}
 }
 

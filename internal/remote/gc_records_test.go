@@ -12,6 +12,7 @@ import (
 	"github.com/dualface/kander/v2/api"
 	"github.com/dualface/kander/v2/internal/client"
 	"github.com/dualface/kander/v2/internal/config"
+	kfs "github.com/dualface/kander/v2/internal/fs"
 )
 
 // runtimeDir creates the local runtime directory of a review run.
@@ -38,7 +39,7 @@ func exists(t *testing.T, path string) bool {
 
 func TestGCReviewRuntimeFollowsTheServerRun(t *testing.T) {
 	f := newGCFixture(t)
-	f.svc.runs["run-final"] = map[string]any{"phase": "finalized"}
+	f.svc.runs["run-final"] = publishedRun()
 	f.svc.runs["run-abandoned"] = map[string]any{"phase": "running", "abandonment": map[string]string{"decision": "d", "reason": "r"}}
 	f.svc.runs["run-live"] = map[string]any{"phase": "running"}
 	final, abandoned, live := f.runtimeDir("run-final", true), f.runtimeDir("run-abandoned", false), f.runtimeDir("run-live", true)
@@ -64,6 +65,64 @@ func TestGCReviewRuntimeFollowsTheServerRun(t *testing.T) {
 	}
 }
 
+// publishedRun is a finalized run published into its only member.
+func publishedRun() map[string]any {
+	return map[string]any{"phase": "finalized", "task_ids": []string{gcTask}, "published": map[string]bool{gcTask: true}}
+}
+
+// A finalized run that still has to be published keeps its directory: a
+// retry of the publication needs the writer secret the server bound.
+func TestGCReviewRuntimeKeepsTheWriterOfAnUnpublishedRun(t *testing.T) {
+	f := newGCFixture(t)
+	f.svc.runs["run-unpublished"] = map[string]any{"phase": "finalized", "task_ids": []string{gcTask, "20261101-gc-other-task"}, "published": map[string]bool{gcTask: true}}
+	dir := f.runtimeDir("run-unpublished", false)
+	secret, err := os.ReadFile(filepath.Join(dir, "writer-secret"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, dryRun := range []bool{true, false} {
+		result := f.run(dryRun)
+		if result.ReviewRuntime.Count != 0 || keptReason(result.ReviewRuntime, "run-unpublished") != config.Text("gc.client_runtime_unpublished") {
+			t.Fatalf("dry run %v: %+v", dryRun, result.ReviewRuntime)
+		}
+	}
+	if kept, err := os.ReadFile(filepath.Join(dir, "writer-secret")); err != nil || string(kept) != string(secret) {
+		t.Fatalf("the writer secret must stay as it was: %q %v", kept, err)
+	}
+	// Once the publication finished, the directory goes.
+	f.svc.runs["run-unpublished"] = map[string]any{"phase": "finalized", "task_ids": []string{gcTask, "20261101-gc-other-task"}, "published": map[string]bool{gcTask: true, "20261101-gc-other-task": true}}
+	if result := f.run(false); result.ReviewRuntime.Count != 1 || exists(t, dir) {
+		t.Fatalf("a published run goes: %+v", result.ReviewRuntime)
+	}
+}
+
+// The server state and the pending record are read under the runtime lock,
+// the lock a reviewer holds while it prepares, finalizes and publishes.
+func TestGCReviewRuntimeDecidesUnderTheRuntimeLock(t *testing.T) {
+	f := newGCFixture(t)
+	dir := f.runtimeDir("run-gone", false)
+	held := 0
+	f.svc.onRun = func(string) {
+		file, err := kfs.OpenLockFile(f.s.Home, filepath.Join(dir, "runtime.lock"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer file.Close()
+		lock, free, err := kfs.TryLockExclusive(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if free {
+			_ = lock.Unlock()
+			return
+		}
+		held++
+	}
+	if result := f.run(false); result.ReviewRuntime.Count != 1 || held != 1 {
+		t.Fatalf("the run was read %d time(s) under the lock: %+v", held, result.ReviewRuntime)
+	}
+}
+
 func TestGCReviewRuntimeStaysWhenTheServerFails(t *testing.T) {
 	f := newGCFixture(t)
 	dir := f.runtimeDir("run-final", false)
@@ -76,7 +135,7 @@ func TestGCReviewRuntimeStaysWhenTheServerFails(t *testing.T) {
 
 func TestGCReviewRuntimeSkipsALockedRun(t *testing.T) {
 	f := newGCFixture(t)
-	f.svc.runs["run-final"] = map[string]any{"phase": "finalized"}
+	f.svc.runs["run-final"] = publishedRun()
 	dir := f.runtimeDir("run-final", false)
 	f.holdLock(filepath.Join(dir, "runtime.lock"))
 	result := f.run(false)

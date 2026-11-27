@@ -25,7 +25,7 @@
   "gc.data_mismatch": "{{.V0}} のサーバーが使うデータディレクトリは {{.V1}} で、{{.V2}} ではありません。",
   "gc.unsupported": "{{.V0}} のサーバーは server gc に対応していません。この kander のバージョンで再起動してください。",
   "gc.client_requires_yes": "kander gc を端末の外で実行するとき、または --json を指定したときは、--yes か --dry-run が必要です。",
-  "gc.client_project_line": "プロジェクト {{.V0}}: worktree {{.V1}} 件（{{.V2}}）、タスクブランチ {{.V3}} 件、review ランタイム {{.V4}} 件（{{.V5}}）、journal レコード {{.V6}} 件（{{.V7}}）、証跡 ref {{.V8}} 件",
+  "gc.client_project_line": "プロジェクト {{.V0}}: worktree {{.V1}} 件（{{.V2}}）、タスクブランチ {{.V3}} 件、review ランタイム {{.V4}} 件（{{.V5}}）、journal レコード {{.V6}} 件（{{.V7}}）、証跡 ref {{.V8}} 件、古い追跡 ref {{.V9}} 件",
   "gc.client_kept_worktree": "  worktree {{.V0}} を保持: {{.V1}}",
   "gc.client_kept_branch": "  タスクブランチ {{.V0}} を保持: {{.V1}}",
   "gc.client_kept_runtime": "  review ランタイム {{.V0}} を保持: {{.V1}}",
@@ -57,5 +57,14 @@
   "gc.client_runtime_pending": "ローカルに未完了の finalize がありますが、server にはその run がもうありません。手動で確認してください",
   "gc.client_remove_failed": "削除に失敗しました: {{.V0}}",
   "gc.client_no_checkout": "証跡 ref: このホストにこのプロジェクトのチェックアウトが見つかりません",
-  "gc.client_inside": "コマンドがこの worktree の中で実行されています。別のディレクトリから実行してください"
+  "gc.client_inside": "コマンドがこの worktree の中で実行されています。別のディレクトリから実行してください",
+  "gc.client_runtime_unpublished": "run は finalize 済みですが、まだすべてのメンバーカードに公開されていません。公開にはその writer 資格情報が必要です",
+  "gc.client_origin_unverified": "{{.V0}} の origin がプロジェクトの共通リモートであると確認できないため、統合と納品を確認できません: {{.V1}}",
+  "gc.client_inside_unknown": "コマンドがこの worktree の中で実行されているか判定できません: {{.V0}}",
+  "gc.client_branch_moved": "worktree の削除後、ブランチが {{.V0}} から {{.V1}} に移動しました",
+  "gc.client_removal_damaged": "削除記録 {{.V0}} が破損しています。手動で確認してください",
+  "gc.client_directory_unidentified": "ディレクトリ内に接続先 server のプロジェクトを示す記録がありません",
+  "gc.client_no_home": "このホストには client ディレクトリがないため、回収する client データはありません",
+  "gc.client_kept_tracking": "  追跡 ref {{.V0}} を保持: {{.V1}}",
+  "gc.client_unverified": "所属プロジェクトを確認できない client プロジェクトディレクトリ（変更しません）:"
 }

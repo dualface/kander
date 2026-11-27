@@ -25,7 +25,7 @@
   "gc.data_mismatch": "The server at {{.V0}} serves {{.V1}}, not {{.V2}}.",
   "gc.unsupported": "The server at {{.V0}} does not support server gc; restart it with this kander version.",
   "gc.client_requires_yes": "kander gc needs --yes or --dry-run when it does not run in a terminal or when --json is given.",
-  "gc.client_project_line": "project {{.V0}}: worktrees {{.V1}} ({{.V2}}); task branches {{.V3}}; review runtime {{.V4}} ({{.V5}}); journal records {{.V6}} ({{.V7}}); evidence refs {{.V8}}",
+  "gc.client_project_line": "project {{.V0}}: worktrees {{.V1}} ({{.V2}}); task branches {{.V3}}; review runtime {{.V4}} ({{.V5}}); journal records {{.V6}} ({{.V7}}); evidence refs {{.V8}}; stale tracking refs {{.V9}}",
   "gc.client_kept_worktree": "  kept worktree {{.V0}}: {{.V1}}",
   "gc.client_kept_branch": "  kept task branch {{.V0}}: {{.V1}}",
   "gc.client_kept_runtime": "  kept review runtime {{.V0}}: {{.V1}}",
@@ -57,5 +57,14 @@
   "gc.client_runtime_pending": "a local finalization is pending but the server no longer knows the run; check it by hand",
   "gc.client_remove_failed": "removal failed: {{.V0}}",
   "gc.client_no_checkout": "evidence refs: no checkout of this project was found on this host",
-  "gc.client_inside": "the command runs inside this worktree; run it from another directory"
+  "gc.client_inside": "the command runs inside this worktree; run it from another directory",
+  "gc.client_runtime_unpublished": "the run is finalized but not yet published into every member card; the publication still needs its writer secret",
+  "gc.client_origin_unverified": "the origin of {{.V0}} is not verified as the project's common remote, so integration and delivery cannot be checked: {{.V1}}",
+  "gc.client_inside_unknown": "cannot tell whether the command runs inside this worktree: {{.V0}}",
+  "gc.client_branch_moved": "the branch moved from {{.V0}} to {{.V1}} after its worktree was removed",
+  "gc.client_removal_damaged": "the removal record {{.V0}} is damaged; check it by hand",
+  "gc.client_directory_unidentified": "no record in the directory names a project of the bound server",
+  "gc.client_no_home": "this host has no client directory, so there is no client data to reclaim",
+  "gc.client_kept_tracking": "  kept tracking ref {{.V0}}: {{.V1}}",
+  "gc.client_unverified": "client project directories whose project could not be confirmed (not changed):"
 }

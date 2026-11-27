@@ -44,10 +44,16 @@ type GCProject struct {
 	ReviewRuntime GCCategory `json:"review_runtime"`
 	Journal       GCCategory `json:"journal"`
 	EvidenceRefs  GCCategory `json:"evidence_refs"`
+	// TrackingRefs are the local tracking refs of evidence refs the common
+	// remote no longer holds.
+	TrackingRefs GCCategory `json:"tracking_refs"`
 	// Skipped says why a category did not run; it does not change the exit
 	// status.
 	Skipped []string `json:"skipped,omitempty"`
 	Errors  []string `json:"errors,omitempty"`
+	// work marks a plan with work no category counts: an emptied task
+	// directory to remove, or an interrupted removal to finish.
+	work bool
 }
 
 // GCCategory counts the entries removed (or, in a dry run, to remove) and
@@ -86,8 +92,12 @@ func (p GCProject) Incomplete() bool {
 	return false
 }
 
-// Empty reports a project with nothing to remove.
+// Empty reports a project with nothing to do: nothing to remove, no worktree
+// deferred to the fetch of a run, and no other work.
 func (p GCProject) Empty() bool {
+	if p.work || len(p.Worktrees.Deferred) > 0 {
+		return false
+	}
 	for _, c := range p.categories() {
 		if c.Count > 0 {
 			return false
@@ -97,7 +107,7 @@ func (p GCProject) Empty() bool {
 }
 
 func (p GCProject) categories() []GCCategory {
-	return []GCCategory{p.Worktrees, p.Branches, p.ReviewRuntime, p.Journal, p.EvidenceRefs}
+	return []GCCategory{p.Worktrees, p.Branches, p.ReviewRuntime, p.Journal, p.EvidenceRefs, p.TrackingRefs}
 }
 
 // gcTerminalState reports the card states whose local data a gc may remove.
@@ -114,6 +124,8 @@ type gcRun struct {
 	cutoff time.Time
 	tasks  map[string]api.TaskSummary
 	report *GCProject
+	// work is set when the pass finds work no category counts.
+	work bool
 	// repository is the first main repository a worktree of this project
 	// named; the evidence category uses it when no checkout was given.
 	repository string
@@ -121,7 +133,30 @@ type gcRun struct {
 
 func (r *gcRun) fail(err error) { r.report.Errors = append(r.report.Errors, err.Error()) }
 
+// gcNoLazyFetch keeps a Git command from fetching missing objects of a partial
+// clone from its promisor remote, so a dry run writes no object.
+var gcNoLazyFetch = []string{"GIT_NO_LAZY_FETCH=1"}
+
+// git runs one Git command of the pass; a dry run never fetches lazily.
+func (r *gcRun) git(ctx context.Context, dir string, args ...string) (string, error) {
+	if r.opts.DryRun {
+		return gitCommandEnv(ctx, dir, gcNoLazyFetch, args...)
+	}
+	return gitCommand(ctx, dir, args...)
+}
+
+// ancestor reports whether source is an ancestor of target, like git; a dry
+// run never fetches lazily.
+func (r *gcRun) ancestor(ctx context.Context, dir, source, target string) (bool, error) {
+	if r.opts.DryRun {
+		return gitAncestorEnv(ctx, dir, gcNoLazyFetch, source, target)
+	}
+	return gitAncestor(ctx, dir, source, target)
+}
+
 // CollectGarbage plans (opts.DryRun) or runs the client gc of this project.
+// The local categories need the project's client directory; the evidence refs
+// need only a checkout.
 // The worktree category runs before the evidence refs, so a worktree whose
 // branch tip only an evidence ref holds is judged while the ref still exists.
 func (s *Session) CollectGarbage(ctx context.Context, opts GCOptions) GCProject {
@@ -130,9 +165,6 @@ func (s *Session) CollectGarbage(ctx context.Context, opts GCOptions) GCProject 
 	exists, err := fs.DirectoryExists(s.Home, root)
 	if err != nil {
 		report.Errors = append(report.Errors, err.Error())
-		return report
-	}
-	if !exists {
 		return report
 	}
 	list, err := s.Project.List(ctx, "")
@@ -144,10 +176,15 @@ func (s *Session) CollectGarbage(ctx context.Context, opts GCOptions) GCProject 
 	for _, task := range list.Tasks {
 		r.tasks[task.TaskID] = task
 	}
-	r.collectWorktrees(ctx)
-	r.collectReviewRuntime(ctx)
-	r.collectJournal()
+	// Without a client project directory there is no local data, but the
+	// common remote can still hold evidence refs of the project.
+	if exists {
+		r.collectWorktrees(ctx)
+		r.collectReviewRuntime(ctx)
+		r.collectJournal()
+	}
 	r.collectEvidenceRefs(ctx)
+	report.work = r.work
 	return report
 }
 

@@ -30,10 +30,15 @@ type gcCard struct {
 // gcService is the REST surface the client gc reads, backed by maps.
 type gcService struct {
 	ProjectService
-	mu          sync.Mutex
-	cards       map[string]*gcCard
-	runs        map[string]any
-	runErr      error
+	mu     sync.Mutex
+	cards  map[string]*gcCard
+	runs   map[string]any
+	runErr error
+	// onRun, when set, runs at each read of a review run; onShow at each
+	// read of a card, without the service lock.
+	onShow func(id string)
+	// onRun, when set, runs at each read of a review run.
+	onRun       func(id string)
 	taskScopes  map[string]api.EvidenceCleanup
 	groupScopes map[string]api.EvidenceCleanup
 }
@@ -49,6 +54,9 @@ func (s *gcService) List(context.Context, string) (api.TaskList, error) {
 }
 
 func (s *gcService) Show(_ context.Context, id string) (api.Task, error) {
+	if s.onShow != nil {
+		s.onShow(id)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	card, found := s.cards[id]
@@ -59,6 +67,9 @@ func (s *gcService) Show(_ context.Context, id string) (api.Task, error) {
 }
 
 func (s *gcService) ReviewResource(_ context.Context, _, id string) (json.RawMessage, error) {
+	if s.onRun != nil {
+		s.onRun(id)
+	}
 	if s.runErr != nil {
 		return nil, s.runErr
 	}

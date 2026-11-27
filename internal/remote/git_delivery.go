@@ -25,9 +25,14 @@ var GitCommandTimeout = 60 * time.Second
 // sanitized, bounded diagnostic for the local user; text that leaves this
 // machine goes through ServerText, which drops it.
 func gitCommand(ctx context.Context, dir string, args ...string) (string, error) {
+	return gitCommandEnv(ctx, dir, nil, args...)
+}
+
+// gitCommandEnv is gitCommand with extra environment entries.
+func gitCommandEnv(ctx context.Context, dir string, extra []string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, GitCommandTimeout)
 	defer cancel()
-	env := append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never")
+	env := append(append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never"), extra...)
 	result, err := probe.CaptureWithEnvDirLimit(ctx, "git", gitArgs(runtime.GOOS, args), env, dir, 1<<20)
 	if err != nil {
 		return "", newGitTransportError(err)

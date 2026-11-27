@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -42,7 +43,7 @@ func (c *gcCommand) run(t *testing.T, args ...string) (int, string, string) {
 	t.Cleanup(func() {
 		gcOpen, gcTerminal, gcPromptIn, gcPromptOut, resolveServerGC = open, terminal, in, out, resolve
 	})
-	gcOpen = func() (*Session, *config.Config, error) {
+	gcOpen = func(context.Context) (*Session, *config.Config, error) {
 		c.opened = true
 		cfg := &config.Config{}
 		cfg.Git.BranchMode = config.GitBranchModeMainOnly
@@ -192,18 +193,24 @@ func TestResolveServerGCSkipsRemoteServersAndUnreadableKeys(t *testing.T) {
 	}
 }
 
-func TestGCCommandAllProjectsListsUnmatchedDirectories(t *testing.T) {
+// --all-projects matches each client project directory by the project ID its
+// own records name, confirmed by a read of that project, also without a
+// server gc: a directory of another server or of a project the server does
+// not have is unmatched, one that names no project is unverified (exit 1),
+// and neither changes.
+func TestGCCommandAllProjectsMatchesDirectoriesByTheirRecords(t *testing.T) {
 	f := newGCFixture(t)
 	other := api.Project{ID: api.ProjectID("other"), Name: "other", Remote: f.bare}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/api/v1/projects":
+		case "/api/v1/projects/" + other.ID:
 			_ = json.NewEncoder(w).Encode(other)
 		case "/api/v1/projects/" + other.ID + "/tasks":
 			_ = json.NewEncoder(w).Encode(api.TaskList{})
 		default:
-			http.NotFound(w, r)
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(api.Error{Code: api.CodeNotFound, Message: r.URL.Path})
 		}
 	}))
 	t.Cleanup(server.Close)
@@ -223,26 +230,52 @@ func TestGCCommandAllProjectsListsUnmatchedDirectories(t *testing.T) {
 	}
 	f.card(gcTask, "done")
 	f.worktree(gcTask, 1)
-	matched := filepath.Join(f.s.Home, "projects", projectNamespace(server.URL, other.ID))
+	retained := func(serverURL, project string) string {
+		namespace := projectNamespace(serverURL, project)
+		data, _ := json.Marshal(RetainedExecution{ServerURL: serverURL, ProjectID: project, TaskID: gcTask, ExecutionID: "x-1", Generation: 1})
+		f.write(filepath.Join(f.s.Home, "retained-executions", namespace, gcTask), "x-1.json", string(data))
+		dir := filepath.Join(f.s.Home, "projects", namespace)
+		f.write(dir, "launch-actions/a.json", `{"schema":1,"phase":"complete","task_id":"`+gcTask+`"}`)
+		return dir
+	}
+	retained(server.URL, other.ID)
+	foreign := retained("http://kander.example.invalid:7878", "p-elsewhere")
+	gone := retained(server.URL, "p-gone")
 	stray := filepath.Join(f.s.Home, "projects", strings.Repeat("ab", 32))
 	f.write(stray, "launch-actions/a.json", `{"schema":1,"phase":"complete","task_id":"`+gcTask+`"}`)
-	if err := os.MkdirAll(matched, 0o700); err != nil {
-		t.Fatal(err)
+	before := map[string]map[string]string{}
+	for _, dir := range []string{foreign, gone, stray} {
+		before[dir] = snapshot(t, dir)
 	}
-	before := snapshot(t, stray)
-	c := &gcCommand{f: f, server: func(_ context.Context, req api.ServerGCRequest) (api.ServerGCReport, error) {
-		return api.ServerGCReport{DryRun: req.DryRun, Projects: []api.ServerGCProject{{Name: "demo"}, {Name: "other"}}}, nil
-	}}
-	code, out, errOut := c.run(t, "--json", "--yes", "--all-projects")
+	c := &gcCommand{f: f}
+	code, out, errOut := c.run(t, "--json", "--yes", "--all-projects", "--client-only")
 	var report GCReport
-	if err := json.Unmarshal([]byte(out), &report); err != nil || code != 0 {
-		t.Fatalf("exit %d: %s %s", code, out, errOut)
+	if err := json.Unmarshal([]byte(out), &report); err != nil || code != 1 {
+		t.Fatalf("an unverified directory exits 1: %d %s %s", code, out, errOut)
 	}
-	if len(report.Projects) != 2 || report.Projects[1].Name != "other" || len(report.Unmatched) != 1 || report.Unmatched[0] != filepath.Base(stray) {
-		t.Fatalf("the matched project is covered and the stray directory is listed: %s", out)
+	unmatched := []string{filepath.Base(foreign), filepath.Base(gone)}
+	slices.Sort(unmatched)
+	if len(report.Projects) != 2 || report.Projects[1].Name != "other" || !slices.Equal(report.Unmatched, unmatched) {
+		t.Fatalf("the matched project is covered and the others are unmatched: %s", out)
 	}
-	if !sameSnapshot(before, snapshot(t, stray)) || c.calls[0].Project != "" {
-		t.Fatalf("an unmatched directory never changes, and the server gc covers every project: %+v", c.calls)
+	if len(report.Unverified) != 1 || report.Unverified[0].ID != filepath.Base(stray) || report.Unverified[0].Reason == "" {
+		t.Fatalf("a directory that names no project is unverified, with the reason: %s", out)
+	}
+	for dir, files := range before {
+		if !sameSnapshot(files, snapshot(t, dir)) {
+			t.Fatalf("%s must not change", dir)
+		}
+	}
+}
+
+// With a server gc the server covers every project.
+func TestGCCommandAllProjectsAsksTheServerForEveryProject(t *testing.T) {
+	f, _ := removable(t)
+	c := &gcCommand{f: f, server: func(_ context.Context, req api.ServerGCRequest) (api.ServerGCReport, error) {
+		return api.ServerGCReport{DryRun: req.DryRun}, nil
+	}}
+	if code, out, errOut := c.run(t, "--json", "--dry-run", "--all-projects"); code != 0 || len(c.calls) != 1 || c.calls[0].Project != "" {
+		t.Fatalf("exit %d, calls %+v: %s %s", code, c.calls, out, errOut)
 	}
 }
 

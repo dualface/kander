@@ -254,6 +254,47 @@ func TestGCLeavesNewGenerationWhileRemovingOldOne(t *testing.T) {
 	}
 }
 
+// The production creation of a new generation, run while the gc judges the
+// old generation under the old generation's lock, keeps its registration,
+// branch and intent: the two hold different locks and touch different paths.
+func TestGCRemovesTheOldGenerationWhilePrepareWorktreeCreatesTheNewOne(t *testing.T) {
+	f := newGCFixture(t)
+	card := f.card(gcTask, "done")
+	old := f.worktree(gcTask, 1)
+	credential := Credential{ServerURL: f.s.ServerURL, ClientID: f.s.Client.ClientID(), ProjectID: f.s.Info.ID, TaskID: gcTask, ExecutionID: "x-gc-2", Generation: 2, BaseCommit: f.base}
+	card.task.Claim = &api.ClaimView{ClientID: credential.ClientID, ExecutionID: credential.ExecutionID, Generation: 2, Status: api.ClaimActive}
+	var created ExecutionWorktree
+	var prepareErr error
+	prepared := false
+	f.svc.onShow = func(string) {
+		if prepared {
+			return
+		}
+		// The gc holds the old generation's lock here, at its card read.
+		prepared = true
+		created, prepareErr = f.s.PrepareWorktree(t.Context(), f.repo, f.base, credential)
+	}
+	result := f.run(false)
+	if prepareErr != nil || !prepared {
+		t.Fatalf("PrepareWorktree: %v", prepareErr)
+	}
+	if result.Worktrees.Count != 1 || f.registered(old.Path) || f.branchExists(old.Branch) {
+		t.Fatalf("the old generation goes: %+v", result)
+	}
+	intent := filepath.Join(f.root, "worktree-intents", gcTask, "g2.json")
+	data, err := os.ReadFile(intent)
+	var recorded ExecutionWorktree
+	if err == nil {
+		err = json.Unmarshal(data, &recorded)
+	}
+	if err != nil || recorded.ExecutionID != "x-gc-2" || recorded.Path != created.Path {
+		t.Fatalf("the new generation's intent must stay: %+v %v", recorded, err)
+	}
+	if !f.registered(created.Path) || !f.branchExists(created.Branch) {
+		t.Fatalf("the new generation must stay registered with its branch: %+v", result.Worktrees)
+	}
+}
+
 // A dry run never fetches: a target commit this repository lacks is reported
 // as decided after the fetch, and nothing in the client directory, the
 // repository or the remote changes.
