@@ -136,7 +136,7 @@ func TestWindowsHerdrCoreDoctor(t *testing.T) {
 		cfg := config.DefaultConfig()
 		cfg.Launcher, cfg.WelcomeComplete = "auto", true
 		text := reportText(CaptureReport(func() {
-			validateConfiguredResources(cfg, map[string]agentState{}, config.InstallPaths{}, tools)
+			validateConfiguredResources(cfg, map[string]agentState{}, tools)
 		}))
 		if strings.Contains(text, config.Text("menu.the_configured_launcher_is_auto_but_herdr_is_not_available")) {
 			t.Fatalf("auto reported unavailable:\n%s", text)
@@ -229,7 +229,7 @@ func TestWindowsHerdrCorePOSIXOverride(t *testing.T) {
 		"menu.the_configured_launcher_is_auto_but_only_herdr_can_run": {},
 	} {
 		text := reportText(CaptureReport(func() {
-			validateConfiguredResources(auto, map[string]agentState{}, config.InstallPaths{}, available)
+			validateConfiguredResources(auto, map[string]agentState{}, available)
 		}))
 		if !strings.Contains(text, config.Text(key)) {
 			t.Errorf("want %s:\n%s", key, text)

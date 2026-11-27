@@ -16,7 +16,6 @@ import (
 const (
 	SourceEmbedded = "embedded"
 	SourceGlobal   = "global"
-	SourceProject  = "project"
 )
 
 // DefinitionsDirName is the share subdirectory holding user definitions.
@@ -66,50 +65,16 @@ var DefinitionDirs = defaultDefinitionDirs
 
 func init() {
 	config.RegisterLauncherNameSource(definitionLauncherNames)
-	config.RegisterProjectLauncherNameSource(projectDefinitionLauncherNames)
 }
 
-// defaultDefinitionDirs returns the global share directory and, inside a Git
-// repository, the project install share directory of its main worktree.
+// defaultDefinitionDirs returns the global share directory. Kander has no project share
+// directory: every definition a user adds lives in the global share.
 func defaultDefinitionDirs() []DefinitionDir {
-	cwd, err := os.Getwd()
+	global, err := config.GlobalInstallPaths()
 	if err != nil {
-		cwd = ""
+		return nil
 	}
-	return definitionDirsFor(cwd)
-}
-
-// definitionDirsFor returns the global share directory and, when project is
-// inside a Git repository, the project install share directory of its main
-// worktree.
-func definitionDirsFor(project string) []DefinitionDir {
-	var dirs []DefinitionDir
-	if global, err := config.GlobalInstallPaths(); err == nil {
-		dirs = append(dirs, DefinitionDir{Source: SourceGlobal, Root: global.ShareDir, Path: filepath.Join(global.ShareDir, DefinitionsDirName)})
-	}
-	if project == "" {
-		return dirs
-	}
-	if paths, err := config.ProjectInstallPaths(project); err == nil {
-		dirs = append(dirs, DefinitionDir{Source: SourceProject, Root: paths.ShareDir, Path: filepath.Join(paths.ShareDir, DefinitionsDirName)})
-	}
-	return dirs
-}
-
-// projectDefinitionLauncherNames lists the launcher names in force for the
-// project of dir, as a process inside it loads them, for validating that
-// project's configuration from a process outside it. The definitions are only
-// named, never registered as backends of this process.
-func projectDefinitionLauncherNames(dir string) []string {
-	definitionRegistry.Lock()
-	embedded := append([]*loadedDefinition{}, definitionRegistry.embedded...)
-	definitionRegistry.Unlock()
-	active, _ := loadDefinitions(embedded, definitionDirsFor(dir))
-	var names []string
-	for _, loaded := range active {
-		names = append(names, loaded.def.LauncherNames()...)
-	}
-	return names
+	return []DefinitionDir{{Source: SourceGlobal, Root: global.ShareDir, Path: filepath.Join(global.ShareDir, DefinitionsDirName)}}
 }
 
 // RegisterDefinition registers a built-in definition embedded in the binary.

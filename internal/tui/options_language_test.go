@@ -57,7 +57,7 @@ func assertLanguageCopy(t *testing.T, app *App, language string) {
 func TestLanguageChangeRedrawsFormAndPersistsOnSubmit(t *testing.T) {
 	useInterfaceLanguage(t, "en")
 	app, panel := openPanel(t, englishConfig())
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	openLanguageField(t, panel)
 
 	if panel.session.Config.Language != "ja" {
@@ -176,7 +176,7 @@ func TestProjectLanguageCancelAndSubmit(t *testing.T) {
 	t.Run("cancel keeps a missing overlay key missing", func(t *testing.T) {
 		useInterfaceLanguage(t, "en")
 		app, panel := openPanel(t, englishConfig())
-		attachTempOverlay(t, panel.session, config.ModeGlobal)
+		attachTempOverlay(t, panel.session)
 		pumpPanel(panel, panel.switchTab(config.TargetOverlay))
 		openLanguageField(t, panel)
 		if !panel.session.FieldOverridden("language") {
@@ -197,7 +197,7 @@ func TestProjectLanguageCancelAndSubmit(t *testing.T) {
 		app, panel := openPanel(t, englishConfig())
 		dir := t.TempDir()
 		loc := config.OverlayLocation{ProjectRoot: dir, Path: filepath.Join(dir, config.OverlayFilename)}
-		if err := panel.session.AttachOverlay(config.ModeGlobal, loc, map[string]any{"language": "cn"}); err != nil {
+		if err := panel.session.AttachOverlay(loc, map[string]any{"language": "cn"}); err != nil {
 			t.Fatal(err)
 		}
 		pumpPanel(panel, panel.switchTab(config.TargetOverlay))
@@ -215,7 +215,7 @@ func TestProjectLanguageCancelAndSubmit(t *testing.T) {
 	t.Run("submit writes only the overlay", func(t *testing.T) {
 		useInterfaceLanguage(t, "en")
 		_, panel := openPanel(t, englishConfig())
-		_, path := attachTempOverlay(t, panel.session, config.ModeGlobal)
+		_, path := attachTempOverlay(t, panel.session)
 		pumpPanel(panel, panel.switchTab(config.TargetOverlay))
 		openLanguageField(t, panel)
 		drivePanel(panel, keyMsg("enter"))
@@ -259,7 +259,7 @@ func TestLanguageCancelIgnoresBindingFromPartialSave(t *testing.T) {
 	t.Run("project submit leaves the unsaved global language cancellable", func(t *testing.T) {
 		useInterfaceLanguage(t, "en")
 		app, panel := openPanel(t, englishConfig())
-		attachTempOverlay(t, panel.session, config.ModeGlobal)
+		attachTempOverlay(t, panel.session)
 		openLanguageField(t, panel)
 		pumpPanel(panel, panel.switchTab(config.TargetOverlay))
 		drivePanel(panel, keyMsg("enter"))
@@ -314,7 +314,7 @@ func TestLanguageCancelAfterSubmitRestoresSubmittedBinding(t *testing.T) {
 	app, panel := openPanel(t, englishConfig())
 	dir := t.TempDir()
 	loc := config.OverlayLocation{ProjectRoot: dir, Path: filepath.Join(dir, config.OverlayFilename)}
-	if err := panel.session.AttachOverlay(config.ModeGlobal, loc, map[string]any{"language": "cn"}); err != nil {
+	if err := panel.session.AttachOverlay(loc, map[string]any{"language": "cn"}); err != nil {
 		t.Fatal(err)
 	}
 	openLanguageField(t, panel)

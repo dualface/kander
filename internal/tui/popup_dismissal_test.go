@@ -35,7 +35,7 @@ func TestOptionsDismissalHints(t *testing.T) {
 				cfg := englishConfig()
 				cfg.Language = language
 				app, panel := openPanel(t, cfg)
-				attachTempOverlay(t, panel.session, config.ModeGlobal)
+				attachTempOverlay(t, panel.session)
 				app.Width, app.Height = width, 18
 				pumpPanel(panel, panel.openRoot())
 				app.View()

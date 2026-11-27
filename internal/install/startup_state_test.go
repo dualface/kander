@@ -10,7 +10,7 @@ import (
 )
 
 func TestStartupVersionRoundTrip(t *testing.T) {
-	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(t.TempDir(), "rules")}
+	paths := config.InstallPaths{RulesDir: filepath.Join(t.TempDir(), "rules")}
 	if got := StartupVersion(paths); got != "" {
 		t.Fatalf("StartupVersion on missing state = %q, want \"\"", got)
 	}
@@ -37,7 +37,7 @@ func TestStartupVersionCorruptState(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, startupStateFileName), []byte("{bad"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: dir}
+	paths := config.InstallPaths{RulesDir: dir}
 	if got := StartupVersion(paths); got != "" {
 		t.Fatalf("StartupVersion on corrupt state = %q, want \"\"", got)
 	}

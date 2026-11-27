@@ -131,8 +131,11 @@ func TestOptionsProjectSaveKeepsUnknownOverlayKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an overlay with unknown keys must read: %v", err)
 	}
-	if err := session.AttachOverlay(config.ModeProject, loc, raw); err != nil {
+	if err := session.AttachOverlay(loc, raw); err != nil {
 		t.Fatalf("an overlay with unknown keys must attach: %v", err)
+	}
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
 	}
 	session.SetTUIField("theme", "dark")
 	if _, err := session.Save(); err != nil {
@@ -196,7 +199,10 @@ func attachProject(t *testing.T, cfg *config.Config, overlay map[string]any) (*S
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := session.AttachOverlay(config.ModeProject, loc, raw); err != nil {
+	if err := session.AttachOverlay(loc, raw); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
 	return session, loc.Path

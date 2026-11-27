@@ -13,7 +13,32 @@ import (
 
 var negationRE = regexp.MustCompile(`(?i)(禁用|废弃|停用|不要遵守|勿遵守|不遵守|不要使用|不使用|请勿使用|未导入|尚未导入|不再生效|已失效|请忽略|do not follow|do not use|disabled|deprecated|\bignore\b)`)
 
-// IntegrationStatus reports what EnsureRulesIntegration did to one agent rules file.
+// ProjectEntrySpelling is how a project reference names the global rules entry. It is the
+// same text on every machine, so the reference can be committed to the repository.
+const ProjectEntrySpelling = "~/.agents/kander/KANDER-AGENTS.md"
+
+// ProjectRules is one checkout's project rules files and the global rules entry they
+// reference. Kander never writes an agent's global rules file: kander init writes a project
+// reference into the project rules files, and the Kander rules apply in the projects whose
+// committed rules files carry it.
+type ProjectRules struct {
+	// Root is the Git main worktree; every project rules target is relative to it.
+	Root string
+	// Paths is the global install whose rules entry the references name.
+	Paths config.InstallPaths
+}
+
+// NewProjectRules returns the project rules of the main worktree root, with the root's
+// symlinks resolved so every write below it is checked component by component.
+func NewProjectRules(root string, paths config.InstallPaths) (ProjectRules, error) {
+	resolved, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return ProjectRules{}, err
+	}
+	return ProjectRules{Root: resolved, Paths: paths}, nil
+}
+
+// IntegrationStatus reports what EnsureProjectReference did to one project rules file.
 type IntegrationStatus int
 
 const (
@@ -21,14 +46,13 @@ const (
 	IntegrationPresent IntegrationStatus = iota
 	// IntegrationCreated means the file did not exist and was created with the reference.
 	IntegrationCreated
-	// IntegrationUpdated means the reference was appended to an existing file; a .mdc rule
-	// without frontmatter also gained the alwaysApply frontmatter.
+	// IntegrationUpdated means the reference was appended to an existing file; a stale or
+	// duplicate load command, such as one naming the retired .kander/rules/ entry, was dropped
+	// at the same time when Removed is above zero. A .mdc rule without frontmatter also gained
+	// the alwaysApply frontmatter.
 	IntegrationUpdated
-	// IntegrationRewritten means a reference to the previous rules entry location was rewritten
-	// in place to the current one.
-	IntegrationRewritten
-	// IntegrationCleaned means invalid or duplicate load commands were removed without a
-	// legacy rewrite and no new reference had to be appended.
+	// IntegrationCleaned means invalid or duplicate load commands were removed and no new
+	// reference had to be appended.
 	IntegrationCleaned
 	// IntegrationFrontmatterAdded means a .mdc rule that already referenced the entry gained
 	// the alwaysApply frontmatter and no reference had to be appended.
@@ -38,7 +62,7 @@ const (
 	IntegrationDisabled
 )
 
-// IntegrationOutcome is the result of ensuring one agent rules file references the Kander entry.
+// IntegrationOutcome is the result of ensuring one project rules file references the Kander entry.
 type IntegrationOutcome struct {
 	Agent  string
 	Target string
@@ -57,127 +81,107 @@ type IntegrationOutcome struct {
 	DisabledBy []string
 }
 
-// integrateAgentRules ensures agent rules files reference the Kander entry after an install.
-// A project install always covers CLAUDE.md and AGENTS.md at the project root; a global install
-// only touches agents whose configuration directory already exists, so absent tools gain no files.
-func integrateAgentRules(paths config.InstallPaths) []AgentIntegration {
+// AgentIntegration records ensuring one project rules file references the Kander entry.
+type AgentIntegration struct {
+	IntegrationOutcome
+	Err error
+}
+
+// EnsureProjectReferences writes the project reference into the project rules file of every
+// covered agent, once per file. The switches decide the files, as DisabledReaders describes.
+func EnsureProjectReferences(project ProjectRules, switches config.InstallRules) []AgentIntegration {
 	var out []AgentIntegration
 	seen := map[string]struct{}{}
-	for _, agent := range IntegrationAgents(paths) {
-		target, err := AgentRulesTarget(agent, paths)
-		if err != nil {
-			out = append(out, AgentIntegration{IntegrationOutcome: IntegrationOutcome{Agent: agent}, Err: err})
+	for _, agent := range ProjectReferenceAgents() {
+		target := ProjectRulesTarget(agent, project.Root)
+		key := rulesFileKey(target)
+		if _, ok := seen[key]; ok {
 			continue
 		}
-		if target == "" {
-			continue
-		}
-		if _, ok := seen[target]; ok {
-			continue
-		}
-		seen[target] = struct{}{}
-		outcome, err := EnsureRulesIntegration(agent, paths)
+		seen[key] = struct{}{}
+		outcome, err := EnsureProjectReference(agent, project, switches)
 		out = append(out, AgentIntegration{IntegrationOutcome: outcome, Err: err})
 	}
 	return out
 }
 
-// IntegrationAgents lists the agents whose rules files the scope covers: a project install
-// covers every embedded agent with a project rules target, while a global install covers only
-// agents whose configuration directory already exists. Doctor reuses this set so its coverage
-// cannot drift from the install-time semantics. An agent whose target cannot be resolved is
-// kept, so the caller's per-agent integration step reports the resolution error.
-func IntegrationAgents(paths config.InstallPaths) []string {
+// ProjectReferenceAgents lists the embedded agents that declare a project rules file. The
+// agents whose style imports another file come first, so a file such as CLAUDE.md that may
+// import AGENTS.md is settled before the files it imports.
+func ProjectReferenceAgents() []string {
 	var importFirst, rest []string
 	for _, agent := range config.ExecutionAgents {
-		target, err := AgentRulesTarget(agent, paths)
-		if err != nil {
-			rest = append(rest, agent)
+		spec, ok := config.RulesSpec(agent)
+		if !ok || strings.TrimSpace(spec.Project) == "" {
 			continue
 		}
-		if target == "" {
-			continue
-		}
-		if paths.Mode == config.ModeProject {
-			if referenceStyleFor(agent).ProjectWriteFirst() {
-				importFirst = append(importFirst, agent)
-			} else {
-				rest = append(rest, agent)
-			}
-			continue
-		}
-		// Coverage follows the agent's config directory, not the target's parent: a
-		// target in a subdirectory (cursor's rules/) is created on first install.
-		root, _, err := agentConfigRoot(agent, paths)
-		if err != nil {
-			rest = append(rest, agent)
-			continue
-		}
-		if info, err := os.Stat(root); err == nil && info.IsDir() {
+		if referenceStyleFor(agent).ProjectWriteFirst() {
+			importFirst = append(importFirst, agent)
+		} else {
 			rest = append(rest, agent)
 		}
 	}
-	if paths.Mode == config.ModeProject {
-		return append(importFirst, rest...)
-	}
-	return rest
+	return append(importFirst, rest...)
 }
 
-// RulesEntry returns the Kander rules entry file of the given scope.
+// RulesEntry returns the Kander rules entry file of the install.
 func RulesEntry(paths config.InstallPaths) string {
 	return filepath.Join(paths.RulesDir, "KANDER-AGENTS.md")
 }
 
-// AgentRulesTarget returns the rules file one agent reads in the given scope. A global target
-// follows the agent's resolved config directory (see agentConfigRoot).
-func AgentRulesTarget(agent string, paths config.InstallPaths) (string, error) {
+// ProjectRulesTarget returns the project rules file one agent reads below the main worktree
+// root, or "" when the agent declares none.
+func ProjectRulesTarget(agent, root string) string {
 	spec, ok := config.RulesSpec(agent)
-	if !ok {
-		return "", nil
+	if !ok || strings.TrimSpace(spec.Project) == "" || root == "" {
+		return ""
 	}
-	rel := spec.Global
-	if paths.Mode == config.ModeProject {
-		rel = spec.Project
-	}
-	if strings.TrimSpace(rel) == "" {
-		return "", nil
-	}
-	if paths.Mode == config.ModeProject {
-		if paths.ProjectRoot == "" {
-			return "", nil
-		}
-		return filepath.Join(paths.ProjectRoot, filepath.FromSlash(rel)), nil
-	}
-	return globalAgentTarget(agent, rel, paths)
+	return filepath.Join(root, filepath.FromSlash(spec.Project))
 }
 
-// RulesIntegration reports whether the agent rules file of the given scope references the Kander entry.
-// When an AGENTS.override.md sibling exists next to an AGENTS.md target, both files must
-// reference the entry: the agent reads the override instead of the main file, so a missing
-// reference there reports the override path as the explanation. The second value is the
-// integrated path, or a localized explanation when not.
-func RulesIntegration(agent string, paths config.InstallPaths) (bool, string) {
-	if paths.Mode == config.ModeProject && paths.ProjectRoot == "" {
-		return false, config.Text("config.project_install_paths_are_missing_the_main_worktree")
+// ProjectRulesRelative returns the project rules file of one agent relative to the main
+// worktree, with forward slashes, or "" when the agent declares none.
+func ProjectRulesRelative(agent string) string {
+	spec, ok := config.RulesSpec(agent)
+	if !ok {
+		return ""
 	}
-	entry := RulesEntry(paths)
-	target, err := AgentRulesTarget(agent, paths)
-	if err != nil {
-		return false, err.Error()
+	return strings.TrimSpace(spec.Project)
+}
+
+// GlobalRulesTarget returns the global rules file of one agent, below its resolved
+// configuration directory (see agentConfigRoot). Kander only reads it, to remove what earlier
+// releases wrote there.
+func GlobalRulesTarget(agent string, paths config.InstallPaths) (string, error) {
+	spec, ok := config.RulesSpec(agent)
+	if !ok || strings.TrimSpace(spec.Global) == "" {
+		return "", nil
 	}
-	integrated, detail := rulesFileIntegration(agent, target, entry, paths)
+	return globalAgentTarget(agent, spec.Global, paths)
+}
+
+// ProjectReferenceStatus reports whether the agent's project rules file references the Kander
+// entry where the agent loads it. When an AGENTS.override.md sibling exists next to an
+// AGENTS.md target, both files must reference the entry: the agent reads the override
+// instead of the main file. The second value is the file, or a localized explanation.
+func ProjectReferenceStatus(agent string, project ProjectRules) (bool, string) {
+	target := ProjectRulesTarget(agent, project.Root)
+	if target == "" {
+		return false, config.Text("menu.not_found", agent)
+	}
+	integrated, detail := rulesFileIntegration(agent, target, project)
 	if !integrated {
 		return false, detail
 	}
 	if override := rulesOverrideTarget(target); override != "" {
-		return rulesFileIntegration(agent, override, entry, paths)
+		return rulesFileIntegration(agent, override, project)
 	}
 	return true, target
 }
 
-// rulesFileIntegration reports whether one rules file references the Kander entry, applying
-// the same checks RulesIntegration used for the configured target to any sibling file.
-func rulesFileIntegration(agent, target, entry string, paths config.InstallPaths) (bool, string) {
+// rulesFileIntegration reports whether one project rules file references the Kander entry.
+func rulesFileIntegration(agent, target string, project ProjectRules) (bool, string) {
+	entry := RulesEntry(project.Paths)
 	info, err := os.Lstat(target)
 	if err != nil {
 		return false, config.Text("menu.not_found", target)
@@ -187,24 +191,21 @@ func rulesFileIntegration(agent, target, entry string, paths config.InstallPaths
 		return false, config.Text(key, target)
 	}
 	style := referenceStyleFor(agent)
+	resolved := target
 	if info.Mode()&os.ModeSymlink != 0 {
 		linked, err := filepath.EvalSymlinks(target)
-		if err == nil {
-			expected, expErr := filepath.EvalSymlinks(entry)
-			if expErr != nil {
-				expected = entry
-			}
-			if linked == expected {
-				return true, target
-			}
-			if paths.Mode == config.ModeProject && !style.ProjectSymlinkMayDiffer() {
-				return false, config.Text(
-					"menu.does_not_point_to_the_project_rules_entry", target, entry,
-				)
-			}
+		if err != nil {
+			return false, config.Text("menu.cannot_read", target)
 		}
+		if !withinDirectory(project.Root, linked) {
+			return false, config.Text("install.rules_target_symlink_escapes_project", target)
+		}
+		if !style.ProjectSymlinkMayDiffer() {
+			return false, config.Text("menu.does_not_point_to_the_project_rules_entry", target, entry)
+		}
+		resolved = linked
 	}
-	text, err := os.ReadFile(target)
+	text, err := os.ReadFile(resolved)
 	if err != nil {
 		return false, config.Text("menu.cannot_read", target)
 	}
@@ -214,50 +215,33 @@ func rulesFileIntegration(agent, target, entry string, paths config.InstallPaths
 	if style.Present(string(text), entry, filepath.Dir(target)) {
 		return true, target
 	}
-	return false, config.Text(
-		"menu.does_not_import_or_include_kander_agents_md", target,
-	)
+	return false, config.Text("menu.does_not_import_or_include_kander_agents_md", target)
 }
 
-// EnsureRulesIntegration makes the agent rules file reference the Kander entry: it creates the file
-// when missing, appends the reference when absent, rewrites references to the previous rules
-// location, and removes invalid or duplicate load commands; a file whose references are already
-// clean is left untouched.
-// When an AGENTS.override.md sibling already exists next to an AGENTS.md target, the same pipeline
-// runs on it too and its result is reported through the outcome's Override field; the override
-// expresses the user's choice to shadow the main file, so it is only ever edited, never created.
-// The write gate is strictReferencePresent, not RulesIntegration: appending must never repeat, so any
-// literal mention of the entry blocks it, even one RulesIntegration would report as inactive.
-func EnsureRulesIntegration(agent string, paths config.InstallPaths) (IntegrationOutcome, error) {
-	switches, err := config.ScopeInstallRules(paths)
-	if err != nil {
-		return IntegrationOutcome{Agent: agent}, err
-	}
-	return EnsureRulesIntegrationWith(agent, paths, switches)
-}
-
-// EnsureRulesIntegrationWith is EnsureRulesIntegration under explicit switches, for a caller
-// whose new switch values are not saved yet (the options save writes them afterwards). A file
-// that an agent with its switch off reads is neither read nor written.
-func EnsureRulesIntegrationWith(agent string, paths config.InstallPaths, switches config.InstallRules) (IntegrationOutcome, error) {
+// EnsureProjectReference makes the agent's project rules file reference the Kander entry: it
+// creates the file when missing, appends the reference when absent, and removes invalid or
+// duplicate load commands, such as one naming the retired .kander/rules/KANDER-AGENTS.md of a
+// project install; a file whose references are already clean is left untouched. A file that
+// an agent with its switch off reads is neither read nor written.
+// When an AGENTS.override.md sibling already exists next to an AGENTS.md target, the same
+// pipeline runs on it too and its result is reported through the outcome's Override field; the
+// override expresses the user's choice to shadow the main file, so it is only ever edited,
+// never created.
+// The write gate is strictReferencePresent, not ProjectReferenceStatus: appending must never
+// repeat, so any literal mention of the entry blocks it, even an inactive one.
+func EnsureProjectReference(agent string, project ProjectRules, switches config.InstallRules) (IntegrationOutcome, error) {
 	outcome := IntegrationOutcome{Agent: agent}
-	if paths.Mode == config.ModeProject && paths.ProjectRoot == "" {
-		return outcome, fmt.Errorf("%s", config.Text("config.project_install_paths_are_missing_the_main_worktree"))
-	}
-	target, err := AgentRulesTarget(agent, paths)
-	if err != nil {
-		return outcome, err
-	}
+	target := ProjectRulesTarget(agent, project.Root)
 	if target == "" {
-		return outcome, fmt.Errorf("%s", config.Text("config.cannot_resolve_home_directory"))
+		return outcome, fmt.Errorf("%s", config.Text("menu.not_found", agent))
 	}
 	outcome.Target = target
-	if disabled := DisabledReaders(target, paths, switches); len(disabled) > 0 {
+	if disabled := DisabledReaders(target, project.Root, switches); len(disabled) > 0 {
 		outcome.Status = IntegrationDisabled
 		outcome.DisabledBy = disabled
 		return outcome, nil
 	}
-	main, err := ensureTargetIntegration(agent, target, true, paths)
+	main, err := ensureTargetIntegration(agent, target, true, project)
 	outcome.Status = main.Status
 	outcome.Removed = main.Removed
 	outcome.Inactive = main.Inactive
@@ -265,7 +249,7 @@ func EnsureRulesIntegrationWith(agent string, paths config.InstallPaths, switche
 		return outcome, err
 	}
 	if override := rulesOverrideTarget(target); override != "" {
-		secondary, err := ensureTargetIntegration(agent, override, false, paths)
+		secondary, err := ensureTargetIntegration(agent, override, false, project)
 		outcome.Override = &secondary
 		if err != nil {
 			return outcome, err
@@ -289,26 +273,18 @@ func rulesOverrideTarget(target string) string {
 
 // ensureTargetIntegration runs the reference pipeline on one rules file. The configured target
 // may be created when missing (create=true); an override sibling (create=false) is only edited.
-func ensureTargetIntegration(agent, target string, create bool, paths config.InstallPaths) (IntegrationOutcome, error) {
-	legacy := legacyRulesEntry(paths)
-	edit, err := planTargetIntegration(agent, target, create, paths, legacy != "" && !legacyEntryExists(legacy))
+// The write is atomic and anchored at the main worktree, so no component below it is followed
+// through a symlink.
+func ensureTargetIntegration(agent, target string, create bool, project ProjectRules) (IntegrationOutcome, error) {
+	edit, err := planTargetIntegration(agent, target, create, project)
 	if err != nil || edit.path == "" {
 		return edit.outcome, err
 	}
-	if edit.created {
-		if err := os.MkdirAll(filepath.Dir(edit.path), 0o755); err != nil {
-			return edit.outcome, err
-		}
-	}
-	anchor, err := fileAnchor(edit.path)
-	if err != nil {
-		return edit.outcome, err
-	}
-	if err := fs.WriteBytesAtomicInherited(anchor, edit.path, edit.content, !edit.created); err != nil {
+	if err := fs.WriteBytesAtomicInherited(project.Root, edit.path, edit.content, !edit.created); err != nil {
 		return edit.outcome, err
 	}
 	if !edit.appended && edit.outcome.Status != IntegrationCreated {
-		edit.outcome.Inactive = !referenceActive(agent, target, paths)
+		edit.outcome.Inactive = !referenceActive(agent, target, project)
 	}
 	return edit.outcome, nil
 }
@@ -324,20 +300,20 @@ type targetEdit struct {
 }
 
 // planTargetIntegration computes the reference pipeline's result for one rules file without
-// writing, so the install wizard can show the change before anything is written. legacyRetired
-// says whether the previous rules entry is gone, which decides the legacy rewrite.
-func planTargetIntegration(agent, target string, create bool, paths config.InstallPaths, legacyRetired bool) (targetEdit, error) {
+// writing. A rules file that is a symlink is edited at its target, which must stay inside the
+// main worktree: a cloned repository controls its own CLAUDE.md and AGENTS.md and must never
+// aim the write at a file outside the project, such as the user's dotfiles.
+func planTargetIntegration(agent, target string, create bool, project ProjectRules) (targetEdit, error) {
 	edit := targetEdit{outcome: IntegrationOutcome{Agent: agent, Target: target}}
-	block := referenceBlock(agent, paths)
+	block := referenceBlock(agent)
 	format := fileFormatFor(target)
 	info, err := os.Lstat(target)
 	if os.IsNotExist(err) {
 		if !create {
 			return edit, err
 		}
-		block = format.Prefix() + block
 		edit.path = target
-		edit.content = []byte(block)
+		edit.content = []byte(format.Prefix() + block)
 		edit.created = true
 		edit.appended = true
 		edit.outcome.Status = IntegrationCreated
@@ -354,24 +330,19 @@ func planTargetIntegration(agent, target string, create bool, paths config.Insta
 		if resolved, err = filepath.EvalSymlinks(target); err != nil {
 			return edit, err
 		}
-		// A cloned repository controls its own CLAUDE.md/AGENTS.md; never let one aim a
-		// project install's append at a file outside the project (e.g. the user's dotfiles).
-		if paths.Mode == config.ModeProject && !withinDirectory(paths.ProjectRoot, resolved) {
-			return edit, fmt.Errorf("%s", config.Text("install.rules_target_symlink_escapes_project", target))
-		}
+	}
+	if !withinDirectory(project.Root, resolved) {
+		return edit, fmt.Errorf("%s", config.Text("install.rules_target_symlink_escapes_project", target))
 	}
 	if info, err := os.Stat(resolved); err != nil {
 		return edit, err
-	} else if info.IsDir() {
+	} else if !info.Mode().IsRegular() {
 		return edit, fmt.Errorf("%s", config.Text("menu.cannot_read", target))
 	}
 	existing, err := os.ReadFile(resolved)
 	if err != nil {
 		return edit, err
 	}
-	// A reference to the previous rules location is rewritten first, even when the current
-	// reference is already present: a repair that ran before the migration may have appended
-	// the current one next to the stale one, and the stale one must not survive.
 	text := string(existing)
 	needFrontmatter := false
 	switch state, problem := format.Inspect(text); state {
@@ -380,39 +351,30 @@ func planTargetIntegration(agent, target string, create bool, paths config.Insta
 	case formatMissingPrefix:
 		needFrontmatter = true
 	}
-	legacyChanged := false
-	if rewritten, changed := rewriteLegacyReferenceIf(text, paths, filepath.Dir(target), legacyRetired); changed {
-		text = rewritten
-		legacyChanged = true
-	}
-	// Dead and duplicate load commands are dropped next, so a stale third-party reference or a
-	// repeated import can neither satisfy the strict gate nor survive the repair.
-	cleaned, removed := CleanRulesReferences(text, paths, filepath.Dir(target))
-	if !needFrontmatter && !legacyChanged && cleaned == text && strictReferencePresent(text, RulesEntry(paths), filepath.Dir(target)) {
+	entry := RulesEntry(project.Paths)
+	// Dead and duplicate load commands are dropped first, so a reference to the retired
+	// project install entry or a repeated import can neither satisfy the strict gate nor
+	// survive the write.
+	cleaned, removed := CleanRulesReferences(text, entry, filepath.Dir(target))
+	if !needFrontmatter && removed == 0 && strictReferencePresent(text, entry, filepath.Dir(target)) {
 		edit.outcome.Status = IntegrationPresent
-		edit.outcome.Inactive = !referenceActive(agent, target, paths)
+		edit.outcome.Inactive = !referenceActive(agent, target, project)
 		return edit, nil
 	}
 	final := cleaned
-	if !strictReferencePresent(cleaned, RulesEntry(paths), filepath.Dir(target)) {
-		separator := "\n"
-		if len(cleaned) == 0 || strings.HasSuffix(cleaned, "\n\n") {
-			separator = ""
-		} else if strings.HasSuffix(cleaned, "\n") {
-			separator = "\n"
-		} else {
-			separator = "\n\n"
+	if !strictReferencePresent(cleaned, entry, filepath.Dir(target)) {
+		// One blank line separates the block from the content above, however many the
+		// removed load commands left behind.
+		final = block
+		if base := strings.TrimRight(cleaned, "\n"); base != "" {
+			final = base + "\n\n" + block
 		}
-		final = cleaned + separator + block
 		edit.appended = true
 	}
 	if needFrontmatter {
 		final = format.Prefix() + final
 	}
 	edit.path = resolved
-	if real, err := filepath.EvalSymlinks(resolved); err == nil {
-		edit.path = real
-	}
 	edit.content = []byte(final)
 	edit.outcome.Removed = removed
 	switch {
@@ -420,8 +382,6 @@ func planTargetIntegration(agent, target string, create bool, paths config.Insta
 		edit.outcome.Status = IntegrationUpdated
 	case needFrontmatter:
 		edit.outcome.Status = IntegrationFrontmatterAdded
-	case legacyChanged:
-		edit.outcome.Status = IntegrationRewritten
 	default:
 		edit.outcome.Status = IntegrationCleaned
 	}
@@ -429,32 +389,14 @@ func planTargetIntegration(agent, target string, create bool, paths config.Insta
 }
 
 // referenceActive reports whether the rules file references the entry where the agent loads
-// it, applying the comment-, fence- and negation-aware check RulesIntegration uses.
-func referenceActive(agent, target string, paths config.InstallPaths) bool {
-	active, _ := rulesFileIntegration(agent, target, RulesEntry(paths), paths)
+// it, applying the comment-, fence- and negation-aware check ProjectReferenceStatus uses.
+func referenceActive(agent, target string, project ProjectRules) bool {
+	active, _ := rulesFileIntegration(agent, target, project)
 	return active
 }
 
-// entrySpelling is the portable spelling of the rules entry written into agent rules files:
-// project scope uses a path relative to the project root, global scope prefers a ~/ path,
-// and both use forward slashes on every platform.
-func entrySpelling(paths config.InstallPaths) string {
-	entry := RulesEntry(paths)
-	if paths.Mode == config.ModeProject && paths.ProjectRoot != "" {
-		if rel, err := filepath.Rel(paths.ProjectRoot, entry); err == nil && !strings.HasPrefix(rel, "..") {
-			return filepath.ToSlash(rel)
-		}
-	}
-	if home, err := os.UserHomeDir(); err == nil {
-		if rel, err := filepath.Rel(home, entry); err == nil && !strings.HasPrefix(rel, "..") {
-			return "~/" + filepath.ToSlash(rel)
-		}
-	}
-	return filepath.ToSlash(entry)
-}
-
-func referenceBlock(agent string, paths config.InstallPaths) string {
-	return referenceStyleFor(agent).Block(entrySpelling(paths))
+func referenceBlock(agent string) string {
+	return referenceStyleFor(agent).Block(ProjectEntrySpelling)
 }
 
 func stripCommentsAndFences(text string) string {

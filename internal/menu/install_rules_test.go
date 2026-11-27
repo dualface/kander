@@ -10,6 +10,16 @@ import (
 	"github.com/dualface/kander/v2/internal/install/installtest"
 )
 
+func writeRulesFile(t *testing.T, path, contents string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func hasWarning(lines []ReportLine) bool {
 	for _, line := range lines {
 		if line.Level == LevelWarning {
@@ -27,7 +37,7 @@ func setupSwitchHome(t *testing.T) (string, config.InstallPaths) {
 	t.Setenv("USERPROFILE", home)
 	installtest.IsolateAgentConfigEnv(t)
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
-	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander")}
+	paths := config.InstallPaths{RulesDir: filepath.Join(home, ".agents", "kander")}
 	writeRulesFile(t, filepath.Join(paths.RulesDir, "KANDER-AGENTS.md"), "# Kander entry\n")
 	for _, dir := range []string{".codex", ".pi/agent"} {
 		if err := os.MkdirAll(filepath.Join(home, filepath.FromSlash(dir)), 0o755); err != nil {
@@ -55,13 +65,13 @@ func TestDoctorReportsSwitchOffWithoutWriting(t *testing.T) {
 	for _, repair := range []bool{true, false} {
 		var healthy bool
 		lines := CaptureReport(func() {
-			healthy = reportRulesIntegration(paths, switches, repair) && reportAgentExtensions(paths, switches, repair)
+			healthy = reportAgentExtensions(paths, switches, repair)
 		})
 		text := reportText(lines)
 		if !healthy {
 			t.Fatalf("repair=%v: turned-off agents made doctor unhealthy:\n%s", repair, text)
 		}
-		disabled := config.Text("menu.rules_injection_disabled", "Codex", filepath.Join(home, ".codex", "AGENTS.md"))
+		disabled := config.Text("menu.rules_injection_disabled", "Pi", filepath.Join(home, ".pi", "agent", "extensions", "kander-rules.ts"))
 		if !strings.Contains(text, disabled) {
 			t.Fatalf("repair=%v: missing turned-off line:\n%s", repair, text)
 		}
@@ -76,24 +86,6 @@ func TestDoctorReportsSwitchOffWithoutWriting(t *testing.T) {
 	}
 	if _, err := os.Lstat(filepath.Join(home, ".pi", "agent", "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("pi rules file written: %v", err)
-	}
-}
-
-func TestDoctorReportsCommentedReferenceInactive(t *testing.T) {
-	home, paths := setupSwitchHome(t)
-	target := filepath.Join(home, ".codex", "AGENTS.md")
-	writeRulesFile(t, target, "# Mine\n\n<!-- read `"+filepath.Join(paths.RulesDir, "KANDER-AGENTS.md")+"` -->\n")
-	var healthy bool
-	lines := CaptureReport(func() { healthy = reportRulesIntegration(paths, config.InstallRulesOf(nil), true) })
-	text := reportText(lines)
-	if healthy {
-		t.Fatalf("inactive reference reported healthy:\n%s", text)
-	}
-	if !strings.Contains(text, config.Text("menu.rules_reference_inactive", "Codex", target)) {
-		t.Fatalf("missing inactive line:\n%s", text)
-	}
-	if strings.Contains(text, config.Text("menu.is_connected_to_kander_rules", "Codex", target)) {
-		t.Fatalf("inactive reference reported connected:\n%s", text)
 	}
 }
 

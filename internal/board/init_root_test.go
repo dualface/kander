@@ -20,7 +20,7 @@ func TestPlannedInitRootMatchesInitBoard(t *testing.T) {
 		t.Fatal(err)
 	}
 	installPathsFn = func() (config.InstallPaths, error) {
-		return config.InstallPaths{Mode: config.ModeGlobal, RulesDir: rulesDir}, nil
+		return config.InstallPaths{RulesDir: rulesDir}, nil
 	}
 	t.Cleanup(func() { installPathsFn = config.CurrentInstallPaths })
 

@@ -12,10 +12,14 @@ type markdownReference struct{}
 
 func (markdownReference) Name() string { return "markdown-reference" }
 
+// Block is committed to the repository, so a reader without Kander installed is told to skip
+// it. The clause shares the line of the entry path: the cleaner drops a stale block line by
+// line, and a separate line would outlive the path it explains. Its wording avoids the words
+// the negation check treats as disabling the reference.
 func (markdownReference) Block(spelling string) string {
 	return rulesReferenceBlockHeading + "\n\n" +
 		"At the start of every session, read `" + spelling +
-		"` and follow it as the Kander workflow rules entry.\n"
+		"` and follow it as the Kander workflow rules entry; when that file does not exist, skip this section.\n"
 }
 
 func (markdownReference) Present(text, entry, baseDir string) bool {

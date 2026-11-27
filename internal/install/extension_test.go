@@ -11,7 +11,7 @@ import (
 
 func globalExtensionPaths(t *testing.T, home string) config.InstallPaths {
 	t.Helper()
-	return config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander")}
+	return config.InstallPaths{RulesDir: filepath.Join(home, ".agents", "kander")}
 }
 
 func piExtensionTarget(t *testing.T, base string, project bool) string {
@@ -35,20 +35,6 @@ func TestExtensionAgentsCoversOnlyExistingPiConfigDir(t *testing.T) {
 	}
 	if err := os.MkdirAll(filepath.Join(home, ".pi", "agent"), 0o755); err != nil {
 		t.Fatal(err)
-	}
-	got := ExtensionAgents(paths)
-	if len(got) != 1 || got[0] != "pi" {
-		t.Fatalf("coverage=%v", got)
-	}
-}
-
-func TestExtensionAgentsCoversEveryDeclaringAgentOnProject(t *testing.T) {
-	setupInstallHome(t)
-	project := t.TempDir()
-	paths := config.InstallPaths{
-		Mode:        config.ModeProject,
-		ProjectRoot: project,
-		RulesDir:    filepath.Join(project, ".kander", "rules"),
 	}
 	got := ExtensionAgents(paths)
 	if len(got) != 1 || got[0] != "pi" {
@@ -86,27 +72,6 @@ func TestEnsureExtensionGlobalWritesOnlyWhenPiDirExists(t *testing.T) {
 	again, err := EnsureExtension("pi", paths)
 	if err != nil || again.Status != ExtensionInstalled {
 		t.Fatalf("second run: %+v %v", again, err)
-	}
-}
-
-func TestEnsureExtensionProjectWritesUnderMainWorktree(t *testing.T) {
-	setupInstallHome(t)
-	project := t.TempDir()
-	paths := config.InstallPaths{
-		Mode:        config.ModeProject,
-		ProjectRoot: project,
-		RulesDir:    filepath.Join(project, ".kander", "rules"),
-	}
-	target := piExtensionTarget(t, project, true)
-	outcome, err := EnsureExtension("pi", paths)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if outcome.Status != ExtensionWritten || outcome.Target != target {
-		t.Fatalf("outcome=%+v", outcome)
-	}
-	if _, err := os.Lstat(target); err != nil {
-		t.Fatalf("extension missing: %v", err)
 	}
 }
 

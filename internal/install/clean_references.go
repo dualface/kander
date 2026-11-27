@@ -5,37 +5,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-
-	"github.com/dualface/kander/v2/internal/config"
 )
 
 // rulesEntryTokenRE extracts a path token ending in KANDER-AGENTS.md. The character class is
 // the same set isPathChar accepts, so a token never swallows surrounding prose.
 var rulesEntryTokenRE = regexp.MustCompile(`[A-Za-z0-9._\-/\\~:]*KANDER-AGENTS\.md`)
-
-// RulesReferenceIssues counts the load commands InspectRulesReferences found that the repair
-// pipeline would drop, aggregated over every rules file the agent's target covers.
-type RulesReferenceIssues struct {
-	// Invalid counts load commands whose path does not resolve to the current rules entry.
-	Invalid int
-	// Duplicates counts load commands dropped because an earlier valid one stays.
-	Duplicates int
-	// Files holds the per-file counts in processing order: the configured target first,
-	// then the existing AGENTS.override.md sibling when one applies.
-	Files []FileReferenceIssues
-}
-
-// FileReferenceIssues counts the load commands the repair pipeline would drop from one file.
-type FileReferenceIssues struct {
-	Target     string
-	Invalid    int
-	Duplicates int
-}
-
-// Total returns the number of load commands the repair pipeline would drop.
-func (i RulesReferenceIssues) Total() int {
-	return i.Invalid + i.Duplicates
-}
 
 // refClass is the classification of one load-command line.
 type refClass int
@@ -47,90 +21,18 @@ const (
 	refDuplicate
 	// refValid keeps the line and claims the single valid slot.
 	refValid
-	// refLegacy keeps the line untouched: it names the previous rules root, which the
-	// rewrite pass owns; it never counts as invalid and never claims the valid slot.
-	refLegacy
 )
 
-// InspectRulesReferences simulates the repair pipeline on every rules file the agent's target
-// covers — the configured target plus an existing AGENTS.override.md sibling — running the
-// legacy rewrite followed by the reference cleanup on each and counting what it would drop,
-// without writing. A missing or unreadable file reports an error and zero issues.
-func InspectRulesReferences(agent string, paths config.InstallPaths) (RulesReferenceIssues, error) {
-	var issues RulesReferenceIssues
-	target, err := AgentRulesTarget(agent, paths)
-	if err != nil || target == "" {
-		return issues, err
-	}
-	targets := []string{target}
-	if override := rulesOverrideTarget(target); override != "" {
-		targets = append(targets, override)
-	}
-	for _, file := range targets {
-		count, err := inspectRulesReferences(file, paths)
-		if err != nil {
-			return RulesReferenceIssues{}, err
-		}
-		issues.Invalid += count.Invalid
-		issues.Duplicates += count.Duplicates
-		issues.Files = append(issues.Files, count)
-	}
-	return issues, nil
-}
-
-// inspectRulesReferences runs the simulated repair pipeline on one rules file and counts the
-// load commands it would drop.
-func inspectRulesReferences(target string, paths config.InstallPaths) (FileReferenceIssues, error) {
-	issues := FileReferenceIssues{Target: target}
-	resolved := target
-	info, err := os.Lstat(target)
-	if err == nil && info.Mode()&os.ModeSymlink != 0 && fileFormatFor(target).SymlinkRefusal() != "" {
-		// A symlinked cursor rule is never read or repaired; the integration check reports it.
-		return issues, nil
-	}
-	if err == nil && info.Mode()&os.ModeSymlink != 0 {
-		if real, err := filepath.EvalSymlinks(target); err == nil {
-			resolved = real
-		}
-	}
-	data, err := os.ReadFile(resolved)
-	if err != nil {
-		return issues, err
-	}
-	baseDir := filepath.Dir(target)
-	text := string(data)
-	if rewritten, changed := rewriteLegacyReference(text, paths, baseDir); changed {
-		text = rewritten
-	}
-	var found RulesReferenceIssues
-	_, found = cleanRulesReferences(text, paths, baseDir)
-	issues.Invalid = found.Invalid
-	issues.Duplicates = found.Duplicates
-	return issues, nil
-}
-
 // CleanRulesReferences removes invalid and duplicate Kander rules load commands from text and
-// returns the result with the number of dropped lines. Load commands are only the forms Kander
-// writes or equivalents: a whole-line `@<path>` claude-import, a `## Kander Rules Entry`
-// block, and a whole-line bare path, each naming a KANDER-AGENTS.md path. Lines inside HTML
-// comments and code fences, and prose mentioning the path among other words, are never
-// touched. Callers that want legacy references rewritten must run rewriteLegacyReference
-// first; references to the previous rules root are otherwise preserved.
-func CleanRulesReferences(text string, paths config.InstallPaths, baseDir string) (string, int) {
-	cleaned, issues := cleanRulesReferences(text, paths, baseDir)
-	return cleaned, issues.Total()
-}
-
-// cleanRulesReferences is the shared line-level cleaner behind CleanRulesReferences and
-// InspectRulesReferences.
-func cleanRulesReferences(text string, paths config.InstallPaths, baseDir string) (string, RulesReferenceIssues) {
-	var issues RulesReferenceIssues
-	entry := RulesEntry(paths)
+// returns the result with the number of dropped lines. A load command is invalid when its path
+// does not resolve to entry, such as the retired .kander/rules/KANDER-AGENTS.md of a project
+// install. Load commands are only the forms Kander writes or equivalents: a whole-line
+// `@<path>` claude-import, a `## Kander Rules Entry` block, and a whole-line bare path, each
+// naming a KANDER-AGENTS.md path. Lines inside HTML comments and code fences, and prose
+// mentioning the path among other words, are never touched.
+func CleanRulesReferences(text, entry, baseDir string) (string, int) {
+	removed := 0
 	spellings := entrySpellings(entry, baseDir)
-	var legacySpellings map[string]struct{}
-	if legacy := legacyRulesEntry(paths); legacy != "" {
-		legacySpellings = legacyEntrySpellings(legacy, baseDir)
-	}
 	lines := strings.Split(text, "\n")
 	live := liveLines(text)
 	drop := make([]bool, len(lines))
@@ -143,22 +45,12 @@ func cleanRulesReferences(text string, paths config.InstallPaths, baseDir string
 			validKept = true
 			return refValid
 		}
-		if _, ok := legacySpellings[token]; ok {
-			return refLegacy
-		}
-		if _, ok := legacySpellings[filepath.ToSlash(token)]; ok {
-			return refLegacy
-		}
 		return refInvalid
 	}
 	apply := func(i int, class refClass) {
-		switch class {
-		case refInvalid:
+		if class != refValid {
 			drop[i] = true
-			issues.Invalid++
-		case refDuplicate:
-			drop[i] = true
-			issues.Duplicates++
+			removed++
 		}
 	}
 	for i := 0; i < len(lines); i++ {
@@ -181,7 +73,7 @@ func cleanRulesReferences(text string, paths config.InstallPaths, baseDir string
 				tokenLines++
 				class := classify(token)
 				apply(j, class)
-				if class == refValid || class == refLegacy {
+				if class == refValid {
 					kept++
 				}
 			}
@@ -199,8 +91,8 @@ func cleanRulesReferences(text string, paths config.InstallPaths, baseDir string
 		}
 		apply(i, classify(token))
 	}
-	if issues.Total() == 0 {
-		return text, issues
+	if removed == 0 {
+		return text, 0
 	}
 	var out strings.Builder
 	for i, line := range lines {
@@ -212,7 +104,7 @@ func cleanRulesReferences(text string, paths config.InstallPaths, baseDir string
 			out.WriteByte('\n')
 		}
 	}
-	return out.String(), issues
+	return out.String(), removed
 }
 
 // firstEntryToken extracts the first KANDER-AGENTS.md path token from a line's live text;

@@ -15,7 +15,7 @@ func TestReportLeaderSkillsRepairsMissing(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	installtest.IsolateAgentConfigEnv(t)
-	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander")}
+	paths := config.InstallPaths{RulesDir: filepath.Join(home, ".agents", "kander")}
 	entry := filepath.Join(home, ".agents", "skills", "kander-leader", "SKILL.md")
 
 	if reportLeaderSkills(paths, allInstallRules, false) {

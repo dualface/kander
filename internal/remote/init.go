@@ -76,13 +76,16 @@ func runInit(args []string, url string, urlGiven bool, name string, nameGiven bo
 		}
 	}
 	if command.JSON() {
+		rules := writeProjectReferences(dir)
+		rules.report()
 		initPolicyStep(ctx, session, cfg)
-		return command.Exit(command.Result(bindResult{ProjectName: session.Info.Name, ProjectID: session.Info.ID, ServerURL: session.ServerURL, BoardPath: session.Info.BoardPath}))
+		return command.Exit(command.Result(bindResult{ProjectName: session.Info.Name, ProjectID: session.Info.ID, ServerURL: session.ServerURL, BoardPath: session.Info.BoardPath, RulesFiles: rules.Written}))
 	}
 	fmt.Fprintln(stdout, config.Text("remote.project_bound", session.Info.Name, session.Info.ID, session.ServerURL))
 	if session.Info.BoardPath != "" {
 		fmt.Fprintln(stdout, config.Text("remote.project_board_path", session.Info.BoardPath))
 	}
+	writeProjectReferences(dir).report()
 	initPolicyStep(ctx, session, cfg)
 	return nil
 }

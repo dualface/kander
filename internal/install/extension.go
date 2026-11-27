@@ -51,45 +51,29 @@ func ExtensionTarget(agent string, paths config.InstallPaths) (string, error) {
 	return extensionTarget(agent, paths)
 }
 
-// extensionTarget resolves the scope's install target of one agent's rules
-// extension. Global targets follow the agent's resolved config directory;
-// project targets remain relative to the main worktree.
+// extensionTarget resolves the install target of one agent's rules extension, which follows
+// the agent's resolved config directory.
 func extensionTarget(agent string, paths config.InstallPaths) (string, error) {
 	spec, _, ok := config.AgentExtension(agent)
 	if !ok {
 		return "", nil
 	}
 	rel := spec.Global
-	if paths.Mode == config.ModeProject {
-		rel = spec.Project
-		if paths.ProjectRoot == "" {
-			return "", nil
-		}
-		return filepath.Join(paths.ProjectRoot, filepath.FromSlash(rel)), nil
-	}
 	if strings.TrimSpace(rel) == "" {
 		return "", nil
 	}
 	return globalAgentTarget(agent, rel, paths)
 }
 
-// ExtensionAgents lists the agents whose extension the scope covers, mirroring
-// the coverage rules of IntegrationAgents: a project install covers every
-// embedded agent declaring a project target, while a global install covers
-// only agents whose configuration directory already exists (the parent of the
-// extension directory, e.g. ~/.pi/agent), so absent tools gain no files. An
-// agent whose target cannot be resolved is kept so the caller reports the error.
+// ExtensionAgents lists the agents whose extension the install covers: the agents whose
+// configuration directory already exists (the parent of the extension directory, e.g.
+// ~/.pi/agent), so absent tools gain no files. An agent whose target cannot be resolved is
+// kept so the caller reports the error.
 func ExtensionAgents(paths config.InstallPaths) []string {
 	var out []string
 	for _, agent := range config.ExecutionAgents {
 		spec, _, ok := config.AgentExtension(agent)
 		if !ok {
-			continue
-		}
-		if paths.Mode == config.ModeProject {
-			if spec.Project != "" && paths.ProjectRoot != "" {
-				out = append(out, agent)
-			}
 			continue
 		}
 		if spec.Global == "" {
@@ -112,9 +96,8 @@ func ExtensionAgents(paths config.InstallPaths) []string {
 
 // rejectReparseChain refuses to read or write through a symlink, junction,
 // or other reparse point: every existing component between the base directory
-// and the target file is checked. Unlike EnsureRulesIntegration, which follows
-// user-managed symlinks in the global scope, an extension or a bundled skill is
-// never written through a redirect.
+// and the target file is checked. An extension or a bundled skill is never
+// written through a redirect.
 func rejectReparseChain(base, target string) error {
 	rel, err := filepath.Rel(base, target)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
@@ -144,16 +127,10 @@ func rejectReparseChain(base, target string) error {
 }
 
 // extensionBase is the trusted anchor the target must stay under: the home
-// directory for a default global install or the main worktree for a project
-// install. A relocated config directory may be outside home, so check its
-// entire chain from the filesystem anchor, including that directory itself.
+// directory for a default config directory. A relocated config directory may be
+// outside home, so check its entire chain from the filesystem anchor, including
+// that directory itself.
 func extensionBase(agent, target string, paths config.InstallPaths) (string, error) {
-	if paths.Mode == config.ModeProject {
-		if paths.ProjectRoot == "" {
-			return "", fmt.Errorf("%s", config.Text("config.project_install_paths_are_missing_the_main_worktree"))
-		}
-		return paths.ProjectRoot, nil
-	}
 	_, relocated, err := agentConfigRoot(agent, paths)
 	if err != nil {
 		return "", err

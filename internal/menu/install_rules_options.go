@@ -14,14 +14,15 @@ func (s *Session) InstallRules() config.InstallRules {
 	return config.InstallRulesOf(s.scopeBuffer())
 }
 
-// InstallRulesAgents lists the agents the options page shows a switch for: the agents whose
-// rules file or rules extension the scope covers, in the embedded agent order.
+// InstallRulesAgents lists the agents the options page shows a switch for: the agents with a
+// project rules file kander init writes, or a rules extension the install covers, in the
+// embedded agent order.
 func (s *Session) InstallRulesAgents() []string {
 	paths, err := currentPaths()
 	if err != nil {
 		return nil
 	}
-	covered := append(install.IntegrationAgents(paths), install.ExtensionAgents(paths)...)
+	covered := append(install.ProjectReferenceAgents(), install.ExtensionAgents(paths)...)
 	var out []string
 	for _, agent := range config.ExecutionAgents {
 		if slices.Contains(covered, agent) {

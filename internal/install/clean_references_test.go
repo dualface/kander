@@ -5,15 +5,16 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 func TestCleanRulesReferencesRemovesDanglingImport(t *testing.T) {
-	home := setupInstallHome(t)
-	paths := globalIntegrationPaths(t, home)
-	target := filepath.Join(home, ".claude", "CLAUDE.md")
+	project, _ := projectFixture(t)
+	target := filepath.Join(project.Root, "CLAUDE.md")
 	writeIntegrateFile(t, target,
 		"# Notes\n\n@/nonexistent/older/KANDER-AGENTS.md\n\n@docs/other.md\n")
-	outcome, err := EnsureRulesIntegration("claude", paths)
+	outcome, err := EnsureProjectReference("claude", project, config.InstallRulesOf(nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +32,7 @@ func TestCleanRulesReferencesRemovesDanglingImport(t *testing.T) {
 	if outcome.Status != IntegrationUpdated || outcome.Removed != 1 {
 		t.Fatalf("outcome=%+v", outcome)
 	}
-	if ok, detail := RulesIntegration("claude", paths); !ok {
+	if ok, detail := ProjectReferenceStatus("claude", project); !ok {
 		t.Fatalf("not integrated after cleanup: %s", detail)
 	}
 	if strings.Count(text, "KANDER-AGENTS.md") != 1 {
@@ -40,13 +41,13 @@ func TestCleanRulesReferencesRemovesDanglingImport(t *testing.T) {
 }
 
 func TestCleanRulesReferencesDeduplicatesSpellings(t *testing.T) {
-	home := setupInstallHome(t)
-	paths := globalIntegrationPaths(t, home)
+	project, home := projectFixture(t)
+	paths := project.Paths
 	entry := RulesEntry(paths)
-	target := filepath.Join(home, ".claude", "CLAUDE.md")
+	target := filepath.Join(project.Root, "CLAUDE.md")
 	tilde := "~/" + filepath.ToSlash(mustRel(t, home, entry))
 	writeIntegrateFile(t, target, "lead\n@"+tilde+"\nmid\n@"+entry+"\ntail\n")
-	outcome, err := EnsureRulesIntegration("claude", paths)
+	outcome, err := EnsureProjectReference("claude", project, config.InstallRulesOf(nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,12 +65,12 @@ func TestCleanRulesReferencesDeduplicatesSpellings(t *testing.T) {
 }
 
 func TestCleanRulesReferencesDeduplicatesMixedForms(t *testing.T) {
-	home := setupInstallHome(t)
-	paths := globalIntegrationPaths(t, home)
+	project, _ := projectFixture(t)
+	paths := project.Paths
 	entry := RulesEntry(paths)
-	target := filepath.Join(home, ".claude", "CLAUDE.md")
+	target := filepath.Join(project.Root, "CLAUDE.md")
 	writeIntegrateFile(t, target, "@"+entry+"\n\n"+entry+"\n")
-	if _, err := EnsureRulesIntegration("claude", paths); err != nil {
+	if _, err := EnsureProjectReference("claude", project, config.InstallRulesOf(nil)); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(target)
@@ -83,14 +84,14 @@ func TestCleanRulesReferencesDeduplicatesMixedForms(t *testing.T) {
 }
 
 func TestCleanRulesReferencesDeduplicatesMarkdownBlock(t *testing.T) {
-	home := setupInstallHome(t)
-	paths := globalIntegrationPaths(t, home)
+	project, _ := projectFixture(t)
+	paths := project.Paths
 	entry := RulesEntry(paths)
-	target := filepath.Join(home, ".codex", "AGENTS.md")
+	target := filepath.Join(project.Root, "AGENTS.md")
 	block := "## Kander Rules Entry\n\nAt the start of every session, read `" + entry +
 		"` and follow it as the Kander workflow rules entry.\n"
 	writeIntegrateFile(t, target, "# Own rules\n\n"+block+"\n"+block+"\n# Other\n")
-	outcome, err := EnsureRulesIntegration("codex", paths)
+	outcome, err := EnsureProjectReference("codex", project, config.InstallRulesOf(nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,13 +109,12 @@ func TestCleanRulesReferencesDeduplicatesMarkdownBlock(t *testing.T) {
 }
 
 func TestCleanRulesReferencesRemovesInvalidMarkdownBlock(t *testing.T) {
-	home := setupInstallHome(t)
-	paths := globalIntegrationPaths(t, home)
-	target := filepath.Join(home, ".codex", "AGENTS.md")
+	project, _ := projectFixture(t)
+	target := filepath.Join(project.Root, "AGENTS.md")
 	block := "## Kander Rules Entry\n\nAt the start of every session, read `/third/party/KANDER-AGENTS.md`" +
 		" and follow it as the Kander workflow rules entry.\n"
 	writeIntegrateFile(t, target, block+"\n# Keep me\n\nbody\n")
-	if _, err := EnsureRulesIntegration("codex", paths); err != nil {
+	if _, err := EnsureProjectReference("codex", project, config.InstallRulesOf(nil)); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(target)
@@ -128,13 +128,13 @@ func TestCleanRulesReferencesRemovesInvalidMarkdownBlock(t *testing.T) {
 }
 
 func TestCleanRulesReferencesKeepsProseCommentsAndFences(t *testing.T) {
-	home := setupInstallHome(t)
-	paths := globalIntegrationPaths(t, home)
+	project, _ := projectFixture(t)
+	paths := project.Paths
 	entry := RulesEntry(paths)
-	target := filepath.Join(home, ".codex", "AGENTS.md")
+	target := filepath.Join(project.Root, "AGENTS.md")
 	writeIntegrateFile(t, target,
 		"# Doc\n\nSee `"+entry+"` for details.\n\n<!-- @/dead/KANDER-AGENTS.md -->\n\n```text\n/dead/KANDER-AGENTS.md\n```\n")
-	if _, err := EnsureRulesIntegration("codex", paths); err != nil {
+	if _, err := EnsureProjectReference("codex", project, config.InstallRulesOf(nil)); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(target)
@@ -147,11 +147,10 @@ func TestCleanRulesReferencesKeepsProseCommentsAndFences(t *testing.T) {
 }
 
 func TestCleanRulesReferencesKeepsBareFilenameMention(t *testing.T) {
-	home := setupInstallHome(t)
-	paths := globalIntegrationPaths(t, home)
-	target := filepath.Join(home, ".codex", "AGENTS.md")
+	project, _ := projectFixture(t)
+	target := filepath.Join(project.Root, "AGENTS.md")
 	writeIntegrateFile(t, target, "# Doc\n\nKANDER-AGENTS.md\n")
-	outcome, err := EnsureRulesIntegration("codex", paths)
+	outcome, err := EnsureProjectReference("codex", project, config.InstallRulesOf(nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,52 +163,16 @@ func TestCleanRulesReferencesKeepsBareFilenameMention(t *testing.T) {
 	}
 }
 
-func TestCleanRulesReferencesRewritesLegacyNotDeletes(t *testing.T) {
-	home := setupInstallHome(t)
-	paths := globalIntegrationPaths(t, home)
-	target := filepath.Join(home, ".claude", "CLAUDE.md")
-	legacy := filepath.Join(home, ".agents", "KANDER-AGENTS.md")
-	writeIntegrateFile(t, target, "@"+legacy+"\n")
-	outcome, err := EnsureRulesIntegration("claude", paths)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if outcome.Status != IntegrationRewritten {
-		t.Fatalf("status=%v", outcome.Status)
-	}
-	got, _ := os.ReadFile(target)
-	if !strings.Contains(string(got), "@"+RulesEntry(paths)) {
-		t.Fatalf("legacy reference deleted instead of rewritten: %q", got)
-	}
-}
-
-func TestCleanRulesReferencesPreservesLiveLegacyReference(t *testing.T) {
-	home := setupInstallHome(t)
-	paths := globalIntegrationPaths(t, home)
-	legacy := filepath.Join(home, ".agents", "KANDER-AGENTS.md")
-	writeIntegrateFile(t, legacy, "# old entry\n")
-	target := filepath.Join(home, ".claude", "CLAUDE.md")
-	writeIntegrateFile(t, target, "@"+legacy+"\n")
-	if _, err := EnsureRulesIntegration("claude", paths); err != nil {
-		t.Fatal(err)
-	}
-	got, _ := os.ReadFile(target)
-	text := string(got)
-	if !strings.Contains(text, "@"+legacy) {
-		t.Fatalf("live legacy reference removed: %q", text)
-	}
-}
-
 func TestCleanRulesReferencesNegatedReferenceKeepsFirstSlot(t *testing.T) {
-	home := setupInstallHome(t)
-	paths := globalIntegrationPaths(t, home)
+	project, _ := projectFixture(t)
+	paths := project.Paths
 	entry := RulesEntry(paths)
-	target := filepath.Join(home, ".claude", "CLAUDE.md")
+	target := filepath.Join(project.Root, "CLAUDE.md")
 	// A negated but resolving reference is still a load command: it keeps the first slot,
 	// so a later plain reference is the duplicate that gets dropped. The strict append
 	// gate then leaves the file as-is, matching the pre-cleanup semantics.
 	writeIntegrateFile(t, target, "## Disabled\n\n@"+entry+"\n\n@"+entry+"\n")
-	outcome, err := EnsureRulesIntegration("claude", paths)
+	outcome, err := EnsureProjectReference("claude", project, config.InstallRulesOf(nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,17 +187,17 @@ func TestCleanRulesReferencesNegatedReferenceKeepsFirstSlot(t *testing.T) {
 }
 
 func TestCleanRulesReferencesIdempotent(t *testing.T) {
-	home := setupInstallHome(t)
-	paths := globalIntegrationPaths(t, home)
+	project, _ := projectFixture(t)
+	paths := project.Paths
 	entry := RulesEntry(paths)
-	target := filepath.Join(home, ".claude", "CLAUDE.md")
+	target := filepath.Join(project.Root, "CLAUDE.md")
 	writeIntegrateFile(t, target, "@/dead/KANDER-AGENTS.md\n@"+entry+"\n@"+entry+"\n")
-	first, err := EnsureRulesIntegration("claude", paths)
+	first, err := EnsureProjectReference("claude", project, config.InstallRulesOf(nil))
 	if err != nil || first.Removed == 0 {
 		t.Fatalf("first: %+v %v", first, err)
 	}
 	before, _ := os.ReadFile(target)
-	second, err := EnsureRulesIntegration("claude", paths)
+	second, err := EnsureProjectReference("claude", project, config.InstallRulesOf(nil))
 	if err != nil || second.Status != IntegrationPresent || second.Removed != 0 {
 		t.Fatalf("second: %+v %v", second, err)
 	}
@@ -244,22 +207,13 @@ func TestCleanRulesReferencesIdempotent(t *testing.T) {
 	}
 }
 
-func TestInspectRulesReferencesCounts(t *testing.T) {
-	home := setupInstallHome(t)
-	paths := globalIntegrationPaths(t, home)
-	entry := RulesEntry(paths)
-	target := filepath.Join(home, ".claude", "CLAUDE.md")
-	writeIntegrateFile(t, target, "@/dead/KANDER-AGENTS.md\n@"+entry+"\n@"+entry+"\n")
-	issues, err := InspectRulesReferences("claude", paths)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if issues.Invalid != 1 || issues.Duplicates != 1 {
-		t.Fatalf("issues=%+v", issues)
-	}
-	got, _ := os.ReadFile(target)
-	if strings.Count(string(got), "KANDER-AGENTS.md") != 3 {
-		t.Fatalf("inspect wrote the file: %q", got)
+func TestCleanRulesReferencesCountsInvalidAndDuplicates(t *testing.T) {
+	project, _ := projectFixture(t)
+	entry := RulesEntry(project.Paths)
+	text := "@/dead/KANDER-AGENTS.md\n@" + entry + "\n@" + entry + "\n@.kander/rules/KANDER-AGENTS.md\n"
+	cleaned, removed := CleanRulesReferences(text, entry, project.Root)
+	if removed != 3 || cleaned != "@"+entry+"\n" {
+		t.Fatalf("removed=%d cleaned=%q", removed, cleaned)
 	}
 }
 

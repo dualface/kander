@@ -316,9 +316,6 @@ func orchestrateLanguage(texts []string, paths config.InstallPaths) (string, err
 // orchestratorAgentPrompt lists the handed-over cards and the creator's plan
 // notes in the language orchestrateLanguage resolves.
 func orchestratorAgentPrompt(tasks []OrchestrateTask, texts []string, handover string, paths config.InstallPaths) (string, error) {
-	if paths.Mode == config.ModeProject && paths.ProjectRoot == "" {
-		return "", launchError("config.project_install_paths_are_missing_the_main_worktree")
-	}
 	lang, err := orchestrateLanguage(texts, paths)
 	if err != nil {
 		return "", err

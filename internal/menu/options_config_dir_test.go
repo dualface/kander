@@ -3,14 +3,14 @@ package menu
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/install/installtest"
 )
 
-func TestFinishIntegratesRelocatedConfigDir(t *testing.T) {
+// The options save writes no agent rules file, in the default or a relocated config directory.
+func TestFinishWritesNoGlobalRulesFile(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
@@ -30,11 +30,9 @@ func TestFinishIntegratesRelocatedConfigDir(t *testing.T) {
 	if _, err := session.Finish(); err != nil {
 		t.Fatal(err)
 	}
-	got, err := os.ReadFile(filepath.Join(relocated, "CLAUDE.md"))
-	if err != nil || !strings.Contains(string(got), "KANDER-AGENTS.md") {
-		t.Fatalf("relocated CLAUDE.md not integrated: %v %q", err, got)
-	}
-	if _, err := os.Lstat(filepath.Join(home, ".claude", "CLAUDE.md")); !os.IsNotExist(err) {
-		t.Fatalf("default CLAUDE.md touched: %v", err)
+	for _, file := range []string{filepath.Join(relocated, "CLAUDE.md"), filepath.Join(home, ".claude", "CLAUDE.md")} {
+		if _, err := os.Lstat(file); !os.IsNotExist(err) {
+			t.Fatalf("options save wrote %s: %v", file, err)
+		}
 	}
 }

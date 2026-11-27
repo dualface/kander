@@ -172,6 +172,25 @@ func GateProject(root *cobra.Command, check func() int) {
 	walk(root)
 }
 
+// BeforeRun makes every command of the tree run hook before its body, after the argument
+// validation and the flag rules of the command, and before the project gate GateProject
+// installed. The hook never fails the command.
+func BeforeRun(root *cobra.Command, hook func(c *cobra.Command)) {
+	var walk func(c *cobra.Command)
+	walk = func(c *cobra.Command) {
+		if run := c.RunE; run != nil {
+			c.RunE = func(c *cobra.Command, args []string) error {
+				hook(c)
+				return run(c, args)
+			}
+		}
+		for _, child := range c.Commands() {
+			walk(child)
+		}
+	}
+	walk(root)
+}
+
 // VersionArguments is the command line, after the executable, that makes a kander binary report
 // its version: what the update and the worker handover probe a candidate with.
 func VersionArguments() []string { return []string{"version"} }

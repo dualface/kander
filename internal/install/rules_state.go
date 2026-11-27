@@ -109,9 +109,9 @@ func InspectRules(paths config.InstallPaths) (RulesReport, error) {
 			return report, err
 		}
 		dest := filepath.Join(paths.RulesDir, filepath.FromSlash(name))
-		// Global rule symlinks are user-managed; doctor must not classify them as
-		// outdated because writeRule will not replace a reparse point.
-		if paths.Mode != config.ModeProject && fs.IsReparsePoint(dest) {
+		// Rule symlinks are user-managed; doctor must not classify them as outdated because
+		// writeRule will not replace a reparse point.
+		if fs.IsReparsePoint(dest) {
 			if got != want {
 				report.Modified = append(report.Modified, name)
 			}
@@ -140,14 +140,14 @@ func InspectRules(paths config.InstallPaths) (RulesReport, error) {
 	return report, nil
 }
 
-func extractRules(paths config.InstallPaths, project bool) error {
+func extractRules(paths config.InstallPaths) error {
 	state := rulesState{Files: map[string]string{}}
 	for _, name := range rules.Names() {
 		data, err := rules.File(name)
 		if err != nil {
 			return err
 		}
-		wrote, err := writeRule(paths, name, data, project)
+		wrote, err := writeRule(paths, name, data)
 		if err != nil {
 			return err
 		}
@@ -173,12 +173,12 @@ func stampDigest(paths config.InstallPaths, name string, embedded []byte, wrote 
 	return digest, true
 }
 
-func writeRule(paths config.InstallPaths, name string, data []byte, project bool) (bool, error) {
+func writeRule(paths config.InstallPaths, name string, data []byte) (bool, error) {
 	dest := filepath.Join(paths.RulesDir, filepath.FromSlash(name))
-	if err := rejectDest(dest, project); err != nil {
+	if err := rejectDest(dest); err != nil {
 		return false, err
 	}
-	if !project && fs.IsReparsePoint(dest) {
+	if fs.IsReparsePoint(dest) {
 		return false, nil
 	}
 	// templates/ and snippets/ files live below the rules root; their directory may not
@@ -197,16 +197,14 @@ func writeRule(paths config.InstallPaths, name string, data []byte, project bool
 }
 
 // RulesRepair reports what RepairRules changed: Rewritten names every rule file restored
-// from the embedded copy, Legacy the previous-location migration, and Links the removed
-// legacy entry symlinks.
+// from the embedded copy, and Legacy the previous-location migration.
 type RulesRepair struct {
 	Rewritten []string
 	Legacy    LegacyRulesMigration
-	Links     []string
 }
 
 // RepairRules restores missing and outdated rule files and reports every file it rewrote.
-// Locally edited files are left untouched. A global repair also migrates rule files left at
+// Locally edited files are left untouched. The repair also migrates rule files left at
 // the previous rules location, so a binary upgraded without running install still converges
 // on the current layout.
 func RepairRules(paths config.InstallPaths) (RulesRepair, error) {
@@ -217,7 +215,6 @@ func RepairRules(paths config.InstallPaths) (RulesRepair, error) {
 	}
 	result.Rewritten = rewritten
 	result.Legacy = migrateLegacyRules(paths)
-	result.Links = removeLegacyEntrySymlinks(paths)
 	return result, nil
 }
 
@@ -242,13 +239,12 @@ func repairRuleFiles(paths config.InstallPaths) ([]string, error) {
 	changed := false
 	var rewritten []string
 	repair := append(append([]string{}, report.Missing...), report.Outdated...)
-	project := paths.Mode == config.ModeProject
 	for _, name := range repair {
 		data, err := rules.File(name)
 		if err != nil {
 			return nil, err
 		}
-		wrote, err := writeRule(paths, name, data, project)
+		wrote, err := writeRule(paths, name, data)
 		if err != nil {
 			return nil, err
 		}

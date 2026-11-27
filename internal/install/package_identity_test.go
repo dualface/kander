@@ -109,7 +109,7 @@ func TestStoreInstallGlobalDefaultsDoNotCopy(t *testing.T) {
 	// TestGlobalInstallDefaultsCopyAndDeleteWithoutPrompt.
 	t.Setenv("PATH", t.TempDir())
 	stubPackaged(t, true)
-	req := Request{Mode: config.ModeGlobal}
+	req := Request{}
 	applyGlobalInstallDefaults(&req)
 	if req.CopyBinary || !req.DeleteLegacy {
 		t.Fatalf("copy=%v delete=%v", req.CopyBinary, req.DeleteLegacy)

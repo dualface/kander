@@ -83,14 +83,14 @@ func TestGlobalInstallDefaultsCopyAndDeleteWithoutPrompt(t *testing.T) {
 	source := stubBinary(t)
 	mockCurrentBinary(t, source)
 	t.Setenv("PATH", t.TempDir())
-	req := Request{Mode: config.ModeGlobal}
+	req := Request{}
 	applyGlobalInstallDefaults(&req)
 	if !req.CopyBinary || !req.DeleteLegacy {
 		t.Fatalf("copy=%v delete=%v", req.CopyBinary, req.DeleteLegacy)
 	}
 
 	t.Setenv("PATH", filepath.Dir(source))
-	req = Request{Mode: config.ModeGlobal}
+	req = Request{}
 	applyGlobalInstallDefaults(&req)
 	if req.CopyBinary || !req.DeleteLegacy {
 		t.Fatalf("matched path still copied or skipped legacy delete: copy=%v delete=%v", req.CopyBinary, req.DeleteLegacy)

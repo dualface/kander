@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/rules"
 )
 
@@ -120,181 +119,58 @@ func TestPerformRemovesLegacyRuleSymlinkOnly(t *testing.T) {
 	}
 }
 
-func TestPerformRewritesLegacyClaudeImport(t *testing.T) {
+// Install never rewrites a global rules file to the current entry any more: every Kander load
+// command goes, whichever entry it names, and a link to the previous entry goes as a link.
+func TestPerformRemovesLegacyGlobalReferences(t *testing.T) {
 	home := setupInstallHome(t)
 	writeLegacyRules(t, home)
 	claude := filepath.Join(home, ".claude", "CLAUDE.md")
-	writeIntegrateFile(t, claude, "# Personal\n\n@~/.agents/KANDER-AGENTS.md\n")
-	result, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(result.Integrations) != 1 || result.Integrations[0].Status != IntegrationRewritten {
-		t.Fatalf("integrations=%+v", result.Integrations)
-	}
-	got, err := os.ReadFile(claude)
-	if err != nil || string(got) != "# Personal\n\n@~/.agents/kander/KANDER-AGENTS.md\n" {
-		t.Fatalf("bytes=%q err=%v", got, err)
-	}
-	paths, err := config.GlobalInstallPaths()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if ok, detail := RulesIntegration("claude", paths); !ok {
-		t.Fatalf("not integrated after rewrite: %s", detail)
-	}
-	again, err := EnsureRulesIntegration("claude", paths)
-	if err != nil || again.Status != IntegrationPresent {
-		t.Fatalf("second pass=%+v err=%v", again, err)
-	}
-}
-
-func TestPerformRewritesLegacyMarkdownReference(t *testing.T) {
-	home := setupInstallHome(t)
-	writeLegacyRules(t, home)
+	writeIntegrateFile(t, claude, "# Personal\n\n@~/.agents/KANDER-AGENTS.md\n\n@~/.agents/kander/KANDER-AGENTS.md\n")
 	agents := filepath.Join(home, ".codex", "AGENTS.md")
 	block := "## Kander Rules Entry\n\nAt the start of every session, read `~/.agents/KANDER-AGENTS.md` and follow it as the Kander workflow rules entry.\n"
 	writeIntegrateFile(t, agents, "# Mine\n\n"+block)
-	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)}); err != nil {
-		t.Fatal(err)
-	}
-	got, err := os.ReadFile(agents)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Count(string(got), "KANDER-AGENTS.md") != 1 || !strings.Contains(string(got), "`~/.agents/kander/KANDER-AGENTS.md`") {
-		t.Fatalf("bytes=%q", got)
-	}
-}
-
-func TestPerformRewritesReferenceEvenWhenLegacyEntryWasEdited(t *testing.T) {
-	home := setupInstallHome(t)
-	legacy := writeLegacyRules(t, home)
-	if err := os.WriteFile(filepath.Join(legacy, "KANDER-AGENTS.md"), []byte("# my entry\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	claude := filepath.Join(home, ".claude", "CLAUDE.md")
-	writeIntegrateFile(t, claude, "@~/.agents/KANDER-AGENTS.md\n")
 	result, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := os.ReadFile(claude)
-	if err != nil || string(got) != "@~/.agents/kander/KANDER-AGENTS.md\n" {
-		t.Fatalf("bytes=%q err=%v", got, err)
+	if result.GlobalCleanup.Err != nil || len(result.GlobalCleanup.Removed) != 2 {
+		t.Fatalf("cleanup=%+v", result.GlobalCleanup)
 	}
-	if len(result.Integrations) != 1 || result.Integrations[0].Status != IntegrationRewritten {
-		t.Fatalf("integrations=%+v", result.Integrations)
+	if got, _ := os.ReadFile(claude); string(got) != "# Personal\n" {
+		t.Fatalf("CLAUDE.md=%q", got)
+	}
+	if got, _ := os.ReadFile(agents); string(got) != "# Mine\n" {
+		t.Fatalf("AGENTS.md=%q", got)
 	}
 }
 
-func TestPerformReplacesLegacyEntrySymlinkTarget(t *testing.T) {
+func TestPerformRemovesLegacyEntrySymlink(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink creation needs privileges on Windows")
 	}
 	home := setupInstallHome(t)
 	legacy := writeLegacyRules(t, home)
-	claude := filepath.Join(home, ".claude", "CLAUDE.md")
-	if err := os.MkdirAll(filepath.Dir(claude), 0o755); err != nil {
-		t.Fatal(err)
+	relocated := t.TempDir()
+	for _, link := range []string{filepath.Join(home, ".codex", "AGENTS.md"), filepath.Join(relocated, "CLAUDE.md")} {
+		if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(filepath.Join(legacy, "KANDER-AGENTS.md"), link); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if err := os.Symlink(filepath.Join(legacy, "KANDER-AGENTS.md"), claude); err != nil {
-		t.Fatal(err)
-	}
+	t.Setenv("CLAUDE_CONFIG_DIR", relocated)
 	result, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.LegacyLinksRemoved) != 1 || result.LegacyLinksRemoved[0] != claude {
-		t.Fatalf("links=%v", result.LegacyLinksRemoved)
+	if result.GlobalCleanup.Err != nil || len(result.GlobalCleanup.Removed) != 2 {
+		t.Fatalf("cleanup=%+v", result.GlobalCleanup)
 	}
-	info, err := os.Lstat(claude)
-	if err != nil || info.Mode()&os.ModeSymlink != 0 {
-		t.Fatalf("still a symlink: %v", err)
-	}
-	got, err := os.ReadFile(claude)
-	if err != nil || string(got) != "@~/.agents/kander/KANDER-AGENTS.md\n" {
-		t.Fatalf("bytes=%q err=%v", got, err)
-	}
-}
-
-func TestRewriteLegacyReferenceSkipsProjectScope(t *testing.T) {
-	project := t.TempDir()
-	paths := config.InstallPaths{Mode: config.ModeProject, ProjectRoot: project, RulesDir: filepath.Join(project, ".kander", "rules")}
-	text := "@~/.agents/KANDER-AGENTS.md\n"
-	if got, changed := rewriteLegacyReference(text, paths, project); changed || got != text {
-		t.Fatalf("project scope rewrote: %q", got)
-	}
-}
-
-func TestRepairRulesMigratesLegacyLayoutBeforeRewrite(t *testing.T) {
-	home := setupInstallHome(t)
-	legacy := writeLegacyRules(t, home)
-	claude := filepath.Join(home, ".claude", "CLAUDE.md")
-	writeIntegrateFile(t, claude, "@~/.agents/KANDER-AGENTS.md\n")
-	paths, err := config.GlobalInstallPaths()
-	if err != nil {
-		t.Fatal(err)
-	}
-	// A binary upgraded without install: doctor repair runs first.
-	repair, err := RepairRules(paths)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(repair.Legacy.Removed) == 0 {
-		t.Fatalf("repair reported no migration: %+v", repair.Legacy)
-	}
-	if _, err := os.Lstat(filepath.Join(legacy, "KANDER-AGENTS.md")); !os.IsNotExist(err) {
-		t.Fatalf("repair left the previous entry: %v", err)
-	}
-	outcome, err := EnsureRulesIntegration("claude", paths)
-	if err != nil || outcome.Status != IntegrationRewritten {
-		t.Fatalf("outcome=%+v err=%v", outcome, err)
-	}
-	got, _ := os.ReadFile(claude)
-	if string(got) != "@~/.agents/kander/KANDER-AGENTS.md\n" {
-		t.Fatalf("bytes=%q", got)
-	}
-}
-
-func TestRewriteRemovesStaleReferenceNextToCurrentOne(t *testing.T) {
-	home := setupInstallHome(t)
-	writeLegacyRules(t, home)
-	claude := filepath.Join(home, ".claude", "CLAUDE.md")
-	// Both references present: an earlier repair appended the current one while the old entry
-	// still existed. After the migration the stale one must be rewritten, not kept.
-	writeIntegrateFile(t, claude, "@~/.agents/KANDER-AGENTS.md\n\n@~/.agents/kander/KANDER-AGENTS.md\n")
-	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)}); err != nil {
-		t.Fatal(err)
-	}
-	got, _ := os.ReadFile(claude)
-	if strings.Contains(string(got), "@~/.agents/KANDER-AGENTS.md\n") || strings.Count(string(got), "@~/.agents/kander/KANDER-AGENTS.md") != 1 {
-		t.Fatalf("bytes=%q", got)
-	}
-}
-
-func TestRewriteWaitsWhileDirectoryBlocksLegacyEntry(t *testing.T) {
-	home := setupInstallHome(t)
-	legacy := writeLegacyRules(t, home)
-	entry := filepath.Join(legacy, "KANDER-AGENTS.md")
-	if err := os.Remove(entry); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Mkdir(entry, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	claude := filepath.Join(home, ".claude", "CLAUDE.md")
-	writeIntegrateFile(t, claude, "@~/.agents/KANDER-AGENTS.md\n")
-	result, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(result.LegacyRules.Kept) != 1 || result.LegacyRules.Kept[0] != entry {
-		t.Fatalf("kept=%v", result.LegacyRules.Kept)
-	}
-	got, _ := os.ReadFile(claude)
-	if !strings.Contains(string(got), "@~/.agents/KANDER-AGENTS.md\n") || !strings.Contains(string(got), "@~/.agents/kander/KANDER-AGENTS.md\n") {
-		t.Fatalf("bytes=%q", got)
+	for _, link := range []string{filepath.Join(home, ".codex", "AGENTS.md"), filepath.Join(relocated, "CLAUDE.md")} {
+		if _, err := os.Lstat(link); !os.IsNotExist(err) {
+			t.Fatalf("%s kept: %v", link, err)
+		}
 	}
 }
 
@@ -308,7 +184,7 @@ func TestPerformLegacyMigrationIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.LegacyRules.Removed) != 0 || len(result.LegacyRules.Kept) != 0 || len(result.LegacyLinksRemoved) != 0 {
+	if len(result.LegacyRules.Removed) != 0 || len(result.LegacyRules.Kept) != 0 || result.GlobalCleanup.Changed() {
 		t.Fatalf("second install migrated again: %+v", result)
 	}
 }
@@ -335,78 +211,6 @@ func TestPerformKeepsDirectoryAtLegacyRuleName(t *testing.T) {
 	}
 }
 
-func TestProjectInstallLeavesFlatGlobalRulesAlone(t *testing.T) {
-	home := setupInstallHome(t)
-	legacy := writeLegacyRules(t, home)
-	project := initGitRepo(t, filepath.Join(t.TempDir(), "proj"))
-	result, err := Perform(Request{Mode: config.ModeProject, Project: project, Language: "cn", Source: stubBinary(t)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(result.LegacyRules.Removed) != 0 || len(result.LegacyRules.Kept) != 0 {
-		t.Fatalf("project install touched global rules: %+v", result.LegacyRules)
-	}
-	for _, name := range legacyRuleNames() {
-		if _, err := os.Stat(filepath.Join(legacy, name)); err != nil {
-			t.Fatalf("%s removed by a project install: %v", name, err)
-		}
-	}
-}
-
-func TestRewriteLegacyReferenceSpellings(t *testing.T) {
-	home := setupInstallHome(t)
-	writeLegacyRules(t, home)
-	paths, err := config.GlobalInstallPaths()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)}); err != nil {
-		t.Fatal(err)
-	}
-	baseDir := filepath.Join(home, ".claude")
-	legacyAbs := filepath.ToSlash(filepath.Join(home, ".agents", "KANDER-AGENTS.md"))
-	currentAbs := filepath.ToSlash(filepath.Join(home, ".agents", "kander", "KANDER-AGENTS.md"))
-	for _, tc := range []struct{ name, in, want string }{
-		{"tilde", "@~/.agents/KANDER-AGENTS.md\n", "@~/.agents/kander/KANDER-AGENTS.md\n"},
-		{"parent-relative", "@../.agents/KANDER-AGENTS.md\n", "@../.agents/kander/KANDER-AGENTS.md\n"},
-		{"absolute", "@" + legacyAbs + "\n", "@" + currentAbs + "\n"},
-		{"backup-suffix-untouched", "see ~/.agents/KANDER-AGENTS.md.bak\n", "see ~/.agents/KANDER-AGENTS.md.bak\n"},
-		{"longer-prefix-untouched", "@/x" + legacyAbs + "\n", "@/x" + legacyAbs + "\n"},
-		{"backticks", "read `~/.agents/KANDER-AGENTS.md` first\n", "read `~/.agents/kander/KANDER-AGENTS.md` first\n"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			got, changed := rewriteLegacyReference(tc.in, paths, baseDir)
-			if got != tc.want || changed != (got != tc.in) {
-				t.Fatalf("got=%q changed=%v want=%q", got, changed, tc.want)
-			}
-		})
-	}
-}
-
-func TestPerformReplacesLegacyEntrySymlinkInRelocatedConfigDir(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink creation needs privileges on Windows")
-	}
-	home := setupInstallHome(t)
-	legacy := writeLegacyRules(t, home)
-	relocated := t.TempDir()
-	t.Setenv("CLAUDE_CONFIG_DIR", relocated)
-	claude := filepath.Join(relocated, "CLAUDE.md")
-	if err := os.Symlink(filepath.Join(legacy, "KANDER-AGENTS.md"), claude); err != nil {
-		t.Fatal(err)
-	}
-	result, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(result.LegacyLinksRemoved) != 1 || result.LegacyLinksRemoved[0] != claude {
-		t.Fatalf("links=%v", result.LegacyLinksRemoved)
-	}
-	if info, err := os.Lstat(claude); err != nil || info.Mode()&os.ModeSymlink != 0 {
-		t.Fatalf("relocated target still a symlink: %v", err)
-	}
-}
-
 func TestLegacyMigrationWaitsForResolvableTargets(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink creation needs privileges on Windows")
@@ -427,17 +231,17 @@ func TestLegacyMigrationWaitsForResolvableTargets(t *testing.T) {
 	if out := migrateLegacyRules(paths); len(out.Removed) != 0 {
 		t.Fatalf("migrated with an unresolvable target: %+v", out)
 	}
-	if links := removeLegacyEntrySymlinks(paths); len(links) != 0 {
-		t.Fatalf("links=%v", links)
-	}
 	if _, err := os.Stat(claude); err != nil {
 		t.Fatalf("rules link dangling: %v", err)
 	}
 	writeScopeConfig(t, paths.ConfigPath, "codex", t.TempDir())
+	if result := CleanGlobalInjection(paths); result.Err != nil || len(result.Removed) != 1 {
+		t.Fatalf("cleanup=%+v", result)
+	}
 	if out := migrateLegacyRules(paths); len(out.Removed) == 0 {
 		t.Fatal("migration did not resume after the config was fixed")
 	}
-	if links := removeLegacyEntrySymlinks(paths); len(links) != 1 || links[0] != claude {
-		t.Fatalf("links=%v", links)
+	if _, err := os.Lstat(claude); !os.IsNotExist(err) {
+		t.Fatalf("link kept: %v", err)
 	}
 }

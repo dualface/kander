@@ -131,7 +131,7 @@ func setupBoard(t *testing.T) (root, home, fakeBin string) {
 	t.Setenv("KANBAN_TMUX_LOG", tmuxLog)
 	loadEffective = func() (*config.Config, error) { return envConfig("codex", "tmux", nil), nil }
 	currentInstallPaths = func() (config.InstallPaths, error) {
-		return config.InstallPaths{Mode: config.ModeGlobal, BinDir: fakeBin}, nil
+		return config.InstallPaths{BinDir: fakeBin}, nil
 	}
 	t.Cleanup(func() {
 		loadEffective = func() (*config.Config, error) { return config.Load(false) }

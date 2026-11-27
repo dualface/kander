@@ -49,7 +49,7 @@ func tempBoard(t *testing.T) string {
 		t.Fatal(err)
 	}
 	installPathsFn = func() (config.InstallPaths, error) {
-		return config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Dir(rules)}, nil
+		return config.InstallPaths{RulesDir: filepath.Dir(rules)}, nil
 	}
 	t.Cleanup(func() { installPathsFn = config.CurrentInstallPaths })
 	return root
@@ -344,7 +344,7 @@ func TestInitLayoutAndArchive(t *testing.T) {
 	_ = os.MkdirAll(rulesDir, 0o755)
 	_ = os.WriteFile(filepath.Join(rulesDir, "KANDER-KANBAN-RULES.md"), []byte("# 全局文件看板规则\n"), 0o644)
 	installPathsFn = func() (config.InstallPaths, error) {
-		return config.InstallPaths{Mode: config.ModeGlobal, RulesDir: rulesDir}, nil
+		return config.InstallPaths{RulesDir: rulesDir}, nil
 	}
 	t.Cleanup(func() { installPathsFn = config.CurrentInstallPaths })
 
@@ -575,7 +575,7 @@ func TestBoardRootRejectsSymlinkKanbanWithoutWalkingPast(t *testing.T) {
 		t.Fatal(err)
 	}
 	installPathsFn = func() (config.InstallPaths, error) {
-		return config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Dir(rules)}, nil
+		return config.InstallPaths{RulesDir: filepath.Dir(rules)}, nil
 	}
 	t.Cleanup(func() { installPathsFn = config.CurrentInstallPaths })
 	t.Setenv(EnvBoardDir, "")
@@ -607,7 +607,7 @@ func TestInitBoardRejectsSymlinkAncestor(t *testing.T) {
 		t.Fatal(err)
 	}
 	installPathsFn = func() (config.InstallPaths, error) {
-		return config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Dir(rules)}, nil
+		return config.InstallPaths{RulesDir: filepath.Dir(rules)}, nil
 	}
 	t.Cleanup(func() { installPathsFn = config.CurrentInstallPaths })
 	if _, _, _, err := InitBoard(""); err == nil {

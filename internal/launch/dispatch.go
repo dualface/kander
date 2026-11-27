@@ -29,7 +29,7 @@ func DispatchInstruction(paths config.InstallPaths, d board.Dispatch) (string, e
 		source = w.Git.SourceCommit
 	}
 	text, err := render(paths, "dispatch.md", map[string]any{
-		"Command":       commandName(paths),
+		"Command":       commandName,
 		"TaskID":        d.Input.TaskID,
 		"DispatchID":    d.Input.ID,
 		"Epoch":         d.Authorization.Epoch,

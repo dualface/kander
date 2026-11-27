@@ -9,7 +9,7 @@ import (
 	"github.com/dualface/kander/v2/internal/config"
 )
 
-func tempOverlaySession(t *testing.T, mode config.Mode) (*Session, string) {
+func tempOverlaySession(t *testing.T) (*Session, string) {
 	t.Helper()
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
 	cfg := config.DefaultConfig()
@@ -25,14 +25,24 @@ func tempOverlaySession(t *testing.T, mode config.Mode) (*Session, string) {
 	}
 	dir := t.TempDir()
 	loc := config.OverlayLocation{ProjectRoot: dir, Path: filepath.Join(dir, config.OverlayFilename)}
-	if err := session.AttachOverlay(mode, loc, nil); err != nil {
+	if err := session.AttachOverlay(loc, nil); err != nil {
 		t.Fatal(err)
 	}
 	return session, loc.Path
 }
 
+// tempProjectTabSession is tempOverlaySession switched to the Project tab.
+func tempProjectTabSession(t *testing.T) (*Session, string) {
+	t.Helper()
+	session, path := tempOverlaySession(t)
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	return session, path
+}
+
 func TestNoteModelOverridePinsExecutionAgent(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +67,7 @@ func TestNoteModelOverridePinsExecutionAgent(t *testing.T) {
 }
 
 func TestSetExecutionAgentMaterializesScaleModels(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +96,7 @@ func TestSetExecutionAgentMaterializesScaleModels(t *testing.T) {
 }
 
 func TestRestoreExecutionAgentClearsScaleModels(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +139,7 @@ func TestPreferProjectTabIfPresent(t *testing.T) {
 	}
 	dir := t.TempDir()
 	loc := config.OverlayLocation{ProjectRoot: dir, Path: filepath.Join(dir, config.OverlayFilename)}
-	if err := session.AttachOverlay(config.ModeGlobal, loc, nil); err != nil {
+	if err := session.AttachOverlay(loc, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := session.PreferProjectTabIfPresent(); err != nil {
@@ -138,7 +148,7 @@ func TestPreferProjectTabIfPresent(t *testing.T) {
 	if session.Target != config.TargetScope {
 		t.Fatalf("empty overlay opened %s", session.Target)
 	}
-	if err := session.AttachOverlay(config.ModeGlobal, loc, map[string]any{"language": "ja"}); err != nil {
+	if err := session.AttachOverlay(loc, map[string]any{"language": "ja"}); err != nil {
 		t.Fatal(err)
 	}
 	if session.Target != config.TargetScope {
@@ -156,7 +166,7 @@ func TestPreferProjectTabIfPresent(t *testing.T) {
 }
 
 func TestRestoreSectionClearsPageOverrides(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +188,7 @@ func TestRestoreSectionClearsPageOverrides(t *testing.T) {
 }
 
 func TestRestoreRulesSectionClearsGitBranchMode(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +213,7 @@ func TestRestoreRulesSectionClearsGitBranchMode(t *testing.T) {
 }
 
 func TestSessionOverlaySaveIsSparseAndIsolated(t *testing.T) {
-	session, path := tempOverlaySession(t, config.ModeGlobal)
+	session, path := tempOverlaySession(t)
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +246,7 @@ func TestSessionOverlaySaveIsSparseAndIsolated(t *testing.T) {
 }
 
 func TestSessionRestoreInheritDeletesOnlyThatKey(t *testing.T) {
-	session, path := tempOverlaySession(t, config.ModeProject)
+	session, path := tempProjectTabSession(t)
 	session.SetLanguage("ja")
 	session.SetTUIField("theme", "dark")
 	if _, err := session.Save(); err != nil {
@@ -268,7 +278,7 @@ func TestSessionRestoreInheritDeletesOnlyThatKey(t *testing.T) {
 }
 
 func TestSessionSeedReviewDoesNotCreateOverlay(t *testing.T) {
-	session, path := tempOverlaySession(t, config.ModeGlobal)
+	session, path := tempOverlaySession(t)
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +295,7 @@ func TestSessionSeedReviewDoesNotCreateOverlay(t *testing.T) {
 }
 
 func TestSessionTabSwitchKeepsUnsavedEdits(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	session.SetLanguage("ja")
 	if !session.ScopeDirty {
 		t.Fatal("scope edit should be dirty")
@@ -315,7 +325,7 @@ func TestSessionTabSwitchKeepsUnsavedEdits(t *testing.T) {
 }
 
 func TestSessionExplicitEqualOverrideIsKept(t *testing.T) {
-	session, path := tempOverlaySession(t, config.ModeProject)
+	session, path := tempProjectTabSession(t)
 	session.SetLanguage("en")
 	if !session.FieldOverridden("language") {
 		t.Fatal("equal value must still be an override")
@@ -332,8 +342,8 @@ func TestSessionExplicitEqualOverrideIsKept(t *testing.T) {
 	}
 }
 
-func TestProjectInstallSaveDoesNotWriteScopeFile(t *testing.T) {
-	session, overlay := tempOverlaySession(t, config.ModeProject)
+func TestProjectTabSaveDoesNotWriteScopeFile(t *testing.T) {
+	session, overlay := tempProjectTabSession(t)
 	scopePath := os.Getenv(config.EnvConfig)
 	before, err := os.ReadFile(scopePath)
 	if err != nil {
@@ -348,7 +358,7 @@ func TestProjectInstallSaveDoesNotWriteScopeFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	if string(before) != string(after) {
-		t.Fatalf("project-install save rewrote scope:\n%s", after)
+		t.Fatalf("project-tab save rewrote scope:\n%s", after)
 	}
 	raw, err := config.ReadOverlayFile(overlay)
 	if err != nil {
@@ -360,7 +370,7 @@ func TestProjectInstallSaveDoesNotWriteScopeFile(t *testing.T) {
 }
 
 func TestSaveAllDirtyWritesBothTabs(t *testing.T) {
-	session, overlay := tempOverlaySession(t, config.ModeGlobal)
+	session, overlay := tempOverlaySession(t)
 	session.SetLanguage("ja")
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
@@ -392,7 +402,7 @@ func TestSaveAllDirtyWritesBothTabs(t *testing.T) {
 }
 
 func TestGlobalAgentPathOverrideDoesNotTouchOverlay(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -464,7 +474,7 @@ func TestSaveScopePreservesCustomAgents(t *testing.T) {
 }
 
 func TestRestoreFlatReviewStageKeepsOtherScale(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -538,19 +548,19 @@ func gitOffOverlaySession(t *testing.T) (*Session, string) {
 	}
 	dir := t.TempDir()
 	loc := config.OverlayLocation{ProjectRoot: dir, Path: filepath.Join(dir, config.OverlayFilename)}
-	if err := session.AttachOverlay(config.ModeGlobal, loc, nil); err != nil {
+	if err := session.AttachOverlay(loc, nil); err != nil {
 		t.Fatal(err)
 	}
 	return session, loc.Path
 }
 
 func TestFlatReviewStagesSaveDoesNotConflict(t *testing.T) {
-	session, path := tempOverlaySession(t, config.ModeGlobal)
+	session, path := tempOverlaySession(t)
 	flat := map[string]any{"review_stages": map[string]any{"PM": "skip"}}
 	if _, err := config.SaveOverlayIfUnchanged(path, flat, map[string]any{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := session.AttachOverlay(config.ModeGlobal, config.OverlayLocation{ProjectRoot: filepath.Dir(path), Path: path, Exists: true}, flat); err != nil {
+	if err := session.AttachOverlay(config.OverlayLocation{ProjectRoot: filepath.Dir(path), Path: path, Exists: true}, flat); err != nil {
 		t.Fatal(err)
 	}
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
@@ -563,7 +573,7 @@ func TestFlatReviewStagesSaveDoesNotConflict(t *testing.T) {
 }
 
 func TestSaveAllDirtySetsWelcomeComplete(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	session.scopeConfig.WelcomeComplete = false
 	session.Config.WelcomeComplete = false
 	session.SetLanguage("ja")
@@ -580,7 +590,7 @@ func TestSaveAllDirtySetsWelcomeComplete(t *testing.T) {
 }
 
 func TestOverlayRuleEditSyncsEffectiveConfig(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeProject)
+	session, _ := tempProjectTabSession(t)
 	scopePath := os.Getenv(config.EnvConfig)
 	raw, err := config.LoadScopeDocument(true)
 	if err != nil {
@@ -618,7 +628,7 @@ func TestOverlayRuleEditSyncsEffectiveConfig(t *testing.T) {
 }
 
 func TestUnsavedGlobalLauncherUpdatesProjectInherit(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	session.SetLauncher("foreground")
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
@@ -632,7 +642,7 @@ func TestUnsavedGlobalLauncherUpdatesProjectInherit(t *testing.T) {
 }
 
 func TestResetReviewRoleOnOverlayBindsAgentDefaults(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -655,7 +665,7 @@ func TestResetReviewRoleOnOverlayBindsAgentDefaults(t *testing.T) {
 }
 
 func TestGlobalTUISyncUpdatesProjectInheritance(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	value := session.Config.TUI
 	value.Theme = "dark"
 	value.Compact = true
@@ -676,7 +686,7 @@ func TestGlobalTUISyncUpdatesProjectInheritance(t *testing.T) {
 }
 
 func TestSetTUICompactFieldCreatesSparseOverlay(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -692,7 +702,7 @@ func TestSetTUICompactFieldCreatesSparseOverlay(t *testing.T) {
 }
 
 func TestSetTUIAutoVariantFieldCreatesSparseOverlay(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -708,7 +718,7 @@ func TestSetTUIAutoVariantFieldCreatesSparseOverlay(t *testing.T) {
 }
 
 func TestGlobalTUISyncKeepsAutoVariantThemes(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	value := session.Config.TUI
 	value.ThemeLight = "slate-light"
 	value.ThemeDark = "dusk"
@@ -724,7 +734,7 @@ func TestGlobalTUISyncKeepsAutoVariantThemes(t *testing.T) {
 }
 
 func TestInvalidOverlayEditRemainsDirtyAndCannotSave(t *testing.T) {
-	session, path := tempOverlaySession(t, config.ModeProject)
+	session, path := tempProjectTabSession(t)
 	delete(session.scopeRaw, "tui")
 	data, _ := json.Marshal(session.scopeRaw)
 	if err := os.WriteFile(os.Getenv(config.EnvConfig), data, 0600); err != nil {
@@ -754,7 +764,7 @@ func TestInvalidOverlayEditRemainsDirtyAndCannotSave(t *testing.T) {
 }
 
 func TestInvalidOverlayDraftRestoresFieldsAcrossTabs(t *testing.T) {
-	session, path := tempOverlaySession(t, config.ModeGlobal)
+	session, path := tempOverlaySession(t)
 	delete(session.scopeRaw, "tui")
 	data, _ := json.Marshal(session.scopeRaw)
 	if err := os.WriteFile(os.Getenv(config.EnvConfig), data, 0600); err != nil {
@@ -810,7 +820,7 @@ func TestInvalidOverlayDraftRestoresFieldsAcrossTabs(t *testing.T) {
 }
 
 func TestDraftProjectionPreservesRawRulesAndExplicitLanguage(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	delete(session.scopeRaw, "tui")
 	delete(session.scopeRaw, "rules")
 	data, _ := json.Marshal(session.scopeRaw)
@@ -854,7 +864,7 @@ func TestDraftProjectionPreservesRawRulesAndExplicitLanguage(t *testing.T) {
 }
 
 func TestGlobalReviewerResetUpdatesProjectModelInheritance(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	session.Config.Models.Review["claude"] = map[string]string{"model": "claude-model", "effort": "high"}
 	session.Config.Models.ReviewRoles["PMQA"] = map[string]string{"model": "old-codex", "effort": "low"}
 	session.scopeRaw, _ = config.DocumentFromConfig(session.Config)

@@ -101,7 +101,12 @@ func TestRemoteStartWithoutAWorktreeRecordsTheMainCheckout(t *testing.T) {
 		t.Fatal(err)
 	}
 	lifecycleGit(t, checkout, "init", "-q")
-	lifecycleGit(t, checkout, "commit", "--allow-empty", "-q", "-m", "fixture")
+	// A project without a registered remote is checked at its local HEAD.
+	if err := os.WriteFile(filepath.Join(checkout, "CLAUDE.md"), []byte("@~/.agents/kander/KANDER-AGENTS.md\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lifecycleGit(t, checkout, "add", "CLAUDE.md")
+	lifecycleGit(t, checkout, "commit", "-q", "-m", "fixture")
 	enterSubdirectory(t, checkout)
 	if _, err := StartRemote("claude", "tmux", card.TaskID); err != nil {
 		t.Fatal(err)

@@ -55,9 +55,7 @@ func AgentLookupIn(dir string) AgentLookup {
 // AgentLookupIn. The directory is checked again after the overlay was
 // located: a directory removed meanwhile may have let the search continue
 // above it, so its result is discarded and the configuration of the process
-// directory is read instead. The launcher of the project configuration may
-// name a definition of that project's own share directory, which the process
-// does not load; it is accepted as a command run in the project accepts it.
+// directory is read instead.
 func loadForAgents(dir string) (*Config, error) {
 	if !UsableConfigDir(dir) {
 		return Load(false)
@@ -69,7 +67,7 @@ func loadForAgents(dir string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg, _, err := layers.effectiveWith(func() []string { return launcherNamesIn(dir) })
+	cfg, _, err := layers.effective()
 	return cfg, err
 }
 

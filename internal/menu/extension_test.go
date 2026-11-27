@@ -17,7 +17,7 @@ func setupExtensionHome(t *testing.T) (string, config.InstallPaths, string) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	installtest.IsolateAgentConfigEnv(t)
-	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander")}
+	paths := config.InstallPaths{RulesDir: filepath.Join(home, ".agents", "kander")}
 	spec, _, ok := config.AgentExtension("pi")
 	if !ok {
 		t.Fatal("pi extension spec missing")
@@ -82,37 +82,12 @@ func TestReportAgentExtensionsReportsModifiedWithoutOverwrite(t *testing.T) {
 	}
 }
 
-func TestReportAgentExtensionsCoversProject(t *testing.T) {
-	home, project := t.TempDir(), t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	paths := config.InstallPaths{
-		Mode:        config.ModeProject,
-		ProjectRoot: project,
-		RulesDir:    filepath.Join(project, ".kander", "rules"),
-	}
-	spec, _, _ := config.AgentExtension("pi")
-	target := filepath.Join(project, filepath.FromSlash(spec.Project))
-	if reportAgentExtensions(paths, allInstallRules, false) {
-		t.Fatal("missing project extension must be unhealthy")
-	}
-	if !reportAgentExtensions(paths, allInstallRules, true) {
-		t.Fatal("project repair failed")
-	}
-	if _, err := os.Lstat(target); err != nil {
-		t.Fatalf("project extension not written: %v", err)
-	}
-	if !reportAgentExtensions(paths, allInstallRules, false) {
-		t.Fatal("installed project extension must be healthy")
-	}
-}
-
 func TestReportAgentExtensionsSkipsMissingPiDir(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	installtest.IsolateAgentConfigEnv(t)
-	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander")}
+	paths := config.InstallPaths{RulesDir: filepath.Join(home, ".agents", "kander")}
 	lines := CaptureReport(func() {
 		if !reportAgentExtensions(paths, allInstallRules, false) {
 			t.Error("no ~/.pi/agent must produce no findings and stay healthy")

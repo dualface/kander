@@ -12,11 +12,10 @@ import (
 
 // isolateDefinitions points the user directories at temporary share
 // directories and starts from the given embedded definitions.
-func isolateDefinitions(t *testing.T, embedded ...*loadedDefinition) (global, project string) {
+func isolateDefinitions(t *testing.T, embedded ...*loadedDefinition) (global string) {
 	t.Helper()
 	root := t.TempDir()
 	global = filepath.Join(root, "global")
-	project = filepath.Join(root, "project")
 	definitionRegistry.Lock()
 	saved := definitionRegistry.embedded
 	definitionRegistry.embedded = embedded
@@ -26,7 +25,6 @@ func isolateDefinitions(t *testing.T, embedded ...*loadedDefinition) (global, pr
 	DefinitionDirs = func() []DefinitionDir {
 		return []DefinitionDir{
 			{Source: SourceGlobal, Root: global, Path: filepath.Join(global, DefinitionsDirName)},
-			{Source: SourceProject, Root: project, Path: filepath.Join(project, DefinitionsDirName)},
 		}
 	}
 	t.Cleanup(func() {
@@ -36,7 +34,7 @@ func isolateDefinitions(t *testing.T, embedded ...*loadedDefinition) (global, pr
 		definitionRegistry.Unlock()
 		ReloadDefinitions()
 	})
-	return global, project
+	return global
 }
 
 func writeDefinition(t *testing.T, share, name string, data []byte) string {
@@ -87,7 +85,7 @@ func executableOf(t *testing.T, launcher string) string {
 
 func TestDefinitionSearchPathPrecedence(t *testing.T) {
 	resetLanguage(t)
-	global, project := isolateDefinitions(t, embeddedFixture(t, "embedded-term"))
+	global := isolateDefinitions(t, embeddedFixture(t, "embedded-term"))
 	if got := executableOf(t, "faketerm"); got != "embedded-term" {
 		t.Fatalf("embedded binary=%s", got)
 	}
@@ -97,35 +95,27 @@ func TestDefinitionSearchPathPrecedence(t *testing.T) {
 	if got := executableOf(t, "faketerm"); got != "global-term" {
 		t.Fatalf("global must replace embedded, binary=%s", got)
 	}
-
-	projectPath := writeDefinition(t, project, "faketerm", fixtureWith(t, "faketerm", "faketerm", "project-term"))
-	ReloadDefinitions()
-	if got := executableOf(t, "faketerm"); got != "project-term" {
-		t.Fatalf("project must replace global, binary=%s", got)
-	}
 	reports := DefinitionReports()
-	if len(reports) != 2 || reports[0].Path != globalPath || reports[0].Active || reports[1].Path != projectPath || !reports[1].Active {
+	if len(reports) != 1 || reports[0].Path != globalPath || !reports[0].Active {
 		t.Fatalf("reports=%+v", reports)
 	}
 
-	// A corrupt project file is reported and the global definition stays.
-	if err := os.WriteFile(projectPath, []byte(`{"schema_version": 1,`), 0o644); err != nil {
+	// A corrupt global file is reported and the embedded definition stays.
+	if err := os.WriteFile(globalPath, []byte(`{"schema_version": 1,`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	ReloadDefinitions()
-	if got := executableOf(t, "faketerm"); got != "global-term" {
-		t.Fatalf("corrupt project file must fall back, binary=%s", got)
+	if got := executableOf(t, "faketerm"); got != "embedded-term" {
+		t.Fatalf("corrupt global file must fall back, binary=%s", got)
 	}
 	reports = DefinitionReports()
-	if len(reports) != 2 || !reports[0].Active || reports[1].Err == nil || !strings.Contains(reports[1].Err.Error(), projectPath) {
+	if len(reports) != 1 || reports[0].Err == nil || !strings.Contains(reports[0].Err.Error(), globalPath) {
 		t.Fatalf("reports=%+v", reports)
 	}
 
-	// Removing both files restores the embedded definition.
-	for _, path := range []string{globalPath, projectPath} {
-		if err := os.Remove(path); err != nil {
-			t.Fatal(err)
-		}
+	// Removing the file restores the embedded definition.
+	if err := os.Remove(globalPath); err != nil {
+		t.Fatal(err)
 	}
 	ReloadDefinitions()
 	if got := executableOf(t, "faketerm"); got != "embedded-term" || len(DefinitionReports()) != 0 {
@@ -133,9 +123,20 @@ func TestDefinitionSearchPathPrecedence(t *testing.T) {
 	}
 }
 
+func TestDefaultDefinitionDirsAreTheGlobalShareOnly(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	dirs := defaultDefinitionDirs()
+	want := filepath.Join(home, ".local", "share", "kander", DefinitionsDirName)
+	if len(dirs) != 1 || dirs[0].Source != SourceGlobal || dirs[0].Path != want {
+		t.Fatalf("dirs=%+v want %s", dirs, want)
+	}
+}
+
 func TestUserDefinitionLaunchersReachConfigValidation(t *testing.T) {
 	resetLanguage(t)
-	global, _ := isolateDefinitions(t)
+	global := isolateDefinitions(t)
 	if config.ValidLauncherName("zellij") {
 		t.Fatal("launcher valid before its definition exists")
 	}
@@ -158,7 +159,7 @@ func TestUserDefinitionLaunchersReachConfigValidation(t *testing.T) {
 
 func TestDefinitionLauncherConflicts(t *testing.T) {
 	resetLanguage(t)
-	global, _ := isolateDefinitions(t, embeddedFixture(t, "embedded-term"))
+	global := isolateDefinitions(t, embeddedFixture(t, "embedded-term"))
 	writeDefinition(t, global, "other", fixtureWith(t, "other", "faketerm", "other-term"))
 	writeDefinition(t, global, "reserved", fixtureWith(t, "reserved", "auto", "reserved-term"))
 	ReloadDefinitions()
@@ -184,7 +185,7 @@ func TestDefinitionFilesAreReadWithoutFollowingLinks(t *testing.T) {
 		t.Skip("symlink creation needs privileges on Windows")
 	}
 	resetLanguage(t)
-	global, _ := isolateDefinitions(t)
+	global := isolateDefinitions(t)
 	target := filepath.Join(t.TempDir(), "zellij.json")
 	if err := os.WriteFile(target, fixtureWith(t, "zellij", "zellij", "zellij"), 0o644); err != nil {
 		t.Fatal(err)
@@ -208,7 +209,7 @@ func TestDefinitionFilesAreReadWithoutFollowingLinks(t *testing.T) {
 
 func TestAutoResolutionOrdersDefinitionsByPriority(t *testing.T) {
 	resetLanguage(t)
-	global, _ := isolateDefinitions(t)
+	global := isolateDefinitions(t)
 	low := mutateFixture(t, func(root map[string]any) {
 		root["name"] = "low"
 		launchers := object(root, "launchers")

@@ -16,19 +16,16 @@ import (
 )
 
 const (
-	SchemaVersion            = 1
-	ProjectInstallDirname    = ".kander"
-	ProjectGitExcludePattern = "/.kander/"
-	EnvConfig                = "KANDER_CONFIG"
-	EnvLang                  = "KANDER_LANG"
-	EnvLangCLI               = "KANDER_LANG_CLI"
-)
-
-type Mode string
-
-const (
-	ModeGlobal  Mode = "global"
-	ModeProject Mode = "project"
+	SchemaVersion = 1
+	// LegacyProjectInstallDirname is the directory a retired project install wrote into the
+	// Git main worktree; doctor reports and removes what is left of it.
+	LegacyProjectInstallDirname = ".kander"
+	// LegacyProjectGitExcludePattern is the line a retired project install appended to the
+	// repository's info/exclude.
+	LegacyProjectGitExcludePattern = "/.kander/"
+	EnvConfig                      = "KANDER_CONFIG"
+	EnvLang                        = "KANDER_LANG"
+	EnvLangCLI                     = "KANDER_LANG_CLI"
 )
 
 var (
@@ -98,18 +95,13 @@ func IsError(err error) bool {
 	return errors.As(err, &target)
 }
 
-// InstallPaths holds the shared paths of the current install scope.
-//
-// global maps to the layout under the user's HOME; project maps to .kander/ in the Git main worktree.
-// Running from the source tree counts as global, even when the repository root holds both cmd/ and rules/.
+// InstallPaths holds the shared paths of the install, which always lives under the user's
+// HOME: there is one global kander per user, whatever directory the binary runs from.
 type InstallPaths struct {
-	Mode        Mode
-	ConfigPath  string
-	RulesDir    string
-	BinDir      string
-	ShareDir    string
-	ProjectRoot string
-	InstallRoot string
+	ConfigPath string
+	RulesDir   string
+	BinDir     string
+	ShareDir   string
 }
 
 // Models matches the models section of the onevoke schema.

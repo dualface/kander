@@ -31,7 +31,7 @@ func resultAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (s
 		"Preamble":   preamble,
 		"JSONPath":   process.AgentPath(request.JSONPath),
 		"IssueRules": rulesPath(paths, "KANDER-ISSUE-RULES.md"),
-		"Command":    commandName(paths),
+		"Command":    commandName,
 		"Number":     request.Number,
 		"Host":       request.Repository.Host,
 		"Owner":      request.Repository.Owner,

@@ -29,7 +29,7 @@ func requireFileValues(t *testing.T, want config.PolicyValues) {
 }
 
 func TestOptionsShowTheServerPolicyAndSaveHostValuesOnly(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	fileValues := config.PolicyValuesOf(session.Config)
 	session.AttachPolicy(serverPolicy(3))
 	if session.Config.Git.BranchMode != "main-only" || session.Config.Issue.ResultOnDone != "ask" || session.Config.AgentLanguage != "zh-CN" {
@@ -75,7 +75,7 @@ func TestOptionsShowTheServerPolicyAndSaveHostValuesOnly(t *testing.T) {
 }
 
 func TestOptionsProjectTabKeepsPolicyEditsOutOfTheOverlay(t *testing.T) {
-	session, overlay := tempOverlaySession(t, config.ModeGlobal)
+	session, overlay := tempOverlaySession(t)
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestOptionsProjectTabKeepsPolicyEditsOutOfTheOverlay(t *testing.T) {
 }
 
 func TestOptionsKeepPolicyEditsWhenTheServerChanges(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	session.AttachPolicy(serverPolicy(3))
 	// Without edits a newer policy replaces the shown one and the expected revision.
 	if session.AttachPolicy(serverPolicy(4)) || session.PolicyRevision() != 4 {
@@ -136,7 +136,7 @@ func TestOptionsKeepPolicyEditsWhenTheServerChanges(t *testing.T) {
 }
 
 func TestOptionsWithoutAPolicyKeepTheFileBehavior(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	session.AttachPolicy(config.PolicySnapshot{})
 	if session.PolicyBacked() {
 		t.Fatal("an unset policy backs the panel")
@@ -157,7 +157,7 @@ func TestOptionsWithoutAPolicyKeepTheFileBehavior(t *testing.T) {
 		t.Fatalf("config.json holds %q", saved.Git.BranchMode)
 	}
 	// A session of no server project shows no policy label at all.
-	plain, _ := tempOverlaySession(t, config.ModeGlobal)
+	plain, _ := tempOverlaySession(t)
 	if label := plain.PolicyLabel("git", "branch_mode"); label != "" {
 		t.Fatalf("an unbound session labels %q", label)
 	}

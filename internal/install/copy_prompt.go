@@ -104,13 +104,15 @@ func CheckStartupCopy() (handled bool, code int) {
 		fmt.Fprintln(os.Stderr, config.Text("install.path_unknown", err.Error()))
 		return false, 0
 	}
-	paths, err := config.InstallPathsFromEntry(entry)
+	// A binary left in a retired project install (.kander/bin/) is not offered as the global
+	// copy: it may be older than the global one, and the migration notice points at doctor.
+	if _, legacy := config.LegacyProjectInstallRootOf(entry); legacy {
+		return false, 0
+	}
+	paths, err := config.GlobalInstallPaths()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return true, 1
-	}
-	if paths.Mode == config.ModeProject {
-		return false, 0
 	}
 	return copyForStartup(paths)
 }
@@ -131,7 +133,7 @@ func copyForStartup(paths config.InstallPaths) (bool, int) {
 	}
 	source, err := resolveSource("", true)
 	if err == nil {
-		err = rejectDest(dest, false)
+		err = rejectDest(dest)
 		if err == nil {
 			err = fs.EnsureInheritedDirectoryPath(paths.BinDir)
 		}

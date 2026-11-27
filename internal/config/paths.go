@@ -142,7 +142,6 @@ func globalInstallPaths() (InstallPaths, error) {
 		return InstallPaths{}, configErrorfWrap(err, "config.cannot_resolve_home_directory")
 	}
 	return InstallPaths{
-		Mode:       ModeGlobal,
 		ConfigPath: filepath.Join(home, ".config", "kander", "config.json"),
 		RulesDir:   filepath.Join(home, ".agents", "kander"),
 		BinDir:     filepath.Join(home, ".local", "bin"),
@@ -155,122 +154,47 @@ func GlobalInstallPaths() (InstallPaths, error) {
 	return globalInstallPaths()
 }
 
-func projectInstallLayout(projectRoot string) InstallPaths {
-	installRoot := filepath.Join(projectRoot, ProjectInstallDirname)
-	return InstallPaths{
-		Mode:        ModeProject,
-		ConfigPath:  filepath.Join(installRoot, "config.json"),
-		RulesDir:    filepath.Join(installRoot, "rules"),
-		BinDir:      filepath.Join(installRoot, "bin"),
-		ShareDir:    filepath.Join(installRoot, "share"),
-		ProjectRoot: projectRoot,
-		InstallRoot: installRoot,
-	}
+// CurrentInstallPaths returns the install paths in force. Kander has one install scope, the
+// global one, whatever directory the running binary lives in.
+func CurrentInstallPaths() (InstallPaths, error) {
+	return globalInstallPaths()
 }
 
-func currentEntry() (string, error) {
+// LegacyProjectInstallRoot reports the retired project install directory the running binary
+// lives in: an entry inside a directory named .kander/bin/ (the layout earlier releases wrote
+// into a Git main worktree). It only names the directory for the migration notice; the binary
+// still runs with the global paths.
+func LegacyProjectInstallRoot() (string, bool) {
 	exe, err := os.Executable()
 	if err != nil {
-		return "", configErrorfWrap(err, "config.cannot_resolve_current_entry")
+		return "", false
 	}
-	return lexicalAbsolute(exe)
+	return LegacyProjectInstallRootOf(exe)
 }
 
-// InstallPathsFromEntry resolves global or project install paths from the entry point.
-// Project mode is entered only when the entry lives in a directory named .kander/bin/, so a source tree's cmd/ is never mistaken for one.
-func InstallPathsFromEntry(entry string) (InstallPaths, error) {
+// LegacyProjectInstallRootOf is LegacyProjectInstallRoot for the given entry path.
+func LegacyProjectInstallRootOf(entry string) (string, bool) {
 	source, err := lexicalAbsolute(entry)
 	if err != nil {
-		return InstallPaths{}, err
+		return "", false
 	}
 	binDir := filepath.Dir(source)
 	installRoot := filepath.Dir(binDir)
-	if !sameDirName(filepath.Base(binDir), "bin") || !sameDirName(filepath.Base(installRoot), ProjectInstallDirname) {
-		return globalInstallPaths()
+	if !sameDirName(filepath.Base(binDir), "bin") || !sameDirName(filepath.Base(installRoot), LegacyProjectInstallDirname) {
+		return "", false
 	}
-	if runtime.GOOS == "windows" {
-		if _, err := ensureWindowsPathNofollowSafe(binDir); err != nil {
-			return InstallPaths{}, err
-		}
-	} else {
-		if err := rejectLeafReparse(installRoot); err != nil {
-			return InstallPaths{}, err
-		}
-		if err := rejectLeafReparse(binDir); err != nil {
-			return InstallPaths{}, err
-		}
-	}
-	parent := filepath.Dir(installRoot)
-	main, err := gitMainWorktree(parent)
-	if err != nil {
-		return InstallPaths{}, err
-	}
-	if main == "" {
-		return InstallPaths{}, configErrorf(
-			"config.project_is_not_a_git_repository", parent,
-		)
-	}
-	paths := projectInstallLayout(main)
-	if runtime.GOOS == "windows" {
-		if _, err := ensureWindowsPathNofollowSafe(paths.BinDir); err != nil {
-			return InstallPaths{}, err
-		}
-	} else {
-		if paths.InstallRoot != "" {
-			if err := rejectLeafReparse(paths.InstallRoot); err != nil {
-				return InstallPaths{}, err
-			}
-		}
-		if err := rejectLeafReparse(paths.BinDir); err != nil {
-			return InstallPaths{}, err
-		}
-	}
-	return paths, nil
+	return installRoot, true
 }
 
-// CurrentInstallPaths resolves the scope from the current executable entry point.
-func CurrentInstallPaths() (InstallPaths, error) {
-	entry, err := currentEntry()
-	if err != nil {
-		return InstallPaths{}, err
-	}
-	return InstallPathsFromEntry(entry)
+// MainWorktree returns the Git main worktree of directory, or "" when directory is not inside
+// a Git checkout. Git override variables of the environment are ignored.
+func MainWorktree(directory string) (string, error) {
+	return gitMainWorktree(directory)
 }
 
-// ProjectInstallPaths normalizes a user-supplied project directory to the project install paths under the Git main worktree.
-func ProjectInstallPaths(project string) (InstallPaths, error) {
-	candidate, err := lexicalAbsolute(project)
-	if err != nil {
-		return InstallPaths{}, err
-	}
-	if runtime.GOOS == "windows" {
-		if _, err := ensureWindowsPathNofollowSafe(candidate); err != nil {
-			return InstallPaths{}, err
-		}
-	} else if err := rejectLeafReparse(candidate); err != nil {
-		return InstallPaths{}, err
-	}
-	info, err := os.Stat(candidate)
-	if err != nil || !info.IsDir() {
-		return InstallPaths{}, configErrorf(
-			"config.project_directory_does_not_exist", candidate,
-		)
-	}
-	main, err := gitMainWorktree(candidate)
-	if err != nil {
-		return InstallPaths{}, err
-	}
-	if main == "" {
-		return InstallPaths{}, configErrorf(
-			"config.project_is_not_a_git_repository", candidate,
-		)
-	}
-	if runtime.GOOS == "windows" {
-		if _, err := ensureWindowsPathNofollowSafe(main); err != nil {
-			return InstallPaths{}, err
-		}
-	}
-	return projectInstallLayout(main), nil
+// GitInfoExcludePath returns the repository-local exclude file of the checkout at gitRoot.
+func GitInfoExcludePath(gitRoot string) (string, error) {
+	return gitExcludePath(gitRoot)
 }
 
 func gitExcludePath(gitRoot string) (string, error) {
@@ -301,83 +225,12 @@ func volumeAnchor(abs string) (string, error) {
 	return string(os.PathSeparator), nil
 }
 
-func appendGitExcludePattern(gitRoot, pattern string) (string, error) {
-	exclude, err := gitExcludePath(gitRoot)
-	if err != nil {
-		return "", err
-	}
-	var openRoot string
-	if runtime.GOOS == "windows" {
-		if _, err := ensureWindowsPathNofollowSafe(filepath.Dir(exclude)); err != nil {
-			return "", err
-		}
-		if err := rejectLeafReparse(exclude); err != nil {
-			return "", err
-		}
-		if err := fs.EnsureInheritedDirectoryPath(filepath.Dir(exclude)); err != nil {
-			return "", configErrorfWrap(err,
-				"board.failed_to_update_git_exclude", exclude, err.Error(),
-			)
-		}
-		openRoot, err = volumeAnchor(exclude)
-		if err != nil {
-			return "", err
-		}
-	} else {
-		if err := rejectLeafReparse(gitRoot); err != nil {
-			return "", err
-		}
-		rel, err := filepath.Rel(gitRoot, filepath.Dir(exclude))
-		if err != nil || strings.HasPrefix(rel, "..") {
-			return "", configErrorf(
-				"config.git_exclude_is_outside_the_repository", exclude,
-			)
-		}
-		current := gitRoot
-		if rel != "." {
-			for _, part := range strings.Split(rel, string(os.PathSeparator)) {
-				if part == "" || part == "." {
-					continue
-				}
-				current = filepath.Join(current, part)
-				if err := rejectLeafReparse(current); err != nil {
-					return "", err
-				}
-			}
-		}
-		if err := rejectLeafReparse(exclude); err != nil {
-			return "", err
-		}
-		openRoot = gitRoot
-	}
-	if err := fs.AppendUniqueLine(openRoot, exclude, pattern); err != nil {
-		return "", configErrorfWrap(err,
-			"board.failed_to_update_git_exclude", exclude, err.Error(),
-		)
-	}
-	return exclude, nil
-}
-
-// EnsureProjectGitExclude idempotently writes /.kander/ into the repository-local Git exclude while preserving existing permissions.
-func EnsureProjectGitExclude(project string) (string, error) {
-	paths, err := ProjectInstallPaths(project)
-	if err != nil {
-		return "", err
-	}
-	if paths.ProjectRoot == "" {
-		return "", configErrorf(
-			"config.project_install_paths_are_missing_the_main_worktree",
-		)
-	}
-	return appendGitExcludePattern(paths.ProjectRoot, ProjectGitExcludePattern)
-}
-
 // ConfigPath returns the config file path in force; KANDER_CONFIG overrides the scope default.
 func ConfigPath() (string, error) {
 	if override := os.Getenv(EnvConfig); override != "" {
 		return expandUser(override), nil
 	}
-	paths, err := CurrentInstallPaths()
+	paths, err := globalInstallPaths()
 	if err != nil {
 		return "", err
 	}

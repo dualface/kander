@@ -12,19 +12,21 @@ import (
 	"github.com/dualface/kander/v2/internal/config"
 )
 
-// The golden transcripts pin what install, doctor and uninstall write and print for every
-// reference style and file format combination the embedded definitions produce. They were
-// generated from the implementation that predates the rules integration providers, so a
-// refactor of the provider layer must leave them byte for byte unchanged. Regenerate them only
-// for a deliberate change of written output: KANDER_UPDATE_GOLDEN=1 go test -run Golden.
+// The golden transcripts pin what kander init writes into the project rules files, what doctor
+// detects there, and what the global injection cleanup and uninstall do to the files earlier
+// releases wrote into the agents' global rules files, for every reference style and file format
+// combination the embedded definitions produce. A refactor of the provider layer must leave
+// them byte for byte unchanged. Regenerate them only for a deliberate change of written output:
+// KANDER_UPDATE_GOLDEN=1 go test -run Golden.
 const (
 	rulesGoldenFile        = "testdata/rules_providers_golden.txt"
 	rulesGoldenSymlinkFile = "testdata/rules_providers_symlink_golden.txt"
 )
 
-// goldenCombo is one agent in one scope; together the five cover the three combinations of
-// reference style and file format: claude-import with markdown, markdown-reference with a
-// .mdc rule, and markdown-reference with markdown.
+// goldenCombo is one agent with its project rules file (project) or its global rules file;
+// together they cover the combinations of reference style and file format: claude-import with
+// markdown, markdown-reference with a .mdc rule (global only), and markdown-reference with
+// markdown. A project combination runs the kander init pipeline, a global one the cleanup.
 type goldenCombo struct {
 	name    string
 	agent   string
@@ -37,6 +39,22 @@ var goldenCombos = []goldenCombo{
 	{"cursor-global", "cursor", false},
 	{"cursor-project", "cursor", true},
 	{"codex-global", "codex", false},
+}
+
+// globalBlock is the reference an earlier release wrote into a global rules file.
+func globalBlock(agent string) string {
+	if referenceStyleFor(agent).Name() == "claude-import" {
+		return "@~/.agents/kander/KANDER-AGENTS.md\n"
+	}
+	return "## Kander Rules Entry\n\nAt the start of every session, read `~/.agents/kander/KANDER-AGENTS.md` and follow it as the Kander workflow rules entry.\n"
+}
+
+// comboBlock is the block the combination's file holds when it references the entry.
+func comboBlock(c goldenCombo) string {
+	if c.project {
+		return referenceBlock(c.agent)
+	}
+	return globalBlock(c.agent)
 }
 
 // goldenScenario prepares the rules file of one combination and names what the transcript
@@ -93,7 +111,7 @@ func goldenScenarios() []goldenScenario {
 // the rules file the agent reads there. The temporary home is resolved first, so a TMPDIR that
 // is an alias for another directory cannot make the spelling of a target differ from the real
 // path an uninstall edit uses; the symlink scenarios create their own links below this home.
-func goldenEnvironment(t *testing.T, c goldenCombo) (config.InstallPaths, string, string) {
+func goldenEnvironment(t *testing.T, c goldenCombo) (ProjectRules, string, string) {
 	t.Helper()
 	home := setupInstallHome(t)
 	real, err := filepath.EvalSymlinks(home)
@@ -105,19 +123,24 @@ func goldenEnvironment(t *testing.T, c goldenCombo) (config.InstallPaths, string
 		t.Setenv("HOME", home)
 		t.Setenv("USERPROFILE", home)
 	}
-	var paths config.InstallPaths
-	if c.project {
-		root := filepath.Join(home, "project")
-		paths = config.InstallPaths{Mode: config.ModeProject, ProjectRoot: root, RulesDir: filepath.Join(root, ".kander", "rules"), ConfigPath: filepath.Join(root, ".kander", "config.json")}
-	} else {
-		paths = config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander"), ConfigPath: filepath.Join(home, ".config", "kander", "config.json")}
-	}
+	paths := config.InstallPaths{RulesDir: filepath.Join(home, ".agents", "kander"), ConfigPath: filepath.Join(home, ".config", "kander", "config.json")}
 	writeIntegrateFile(t, RulesEntry(paths), "# Kander entry\n")
-	target, err := AgentRulesTarget(c.agent, paths)
-	if err != nil || target == "" {
-		t.Fatalf("target=%q err=%v", target, err)
+	root := filepath.Join(home, "project")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
 	}
-	return paths, target, home
+	project := ProjectRules{Root: root, Paths: paths}
+	target := ProjectRulesTarget(c.agent, root)
+	if !c.project {
+		var err error
+		if target, err = GlobalRulesTarget(c.agent, paths); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if target == "" {
+		t.Fatalf("no target for %s", c.name)
+	}
+	return project, target, home
 }
 
 // goldenTranscript renders paths and bytes with the temporary home abstracted away, so the
@@ -221,44 +244,46 @@ func goldenApplyUninstall(g *goldenTranscript, paths config.InstallPaths, files 
 	}
 }
 
-// runGoldenScenario records the five observable behaviors for one scenario: what an install
-// writes, what doctor detects, what a repair rewrites, and what uninstall plans.
+// runGoldenScenario records the observable behaviors for one scenario: for a project rules
+// file what doctor detects and what kander init writes, for a global rules file what the
+// cleanup and uninstall plan.
 func runGoldenScenario(t *testing.T, g *goldenTranscript, c goldenCombo, s goldenScenario) {
-	paths, target, home := goldenEnvironment(t, c)
+	project, target, home := goldenEnvironment(t, c)
 	g.home = home
-	block := referenceBlock(c.agent, paths)
+	block := comboBlock(c)
 	g.line("== %s / %s", c.name, s.name)
 	g.line("block: %q", block)
 	text, exists := s.content(c, block)
 	if exists {
 		writeIntegrateFile(t, target, text)
 	}
-	ok, detail := RulesIntegration(c.agent, paths)
-	g.line("detect: ok=%t detail=%s", ok, g.msg(detail))
-	if exists {
-		issues, err := InspectRulesReferences(c.agent, paths)
-		g.line("inspect: invalid=%d duplicates=%d files=%d err=%v", issues.Invalid, issues.Duplicates, len(issues.Files), err != nil)
-		goldenUninstall(g, paths, target)
+	if !c.project {
+		if exists {
+			goldenUninstall(g, project.Paths, target)
+		}
+		return
 	}
+	ok, detail := ProjectReferenceStatus(c.agent, project)
+	g.line("detect: ok=%t detail=%s", ok, g.msg(detail))
 	for pass := 1; pass <= 2; pass++ {
-		outcome, err := EnsureRulesIntegration(c.agent, paths)
+		outcome, err := EnsureProjectReference(c.agent, project, config.InstallRulesOf(nil))
 		g.line("ensure %d: %s target=%s", pass, g.outcome(outcome, err), g.path(outcome.Target))
 		g.file(fmt.Sprintf("file after ensure %d", pass), target)
 	}
-	ok, detail = RulesIntegration(c.agent, paths)
+	ok, detail = ProjectReferenceStatus(c.agent, project)
 	g.line("detect after ensure: ok=%t detail=%s", ok, g.msg(detail))
-	goldenUninstall(g, paths, target)
 }
 
-// runGoldenApply records what a real uninstall does to the initial content of one scenario.
+// runGoldenApply records what a real uninstall does to the initial content of one global
+// rules file scenario.
 func runGoldenApply(t *testing.T, g *goldenTranscript, c goldenCombo, s goldenScenario) {
-	paths, target, home := goldenEnvironment(t, c)
+	project, target, home := goldenEnvironment(t, c)
 	g.home = home
 	g.line("== %s / %s / apply uninstall", c.name, s.name)
-	if text, exists := s.content(c, referenceBlock(c.agent, paths)); exists {
+	if text, exists := s.content(c, comboBlock(c)); exists {
 		writeIntegrateFile(t, target, text)
 	}
-	goldenApplyUninstall(g, paths, target)
+	goldenApplyUninstall(g, project.Paths, target)
 }
 
 func TestRulesProvidersGolden(t *testing.T) {
@@ -268,44 +293,44 @@ func TestRulesProvidersGolden(t *testing.T) {
 			t.Run(c.name+"/"+s.name, func(t *testing.T) {
 				runGoldenScenario(t, g, c, s)
 			})
+			if c.project {
+				continue
+			}
 			t.Run(c.name+"/"+s.name+"/apply-uninstall", func(t *testing.T) {
 				runGoldenApply(t, g, c, s)
 			})
 		}
 	}
 	// An AGENTS.override.md sibling is processed by the same pipeline and never created.
-	for _, c := range []goldenCombo{{"cursor-project", "cursor", true}, {"codex-global", "codex", false}} {
-		t.Run(c.name+"/override", func(t *testing.T) {
-			paths, target, home := goldenEnvironment(t, c)
-			g.home = home
-			g.line("== %s / override", c.name)
-			override := filepath.Join(filepath.Dir(target), "AGENTS.override.md")
-			writeIntegrateFile(t, target, "# Main\n")
-			writeIntegrateFile(t, override, "# Override\n\n@/nowhere/KANDER-AGENTS.md\n")
-			ok, detail := RulesIntegration(c.agent, paths)
-			g.line("detect: ok=%t detail=%s", ok, g.msg(detail))
-			outcome, err := EnsureRulesIntegration(c.agent, paths)
-			g.line("ensure: %s", g.outcome(outcome, err))
-			g.file("main", target)
-			g.file("override", override)
-			goldenUninstall(g, paths, target, override)
-		})
-		t.Run(c.name+"/override/apply-uninstall", func(t *testing.T) {
-			paths, target, home := goldenEnvironment(t, c)
-			g.home = home
-			g.line("== %s / override / apply uninstall", c.name)
-			override := filepath.Join(filepath.Dir(target), "AGENTS.override.md")
-			writeIntegrateFile(t, target, "# Main\n\n"+referenceBlock(c.agent, paths))
-			writeIntegrateFile(t, override, "# Override\n\n@/nowhere/KANDER-AGENTS.md\n")
-			goldenApplyUninstall(g, paths, target, override)
-		})
-	}
-	// Coverage order: a project install writes claude-import agents first.
-	t.Run("project-coverage-order", func(t *testing.T) {
-		_, _, home := goldenEnvironment(t, goldenCombos[1])
+	t.Run("cursor-project/override", func(t *testing.T) {
+		c := goldenCombos[3]
+		project, target, home := goldenEnvironment(t, c)
 		g.home = home
-		paths := config.InstallPaths{Mode: config.ModeProject, ProjectRoot: filepath.Join(home, "project"), RulesDir: filepath.Join(home, "project", ".kander", "rules"), ConfigPath: filepath.Join(home, "project", ".kander", "config.json")}
-		g.line("== project-coverage-order: %v", IntegrationAgents(paths))
+		g.line("== %s / override", c.name)
+		override := filepath.Join(filepath.Dir(target), "AGENTS.override.md")
+		writeIntegrateFile(t, target, "# Main\n")
+		writeIntegrateFile(t, override, "# Override\n\n@/nowhere/KANDER-AGENTS.md\n")
+		ok, detail := ProjectReferenceStatus(c.agent, project)
+		g.line("detect: ok=%t detail=%s", ok, g.msg(detail))
+		outcome, err := EnsureProjectReference(c.agent, project, config.InstallRulesOf(nil))
+		g.line("ensure: %s", g.outcome(outcome, err))
+		g.file("main", target)
+		g.file("override", override)
+	})
+	t.Run("codex-global/override/apply-uninstall", func(t *testing.T) {
+		c := goldenCombos[4]
+		project, target, home := goldenEnvironment(t, c)
+		g.home = home
+		g.line("== %s / override / apply uninstall", c.name)
+		override := filepath.Join(filepath.Dir(target), "AGENTS.override.md")
+		writeIntegrateFile(t, target, "# Main\n\n"+globalBlock(c.agent))
+		writeIntegrateFile(t, override, "# Override\n\n@/nowhere/KANDER-AGENTS.md\n")
+		goldenUninstall(g, project.Paths, target, override)
+		goldenApplyUninstall(g, project.Paths, target, override)
+	})
+	// Coverage order: kander init writes claude-import agents first.
+	t.Run("project-coverage-order", func(t *testing.T) {
+		g.line("== project-coverage-order: %v", ProjectReferenceAgents())
 	})
 	compareGolden(t, rulesGoldenFile, g.String())
 }
@@ -356,27 +381,31 @@ func TestRulesProvidersGoldenSymlinks(t *testing.T) {
 	for _, c := range goldenCombos {
 		for _, link := range goldenLinks {
 			t.Run(c.name+"/"+link.name, func(t *testing.T) {
-				paths, target, home := goldenEnvironment(t, c)
+				project, target, home := goldenEnvironment(t, c)
 				g.home = home
 				g.line("== %s / %s", c.name, link.name)
-				files := link.build(t, paths, target, home)
-				ok, detail := RulesIntegration(c.agent, paths)
+				files := link.build(t, project.Paths, target, home)
+				if !c.project {
+					goldenUninstall(g, project.Paths, files...)
+					return
+				}
+				ok, detail := ProjectReferenceStatus(c.agent, project)
 				g.line("detect: ok=%t detail=%s", ok, g.msg(detail))
-				issues, err := InspectRulesReferences(c.agent, paths)
-				g.line("inspect: invalid=%d duplicates=%d files=%d err=%v", issues.Invalid, issues.Duplicates, len(issues.Files), err != nil)
-				outcome, err := EnsureRulesIntegration(c.agent, paths)
+				outcome, err := EnsureProjectReference(c.agent, project, config.InstallRulesOf(nil))
 				g.line("ensure: %s", g.outcome(outcome, err))
 				for _, file := range files[1:] {
 					g.file("followed", file)
 				}
-				goldenUninstall(g, paths, files...)
 			})
+			if c.project {
+				continue
+			}
 			t.Run(c.name+"/"+link.name+"/apply-uninstall", func(t *testing.T) {
-				paths, target, home := goldenEnvironment(t, c)
+				project, target, home := goldenEnvironment(t, c)
 				g.home = home
 				g.line("== %s / %s / apply uninstall", c.name, link.name)
-				files := link.build(t, paths, target, home)
-				goldenApplyUninstall(g, paths, files...)
+				files := link.build(t, project.Paths, target, home)
+				goldenApplyUninstall(g, project.Paths, files...)
 			})
 		}
 	}

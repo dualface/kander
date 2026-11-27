@@ -40,7 +40,17 @@ func integrationGit(t *testing.T) (string, string) {
 		return strings.TrimSpace(string(b))
 	}
 	git("init", "-b", "develop")
-	git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--allow-empty", "-m", "fixture")
+	// The project references kander init writes; kander start refuses a start base without them.
+	for name, text := range map[string]string{
+		"CLAUDE.md": "@~/.agents/kander/KANDER-AGENTS.md\n",
+		"AGENTS.md": "## Kander Rules Entry\n\nAt the start of every session, read `~/.agents/kander/KANDER-AGENTS.md` and follow it as the Kander workflow rules entry; when that file does not exist, skip this section.\n",
+	} {
+		if err := os.WriteFile(filepath.Join(cwd, name), []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	git("add", "CLAUDE.md", "AGENTS.md")
+	git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "fixture")
 	return cwd, git("rev-parse", "HEAD")
 }
 

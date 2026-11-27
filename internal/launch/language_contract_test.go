@@ -36,7 +36,7 @@ func configuredAgentLanguage(t *testing.T) string {
 }
 
 func TestHeadedTaskFileInstructionEndsAtFileProtocol(t *testing.T) {
-	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(t.TempDir(), "rules")}
+	paths := config.InstallPaths{RulesDir: filepath.Join(t.TempDir(), "rules")}
 	for _, kind := range []string{"start", "resume", "takeover", "orchestrate", "triage", "refine", "result", "chat"} {
 		line, err := headedTaskFileInstruction(paths, kind, "20260101-a-task", "dualface/kander#42", 2, "/tmp/task.md")
 		if err != nil {
@@ -65,7 +65,7 @@ func TestInvalidCardLanguageDeliversNoReminder(t *testing.T) {
 
 func TestOrchestrateLanguageFallsBackToConfigWhenCardsDisagree(t *testing.T) {
 	setupBoard(t)
-	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(t.TempDir(), "rules")}
+	paths := config.InstallPaths{RulesDir: filepath.Join(t.TempDir(), "rules")}
 	if got, err := orchestrateLanguage([]string{"- LANGUAGE: ja\n", "- LANGUAGE: ja\n"}, paths); err != nil || got != "ja" {
 		t.Fatalf("shared language=%q err=%v", got, err)
 	}
@@ -113,7 +113,7 @@ func TestStartChatCarriesTheConfiguredLanguageContract(t *testing.T) {
 // Service snapshots must supply the frozen card language without local board reads.
 func TestRemoteSnapshotLanguageContract(t *testing.T) {
 	setupBoard(t)
-	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(t.TempDir(), "rules")}
+	paths := config.InstallPaths{RulesDir: filepath.Join(t.TempDir(), "rules")}
 	for _, mode := range []string{"refine", "result"} {
 		t.Run(mode, func(t *testing.T) {
 			request := issue.TriageLaunch{Root: filepath.Join(t.TempDir(), "absent-board"), CardID: "20261114-snapshot-task"}

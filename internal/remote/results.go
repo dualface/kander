@@ -61,6 +61,9 @@ type bindResult struct {
 	ProjectID   string `json:"project_id"`
 	ServerURL   string `json:"server_url"`
 	BoardPath   string `json:"board_path,omitempty"`
+	// RulesFiles lists the project rules files kander init wrote the project reference into;
+	// they take effect for task worktrees and other hosts once committed and pushed.
+	RulesFiles []string `json:"rules_files,omitempty"`
 }
 
 // guardResult is the result object of kander guard-write.

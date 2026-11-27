@@ -9,23 +9,24 @@ import (
 	"github.com/dualface/kander/v2/internal/config"
 )
 
-// codexOverrideSetup prepares a global scope where codex is a covered agent and returns the
-// AGENTS.md target together with its AGENTS.override.md sibling path.
-func codexOverrideSetup(t *testing.T) (config.InstallPaths, string, string) {
+// codexOverrideSetup prepares a project and returns its AGENTS.md target together with the
+// AGENTS.override.md sibling path.
+func codexOverrideSetup(t *testing.T) (ProjectRules, string, string) {
 	t.Helper()
-	home := setupInstallHome(t)
-	paths := globalIntegrationPaths(t, home)
-	target := filepath.Join(home, ".codex", "AGENTS.md")
-	override := filepath.Join(home, ".codex", "AGENTS.override.md")
-	return paths, target, override
+	project, _ := projectFixture(t)
+	target := filepath.Join(project.Root, "AGENTS.md")
+	override := filepath.Join(project.Root, "AGENTS.override.md")
+	return project, target, override
 }
 
-func TestEnsureRulesIntegrationWritesExistingOverride(t *testing.T) {
-	paths, target, override := codexOverrideSetup(t)
+var allSwitches = config.InstallRulesOf(nil)
+
+func TestEnsureProjectReferenceWritesExistingOverride(t *testing.T) {
+	project, target, override := codexOverrideSetup(t)
 	writeIntegrateFile(t, target, "# Personal rules\n")
 	writeIntegrateFile(t, override, "# Override rules\n")
 
-	outcome, err := EnsureRulesIntegration("codex", paths)
+	outcome, err := EnsureProjectReference("codex", project, allSwitches)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +39,7 @@ func TestEnsureRulesIntegrationWritesExistingOverride(t *testing.T) {
 	if outcome.Override.Target != override || outcome.Override.Status != IntegrationUpdated {
 		t.Fatalf("override outcome: %+v", outcome.Override)
 	}
-	spelling := entrySpelling(paths)
+	spelling := ProjectEntrySpelling
 	for _, file := range []string{target, override} {
 		data, err := os.ReadFile(file)
 		if err != nil || !strings.Contains(string(data), spelling) {
@@ -46,7 +47,7 @@ func TestEnsureRulesIntegrationWritesExistingOverride(t *testing.T) {
 		}
 	}
 
-	again, err := EnsureRulesIntegration("codex", paths)
+	again, err := EnsureProjectReference("codex", project, allSwitches)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,11 +59,11 @@ func TestEnsureRulesIntegrationWritesExistingOverride(t *testing.T) {
 	}
 }
 
-func TestEnsureRulesIntegrationNeverCreatesOverride(t *testing.T) {
-	paths, target, override := codexOverrideSetup(t)
+func TestEnsureProjectReferenceNeverCreatesOverride(t *testing.T) {
+	project, target, override := codexOverrideSetup(t)
 	writeIntegrateFile(t, target, "# Personal rules\n")
 
-	outcome, err := EnsureRulesIntegration("codex", paths)
+	outcome, err := EnsureProjectReference("codex", project, allSwitches)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,11 +75,11 @@ func TestEnsureRulesIntegrationNeverCreatesOverride(t *testing.T) {
 	}
 }
 
-func TestEnsureRulesIntegrationOverrideWithoutMainFile(t *testing.T) {
-	paths, _, override := codexOverrideSetup(t)
+func TestEnsureProjectReferenceOverrideWithoutMainFile(t *testing.T) {
+	project, _, override := codexOverrideSetup(t)
 	writeIntegrateFile(t, override, "# Override rules\n")
 
-	outcome, err := EnsureRulesIntegration("codex", paths)
+	outcome, err := EnsureProjectReference("codex", project, allSwitches)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,24 +90,22 @@ func TestEnsureRulesIntegrationOverrideWithoutMainFile(t *testing.T) {
 		t.Fatalf("override outcome: %+v", outcome.Override)
 	}
 	data, _ := os.ReadFile(override)
-	if !strings.Contains(string(data), entrySpelling(paths)) {
+	if !strings.Contains(string(data), ProjectEntrySpelling) {
 		t.Fatalf("override lacks the entry reference: %q", data)
 	}
 }
 
-func TestEnsureRulesIntegrationCleansOverride(t *testing.T) {
-	paths, target, override := codexOverrideSetup(t)
-	entry := RulesEntry(paths)
-	writeIntegrateFile(t, target, referenceBlock("codex", paths))
-	legacy := filepath.Join(filepath.Dir(paths.RulesDir), "KANDER-AGENTS.md")
+func TestEnsureProjectReferenceCleansOverride(t *testing.T) {
+	project, target, override := codexOverrideSetup(t)
+	entry := RulesEntry(project.Paths)
+	writeIntegrateFile(t, target, referenceBlock("codex"))
 	writeIntegrateFile(t, override,
 		"# Override rules\n"+
-			"see `"+legacy+"` for the old entry\n"+
 			"@/dead/KANDER-AGENTS.md\n"+
 			"@"+entry+"\n"+
 			"@"+entry+"\n")
 
-	outcome, err := EnsureRulesIntegration("codex", paths)
+	outcome, err := EnsureProjectReference("codex", project, allSwitches)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +115,7 @@ func TestEnsureRulesIntegrationCleansOverride(t *testing.T) {
 	if outcome.Override == nil {
 		t.Fatal("override outcome missing")
 	}
-	if outcome.Override.Status != IntegrationRewritten && outcome.Override.Status != IntegrationCleaned {
+	if outcome.Override.Status != IntegrationCleaned {
 		t.Fatalf("override outcome: %+v", outcome.Override)
 	}
 	if outcome.Override.Removed != 2 {
@@ -124,21 +123,17 @@ func TestEnsureRulesIntegrationCleansOverride(t *testing.T) {
 	}
 	data, _ := os.ReadFile(override)
 	text := string(data)
-	if strings.Contains(text, "/dead/") || strings.Contains(text, ".agents/KANDER-AGENTS.md") {
-		t.Fatalf("stale references survived: %q", text)
-	}
-	// The rewritten legacy line and the surviving load command both name the current entry.
-	if strings.Count(text, entry) != 2 {
-		t.Fatalf("override does not hold the rewritten and surviving references: %q", text)
+	if strings.Contains(text, "/dead/") || strings.Count(text, entry) != 1 {
+		t.Fatalf("stale or duplicate references survived: %q", text)
 	}
 }
 
-func TestRulesIntegrationRequiresBothFiles(t *testing.T) {
-	paths, target, override := codexOverrideSetup(t)
-	writeIntegrateFile(t, target, referenceBlock("codex", paths))
+func TestProjectReferenceStatusRequiresBothFiles(t *testing.T) {
+	project, target, override := codexOverrideSetup(t)
+	writeIntegrateFile(t, target, referenceBlock("codex"))
 	writeIntegrateFile(t, override, "# Override rules\n")
 
-	ok, detail := RulesIntegration("codex", paths)
+	ok, detail := ProjectReferenceStatus("codex", project)
 	if ok {
 		t.Fatal("override without a reference must report not integrated")
 	}
@@ -146,8 +141,8 @@ func TestRulesIntegrationRequiresBothFiles(t *testing.T) {
 		t.Fatalf("detail must name the override file, got %q", detail)
 	}
 
-	writeIntegrateFile(t, override, "# Override rules\n\n"+referenceBlock("codex", paths))
-	ok, detail = RulesIntegration("codex", paths)
+	writeIntegrateFile(t, override, "# Override rules\n\n"+referenceBlock("codex"))
+	ok, detail = ProjectReferenceStatus("codex", project)
 	if !ok {
 		t.Fatalf("both files referencing must report integrated, got %q", detail)
 	}
@@ -156,38 +151,12 @@ func TestRulesIntegrationRequiresBothFiles(t *testing.T) {
 	}
 }
 
-func TestInspectRulesReferencesCoversOverride(t *testing.T) {
-	paths, target, override := codexOverrideSetup(t)
-	entry := RulesEntry(paths)
-	writeIntegrateFile(t, target, referenceBlock("codex", paths))
-	writeIntegrateFile(t, override, "@/dead/KANDER-AGENTS.md\n@"+entry+"\n@"+entry+"\n")
-
-	issues, err := InspectRulesReferences("codex", paths)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if issues.Invalid != 1 || issues.Duplicates != 1 {
-		t.Fatalf("aggregate counts: %+v", issues)
-	}
-	if len(issues.Files) != 2 {
-		t.Fatalf("files inspected: %+v", issues.Files)
-	}
-	if issues.Files[1].Target != override || issues.Files[1].Invalid != 1 || issues.Files[1].Duplicates != 1 {
-		t.Fatalf("override counts: %+v", issues.Files[1])
-	}
-	data, _ := os.ReadFile(override)
-	if strings.Count(string(data), "KANDER-AGENTS.md") != 3 {
-		t.Fatalf("inspect wrote the override: %q", data)
-	}
-}
-
 func TestClaudeTargetIgnoresOverrideSibling(t *testing.T) {
-	home := setupInstallHome(t)
-	paths := globalIntegrationPaths(t, home)
-	override := filepath.Join(home, ".claude", "AGENTS.override.md")
+	project, _ := projectFixture(t)
+	override := filepath.Join(project.Root, "AGENTS.override.md")
 	writeIntegrateFile(t, override, "# Override rules\n")
 
-	outcome, err := EnsureRulesIntegration("claude", paths)
+	outcome, err := EnsureProjectReference("claude", project, allSwitches)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,21 +167,18 @@ func TestClaudeTargetIgnoresOverrideSibling(t *testing.T) {
 	if string(data) != "# Override rules\n" {
 		t.Fatalf("claude run touched the override: %q", data)
 	}
-	ok, _ := RulesIntegration("claude", paths)
+	ok, _ := ProjectReferenceStatus("claude", project)
 	if !ok {
 		t.Fatal("claude integration must ignore the override sibling")
 	}
 }
 
-func TestEnsureRulesIntegrationProjectOverride(t *testing.T) {
-	setupInstallHome(t)
-	project := t.TempDir()
-	paths := config.InstallPaths{Mode: config.ModeProject, ProjectRoot: project, RulesDir: filepath.Join(project, ".kander", "rules")}
-	writeIntegrateFile(t, RulesEntry(paths), "# Kander entry\n")
-	override := filepath.Join(project, "AGENTS.override.md")
+func TestEnsureProjectReferenceProjectOverride(t *testing.T) {
+	project, _ := projectFixture(t)
+	override := filepath.Join(project.Root, "AGENTS.override.md")
 	writeIntegrateFile(t, override, "# Override rules\n")
 
-	outcome, err := EnsureRulesIntegration("pi", paths)
+	outcome, err := EnsureProjectReference("pi", project, allSwitches)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,27 +189,24 @@ func TestEnsureRulesIntegrationProjectOverride(t *testing.T) {
 		t.Fatalf("override outcome: %+v", outcome.Override)
 	}
 	data, _ := os.ReadFile(override)
-	if !strings.Contains(string(data), ".kander/rules/KANDER-AGENTS.md") {
-		t.Fatalf("override lacks the project entry reference: %q", data)
+	if !strings.Contains(string(data), ProjectEntrySpelling) {
+		t.Fatalf("override lacks the project reference: %q", data)
 	}
 }
 
-func TestEnsureRulesIntegrationProjectOverrideSymlinkEscape(t *testing.T) {
+func TestEnsureProjectReferenceProjectOverrideSymlinkEscape(t *testing.T) {
 	if os.PathSeparator == '\\' {
 		t.Skip("symlink creation needs privileges on Windows")
 	}
-	setupInstallHome(t)
-	project := t.TempDir()
-	paths := config.InstallPaths{Mode: config.ModeProject, ProjectRoot: project, RulesDir: filepath.Join(project, ".kander", "rules")}
-	writeIntegrateFile(t, RulesEntry(paths), "# Kander entry\n")
-	override := filepath.Join(project, "AGENTS.override.md")
+	project, _ := projectFixture(t)
+	override := filepath.Join(project.Root, "AGENTS.override.md")
 	outside := filepath.Join(t.TempDir(), "outside.md")
 	writeIntegrateFile(t, outside, "# foreign\n")
 	if err := os.Symlink(outside, override); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := EnsureRulesIntegration("pi", paths); err == nil {
+	if _, err := EnsureProjectReference("pi", project, allSwitches); err == nil {
 		t.Fatal("an override symlink escaping the project must fail")
 	}
 	data, _ := os.ReadFile(outside)

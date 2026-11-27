@@ -32,7 +32,7 @@ func leaderDoctorHome(t *testing.T) (string, config.InstallPaths) {
 	if err := os.Mkdir(filepath.Join(home, ".claude"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	return home, config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander")}
+	return home, config.InstallPaths{RulesDir: filepath.Join(home, ".agents", "kander")}
 }
 
 func TestEnsureLeaderSkillsInstallsAndUpdates(t *testing.T) {
@@ -168,7 +168,7 @@ func TestEnsureLeaderSkillsRespectsInstallRules(t *testing.T) {
 
 func TestLeaderSkillsCoverClaudeOnlyWhenInstalled(t *testing.T) {
 	home := setupInstallHome(t)
-	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander")}
+	paths := config.InstallPaths{RulesDir: filepath.Join(home, ".agents", "kander")}
 	outcomes := EnsureLeaderSkills(paths, allLeaderSwitches)
 	if len(outcomes) != 1 || outcomes[0].Agent != "codex" {
 		t.Fatalf("outcomes without a Claude configuration: %+v", outcomes)

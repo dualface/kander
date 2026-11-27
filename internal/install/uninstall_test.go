@@ -41,7 +41,8 @@ func TestRemoveRulesReferences(t *testing.T) {
 }
 
 // installForUninstall runs a global install over existing claude, codex, cursor, and pi
-// config directories and returns the install paths.
+// config directories, then writes the global rules files an earlier release injected, and
+// returns the install paths.
 func installForUninstall(t *testing.T, home string) config.InstallPaths {
 	t.Helper()
 	for _, dir := range []string{".claude", ".codex", ".cursor", ".pi/agent"} {
@@ -49,11 +50,14 @@ func installForUninstall(t *testing.T, home string) config.InstallPaths {
 			t.Fatal(err)
 		}
 	}
-	writeIntegrateFile(t, filepath.Join(home, ".codex", "AGENTS.md"), "# Personal codex rules\n")
-	writeIntegrateFile(t, filepath.Join(home, ".codex", "AGENTS.override.md"), "# Override\n")
 	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
 		t.Fatal(err)
 	}
+	writeIntegrateFile(t, filepath.Join(home, ".claude", "CLAUDE.md"), globalBlock("claude"))
+	writeIntegrateFile(t, filepath.Join(home, ".cursor", "rules", "kander.mdc"), alwaysApplyFrontmatter+globalBlock("cursor"))
+	writeIntegrateFile(t, filepath.Join(home, ".pi", "agent", "AGENTS.md"), globalBlock("pi"))
+	writeIntegrateFile(t, filepath.Join(home, ".codex", "AGENTS.md"), "# Personal codex rules\n\n"+globalBlock("codex"))
+	writeIntegrateFile(t, filepath.Join(home, ".codex", "AGENTS.override.md"), "# Override\n\n"+globalBlock("codex"))
 	paths, _ := config.GlobalInstallPaths()
 	return paths
 }
@@ -106,10 +110,6 @@ func TestUninstallRemovesKanderWritesOnly(t *testing.T) {
 	// A later doctor repair restores the rules root but injects nothing.
 	if _, err := RepairRules(paths); err != nil {
 		t.Fatal(err)
-	}
-	outcome, err := EnsureRulesIntegration("claude", paths)
-	if err != nil || outcome.Status != IntegrationDisabled {
-		t.Fatalf("outcome=%+v err=%v", outcome, err)
 	}
 	if _, err := os.Lstat(filepath.Join(home, ".claude", "CLAUDE.md")); !os.IsNotExist(err) {
 		t.Fatalf("doctor rewrote the claude reference: %v", err)
@@ -183,33 +183,6 @@ func TestUninstallRefusesSymlinkedRulesDir(t *testing.T) {
 	}
 }
 
-func TestUninstallProjectRefusesRulesFileOutsideWorktree(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlinks need privileges on Windows")
-	}
-	home := setupInstallHome(t)
-	project := initGitRepo(t, filepath.Join(t.TempDir(), "app"))
-	outside := filepath.Join(home, "dotfiles", "AGENTS.md")
-	writeIntegrateFile(t, outside, "# Mine\n\n@~/.agents/kander/KANDER-AGENTS.md\n")
-	if err := os.Symlink(outside, filepath.Join(project, "AGENTS.md")); err != nil {
-		t.Fatal(err)
-	}
-	paths, err := config.ProjectInstallPaths(project)
-	if err != nil {
-		t.Fatal(err)
-	}
-	plan := PlanUninstall(paths)
-	if err := ApplyUninstall(plan, &bytes.Buffer{}); err != nil {
-		t.Fatal(err)
-	}
-	if got := readBytes(t, outside); !strings.Contains(got, "KANDER-AGENTS.md") {
-		t.Fatalf("file outside the worktree edited: %q", got)
-	}
-	if !strings.Contains(planText(plan), filepath.Join(project, "AGENTS.md")) {
-		t.Fatal("escaping rules file not reported")
-	}
-}
-
 func TestRunUninstallConfirmation(t *testing.T) {
 	home := setupInstallHome(t)
 	paths := installForUninstall(t, home)
@@ -275,7 +248,7 @@ func TestUninstallEmptiesFileBehindSymlinkedDirectory(t *testing.T) {
 	}
 	paths, _ := config.GlobalInstallPaths()
 	real := filepath.Join(dotfiles, "AGENTS.md")
-	writeIntegrateFile(t, real, referenceBlock("codex", paths))
+	writeIntegrateFile(t, real, globalBlock("codex"))
 	plan := PlanUninstall(paths)
 	if err := ApplyUninstall(plan, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)

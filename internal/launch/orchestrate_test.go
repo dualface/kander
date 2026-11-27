@@ -252,7 +252,7 @@ func TestStartOrchestratorFailureClosesTheContainerAndTaskFile(t *testing.T) {
 
 func TestOrchestratorPromptFallsBackToConfiguredLanguageWhenCardsDisagree(t *testing.T) {
 	setupBoard(t)
-	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(t.TempDir(), "rules")}
+	paths := config.InstallPaths{RulesDir: filepath.Join(t.TempDir(), "rules")}
 	tasks := []OrchestrateTask{{TaskID: "a"}, {TaskID: "b"}}
 	body, err := orchestratorAgentPrompt(tasks, []string{"- LANGUAGE: ja\n", "- LANGUAGE: ja\n"}, "plan", paths)
 	if err != nil || !strings.Contains(body, `"ja"`) {

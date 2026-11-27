@@ -286,7 +286,7 @@ func TestOptionsMouseMenuWrappedAndScrolled(t *testing.T) {
 
 func TestOptionsMouseRestoreAndRuleButtons(t *testing.T) {
 	app, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	pumpPanel(panel, panel.switchTab(config.TargetOverlay))
 	pumpPanel(panel, panel.openSection(sectionRules))
 	app.Width, app.Height = 48, 24

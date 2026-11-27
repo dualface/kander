@@ -201,7 +201,7 @@ func TestRulesPageEditsInstallRulesOnScopeTabOnly(t *testing.T) {
 	if switches := config.InstallRulesOf(saved); switches.Global || switches.Enabled("codex") {
 		t.Fatalf("saved switches=%+v", switches)
 	}
-	attachTempOverlay(t, panel.session, config.ModeProject)
+	attachProjectTab(t, panel.session)
 	pumpPanel(panel, panel.openSection(sectionRules))
 	if panel.bind.installRules != nil {
 		t.Fatal("project tab shows the install_rules switches")
@@ -234,7 +234,7 @@ func TestRulePanelSavesGitBranchModeToScope(t *testing.T) {
 
 func TestRulePanelSavesGitBranchModeToProjectOverlay(t *testing.T) {
 	_, panel := openPanel(t)
-	_, path := attachTempOverlay(t, panel.session, config.ModeGlobal)
+	_, path := attachTempOverlay(t, panel.session)
 	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}

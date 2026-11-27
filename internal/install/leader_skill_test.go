@@ -29,15 +29,11 @@ func assertSkill(t *testing.T, dir string) {
 }
 
 func TestInstallLeaderSkillLifecycle(t *testing.T) {
-	for _, mode := range []config.Mode{config.ModeGlobal, config.ModeProject} {
-		t.Run(string(mode), func(t *testing.T) {
+	for _, run := range []string{"global"} {
+		t.Run(run, func(t *testing.T) {
 			home := setupInstallHome(t)
-			req := Request{Mode: mode, Language: "en", Source: stubBinary(t)}
+			req := Request{Language: "en", Source: stubBinary(t)}
 			root := home
-			if mode == config.ModeProject {
-				req.Project = initGitRepo(t, filepath.Join(t.TempDir(), "app"))
-				root = req.Project
-			}
 			if err := os.Mkdir(filepath.Join(root, ".claude"), 0o755); err != nil {
 				t.Fatal(err)
 			}
@@ -226,7 +222,7 @@ func TestLeaderSkillUsesConfirmedTargets(t *testing.T) {
 	root := filepath.Join(home, ".agents")
 	t.Setenv("CLAUDE_CONFIG_DIR", root)
 	req := Request{Language: "en", Source: stubBinary(t)}
-	paths, err := resolvePaths(req)
+	paths, err := config.GlobalInstallPaths()
 	if err != nil {
 		t.Fatal(err)
 	}

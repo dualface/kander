@@ -53,7 +53,7 @@ func TestUpgradeUnstampedFourRoleRules(t *testing.T) {
 			name = "locally-edited"
 		}
 		t.Run(name, func(t *testing.T) {
-			paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: t.TempDir()}
+			paths := config.InstallPaths{RulesDir: t.TempDir()}
 			for _, name := range rules.Names() {
 				data, err := rules.File(name)
 				if err != nil {

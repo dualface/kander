@@ -26,12 +26,8 @@ type OverlayLocation struct {
 	Exists      bool
 }
 
-// OptionsTargets returns the Options tabs for an install mode.
-// A global binary always exposes both tabs; a project-install binary exposes only Project.
-func OptionsTargets(mode Mode) []string {
-	if mode == ModeProject {
-		return []string{TargetOverlay}
-	}
+// OptionsTargets returns the Options tabs: the Global scope file and the Project overlay.
+func OptionsTargets() []string {
 	return []string{TargetScope, TargetOverlay}
 }
 

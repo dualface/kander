@@ -181,7 +181,7 @@ func fixture(t *testing.T, capability string) (terminal.Backend, string) {
 	}
 	saved := terminal.DefinitionDirs
 	terminal.DefinitionDirs = func() []terminal.DefinitionDir {
-		return []terminal.DefinitionDir{{Source: terminal.SourceProject, Root: share, Path: dir}}
+		return []terminal.DefinitionDir{{Source: terminal.SourceGlobal, Root: share, Path: dir}}
 	}
 	terminal.ReloadDefinitions()
 	t.Cleanup(func() { terminal.DefinitionDirs = saved; terminal.ReloadDefinitions() })

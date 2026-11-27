@@ -93,6 +93,7 @@ func NewRoot() *cobra.Command {
 		root.AddCommand(c)
 	}
 	command.GateProject(root, remote.CheckProject)
+	command.BeforeRun(root, startupMaintenance)
 	return root
 }
 

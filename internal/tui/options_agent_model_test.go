@@ -16,7 +16,7 @@ func TestOptionsAgentSwitchDoesNotReplayOldModelDraft(t *testing.T) {
 			}
 			t.Run(name, func(t *testing.T) {
 				_, panel := openPanel(t)
-				_, path := attachTempOverlay(t, panel.session, config.ModeGlobal)
+				_, path := attachTempOverlay(t, panel.session)
 				if project {
 					if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
 						t.Fatal(err)
@@ -75,13 +75,13 @@ func TestReviewModelEditRefreshesCoupledInheritance(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			_, panel := openPanel(t)
-			dir, path := attachTempOverlay(t, panel.session, config.ModeGlobal)
+			dir, path := attachTempOverlay(t, panel.session)
 			overlay := map[string]any{}
 			config.OverlaySet(overlay, "existing-model", "models", "review_roles", "PMQA", "large_model")
 			if pinned {
 				config.OverlaySet(overlay, "codex", "reviewers", "large", "PMQA")
 			}
-			if err := panel.session.AttachOverlay(config.ModeGlobal, config.OverlayLocation{ProjectRoot: dir, Path: path}, overlay); err != nil {
+			if err := panel.session.AttachOverlay(config.OverlayLocation{ProjectRoot: dir, Path: path}, overlay); err != nil {
 				t.Fatal(err)
 			}
 			if err := panel.session.SetTarget(config.TargetOverlay); err != nil {

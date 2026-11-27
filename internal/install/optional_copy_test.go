@@ -71,19 +71,6 @@ func TestGlobalInitializationDoesNotCopy(t *testing.T) {
 	}
 }
 
-func TestProjectInitializationStillCopies(t *testing.T) {
-	setupInstallHome(t)
-	source := stubBinary(t)
-	project := initGitRepo(t, t.TempDir())
-	result, err := Perform(Request{Mode: config.ModeProject, Project: project, Source: source})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !result.Copied || result.RunBinary != result.DestBinary || result.DestBinary == source {
-		t.Fatalf("project did not install its own binary: %+v", result)
-	}
-}
-
 func TestStartupCopyIsOptionalAndBinaryOnly(t *testing.T) {
 	for _, accept := range []bool{false, true} {
 		t.Run(map[bool]string{false: "decline", true: "accept"}[accept], func(t *testing.T) {

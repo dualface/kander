@@ -53,33 +53,25 @@ func leaderDestinations(paths config.InstallPaths) []leaderDestination {
 }
 
 func leaderTarget(agent string, paths config.InstallPaths) (string, error) {
-	base := paths.ProjectRoot
-	if paths.Mode != config.ModeProject {
-		var err error
-		base, err = os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
+	base, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
 	}
 	switch agent {
 	case "codex":
 		base = filepath.Join(base, ".agents")
 	case "claude":
-		if paths.Mode == config.ModeProject {
-			base = filepath.Join(base, ".claude")
-		} else {
-			root, _, err := agentConfigRoot(agent, paths)
-			if err != nil {
-				return "", err
-			}
-			// A global install covers an existing Claude installation.
-			if _, err := os.Stat(root); errors.Is(err, os.ErrNotExist) {
-				return "", nil
-			} else if err != nil {
-				return "", err
-			}
-			base = root
+		root, _, err := agentConfigRoot(agent, paths)
+		if err != nil {
+			return "", err
 		}
+		// The install covers an existing Claude installation.
+		if _, err := os.Stat(root); errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		} else if err != nil {
+			return "", err
+		}
+		base = root
 	default:
 		return "", nil
 	}

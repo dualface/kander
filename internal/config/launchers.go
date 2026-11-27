@@ -11,9 +11,6 @@ var launcherRegistry struct {
 	sync.Mutex
 	names   []string
 	sources []func() []string
-	// projectSources supply the launcher names a project directory defines
-	// for itself (RegisterProjectLauncherNameSource).
-	projectSources []func(dir string) []string
 }
 
 // DefaultLauncherNames returns the built-in launcher set.
@@ -44,34 +41,6 @@ func RegisterLauncherNameSource(source func() []string) {
 	launcherRegistry.Lock()
 	defer launcherRegistry.Unlock()
 	launcherRegistry.sources = append(launcherRegistry.sources, source)
-}
-
-// RegisterProjectLauncherNameSource adds a function that supplies the launcher
-// names a project directory defines for itself, which a process outside that
-// project does not see. The configuration of that project, read from another
-// directory (AgentLookupIn), accepts them. A source must not call back into
-// launcher name validation.
-func RegisterProjectLauncherNameSource(source func(dir string) []string) {
-	launcherRegistry.Lock()
-	defer launcherRegistry.Unlock()
-	launcherRegistry.projectSources = append(launcherRegistry.projectSources, source)
-}
-
-// launcherNamesIn is LauncherNames plus the names the project directory dir
-// defines for itself.
-func launcherNamesIn(dir string) []string {
-	out := LauncherNames()
-	launcherRegistry.Lock()
-	sources := append([]func(string) []string{}, launcherRegistry.projectSources...)
-	launcherRegistry.Unlock()
-	for _, source := range sources {
-		for _, name := range source(dir) {
-			if name != "" && !contains(out, name) {
-				out = append(out, name)
-			}
-		}
-	}
-	return out
 }
 
 // RegisteredLauncherNames returns only the explicitly registered names, in

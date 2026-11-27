@@ -98,12 +98,9 @@ func recordUnresolved(root string, plan LaunchPlan, entry board.Entry, outcome L
 	if err != nil {
 		return launchError("launch.value", cause.Error(), err.Error())
 	}
-	unresolved := &UnresolvedError{TaskID: entry.TaskID, Window: record.Window, Reason: reason, Command: "kander"}
+	unresolved := &UnresolvedError{TaskID: entry.TaskID, Window: record.Window, Reason: reason, Command: commandName}
 	unresolved.Unmarked = plan.capabilities().PaneMetadata && outcome.Container != "" && !outcome.SessionMarked
 	unresolved.Repairable = unresolved.Unmarked && markerRepairable(record.Session)
-	if paths, err := currentInstallPaths(); err == nil {
-		unresolved.Command = commandName(paths)
-	}
 	if plan.OccupiesTerminal() && outcome.Wait != nil {
 		unresolved.hold = func() { _, _ = outcome.Wait() }
 	}

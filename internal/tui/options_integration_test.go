@@ -31,7 +31,7 @@ func TestOptionsRestoreAndTabSwitchResetPreviewBaseline(t *testing.T) {
 	initial := config.DefaultConfig()
 	initial.TUI.Theme = "light"
 	_, panel := openPanel(t, initial)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	pumpPanel(panel, panel.switchTab(config.TargetOverlay))
 	pumpPanel(panel, panel.openSection(sectionInterface))
 	panel.bind.theme = "dark"
@@ -64,9 +64,12 @@ func TestProjectOptionsLoadKeepsOverlayLanguage(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		return session, session.AttachOverlay(config.ModeProject, config.OverlayLocation{
+		if err := session.AttachOverlay(config.OverlayLocation{
 			ProjectRoot: dir, Path: filepath.Join(dir, config.OverlayFilename), Exists: true,
-		}, raw)
+		}, raw); err != nil {
+			return nil, err
+		}
+		return session, session.SetTarget(config.TargetOverlay)
 	}
 	t.Cleanup(func() { newOptionsSession = original; config.BindConfigLanguage(nil) })
 	app.openOptions()
@@ -114,7 +117,7 @@ func TestProjectLanguageEditDoesNotOverrideDerivedAgentLanguage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, path := attachTempOverlay(t, panel.session, config.ModeProject)
+	_, path := attachProjectTab(t, panel.session)
 	pumpPanel(panel, panel.openSection(sectionInterface))
 	panel.bind.language = "ja"
 	panel.bind.apply(panel)
@@ -136,7 +139,7 @@ func TestProjectLanguageEditDoesNotOverrideDerivedAgentLanguage(t *testing.T) {
 
 func TestModelDraftSurvivesConfigReplacementAndFormRebuild(t *testing.T) {
 	_, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeProject)
+	attachProjectTab(t, panel.session)
 	fields := panel.session.ExecutionModelFieldsFor("large")
 	model, effort := fields[0], fields[1]
 	model.Set("first-model")

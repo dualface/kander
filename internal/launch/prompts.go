@@ -12,14 +12,8 @@ import (
 	"github.com/dualface/kander/v2/internal/process"
 )
 
-// commandName is the kander command as prompts show it; a project install names its entry through
-// process.AgentPath.
-func commandName(paths config.InstallPaths) string {
-	if paths.Mode == config.ModeProject {
-		return process.AgentPath(filepath.Join(paths.BinDir, "kander"))
-	}
-	return "kander"
-}
+// commandName is the kander command as prompts show it: the global kander on PATH.
+const commandName = "kander"
 
 // rulesPath is the displayed path of one released rules file in the install scope.
 func rulesPath(paths config.InstallPaths, name string) string {
@@ -54,9 +48,6 @@ func (f *fragments) render(name string, data any) string {
 }
 
 func promptAgents(paths config.InstallPaths) (string, error) {
-	if paths.Mode == config.ModeProject {
-		return process.AgentPath(filepath.Join(paths.ProjectRoot, "AGENTS.md")), nil
-	}
 	return render(paths, "agents-default.md", nil)
 }
 
@@ -66,7 +57,7 @@ func SelfMoveInstruction(paths config.InstallPaths, taskID, state string) (strin
 	if state != "review" {
 		return "", nil
 	}
-	return render(paths, "self-move-review.md", map[string]string{"Command": commandName(paths), "TaskID": taskID})
+	return render(paths, "self-move-review.md", map[string]string{"Command": commandName, "TaskID": taskID})
 }
 
 func cardStateStatus(paths config.InstallPaths, taskID, state string) (string, error) {
@@ -106,7 +97,7 @@ func rulesAndLanguage(paths config.InstallPaths, language string) (string, error
 	f := &fragments{paths: paths}
 	rules := f.render("rule-loading.md", map[string]string{
 		"AgentsRules": rulesPath(paths, "KANDER-AGENTS.md"),
-		"Command":     commandName(paths),
+		"Command":     commandName,
 		"KanbanRules": rulesPath(paths, "KANDER-KANBAN-RULES.md"),
 	})
 	directive := f.render("language.md", map[string]string{"Language": language})
@@ -247,9 +238,6 @@ func headedTaskFileInstruction(paths config.InstallPaths, kind, taskID, target s
 }
 
 func startAgentPrompt(taskID string, paths config.InstallPaths, taskGroup, cardText string) (string, error) {
-	if paths.Mode == config.ModeProject && paths.ProjectRoot == "" {
-		return "", launchError("config.project_install_paths_are_missing_the_main_worktree")
-	}
 	preamble, err := ruleLoadingWithLanguage(paths, cardText)
 	if err != nil {
 		return "", err
@@ -266,7 +254,7 @@ func startAgentPrompt(taskID string, paths config.InstallPaths, taskGroup, cardT
 	return render(paths, "start.md", map[string]any{
 		"Head":          head,
 		"Preamble":      preamble,
-		"Command":       commandName(paths),
+		"Command":       commandName,
 		"TaskID":        taskID,
 		"Agents":        agents,
 		"Group":         taskGroup != "",
@@ -283,9 +271,6 @@ func promptStatus(paths config.InstallPaths, taskID, state, cardText string) (st
 
 // resumeData gathers the fields shared by the resume and takeover bodies.
 func resumeData(taskID, message string, paths config.InstallPaths, state, cardText, kind string) (map[string]any, error) {
-	if paths.Mode == config.ModeProject && paths.ProjectRoot == "" {
-		return nil, launchError("config.project_install_paths_are_missing_the_main_worktree")
-	}
 	preamble, err := ruleLoadingWithLanguage(paths, cardText)
 	if err != nil {
 		return nil, err
@@ -312,7 +297,7 @@ func resumeData(taskID, message string, paths config.InstallPaths, state, cardTe
 		"Head":          head,
 		"Status":        status,
 		"Preamble":      preamble,
-		"Command":       commandName(paths),
+		"Command":       commandName,
 		"TaskID":        taskID,
 		"Message":       message,
 		"Agents":        agents,

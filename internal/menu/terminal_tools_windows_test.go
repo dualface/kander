@@ -99,12 +99,11 @@ func TestValidateConfiguredResourcesAcceptsHerdrOnWindows(t *testing.T) {
 	for _, name := range config.ExecutionAgents {
 		agents[name] = agentState{Path: `C:\agent.exe`, Version: "1", Review: true}
 	}
-	paths := config.InstallPaths{Mode: config.ModeGlobal}
 
 	herdrWarning := func(tools TerminalTools) (bool, []ReportLine) {
 		var warned bool
 		lines := CaptureReport(func() {
-			validateConfiguredResources(cfg, agents, paths, tools)
+			validateConfiguredResources(cfg, agents, tools)
 		})
 		for _, line := range lines {
 			if line.Level == LevelWarning && strings.Contains(line.Text, "herdr") {

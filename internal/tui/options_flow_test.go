@@ -300,7 +300,7 @@ func TestFlowScopeTabsAndScaleKeys(t *testing.T) {
 			},
 		},
 	}
-	if err := panel.session.AttachOverlay(config.ModeGlobal, config.OverlayLocation{ProjectRoot: dir, Path: path}, raw); err != nil {
+	if err := panel.session.AttachOverlay(config.OverlayLocation{ProjectRoot: dir, Path: path}, raw); err != nil {
 		t.Fatal(err)
 	}
 	panel.dispatch(sectionFlow)
@@ -371,7 +371,7 @@ func TestFlowScopeTabsAndScaleKeys(t *testing.T) {
 
 func TestFlowHintOmitsScopeWhenSingleTab(t *testing.T) {
 	_, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeProject)
+	attachProjectTab(t, panel.session)
 	panel.dispatch(sectionFlow)
 	plain := ansi.Strip(panelView(panel))
 	if strings.Contains(plain, " · "+uiText("tui.switch_scope_tabs")) || strings.Contains(plain, uiText("tui.tab_global")) {

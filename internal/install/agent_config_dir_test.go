@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/dualface/kander/v2/internal/config"
@@ -48,12 +49,8 @@ func TestPiDirectoryTargets(t *testing.T) {
 					}
 				}
 			}
-			project := config.InstallPaths{Mode: config.ModeProject, ProjectRoot: cwd}
-			if got := mustRulesTarget(t, "pi", project); got != filepath.Join(cwd, "AGENTS.md") {
+			if got := ProjectRulesTarget("pi", cwd); got != filepath.Join(cwd, "AGENTS.md") {
 				t.Fatalf("project rules=%q", got)
-			}
-			if got := mustExtensionTarget(t, "pi", project); got != filepath.Join(cwd, ".pi", "extensions", "kander-rules.ts") {
-				t.Fatalf("project extension=%q", got)
 			}
 		})
 	}
@@ -80,10 +77,9 @@ func TestPiDirectoryCoverageAndInstall(t *testing.T) {
 	if err := os.MkdirAll(old, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if slices.Contains(IntegrationAgents(paths), "pi") || slices.Contains(ExtensionAgents(paths), "pi") {
+	if slices.Contains(ExtensionAgents(paths), "pi") {
 		t.Fatal("default directory must not cover a missing override")
 	}
-	integrateAgentRules(paths)
 	integrateAgentExtensions(paths)
 	if _, err := os.Lstat(directory); !os.IsNotExist(err) {
 		t.Fatalf("missing override created: %v", err)
@@ -91,20 +87,12 @@ func TestPiDirectoryCoverageAndInstall(t *testing.T) {
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(IntegrationAgents(paths), "pi") || !slices.Contains(ExtensionAgents(paths), "pi") {
-		t.Fatal("existing override must cover Pi rules and extension")
-	}
-	for _, result := range integrateAgentRules(paths) {
-		if result.Err != nil {
-			t.Fatal(result.Err)
-		}
+	if !slices.Contains(ExtensionAgents(paths), "pi") {
+		t.Fatal("existing override must cover the Pi extension")
 	}
 	results := integrateAgentExtensions(paths)
 	if len(results) != 1 || results[0].Err != nil || results[0].Status != ExtensionWritten {
 		t.Fatalf("extension install: %+v", results)
-	}
-	if ok, detail := RulesIntegration("pi", paths); !ok {
-		t.Fatalf("rules not integrated: %s", detail)
 	}
 	out, err := InspectExtension("pi", paths)
 	if err != nil || out.Status != ExtensionInstalled {
@@ -139,9 +127,6 @@ func TestPiDirectoryIgnoresLegacySymlink(t *testing.T) {
 		t.Skipf("symlink unavailable: %v", err)
 	}
 	paths := globalExtensionPaths(t, home)
-	if _, err := EnsureRulesIntegration("pi", paths); err != nil {
-		t.Fatal(err)
-	}
 	if _, err := EnsureExtension("pi", paths); err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +189,7 @@ func TestPiDirectoryRejectsExtensionSymlinks(t *testing.T) {
 
 func mustRulesTarget(t *testing.T, agent string, paths config.InstallPaths) string {
 	t.Helper()
-	target, err := AgentRulesTarget(agent, paths)
+	target, err := GlobalRulesTarget(agent, paths)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,9 +233,8 @@ func TestAgentConfigEnvTargets(t *testing.T) {
 			if got := mustRulesTarget(t, tt.agent, paths); got != tt.want {
 				t.Fatalf("target=%q want %q", got, tt.want)
 			}
-			project := config.InstallPaths{Mode: config.ModeProject, ProjectRoot: custom}
 			spec, _ := config.RulesSpec(tt.agent)
-			if got := mustRulesTarget(t, tt.agent, project); got != filepath.Join(custom, filepath.FromSlash(spec.Project)) {
+			if got := ProjectRulesTarget(tt.agent, custom); got != filepath.Join(custom, filepath.FromSlash(spec.Project)) {
 				t.Fatalf("project target=%q", got)
 			}
 		})
@@ -305,11 +289,6 @@ func TestScopeConfigDirOverridesEnvironment(t *testing.T) {
 	if got := mustExtensionTarget(t, "pi", pi); got != filepath.Join(configured, "extensions", "kander-rules.ts") {
 		t.Fatalf("pi extension=%q", got)
 	}
-	project := paths
-	project.Mode, project.ProjectRoot = config.ModeProject, t.TempDir()
-	if got := mustRulesTarget(t, "codex", project); got != filepath.Join(project.ProjectRoot, "AGENTS.md") {
-		t.Fatalf("project target=%q", got)
-	}
 }
 
 func TestProjectOverlayConfigDirIgnored(t *testing.T) {
@@ -335,51 +314,34 @@ func TestInvalidScopeConfigReportsError(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := AgentRulesTarget("codex", paths); err == nil {
+	if _, err := GlobalRulesTarget("codex", paths); err == nil {
 		t.Fatal("invalid config_dir accepted")
 	}
-	if !slices.Contains(IntegrationAgents(paths), "codex") {
-		t.Fatal("unresolvable agent dropped from coverage")
-	}
-	for _, result := range integrateAgentRules(paths) {
-		if result.Agent == "codex" && result.Err == nil {
-			t.Fatal("resolution error not reported")
-		}
+	if plan := planGlobalInjectionCleanup(paths); plan.Err == nil {
+		t.Fatal("resolution error not reported by the cleanup")
 	}
 }
 
-func TestRelocatedConfigDirCoverageAndCleanup(t *testing.T) {
+func TestRelocatedConfigDirCleanup(t *testing.T) {
 	home := setupInstallHome(t)
 	paths := globalExtensionPaths(t, home)
 	directory := filepath.Join(t.TempDir(), "codex")
 	t.Setenv("CODEX_HOME", directory)
-	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if slices.Contains(IntegrationAgents(paths), "codex") {
-		t.Fatal("default directory must not cover a missing relocated directory")
-	}
-	integrateAgentRules(paths)
-	if _, err := os.Lstat(directory); !os.IsNotExist(err) {
-		t.Fatalf("missing relocated directory created: %v", err)
-	}
-	if err := os.MkdirAll(directory, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	defaultTarget := filepath.Join(home, ".codex", "AGENTS.md")
+	writeIntegrateFile(t, defaultTarget, "# Default\n\n@~/.agents/kander/KANDER-AGENTS.md\n")
 	target := filepath.Join(directory, "AGENTS.md")
-	entry := RulesEntry(paths)
-	if err := os.WriteFile(target, []byte(entry+"\n"+entry+"\n"), 0o600); err != nil {
-		t.Fatal(err)
+	writeIntegrateFile(t, target, "# Mine\n\n"+RulesEntry(paths)+"\n")
+	result := CleanGlobalInjection(paths)
+	if result.Err != nil || !slices.Contains(result.Removed, target) {
+		t.Fatalf("cleanup: %+v", result)
 	}
-	issues, err := InspectRulesReferences("codex", paths)
-	if err != nil || issues.Duplicates != 1 || len(issues.Files) != 1 || issues.Files[0].Target != target {
-		t.Fatalf("inspection: %+v %v", issues, err)
+	if got, _ := os.ReadFile(target); string(got) != "# Mine\n" {
+		t.Fatalf("relocated target=%q", got)
 	}
-	if out, err := EnsureRulesIntegration("codex", paths); err != nil || out.Target != target {
-		t.Fatalf("repair: %+v %v", out, err)
-	}
-	if _, err := os.Lstat(filepath.Join(home, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
-		t.Fatalf("default target touched: %v", err)
+	// Only the directory the environment selects is cleaned; the default one waits for an
+	// environment that selects it.
+	if got, _ := os.ReadFile(defaultTarget); !strings.Contains(string(got), "KANDER-AGENTS.md") {
+		t.Fatalf("default target touched: %q", got)
 	}
 }
 

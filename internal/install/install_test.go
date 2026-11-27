@@ -277,105 +277,30 @@ func TestPerformRejectsSourceSymlink(t *testing.T) {
 	}
 }
 
-func TestPerformProjectSkipsGlobal(t *testing.T) {
+func TestPerformCleansGlobalInjectionAndWritesNoRulesFile(t *testing.T) {
 	home := setupInstallHome(t)
-	canary := filepath.Join(home, "keep")
-	if err := os.WriteFile(canary, []byte("home-canary\n"), 0o644); err != nil {
+	claude := filepath.Join(home, ".claude", "CLAUDE.md")
+	writeIntegrateFile(t, claude, "# Mine\n\n@~/.agents/kander/KANDER-AGENTS.md\n")
+	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	project := initGitRepo(t, filepath.Join(t.TempDir(), "app"))
-	src := stubBinary(t)
-	result, err := Perform(Request{CopyBinary: true, Language: "cn", Mode: config.ModeProject, Project: project, Source: src})
-	if err != nil {
-		t.Fatal(err)
+	for i := 0; i < 2; i++ {
+		result, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.GlobalCleanup.Err != nil || result.GlobalCleanup.Changed() != (i == 0) {
+			t.Fatalf("run %d cleanup=%+v", i, result.GlobalCleanup)
+		}
 	}
-	dest := filepath.Join(project, ".kander", "bin", binaryName())
-	if result.DestBinary != dest {
-		t.Fatalf("dest=%s", result.DestBinary)
+	if got, _ := os.ReadFile(claude); string(got) != "# Mine\n" {
+		t.Fatalf("CLAUDE.md=%q", got)
 	}
-	if _, err := os.Stat(dest); err != nil {
-		t.Fatal(err)
+	if _, err := os.Lstat(filepath.Join(home, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("install wrote a global rules file: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(project, ".kander", "rules", "KANDER-AGENTS.md")); err != nil {
-		t.Fatal(err)
-	}
-	exclude, _ := os.ReadFile(filepath.Join(project, ".git", "info", "exclude"))
-	if !strings.Contains(string(exclude), "/.kander/") {
-		t.Fatalf("exclude=%q", exclude)
-	}
-	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Mode: config.ModeProject, Project: project, Source: src}); err != nil {
-		t.Fatal(err)
-	}
-	exclude2, _ := os.ReadFile(filepath.Join(project, ".git", "info", "exclude"))
-	if strings.Count(string(exclude2), "/.kander/") != 1 {
-		t.Fatalf("exclude duplicated: %q", exclude2)
-	}
-	if _, err := os.Stat(filepath.Join(home, ".local")); !os.IsNotExist(err) {
-		t.Fatal("touched global bin")
-	}
-	if _, err := os.Stat(filepath.Join(home, ".agents", "kander")); !os.IsNotExist(err) {
-		t.Fatal("touched global agents")
-	}
-	got, _ := os.ReadFile(canary)
-	if string(got) != "home-canary\n" {
-		t.Fatal("home mutated")
-	}
-}
-
-func TestPerformProjectFromLinkedWorktree(t *testing.T) {
-	setupInstallHome(t)
-	main := initGitRepo(t, filepath.Join(t.TempDir(), "app"))
-	linked := filepath.Join(t.TempDir(), "app-linked")
-	runGit(t, main, "-C", main, "worktree", "add", "-q", linked, "HEAD")
-	result, err := Perform(Request{CopyBinary: true, Language: "cn", Mode: config.ModeProject, Project: linked, Source: stubBinary(t)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(result.DestBinary, filepath.Join(main, ".kander", "bin")) {
-		t.Fatalf("dest=%s", result.DestBinary)
-	}
-	if _, err := os.Stat(filepath.Join(linked, ".kander")); !os.IsNotExist(err) {
-		t.Fatal("installed into linked worktree")
-	}
-}
-
-func TestPerformProjectRejectsNonGitAndSymlink(t *testing.T) {
-	setupInstallHome(t)
-	_, err := Perform(Request{CopyBinary: true, Language: "cn", Mode: config.ModeProject, Project: t.TempDir(), Source: stubBinary(t)})
-	if err == nil {
-		t.Fatal("expected non-git reject")
-	}
-	project := initGitRepo(t, filepath.Join(t.TempDir(), "app"))
-	link := filepath.Join(t.TempDir(), "app-link")
-	if err := os.Symlink(project, link); err != nil {
-		t.Fatal(err)
-	}
-	_, err = Perform(Request{CopyBinary: true, Language: "cn", Mode: config.ModeProject, Project: link, Source: stubBinary(t)})
-	if err == nil {
-		t.Fatal("expected symlink reject")
-	}
-}
-
-func TestPerformProjectRejectsKanderSymlink(t *testing.T) {
-	setupInstallHome(t)
-	project := initGitRepo(t, filepath.Join(t.TempDir(), "app"))
-	outside := filepath.Join(t.TempDir(), "payload")
-	if err := os.Mkdir(outside, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(outside, "keep"), []byte("outside\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(outside, filepath.Join(project, ".kander")); err != nil {
-		t.Fatal(err)
-	}
-	_, err := Perform(Request{CopyBinary: true, Language: "cn", Mode: config.ModeProject, Project: project, Source: stubBinary(t)})
-	if err == nil {
-		t.Fatal("expected .kander symlink reject")
-	}
-	got, _ := os.ReadFile(filepath.Join(outside, "keep"))
-	if string(got) != "outside\n" {
-		t.Fatal("followed symlink")
+	if _, err := os.Lstat(filepath.Join(home, ".cursor")); !os.IsNotExist(err) {
+		t.Fatalf("install created a directory for an absent agent: %v", err)
 	}
 }
 
@@ -719,7 +644,7 @@ func TestWizardDefaultKeepsJapanese(t *testing.T) {
 	if !supportedLanguage(lang) {
 		t.Fatal("wizard must accept ja as a default language")
 	}
-	req := Request{CopyBinary: true, Language: lang, Mode: config.ModeGlobal}
+	req := Request{CopyBinary: true, Language: lang}
 	if !supportedLanguage(req.Language) {
 		req.Language = "cn"
 	}

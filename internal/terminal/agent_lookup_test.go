@@ -59,39 +59,6 @@ func isolateUserEnvironment(t *testing.T) {
 	t.Cleanup(ReloadDefinitions)
 }
 
-// writeProjectDefinition writes a definition file into the project install
-// share directory of project.
-func writeProjectDefinition(t *testing.T, project, file, data string) {
-	t.Helper()
-	share, err := config.ProjectInstallPaths(project)
-	if err != nil {
-		t.Fatal(err)
-	}
-	definitions := filepath.Join(share.ShareDir, DefinitionsDirName)
-	if err := os.MkdirAll(definitions, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(definitions, file), []byte(data), 0o600); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// A project may default to a launcher that only its own share directory
-// defines. Read from outside the project, its configuration still gives the
-// agent definitions, and the launcher is not registered in this process.
-func TestAgentLookupAcceptsALauncherOfTheProjectShare(t *testing.T) {
-	resetLanguage(t)
-	project := overlayProject(t, map[string]any{"launcher": "faketerm", "agents": map[string]any{"codex": map[string]any{"process_name": "codex-project"}}})
-	writeProjectDefinition(t, project, "faketerm.json", fixtureDefinition)
-	definition, err := config.AgentLookupIn(project).Agent("codex")
-	if err != nil || definition.ProcessName != "codex-project" {
-		t.Fatalf("definition=%+v err=%v", definition, err)
-	}
-	if _, ok := Lookup("faketerm"); ok {
-		t.Fatal("the launcher of another project was registered in this process")
-	}
-}
-
 func TestMatchAgentWithReadsTheProgramStatusOfTheLookup(t *testing.T) {
 	resetLanguage(t)
 	lookup := projectLookup(t, map[string]any{"program_status": map[string]any{"reports": true, "app": "project-codex"}})
@@ -121,27 +88,25 @@ func TestSessionRowReverseLookupReadsTheSessionFileOfTheLookup(t *testing.T) {
 	}
 }
 
-// A project definition that a process inside the project rejects (here, a
-// launcher name another definition already provides) gives no launcher name
-// to the project configuration read from outside either. The overlay names
-// the launcher only the rejected definition has.
-func TestAgentLookupRefusesALauncherOfARejectedProjectDefinition(t *testing.T) {
+// The retired project install share directory is no longer searched: a launcher that only a
+// definition below <project>/.kander/share/terminals/ provides is refused for the project
+// configuration, read from outside the project or inside it.
+func TestAgentLookupRefusesALauncherOfTheRetiredProjectShare(t *testing.T) {
 	resetLanguage(t)
-	project := overlayProject(t, map[string]any{"launcher": "otherterm", "agents": map[string]any{"codex": map[string]any{"process_name": "codex-project"}}})
-	writeProjectDefinition(t, project, "faketerm.json", fixtureDefinition)
-	var conflicting map[string]any
-	if err := json.Unmarshal([]byte(fixtureDefinition), &conflicting); err != nil {
+	project := overlayProject(t, map[string]any{"launcher": "faketerm", "agents": map[string]any{"codex": map[string]any{"process_name": "codex-project"}}})
+	definitions := filepath.Join(project, config.LegacyProjectInstallDirname, "share", DefinitionsDirName)
+	if err := os.MkdirAll(definitions, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	launchers := conflicting["launchers"].(map[string]any)
-	conflicting["name"] = "otherterm"
-	launchers["otherterm"] = launchers["faketerm"]
-	data, err := json.Marshal(conflicting)
-	if err != nil {
+	if err := os.WriteFile(filepath.Join(definitions, "faketerm.json"), []byte(fixtureDefinition), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	writeProjectDefinition(t, project, "otherterm.json", string(data))
 	if _, err := config.AgentLookupIn(project).Agent("codex"); err == nil {
-		t.Fatal("the launcher of a rejected project definition was accepted")
+		t.Fatal("the launcher of the retired project share was accepted")
+	}
+	t.Chdir(project)
+	ReloadDefinitions()
+	if _, ok := Lookup("faketerm"); ok {
+		t.Fatal("a definition of the retired project share was loaded")
 	}
 }

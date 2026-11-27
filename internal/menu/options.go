@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/dualface/kander/v2/internal/config"
-	"github.com/dualface/kander/v2/internal/install"
 	"github.com/dualface/kander/v2/internal/terminal/builtin"
 	"github.com/dualface/kander/v2/internal/terminal/direct"
 	"strings"
@@ -75,8 +74,6 @@ type Session struct {
 	Warnings []ReportLine
 	// Target is config.TargetScope (Global tab) or config.TargetOverlay (Project tab).
 	Target string
-	// InstallMode comes from config.CurrentInstallPaths and selects the visible tabs.
-	InstallMode config.Mode
 	// OverlayLocation is the Project-tab read/write target, including when the file does not exist.
 	OverlayLocation config.OverlayLocation
 	// BasePath is the actual scope file in force, including KANDER_CONFIG.
@@ -698,39 +695,14 @@ func (s *Session) finish() error {
 	if err := config.ValidateRules(s.Config.Rules); err != nil {
 		return err
 	}
-	labels := agentLabels()
 	paths, err := currentPaths()
 	if err != nil {
 		return err
 	}
-	entry := rulesEntry(paths)
 	// The switches being saved decide the writes; config.json still holds the old values.
 	switches := config.InstallRulesOf(s.scopeBuffer())
-	seen := map[string]struct{}{}
-	for _, selected := range install.IntegrationAgents(paths) {
-		// A resolution error is not deduplicated: the integration call below reports it.
-		target, targetErr := install.AgentRulesTarget(selected, paths)
-		if targetErr == nil && target == "" {
-			continue
-		}
-		if _, ok := seen[target]; ok && targetErr == nil {
-			continue
-		}
-		seen[target] = struct{}{}
-		outcome, ensureErr := install.EnsureRulesIntegrationWith(selected, paths, switches)
-		if ensureErr != nil {
-			warning(config.Text("menu.is_not_connected_to_kander_rules", labels[selected], ensureErr.Error()))
-			hint(config.Text(
-				"menu.follow_the_readme_integration_section_and_point_the_rules", entry,
-			))
-			continue
-		}
-		reportIntegrationOutcome(labels[selected], outcome)
-		if outcome.Override != nil {
-			reportIntegrationOutcome(labels[selected], *outcome.Override)
-		}
-	}
-	// The rules-extension files and the leader skill converge the same way the references do.
+	// The rules-extension files and the leader skill converge with the switches; the project
+	// rules files are kander init's to write.
 	reportAgentExtensions(paths, switches, true)
 	reportLeaderSkills(paths, switches, true)
 	note(config.Text(

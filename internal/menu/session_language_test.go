@@ -7,7 +7,7 @@ import (
 )
 
 func TestAdvanceLanguageKeepsDirtyTabBaseline(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	t.Cleanup(func() { config.BindConfigLanguage(nil) })
 	base := session.CaptureLanguage()
 	session.SetLanguage("ja")

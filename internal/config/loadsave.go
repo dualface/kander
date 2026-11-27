@@ -152,16 +152,10 @@ func readLayers(cwd string, missingOK bool) (layerDocuments, error) {
 // effective merges the layers and validates the result: the configuration in force, with the
 // merged raw document it was validated from.
 func (l layerDocuments) effective() (*Config, map[string]any, error) {
-	return l.effectiveWith(LauncherNames)
-}
-
-// effectiveWith is effective with the launcher checked against the names that
-// launchers returns.
-func (l layerDocuments) effectiveWith(launchers func() []string) (*Config, map[string]any, error) {
 	if l.overlay == nil {
 		return l.scopeConfig, l.scope, nil
 	}
-	effective, merged, err := validateLayersWith(l.scope, l.overlay, launchers)
+	effective, merged, err := validateLayersWith(l.scope, l.overlay, LauncherNames)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -2,7 +2,6 @@ package install
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"runtime"
 
@@ -14,11 +13,9 @@ import (
 // Request is a complete, non-interactive installation request.
 type Request struct {
 	Language     string
-	Mode         config.Mode
-	Project      string
 	Source       string
 	DeleteLegacy bool
-	// CopyBinary opts into a global binary copy. Project installs always copy.
+	// CopyBinary opts into the binary copy into the global bin directory.
 	CopyBinary bool
 	// RulesChoice is the install wizard's per-agent install_rules values that differ from
 	// the scope's current switches; Perform saves them before writing any rules file.
@@ -37,33 +34,27 @@ type Result struct {
 	LegacyRemoved bool
 	// LegacyRules records rule files migrated away from the previous global rules root.
 	LegacyRules LegacyRulesMigration
-	// LegacyLinksRemoved lists agent rules files that were symlinks to the previous entry and
-	// were replaced by reference files during integration.
-	LegacyLinksRemoved []string
-	Integrations       []AgentIntegration
+	// GlobalCleanup records removing what earlier releases wrote into the agents' global
+	// rules files; install never writes them.
+	GlobalCleanup GlobalCleanup
 	// Extensions records ensuring each covered agent's rules-extension file.
 	Extensions []AgentExtension
 	// SkippedSkills names skill directories that could not be safely inspected.
 	SkippedSkills []error
 }
 
-// AgentIntegration records ensuring one agent rules file references the Kander entry.
-type AgentIntegration struct {
-	IntegrationOutcome
-	Err error
-}
-
-// Perform initializes the requested scope and copies the binary only when requested
-// globally or required by project mode. RunBinary is the entry used afterward.
+// Perform installs the rules directory and, when requested, copies the binary into the global
+// bin directory. RunBinary is the entry used afterward. It never writes an agent's global
+// rules file: it removes what earlier releases wrote there instead.
 func Perform(req Request) (Result, error) {
 	var result Result
-	copyBinary := req.Mode == config.ModeProject || req.CopyBinary
+	copyBinary := req.CopyBinary
 	source, err := resolveSource(req.Source, copyBinary)
 	if err != nil {
 		return result, err
 	}
 	result.RunBinary = source
-	paths, err := resolvePaths(req)
+	paths, err := config.GlobalInstallPaths()
 	if err != nil {
 		return result, err
 	}
@@ -71,41 +62,29 @@ func Perform(req Request) (Result, error) {
 	if req.leaderTargets == nil {
 		req.leaderTargets = leaderDestinations(paths)
 	}
-	project := paths.Mode == config.ModeProject
-	if err := rejectProjectLayout(paths, project); err != nil {
-		return result, err
-	}
 	dest := filepath.Join(paths.BinDir, binaryName())
 	if copyBinary {
 		result.DestBinary = dest
-		if err := rejectDest(dest, project); err != nil {
+		if err := rejectDest(dest); err != nil {
 			return result, err
 		}
-
 	}
 	for _, name := range rules.Names() {
-		if err := rejectDest(filepath.Join(paths.RulesDir, filepath.FromSlash(name)), project); err != nil {
+		if err := rejectDest(filepath.Join(paths.RulesDir, filepath.FromSlash(name))); err != nil {
 			return result, err
 		}
 	}
-	if !project {
-		legacy, err := scanLegacy(paths.BinDir)
-		if err != nil {
-			return result, err
-		}
-		result.Legacy = legacy
+	legacy, err := scanLegacy(paths.BinDir)
+	if err != nil {
+		return result, err
 	}
+	result.Legacy = legacy
 	dirs := []string{paths.RulesDir, paths.ShareDir}
 	if copyBinary {
 		dirs = append([]string{paths.BinDir}, dirs...)
 	}
 	for _, dir := range dirs {
 		if err := fs.EnsureInheritedDirectoryPath(dir); err != nil {
-			return result, err
-		}
-	}
-	if project {
-		if _, err := config.EnsureProjectGitExclude(paths.ProjectRoot); err != nil {
 			return result, err
 		}
 	}
@@ -121,7 +100,7 @@ func Perform(req Request) (Result, error) {
 	if lang == "" {
 		lang = config.ResolveLanguage()
 	}
-	if err := extractRules(paths, project); err != nil {
+	if err := extractRules(paths); err != nil {
 		return result, fmt.Errorf("%s", config.Text("install.failed_to_extract_rules", err.Error()))
 	}
 	if err := config.SetLanguageIfPresent(paths.ConfigPath, lang); err != nil {
@@ -131,9 +110,10 @@ func Perform(req Request) (Result, error) {
 		return result, err
 	}
 	cleanupAgentsEntryLink(paths)
+	// The cleanup runs before the previous rules location retires, so a link aimed at the
+	// previous entry is removed as a link instead of being left dangling.
+	result.GlobalCleanup = CleanGlobalInjection(paths)
 	result.LegacyRules = migrateLegacyRules(paths)
-	result.LegacyLinksRemoved = removeLegacyEntrySymlinks(paths)
-	result.Integrations = integrateAgentRules(paths)
 	result.Extensions = integrateAgentExtensions(paths)
 	if err := result.installLeaderSkills(req.leaderTargets); err != nil {
 		return result, err
@@ -151,31 +131,6 @@ func Perform(req Request) (Result, error) {
 		CleanupStaleBinary(paths)
 	}
 	return result, nil
-}
-
-func resolvePaths(req Request) (config.InstallPaths, error) {
-	if req.Mode == config.ModeProject {
-		return config.ProjectInstallPaths(req.Project)
-	}
-	return config.GlobalInstallPaths()
-}
-
-func rejectProjectLayout(paths config.InstallPaths, project bool) error {
-	if !project {
-		return nil
-	}
-	for _, dir := range []string{paths.InstallRoot, paths.BinDir, paths.RulesDir, paths.ShareDir} {
-		if _, err := os.Lstat(dir); err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return err
-		}
-		if fs.IsReparsePoint(dir) {
-			return fmt.Errorf("%s", config.Text("install.target_is_symlink", dir))
-		}
-	}
-	return nil
 }
 
 func installBinary(source, dest string) (bool, error) {

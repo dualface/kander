@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -57,41 +56,11 @@ func fileExists(path string) bool {
 	return err == nil && info.Mode().IsRegular()
 }
 
-func findCommands(paths config.InstallPaths) map[string]string {
-	found := map[string]string{}
-	if paths.Mode == config.ModeProject {
-		command := projectCommandPath(paths.BinDir, "kander")
-		found["kander"] = command
-		return found
-	}
-	found["kander"] = lookPath("kander")
-	return found
+func findCommands() map[string]string {
+	return map[string]string{"kander": lookPath("kander")}
 }
 
-func projectCommandPath(binDir, name string) string {
-	candidates := []string{name}
-	if isWindowsOS() {
-		candidates = []string{name + ".exe", name}
-	}
-	for _, candidate := range candidates {
-		path := filepath.Join(binDir, candidate)
-		if fileExists(path) {
-			return path
-		}
-	}
-	return ""
-}
-
-func commandMissingMessage(name string, paths config.InstallPaths) string {
-	if paths.Mode == config.ModeProject {
-		expected := filepath.Join(paths.BinDir, name)
-		if isWindowsOS() && name == "kander" {
-			expected = filepath.Join(paths.BinDir, name+".exe")
-		}
-		return config.Text(
-			"menu.is_not_in_the_project_command_root", name, expected,
-		)
-	}
+func commandMissingMessage(name string) string {
 	return config.Text(
 		"menu.is_not_in_path_add_local_bin_to_path", name,
 	)
@@ -191,18 +160,7 @@ func probeAgent(cfg *config.Config, name string, reviewSet map[string]struct{}) 
 	return state
 }
 
-func reviewGatePresent(paths config.InstallPaths) (bool, string) {
-	if paths.Mode == config.ModeProject {
-		command := projectCommandPath(paths.BinDir, "kander")
-		if command != "" {
-			return true, command
-		}
-		expected := filepath.Join(paths.BinDir, "kander")
-		if isWindowsOS() {
-			expected = filepath.Join(paths.BinDir, "kander.exe")
-		}
-		return false, config.Text("menu.review_entrypoint_is_missing", expected)
-	}
+func reviewGatePresent() (bool, string) {
 	if found := lookPath("kander"); found != "" {
 		return true, found
 	}

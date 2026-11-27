@@ -11,7 +11,7 @@ func TestReviewerSwitchKeepsModelsWithAgent(t *testing.T) {
 		for _, scale := range config.TaskScales {
 			for _, next := range []string{"grok", "cursor", "claude"} {
 				t.Run(target+"/"+scale+"/"+next, func(t *testing.T) {
-					s, path := tempOverlaySession(t, config.ModeGlobal)
+					s, path := tempOverlaySession(t)
 					s.Config.Models.ReviewRoles["PMQA"] = map[string]string{
 						"model": "legacy-model", "effort": "legacy-effort",
 						"large_model": "old-large", "small_model": "old-small",
@@ -27,7 +27,7 @@ func TestReviewerSwitchKeepsModelsWithAgent(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if err := fresh.AttachOverlay(config.ModeGlobal, s.OverlayLocation, nil); err != nil {
+					if err := fresh.AttachOverlay(s.OverlayLocation, nil); err != nil {
 						t.Fatal(err)
 					}
 					s = fresh
@@ -96,7 +96,7 @@ func TestReviewerSwitchKeepsModelsWithAgent(t *testing.T) {
 }
 
 func TestProjectReviewModelEditPinsReviewer(t *testing.T) {
-	s, _ := tempOverlaySession(t, config.ModeGlobal)
+	s, _ := tempOverlaySession(t)
 	if err := s.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -122,12 +122,12 @@ func TestProjectReviewModelEditPinsReviewer(t *testing.T) {
 }
 
 func TestRestoreReviewerRetiresLegacySharedProjectModel(t *testing.T) {
-	s, _ := tempOverlaySession(t, config.ModeGlobal)
+	s, _ := tempOverlaySession(t)
 	overlay := map[string]any{}
 	config.OverlaySet(overlay, "claude", "reviewers", "large", "PM")
 	config.OverlaySet(overlay, "claude", "reviewers", "small", "PM")
 	config.OverlaySet(overlay, "project-legacy", "models", "review_roles", "PM", "model")
-	if err := s.AttachOverlay(config.ModeGlobal, s.OverlayLocation, overlay); err != nil {
+	if err := s.AttachOverlay(s.OverlayLocation, overlay); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SetTarget(config.TargetOverlay); err != nil {
@@ -148,7 +148,7 @@ func TestRestoreReviewerRetiresLegacySharedProjectModel(t *testing.T) {
 }
 
 func TestReviewFieldsPreserveAnotherOwnersStoredValues(t *testing.T) {
-	s, _ := tempOverlaySession(t, config.ModeGlobal)
+	s, _ := tempOverlaySession(t)
 	entry := s.Config.Models.ReviewRoles["PMQA"]
 	entry["large_agent"], entry["large_model"], entry["large_effort"] = "claude", "claude-custom", "low"
 	fields := s.ReviewModelFieldsFor("PMQA", "large")

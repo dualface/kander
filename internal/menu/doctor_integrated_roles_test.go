@@ -14,14 +14,14 @@ func TestDoctorIntegratedRoleAvailability(t *testing.T) {
 		for _, role := range config.ReviewRoles {
 			for _, stage := range []string{"skip", "auto", "required"} {
 				t.Run(scale+"/"+role+"/"+stage, func(t *testing.T) {
-					cfg, paths, agents := doctorFourRoleConfig(t)
+					cfg, agents := doctorFourRoleConfig(t)
 					cfg.ReviewStages[scale][role] = stage
 					cfg.Reviewers[scale][role] = "codex"
 					cfg.Models.ReviewRoles[role][scale+"_model"] = "preserved-model"
 					cfg.Models.ReviewRoles[role][scale+"_effort"] = "high"
 					cfg.Models.ReviewRoles[role][scale+"_agent"] = "codex"
 					before := config.Clone(cfg)
-					if healthy := validateConfiguredResources(cfg, agents, paths, TerminalTools{}); healthy {
+					if healthy := validateConfiguredResources(cfg, agents, TerminalTools{}); healthy {
 						t.Errorf("healthy=%v want false", healthy)
 					}
 					changes, _ := repairConfiguredTools(cfg, cfg, agents, TerminalTools{}, toolRepairDecisions{chatExplicit: true}, nil)
@@ -42,7 +42,7 @@ func TestDoctorIntegratedRoleAvailability(t *testing.T) {
 	}
 }
 
-func doctorFourRoleConfig(t *testing.T) (*config.Config, config.InstallPaths, map[string]agentState) {
+func doctorFourRoleConfig(t *testing.T) (*config.Config, map[string]agentState) {
 	t.Helper()
 	root := t.TempDir()
 	t.Setenv("HOME", root)
@@ -62,7 +62,8 @@ func doctorFourRoleConfig(t *testing.T) (*config.Config, config.InstallPaths, ma
 	if err := os.WriteFile(filepath.Join(root, name), []byte("test review gate"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	paths := config.InstallPaths{Mode: config.ModeProject, BinDir: root}
+	// The review gate is the kander on PATH.
+	t.Setenv("PATH", root+string(os.PathListSeparator)+os.Getenv("PATH"))
 	agents := map[string]agentState{"claude": {Path: "claude", Version: "test-version", Review: true, Execution: true}}
-	return cfg, paths, agents
+	return cfg, agents
 }

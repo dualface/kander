@@ -125,6 +125,9 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 	// generation, baseline, worktree or task branch. A takeover keeps the base
 	// its restart chose.
 	startBase, branch := "", ""
+	// references checks the start base for the project reference of the executing agent,
+	// once the agent is known; the takeover keeps the base and is not checked.
+	var references *startReferenceCheck
 	// resolveStartBase resolves the start branch and its base. It runs again
 	// when a stale policy revision refreshed the policy before the claim, so
 	// the base follows the branch model the claim's snapshot will record.
@@ -147,6 +150,11 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 		base, err := session.ResolveStartBase(ctx, cwd, next)
 		if err != nil {
 			return err
+		}
+		if references != nil {
+			if err := references.check(ctx, base, next); err != nil {
+				return err
+			}
 		}
 		startBase, branch = base, next
 		return nil
@@ -180,6 +188,17 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 	agentName := choice.Agent
 	if !config.HasAgent(cfg, agentName) {
 		return result, unavailableAgentError(cfg, agentName)
+	}
+	if !input.Takeover {
+		// The base is checked before the claim, so a refusal leaves the card in todo with no
+		// generation, baseline, worktree or task branch.
+		references = &startReferenceCheck{cwd: cwd, agent: agentName}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		err := references.check(ctx, startBase, branch)
+		cancel()
+		if err != nil {
+			return result, err
+		}
 	}
 	launcher := launcherOverride
 	if launcher == "" {

@@ -1,11 +1,8 @@
 package install
 
 import (
-	"cmp"
-	"maps"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/dualface/kander/v2/internal/config"
@@ -30,7 +27,7 @@ type LegacyRulesMigration struct {
 // legacyRulesDir returns the flat rules root earlier global installs used, or "" when the
 // scope has no previous location to migrate from.
 func legacyRulesDir(paths config.InstallPaths) string {
-	if paths.Mode == config.ModeProject || filepath.Base(paths.RulesDir) != legacyRulesDirname {
+	if filepath.Base(paths.RulesDir) != legacyRulesDirname {
 		return ""
 	}
 	return filepath.Dir(paths.RulesDir)
@@ -49,10 +46,10 @@ func legacyRulesEntry(paths config.InstallPaths) string {
 // global rules root after the current root has been written. Every file with a rule name goes,
 // whatever its content or link status: the old location is retired, and a stale copy there
 // would only be read by mistake. Directories are left alone. It never fails the install and
-// is silent by design; the result exists for tests and diagnostics. While any agent rules
-// target cannot be resolved, the migration waits: removeLegacyEntrySymlinks could not replace
-// a link at that target, and deleting the entry would leave the link dangling. The integration
-// pass reports the resolution error, and the next successful run migrates.
+// is silent by design; the result exists for tests and diagnostics. While any agent's global
+// rules target cannot be resolved, the migration waits: the global injection cleanup could not
+// remove a link aimed at the previous entry there, and deleting the entry would leave the link
+// dangling. The cleanup reports the resolution error, and the next successful run migrates.
 func migrateLegacyRules(paths config.InstallPaths) LegacyRulesMigration {
 	var out LegacyRulesMigration
 	dir := legacyRulesDir(paths)
@@ -85,170 +82,6 @@ func migrateLegacyRules(paths config.InstallPaths) LegacyRulesMigration {
 	return out
 }
 
-// removeLegacyEntrySymlinks drops agent rules files that are symlinks aimed at the previous
-// rules entry once that entry is gone. The following integration pass recreates them as
-// reference files pointing at the current entry, so no agent is left reading a dangling link.
-// A link an agent with install_rules off reads stays. Returns the targets it removed.
-func removeLegacyEntrySymlinks(paths config.InstallPaths) []string {
-	legacy := legacyRulesEntry(paths)
-	if legacy == "" || legacyEntryExists(legacy) {
-		return nil
-	}
-	var removed []string
-	seen := map[string]struct{}{}
-	for _, agent := range config.ExecutionAgents {
-		// migrateLegacyRules keeps the entry while a target is unresolvable, so
-		// this skip only happens when no entry was deleted; the integration pass
-		// that follows reports the resolution error for the agent.
-		target, err := AgentRulesTarget(agent, paths)
-		if err != nil || target == "" {
-			continue
-		}
-		if _, ok := seen[target]; ok {
-			continue
-		}
-		seen[target] = struct{}{}
-		if !linksToLegacyEntry(target, paths) {
-			continue
-		}
-		// The replacement is a write to the agent's rules file, so install_rules gates it.
-		if !targetInjectionAllowed(target, paths) {
-			continue
-		}
-		if err := os.Remove(target); err != nil {
-			continue
-		}
-		removed = append(removed, target)
-	}
-	return removed
-}
-
-// legacyEntryWillRetire reports whether the previous entry is gone once Perform has run
-// migrateLegacyRules: it is already missing, or it is a file the migration deletes.
-func legacyEntryWillRetire(paths config.InstallPaths) bool {
-	legacy := legacyRulesEntry(paths)
-	if legacy == "" {
-		return false
-	}
-	info, err := os.Lstat(legacy)
-	if os.IsNotExist(err) {
-		return true
-	}
-	return err == nil && !info.IsDir() && agentRulesTargetsResolve(paths)
-}
-
-// legacyEntryExists reports whether anything still sits at the previous entry path.
-func legacyEntryExists(legacy string) bool {
-	_, err := os.Lstat(legacy)
-	return err == nil
-}
-
-// legacyEntrySpellings is every spelling of the previous entry a rules file may carry: the
-// accepted spellings of entrySpellings, the base-directory-relative form even when it climbs
-// through "..", and the absolute form under a resolved (symlinked) home directory.
-func legacyEntrySpellings(legacy, baseDir string) map[string]struct{} {
-	spellings := entrySpellings(legacy, baseDir)
-	if rel, err := filepath.Rel(baseDir, legacy); err == nil {
-		spellings[rel] = struct{}{}
-		spellings[filepath.ToSlash(rel)] = struct{}{}
-	}
-	if home, err := os.UserHomeDir(); err == nil {
-		if rel, err := filepath.Rel(home, legacy); err == nil && !strings.HasPrefix(rel, "..") {
-			if resolvedHome, err := filepath.EvalSymlinks(home); err == nil && resolvedHome != home {
-				abs := filepath.Join(resolvedHome, rel)
-				spellings[abs] = struct{}{}
-				spellings[filepath.ToSlash(abs)] = struct{}{}
-			}
-		}
-	}
-	return spellings
-}
-
-// legacyEntryReplacements maps every spelling of the previous rules entry to the same spelling
-// of the current one, so a reference written by an earlier installer can be rewritten in place.
-// Both slash styles are covered because references always use forward slashes on disk.
-func legacyEntryReplacements(paths config.InstallPaths, baseDir string) map[string]string {
-	legacy := legacyRulesEntry(paths)
-	if legacy == "" {
-		return nil
-	}
-	out := map[string]string{}
-	for spelling := range legacyEntrySpellings(legacy, baseDir) {
-		for _, sep := range []string{"/", string(os.PathSeparator)} {
-			suffix := sep + "KANDER-AGENTS.md"
-			stem, ok := strings.CutSuffix(spelling, suffix)
-			if !ok || stem == "" {
-				continue
-			}
-			out[spelling] = stem + sep + legacyRulesDirname + suffix
-			break
-		}
-	}
-	return out
-}
-
-// rewriteLegacyReference replaces references to the previous rules entry with the current one.
-// It reports whether anything changed. Nothing is rewritten while something still exists at the
-// previous entry path (a directory the migration could not remove), because that reference may
-// still be meant.
-func rewriteLegacyReference(text string, paths config.InstallPaths, baseDir string) (string, bool) {
-	legacy := legacyRulesEntry(paths)
-	return rewriteLegacyReferenceIf(text, paths, baseDir, legacy != "" && !legacyEntryExists(legacy))
-}
-
-// rewriteLegacyReferenceIf is rewriteLegacyReference with the retirement of the previous entry
-// given by the caller, so the install plan can assume the migration Perform runs first.
-func rewriteLegacyReferenceIf(text string, paths config.InstallPaths, baseDir string, retired bool) (string, bool) {
-	if !retired || legacyRulesEntry(paths) == "" {
-		return text, false
-	}
-	replacements := legacyEntryReplacements(paths, baseDir)
-	if len(replacements) == 0 {
-		return text, false
-	}
-	// Longer spellings first so an absolute path is not partially rewritten by a shorter suffix.
-	keys := slices.SortedFunc(maps.Keys(replacements), func(a, b string) int {
-		return cmp.Or(cmp.Compare(len(b), len(a)), cmp.Compare(a, b))
-	})
-	changed := false
-	for _, key := range keys {
-		var rewritten bool
-		text, rewritten = replaceWholePath(text, key, replacements[key])
-		changed = changed || rewritten
-	}
-	return text, changed
-}
-
-// replaceWholePath replaces every occurrence of old that is not embedded in a longer path:
-// the characters on both sides must not be path characters, so "~/.agents/KANDER-AGENTS.md.bak"
-// and "/x/home/u/.agents/KANDER-AGENTS.md" are left alone.
-func replaceWholePath(text, old, replacement string) (string, bool) {
-	var out strings.Builder
-	changed := false
-	offset := 0
-	for {
-		index := strings.Index(text[offset:], old)
-		if index < 0 {
-			break
-		}
-		start := offset + index
-		end := start + len(old)
-		out.WriteString(text[offset:start])
-		if (start == 0 || !isPathChar(text[start-1])) && (end == len(text) || !isPathChar(text[end])) {
-			out.WriteString(replacement)
-			changed = true
-		} else {
-			out.WriteString(old)
-		}
-		offset = end
-	}
-	if !changed {
-		return text, false
-	}
-	out.WriteString(text[offset:])
-	return out.String(), true
-}
-
 func isPathChar(c byte) bool {
 	switch {
 	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
@@ -257,10 +90,10 @@ func isPathChar(c byte) bool {
 	return strings.IndexByte("._-/\\~:", c) >= 0
 }
 
-// agentRulesTargetsResolve reports whether every embedded agent's rules target resolves.
+// agentRulesTargetsResolve reports whether every embedded agent's global rules target resolves.
 func agentRulesTargetsResolve(paths config.InstallPaths) bool {
 	for _, agent := range config.ExecutionAgents {
-		if _, err := AgentRulesTarget(agent, paths); err != nil {
+		if _, err := GlobalRulesTarget(agent, paths); err != nil {
 			return false
 		}
 	}

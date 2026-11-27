@@ -214,18 +214,17 @@ func TestTriagePromptResolvesTheIssueRulesPathFromScope(t *testing.T) {
 	config.BindConfigLanguage(nil)
 	t.Cleanup(func() { config.BindConfigLanguage(nil) })
 	t.Setenv(config.EnvLangCLI, "")
+	project := filepath.Join(t.TempDir(), "project")
 	paths := config.InstallPaths{
-		Mode:        config.ModeProject,
-		ProjectRoot: filepath.Join(t.TempDir(), "project"),
-		BinDir:      filepath.Join(t.TempDir(), "bin"),
-		RulesDir:    filepath.Join(t.TempDir(), "rules"),
+		BinDir:   filepath.Join(t.TempDir(), "bin"),
+		RulesDir: filepath.Join(t.TempDir(), "rules"),
 	}
 	request := issue.TriageLaunch{
-		Root:         paths.ProjectRoot,
+		Root:         project,
 		Repository:   triageRepository(),
 		Number:       42,
-		JSONPath:     filepath.Join(paths.ProjectRoot, "cache", "issue.json"),
-		MarkdownPath: filepath.Join(paths.ProjectRoot, "cache", "issue.md"),
+		JSONPath:     filepath.Join(project, "cache", "issue.json"),
+		MarkdownPath: filepath.Join(project, "cache", "issue.md"),
 	}
 	for _, lang := range []string{"cn", "en", "ja"} {
 		t.Run(lang, func(t *testing.T) {
@@ -249,7 +248,6 @@ func TestTriagePromptImportsOnlyWithoutABoundCard(t *testing.T) {
 	t.Cleanup(func() { config.BindConfigLanguage(nil) })
 	t.Setenv(config.EnvLangCLI, "")
 	paths := config.InstallPaths{
-		Mode:     config.ModeGlobal,
 		BinDir:   filepath.Join(t.TempDir(), "bin"),
 		RulesDir: filepath.Join(t.TempDir(), "rules"),
 	}

@@ -7,7 +7,7 @@ import (
 )
 
 func TestSetChatAgentWritesOnlyChatAgentOnProjectTab(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func TestSetChatAgentWritesOnlyChatAgentOnProjectTab(t *testing.T) {
 }
 
 func TestChatModelEditPinsChatAgent(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestChatModelEditPinsChatAgent(t *testing.T) {
 }
 
 func TestRestoreChatFieldAndSection(t *testing.T) {
-	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session, _ := tempOverlaySession(t)
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}

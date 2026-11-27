@@ -11,7 +11,7 @@ import (
 )
 
 func TestReadRulesFileWarnsOnlyOnFallback(t *testing.T) {
-	paths := InstallPaths{Mode: ModeGlobal, RulesDir: t.TempDir()}
+	paths := InstallPaths{RulesDir: t.TempDir()}
 	var warn bytes.Buffer
 	data, err := ReadRulesFile(paths, "snippets/README.md", &warn)
 	if err != nil {
@@ -37,7 +37,7 @@ func TestReadRulesFileWarnsOnlyOnFallback(t *testing.T) {
 }
 
 func TestRenderRulesTemplateFailsWhole(t *testing.T) {
-	paths := InstallPaths{Mode: ModeGlobal, RulesDir: t.TempDir()}
+	paths := InstallPaths{RulesDir: t.TempDir()}
 	if err := os.MkdirAll(filepath.Join(paths.RulesDir, "templates"), 0o700); err != nil {
 		t.Fatal(err)
 	}

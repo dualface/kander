@@ -18,7 +18,6 @@ func TestStartPromptNeverCarriesCardBodies(t *testing.T) {
 	t.Cleanup(func() { config.BindConfigLanguage(nil) })
 	t.Setenv(config.EnvLangCLI, "")
 	paths := config.InstallPaths{
-		Mode:     config.ModeGlobal,
 		RulesDir: filepath.Join(t.TempDir(), "rules"),
 	}
 	card := "# Secret issue title\n\n" +

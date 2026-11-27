@@ -14,7 +14,7 @@ func TestDispatchPromptTranslations(t *testing.T) {
 		t.Setenv(config.EnvLang, lang)
 		t.Setenv(config.EnvLangCLI, "1")
 		d := board.Dispatch{Input: board.DispatchInput{ID: "prompt-one", TaskID: "20260908-prompt-task", Kind: "fix"}, Authorization: board.ExecutionAuthorization{DispatchID: "prompt-one", Epoch: 4}}
-		prompt, err := DispatchInstruction(config.InstallPaths{Mode: config.ModeGlobal}, d)
+		prompt, err := DispatchInstruction(config.InstallPaths{}, d)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -38,7 +38,7 @@ func TestDispatchPromptWrapUpNamesSourceCommit(t *testing.T) {
 		}}},
 		Authorization: board.ExecutionAuthorization{DispatchID: "wrap-one", Epoch: 3},
 	}
-	prompt, err := DispatchInstruction(config.InstallPaths{Mode: config.ModeGlobal}, d)
+	prompt, err := DispatchInstruction(config.InstallPaths{}, d)
 	if err != nil {
 		t.Fatal(err)
 	}

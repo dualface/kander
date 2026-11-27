@@ -60,7 +60,7 @@ func TestPerformInstallsTemplatesAndSnippets(t *testing.T) {
 // or snippets/ directory. Doctor reports those files missing and repair installs them; the old
 // files keep their classification.
 func TestInspectRulesReportsSubdirFilesMissingOnOldInstall(t *testing.T) {
-	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: t.TempDir()}
+	paths := config.InstallPaths{RulesDir: t.TempDir()}
 	state := rulesState{Files: map[string]string{}}
 	for _, name := range rules.Names() {
 		if strings.Contains(name, "/") {

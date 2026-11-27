@@ -33,14 +33,14 @@ func TestSelectBackendFollowsInventoryOrder(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	global, project := t.TempDir(), t.TempDir()
+	global, second := t.TempDir(), t.TempDir()
 	write(global, "zellij", "zellij-tab")
-	write(project, "zj", "zellij")
+	write(second, "zj", "zellij")
 	saved := terminal.DefinitionDirs
 	terminal.DefinitionDirs = func() []terminal.DefinitionDir {
 		return []terminal.DefinitionDir{
 			{Source: terminal.SourceGlobal, Root: global, Path: filepath.Join(global, terminal.DefinitionsDirName)},
-			{Source: terminal.SourceProject, Root: project, Path: filepath.Join(project, terminal.DefinitionsDirName)},
+			{Source: terminal.SourceGlobal, Root: second, Path: filepath.Join(second, terminal.DefinitionsDirName)},
 		}
 	}
 	terminal.ReloadDefinitions()

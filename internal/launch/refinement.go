@@ -36,7 +36,7 @@ func refinementAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths
 		"IssueRules":   rulesPath(paths, "KANDER-ISSUE-RULES.md"),
 		"JSONPath":     process.AgentPath(request.JSONPath),
 		"MarkdownPath": process.AgentPath(request.MarkdownPath),
-		"Command":      commandName(paths),
+		"Command":      commandName,
 	})
 	return body, err
 }

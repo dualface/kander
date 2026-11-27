@@ -253,9 +253,6 @@ func triageAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (s
 	if request.RefineCard {
 		return refinementAgentPrompt(request, paths)
 	}
-	if paths.Mode == config.ModeProject && paths.ProjectRoot == "" {
-		return "", launchError("config.project_install_paths_are_missing_the_main_worktree")
-	}
 	lang, err := resolvePromptLanguage("", paths)
 	if err != nil {
 		return "", err
@@ -283,7 +280,7 @@ func triageAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (s
 		"JSONPath":     process.AgentPath(request.JSONPath),
 		"MarkdownPath": process.AgentPath(request.MarkdownPath),
 		"CardID":       request.CardID,
-		"Command":      commandName(paths),
+		"Command":      commandName,
 		"Number":       request.Number,
 		"Agents":       agents,
 	})

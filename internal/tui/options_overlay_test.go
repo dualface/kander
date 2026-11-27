@@ -45,11 +45,21 @@ func confirmPageRestore(t *testing.T, panel *optionsPanel) {
 	drivePanel(panel, keyMsg("y"))
 }
 
-func attachTempOverlay(t *testing.T, session *menu.Session, mode config.Mode) (string, string) {
+func attachTempOverlay(t *testing.T, session *menu.Session) (string, string) {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, config.OverlayFilename)
-	if err := session.AttachOverlay(mode, config.OverlayLocation{ProjectRoot: dir, Path: path}, nil); err != nil {
+	if err := session.AttachOverlay(config.OverlayLocation{ProjectRoot: dir, Path: path}, nil); err != nil {
+		t.Fatal(err)
+	}
+	return dir, path
+}
+
+// attachProjectTab is attachTempOverlay switched to the Project tab.
+func attachProjectTab(t *testing.T, session *menu.Session) (string, string) {
+	t.Helper()
+	dir, path := attachTempOverlay(t, session)
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
 	return dir, path
@@ -69,7 +79,7 @@ func TestPadTabLabelRight(t *testing.T) {
 
 func TestOptionsTabHeaderVersionIsRightAligned(t *testing.T) {
 	_, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	pumpPanel(panel, panel.openRoot())
 	_, view := panel.view()
 	lines := strings.Split(ansi.Strip(view), "\n")
@@ -90,7 +100,7 @@ func TestOptionsTabHeaderVersionIsRightAligned(t *testing.T) {
 
 func TestOptionsTabsFollowInstallMode(t *testing.T) {
 	_, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	pumpPanel(panel, panel.openRoot())
 	_, view := panel.view()
 	plain := ansi.Strip(view)
@@ -145,7 +155,7 @@ func TestOptionsTabsFollowInstallMode(t *testing.T) {
 	}
 
 	_, panel = openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeProject)
+	attachProjectTab(t, panel.session)
 	pumpPanel(panel, panel.openRoot())
 	_, view = panel.view()
 	plain = ansi.Strip(view)
@@ -156,7 +166,7 @@ func TestOptionsTabsFollowInstallMode(t *testing.T) {
 
 func TestOptionsTabSwitchKeepsEditsAndDoesNotSave(t *testing.T) {
 	_, panel := openPanel(t)
-	_, path := attachTempOverlay(t, panel.session, config.ModeGlobal)
+	_, path := attachTempOverlay(t, panel.session)
 	pumpPanel(panel, panel.openRoot())
 	panel.session.SetLauncher("foreground")
 	panel.markDirty()
@@ -188,7 +198,7 @@ func TestOptionsTabSwitchKeepsEditsAndDoesNotSave(t *testing.T) {
 
 func TestProjectTabSaveWritesOverlayOnly(t *testing.T) {
 	_, panel := openPanel(t)
-	_, path := attachTempOverlay(t, panel.session, config.ModeGlobal)
+	_, path := attachTempOverlay(t, panel.session)
 	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +228,7 @@ func TestProjectTabSaveWritesOverlayOnly(t *testing.T) {
 
 func TestProjectBrowseAndReviewDoesNotCreateOverlay(t *testing.T) {
 	_, panel := openPanel(t)
-	_, path := attachTempOverlay(t, panel.session, config.ModeGlobal)
+	_, path := attachTempOverlay(t, panel.session)
 	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +241,7 @@ func TestProjectBrowseAndReviewDoesNotCreateOverlay(t *testing.T) {
 
 func TestInheritedPrefixOnProjectTab(t *testing.T) {
 	_, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +255,7 @@ func TestInheritedPrefixOnProjectTab(t *testing.T) {
 
 func TestProjectInstallInheritPrefixUsesDefault(t *testing.T) {
 	_, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeProject)
+	attachProjectTab(t, panel.session)
 	pumpPanel(panel, panel.dispatch(sectionInterface))
 	_, view := panel.view()
 	plain := ansi.Strip(view)
@@ -256,7 +266,7 @@ func TestProjectInstallInheritPrefixUsesDefault(t *testing.T) {
 
 func TestModelInputShowsInheritedValue(t *testing.T) {
 	_, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -290,7 +300,7 @@ func TestOverlaySaveFailureKeepsEdits(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(blocked, config.OverlayFilename)
-	if err := panel.session.AttachOverlay(config.ModeGlobal, config.OverlayLocation{ProjectRoot: dir, Path: path}, nil); err != nil {
+	if err := panel.session.AttachOverlay(config.OverlayLocation{ProjectRoot: dir, Path: path}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
@@ -311,7 +321,7 @@ func TestOverlaySaveFailureKeepsEdits(t *testing.T) {
 
 func TestScopeChromeFitsNarrowScreen(t *testing.T) {
 	app, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	app.Width, app.Height = 72, 12
 	pumpPanel(panel, panel.openRoot())
 	_, view := panel.view()
@@ -327,7 +337,7 @@ func TestScopeChromeFitsNarrowScreen(t *testing.T) {
 
 func TestSaveAndApplyPersistsBothDirtyTabs(t *testing.T) {
 	_, panel := openPanel(t)
-	_, path := attachTempOverlay(t, panel.session, config.ModeGlobal)
+	_, path := attachTempOverlay(t, panel.session)
 	panel.session.SetLanguage("ja")
 	panel.markDirty()
 	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
@@ -357,7 +367,7 @@ func TestSaveAndApplyPersistsBothDirtyTabs(t *testing.T) {
 
 func TestRestoreTUIInheritRevertsAppTheme(t *testing.T) {
 	app, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -382,7 +392,7 @@ func TestRestoreTUIInheritRevertsAppTheme(t *testing.T) {
 
 func TestCompactOverrideRefreshesInheritanceChrome(t *testing.T) {
 	app, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -402,7 +412,7 @@ func TestCompactOverrideRefreshesInheritanceChrome(t *testing.T) {
 
 func TestMouseClickAccountsForScopeChrome(t *testing.T) {
 	_, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	pumpPanel(panel, panel.openRoot())
 	panel.view()
 	if panel.chromeLines < 1 {
@@ -425,7 +435,7 @@ func TestMouseClickAccountsForScopeChrome(t *testing.T) {
 
 func TestCloseConfirmDoesNotPaintFallbackNotice(t *testing.T) {
 	_, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	panel.overlayNotice = config.Text("tui.overlay_file", panel.session.OverlayLocation.Path)
 	panel.confirming = true
 	panel.view()
@@ -436,7 +446,7 @@ func TestCloseConfirmDoesNotPaintFallbackNotice(t *testing.T) {
 
 func TestCloseConfirmClearsTabHits(t *testing.T) {
 	_, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	pumpPanel(panel, panel.openRoot())
 	panel.view()
 	if len(panel.tabHits) < 2 {
@@ -459,7 +469,7 @@ func TestCloseConfirmClearsTabHits(t *testing.T) {
 
 func TestProjectLauncherChangeRefreshesInherit(t *testing.T) {
 	_, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -495,7 +505,7 @@ func TestProjectLauncherChangeRefreshesInherit(t *testing.T) {
 
 func TestModelEditPinsAgentOnProjectTab(t *testing.T) {
 	_, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -523,7 +533,7 @@ func TestModelEditPinsAgentOnProjectTab(t *testing.T) {
 
 func TestModelOverrideRefreshKeepsCursorAndRestore(t *testing.T) {
 	_, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
@@ -560,7 +570,7 @@ func TestModelOverrideRefreshKeepsCursorAndRestore(t *testing.T) {
 
 func TestSwitchTabSyncsAppFromSession(t *testing.T) {
 	app, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	inherited := panel.session.Config.TUI.Theme
 	override := "light"
 	if inherited == "light" {
@@ -577,7 +587,7 @@ func TestSwitchTabSyncsAppFromSession(t *testing.T) {
 
 func TestSwitchTabKeepsFocusedField(t *testing.T) {
 	_, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	pumpPanel(panel, panel.openSection(sectionInterface))
 	agentIndex := panel.bind.fieldIndex[interfaceFocusKey("agent_language")]
 	if agentIndex < 1 {
@@ -616,7 +626,7 @@ func focusableFieldAt(bind *formBinding, index int) huh.Field {
 
 func TestAppUpdateRoutesOptionsClick(t *testing.T) {
 	app, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	pumpPanel(panel, panel.openRoot())
 	panel.view()
 	if panel.chromeLines < 1 {
@@ -657,7 +667,7 @@ func TestRulesRawMergeDoesNotReapplyStaleBindings(t *testing.T) {
 		t.Fatal(err)
 	}
 	panel.session = session
-	_, path := attachTempOverlay(t, session, config.ModeProject)
+	_, path := attachProjectTab(t, session)
 	pumpPanel(panel, panel.openSection(sectionRules))
 	*panel.bind.rules[config.RuleCode] = false
 	panel.bind.apply(panel)
@@ -691,7 +701,7 @@ func TestInvalidProjectInterfaceEditReportsAndKeepsInput(t *testing.T) {
 		t.Fatal(err)
 	}
 	panel.session = session
-	_, path := attachTempOverlay(t, session, config.ModeProject)
+	_, path := attachProjectTab(t, session)
 	panel.syncAppFromSession()
 	pumpPanel(panel, panel.openSection(sectionInterface))
 	want := "dark"
@@ -720,7 +730,7 @@ func scopeSwitchHint() string {
 
 func TestOptionsTabKeyCyclesScope(t *testing.T) {
 	_, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	pumpPanel(panel, panel.openRoot())
 	drivePanel(panel, keyMsg("tab"))
 	if panel.session.Target != config.TargetOverlay {
@@ -741,7 +751,7 @@ func TestOptionsTabKeyCyclesScope(t *testing.T) {
 func TestOptionsHintShowsAvailableTabsAndKeys(t *testing.T) {
 	want := scopeSwitchHint()
 	_, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	pumpPanel(panel, panel.openRoot())
 	_, view := panel.view()
 	if !strings.Contains(ansi.Strip(view), want) {
@@ -763,14 +773,14 @@ func TestOptionsHintOmitsTabSwitchWhenUnavailable(t *testing.T) {
 	// The scope hint is appended after the page hint, so match it with its separator.
 	keys := " · " + scopeSwitchHint()
 	_, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeProject)
+	attachProjectTab(t, panel.session)
 	pumpPanel(panel, panel.openRoot())
 	if strings.Contains(ansi.Strip(panelView(panel)), keys) {
 		t.Fatalf("project install showed tab switch:\n%s", ansi.Strip(panelView(panel)))
 	}
 
 	_, panel = openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	panel.markDirty()
 	pumpPanel(panel, panel.openCloseConfirm())
 	if strings.Contains(ansi.Strip(panelView(panel)), keys) {
@@ -782,7 +792,7 @@ func TestOptionsHintOmitsTabSwitchWhenUnavailable(t *testing.T) {
 	}
 
 	_, panel = openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	pumpPanel(panel, panel.openRoot())
 	panel.showReport("title", nil, "body")
 	if strings.Contains(ansi.Strip(panelView(panel)), keys) {
@@ -797,7 +807,7 @@ func panelView(panel *optionsPanel) string {
 
 func TestOptionsTabKeyCyclesFromTextSection(t *testing.T) {
 	_, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	pumpPanel(panel, panel.openSection(sectionExecution))
 	if !panel.acceptsText() {
 		t.Fatal("execution should accept text")
@@ -814,7 +824,7 @@ func TestOptionsTabKeyCyclesFromTextSection(t *testing.T) {
 
 func TestOptionsHintKeepsTabSwitchWhenNarrow(t *testing.T) {
 	app, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	attachTempOverlay(t, panel.session)
 	app.Width, app.Height = 48, 16
 	pumpPanel(panel, panel.openSection(sectionExecution))
 	plain := ansi.Strip(panelView(panel))
@@ -825,7 +835,7 @@ func TestOptionsHintKeepsTabSwitchWhenNarrow(t *testing.T) {
 
 func TestOptionsTabDoesNotStealSingleTarget(t *testing.T) {
 	_, panel := openPanel(t)
-	attachTempOverlay(t, panel.session, config.ModeProject)
+	attachProjectTab(t, panel.session)
 	pumpPanel(panel, panel.openSection(sectionInterface))
 	beforeTarget := panel.session.Target
 	before := panel.form.GetFocusedField()

@@ -11,7 +11,7 @@ import (
 
 // goldenPaths keeps every rendered path deterministic; the rules root does not exist, so the
 // embedded templates render.
-var goldenPaths = config.InstallPaths{Mode: config.ModeGlobal, RulesDir: "/rules"}
+var goldenPaths = config.InstallPaths{RulesDir: "/rules"}
 
 func goldenConfig(t *testing.T, reporting bool) {
 	t.Helper()
@@ -44,7 +44,7 @@ func TestPromptTemplatesCarryPhaseSnippetsPlaceholder(t *testing.T) {
 // An installed template wins over the embedded copy: editing it changes the next prompt.
 func TestInstalledPromptTemplateOverridesEmbedded(t *testing.T) {
 	goldenConfig(t, false)
-	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: t.TempDir()}
+	paths := config.InstallPaths{RulesDir: t.TempDir()}
 	if err := os.MkdirAll(filepath.Join(paths.RulesDir, "templates", "prompt"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestOrchestratePromptCarriesTheWaitingReminder(t *testing.T) {
 // carries the embedded sentence, while the installed templates keep winning.
 func TestOldInstallWithoutWaitingTemplateUsesEmbedded(t *testing.T) {
 	goldenConfig(t, false)
-	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: t.TempDir()}
+	paths := config.InstallPaths{RulesDir: t.TempDir()}
 	dir := filepath.Join(paths.RulesDir, "templates", "prompt")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
@@ -156,7 +156,7 @@ func TestOldInstallWithoutWaitingTemplateUsesEmbedded(t *testing.T) {
 // the launch wrote with, so a customized head still matches.
 func TestPromptPrefixesFollowInstalledHead(t *testing.T) {
 	goldenConfig(t, false)
-	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: t.TempDir()}
+	paths := config.InstallPaths{RulesDir: t.TempDir()}
 	if err := os.MkdirAll(filepath.Join(paths.RulesDir, "templates", "prompt"), 0o700); err != nil {
 		t.Fatal(err)
 	}

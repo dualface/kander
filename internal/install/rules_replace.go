@@ -48,10 +48,9 @@ func ReplaceModifiedRules(paths config.InstallPaths, names []string) (ModifiedRu
 	if state.Files == nil {
 		state.Files = map[string]string{}
 	}
-	project := paths.Mode == config.ModeProject
 	changed := false
 	for _, name := range names {
-		replacement, fail := replaceModifiedRule(paths, name, project)
+		replacement, fail := replaceModifiedRule(paths, name)
 		if fail != nil {
 			result.Failed = append(result.Failed, *fail)
 			continue
@@ -73,9 +72,9 @@ func ReplaceModifiedRules(paths config.InstallPaths, names []string) (ModifiedRu
 
 // replaceModifiedRule backs up the installed copy of name and replaces it with the embedded
 // file. The backup must exist before the destination is touched, so a failed backup leaves
-// the local edit in place. A global-mode reparse point stays user-managed: the file is not
+// the local edit in place. A reparse point stays user-managed: the file is not
 // backed up or replaced and the failure names that boundary.
-func replaceModifiedRule(paths config.InstallPaths, name string, project bool) (*RuleReplacement, *RuleReplaceFailure) {
+func replaceModifiedRule(paths config.InstallPaths, name string) (*RuleReplacement, *RuleReplaceFailure) {
 	fail := func(err error) (*RuleReplacement, *RuleReplaceFailure) {
 		return nil, &RuleReplaceFailure{Name: name, Err: err}
 	}
@@ -87,7 +86,7 @@ func replaceModifiedRule(paths config.InstallPaths, name string, project bool) (
 		return fail(fmt.Errorf("%s", config.Text("install.rule_replace_missing", name)))
 	}
 	dest := filepath.Join(paths.RulesDir, filepath.FromSlash(name))
-	if !project && fs.IsReparsePoint(dest) {
+	if fs.IsReparsePoint(dest) {
 		return fail(fmt.Errorf("%s", config.Text("install.rule_backup_refused_link", name)))
 	}
 	backup, err := uniqueRuleBackupPath(paths.RulesDir, name)
@@ -107,7 +106,7 @@ func replaceModifiedRule(paths config.InstallPaths, name string, project bool) (
 	if err != nil {
 		return fail(err)
 	}
-	wrote, err := writeRule(paths, name, embedded, project)
+	wrote, err := writeRule(paths, name, embedded)
 	if err != nil {
 		return fail(err)
 	}

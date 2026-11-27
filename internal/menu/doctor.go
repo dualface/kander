@@ -41,12 +41,7 @@ func printDoctorWithBinaries(tools TerminalTools, repair bool, interactive bool,
 		warning(err.Error())
 		return false
 	}
-	if paths.Mode == config.ModeProject {
-		success(config.Text("menu.install_mode_project", paths.InstallRoot))
-		success(config.Text("menu.rules_entry", rulesEntry(paths)))
-	} else {
-		success(config.Text("menu.install_mode_global"))
-	}
+	success(config.Text("menu.install_mode_global"))
 	install.CleanupStaleBinary(paths)
 	if repair {
 		rulesRepair, repairErr := install.RepairRules(paths)
@@ -62,9 +57,6 @@ func printDoctorWithBinaries(tools TerminalTools, repair bool, interactive bool,
 		}
 		for _, path := range rulesRepair.Legacy.Kept {
 			hint(config.Text("install.legacy_rule_kept", path))
-		}
-		for _, path := range rulesRepair.Links {
-			hint(config.Text("install.legacy_link_replaced", path))
 		}
 	}
 	if report, inspectErr := install.InspectRules(paths); inspectErr != nil {
@@ -88,13 +80,16 @@ func printDoctorWithBinaries(tools TerminalTools, repair bool, interactive bool,
 			healthy = promptModifiedRules(paths, report.Modified) && healthy
 		}
 	}
-	for name, path := range findCommands(paths) {
+	for name, path := range findCommands() {
 		if path != "" {
 			success(name + ": " + path)
 		} else {
 			healthy = false
-			warning(commandMissingMessage(name, paths))
+			warning(commandMissingMessage(name))
 		}
+	}
+	if !reportLegacyProjectInstall(repair) {
+		healthy = false
 	}
 	if !reportPathKanders(interactive, binaries) {
 		healthy = false
@@ -127,6 +122,11 @@ func printDoctorWithBinaries(tools TerminalTools, repair bool, interactive bool,
 			agentConfig = loaded
 			agents = findAgents(agentConfig)
 		}
+	}
+	// The cleanup resolves the agents' config directories through the scope config, so it
+	// runs once the repair above had its chance to fix that file.
+	if !reportGlobalInjectionCleanup(paths) {
+		healthy = false
 	}
 	var configuredLauncher string
 	if loaded, loadErr := config.Load(false); loadErr == nil {
@@ -220,7 +220,7 @@ func printDoctorWithBinaries(tools TerminalTools, repair bool, interactive bool,
 			hint(config.Text("menu.config_incomplete", cfgPath))
 			maybeHintLegacyOnevoke()
 		}
-		healthy = validateConfiguredResources(loaded, agents, paths, tools) && healthy
+		healthy = validateConfiguredResources(loaded, agents, tools) && healthy
 		reportAgentSessionFileInheritance(loaded)
 		if loaded.WelcomeComplete {
 			switches, switchErr := config.ScopeInstallRules(paths)
@@ -228,7 +228,7 @@ func printDoctorWithBinaries(tools TerminalTools, repair bool, interactive bool,
 				warning(switchErr.Error())
 				healthy = false
 			} else {
-				healthy = reportRulesIntegration(paths, switches, repair) && healthy
+				healthy = reportProjectReferences(paths, switches) && healthy
 				healthy = reportAgentExtensions(paths, switches, repair) && healthy
 				healthy = reportLeaderSkills(paths, switches, repair) && healthy
 			}
@@ -308,68 +308,6 @@ func reportOverlayInstallRules() {
 	for _, key := range keys {
 		warning(config.Text("menu.overlay_install_rules_ignored", key, file))
 	}
-}
-
-// reportRulesIntegration reports whether the rules file of every agent the install scope covers
-// references the Kander entry, reusing install.IntegrationAgents so doctor cannot drift from the
-// install-time coverage; in repair mode it writes the missing references instead of only warning.
-// A file an agent with install_rules off reads is reported as turned off and is never touched.
-func reportRulesIntegration(paths config.InstallPaths, switches config.InstallRules, repair bool) bool {
-	healthy := true
-	labels := agentLabels()
-	entry := rulesEntry(paths)
-	seen := map[string]struct{}{}
-	for _, selected := range install.IntegrationAgents(paths) {
-		// A resolution error is not deduplicated: the integration call below reports it.
-		target, targetErr := install.AgentRulesTarget(selected, paths)
-		if targetErr == nil && target == "" {
-			continue
-		}
-		if _, ok := seen[target]; ok && targetErr == nil {
-			continue
-		}
-		seen[target] = struct{}{}
-		if repair {
-			outcome, ensureErr := install.EnsureRulesIntegrationWith(selected, paths, switches)
-			if ensureErr != nil {
-				healthy = false
-				warning(config.Text("menu.is_not_connected_to_kander_rules", labels[selected], ensureErr.Error()))
-				hint(config.Text("menu.follow_the_readme_integration_section_and_point_the_rules", entry))
-				continue
-			}
-			healthy = reportIntegrationOutcome(labels[selected], outcome) && healthy
-			if outcome.Override != nil {
-				healthy = reportIntegrationOutcome(labels[selected], *outcome.Override) && healthy
-			}
-			continue
-		}
-		if targetErr == nil {
-			if disabled := install.DisabledReaders(target, paths, switches); len(disabled) > 0 {
-				hint(config.Text("menu.rules_injection_disabled", install.AgentLabelList(disabled), target))
-				continue
-			}
-		}
-		integrated, detail := rulesIntegration(selected, paths)
-		if integrated {
-			success(config.Text("menu.is_connected_to_kander_rules", labels[selected], detail))
-		} else {
-			healthy = false
-			warning(config.Text("menu.is_not_connected_to_kander_rules", labels[selected], detail))
-			hint(config.Text("menu.follow_the_readme_integration_section_and_point_the_rules", entry))
-		}
-		if issues, inspectErr := install.InspectRulesReferences(selected, paths); inspectErr == nil && issues.Total() > 0 {
-			for _, file := range issues.Files {
-				if file.Invalid+file.Duplicates == 0 {
-					continue
-				}
-				hint(config.Text(
-					"menu.found_invalid_or_duplicate_kander_rules_references",
-					labels[selected], file.Invalid, file.Duplicates, file.Target,
-				))
-			}
-		}
-	}
-	return healthy
 }
 
 // reportAgentExtensions reports the state of every covered agent rules extension,
@@ -475,41 +413,6 @@ func reportLeaderSkills(paths config.InstallPaths, switches config.InstallRules,
 	return healthy
 }
 
-// reportIntegrationOutcome prints the per-file result of one ensured rules file; doctor repair
-// and the options finish share it so the override sibling reports identically. It returns false
-// when the file still has no reference the agent loads.
-func reportIntegrationOutcome(label string, outcome install.IntegrationOutcome) bool {
-	switch outcome.Status {
-	case install.IntegrationDisabled:
-		hint(config.Text("menu.rules_injection_disabled", install.AgentLabelList(outcome.DisabledBy), outcome.Target))
-		return true
-	case install.IntegrationPresent:
-		if outcome.Inactive {
-			break
-		}
-		success(config.Text("menu.is_connected_to_kander_rules", label, outcome.Target))
-	case install.IntegrationRewritten:
-		success(config.Text("menu.updated_kander_rules_reference", label, outcome.Target))
-	case install.IntegrationCleaned:
-		success(config.Text("menu.cleaned_kander_rules_references", label, outcome.Target))
-	case install.IntegrationFrontmatterAdded:
-		success(config.Text("menu.added_always_apply_frontmatter", label, outcome.Target))
-	default:
-		success(config.Text("menu.added_kander_rules_reference", label, outcome.Target))
-	}
-	if outcome.Removed > 0 {
-		success(config.Text(
-			"menu.removed_invalid_or_duplicate_kander_rules_references",
-			label, outcome.Removed, outcome.Target,
-		))
-	}
-	if outcome.Inactive {
-		warning(config.Text("menu.rules_reference_inactive", label, outcome.Target))
-		return false
-	}
-	return true
-}
-
 // sessionFileInheritSpec reports whether the named agent overlay declares a
 // session without file and therefore inherits the file declaration of its
 // dialect's embedded definition, returning the resolved dialect and a detached
@@ -566,7 +469,7 @@ func maybeHintLegacyOnevoke() {
 	}
 }
 
-func validateConfiguredResources(cfg *config.Config, agents map[string]agentState, paths config.InstallPaths, tools TerminalTools) bool {
+func validateConfiguredResources(cfg *config.Config, agents map[string]agentState, tools TerminalTools) bool {
 	healthy := true
 	effective, err := config.Effective(cfg)
 	if err != nil {
@@ -582,7 +485,7 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 			))
 		}
 	}
-	if ok, msg := reviewGatePresent(paths); !ok {
+	if ok, msg := reviewGatePresent(); !ok {
 		healthy = false
 		warning(msg)
 	}

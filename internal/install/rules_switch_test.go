@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/dualface/kander/v2/internal/config"
@@ -35,63 +34,40 @@ func readBytes(t *testing.T, path string) string {
 	return string(data)
 }
 
-func TestPerformSkipsAgentsWithSwitchOff(t *testing.T) {
+func TestPerformSkipsExtensionWithSwitchOff(t *testing.T) {
 	home := setupInstallHome(t)
 	for _, dir := range []string{".claude", ".codex", ".pi/agent"} {
 		if err := os.MkdirAll(filepath.Join(home, filepath.FromSlash(dir)), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	codex := filepath.Join(home, ".codex", "AGENTS.md")
-	override := filepath.Join(home, ".codex", "AGENTS.override.md")
-	writeIntegrateFile(t, codex, "# Personal codex rules\n")
-	writeIntegrateFile(t, override, "# Override\n")
-	writeScopeSwitches(t, home, true, map[string]bool{"codex": false, "pi": false})
+	writeScopeSwitches(t, home, true, map[string]bool{"pi": false})
 	result, err := Perform(Request{Language: "cn", Source: stubBinary(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := readBytes(t, codex); got != "# Personal codex rules\n" {
-		t.Fatalf("codex rules file changed: %q", got)
-	}
-	if got := readBytes(t, override); got != "# Override\n" {
-		t.Fatalf("override changed: %q", got)
-	}
 	if _, err := os.Lstat(piExtensionTarget(t, home, false)); !os.IsNotExist(err) {
 		t.Fatalf("pi extension written: %v", err)
 	}
-	if _, err := os.Lstat(filepath.Join(home, ".pi", "agent", "AGENTS.md")); !os.IsNotExist(err) {
-		t.Fatalf("pi rules file written: %v", err)
+	if len(result.Extensions) != 1 || result.Extensions[0].Status != ExtensionDisabled {
+		t.Fatalf("extensions=%+v", result.Extensions)
 	}
-	if !strings.Contains(readBytes(t, filepath.Join(home, ".claude", "CLAUDE.md")), "KANDER-AGENTS.md") {
-		t.Fatal("claude reference missing")
-	}
-	var disabled []string
-	for _, item := range result.Integrations {
-		if item.Status == IntegrationDisabled {
-			disabled = append(disabled, item.DisabledBy...)
+	for _, file := range []string{filepath.Join(home, ".pi", "agent", "AGENTS.md"), filepath.Join(home, ".claude", "CLAUDE.md"), filepath.Join(home, ".codex", "AGENTS.md")} {
+		if _, err := os.Lstat(file); !os.IsNotExist(err) {
+			t.Fatalf("global rules file written: %s: %v", file, err)
 		}
-	}
-	if !slices.Equal(disabled, []string{"codex", "pi"}) {
-		t.Fatalf("disabled=%v", disabled)
 	}
 }
 
 func TestRulesRootStillExtractedWithAllSwitchesOff(t *testing.T) {
 	home := setupInstallHome(t)
 	writeScopeSwitches(t, home, false, nil)
-	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o755); err != nil {
-		t.Fatal(err)
-	}
 	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
 		t.Fatal(err)
 	}
 	paths, _ := config.GlobalInstallPaths()
 	if _, err := os.Stat(RulesEntry(paths)); err != nil {
 		t.Fatal(err)
-	}
-	if _, err := os.Lstat(filepath.Join(home, ".claude", "CLAUDE.md")); !os.IsNotExist(err) {
-		t.Fatalf("claude rules file created: %v", err)
 	}
 	if err := os.Remove(RulesEntry(paths)); err != nil {
 		t.Fatal(err)
@@ -105,23 +81,26 @@ func TestRulesRootStillExtractedWithAllSwitchesOff(t *testing.T) {
 }
 
 func TestEnsurePrimitivesHonorSwitchOff(t *testing.T) {
-	home := setupInstallHome(t)
+	project, home := projectFixture(t)
 	writeScopeSwitches(t, home, false, nil)
-	paths, _ := config.GlobalInstallPaths()
-	for _, dir := range []string{".codex", ".pi/agent/extensions"} {
-		if err := os.MkdirAll(filepath.Join(home, filepath.FromSlash(dir)), 0o755); err != nil {
-			t.Fatal(err)
-		}
+	paths := project.Paths
+	switches, err := config.ScopeInstallRules(config.InstallPaths{ConfigPath: filepath.Join(home, ".config", "kander", "config.json")})
+	if err != nil {
+		t.Fatal(err)
 	}
-	codex := filepath.Join(home, ".codex", "AGENTS.md")
-	writeIntegrateFile(t, codex, "# Mine\n")
-	outcome, err := EnsureRulesIntegration("codex", paths)
-	if err != nil || outcome.Status != IntegrationDisabled || !slices.Equal(outcome.DisabledBy, []string{"codex"}) {
+	agents := filepath.Join(project.Root, "AGENTS.md")
+	writeIntegrateFile(t, agents, "# Mine\n")
+	outcome, err := EnsureProjectReference("codex", project, switches)
+	if err != nil || outcome.Status != IntegrationDisabled || !slices.Contains(outcome.DisabledBy, "codex") {
 		t.Fatalf("outcome=%+v err=%v", outcome, err)
 	}
-	if got := readBytes(t, codex); got != "# Mine\n" {
-		t.Fatalf("codex changed: %q", got)
+	if got := readBytes(t, agents); got != "# Mine\n" {
+		t.Fatalf("AGENTS.md changed: %q", got)
 	}
+	if err := os.MkdirAll(filepath.Join(home, ".pi", "agent", "extensions"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	paths.ConfigPath = filepath.Join(home, ".config", "kander", "config.json")
 	target := piExtensionTarget(t, home, false)
 	writeIntegrateFile(t, target, "// old\n")
 	ext, err := EnsureExtension("pi", paths)
@@ -133,12 +112,14 @@ func TestEnsurePrimitivesHonorSwitchOff(t *testing.T) {
 	}
 }
 
-func TestLegacyEntrySymlinkKeptWhenSwitchOff(t *testing.T) {
+// The cleanup removes what Kander wrote whatever the switches say: they decide what Kander
+// writes, not what it takes back.
+func TestGlobalCleanupIgnoresSwitches(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlinks need privileges on Windows")
 	}
 	home := setupInstallHome(t)
-	writeScopeSwitches(t, home, true, map[string]bool{"claude": false})
+	writeScopeSwitches(t, home, false, nil)
 	paths, _ := config.GlobalInstallPaths()
 	link := filepath.Join(home, ".claude", "CLAUDE.md")
 	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
@@ -147,52 +128,25 @@ func TestLegacyEntrySymlinkKeptWhenSwitchOff(t *testing.T) {
 	if err := os.Symlink(legacyRulesEntry(paths), link); err != nil {
 		t.Fatal(err)
 	}
-	if removed := removeLegacyEntrySymlinks(paths); len(removed) != 0 {
-		t.Fatalf("removed=%v", removed)
+	codex := filepath.Join(home, ".codex", "AGENTS.md")
+	writeIntegrateFile(t, codex, "# Mine\n\n@~/.agents/kander/KANDER-AGENTS.md\n")
+	if result := CleanGlobalInjection(paths); result.Err != nil || len(result.Removed) != 2 {
+		t.Fatalf("cleanup=%+v", result)
 	}
-	if info, err := os.Lstat(link); err != nil || info.Mode()&os.ModeSymlink == 0 {
-		t.Fatalf("legacy link replaced: %v", err)
+	if _, err := os.Lstat(link); !os.IsNotExist(err) {
+		t.Fatalf("legacy link kept: %v", err)
 	}
-}
-
-func TestSharedProjectRulesFileNeedsEveryReader(t *testing.T) {
-	setupInstallHome(t)
-	project := initGitRepo(t, filepath.Join(t.TempDir(), "app"))
-	paths, err := config.ProjectInstallPaths(project)
-	if err != nil {
-		t.Fatal(err)
-	}
-	off := false
-	if _, err := config.UpdateAt(paths.ConfigPath, func(cfg *config.Config) error {
-		config.SetAgentInstallRules(cfg, "pi", &off)
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	outcome, err := EnsureRulesIntegration("codex", paths)
-	if err != nil || outcome.Status != IntegrationDisabled || !slices.Equal(outcome.DisabledBy, []string{"pi"}) {
-		t.Fatalf("outcome=%+v err=%v", outcome, err)
-	}
-	if _, err := os.Lstat(filepath.Join(project, "AGENTS.md")); !os.IsNotExist(err) {
-		t.Fatalf("shared AGENTS.md written: %v", err)
-	}
-	claude, err := EnsureRulesIntegration("claude", paths)
-	if err != nil || claude.Status != IntegrationCreated {
-		t.Fatalf("claude=%+v err=%v", claude, err)
+	if got := readBytes(t, codex); got != "# Mine\n" {
+		t.Fatalf("codex=%q", got)
 	}
 }
 
 func TestCommentedReferenceIsInactive(t *testing.T) {
-	home := setupInstallHome(t)
-	paths, _ := config.GlobalInstallPaths()
-	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeIntegrateFile(t, RulesEntry(paths), "# entry\n")
-	target := filepath.Join(home, ".claude", "CLAUDE.md")
+	project, _ := projectFixture(t)
+	target := filepath.Join(project.Root, "CLAUDE.md")
 	body := "# Mine\n\n<!--\n@~/.agents/kander/KANDER-AGENTS.md\n-->\n"
 	writeIntegrateFile(t, target, body)
-	outcome, err := EnsureRulesIntegration("claude", paths)
+	outcome, err := EnsureProjectReference("claude", project, config.InstallRulesOf(nil))
 	if err != nil || outcome.Status != IntegrationPresent || !outcome.Inactive {
 		t.Fatalf("outcome=%+v err=%v", outcome, err)
 	}
@@ -200,7 +154,7 @@ func TestCommentedReferenceIsInactive(t *testing.T) {
 		t.Fatalf("file changed: %q", got)
 	}
 	writeIntegrateFile(t, target, "# Mine\n\n@~/.agents/kander/KANDER-AGENTS.md\n")
-	outcome, err = EnsureRulesIntegration("claude", paths)
+	outcome, err = EnsureProjectReference("claude", project, config.InstallRulesOf(nil))
 	if err != nil || outcome.Status != IntegrationPresent || outcome.Inactive {
 		t.Fatalf("active reference outcome=%+v err=%v", outcome, err)
 	}
@@ -210,59 +164,20 @@ func TestSymlinkedRulesFileNeedsEveryReader(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlinks need privileges on Windows")
 	}
-	home := setupInstallHome(t)
-	writeScopeSwitches(t, home, true, map[string]bool{"codex": false})
-	paths, _ := config.GlobalInstallPaths()
-	codex := filepath.Join(home, ".codex", "AGENTS.md")
-	writeIntegrateFile(t, codex, "# Mine\n")
-	if err := os.MkdirAll(filepath.Join(home, ".grok"), 0o755); err != nil {
+	project, _ := projectFixture(t)
+	cfg := config.DefaultConfig()
+	off := false
+	config.SetAgentInstallRules(cfg, "codex", &off)
+	agents := filepath.Join(project.Root, "AGENTS.md")
+	writeIntegrateFile(t, agents, "# Mine\n")
+	if err := os.Symlink("AGENTS.md", filepath.Join(project.Root, "CLAUDE.md")); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(codex, filepath.Join(home, ".grok", "AGENTS.md")); err != nil {
-		t.Fatal(err)
-	}
-	outcome, err := EnsureRulesIntegration("grok", paths)
+	outcome, err := EnsureProjectReference("claude", project, config.InstallRulesOf(cfg))
 	if err != nil || outcome.Status != IntegrationDisabled || !slices.Equal(outcome.DisabledBy, []string{"codex"}) {
 		t.Fatalf("outcome=%+v err=%v", outcome, err)
 	}
-	if got := readBytes(t, codex); got != "# Mine\n" {
-		t.Fatalf("codex file written through the grok link: %q", got)
-	}
-	var shared []string
-	for _, group := range PlanRulesInjection(paths) {
-		if slices.Contains(group.Agents, "grok") {
-			shared = group.Agents
-		}
-	}
-	if !slices.Equal(shared, []string{"codex", "grok"}) {
-		t.Fatalf("linked rules files not grouped: %v", shared)
-	}
-}
-
-func TestPlanListsOverrideOfLinkedRulesFile(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlinks need privileges on Windows")
-	}
-	home := setupInstallHome(t)
-	paths, _ := config.GlobalInstallPaths()
-	codex := filepath.Join(home, ".codex", "AGENTS.md")
-	writeIntegrateFile(t, codex, "# Mine\n")
-	if err := os.MkdirAll(filepath.Join(home, ".grok"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(codex, filepath.Join(home, ".grok", "AGENTS.md")); err != nil {
-		t.Fatal(err)
-	}
-	override := filepath.Join(home, ".grok", "AGENTS.override.md")
-	writeIntegrateFile(t, override, "# Grok override\n")
-	changes := plannedChanges(PlanRulesInjection(paths))
-	if got, ok := changes[override]; !ok || got != RulesChangeAppend {
-		t.Fatalf("grok override change=%v ok=%v; plan=%v", got, ok, changes)
-	}
-	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(readBytes(t, override), "KANDER-AGENTS.md") {
-		t.Fatal("install did not append to the planned override")
+	if got := readBytes(t, agents); got != "# Mine\n" {
+		t.Fatalf("AGENTS.md written through the CLAUDE.md link: %q", got)
 	}
 }

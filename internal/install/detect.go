@@ -132,7 +132,7 @@ func inSourceTree() bool {
 	return false
 }
 
-func rejectDest(path string, project bool) error {
+func rejectDest(path string) error {
 	_, err := os.Lstat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -142,9 +142,6 @@ func rejectDest(path string, project bool) error {
 	}
 	if st, statErr := os.Stat(path); statErr == nil && st.IsDir() {
 		return fmt.Errorf("%s", config.Text("install.target_is_directory", path))
-	}
-	if project && fs.IsReparsePoint(path) {
-		return fmt.Errorf("%s", config.Text("install.target_is_symlink", path))
 	}
 	return nil
 }

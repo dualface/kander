@@ -9,12 +9,9 @@ func (s *Session) EditingOverlay() bool {
 	return s != nil && s.Target == config.TargetOverlay
 }
 
-// AvailableTargets returns the Options tabs for the current install mode.
+// AvailableTargets returns the Options tabs: the Global scope file and the Project overlay.
 func (s *Session) AvailableTargets() []string {
-	if s == nil {
-		return config.OptionsTargets(config.ModeGlobal)
-	}
-	return config.OptionsTargets(s.InstallMode)
+	return config.OptionsTargets()
 }
 
 // HasUnsaved reports whether either tab or the project policy still has
@@ -43,7 +40,6 @@ func (s *Session) FormatInherited(value string) string {
 
 func (s *Session) initOverlayState() {
 	s.Target = config.TargetScope
-	s.InstallMode = config.ModeGlobal
 	s.overlayRaw = map[string]any{}
 	s.overlayExisting = map[string]any{}
 	s.scopeConfig = s.Config
@@ -53,11 +49,6 @@ func (s *Session) initOverlayState() {
 }
 
 func (s *Session) loadOverlayContext() error {
-	paths, err := config.CurrentInstallPaths()
-	if err != nil {
-		return err
-	}
-	s.InstallMode = paths.Mode
 	base, err := config.ConfigPath()
 	if err != nil {
 		return err
@@ -76,35 +67,22 @@ func (s *Session) loadOverlayContext() error {
 		s.overlayRaw = raw
 		s.overlayExisting = config.CloneOverlay(raw)
 	}
-	if err := s.ensureScopeRaw(); err != nil {
-		return err
-	}
-	if paths.Mode == config.ModeProject {
-		return s.SetTarget(config.TargetOverlay)
-	}
-	return nil
+	return s.ensureScopeRaw()
 }
 
 // AttachOverlay installs a test overlay location without probing the real cwd.
-func (s *Session) AttachOverlay(mode config.Mode, loc config.OverlayLocation, raw map[string]any) error {
-	s.InstallMode = mode
+func (s *Session) AttachOverlay(loc config.OverlayLocation, raw map[string]any) error {
 	s.OverlayLocation = loc
 	s.overlayRaw = config.CloneOverlay(raw)
 	s.overlayExisting = config.CloneOverlay(raw)
-	if err := s.ensureScopeRaw(); err != nil {
-		return err
-	}
-	if mode == config.ModeProject {
-		return s.SetTarget(config.TargetOverlay)
-	}
-	return nil
+	return s.ensureScopeRaw()
 }
 
-// PreferProjectTabIfPresent switches Options to the Project tab when a global
-// install already has project overlay settings. Doctor and other callers keep
-// the Global buffer until they opt in through the Options panel.
+// PreferProjectTabIfPresent switches Options to the Project tab when the
+// project overlay already has settings. Doctor and other callers keep the
+// Global buffer until they opt in through the Options panel.
 func (s *Session) PreferProjectTabIfPresent() error {
-	if s == nil || s.InstallMode != config.ModeGlobal || len(s.AvailableTargets()) < 2 {
+	if s == nil {
 		return nil
 	}
 	if len(s.overlayRaw) == 0 || s.Target == config.TargetOverlay {

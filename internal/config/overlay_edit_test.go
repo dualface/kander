@@ -7,14 +7,10 @@ import (
 	"testing"
 )
 
-func TestOptionsTargetsByInstallMode(t *testing.T) {
-	got := OptionsTargets(ModeGlobal)
+func TestOptionsTargetsAreScopeAndOverlay(t *testing.T) {
+	got := OptionsTargets()
 	if len(got) != 2 || got[0] != TargetScope || got[1] != TargetOverlay {
-		t.Fatalf("global targets: %#v", got)
-	}
-	got = OptionsTargets(ModeProject)
-	if len(got) != 1 || got[0] != TargetOverlay {
-		t.Fatalf("project targets: %#v", got)
+		t.Fatalf("targets: %#v", got)
 	}
 }
 

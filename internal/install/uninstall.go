@@ -42,6 +42,9 @@ type UninstallItem struct {
 	// rules marks a file of the rules directory, which the plan lists as one count.
 	rules       bool
 	skillDigest string
+	// failed marks a kept path whose inspection failed, so the global injection cleanup
+	// cannot tell whether Kander content remains there.
+	failed bool
 }
 
 // UninstallPlan is everything kander uninstall removes or edits in one scope, computed
@@ -130,7 +133,7 @@ func uninstallJSON(plan UninstallPlan) int {
 		ConfigFile string          `json:"config_file"`
 		RulesDir   string          `json:"rules_dir"`
 		Items      []uninstallItem `json:"items"`
-	}{string(plan.Paths.Mode), plan.ConfigFile, plan.Paths.RulesDir, items})
+	}{"global", plan.ConfigFile, plan.Paths.RulesDir, items})
 }
 
 func askUninstall() (bool, error) {
@@ -145,34 +148,12 @@ func askUninstall() (bool, error) {
 	return parseCopyAnswer(line), nil
 }
 
-// PlanUninstall lists what kander uninstall would change in the scope, without writing.
-// Every embedded agent's rules file is covered whatever its switch, so references written
-// before a switch was turned off go too.
+// PlanUninstall lists what kander uninstall would change, without writing. Every embedded
+// agent's global rules file is covered whatever its switch, so references written by an
+// earlier release go too; it is the same plan the global injection cleanup applies.
 func PlanUninstall(paths config.InstallPaths) UninstallPlan {
 	plan := UninstallPlan{Paths: paths, ConfigFile: config.ScopeConfigFile(paths)}
-	seen := map[string]struct{}{}
-	for _, agent := range config.ExecutionAgents {
-		target, err := AgentRulesTarget(agent, paths)
-		if err != nil {
-			plan.Items = append(plan.Items, UninstallItem{Action: UninstallKeep, Path: agent, Reason: err.Error()})
-			continue
-		}
-		if target == "" {
-			continue
-		}
-		if _, ok := seen[target]; ok {
-			continue
-		}
-		seen[target] = struct{}{}
-		if item, ok := planReferenceRemoval(target, false, paths); ok {
-			plan.Items = append(plan.Items, item)
-		}
-		if override := rulesOverrideTarget(target); override != "" {
-			if item, ok := planReferenceRemoval(override, true, paths); ok {
-				plan.Items = append(plan.Items, item)
-			}
-		}
-	}
+	plan.Items = append(plan.Items, planGlobalInjectionCleanup(paths).Items...)
 	for _, agent := range config.ExecutionAgents {
 		if item, ok := planExtensionRemoval(agent, paths); ok {
 			plan.Items = append(plan.Items, item)
@@ -199,46 +180,53 @@ func PlanUninstall(paths config.InstallPaths) UninstallPlan {
 	return plan
 }
 
-// planReferenceRemoval plans dropping the Kander load commands from one rules file. A file left
-// with only blank lines, or a .mdc rule left with only the alwaysApply frontmatter Kander wrote,
-// is deleted; an AGENTS.override.md sibling and a symlinked rules file are only edited.
+// planReferenceRemoval plans dropping the Kander load commands from one global rules file. A
+// file left with only blank lines, or a .mdc rule left with only the alwaysApply frontmatter
+// Kander wrote, is deleted; an AGENTS.override.md sibling and a symlinked rules file are only
+// edited, and a .mdc rule the user changed keeps its other content. A rules file that is a
+// symlink to the Kander rules entry, current or previous, is removed as a link.
 func planReferenceRemoval(target string, override bool, paths config.InstallPaths) (UninstallItem, bool) {
 	keep := func(reason string) (UninstallItem, bool) {
 		return UninstallItem{Action: UninstallKeep, Path: target, Reason: reason}, true
+	}
+	fail := func(err error) (UninstallItem, bool) {
+		return UninstallItem{Action: UninstallKeep, Path: target, Reason: err.Error(), failed: true}, true
 	}
 	info, err := os.Lstat(target)
 	if os.IsNotExist(err) {
 		return UninstallItem{}, false
 	}
 	if err != nil {
-		return keep(err.Error())
+		return fail(err)
 	}
 	linked := info.Mode()&os.ModeSymlink != 0
+	if linked && linksToRulesEntry(target, paths) {
+		// The link itself goes, never its target; it is removed below the resolved directory
+		// so the removal does not walk through a symlinked config directory.
+		dir, err := filepath.EvalSymlinks(filepath.Dir(target))
+		if err != nil {
+			return fail(err)
+		}
+		return UninstallItem{Action: UninstallRemove, Path: filepath.Join(dir, filepath.Base(target))}, true
+	}
 	format := fileFormatFor(target)
 	if key := format.SymlinkRefusal(); linked && key != "" {
 		return keep(config.Text(key, target))
 	}
-	// The write goes to the real path, as EnsureRulesIntegration's does, so a config directory
-	// the user keeps behind a symlink is edited in place; a project file must stay inside the
-	// main worktree.
+	// The write goes to the real path, so a config directory the user keeps behind a symlink
+	// is edited in place.
 	resolved, err := realRulesPath(target, linked)
 	if err != nil {
-		return keep(err.Error())
-	}
-	if paths.Mode == config.ModeProject && !withinDirectory(paths.ProjectRoot, resolved) {
-		return keep(config.Text("install.rules_target_symlink_escapes_project", target))
-	}
-	if linked && sameResolved(resolved, RulesEntry(paths)) {
-		return keep(config.Text("install.uninstall_link_to_entry"))
+		return fail(err)
 	}
 	if info, err := os.Stat(resolved); err != nil {
-		return keep(err.Error())
+		return fail(err)
 	} else if !info.Mode().IsRegular() {
-		return keep(config.Text("menu.cannot_read", target))
+		return fail(fmt.Errorf("%s", config.Text("menu.cannot_read", target)))
 	}
 	data, err := os.ReadFile(resolved)
 	if err != nil {
-		return keep(err.Error())
+		return fail(err)
 	}
 	stripped, removed := RemoveRulesReferences(string(data))
 	if removed == 0 {
@@ -251,7 +239,36 @@ func planReferenceRemoval(target string, override bool, paths config.InstallPath
 	if kanderOnly && !linked && !override && resolved == filepath.Clean(target) {
 		return UninstallItem{Action: UninstallRemove, Path: target}, true
 	}
-	return UninstallItem{Action: UninstallEdit, Path: resolved, content: []byte(stripped)}, true
+	item := UninstallItem{Action: UninstallEdit, Path: resolved, content: []byte(stripped)}
+	if format.Prefix() != "" && !kanderOnly {
+		// A rule file Kander created and the user changed afterwards stays without the
+		// Kander load command; it is reported as kept.
+		item.Reason = config.Text("install.global_rules_file_modified_kept")
+	}
+	return item, true
+}
+
+// linksToRulesEntry reports whether target is a symlink to the Kander rules entry: the current
+// one, or the previous global entry, whose link may already dangle.
+func linksToRulesEntry(target string, paths config.InstallPaths) bool {
+	link, err := os.Readlink(target)
+	if err != nil {
+		return false
+	}
+	if !filepath.IsAbs(link) {
+		link = filepath.Join(filepath.Dir(target), link)
+	}
+	link = filepath.Clean(link)
+	entries := []string{RulesEntry(paths)}
+	if legacy := legacyRulesEntry(paths); legacy != "" {
+		entries = append(entries, legacy)
+	}
+	for _, entry := range entries {
+		if link == filepath.Clean(entry) || sameResolved(target, entry) {
+			return true
+		}
+	}
+	return false
 }
 
 // realRulesPath resolves a rules file to the path without symlinks: the link target for a
@@ -301,7 +318,7 @@ func planRulesDirRemoval(dir string) ([]UninstallItem, []string) {
 	if info.Mode()&os.ModeSymlink != 0 || kfs.IsReparsePoint(dir) || !info.IsDir() {
 		return []UninstallItem{{Action: UninstallKeep, Path: dir, Reason: config.Text("install.target_is_symlink", dir)}}, nil
 	}
-	known := map[string]struct{}{stateFileName: {}, startupStateFileName: {}}
+	known := map[string]struct{}{stateFileName: {}, startupStateFileName: {}, globalCleanupFileName: {}, globalCleanupLockName: {}}
 	for _, name := range rules.Names() {
 		known[name] = struct{}{}
 	}
@@ -356,36 +373,9 @@ func ApplyUninstall(plan UninstallPlan, out io.Writer) error {
 		return err
 	}
 	fmt.Fprintln(out, config.Text("install.uninstall_config_written", plan.ConfigFile))
-	var failed error
-	removedRules := 0
-	for _, item := range plan.Items {
-		var err error
-		switch item.Action {
-		case UninstallEdit:
-			err = writeUninstallEdit(item)
-			if err == nil {
-				fmt.Fprintln(out, config.Text("install.uninstall_edited", item.Path))
-			}
-		case UninstallRemove:
-			if item.skillDigest != "" {
-				if err = removeSkillFile(item); err != nil {
-					// Keep the receipt so a later run can finish this bundle.
-					return errors.Join(failed, err)
-				}
-			} else {
-				err = removeUninstallFile(item.Path)
-			}
-			if err == nil && item.rules {
-				removedRules++
-			} else if err == nil {
-				fmt.Fprintln(out, config.Text("install.uninstall_removed", item.Path))
-			}
-		default:
-			continue
-		}
-		if err != nil {
-			failed = errors.Join(failed, fmt.Errorf("%s: %w", item.Path, err))
-		}
+	removedRules, _, failed := applyUninstallItems(plan.Items, out)
+	if failed != nil && errors.Is(failed, errSkillRemoval) {
+		return failed
 	}
 	if removedRules > 0 {
 		fmt.Fprintln(out, config.Text("install.uninstall_rules_removed", removedRules, plan.Paths.RulesDir))
@@ -404,6 +394,50 @@ func ApplyUninstall(plan UninstallPlan, out io.Writer) error {
 		}
 	}
 	return failed
+}
+
+// errSkillRemoval marks a failed removal of a bundled skill file, which stops the uninstall so
+// the receipt stays and a later run can finish the bundle.
+var errSkillRemoval = errors.New("skill removal failed")
+
+// applyUninstallItems edits and removes the planned paths, reporting each to out, and returns
+// the number of removed rules directory files, the paths it changed, and every failure joined.
+func applyUninstallItems(items []UninstallItem, out io.Writer) (int, []string, error) {
+	var failed error
+	var changed []string
+	removedRules := 0
+	for _, item := range items {
+		var err error
+		switch item.Action {
+		case UninstallEdit:
+			err = writeUninstallEdit(item)
+			if err == nil {
+				fmt.Fprintln(out, config.Text("install.uninstall_edited", item.Path))
+			}
+		case UninstallRemove:
+			if item.skillDigest != "" {
+				if err = removeSkillFile(item); err != nil {
+					// Keep the receipt so a later run can finish this bundle.
+					return removedRules, changed, errors.Join(failed, errSkillRemoval, err)
+				}
+			} else {
+				err = removeUninstallFile(item.Path)
+			}
+			if err == nil && item.rules {
+				removedRules++
+			} else if err == nil {
+				fmt.Fprintln(out, config.Text("install.uninstall_removed", item.Path))
+			}
+		default:
+			continue
+		}
+		if err != nil {
+			failed = errors.Join(failed, fmt.Errorf("%s: %w", item.Path, err))
+			continue
+		}
+		changed = append(changed, item.Path)
+	}
+	return removedRules, changed, failed
 }
 
 // disableRulesInjection writes install_rules=false and drops every agent value. A missing
@@ -441,11 +475,7 @@ func removeUninstallFile(path string) error {
 }
 
 func printUninstallPlan(out io.Writer, plan UninstallPlan) {
-	if plan.Paths.Mode == config.ModeProject {
-		fmt.Fprintln(out, config.Text("install.uninstall_plan_project", plan.Paths.ProjectRoot))
-	} else {
-		fmt.Fprintln(out, config.Text("install.uninstall_plan_global"))
-	}
+	fmt.Fprintln(out, config.Text("install.uninstall_plan_global"))
 	rulesFiles := 0
 	for _, item := range plan.Items {
 		switch item.Action {
