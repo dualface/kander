@@ -121,6 +121,10 @@ func (s *Server) importPreparedSource(ctx context.Context, req api.ImportRequest
 	if err != nil {
 		return result, err
 	}
+	// An import replaces the board directory: a gc of this project that
+	// works on the board outside the project lock must not run meanwhile.
+	p.maintenance.Lock()
+	defer p.maintenance.Unlock()
 	if err := p.lockBoard(); err != nil {
 		return result, err
 	}

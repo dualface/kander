@@ -21,7 +21,11 @@ import (
 // so ownership checks, board transactions, receipts, and events of one
 // project never interleave.
 type project struct {
-	mu             sync.Mutex
+	mu sync.Mutex
+	// maintenance excludes the operations that replace the board directory
+	// (an import) from those that work on it for long outside mu (a gc). It
+	// does not move with the board directory. Take it before mu.
+	maintenance    sync.Mutex
 	server         *Server
 	info           api.Project
 	root           string

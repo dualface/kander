@@ -2,12 +2,45 @@ package servicectl
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"path/filepath"
 
 	"github.com/dualface/kander/v2/api"
 	"github.com/dualface/kander/v2/internal/client"
 	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/fs"
 )
+
+// ListenRecordName is the file in the data directory where a serving server
+// records the address it listens on, so a command that finds the data
+// directory lock held can reach a server started with another --listen.
+const ListenRecordName = "server-listen.json"
+
+// ListenRecord is the content of ListenRecordName.
+type ListenRecord struct {
+	Listen string `json:"listen"`
+	PID    int    `json:"pid"`
+}
+
+// RecordedURL returns the loopback URL of the address the server of dataDir
+// recorded, or "" when there is no usable record. The record can be stale:
+// the caller still asks the server at that URL which directory it serves.
+func RecordedURL(dataDir string) (string, error) {
+	data, found, err := fs.ReadRegularFileIfExists(filepath.Dir(dataDir), filepath.Join(dataDir, ListenRecordName))
+	if err != nil || !found {
+		return "", err
+	}
+	var record ListenRecord
+	if json.Unmarshal(data, &record) != nil || record.Listen == "" {
+		return "", nil
+	}
+	target, err := ProbeURL(record.Listen)
+	if err != nil || !Local(target) {
+		return "", nil
+	}
+	return target, nil
+}
 
 // ErrNoServer reports that no server answers at the target, so an online
 // call cannot be made.

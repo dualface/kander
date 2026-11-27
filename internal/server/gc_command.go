@@ -37,6 +37,12 @@ var (
 	}
 	// gcServerURL returns the configured server URL, like importTarget.
 	gcServerURL = func() (string, error) { return importTarget() }
+	// gcProbe finds the loopback server at a URL that serves a data directory.
+	gcProbe = servicectl.ServerFor
+	// gcInterrupt is the context an interrupt cancels.
+	gcInterrupt = func() (context.Context, context.CancelFunc) {
+		return signal.NotifyContext(context.Background(), os.Interrupt)
+	}
 )
 
 // NewGCCommand builds `kander server gc`. It plans, asks, and then reclaims
@@ -95,7 +101,7 @@ func runGC(o gcFlags, stdout io.Writer) int {
 	if err != nil {
 		return command.Fail(err)
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := gcInterrupt()
 	defer stop()
 	request := api.ServerGCRequest{Project: o.project, OlderThan: olderThan.String(), LogKeep: logKeep}
 	execute, closeTarget, err := gcExecutorFor(ctx, dir, request)
@@ -114,19 +120,27 @@ func runGC(o gcFlags, stdout io.Writer) int {
 	if o.dryRun {
 		return gcOutput(stdout, plan)
 	}
-	if !o.yes {
+	// Text output shows the plan before anything changes, with --yes too;
+	// JSON output stays one object, the result.
+	if !command.JSON() {
 		printGCReport(stdout, plan)
 		if gcEmpty(plan) {
 			return gcStatus(plan)
 		}
-		confirmed, err := askGC()
+	}
+	if !o.yes {
+		confirmed, err := askGC(ctx)
 		if err != nil {
 			return command.Fail(err)
 		}
-		if !confirmed {
+		if !confirmed || ctx.Err() != nil {
 			fmt.Fprintln(os.Stderr, config.Text("gc.cancelled"))
 			return 1
 		}
+	}
+	if ctx.Err() != nil {
+		fmt.Fprintln(os.Stderr, config.Text("gc.cancelled"))
+		return 1
 	}
 	result, err := execute(ctx, false)
 	if err != nil {
@@ -151,10 +165,8 @@ func gcExecutorFor(ctx context.Context, dir string, request api.ServerGCRequest)
 		}, func() error { return nil }, nil
 	}
 	local := servicectl.Local(target)
-	var probeErr error = servicectl.ErrNoServer
 	if local {
-		var info api.ServerInfo
-		if info, probeErr = servicectl.ServerFor(ctx, target, dir); probeErr == nil {
+		if info, err := gcProbe(ctx, target, dir); err == nil {
 			return online(info)
 		}
 	}
@@ -169,20 +181,31 @@ func gcExecutorFor(ctx context.Context, dir string, request api.ServerGCRequest)
 	if !errors.Is(err, ErrDataDirInUse) {
 		return nil, nil, err
 	}
-	if !local {
+	// A server holds the lock. Ask the configured URL again, since it may have
+	// finished starting, then the address the server of dir recorded, which
+	// differs when it was started with another --listen.
+	var candidates []string
+	if local {
+		candidates = append(candidates, target)
+	}
+	if recorded, err := servicectl.RecordedURL(dir); err == nil && recorded != "" && recorded != target {
+		candidates = append(candidates, recorded)
+	}
+	if len(candidates) == 0 {
 		return nil, nil, errors.New(config.Text("gc.local_only", target))
 	}
-	if !errors.Is(probeErr, servicectl.ErrNoServer) {
-		return nil, nil, probeErr
+	var last error
+	for _, candidate := range candidates {
+		info, err := gcProbe(ctx, candidate, dir)
+		if err == nil {
+			return online(info)
+		}
+		last = err
 	}
-	info, err := servicectl.ServerFor(ctx, target, dir)
-	if errors.Is(err, servicectl.ErrNoServer) {
+	if errors.Is(last, servicectl.ErrNoServer) {
 		return nil, nil, errors.New(config.Text("gc.no_server", dir, target))
 	}
-	if err != nil {
-		return nil, nil, err
-	}
-	return online(info)
+	return nil, nil, last
 }
 
 // gcFailure reports a failed plan or gc. A refused request (bad value, unknown
@@ -215,9 +238,9 @@ func gcStatus(r api.ServerGCReport) int {
 	return 0
 }
 
-// gcEmpty reports a plan with nothing to reclaim.
+// gcEmpty reports a plan with nothing to reclaim or recover.
 func gcEmpty(r api.ServerGCReport) bool {
-	if r.Log != nil && r.Log.Bytes > 0 {
+	if r.Log != nil && (r.Log.Bytes > 0 || r.Log.Recovered > 0) {
 		return false
 	}
 	for _, p := range r.Projects {
@@ -259,6 +282,13 @@ func printGCReport(w io.Writer, r api.ServerGCReport) {
 	}
 	if r.Log != nil {
 		fmt.Fprintln(w, config.Text("gc.log_line", r.Log.Path, formatBytes(r.Log.Size), formatBytes(r.Log.Bytes)))
+		if r.Log.Recovered > 0 {
+			key := "gc.log_recovered"
+			if r.DryRun {
+				key = "gc.log_recover"
+			}
+			fmt.Fprintln(w, config.Text(key, formatBytes(r.Log.Recovered)))
+		}
 		if r.Log.Kept != "" {
 			fmt.Fprintln(w, config.Text("gc.kept_log", oneLine(r.Log.Kept)))
 		}
@@ -290,16 +320,33 @@ func formatBytes(n int64) string {
 	return fmt.Sprintf("%.1f %s", value, suffix)
 }
 
-// askGC asks y/N on stderr; anything but y or yes, including EOF, is no.
-func askGC() (bool, error) {
+// askGC asks y/N on stderr; anything but y or yes, including EOF, is no. An
+// interrupt while it waits is no as well: the read is left behind, and the
+// caller exits instead of holding the data directory lock.
+func askGC(ctx context.Context) (bool, error) {
 	fmt.Fprint(gcPromptOut, config.Text("gc.question"))
-	line, err := bufio.NewReader(gcPromptIn).ReadString('\n')
-	if err != nil && strings.TrimSpace(line) == "" {
-		if errors.Is(err, io.EOF) {
+	type answer struct {
+		line string
+		err  error
+	}
+	read := make(chan answer, 1)
+	go func() {
+		line, err := bufio.NewReader(gcPromptIn).ReadString('\n')
+		read <- answer{line, err}
+	}()
+	var a answer
+	select {
+	case <-ctx.Done():
+		fmt.Fprintln(gcPromptOut)
+		return false, nil
+	case a = <-read:
+	}
+	if a.err != nil && strings.TrimSpace(a.line) == "" {
+		if errors.Is(a.err, io.EOF) {
 			return false, nil
 		}
-		return false, err
+		return false, a.err
 	}
-	answer := strings.ToLower(strings.TrimSpace(line))
-	return answer == "y" || answer == "yes", nil
+	reply := strings.ToLower(strings.TrimSpace(a.line))
+	return reply == "y" || reply == "yes", nil
 }

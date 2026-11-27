@@ -126,8 +126,9 @@ type ServerGCReport struct {
 }
 
 // ServerGCProject is the outcome of one project. Errors lists the failures
-// that stopped a category of this project; Warnings lists damaged records the
-// categories skipped. Kept entries and errors make the command exit 1.
+// that stopped a category of this project or skipped the whole project;
+// Warnings lists notes of the review run compaction. Kept entries and errors
+// make the command exit 1.
 type ServerGCProject struct {
 	Name       string             `json:"name"`
 	Compaction ServerGCCompaction `json:"compaction"`
@@ -161,12 +162,15 @@ type ServerGCKept struct {
 
 // ServerGCLog is the server.log trim. Size is the size before the trim, Bytes
 // the bytes moved out of server.log into server.log.1.gz (0 when the log is
-// not larger than the limit). Kept, when set, says why a due trim failed.
+// not larger than the limit). Recovered is the tail an interrupted earlier
+// trim saved aside: appended back to server.log first, or in a dry run, still
+// to append back. Kept, when set, says why a due trim failed.
 type ServerGCLog struct {
-	Path  string `json:"path"`
-	Size  int64  `json:"size"`
-	Bytes int64  `json:"bytes"`
-	Kept  string `json:"kept,omitempty"`
+	Path      string `json:"path"`
+	Size      int64  `json:"size"`
+	Bytes     int64  `json:"bytes"`
+	Recovered int64  `json:"recovered,omitempty"`
+	Kept      string `json:"kept,omitempty"`
 }
 
 // Incomplete reports whether a gc kept a candidate or met an error, which

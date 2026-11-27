@@ -23,6 +23,7 @@ import (
 	"github.com/dualface/kander/v2/internal/board"
 	"github.com/dualface/kander/v2/internal/command"
 	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/fs"
 	"github.com/dualface/kander/v2/internal/servicectl"
 	"github.com/dualface/kander/v2/internal/version"
 )
@@ -43,6 +44,15 @@ func RunForeground(ctx context.Context, options Options, listen string) error {
 		return err
 	}
 	s.listen = listener.Addr().String()
+	// The record lets an offline command that finds the data directory lock
+	// held reach this server even when it listens on another address than the
+	// configured one. A failure to write it only costs that convenience.
+	if err := writeJSON(s.data, servicectl.ListenRecordName, servicectl.ListenRecord{Listen: s.listen, PID: os.Getpid()}); err != nil {
+		s.log.Warn("record listen address", "error", err)
+	}
+	defer func() {
+		_, _ = fs.RemoveRegularFileIfExists(filepath.Dir(s.data), filepath.Join(s.data, servicectl.ListenRecordName))
+	}()
 	httpServer := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second}
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/dualface/kander/v2/api"
 )
@@ -58,8 +59,22 @@ func (s *Server) adminRoutes(mux *routeTable) {
 	// handshake and the readiness gate of domain().
 	mux.HandleFunc("POST /api/v1/server/import", s.domain(s.importRoute))
 	// gc removes board data, so like import it passes the handshake and the
-	// readiness gate; the route itself requires the administration token.
-	mux.HandleFunc("POST /api/v1/server/gc", s.domain(s.gcRoute))
+	// readiness gate. Only a loopback administrator gets that far: any other
+	// request is refused with 403 first, whatever its headers.
+	mux.HandleFunc("POST /api/v1/server/gc", s.administratorFirst("server gc refused", s.domain(s.gcRoute)))
+}
+
+// administratorFirst answers 403 to every request that administrator does
+// not accept, before fn and its protocol and readiness checks run.
+func (s *Server) administratorFirst(refusal string, fn http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.administrator(r) {
+			w.Header().Set(api.HeaderProtocol, strconv.Itoa(api.ProtocolVersion))
+			writeJSONResponse(w, http.StatusForbidden, api.Error{Code: api.CodeInvalidRequest, Message: refusal})
+			return
+		}
+		fn(w, r)
+	}
 }
 
 func (s *Server) authorizedAdmin(fn http.HandlerFunc) http.HandlerFunc {
