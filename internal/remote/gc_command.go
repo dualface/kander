@@ -179,7 +179,7 @@ func runClientGC(o clientGCFlags, probe ExecutorProbe, stdout io.Writer) int {
 	defer stop()
 	s, cfg, err := gcOpen(ctx)
 	if errors.Is(err, errNoClientHome) {
-		return gcClientOutput(stdout, GCReport{DryRun: true, Skipped: config.Text("gc.client_no_home")})
+		return gcClientOutput(stdout, GCReport{DryRun: true, Skipped: config.Text("gc.client_no_home"), Projects: []GCProject{}})
 	}
 	if err != nil {
 		return command.Fail(err)

@@ -332,6 +332,11 @@ func TestGCCommandCreatesNothingOnAnEmptyHome(t *testing.T) {
 	if code != 0 || !strings.Contains(out, config.Text("gc.client_no_home")) || exists(t, home) || len(methods()) != 0 {
 		t.Fatalf("exit %d, requests %v\n%s\n%s", code, methods(), out, errOut)
 	}
+	code, out, _ = run("--dry-run", "--json")
+	var report GCReport
+	if err := json.Unmarshal([]byte(out), &report); err != nil || code != 0 || report.Projects == nil || report.Skipped == "" || exists(t, home) {
+		t.Fatalf("the JSON result has an empty project list and the reason: %d %s", code, out)
+	}
 }
 
 // With a client identity the plan only reads: it registers no project,
