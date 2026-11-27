@@ -291,6 +291,19 @@ func OpenWritableRegularFile(root, path string) (*os.File, error) {
 	return os.NewFile(uintptr(fd), parent.path), nil
 }
 
+// OpenSharedRegularFileIfExists is OpenRegularFileIfExists for a file that
+// other handles keep open for writing. POSIX has no share modes, so the two are
+// the same; on Windows the handle shares write access.
+func OpenSharedRegularFileIfExists(root, path string) (*os.File, error) {
+	return OpenRegularFileIfExists(root, path)
+}
+
+// OpenSharedWritableRegularFile is OpenWritableRegularFile for a file that
+// other handles keep open for writing; see OpenSharedRegularFileIfExists.
+func OpenSharedWritableRegularFile(root, path string) (*os.File, error) {
+	return OpenWritableRegularFile(root, path)
+}
+
 // MakeRegularFileReadOnly sets a regular file to 0400 through an already validated handle.
 func MakeRegularFileReadOnly(root, path string) error {
 	parent, err := openPosixParent(root, path)

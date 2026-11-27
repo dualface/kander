@@ -22,6 +22,7 @@ import (
 	"github.com/dualface/kander/v2/api"
 	"github.com/dualface/kander/v2/internal/board"
 	"github.com/dualface/kander/v2/internal/fs"
+	"github.com/dualface/kander/v2/internal/servicectl"
 )
 
 // projectIDFor derives project IDs; tests replace it to force a collision.
@@ -130,7 +131,7 @@ func Open(o Options) (*Server, error) {
 		return nil, errors.New("renew interval must be shorter than the lease TTL")
 	}
 	if s.log == nil {
-		s.log = slog.New(slog.NewJSONHandler(os.Stderr, nil))
+		s.log = slog.New(slog.NewJSONHandler(servicectl.Stderr, nil))
 	}
 	if s.clock == nil {
 		s.clock = time.Now

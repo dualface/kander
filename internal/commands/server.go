@@ -120,7 +120,7 @@ func (l *serverLog) ready() { l.served.Store(true) }
 
 func (l *serverLog) Write(p []byte) (int, error) {
 	if l.served.Load() {
-		return os.Stderr.Write(p)
+		return servicectl.Stderr.Write(p)
 	}
 	command.Notify("server_log", strings.TrimRight(string(p), "\r\n"))
 	return len(p), nil

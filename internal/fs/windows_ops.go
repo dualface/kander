@@ -143,7 +143,24 @@ func openExistingRegular(root, path string, access uint32, shareWrite bool) (*os
 	return os.NewFile(uintptr(handle), candidate), nil
 }
 
+// OpenSharedRegularFileIfExists is OpenRegularFileIfExists for a file that
+// other handles keep open for writing, such as a log a running process appends
+// to: the handle shares write access, which such a file needs to be opened.
+func OpenSharedRegularFileIfExists(root, path string) (*os.File, error) {
+	return openExistingRegular(root, path, windows.GENERIC_READ|windows.FILE_READ_ATTRIBUTES, true)
+}
+
 func OpenWritableRegularFile(root, path string) (*os.File, error) {
+	return openWritableRegular(root, path, false)
+}
+
+// OpenSharedWritableRegularFile is OpenWritableRegularFile for a file that
+// other handles keep open for writing: the handle shares write access.
+func OpenSharedWritableRegularFile(root, path string) (*os.File, error) {
+	return openWritableRegular(root, path, true)
+}
+
+func openWritableRegular(root, path string, shareWrite bool) (*os.File, error) {
 	rootAbs, candidate, parts, err := relativeParts(root, path)
 	if err != nil {
 		return nil, err
@@ -157,7 +174,7 @@ func OpenWritableRegularFile(root, path string) (*os.File, error) {
 	}
 	defer cleanup()
 	access := uint32(windows.GENERIC_WRITE | windows.FILE_READ_ATTRIBUTES)
-	handle, err := tryOpenLeaf(parent, filepath.Base(candidate), candidate, access, kindFile, false, false)
+	handle, err := tryOpenLeaf(parent, filepath.Base(candidate), candidate, access, kindFile, shareWrite, false)
 	if err != nil {
 		return nil, err
 	}

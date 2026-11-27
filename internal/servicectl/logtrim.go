@@ -53,14 +53,23 @@ const lineFlush = 1 << 20
 // keep, is left alone. A dry run only measures and changes no file; it also
 // reports the tail an interrupted trim left to append back.
 //
-// Lines the server writes between the end of the tail copy and the truncation
-// are lost; lines it writes between the truncation and the end of the append
-// come before the kept tail. A trim interrupted after its tail copy is
+// When this process writes its log through Stderr and stderr is that log, the
+// tail copy, the truncation and the append run while Stderr holds its lines
+// back, and afterwards Stderr writes at the new end of the file, also through a
+// descriptor without O_APPEND. Otherwise lines the server writes between the
+// end of the tail copy and the truncation are lost, and lines it writes between
+// the truncation and the end of the append come before the kept tail. A trim
+// interrupted after its tail copy is
 // finished by the next trim, which appends the saved tail back first: the tail
 // is never lost, but it may then follow newer lines or appear twice. The
 // archive is replaced in one atomic step. A dry run plans on the log as the
 // recovery of a saved tail would leave it: the log followed by that tail.
 func TrimLog(dataDir string, keep int64, dryRun bool) (result LogTrim, err error) {
+	return trimLog(dataDir, keep, dryRun, Stderr)
+}
+
+// trimLog is TrimLog with the writer of this process's log lines.
+func trimLog(dataDir string, keep int64, dryRun bool, w *LogWriter) (result LogTrim, err error) {
 	if keep <= 0 {
 		return result, errors.New("log trim needs a positive size to keep")
 	}
@@ -72,10 +81,16 @@ func TrimLog(dataDir string, keep int64, dryRun bool) (result LogTrim, err error
 	if dryRun {
 		return planLogTrim(root, dataDir, keep, result)
 	}
-	if result.Recovered, err = recoverLogTail(root, dataDir); err != nil {
+	// A stderr that cannot be compared is not the log: the trim then runs as
+	// it did before it knew the writer.
+	hold := func(step func() error) error { return step() }
+	if own, _ := w.writes(dataDir); own {
+		hold = w.hold
+	}
+	if err := hold(func() (err error) { result.Recovered, err = recoverLogTail(root, dataDir); return err }); err != nil {
 		return result, err
 	}
-	log, err := fs.OpenRegularFileIfExists(root, result.Path)
+	log, err := fs.OpenSharedRegularFileIfExists(root, result.Path)
 	if err != nil || log == nil {
 		return result, err
 	}
@@ -102,24 +117,29 @@ func TrimLog(dataDir string, keep int64, dryRun bool) (result LogTrim, err error
 	if err := stopAfter("archive"); err != nil {
 		return result, err
 	}
+	return result, hold(func() error { return moveLogTail(root, dataDir, result.Path, log, cut) })
+}
+
+// moveLogTail copies the log from cut aside, truncates the log and appends the
+// copy back.
+func moveLogTail(root, dataDir, path string, log *os.File, cut int64) error {
 	if err := saveLogTail(root, dataDir, log, cut); err != nil {
-		return result, err
+		return err
 	}
 	if err := stopAfter("tail"); err != nil {
-		return result, err
+		return err
 	}
-	writable, err := fs.OpenWritableRegularFile(root, result.Path)
+	writable, err := fs.OpenSharedWritableRegularFile(root, path)
 	if err != nil {
-		return result, err
+		return err
 	}
-	err = errors.Join(writable.Truncate(0), writable.Close())
-	if err != nil {
-		return result, err
+	if err := errors.Join(writable.Truncate(0), writable.Close()); err != nil {
+		return err
 	}
 	if err := stopAfter("truncate"); err != nil {
-		return result, err
+		return err
 	}
-	return result, appendLogTail(root, dataDir)
+	return appendLogTail(root, dataDir)
 }
 
 func stopAfter(step string) error {
@@ -135,7 +155,7 @@ func stopAfter(step string) error {
 func planLogTrim(root, dataDir string, keep int64, result LogTrim) (LogTrim, error) {
 	var parts []sizedReader
 	for _, name := range []string{LogName, logTailName} {
-		file, err := fs.OpenRegularFileIfExists(root, filepath.Join(dataDir, name))
+		file, err := fs.OpenSharedRegularFileIfExists(root, filepath.Join(dataDir, name))
 		if err != nil {
 			return result, err
 		}

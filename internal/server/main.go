@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -53,7 +54,9 @@ func RunForeground(ctx context.Context, options Options, listen string) error {
 	defer func() {
 		_, _ = fs.RemoveRegularFileIfExists(filepath.Dir(s.data), filepath.Join(s.data, servicectl.ListenRecordName))
 	}()
-	httpServer := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second}
+	// The HTTP server's own messages go to stderr like the default, through the
+	// writer a trim of the log holds back.
+	httpServer := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second, ErrorLog: log.New(servicectl.Stderr, "", log.LstdFlags)}
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	finished := make(chan struct{})
@@ -80,7 +83,7 @@ func RunForeground(ctx context.Context, options Options, listen string) error {
 	capped := make(chan struct{})
 	go func() {
 		defer close(capped)
-		servicectl.LogCapper{DataDir: s.data, Log: os.Stderr, Logger: s.log}.Run(s.shutdown)
+		servicectl.LogCapper{DataDir: s.data, Log: servicectl.Stderr, Logger: s.log}.Run(s.shutdown)
 	}()
 	err = httpServer.Serve(listener)
 	stop()
