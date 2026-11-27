@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -225,13 +226,9 @@ func (s *Server) registerRoutes(mux *routeTable) {
 		return p.answerRequest(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("task"), r.PathValue("request"), req, holderOf(r))
 	})
 	s.projectRoute(mux, projectEvents, func(p *project, r *http.Request) outcome {
-		wait := time.Duration(0)
-		if raw := r.URL.Query().Get("wait"); raw != "" {
-			seconds, err := strconv.Atoi(raw)
-			if err != nil || seconds < 0 {
-				return outcome{err: apiError(api.CodeInvalidRequest, "wait must be a non-negative number of seconds")}
-			}
-			wait = min(time.Duration(seconds)*time.Second, maxWait)
+		wait, err := eventWait(r)
+		if err != nil {
+			return outcome{err: err}
 		}
 		// Long polls have no writes to drain and should not delay shutdown.
 		ctx, cancel := context.WithCancel(r.Context())
@@ -341,10 +338,63 @@ func (s *Server) domainWithBodyLimit(bodyLimit int64, fn func(*http.Request) out
 		default:
 			writeJSONResponse(w, status, out.body)
 		}
-		s.log.Info("request", "method", r.Method, "path", r.URL.Path, "status", status,
+		elapsed := time.Since(started)
+		s.log.Log(r.Context(), requestLevel(r, status, elapsed), "request", "method", r.Method, "path", r.URL.Path, "status", status,
 			"client", r.Header.Get(api.HeaderClientID), "group", r.PathValue("group"), "operation", r.Header.Get(api.HeaderOperationID),
-			"generation", r.Header.Get(api.HeaderClaimGen), "duration_ms", time.Since(started).Milliseconds())
+			"generation", r.Header.Get(api.HeaderClaimGen), "duration_ms", elapsed.Milliseconds())
 	}
+}
+
+// pollingRoutes are the routes clients call on a timer: the worker's renewals,
+// observations and request lists, the subscribers' and the TUI's event polls,
+// snapshots and task lists, and the wait of an integration.
+var pollingRoutes = map[string]bool{
+	projectEvents: true,
+	taskListRoute: true,
+	"POST /api/v1/projects/{project}/snapshot":                              true,
+	"POST /api/v1/projects/{project}/tasks/{task}/renew":                    true,
+	"POST /api/v1/projects/{project}/tasks/{task}/observation":              true,
+	"GET /api/v1/projects/{project}/tasks/{task}/requests":                  true,
+	"POST /api/v1/projects/{project}/groups/{group}/renew":                  true,
+	"POST /api/v1/projects/{project}/groups/{group}/observation":            true,
+	"POST /api/v1/projects/{project}/integrations/{integration}/renew":      true,
+	"GET /api/v1/projects/{project}/integrations/{integration}/observation": true,
+}
+
+// slowRequest is the duration from which a polling request is logged like any
+// other request; tests replace it.
+var slowRequest = time.Second
+
+// requestLevel is the level of the request log line: DEBUG for a polling
+// request that succeeded in less than slowRequest, INFO otherwise. The time an
+// event poll asked to wait is not slowness and does not count.
+func requestLevel(r *http.Request, status int, elapsed time.Duration) slog.Level {
+	if !pollingRoutes[r.Pattern] || status >= http.StatusBadRequest {
+		return slog.LevelInfo
+	}
+	if r.Pattern == projectEvents {
+		// The route refused a malformed wait, so the status is already 400.
+		wait, _ := eventWait(r)
+		elapsed -= wait
+	}
+	if elapsed >= slowRequest {
+		return slog.LevelInfo
+	}
+	return slog.LevelDebug
+}
+
+// eventWait is the wait an event poll asks for, bounded by maxWait; no value
+// waits for nothing.
+func eventWait(r *http.Request) (time.Duration, error) {
+	raw := r.URL.Query().Get("wait")
+	if raw == "" {
+		return 0, nil
+	}
+	seconds, err := strconv.Atoi(raw)
+	if err != nil || seconds < 0 {
+		return 0, apiError(api.CodeInvalidRequest, "wait must be a non-negative number of seconds")
+	}
+	return min(time.Duration(seconds)*time.Second, maxWait), nil
 }
 
 // failure converts an operation error to its API error and logs an internal one.
