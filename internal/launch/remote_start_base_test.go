@@ -163,6 +163,7 @@ func TestRemoteStartBasesACardWithoutTargetOnTheMainlineBranch(t *testing.T) {
 		t.Run(tc.mode, func(t *testing.T) {
 			f := newStartBaseFixture(t)
 			f.cfg.Git.BranchMode = tc.mode
+			putTestPolicy(t, f.session, f.cfg)
 			card := f.todo(t, "start-base-mainline")
 			f.start(t, card.TaskID, f.commits[tc.branch])
 		})

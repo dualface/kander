@@ -48,7 +48,9 @@ func (f *policyFixture) open() {
 		f.t.Fatal(err)
 	}
 	f.srv = srv
-	f.http = httptest.NewUnstartedServer(srv.Handler())
+	// The differential handler checks the task index after each write, which also records the
+	// policy write route as covered.
+	f.http = httptest.NewUnstartedServer(srv.IndexDifferentialHandler(f.t))
 	f.http.Config.ErrorLog = log.New(io.Discard, "", 0)
 	f.http.Config.SetKeepAlivesEnabled(false)
 	f.http.Start()

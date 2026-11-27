@@ -15,11 +15,22 @@ import (
 // test pins.
 func initTestPolicy(t *testing.T, session *remote.Session) {
 	t.Helper()
-	values, err := json.Marshal(config.PolicyValuesOf(config.DefaultConfig()))
+	putTestPolicy(t, session, config.DefaultConfig())
+}
+
+// putTestPolicy makes the policy values of cfg the project policy: the policy, not the local
+// configuration, decides them once a project has one.
+func putTestPolicy(t *testing.T, session *remote.Session, cfg *config.Config) {
+	t.Helper()
+	current, err := session.Project.Policy(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := session.Project.PutPolicy(t.Context(), client.NewKey(), api.PolicyWrite{Values: values}); err != nil {
+	values, err := json.Marshal(config.PolicyValuesOf(cfg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := session.Project.PutPolicy(t.Context(), client.NewKey(), api.PolicyWrite{ExpectedRevision: current.Revision, Values: values}); err != nil {
 		t.Fatal(err)
 	}
 }
