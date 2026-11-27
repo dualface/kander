@@ -435,8 +435,9 @@ func TestRemoteAdoptionCannotUseAnotherProjectsRollout(t *testing.T) {
 	oldPrompt := testAdoptionLaunchPrompt(t, first, old, "start")
 	oldCreated := time.Now().UTC()
 
+	// cfg carries the fixture's project policy now; the scope file changes through Update.
 	cfg.Project.Name = "rebound-project"
-	if _, err := config.Save(cfg); err != nil {
+	if _, err := config.Update(func(scope *config.Config) error { scope.Project.Name = cfg.Project.Name; return nil }); err != nil {
 		t.Fatal(err)
 	}
 	second, err := remote.Open(t.Context(), cfg, cwd)
