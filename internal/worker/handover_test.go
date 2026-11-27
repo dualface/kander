@@ -176,7 +176,7 @@ func (r *rig) options() Options {
 		Logger:            slog.New(slog.NewJSONHandler(r.sink, nil)),
 		Now:               r.now,
 		Stop:              func(int) error { return nil },
-		Resolve: func(window, session string) (*Target, error) {
+		Resolve: func(AgentAddress) (*Target, error) {
 			return &Target{Prompt: func(text string) error {
 				r.mu.Lock()
 				defer r.mu.Unlock()

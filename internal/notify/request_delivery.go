@@ -31,18 +31,22 @@ const requestReasonLimit = 512
 // resolveRequest finds the agent pane of a card's WINDOW and SESSION and checks
 // that it takes a line. It types nothing: an error means no text reached any
 // terminal. The prompt it returns types into the pane the resolution found,
-// including a pane found by the session lookup.
-func resolveRequest(window, session string) (*worker.Target, error) {
+// including a pane found by the session lookup. Every agent definition it
+// reads comes from the project overlay of the address's configuration
+// directory.
+func resolveRequest(address worker.AgentAddress) (*worker.Target, error) {
+	window := address.Window
 	if window == "" {
 		return nil, errors.New("the card records no WINDOW to deliver to")
 	}
-	agent, reference, _ := strings.Cut(session, " ")
+	lookup := config.AgentLookupIn(address.ConfigDir)
+	agent, reference, _ := strings.Cut(address.Session, " ")
 	if _, _, parsed := terminal.ParseWindow(window); parsed && reference == "" {
 		// Without a session ID no pane can prove it runs this card's
 		// session, so probing the terminal could never succeed.
-		return nil, bareSessionError(agent)
+		return nil, bareSessionError(lookup, agent)
 	}
-	target, err := ResolveTarget(window, "", liveness.TaskSession{Agent: agent, Reference: reference}, requestTargetTimeout)
+	target, err := ResolveTarget(window, "", liveness.TaskSession{Agent: agent, Reference: reference, Lookup: lookup}, requestTargetTimeout)
 	var marker *SessionMarkerError
 	if errors.As(err, &marker) {
 		return nil, errors.New(sessionMarkerReason(err.Error()))
@@ -65,8 +69,8 @@ func resolveRequest(window, session string) (*worker.Target, error) {
 // agent whose effective definition records no session ID gets no takeover
 // hint: a new session of it would record none either. A definition that
 // cannot be loaded keeps the general text, which holds for any agent.
-func bareSessionError(agent string) error {
-	definition, err := config.LoadAgent(agent)
+func bareSessionError(lookup config.AgentLookup, agent string) error {
+	definition, err := lookup.Agent(agent)
 	if err == nil && definition.Session.Mode == "none" {
 		return errors.New(config.Text("notify.request_session_mode_none", agent))
 	}

@@ -126,12 +126,12 @@ func (e paneExit) send(session launch.AgentSession, command string, timeout floa
 		if err = notify.AgentPrompt(e.backend, e.program, e.target.Pane, command); err != nil {
 			return err
 		}
-		exists, err = agentWaitExit(e.backend, e.program, e.target, session, timeout)
+		exists, err = agentWaitExit(e.backend, e.program, e.target, session, timeout, nil)
 	} else {
 		if err = sendAgentExit(e.backend, e.program, e.target.Pane, command); err != nil {
 			return err
 		}
-		exists, err = processWaitExit(e.backend, e.program, e.target, session, timeout)
+		exists, err = processWaitExit(e.backend, e.program, e.target, session, timeout, nil)
 	}
 	if err != nil {
 		return err

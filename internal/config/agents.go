@@ -206,10 +206,7 @@ func LoadAgent(name string) (AgentDefinition, error) {
 	if err != nil {
 		return AgentDefinition{}, err
 	}
-	if !HasAgent(cfg, name) {
-		return AgentDefinition{}, UnavailableAgentError(cfg, name)
-	}
-	return AgentFor(cfg, name), nil
+	return agentOf(cfg, name)
 }
 
 func cloneAgent(d AgentDefinition) AgentDefinition {

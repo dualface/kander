@@ -38,8 +38,8 @@ func ParseSessionValue(value string) *TaskSession {
 	return &TaskSession{Agent: agent, Reference: reference}
 }
 
-func agentCommandName(agent string) (string, error) {
-	definition, err := config.LoadAgent(agent)
+func agentCommandName(session TaskSession) (string, error) {
+	definition, err := session.definition()
 	return definition.ProcessName, err
 }
 
@@ -49,7 +49,8 @@ func lookupIdentity(session TaskSession) terminal.Identity {
 	return terminal.Identity{
 		Agent:       session.Agent,
 		Reference:   session.Reference,
-		ProcessName: func() (string, error) { return agentCommandName(session.Agent) },
+		ProcessName: func() (string, error) { return agentCommandName(session) },
+		Lookup:      session.Lookup,
 	}
 }
 

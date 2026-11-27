@@ -33,7 +33,10 @@ func waitProbeError(err error) error {
 	}
 }
 
-func agentWaitExit(backend terminal.Backend, program string, address terminal.Address, session launch.AgentSession, timeout float64) (paneExists bool, err error) {
+// agentWaitExit waits for the agent of session to leave its pane, with the
+// agent definition read through lookup; a nil lookup reads it with
+// config.LoadAgent.
+func agentWaitExit(backend terminal.Backend, program string, address terminal.Address, session launch.AgentSession, timeout float64, lookup config.AgentLookup) (paneExists bool, err error) {
 	tabID, paneID := address.Container, address.Pane
 	deadline := nowFn().Add(time.Duration(timeout * float64(time.Second)))
 	for {
@@ -71,7 +74,7 @@ func agentWaitExit(backend terminal.Backend, program string, address terminal.Ad
 				"takeover.the_herdr_pane_moved_to_another_tab_while_waiting", tabID, orNA(pane.Container),
 			)
 		}
-		match := pane.MatchAgent(session.Agent)
+		match := pane.MatchAgentWith(session.Agent, lookup)
 		if match == terminal.AgentDiffers && pane.ReportedAgent() == "" {
 			if err := validateAgentContainer(backend, program, address, pane); err != nil {
 				return false, err
@@ -97,7 +100,7 @@ func agentWaitExit(backend terminal.Backend, program string, address terminal.Ad
 			)
 		}
 		mctx, cancel := probe.WithDefaultTimeout(context.Background())
-		verdict, detail := terminal.MatchAgentSession(mctx, session.Agent, pane.AgentSessionKind, pane.AgentSession, session.Reference)
+		verdict, detail := terminal.MatchAgentSessionWith(mctx, lookup, session.Agent, pane.AgentSessionKind, pane.AgentSession, session.Reference)
 		cancel()
 		switch verdict {
 		case terminal.SessionMatches:
@@ -121,10 +124,13 @@ func agentWaitExit(backend terminal.Backend, program string, address terminal.Ad
 	}
 }
 
-func processWaitExit(backend terminal.Backend, program string, address terminal.Address, session launch.AgentSession, timeout float64) (windowExists bool, err error) {
+// processWaitExit waits for the agent process of session to leave its pane,
+// with the agent definition read through lookup; a nil lookup reads it with
+// config.LoadAgent.
+func processWaitExit(backend terminal.Backend, program string, address terminal.Address, session launch.AgentSession, timeout float64, lookup config.AgentLookup) (windowExists bool, err error) {
 	paneID, windowID := address.Pane, address.Container
 	deadline := nowFn().Add(time.Duration(timeout * float64(time.Second)))
-	expected, err := agentCommandName(session.Agent)
+	expected, err := agentCommandName(lookup, session.Agent)
 	if err != nil {
 		return false, err
 	}

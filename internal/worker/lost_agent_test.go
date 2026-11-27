@@ -79,7 +79,7 @@ func TestWorkerDoesNotRepeatAnUncertainRequestDelivery(t *testing.T) {
 		t.Fatal(err)
 	}
 	calls := 0
-	h.loop.o.Resolve = func(window, session string) (*Target, error) {
+	h.loop.o.Resolve = func(AgentAddress) (*Target, error) {
 		return &Target{Prompt: func(text string) error {
 			calls++
 			saved := h.credential()

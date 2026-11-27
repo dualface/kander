@@ -104,7 +104,7 @@ func cleanupAgentContainer(backend terminal.Backend, address terminal.Address, o
 		if err := notify.AgentPrompt(backend, program, paneID, command); err != nil {
 			return launch.CleanupResult{}, err
 		}
-		paneExists, err := agentWaitExit(backend, program, address, oldSession, timeout)
+		paneExists, err := agentWaitExit(backend, program, address, oldSession, timeout, nil)
 		if err != nil {
 			return launch.CleanupResult{}, err
 		}
@@ -144,7 +144,7 @@ func cleanupProcessContainer(backend terminal.Backend, address terminal.Address,
 	if err := validateProcessContainer(backend, program, address); err != nil {
 		return launch.CleanupResult{}, err
 	}
-	expected, err := agentCommandName(oldSession.Agent)
+	expected, err := agentCommandName(nil, oldSession.Agent)
 	if err != nil {
 		return launch.CleanupResult{}, err
 	}
@@ -169,7 +169,7 @@ func cleanupProcessContainer(backend terminal.Backend, address terminal.Address,
 	if err := sendAgentExit(backend, program, paneID, command); err != nil {
 		return launch.CleanupResult{}, err
 	}
-	windowExists, err := processWaitExit(backend, program, address, oldSession, timeout)
+	windowExists, err := processWaitExit(backend, program, address, oldSession, timeout, nil)
 	if err != nil {
 		return launch.CleanupResult{}, err
 	}

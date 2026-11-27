@@ -36,7 +36,7 @@ func (h *harness) target(err error) *fakeTarget {
 	return p
 }
 
-func (p *fakeTarget) resolve(window, session string) (*Target, error) {
+func (p *fakeTarget) resolve(AgentAddress) (*Target, error) {
 	p.mu.Lock()
 	p.calls = append(p.calls, p.h.now())
 	err, cost := p.err, p.cost
@@ -319,7 +319,7 @@ func TestReservationFollowsASlowResolution(t *testing.T) {
 	_, c := h.claimed("slow-resolution", true)
 	h.request(c, "x")
 	typed := atomic.Int32{}
-	h.loop.o.Resolve = func(string, string) (*Target, error) {
+	h.loop.o.Resolve = func(AgentAddress) (*Target, error) {
 		time.Sleep(2 * renew)
 		return &Target{Prompt: func(string) error { typed.Add(1); return nil }}, nil
 	}

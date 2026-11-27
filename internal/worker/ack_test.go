@@ -37,8 +37,8 @@ func controlPolls(h *harness, seen func(context.Context, string) (bool, error)) 
 			return true
 		}
 	}
-	h.loop.o.Resolve = func(window, session string) (*Target, error) {
-		target, err := h.resolveRecording(window, session)
+	h.loop.o.Resolve = func(address AgentAddress) (*Target, error) {
+		target, err := h.resolveRecording(address)
 		target.Seen = seen
 		return target, err
 	}

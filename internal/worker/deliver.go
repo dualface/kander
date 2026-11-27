@@ -75,7 +75,7 @@ func (w *loop) deliver(ctx context.Context, log *slog.Logger, project *client.Pr
 			break
 		}
 		started := w.o.Now()
-		target, err := w.o.Resolve(window, session)
+		target, err := w.o.Resolve(AgentAddress{Window: window, Session: session, ConfigDir: w.agentConfigDir(*c)})
 		failedAt := w.o.Now()
 		budget.spent += failedAt.Sub(started)
 		if err != nil {

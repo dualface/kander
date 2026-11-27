@@ -21,6 +21,9 @@ type ExecutionContext struct {
 	BootID      string `json:"boot_id,omitempty"`
 	Window      string `json:"window,omitempty"`
 	Session     string `json:"session,omitempty"`
+	// ProjectDir is the execution directory of the orchestrator launch, as
+	// Credential.ProjectDir.
+	ProjectDir string `json:"project_dir,omitempty"`
 }
 
 func executionContextPath(home, serverURL, project, execution string) string {
@@ -65,7 +68,7 @@ func RefreshExecutionContext(home string, c *Credential) error {
 		}
 		for _, other := range credentials {
 			if other.ResourceKind == "" && other.ProjectID == c.ProjectID && other.ExecutionID == c.ExecutionID && other.ServerURL == c.ServerURL && other.ClientID == c.ClientID {
-				value = ExecutionContext{AgentPID: other.AgentPID, AgentStart: other.AgentStart, BootID: other.BootID, Window: other.Window, Session: other.Session}
+				value = ExecutionContext{AgentPID: other.AgentPID, AgentStart: other.AgentStart, BootID: other.BootID, Window: other.Window, Session: other.Session, ProjectDir: other.ProjectDir}
 				break
 			}
 		}
@@ -73,7 +76,7 @@ func RefreshExecutionContext(home string, c *Credential) error {
 	if c.AgentPID == 0 {
 		c.AgentPID = value.AgentPID
 	}
-	for _, pair := range [][2]*string{{&c.AgentStart, &value.AgentStart}, {&c.BootID, &value.BootID}, {&c.Window, &value.Window}, {&c.Session, &value.Session}} {
+	for _, pair := range [][2]*string{{&c.AgentStart, &value.AgentStart}, {&c.BootID, &value.BootID}, {&c.Window, &value.Window}, {&c.Session, &value.Session}, {&c.ProjectDir, &value.ProjectDir}} {
 		if *pair[0] == "" {
 			*pair[0] = *pair[1]
 		}

@@ -11,7 +11,7 @@ import (
 
 // ObserveAgent is provided by the terminal observation layer. It observes only
 // immutable host-local routing facts, never another client's card address.
-var ObserveAgent func(context.Context, remote.Credential) api.AgentObservation
+var ObserveAgent func(context.Context, AgentAddress) api.AgentObservation
 
 func (w *loop) observe(ctx context.Context, c remote.Credential) api.AgentObservation {
 	if w.o.Observe != nil {
@@ -41,7 +41,7 @@ func (w *loop) observe(ctx context.Context, c remote.Credential) api.AgentObserv
 		return api.AgentObservation{Status: "alive"}
 	}
 	if ObserveAgent != nil && c.Window != "" && c.Session != "" {
-		return ObserveAgent(ctx, c)
+		return ObserveAgent(ctx, AgentAddress{Window: c.Window, Session: c.Session, ConfigDir: w.agentConfigDir(c)})
 	}
 	return api.AgentObservation{Status: "unknown", Reason: "agent launch facts are incomplete"}
 }

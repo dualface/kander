@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/launch"
 	"github.com/dualface/kander/v2/internal/process"
 	"github.com/dualface/kander/v2/internal/terminal"
@@ -16,12 +17,14 @@ func init() { worker.StopAgent = stopWorkerAgent }
 
 // stopWorkerAgent uses only the immutable host-local address and session. It
 // never reverse looks up another pane and never closes a terminal container.
-func stopWorkerAgent(ctx context.Context, window, sessionValue string) error {
-	backend, address, ok := terminal.ParseWindow(window)
+// Every agent definition it reads, the exit command included, comes from the
+// project overlay of the address's configuration directory.
+func stopWorkerAgent(ctx context.Context, target worker.AgentAddress) error {
+	backend, address, ok := terminal.ParseWindow(target.Window)
 	if !ok || !backend.Capabilities().Container {
 		return errors.New("lost execution has no local terminal container")
 	}
-	agent, reference, _ := strings.Cut(sessionValue, " ")
+	agent, reference, _ := strings.Cut(target.Session, " ")
 	if agent == "" || reference == "" {
 		return errors.New("lost execution has no complete agent session")
 	}
@@ -31,20 +34,20 @@ func stopWorkerAgent(ctx context.Context, window, sessionValue string) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	return stopWorkerPane(ctx, backend, program, address, launch.AgentSession{Agent: agent, Reference: reference})
+	return stopWorkerPane(ctx, backend, program, address, launch.AgentSession{Agent: agent, Reference: reference}, config.AgentLookupIn(target.ConfigDir))
 }
-func sameWorkerPane(ctx context.Context, backend terminal.Backend, pane terminal.PaneFacts, session launch.AgentSession) error {
+func sameWorkerPane(ctx context.Context, backend terminal.Backend, pane terminal.PaneFacts, session launch.AgentSession, lookup config.AgentLookup) error {
 	if backend.Capabilities().AgentIdentity {
-		if pane.MatchAgent(session.Agent) != terminal.AgentMatches {
+		if pane.MatchAgentWith(session.Agent, lookup) != terminal.AgentMatches {
 			return errors.New("pane no longer proves the lost execution agent")
 		}
-		verdict, detail := terminal.MatchAgentSession(ctx, session.Agent, pane.AgentSessionKind, pane.AgentSession, session.Reference)
+		verdict, detail := terminal.MatchAgentSessionWith(ctx, lookup, session.Agent, pane.AgentSessionKind, pane.AgentSession, session.Reference)
 		if verdict != terminal.SessionMatches {
 			return errors.New("pane no longer proves the lost execution session: " + detail)
 		}
 		return nil
 	}
-	expected, err := agentCommandName(session.Agent)
+	expected, err := agentCommandName(lookup, session.Agent)
 	if err != nil {
 		return err
 	}
@@ -53,7 +56,7 @@ func sameWorkerPane(ctx context.Context, backend terminal.Backend, pane terminal
 	}
 	return nil
 }
-func stopWorkerPane(ctx context.Context, backend terminal.Backend, program string, address terminal.Address, session launch.AgentSession) error {
+func stopWorkerPane(ctx context.Context, backend terminal.Backend, program string, address terminal.Address, session launch.AgentSession, lookup config.AgentLookup) error {
 	conn := probeConn(program)
 	pane, err := backend.PaneFacts(ctx, conn, address.Pane)
 	if err != nil {
@@ -65,14 +68,14 @@ func stopWorkerPane(ctx context.Context, backend terminal.Backend, program strin
 	if pane.Container != "" && pane.Container != address.Container {
 		return errors.New("lost execution pane moved to another container")
 	}
-	if err := sameWorkerPane(ctx, backend, pane, session); err != nil {
+	if err := sameWorkerPane(ctx, backend, pane, session, lookup); err != nil {
 		return err
 	}
 	stopped := false
 	if inspector, ok := backend.(terminal.ProcessInspector); ok {
 		observed, inspectErr := inspector.ProcessFacts(ctx, conn, address.Pane)
 		if inspectErr == nil {
-			expected, err := agentCommandName(session.Agent)
+			expected, err := agentCommandName(lookup, session.Agent)
 			if err != nil {
 				return err
 			}
@@ -97,7 +100,7 @@ func stopWorkerPane(ctx context.Context, backend terminal.Backend, program strin
 				if err != nil {
 					return err
 				}
-				if err := sameWorkerPane(ctx, backend, current, session); err != nil {
+				if err := sameWorkerPane(ctx, backend, current, session, lookup); err != nil {
 					return err
 				}
 				boot, err := process.BootIdentity()
@@ -116,7 +119,7 @@ func stopWorkerPane(ctx context.Context, backend terminal.Backend, program strin
 		}
 	}
 	if !stopped {
-		command, err := AgentExitCommand(session.Agent)
+		command, err := agentExitCommand(lookup, session.Agent)
 		if err != nil {
 			return err
 		}
@@ -126,9 +129,9 @@ func stopWorkerPane(ctx context.Context, backend terminal.Backend, program strin
 	}
 	// Exit observation does not call the container cleanup routines.
 	if backend.Capabilities().AgentIdentity {
-		_, err = agentWaitExit(backend, program, address, session, 10)
+		_, err = agentWaitExit(backend, program, address, session, 10, lookup)
 	} else {
-		_, err = processWaitExit(backend, program, address, session, 10)
+		_, err = processWaitExit(backend, program, address, session, 10, lookup)
 	}
 	return err
 }

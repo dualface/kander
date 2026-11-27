@@ -69,7 +69,7 @@ func staleReport(ctx context.Context, entry board.Entry, session TaskSession, ch
 	}
 	resolvable := false
 	if session.Reference == "" {
-		if definition, err := config.LoadAgent(session.Agent); err == nil {
+		if definition, err := session.definition(); err == nil {
 			resolvable = config.SessionResolvesEmptyReference(definition.Session)
 		}
 	}
@@ -102,7 +102,7 @@ func staleReport(ctx context.Context, entry board.Entry, session TaskSession, ch
 		if pane.Gone {
 			return report(entry, &sess, Stopped, channel, container, detail, "")
 		}
-		switch pane.MatchAgent(session.Agent) {
+		switch pane.MatchAgentWith(session.Agent, session.Lookup) {
 		case terminal.AgentDiffers:
 			return report(entry, &sess, Stopped, channel, container, detail, "")
 		case terminal.AgentUndecided:
@@ -112,7 +112,7 @@ func staleReport(ctx context.Context, entry board.Entry, session TaskSession, ch
 			// A pane found by session must keep a decidable identity: an
 			// empty or unresolvable report means the identity changed or is
 			// unverifiable, so drift is never attached on that evidence.
-			verdict, detail := terminal.MatchAgentSession(ctx, session.Agent, pane.AgentSessionKind, pane.AgentSession, session.Reference)
+			verdict, detail := terminal.MatchAgentSessionWith(ctx, session.Lookup, session.Agent, pane.AgentSessionKind, pane.AgentSession, session.Reference)
 			switch verdict {
 			case terminal.SessionDiffers:
 				return report(entry, &sess, Stopped, channel, container, detail, "")
@@ -185,7 +185,7 @@ func classifyAgentFacts(ctx context.Context, entry board.Entry, session TaskSess
 	if pane.Gone {
 		return staleReport(ctx, entry, session, channel, container, t("launch.pane_does_not_exist_2", paneID), program, backend, search)
 	}
-	switch pane.MatchAgent(session.Agent) {
+	switch pane.MatchAgentWith(session.Agent, session.Lookup) {
 	case terminal.AgentDiffers:
 		actual := pane.ReportedAgent()
 		if actual == "" {
@@ -201,7 +201,7 @@ func classifyAgentFacts(ctx context.Context, entry board.Entry, session TaskSess
 	}
 	actualSession := pane.AgentSession
 	if session.Reference != "" && (actualSession != "" || pane.AgentSessionKind != "") {
-		verdict, detail := terminal.MatchAgentSession(ctx, session.Agent, pane.AgentSessionKind, actualSession, session.Reference)
+		verdict, detail := terminal.MatchAgentSessionWith(ctx, session.Lookup, session.Agent, pane.AgentSessionKind, actualSession, session.Reference)
 		switch verdict {
 		case terminal.SessionDiffers:
 			return staleReport(ctx, entry, session, channel, container, t("liveness.session_identity_mismatch"), program, backend, search)
@@ -252,7 +252,7 @@ func classifyProcessPane(ctx context.Context, entry board.Entry, session TaskSes
 	if facts.Gone {
 		return staleReport(ctx, entry, session, launcher, container, t("launch.pane_does_not_exist_2", paneID), program, backend, search)
 	}
-	expected, err := agentCommandName(session.Agent)
+	expected, err := agentCommandName(session)
 	if err != nil {
 		return report(entry, &session, Unknown, backend.Executable(), address.Session, err.Error(), "")
 	}

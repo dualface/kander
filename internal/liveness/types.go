@@ -33,6 +33,14 @@ var (
 type TaskSession struct {
 	Agent     string
 	Reference string
+	// Lookup reads the definition of Agent; nil reads it with
+	// config.LoadAgent, from the configuration of the process directory.
+	Lookup config.AgentLookup
+}
+
+// definition reads the definition of the session's agent.
+func (s TaskSession) definition() (config.AgentDefinition, error) {
+	return s.Lookup.Agent(s.Agent)
 }
 
 // ExecutorEvidence says why an unknown observation still shows an executor: the

@@ -5,13 +5,18 @@ import (
 	"time"
 
 	"github.com/dualface/kander/v2/api"
-	"github.com/dualface/kander/v2/internal/remote"
+	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/worker"
 )
 
 func init() { worker.ObserveAgent = observeWorkerAgent }
-func observeWorkerAgent(ctx context.Context, c remote.Credential) api.AgentObservation {
-	reports := ObserveAgentStatus(ctx, []AgentStatusInput{{TaskID: c.TaskID, Window: c.Window, Session: c.Session}}, BatchOptions{Budget: 2 * time.Second, Concurrency: 1})
+
+// observeWorkerAgent observes the agent of an execution for the worker, with
+// the agent definition read from the project overlay of the address's
+// configuration directory.
+func observeWorkerAgent(ctx context.Context, address worker.AgentAddress) api.AgentObservation {
+	input := AgentStatusInput{Window: address.Window, Session: address.Session, Lookup: config.AgentLookupIn(address.ConfigDir)}
+	reports := ObserveAgentStatus(ctx, []AgentStatusInput{input}, BatchOptions{Budget: 2 * time.Second, Concurrency: 1})
 	report := reports[0]
 	status := "unknown"
 	switch report.Status {
