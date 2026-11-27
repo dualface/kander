@@ -232,10 +232,7 @@ func TestTerminalDefinitionLifecycle(t *testing.T) {
 	if !strings.Contains(notify.stdout, `"status":"open"`) {
 		t.Fatalf("notify did not return an open proposal: %s", notify.stdout)
 	}
-	waitCommandFact(t, func() bool {
-		output, _ := os.ReadFile(filepath.Join(state, "panes", "p1", "output"))
-		return strings.Contains(string(output), "kander request show "+id)
-	})
+	waitPaneDelivered(t, state, "p1", "kander request show "+id)
 	requests, err := service.Project.Requests(t.Context(), id)
 	if err != nil || len(requests) != 1 || requests[0].Status != api.RequestAccepted {
 		t.Fatalf("holder delivery receipt: %+v %v", requests, err)
@@ -376,6 +373,21 @@ func fakeMuxFixture(t *testing.T) fakeMux {
 	}
 
 	return fakeMux{service: service, cfg: cfg, state: state, definitionPath: definitionPath}
+}
+
+// waitPaneDelivered waits until the worker has finished delivering text to
+// the fake pane. The fake terminal's deliver_text runs two steps: type
+// appends the text without a newline, then key Enter appends "\n". Only the
+// key step writes a newline, so output that contains text and ends with
+// "\n" means the delivery's last write to the pane has completed. The
+// worker delivers from a background goroutine; removing the pane directory
+// before this point races the pending Enter append.
+func waitPaneDelivered(t *testing.T, state, pane, text string) {
+	t.Helper()
+	waitCommandFact(t, func() bool {
+		output, _ := os.ReadFile(filepath.Join(state, "panes", pane, "output"))
+		return strings.Contains(string(output), text) && strings.HasSuffix(string(output), "\n")
+	})
 }
 
 func readyCard(t *testing.T, slug string) string {

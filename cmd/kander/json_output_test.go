@@ -353,10 +353,7 @@ func TestJSONLaunchLifecycle(t *testing.T) {
 	if notified["status"] != "open" {
 		t.Fatalf("notify: %v", notified)
 	}
-	waitCommandFact(t, func() bool {
-		output, _ := os.ReadFile(filepath.Join(state, "panes", "p1", "output"))
-		return strings.Contains(string(output), "kander request show "+id)
-	})
+	waitPaneDelivered(t, state, "p1", "kander request show "+id)
 
 	// A takeover needs a confirmed stop of the first container and an explicit decision.
 	if err := os.RemoveAll(filepath.Join(state, "panes", "p1")); err != nil {
