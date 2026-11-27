@@ -77,7 +77,7 @@ func (r *gcRun) removeWorktree(ctx context.Context, w gcWorktree, repo string, r
 		}
 		// The directory is gone, so no kept entry carries the Git error.
 		r.fail(err)
-		if reason := r.unregister(ctx, repo, w.intent.Path); reason != "" {
+		if reason := r.unregister(ctx, repo, w.intent.Path, repos[repo]); reason != "" {
 			r.report.Worktrees.keep(w.id, reason)
 			return false
 		}
@@ -89,14 +89,18 @@ func (r *gcRun) removeWorktree(ctx context.Context, w gcWorktree, repo string, r
 // unregister makes sure Git no longer registers the worktree at path, whose
 // directory is gone, and returns the reason when it cannot: the branch, the
 // intent and the removal record must stay while Git still names the worktree.
-// A real run prunes the repository's registry once and looks again. A dry run
-// changes nothing: it counts a registration Git marks prunable as one the run
-// clears.
-func (r *gcRun) unregister(ctx context.Context, repo, path string) string {
+// A real run prunes the repository's registry once and looks again; a
+// successful prune spares the repository the pass's final prune until the
+// next removal (cache, when the pass knows the repository). A dry run changes
+// nothing: it counts a registration Git marks prunable as one the run clears.
+func (r *gcRun) unregister(ctx context.Context, repo, path string, cache *gcRepository) string {
 	registered, prunable, err := r.worktreeRegistration(ctx, repo, path)
 	var pruneErr error
 	if err == nil && registered && !r.opts.DryRun {
 		_, pruneErr = r.git(ctx, repo, "worktree", "prune")
+		if pruneErr == nil && cache != nil {
+			cache.pruned = false
+		}
 		registered, _, err = r.worktreeRegistration(ctx, repo, path)
 	}
 	switch {
@@ -238,18 +242,10 @@ func (r *gcRun) resumeRemoval(ctx context.Context, task string, generation uint6
 		r.report.Branches.keep(record.Branch, err.Error())
 		return
 	}
-	if reason := r.unregister(ctx, record.Repository, record.Path); reason != "" {
+	if reason := r.unregister(ctx, record.Repository, record.Path, repos[record.Repository]); reason != "" {
 		r.report.Worktrees.keep(id, reason)
 		return
 	}
 	r.work = true
-	if !r.opts.DryRun {
-		cache, found := repos[record.Repository]
-		if !found {
-			cache = &gcRepository{targets: map[string]gcTarget{}}
-			repos[record.Repository] = cache
-		}
-		cache.pruned = true
-	}
 	r.finishRemoval(ctx, task, record, path)
 }

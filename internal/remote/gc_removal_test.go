@@ -73,8 +73,15 @@ func TestGCKeepsTheRemovalWhileGitStillRegistersTheWorktree(t *testing.T) {
 		t.Fatalf("a dry run prunes nothing and plans the branch: %+v", plan)
 	}
 
+	prunes := filepath.Join(t.TempDir(), "prunes")
+	wrapGit(t, `case "$*" in *"worktree prune"*) echo prune >> '`+prunes+`';; esac
+exec "$real" "$@"
+`)
 	result = f.run(false)
 	if result.Incomplete() || f.registered(w.Path) || f.branchExists(w.Branch) || exists(t, intent) || exists(t, record) {
 		t.Fatalf("the run that clears the registration finishes the removal: %+v", result)
+	}
+	if log, err := os.ReadFile(prunes); err != nil || string(log) != "prune\n" {
+		t.Fatalf("the registry is pruned once: %q %v", log, err)
 	}
 }
