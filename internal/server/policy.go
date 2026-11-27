@@ -299,7 +299,20 @@ func (p *project) writePolicy(key string, expected uint64, values json.RawMessag
 	}
 	p.policy.Store(&next)
 	p.policyFault("policy-replaced")
+	// Only a write that ran announces itself: a retry answered from its receipt
+	// or from the audit log never reaches this point. A failed append rotates the
+	// event log, so every subscriber gets a reset and reads the policy anyway.
+	if err := p.events.append(api.Event{Kind: api.EventProjectPolicyChanged, Revision: next.Revision}); err != nil {
+		p.log().Error("event append failed", "event", api.EventProjectPolicyChanged, "error", err)
+	}
 	return outcome{status: http.StatusOK, body: next}
+}
+
+// policyRenewal adds the current policy version to a lease renewal.
+func (p *project) policyRenewal(renewal api.Renewal) api.Renewal {
+	policy := p.policyView()
+	renewal.PolicyEpoch, renewal.PolicyRevision = policy.Epoch, policy.Revision
+	return renewal
 }
 
 // voidPolicyAttempt cancels an attempt that did not take effect. When even the

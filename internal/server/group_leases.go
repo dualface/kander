@@ -155,5 +155,8 @@ func (p *project) renewGroup(group string, h holder) (api.Renewal, error) {
 		claim.ExpiresAt = claim.RenewedAt.Add(p.server.ttl)
 		return stageJSON(tx, groupClaimName(group), claim)
 	})
-	return api.Renewal{Claim: *p.groupClaimView(claim)}, err
+	if err != nil {
+		return api.Renewal{}, err
+	}
+	return p.policyRenewal(api.Renewal{Claim: *p.groupClaimView(claim)}), nil
 }
