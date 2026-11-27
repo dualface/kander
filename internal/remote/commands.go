@@ -603,7 +603,15 @@ func claim(ctx context.Context, s *Session, task, owner, decision string) error 
 	var grant api.ClaimGrant
 	var err error
 	if decision == "" {
-		grant, err = s.Project.Claim(ctx, client.NewKey(), task, req)
+		// The first claim of a card fixes its branch snapshot from the policy;
+		// a stale revision is refreshed and the same key sent once more.
+		key := client.NewKey()
+		err = s.WithCurrentPolicy(ctx, func(revision uint64, branchMode string) error {
+			req.PolicyRevision, req.BranchMode = revision, branchMode
+			var sendErr error
+			grant, sendErr = s.Project.Claim(ctx, key, task, req)
+			return sendErr
+		}, nil)
 	} else {
 		current, serr := s.Project.Show(ctx, task)
 		if serr != nil {
@@ -627,6 +635,7 @@ func claim(ctx context.Context, s *Session, task, owner, decision string) error 
 			req.Dispatch = &board.DispatchTakeover{Authorization: dispatch.Authorization, Revision: dispatch.Revision, Mode: mode}
 		}
 
+		req.PolicyRevision, req.BranchMode = s.PolicyRevision(), s.BranchMode()
 		grant, err = s.Project.Takeover(ctx, client.NewKey(), task, req)
 	}
 	if err != nil {

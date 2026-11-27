@@ -72,6 +72,42 @@ type ReviewBatch struct {
 	Requirements    map[string]string `json:"requirements"`
 	Advances        []ReviewAdvance   `json:"advances"`
 	Revision        uint64            `json:"revision"`
+	// PolicyRevision is the project policy revision the server checked the
+	// batch against when it created it, and RequirementDecisions the decision
+	// record that justified each role the policy required but Requirements
+	// marks N/A. A batch created before the server checked batches, or while
+	// the project had no policy, has neither; omitted, its record keeps its
+	// bytes.
+	PolicyRevision       uint64            `json:"policy_revision,omitzero"`
+	RequirementDecisions map[string]string `json:"requirement_decisions,omitempty"`
+}
+
+// BatchAttestation is what the server records on a batch it creates: the
+// policy revision it checked the batch against and the decisions it used.
+type BatchAttestation struct {
+	PolicyRevision       uint64
+	RequirementDecisions map[string]string
+}
+
+// BatchAttestations maps the ID of each batch a request creates to its
+// attestation. A batch the request does not create takes none.
+type BatchAttestations map[string]BatchAttestation
+
+// attest writes the attestation of b, if any, onto b.
+func (a BatchAttestations) attest(b *ReviewBatch) {
+	if value, ok := a[b.BatchID]; ok {
+		b.PolicyRevision = value.PolicyRevision
+		if len(value.RequirementDecisions) > 0 {
+			b.RequirementDecisions = maps.Clone(value.RequirementDecisions)
+		}
+	}
+}
+
+// withoutAttestation is b without the fields the server sets when it creates
+// a batch, for comparing a repeated batch binding with the stored one.
+func (b ReviewBatch) withoutAttestation() ReviewBatch {
+	b.PolicyRevision, b.RequirementDecisions = 0, nil
+	return b
 }
 
 type ReviewIndex struct {
@@ -206,7 +242,10 @@ func reviewCards(tx *Transaction, ids []string, fallback, frozen string) (string
 
 // PrepareReviewRun commits all input bytes and intent before process launch.
 // Reusing an identity returns its durable state and never authorizes a rerun.
-func PrepareReviewRunWithTransaction(root string, input ReviewInput, requirements map[string]string, advance *ReviewAdvance, originals map[string][]byte, version string, extensions ...TransactionExtension) (run ReviewRun, fresh bool, err error) {
+//
+// attest is recorded on the batch when this run creates it; a run of an
+// existing batch ignores it.
+func PrepareReviewRunWithTransaction(root string, input ReviewInput, requirements map[string]string, attest BatchAttestations, advance *ReviewAdvance, originals map[string][]byte, version string, extensions ...TransactionExtension) (run ReviewRun, fresh bool, err error) {
 	if input.FindingsSchema < 0 || input.FindingsSchema > FindingsSchemaReceiver || input.RunID == "batches" || !ValidReviewID(input.RunID) || !ValidReviewID(input.BatchID) || input.PreviousRunID != "" && !ValidReviewID(input.PreviousRunID) {
 		return run, false, reviewError("run/batch/previous ID")
 	}
@@ -324,6 +363,7 @@ func PrepareReviewRunWithTransaction(root string, input ReviewInput, requirement
 				return err
 			}
 			batch = ReviewBatch{TaskContextHash: input.InputHashes["task-context.md"], Schema: 1, BatchID: input.BatchID, TaskIDs: input.TaskIDs, Base: input.Base, TargetCommit: input.Commit, ReportLanguage: language, Requirements: requirements, Revision: 1}
+			attest.attest(&batch)
 		} else {
 			if batch.TaskContextHash == "" {
 				batch.TaskContextHash = input.InputHashes["task-context.md"]

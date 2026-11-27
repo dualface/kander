@@ -48,15 +48,28 @@ func (p *project) claimGroup(ctx context.Context, scope receiptScope, group, cli
 	if !api.ValidIdentity(input.ExecutionID) || !api.ValidIdentity(client) || input.Request.GroupID != group {
 		return outcome{err: apiError(api.CodeInvalidRequest, "invalid coordinator execution identity")}
 	}
+	// The policy context is checked, never part of the claim identity: a
+	// resend of the same key after a policy refresh is the same group claim.
+	revision, branchMode := input.PolicyRevision, input.BranchMode
+	input.PolicyRevision, input.BranchMode = 0, ""
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
 	defer p.unlockBoard()
 	operation := "group-claim:" + group
-	out := p.idempotent(scope, operation, input, func() outcome {
+	check := func() error { return p.checkSnapshotClaim(p.groupClaimCreatesSnapshot(group), revision, branchMode) }
+	out := p.idempotentChecked(scope, operation, input, check, func() outcome {
 		previous, found, err := p.readGroupClaim(group)
 		if err != nil {
 			return outcome{err: err}
+		}
+		// The first group claim of a group fixes its branch model; every later
+		// generation carries it on.
+		snapshot := previous.BranchSnapshot
+		if !found {
+			if snapshot, err = p.newBranchSnapshot(api.BranchSnapshotGroup, branchMode); err != nil {
+				return outcome{err: err}
+			}
 		}
 		reuse, err := p.groupClaim(previous, found, client, input, h, "the coordinator lease is still active")
 		if err != nil {
@@ -65,7 +78,7 @@ func (p *project) claimGroup(ctx context.Context, scope receiptScope, group, cli
 		claim := previous
 		if !reuse {
 			now := p.server.now()
-			claim = claimRecord{TaskID: group, ClientID: client, ExecutionID: input.ExecutionID, Owner: input.Request.Owner, Generation: previous.Generation + 1, Status: api.ClaimActive, RenewedAt: now, ExpiresAt: now.Add(p.server.ttl), Handoffs: previous.Handoffs}
+			claim = claimRecord{TaskID: group, ClientID: client, ExecutionID: input.ExecutionID, Owner: input.Request.Owner, Generation: previous.Generation + 1, Status: api.ClaimActive, RenewedAt: now, ExpiresAt: now.Add(p.server.ttl), Handoffs: previous.Handoffs, BranchSnapshot: snapshot}
 			if found {
 				claim.Handoffs = append(claim.Handoffs, api.Handoff{At: now, FromGeneration: previous.Generation, ToGeneration: claim.Generation, FromClient: previous.ClientID, ToClient: client, Owner: claim.Owner, Decision: input.Decision})
 			}
@@ -142,5 +155,8 @@ func (p *project) renewGroup(group string, h holder) (api.Renewal, error) {
 		claim.ExpiresAt = claim.RenewedAt.Add(p.server.ttl)
 		return stageJSON(tx, groupClaimName(group), claim)
 	})
-	return api.Renewal{Claim: *p.groupClaimView(claim)}, err
+	if err != nil {
+		return api.Renewal{}, err
+	}
+	return p.policyRenewal(api.Renewal{Claim: *p.groupClaimView(claim)}), nil
 }

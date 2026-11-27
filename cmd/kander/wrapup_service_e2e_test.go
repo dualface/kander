@@ -175,7 +175,7 @@ func newWrapUpScenario(t *testing.T, targetBranch string) *wrapUpScenario {
 		}
 	}
 	s.task = task.TaskID
-	grant, err := s.holder.Project.Claim(ctx, "", s.task, api.ClaimRequest{ClientID: s.holder.Client.ClientID(), ExecutionID: "gitless-wrap-executor", Owner: "codex"})
+	grant, err := s.holder.Project.Claim(ctx, "", s.task, api.ClaimRequest{BranchMode: "main-develop", ClientID: s.holder.Client.ClientID(), ExecutionID: "gitless-wrap-executor", Owner: "codex"})
 	if err != nil {
 		t.Fatal(err)
 	}

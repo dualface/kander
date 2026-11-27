@@ -89,6 +89,10 @@ type ImportOptions struct {
 	Submitter string
 	// Comments stores the issue discussion in the snapshot.
 	Comments bool
+	// languageFromConfig marks a Language that came from the configuration, not
+	// from --language: the service import replaces it with the agent language of
+	// the opened session, after the project policy applied.
+	languageFromConfig bool
 }
 
 // ImportResult reports the canonical card of one import. Existing is true when

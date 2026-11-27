@@ -22,6 +22,16 @@ type remoteReviewStore struct {
 	session *remote.Session
 	root    string
 	writer  string
+	// decisions are the --requirement-decision values: the decision record
+	// that justifies each role the project policy requires but the
+	// requirements of a new batch mark N/A.
+	decisions map[string]string
+}
+
+// setRequirementDecisions takes the --requirement-decision values for the
+// prepare request of a run that creates its batch.
+func (s *remoteReviewStore) setRequirementDecisions(decisions map[string]string) {
+	s.decisions = decisions
 }
 
 func newRemoteReviewStore(session *remote.Session) (*remoteReviewStore, error) {
@@ -113,7 +123,7 @@ func (s *remoteReviewStore) Snapshot(id string) (board.Snapshot, error) {
 }
 func (s *remoteReviewStore) Prepare(input board.ReviewInput, requirements map[string]string, advance *board.ReviewAdvance, originals map[string][]byte, version string) (board.ReviewRun, bool, error) {
 	input.CWD = "project:" + s.session.Info.ID
-	request := api.ReviewPrepare{Input: input, Requirements: requirements, Advance: advance, Originals: originals, Version: version, WriterHash: board.ReviewDigest([]byte(s.writer))}
+	request := api.ReviewPrepare{Input: input, Requirements: requirements, RequirementDecisions: s.decisions, Advance: advance, Originals: originals, Version: version, WriterHash: board.ReviewDigest([]byte(s.writer))}
 	ids := input.TaskIDs
 	if batch, err := s.Batch(input.BatchID); err == nil && batch.PlanID != "" {
 		raw, err := s.session.Project.ReviewResource(context.Background(), "plans", batch.PlanID)
@@ -142,7 +152,18 @@ func (s *remoteReviewStore) Prepare(input board.ReviewInput, requirements map[st
 		proof = &client.Claim{}
 	}
 	proof.ReviewWriter = s.writer
-	raw, err := s.session.Project.ReviewRuntime(context.Background(), client.NewKey(), input.RunID, "prepare", request, proof)
+	// The holders confirmed the request without a policy revision, which is
+	// not part of the run identity; it goes only on the wire. A run that
+	// creates its batch is refused while the revision is stale: the policy is
+	// refreshed and the same key sent once more.
+	ctx, key := context.Background(), client.NewKey()
+	var raw json.RawMessage
+	err = s.session.WithCurrentPolicy(ctx, func(revision uint64, _ string) error {
+		request.PolicyRevision = revision
+		var sendErr error
+		raw, sendErr = s.session.Project.ReviewRuntime(ctx, key, input.RunID, "prepare", request, proof)
+		return sendErr
+	}, nil)
 	var result board.ReviewPreparation
 	if err == nil {
 		err = json.Unmarshal(raw, &result)

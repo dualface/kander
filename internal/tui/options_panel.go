@@ -99,6 +99,8 @@ type optionsPanel struct {
 	chromeLines   int
 	headerX       int
 	headerY       int
+	// policyNotice is the last result of a project policy refresh or write.
+	policyNotice string
 
 	// The geometry and body lines of the most recent render, for mouse hit testing.
 	box        popupBox
@@ -217,6 +219,8 @@ func (a *App) applyWork(payload any) tea.Cmd {
 	case boardEventResult:
 		a.applyBoardEvents(result)
 		return nil
+	case policyResult:
+		return a.applyPolicyResult(result)
 	case boardReadResult:
 		a.applyBoardRead(result)
 		return nil
@@ -281,6 +285,9 @@ func (a *App) applyWork(payload any) tea.Cmd {
 		}
 		a.Session = result.session
 		panel.session = result.session
+		// The policy this process knows now, not when the load started: a refresh that
+		// finished while the session loaded found no session to update.
+		a.attachKnownPolicy(panel.session)
 		// Prefer the Project tab when an overlay already has settings; an invalid
 		// overlay merge stays on Global so Options can still open.
 		_ = panel.session.PreferProjectTabIfPresent()
@@ -656,6 +663,7 @@ func (p *optionsPanel) savesOnSubmit() bool {
 
 // persistNow writes the current session to the config file, UI preferences included.
 func (p *optionsPanel) persistNow() error {
+	p.queuePolicySave()
 	if p.session != nil && p.session.EditingOverlay() {
 		if _, err := p.session.Save(); err != nil {
 			return err
@@ -733,6 +741,7 @@ func (p *optionsPanel) save() {
 		p.showReport(t("tui.save_failed"), finishLines, err.Error())
 		return
 	}
+	p.queuePolicySave()
 	path, err := p.session.SaveAllDirty()
 	p.advanceLanguageBaseline()
 	if err != nil {

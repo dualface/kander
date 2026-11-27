@@ -49,7 +49,7 @@ func (s *Session) ApplyDoctorConfig(before, after *config.Config, dirty bool) er
 	if s.EditingOverlay() {
 		return s.rebuildOverlayConfig()
 	}
-	s.Config = merged
+	s.setConfig(merged)
 	return nil
 }
 

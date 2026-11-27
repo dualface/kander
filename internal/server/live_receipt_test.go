@@ -40,14 +40,14 @@ func newLiveFixture(t *testing.T) *liveFixture {
 	ctx := t.Context()
 	f.task = gcTodoTask(t, f.p, "alpha", "").TaskID
 	var err error
-	if f.taskGrant, err = f.p.Claim(ctx, "", f.task, api.ClaimRequest{ClientID: "gc-host", ExecutionID: "exec-a", Owner: "claude"}); err != nil {
+	if f.taskGrant, err = f.p.Claim(ctx, "", f.task, api.ClaimRequest{BranchMode: "main-develop", ClientID: "gc-host", ExecutionID: "exec-a", Owner: "claude"}); err != nil {
 		t.Fatal(err)
 	}
 	f.taskProof = client.Claim{Token: f.taskGrant.Token, Generation: f.taskGrant.Claim.Generation}
 	for _, slug := range []string{"one", "two"} {
 		f.members = append(f.members, gcTodoTask(t, f.p, slug, f.group).TaskID)
 	}
-	claim := api.GroupClaim{ExecutionID: "coordinator-a", Request: board.CoordinatorClaim{GroupID: f.group, Owner: "codex", Token: "public-session", Basis: "confirmed group fixture", Members: f.members}}
+	claim := api.GroupClaim{BranchMode: "main-develop", ExecutionID: "coordinator-a", Request: board.CoordinatorClaim{GroupID: f.group, Owner: "codex", Token: "public-session", Basis: "confirmed group fixture", Members: f.members}}
 	if f.groupGrant, err = f.p.ClaimGroup(ctx, "", f.group, claim, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestLivenessObservationsKeepOneReceiptPerExecution(t *testing.T) {
 	}
 	// A successor execution has a slot of its own; the earlier one stays until a gc.
 	f.clock.advance(91 * time.Second)
-	successor, err := f.p.Takeover(ctx, "", f.task, api.ClaimRequest{ClientID: "gc-host", ExecutionID: "exec-b", Owner: "codex", Decision: "explicit takeover", ExpectedGeneration: f.taskGrant.Claim.Generation})
+	successor, err := f.p.Takeover(ctx, "", f.task, api.ClaimRequest{BranchMode: "main-develop", ClientID: "gc-host", ExecutionID: "exec-b", Owner: "codex", Decision: "explicit takeover", ExpectedGeneration: f.taskGrant.Claim.Generation})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +213,7 @@ func TestLivenessReplayOfAnOlderKeyNeverMovesTheClaimBack(t *testing.T) {
 	// After a takeover the older key of the earlier execution is refused and
 	// leaves the successor's claim as it was.
 	f.clock.advance(91 * time.Second)
-	if _, err := f.p.Takeover(ctx, "", f.task, api.ClaimRequest{ClientID: "gc-host", ExecutionID: "exec-b", Owner: "codex", Decision: "explicit takeover", ExpectedGeneration: f.taskGrant.Claim.Generation}); err != nil {
+	if _, err := f.p.Takeover(ctx, "", f.task, api.ClaimRequest{BranchMode: "main-develop", ClientID: "gc-host", ExecutionID: "exec-b", Owner: "codex", Decision: "explicit takeover", ExpectedGeneration: f.taskGrant.Claim.Generation}); err != nil {
 		t.Fatal(err)
 	}
 	successor := f.claim(t)
@@ -255,7 +255,7 @@ func TestGroupLivenessReplayOfAnOlderKeyNeverMovesTheLeaseBack(t *testing.T) {
 	// A successor coordinator: the earlier execution's older key is refused.
 	f.clock.advance(91 * time.Second)
 	c := f.groupGrant.Checkpoint
-	claim := api.GroupClaim{ExecutionID: "coordinator-b", ExpectedGeneration: f.groupGrant.Claim.Generation, Decision: "explicit coordinator handoff after lease loss", Request: board.CoordinatorClaim{GroupID: f.group, ExpectedRevision: c.Revision, ExpectedEpoch: c.Authority.Epoch, Owner: "codex", Token: "successor-session", Basis: "confirmed group fixture", Members: f.members}}
+	claim := api.GroupClaim{BranchMode: "main-develop", ExecutionID: "coordinator-b", ExpectedGeneration: f.groupGrant.Claim.Generation, Decision: "explicit coordinator handoff after lease loss", Request: board.CoordinatorClaim{GroupID: f.group, ExpectedRevision: c.Revision, ExpectedEpoch: c.Authority.Epoch, Owner: "codex", Token: "successor-session", Basis: "confirmed group fixture", Members: f.members}}
 	if _, err := f.p.ClaimGroup(ctx, "group-takeover", f.group, claim, nil); err != nil {
 		t.Fatal(err)
 	}

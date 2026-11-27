@@ -14,11 +14,11 @@ func TestReviewPlanUsesIndependentProofsAndStableProjectIdentity(t *testing.T) {
 	project := fixture.project("host-a")
 	first := todoTask(t, project, "review-first", "20261112-joint-group")
 	second := todoTask(t, project, "review-second", "20261112-joint-group")
-	one, err := project.Claim(t.Context(), "", first.TaskID, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-first", Owner: "codex"})
+	one, err := project.Claim(t.Context(), "", first.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "exec-first", Owner: "codex"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	two, err := project.Claim(t.Context(), "", second.TaskID, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-second", Owner: "codex"})
+	two, err := project.Claim(t.Context(), "", second.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "exec-second", Owner: "codex"})
 	if err != nil {
 		t.Fatal(err)
 	}

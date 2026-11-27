@@ -63,7 +63,7 @@ func publicationSessionsAt(t *testing.T) (*remote.Session, *remote.Session, []st
 		if err != nil {
 			t.Fatal(err)
 		}
-		grant, err := s.Project.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{ClientID: s.Client.ClientID(), ExecutionID: "execution-" + s.Client.ClientID(), Owner: "codex"})
+		grant, err := s.Project.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: s.Client.ClientID(), ExecutionID: "execution-" + s.Client.ClientID(), Owner: "codex"})
 		if err != nil {
 			t.Fatal(err)
 		}

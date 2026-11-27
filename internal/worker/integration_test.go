@@ -40,7 +40,7 @@ func (h *harness) integration() (*client.Project, remote.Credential) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	coordinator, err := p.ClaimGroup(t.Context(), "", group, api.GroupClaim{ExecutionID: "integration-coordinator", Request: board.CoordinatorClaim{GroupID: group, Owner: "coordinator", Token: "public-integration", Basis: "fixture", Members: []string{task.TaskID}}}, nil)
+	coordinator, err := p.ClaimGroup(t.Context(), "", group, api.GroupClaim{BranchMode: "main-develop", ExecutionID: "integration-coordinator", Request: board.CoordinatorClaim{GroupID: group, Owner: "coordinator", Token: "public-integration", Basis: "fixture", Members: []string{task.TaskID}}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

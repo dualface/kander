@@ -89,11 +89,22 @@ func requestDigest(operation string, request any) string {
 // receipt is kept per operation and receipt scope, so the same key in another
 // scope neither replays this receipt nor is refused by it.
 func (p *project) idempotent(scope receiptScope, operation string, request any, run func() outcome, applied func() (outcome, bool)) outcome {
-	return p.idempotentAt(scope.receipt(operation), scope, operation, request, run, applied)
+	return p.idempotentAt(scope.receipt(operation), scope, operation, request, nil, run, applied)
 }
 
-// idempotentAt is idempotent with the receipt kept at at.
-func (p *project) idempotentAt(at receiptAt, scope receiptScope, operation string, request any, run func() outcome, applied func() (outcome, bool)) outcome {
+// idempotentChecked is idempotent with a check that runs only when the
+// operation is about to run: after the receipt lookup, before a new pending
+// receipt is written or a pending one is run again. A replayed done receipt
+// and an applied pending one skip it. A refused check answers its error and
+// writes no receipt, so the caller may send the same key again once it fixed
+// what the check refused.
+func (p *project) idempotentChecked(scope receiptScope, operation string, request any, check func() error, run func() outcome, applied func() (outcome, bool)) outcome {
+	return p.idempotentAt(scope.receipt(operation), scope, operation, request, check, run, applied)
+}
+
+// idempotentAt is idempotent with the receipt kept at at and an optional check
+// (see idempotentChecked).
+func (p *project) idempotentAt(at receiptAt, scope receiptScope, operation string, request any, check func() error, run func() outcome, applied func() (outcome, bool)) outcome {
 	key := scope.key
 	if !api.ValidIdentity(key) {
 		return outcome{err: &api.Error{Code: api.CodeInvalidRequest, Message: "Idempotency-Key header is required and must be an identity"}}
@@ -147,7 +158,17 @@ func (p *project) idempotentAt(at receiptAt, scope receiptScope, operation strin
 		if out, ok := applied(); ok {
 			return p.finish(rel, r, out)
 		}
+		if check != nil {
+			if err := check(); err != nil {
+				return outcome{err: err}
+			}
+		}
 	} else {
+		if check != nil {
+			if err := check(); err != nil {
+				return outcome{err: err}
+			}
+		}
 		if at.slot {
 			// The slot may hold the receipt an earlier request staged in a board
 			// transaction that waits for recovery, which needs the slot as that

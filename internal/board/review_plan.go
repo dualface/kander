@@ -16,6 +16,10 @@ type ReviewPlanBatch struct {
 	Base            string            `json:"base"`
 	TargetCommit    string            `json:"target_commit"`
 	Requirements    map[string]string `json:"requirements"`
+	// RequirementDecisions names, per role, the decision record of a batch
+	// member that justifies marking N/A a role the project policy requires.
+	// The server checks it when the plan creates the batch.
+	RequirementDecisions map[string]string `json:"requirement_decisions,omitempty"`
 }
 
 // ReviewPlan freezes the execution cycle and every intended batch before closure.
@@ -47,6 +51,10 @@ type ReviewPlan struct {
 	// keeps plans without one byte-identical on re-encode.
 	ResolvedBatches []ReviewBatchResolution `json:"resolved_batches,omitempty"`
 	RecordedAt      string                  `json:"recorded_at"`
+	// PolicyRevision is the project policy revision of the request that
+	// creates the plan; the client fills it in. It is checked and never
+	// stored, so the plan record does not change with the policy.
+	PolicyRevision uint64 `json:"policy_revision,omitzero"`
 }
 
 func planName(id string) string     { return "plans/" + id + ".json" }
@@ -101,16 +109,19 @@ func planCycle(s Snapshot) string {
 	return ReviewDigest([]byte(identity))
 }
 func CreateReviewPlan(root string, p ReviewPlan) error {
-	return createReviewPlan(root, p, true)
+	return createReviewPlan(root, p, true, nil)
 }
 
 // CreateHistoricalReviewPlan records a plan using the read-compatible 2/4/6-key
 // requirement shapes. Production `kander review plan` uses CreateReviewPlan.
 func CreateHistoricalReviewPlan(root string, p ReviewPlan) error {
-	return createReviewPlan(root, p, false)
+	return createReviewPlan(root, p, false, nil)
 }
 
-func createReviewPlan(root string, p ReviewPlan, restrictNewShape bool, extensions ...TransactionExtension) error {
+// createReviewPlan records p; attest is recorded on each batch the plan
+// creates.
+func createReviewPlan(root string, p ReviewPlan, restrictNewShape bool, attest BatchAttestations, extensions ...TransactionExtension) error {
+	p.PolicyRevision = 0
 	if p.Schema != 1 || !ValidReviewID(p.PlanID) || strings.TrimSpace(p.Author) == "" || strings.TrimSpace(p.Basis) == "" || p.CWD == "" || len(p.Batches) == 0 {
 		return reviewError("review plan identity/provenance")
 	}
@@ -225,6 +236,7 @@ func createReviewPlan(root string, p ReviewPlan, restrictNewShape bool, extensio
 			}
 			if !exists {
 				existing = ReviewBatch{Schema: 1, BatchID: b.BatchID, TaskIDs: b.TaskIDs, Base: b.Base, TargetCommit: b.TargetCommit, Requirements: b.Requirements, ReportLanguage: p.ReportLanguage, Revision: 1}
+				attest.attest(&existing)
 			}
 			if existing.PlanID != "" {
 				return planIDConflict("batch already planned", t("board.review_plan_batch_planned", b.BatchID, existing.PlanID, strings.Join(existing.TaskIDs, ", ")))
@@ -401,6 +413,20 @@ func verifyPlanCopiesFor(tx *Transaction, p ReviewPlan, currentCycle bool) error
 	}
 	return nil
 }
+
+// LookupReviewBatch reads a batch record and reports whether it exists.
+func LookupReviewBatch(root, id string) (b ReviewBatch, found bool, err error) {
+	if !ValidReviewID(id) {
+		return b, false, reviewError("batch_id")
+	}
+	err = WithTransaction(root, reviewScope(nil, true), func(tx *Transaction) error {
+		var e error
+		found, e = readReviewJSON(tx, reviewBatchName(id), &b)
+		return e
+	})
+	return b, found, err
+}
+
 func ReadReviewBatch(root, id string) (b ReviewBatch, err error) {
 	if !ValidReviewID(id) {
 		return b, reviewError("batch_id")
@@ -500,8 +526,9 @@ func ReviewNeedsGit(b ReviewPlanBatch) bool {
 }
 
 // CreateReviewPlanWithTransaction binds service authority to plan publication.
-func CreateReviewPlanWithTransaction(root string, plan ReviewPlan, extensions ...TransactionExtension) error {
-	return createReviewPlan(root, plan, true, extensions...)
+// attest is recorded on each batch the plan creates.
+func CreateReviewPlanWithTransaction(root string, plan ReviewPlan, attest BatchAttestations, extensions ...TransactionExtension) error {
+	return createReviewPlan(root, plan, true, attest, extensions...)
 }
 
 // ReviewNoDelivery reports a batch with no delivery commit: one full SHA as both

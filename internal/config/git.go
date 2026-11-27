@@ -41,7 +41,17 @@ func validateGit(raw any) (Git, error) {
 // MainlineBranch names the branch that single cards and task group branches
 // integrate into under the configured branch mode.
 func MainlineBranch(cfg *Config) string {
-	if cfg != nil && cfg.Git.BranchMode == GitBranchModeMainOnly {
+	if cfg == nil {
+		return MainlineBranchFor("")
+	}
+	return MainlineBranchFor(cfg.Git.BranchMode)
+}
+
+// MainlineBranchFor names the mainline branch of one branch mode: main for
+// main-only, develop otherwise. A branch snapshot of a card or task group
+// names its mode; the configuration names the mode of a card without one.
+func MainlineBranchFor(mode string) string {
+	if mode == GitBranchModeMainOnly {
 		return "main"
 	}
 	return "develop"

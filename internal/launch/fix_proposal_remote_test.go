@@ -19,7 +19,7 @@ import (
 // and the corrected evidence sent again without a dispatch ID creates one.
 func TestRemoteNotifyRefusesWrongFixEvidenceAndAcceptsTheCorrection(t *testing.T) {
 	_, session, card, _, _ := remoteLifecycleFixture(t, "remote-fix-evidence")
-	grant, err := session.Project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{ClientID: session.Client.ClientID(), ExecutionID: "fix-evidence-holder", Owner: "claude", Start: &api.StartInput{Session: "claude fix evidence", Window: "tmux:$1:@1:%1"}})
+	grant, err := session.Project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{BranchMode: "main-develop", PolicyRevision: session.PolicyRevision(), ClientID: session.Client.ClientID(), ExecutionID: "fix-evidence-holder", Owner: "claude", Start: &api.StartInput{Session: "claude fix evidence", Window: "tmux:$1:@1:%1"}})
 	if err != nil {
 		t.Fatal(err)
 	}

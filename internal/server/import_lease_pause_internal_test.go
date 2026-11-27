@@ -45,7 +45,7 @@ func newPauseRig(t *testing.T) *pauseRig {
 		t.Fatal(err)
 	}
 	r.remote = c.Project(initial.Project.ID)
-	r.grant, err = r.remote.Takeover(t.Context(), "", r.task, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-a", Owner: "codex", Decision: "user:test"})
+	r.grant, err = r.remote.Takeover(t.Context(), "", r.task, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "exec-a", Owner: "codex", Decision: "user:test"})
 	if err != nil {
 		t.Fatal(err)
 	}

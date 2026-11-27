@@ -17,9 +17,10 @@ func (s *Session) AvailableTargets() []string {
 	return config.OptionsTargets(s.InstallMode)
 }
 
-// HasUnsaved reports whether either tab still has unpublished edits.
+// HasUnsaved reports whether either tab or the project policy still has
+// unpublished edits.
 func (s *Session) HasUnsaved() bool {
-	return s != nil && (s.ScopeDirty || s.OverlayDirty)
+	return s != nil && (s.ScopeDirty || s.OverlayDirty || s.PolicyDirty())
 }
 
 // FieldOverridden reports overlay key presence for the current edit buffer.
@@ -131,14 +132,14 @@ func (s *Session) SetTarget(target string) error {
 			s.scopeConfig = s.Config
 		}
 		s.Target = target
-		s.Config = merged
+		s.setConfig(merged)
 		return nil
 	}
 	if s.scopeConfig == nil {
 		s.scopeConfig = s.Config
 	}
 	s.Target = target
-	s.Config = s.scopeConfig
+	s.setConfig(s.scopeConfig)
 	return nil
 }
 
@@ -176,7 +177,7 @@ func (s *Session) rebuildOverlayConfig() error {
 		return err
 	}
 	s.overlayDraft = false
-	s.Config = merged
+	s.setConfig(merged)
 	return nil
 }
 
@@ -193,7 +194,7 @@ func (s *Session) applyOverlayEdit(mutate func(map[string]any)) error {
 	s.overlayRaw = candidate
 	s.OverlayDirty = true
 	s.overlayDraft = false
-	s.Config = merged
+	s.setConfig(merged)
 	return nil
 }
 
@@ -241,7 +242,7 @@ func (s *Session) noteOverride(path []string, value any) error {
 		// Model inputs may still reference a map replaced by a previous merge.
 		// Rebuild the visible draft from raw edits rather than that old map.
 		if draft, draftErr := s.previewOverlayDraft(s.overlayRaw); draftErr == nil {
-			s.Config = draft
+			s.setConfig(draft)
 		}
 	}
 	return err
@@ -316,7 +317,7 @@ func (s *Session) RestoreSection(section string) error {
 	s.overlayRaw = candidate
 	s.OverlayDirty = true
 	if s.EditingOverlay() {
-		s.Config = merged
+		s.setConfig(merged)
 	}
 	return nil
 }
@@ -379,7 +380,7 @@ func (s *Session) RestoreInherit(path ...string) error {
 	s.overlayRaw = candidate
 	s.OverlayDirty = true
 	if s.EditingOverlay() {
-		s.Config = merged
+		s.setConfig(merged)
 	}
 	return nil
 }
@@ -513,12 +514,12 @@ func (s *Session) pinKanbanAgentForField(field ModelField) {
 		return
 	}
 	if merged, err := config.MergeOverlayOnRaw(s.scopeRaw, s.overlayRaw); err == nil {
-		s.Config = merged
+		s.setConfig(merged)
 		s.overlayDraft = false
 		return
 	}
 	if draft, err := s.previewOverlayDraft(s.overlayRaw); err == nil {
-		s.Config = draft
+		s.setConfig(draft)
 		s.overlayDraft = true
 	}
 }
@@ -540,12 +541,12 @@ func (s *Session) pinChatAgent() {
 		return
 	}
 	if merged, err := config.MergeOverlayOnRaw(s.scopeRaw, s.overlayRaw); err == nil {
-		s.Config = merged
+		s.setConfig(merged)
 		s.overlayDraft = false
 		return
 	}
 	if draft, err := s.previewOverlayDraft(s.overlayRaw); err == nil {
-		s.Config = draft
+		s.setConfig(draft)
 		s.overlayDraft = true
 	}
 }
@@ -638,6 +639,11 @@ func (s *Session) saveScope() (string, error) {
 		cfg.Agents = config.CloneAgents(baseline.Agents)
 		config.ApplyAgentInstallRules(cfg, edited)
 	}
+	if s.PolicyBacked() {
+		// The buffer shows the project policy; the file keeps its own values.
+		s.scopeFileValues().ApplyTo(cfg)
+		defer s.showPolicy()
+	}
 	path, err := config.SaveIfUnchanged(cfg, baseline)
 	if err == nil {
 		s.existing = config.Clone(cfg)
@@ -654,7 +660,7 @@ func (s *Session) saveScope() (string, error) {
 		if s.EditingOverlay() {
 			_ = s.rebuildOverlayConfig()
 		} else {
-			s.Config = cfg
+			s.setConfig(cfg)
 		}
 		s.ScopeDirty = false
 	}

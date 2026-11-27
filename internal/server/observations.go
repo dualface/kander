@@ -31,7 +31,7 @@ func (s *Server) observationRoutes(mux *routeTable) {
 		// receipt per key: the agents of every execution send one each round.
 		presented, _ := holderOf(r).forTask(id)
 		slot := liveReceipt(operation, presented.token)
-		return p.idempotentAt(slot, scope, operation, input, func() outcome {
+		return p.idempotentAt(slot, scope, operation, input, nil, func() outcome {
 			var view api.ClaimView
 			err := p.boardTransaction(board.LockScope{Groups: []string{serviceGroup}, Tasks: []string{id}}, func(tx *board.Transaction) error {
 				claim, err := p.requireHolder(id, holderOf(r))

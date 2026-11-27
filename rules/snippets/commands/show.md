@@ -45,6 +45,7 @@ kander show --document plan.md 20261118-example-task
 - `kander show` prints the current state and absolute path before the card body.
 - With `--document`, `kander show` prints only the document text, byte for byte, without the state and path header. The text of `spec.md` equals the `text` of `kander show --json`.
 - With `--json`: one object. Without `--document`: `task_id`, `state`, `revision` (the card revision `kander update --expect-revision` expects), `operation_id`, `text` (the body), `observed_at` (RFC 3339), and, when present, `claim` (the claim view), `move_receipt`, and `delivery`.
+- `claim.branch_snapshot` (object, omitted when absent): the branch model the server fixed at the first claim, `{branch_mode, policy_revision, scope}`; `scope` is `task` for the card's own snapshot or `group` for its task group's. In distributed mode the card's mainline branch comes from it (`main` for `main-only`, `develop` otherwise), not from `kander config --json` (`snippets/git-integrate.md` "Integration Target"). A card or group claimed before snapshots existed has none.
 - With `--json` and `--document`: `path` (the requested relative path), `text`, `sha256` (the hex digest of `text`), and `expected_revision` (the card revision).
 
 ## Rejections

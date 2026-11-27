@@ -27,7 +27,7 @@ func historicalPlan(t *testing.T, root string, ids []string, requirements map[st
 func historicalPlanWithSeal(t *testing.T, root string, ids []string, requirements map[string]string, sealed bool) ReviewPlan {
 	t.Helper()
 	p := ReviewPlan{Schema: 1, Sealed: sealed, PlanID: "plan-" + ids[0], Author: "coordinator", Basis: "historical four-role fixture", CWD: "/repo", ReportLanguage: "en", TaskIDs: ids, Batches: []ReviewPlanBatch{{BatchID: "batch", TaskIDs: ids, Base: strings.Repeat("a", 40), TargetCommit: strings.Repeat("b", 40), Requirements: requirements}}}
-	if err := createReviewPlan(root, p, false); err != nil {
+	if err := createReviewPlan(root, p, false, nil); err != nil {
 		t.Fatal(err)
 	}
 	return p

@@ -89,7 +89,7 @@ func (g *redeliverGroup) takeOver(t *testing.T, i int) remote.Credential {
 	if _, err := session.Project.Execution(t.Context(), "", id, api.ExecutionUpdate{Action: api.ExecutionRelease, ExpectedRevision: state.Task.Revision, ObservationTicket: state.ObservationTicket, Decision: "the holder releases for an explicit takeover", Presence: &api.AgentObservation{Status: "stopped"}}, own); err != nil {
 		t.Fatal(err)
 	}
-	successor, err := g.f.b.Project.Takeover(t.Context(), "", id, api.ClaimRequest{ClientID: "host-b", ExecutionID: "redeliver-successor", Owner: "codex", Decision: "explicit takeover after the group integration", ExpectedGeneration: g.owners[i].Generation})
+	successor, err := g.f.b.Project.Takeover(t.Context(), "", id, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "redeliver-successor", Owner: "codex", Decision: "explicit takeover after the group integration", ExpectedGeneration: g.owners[i].Generation})
 	if err != nil {
 		t.Fatal(err)
 	}

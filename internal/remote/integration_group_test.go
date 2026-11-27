@@ -51,7 +51,7 @@ func integrationGroupCardsOf(t *testing.T, f *integrationFixture, group string, 
 		if i >= 2 {
 			execution += "-" + strconv.Itoa(i)
 		}
-		grant, err := s.Project.Claim(t.Context(), "", ids[i], api.ClaimRequest{ClientID: s.Client.ClientID(), ExecutionID: execution, Owner: "codex"})
+		grant, err := s.Project.Claim(t.Context(), "", ids[i], api.ClaimRequest{BranchMode: "main-develop", ClientID: s.Client.ClientID(), ExecutionID: execution, Owner: "codex"})
 		if err != nil {
 			t.Fatal(err)
 		}

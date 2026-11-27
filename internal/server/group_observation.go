@@ -15,7 +15,7 @@ func (p *project) updateGroupLease(at receiptAt, scope receiptScope, group, oper
 		return outcome{err: err}
 	}
 	defer p.unlockBoard()
-	return p.idempotentAt(at, scope, operation, input, func() outcome {
+	return p.idempotentAt(at, scope, operation, input, nil, func() outcome {
 		var view api.ClaimView
 		err := p.boardTransaction(board.LockScope{Groups: []string{serviceGroup}}, func(tx *board.Transaction) error {
 			c, err := p.groupLease(group, h)

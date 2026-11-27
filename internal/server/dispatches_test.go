@@ -69,7 +69,7 @@ func TestDispatchServiceKeepsOwnershipAndBusinessEpochAsSeparateFences(t *testin
 	f := newFixture(t)
 	a, b := f.project("host-a"), f.project("host-b")
 	task := todoTask(t, a, "remote-dispatch")
-	grant, err := a.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{ClientID: "host-a", ExecutionID: "dispatch-execution", Owner: "codex", Start: &api.StartInput{Session: "codex dispatch-session", Window: "tmux:$1:@1:%1"}})
+	grant, err := a.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "dispatch-execution", Owner: "codex", Start: &api.StartInput{Session: "codex dispatch-session", Window: "tmux:$1:@1:%1"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestDispatchServiceKeepsOwnershipAndBusinessEpochAsSeparateFences(t *testin
 		t.Fatal("prepare retry did not return its original transaction result")
 	}
 	f.clock.advance(91 * time.Second)
-	successor, err := b.Takeover(t.Context(), "", task.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "dispatch-successor", Owner: "codex", Decision: "explicit takeover fixture", ExpectedGeneration: grant.Claim.Generation, Dispatch: &board.DispatchTakeover{Authorization: completed.Authorization, Revision: completed.Revision, Mode: "settle-completed"}})
+	successor, err := b.Takeover(t.Context(), "", task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "dispatch-successor", Owner: "codex", Decision: "explicit takeover fixture", ExpectedGeneration: grant.Claim.Generation, Dispatch: &board.DispatchTakeover{Authorization: completed.Authorization, Revision: completed.Revision, Mode: "settle-completed"}})
 	if err != nil {
 		t.Fatal(err)
 	}

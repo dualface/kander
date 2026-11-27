@@ -18,7 +18,7 @@ func TestReviewPlanBatchIDConflictNamesItsHolder(t *testing.T) {
 	first := todoTask(t, project, "plan-conflict-first")
 	second := todoTask(t, project, "plan-conflict-second")
 	grant := func(id, execution string) client.Claim {
-		g, err := project.Claim(t.Context(), "", id, api.ClaimRequest{ClientID: "host-a", ExecutionID: execution, Owner: "codex"})
+		g, err := project.Claim(t.Context(), "", id, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: execution, Owner: "codex"})
 		if err != nil {
 			t.Fatal(err)
 		}

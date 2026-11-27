@@ -86,7 +86,7 @@ func TestDeliveryCrossesIndependentClonesAndMissingRemoteBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	grant, err := sa.Project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{ClientID: "host-a", ExecutionID: "clone-execution", Owner: "codex"})
+	grant, err := sa.Project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "clone-execution", Owner: "codex"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestDeliveryCrossesIndependentClonesAndMissingRemoteBlocks(t *testing.T) {
 	if _, err := sa.Project.Execution(t.Context(), "release-source", card.TaskID, api.ExecutionUpdate{Action: api.ExecutionRelease, ExpectedRevision: state.Task.Revision, ObservationTicket: state.ObservationTicket, Decision: "source holder releases for explicit clone takeover", Presence: &api.AgentObservation{Status: "stopped"}}, *credential.Claim()); err != nil {
 		t.Fatal(err)
 	}
-	successor, err := sb.Project.Takeover(t.Context(), "takeover-new-clone", card.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "clone-successor", Owner: "codex", Decision: "explicit takeover in second independent clone", ExpectedGeneration: credential.Generation})
+	successor, err := sb.Project.Takeover(t.Context(), "takeover-new-clone", card.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "clone-successor", Owner: "codex", Decision: "explicit takeover in second independent clone", ExpectedGeneration: credential.Generation})
 	if err != nil {
 		t.Fatal(err)
 	}

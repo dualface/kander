@@ -42,6 +42,9 @@ kander gc [--dry-run] [--yes] [--older-than D] [--all-projects] [--client-only]
 kander terminal list
 kander terminal test <name> [--keep] [--skip-focus]
 kander init [--server <URL>] [--project <name>] [project-path]
+kander policy show
+kander policy init [--yes]
+kander policy set <key> <value>
 kander list [--agent-status] [backlog|todo|working|review|done|archived|trash]
 kander show [--document <relative-path>] <task-id>
 kander new [--large] [--language <agent language>] <feature|bug|chore|research> <slug> <title...>
@@ -74,7 +77,7 @@ kander coordinator claim <absolute-claim.json>
 kander coordinator reconcile <absolute-observations.json>
 kander coordinator recover <absolute-request.json>
 kander coordinator remove-member <absolute-request.json>
-kander review [agent] [--task <id>]... [--run-id <id>] [--batch-id <id>] [--previous-run-id <id>] [--requirements-file <JSON>] [--advance-file <JSON>] <CWD> <base-commit> <commit> <role> <task-goal|absolute-spec-path> [review-context] [reviewed-commit]
+kander review [agent] [--task <id>]... [--run-id <id>] [--batch-id <id>] [--previous-run-id <id>] [--requirements-file <JSON>] [--requirement-decision <ROLE>=<decision-id>]... [--advance-file <JSON>] <CWD> <base-commit> <commit> <role> <task-goal|absolute-spec-path> [review-context] [reviewed-commit]
 kander review plan <absolute-CWD> <absolute-plan.json>
 kander review extend-plan <absolute-CWD> <absolute-extension.json>
 kander review assign <absolute-CWD> <absolute-assignment.json>

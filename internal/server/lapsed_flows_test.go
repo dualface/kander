@@ -46,7 +46,7 @@ func TestReviewRuntimeInputTakesTheSuccessorGeneration(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.clock.advance(91 * time.Second)
-	next, err := b.Takeover(t.Context(), "", task.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "successor", Owner: "codex", ExpectedGeneration: grant.Claim.Generation, Decision: "explicit test takeover"})
+	next, err := b.Takeover(t.Context(), "", task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "successor", Owner: "codex", ExpectedGeneration: grant.Claim.Generation, Decision: "explicit test takeover"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestRequestForTakenOverGenerationIsRefused(t *testing.T) {
 	a, b := f.project("host-a"), f.project("host-b")
 	grant, _ := lapsedTask(t, f, a, "request-taken-over")
 	id := grant.Task.TaskID
-	if _, err := b.Takeover(t.Context(), "", id, api.ClaimRequest{ClientID: "host-b", ExecutionID: "successor", Owner: "codex", Decision: "user:takeover", ExpectedGeneration: grant.Claim.Generation}); err != nil {
+	if _, err := b.Takeover(t.Context(), "", id, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "successor", Owner: "codex", Decision: "user:takeover", ExpectedGeneration: grant.Claim.Generation}); err != nil {
 		t.Fatal(err)
 	}
 	_, err := b.CreateRequest(t.Context(), "", id, api.NewCollabRequest{Kind: api.RequestFix, Message: "fix", TargetGeneration: grant.Claim.Generation})
@@ -149,7 +149,7 @@ func TestIntegrationContributorStanding(t *testing.T) {
 
 	s := newIntegrationRig(t, "contributor-taken-over")
 	s.f.clock.advance(91 * time.Second)
-	next, err := s.b.Takeover(ctx, "", s.member.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "contributor-successor", Owner: "codex", Decision: "user:takeover", ExpectedGeneration: s.task.Claim.Generation})
+	next, err := s.b.Takeover(ctx, "", s.member.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "contributor-successor", Owner: "codex", Decision: "user:takeover", ExpectedGeneration: s.task.Claim.Generation})
 	if err != nil {
 		t.Fatal(err)
 	}

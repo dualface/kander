@@ -361,7 +361,7 @@ func TestServerGCExpiresReceipts(t *testing.T) {
 	ctx := t.Context()
 	// A: claimed, observed, then archived. C: claimed and observed, still working. B: open in todo.
 	a := gcTodoTask(t, p, "alpha", "20261101-closed-group")
-	grantA, err := p.Claim(ctx, "", a.TaskID, api.ClaimRequest{ClientID: "gc-host", ExecutionID: "exec-a", Owner: "claude"})
+	grantA, err := p.Claim(ctx, "", a.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "gc-host", ExecutionID: "exec-a", Owner: "claude"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -375,7 +375,7 @@ func TestServerGCExpiresReceipts(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := gcTodoTask(t, p, "gamma", "")
-	grantC, err := p.Claim(ctx, "", c.TaskID, api.ClaimRequest{ClientID: "gc-host", ExecutionID: "exec-c", Owner: "claude"})
+	grantC, err := p.Claim(ctx, "", c.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "gc-host", ExecutionID: "exec-c", Owner: "claude"})
 	if err != nil {
 		t.Fatal(err)
 	}

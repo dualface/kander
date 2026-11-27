@@ -51,7 +51,7 @@ func TestTakeoverSupersedesRequestsInTheClaimTransaction(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.clock.advance(90 * time.Second)
-	if _, err := b.Takeover(t.Context(), "", task.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "successor", Owner: "codex", Decision: "test explicit handoff", ExpectedGeneration: grant.Claim.Generation}); err != nil {
+	if _, err := b.Takeover(t.Context(), "", task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "successor", Owner: "codex", Decision: "test explicit handoff", ExpectedGeneration: grant.Claim.Generation}); err != nil {
 		t.Fatal(err)
 	}
 	requests, err := b.Requests(t.Context(), task.TaskID)

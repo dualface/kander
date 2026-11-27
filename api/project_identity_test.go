@@ -59,3 +59,13 @@ func TestProjectDirNameCutsTheReadablePrefix(t *testing.T) {
 		t.Fatalf("ProjectDirName(%q) = %q", name, dir)
 	}
 }
+
+// internal/config derives the project ID of its policy cache key itself; it
+// must equal the ID the server assigns.
+func TestProjectIDMatchesConfig(t *testing.T) {
+	for _, name := range acceptedProjectNames {
+		if ProjectID(name) != config.ProjectIDForName(name) {
+			t.Errorf("api and config derive different IDs for %q", name)
+		}
+	}
+}

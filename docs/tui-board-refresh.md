@@ -53,3 +53,14 @@ A change or cursor reset queues the existing asynchronous snapshot reader. Polli
 A failed event endpoint backs off for two seconds, even when list reads still succeed. An offline cached snapshot remains explicitly stale and triggers bounded snapshot retries rather than polling its old cursor. Periodic refresh remains a fallback for service-clock lease expiry and read recovery.
 
 Quit cancels the UI's event, board, detail and observation requests. It does not cancel the independent worker. HTTP tests verify that the same generation continues renewing after UI shutdown without changing the card revision.
+
+## Project policy refresh
+
+The TUI keeps the [project policy](project-policy.md#propagation) of its process current with one more scheduler beside the event poll, the board and detail reads, and pending terminal work: one policy request at a time, with a 15-second budget, a write before a read, and none blocks `Update`.
+
+- An event page asks for a read when it is a reset, when it carries a `project_policy_changed` event above the revision the process knows, or when its own `policy_epoch`/`policy_revision` is newer than that. A repeated or late event at or below the known revision asks for nothing. The page version covers an event the poll skipped when it continued from the cursor of a later board snapshot.
+- A read uses the policy refresh function: it writes the policy cache and the configuration of the process (the remote session and the policy `config.Load` uses in the process). A failed read shows a board notice and keeps the previous values; the next event or reset reads again. A failed cache write is a notice too, and the next event page reads again whatever its version, so the cache catches up.
+- An Options session takes the policy the process knows when the session is installed, not when its load started.
+- An open Options panel shows the new values at once when it has no unsaved policy edits: the open page is rebuilt with its focus kept, and an open workflow chart is drawn again. With unsaved policy edits the panel keeps them and the revision they started from, and shows that the policy changed on the server.
+- Saving Options queues the policy write of its session; the write is built when it starts, from the edits and the revision they started from at that moment, so a second save waits for the first answer. The answer applies only to the session that sent it, and an edit made while it ran stays unsaved; the host values of the same save are written to the files as before, and each part reports its own result. `policy_revision_conflict` queues a read that drops the policy edits and shows the server values.
+- Quit cancels the policy request.

@@ -109,7 +109,7 @@ func newCoordinatedRunKeeping(t *testing.T, members, planned int, keepLive bool)
 		t.Fatal(err)
 	}
 	for _, id := range r.ids {
-		grant, err := r.holder.Project.Claim(t.Context(), "", id, api.ClaimRequest{ClientID: a.ClientID(), ExecutionID: "execution-" + id, Owner: "codex"})
+		grant, err := r.holder.Project.Claim(t.Context(), "", id, api.ClaimRequest{BranchMode: "main-develop", ClientID: a.ClientID(), ExecutionID: "execution-" + id, Owner: "codex"})
 		if err != nil {
 			t.Fatal(err)
 		}

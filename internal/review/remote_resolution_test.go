@@ -73,7 +73,7 @@ func TestRemoteHistoricalResolutionVerifiesGitAndBindsOriginals(t *testing.T) {
 	if err != nil || string(sourceReport) != string(originalReport) {
 		t.Fatalf("migration changed local backup: %v", err)
 	}
-	grant, err := project.Takeover(t.Context(), "historical-takeover", w.id, api.ClaimRequest{ClientID: "fixture-host", ExecutionID: "historical-executor", Owner: "codex", Decision: "explicit recovery of historical storage"})
+	grant, err := project.Takeover(t.Context(), "historical-takeover", w.id, api.ClaimRequest{BranchMode: "main-develop", ClientID: "fixture-host", ExecutionID: "historical-executor", Owner: "codex", Decision: "explicit recovery of historical storage"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,12 +96,12 @@ func TestRemoteHistoricalResolutionVerifiesGitAndBindsOriginals(t *testing.T) {
 	if err := session.SaveCredential(remote.Credential{ServerURL: session.ServerURL, ClientID: "fixture-host", ProjectID: info.ID, TaskID: w.id, ExecutionID: grant.Claim.ExecutionID, Generation: grant.Claim.Generation, Token: grant.Token}); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := config.Load(false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg.Server.URL, cfg.Project.Name = httpServer.URL, info.Name
-	if _, err := config.Save(cfg); err != nil {
+	// A loaded configuration may carry overlay or policy values; the scope file changes
+	// through Update.
+	if _, err := config.Update(func(cfg *config.Config) error {
+		cfg.Server.URL, cfg.Project.Name = httpServer.URL, info.Name
+		return nil
+	}); err != nil {
 		t.Fatal(err)
 	}
 	forbidden := filepath.Join(t.TempDir(), "forbidden-board")

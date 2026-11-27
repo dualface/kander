@@ -24,6 +24,16 @@ type ReviewProgress struct {
 	BatchID         string                  `json:"batch_id,omitempty"`
 	NextActions     []ReviewNextAction      `json:"next_actions,omitempty"`
 	ResolvedBatches []ReviewBatchResolution `json:"resolved_batches,omitempty"`
+	// BatchPolicies maps each planned batch the server checked against the
+	// project policy to what it recorded then; batches without a record are
+	// left out, and so is the field when none has one.
+	BatchPolicies map[string]ReviewBatchPolicy `json:"batch_policies,omitempty"`
+}
+
+// ReviewBatchPolicy is the policy record of one batch in review progress.
+type ReviewBatchPolicy struct {
+	PolicyRevision       uint64            `json:"policy_revision,omitzero"`
+	RequirementDecisions map[string]string `json:"requirement_decisions,omitempty"`
 }
 
 func reviewGateScope(root, id string, exclusive bool, warnings ...*WarningLog) (LockScope, error) {
@@ -191,6 +201,12 @@ func validateTaskReviewMode(tx *Transaction, id string, completion, importHistor
 		}
 		if !ok {
 			return progress, reviewError("planned batch missing")
+		}
+		if b.PolicyRevision != 0 || len(b.RequirementDecisions) > 0 {
+			if progress.BatchPolicies == nil {
+				progress.BatchPolicies = map[string]ReviewBatchPolicy{}
+			}
+			progress.BatchPolicies[b.BatchID] = ReviewBatchPolicy{PolicyRevision: b.PolicyRevision, RequirementDecisions: b.RequirementDecisions}
 		}
 		if pb.TargetCommit != b.TargetCommit {
 			progress.PlanTarget = pb.TargetCommit

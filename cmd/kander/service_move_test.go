@@ -69,7 +69,12 @@ func closeNonGitFixturePlan(t *testing.T, session *remote.Session, task api.Task
 	if err != nil || !found {
 		t.Fatalf("credential: %v", err)
 	}
-	plan := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: "move-notice-plan", Author: "codex", Basis: "isolated non-Git CLI fixture", CWD: "project:" + session.Info.ID, ReportLanguage: "en", TaskIDs: []string{task.TaskID}, Batches: []board.ReviewPlanBatch{{BatchID: "move-notice-batch", TaskIDs: []string{task.TaskID}, Base: "N/A", TargetCommit: "N/A", Requirements: map[string]string{"PMQA": "N/A: isolated fixture", "Security": "N/A: isolated fixture"}}}}
+	// The plan creates a batch, so it carries the current policy revision.
+	policy, err := session.Project.Policy(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: "move-notice-plan", Author: "codex", Basis: "isolated non-Git CLI fixture", CWD: "project:" + session.Info.ID, ReportLanguage: "en", PolicyRevision: policy.Revision, TaskIDs: []string{task.TaskID}, Batches: []board.ReviewPlanBatch{{BatchID: "move-notice-batch", TaskIDs: []string{task.TaskID}, Base: "N/A", TargetCommit: "N/A", Requirements: map[string]string{"PMQA": "N/A: isolated fixture", "Security": "N/A: isolated fixture"}}}}
 	if _, err := session.Project.ReviewPlan(t.Context(), "", plan, credential.Claim()); err != nil {
 		t.Fatal(err)
 	}

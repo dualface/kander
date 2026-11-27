@@ -54,7 +54,7 @@ func newScopeFixture(t *testing.T, hooks Hooks) *scopeFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	grant, err := holder.Claim(t.Context(), "", task, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-a", Owner: "claude"})
+	grant, err := holder.Claim(t.Context(), "", task, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "exec-a", Owner: "claude"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,7 +360,7 @@ func TestReceiptScopeKeepsTheReleaseRecordOfAnEarlierGeneration(t *testing.T) {
 		_, err = p.Execution(t.Context(), "shared-release", id, api.ExecutionUpdate{Action: api.ExecutionRelease, ExpectedRevision: state.Task.Revision, ObservationTicket: state.ObservationTicket, Decision: "test release", Presence: &api.AgentObservation{Status: "stopped"}}, proof)
 		return err
 	}
-	first, err := p.Claim(t.Context(), "", id, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-a", Owner: "claude"})
+	first, err := p.Claim(t.Context(), "", id, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "exec-a", Owner: "claude"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -372,7 +372,7 @@ func TestReceiptScopeKeepsTheReleaseRecordOfAnEarlierGeneration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := p.Takeover(t.Context(), "", id, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-b", Owner: "claude", Decision: "test takeover", ExpectedGeneration: first.Claim.Generation})
+	second, err := p.Takeover(t.Context(), "", id, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "exec-b", Owner: "claude", Decision: "test takeover", ExpectedGeneration: first.Claim.Generation})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -33,7 +33,7 @@ import (
 const (
 	EnvExecutionID            = process.EnvExecutionID
 	EnvCoordinatorExecutionID = process.EnvCoordinatorExecutionID
-	EnvClientHome             = "KANDER_CLIENT_HOME"
+	EnvClientHome             = config.EnvClientHome
 )
 
 // ErrNotConfigured reports a client without project.name.
@@ -62,22 +62,15 @@ type Session struct {
 	Info            api.Project
 	Home            string
 	WorkerStarter   func(string) error
+	// config is the configuration Open applied the project policy to. A
+	// refresh after a stale policy revision applies the new policy to it, so
+	// the rest of the command works with the server's values. nil for a
+	// session built without a configuration.
+	config *config.Config
 }
 
 // Home returns the private client directory of this user.
-func Home() (string, error) {
-	if dir := os.Getenv(EnvClientHome); dir != "" {
-		if !filepath.IsAbs(dir) {
-			return "", errors.New(EnvClientHome + " must be an absolute path")
-		}
-		return dir, nil
-	}
-	paths, err := config.GlobalInstallPaths()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(paths.ShareDir, "client"), nil
-}
+func Home() (string, error) { return config.ClientHome() }
 
 func ensureHome(home string) error {
 	if err := os.MkdirAll(filepath.Dir(home), 0o700); err != nil {
@@ -178,8 +171,22 @@ func ProjectDir(dir string) string {
 	return dir
 }
 
-// Open resolves the project of cfg and checks protocol compatibility.
+// OpenOptions adjusts OpenWith.
+type OpenOptions struct {
+	// QuietPolicy keeps the remarks about the project policy back, for a
+	// command that reports the policy itself.
+	QuietPolicy bool
+}
+
+// Open resolves the project of cfg and checks protocol compatibility. The
+// project policy the registration answers is written to the policy cache and
+// applied to cfg, so the rest of the command uses the server's values.
 func Open(ctx context.Context, cfg *config.Config, dir string) (*Session, error) {
+	return OpenWith(ctx, cfg, dir, OpenOptions{})
+}
+
+// OpenWith is Open with options.
+func OpenWith(ctx context.Context, cfg *config.Config, dir string, options OpenOptions) (*Session, error) {
 	if cfg == nil || cfg.Project.Name == "" {
 		return nil, ErrNotConfigured
 	}
@@ -222,11 +229,19 @@ func Open(ctx context.Context, cfg *config.Config, dir string) (*Session, error)
 	if err != nil {
 		return nil, err
 	}
-	info, err := c.Register(ctx, cfg.Project.Name, repository)
+	// The registration answers the project policy, so it runs as the request of the policy
+	// refresh, under the lock of the project's policy cache; no separate policy request is sent.
+	var info api.Project
+	cacheErr, err := RefreshPolicy(ctx, home, config.ServerURL(cfg), config.ProjectIDForName(cfg.Project.Name), func() (*api.ProjectPolicy, error) {
+		var err error
+		info, err = c.Register(ctx, cfg.Project.Name, repository)
+		return info.Policy, err
+	})
 	if err != nil {
 		return nil, err
 	}
-	return &Session{afterQuestion: prompted, operationBudget: operationBudget, ServerURL: config.ServerURL(cfg), Client: c, Project: c.Project(info.ID), Info: info, Home: home}, nil
+	applySessionPolicy(cfg, info, cacheErr, options.QuietPolicy)
+	return &Session{afterQuestion: prompted, operationBudget: operationBudget, ServerURL: config.ServerURL(cfg), Client: c, Project: c.Project(info.ID), Info: info, Home: home, config: cfg}, nil
 }
 
 // Credential is one execution's claim on this host. The worker renews it

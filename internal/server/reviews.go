@@ -39,6 +39,13 @@ func (p *project) requireHolders(tasks []string, h holder) error {
 }
 
 func (p *project) reviewWrite(scope receiptScope, operation string, request any, tasks func() ([]string, error), h holder, apply func(board.TransactionExtension) (any, error)) outcome {
+	return p.reviewWriteChecked(scope, operation, request, tasks, h, nil, apply)
+}
+
+// reviewWriteChecked is reviewWrite with a check that runs under the project
+// lock before the write would run (see idempotentChecked): a refusal writes
+// nothing, not even a receipt.
+func (p *project) reviewWriteChecked(scope receiptScope, operation string, request any, tasks func() ([]string, error), h holder, check func() error, apply func(board.TransactionExtension) (any, error)) outcome {
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
@@ -191,7 +198,7 @@ func (p *project) reviewWrite(scope receiptScope, operation string, request any,
 	// Review publications are content-addressed by the board (plan and batch
 	// IDs, view hashes); a replay of an applied one is refused by the board as
 	// a duplicate, so the receipt is the only replay path.
-	return p.idempotent(scope, operation, request, run, func() (outcome, bool) { return outcome{}, false })
+	return p.idempotentChecked(scope, operation, request, check, run, func() (outcome, bool) { return outcome{}, false })
 }
 
 func (p *project) batchTasks(id string) func() ([]string, error) {
@@ -209,10 +216,21 @@ func (s *Server) reviewRoutes(mux *routeTable) {
 			return outcome{err: err}
 		}
 		plan.CWD = "project:" + p.info.ID
-		return p.reviewWrite(scopeOf(r), "review-plan", plan,
-			func() ([]string, error) { return plan.TaskIDs, nil }, holderOf(r),
+		// The policy revision is checked, never part of the request identity.
+		revision := plan.PolicyRevision
+		plan.PolicyRevision = 0
+		var attest board.BatchAttestations
+		check := func() error {
+			created, err := p.planNewBatches(plan.Batches)
+			if err == nil {
+				attest, err = p.checkNewReviewBatches(revision, created)
+			}
+			return err
+		}
+		return p.reviewWriteChecked(scopeOf(r), "review-plan", plan,
+			func() ([]string, error) { return plan.TaskIDs, nil }, holderOf(r), check,
 			func(extension board.TransactionExtension) (any, error) {
-				return map[string]string{"plan_id": plan.PlanID}, board.CreateReviewPlanWithTransaction(p.board, plan, extension)
+				return map[string]string{"plan_id": plan.PlanID}, board.CreateReviewPlanWithTransaction(p.board, plan, attest, extension)
 			})
 	})
 	s.projectRoute(mux, "POST "+base+"/batches/{batch}/aggregate", func(p *project, r *http.Request) outcome {

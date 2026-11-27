@@ -50,6 +50,18 @@ type project struct {
 	indexFull       bool
 	indexWake       chan struct{} // Non-nil while a rebuild worker owns retries.
 	indexRebuilding atomic.Bool
+	// policy is the current project policy (see policy.go). Writes replace it
+	// under mu after the file is written; reads load it without a lock.
+	policy atomic.Pointer[api.ProjectPolicy]
+	// policyBroken is guarded by mu. It is set when a policy write could
+	// neither take effect nor void its audit line; policy writes then wait
+	// for the startup recovery of a restart.
+	policyBroken bool
+	// policyFaultHook interrupts a policy write at a named stage in tests.
+	policyFaultHook func(stage string)
+	// policyAppendFault fails an audit append after its line was written, as a
+	// failed sync would, in tests.
+	policyAppendFault func() error
 }
 
 func (p *project) log() *slog.Logger { return p.server.log.With("project", p.info.ID) }
@@ -74,6 +86,12 @@ func (p *project) lockBoard() error {
 func (p *project) open() error {
 	if err := ensureDir(p.root, "control"); err != nil {
 		return err
+	}
+	// Offline maintenance neither reads nor writes the project policy.
+	if p.server.maintenance == nil {
+		if err := p.openPolicy(); err != nil {
+			return err
+		}
 	}
 	if err := p.recoverImport(); err != nil {
 		return err
@@ -172,7 +190,7 @@ func (p *project) show(id string) (api.Task, error) {
 		return api.Task{}, err
 	}
 	if found && r.Status != claimPending {
-		t.Claim = r.view(p.server.now())
+		t.Claim = p.claimView(r, s.Text)
 	}
 	return t, nil
 }
@@ -434,7 +452,7 @@ func (p *project) grant(r claimRecord) (api.ClaimGrant, error) {
 		return api.ClaimGrant{}, err
 	}
 	return api.ClaimGrant{
-		Claim: *r.view(p.server.now()), Token: p.server.token(p.info.ID, r.TaskID, r.ExecutionID, r.Generation), Task: t,
+		Claim: *p.claimView(r, t.Text), Token: p.server.token(p.info.ID, r.TaskID, r.ExecutionID, r.Generation), Task: t,
 		RenewInterval: api.DurationOf(p.server.renew), TTL: api.DurationOf(p.server.ttl),
 	}, nil
 }
@@ -472,10 +490,15 @@ func (p *project) claim(scope receiptScope, id string, req api.ClaimRequest) out
 	if err := validClaimRequest(req); err != nil {
 		return outcome{err: err}
 	}
+	// The policy context is checked, never part of the claim identity: a
+	// resend of the same key after a policy refresh is the same claim.
+	revision, branchMode := req.PolicyRevision, req.BranchMode
+	req.PolicyRevision, req.BranchMode = 0, ""
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
 	defer p.unlockBoard()
+	check := func() error { return p.checkSnapshotClaim(p.taskClaimCreatesSnapshot(id), revision, branchMode) }
 	run := func() outcome {
 		view, err := board.LoadBoard(p.board)
 		if err != nil {
@@ -503,7 +526,19 @@ func (p *project) claim(scope receiptScope, id string, req api.ClaimRequest) out
 
 		r := claimRecord{TaskID: entry.TaskID, ClientID: req.ClientID, ExecutionID: req.ExecutionID, Owner: req.Owner, Generation: 1, Status: claimPending}
 		if found {
-			r.Generation, r.Handoffs = previous.Generation+1, previous.Handoffs
+			r.Generation, r.Handoffs, r.BranchSnapshot = previous.Generation+1, previous.Handoffs, previous.BranchSnapshot
+		} else {
+			// The first claim of a card outside a task group fixes its branch
+			// model; a member delivers under the snapshot of its group.
+			text, err := view.Document(entry.TaskID)
+			if err != nil {
+				return outcome{err: err}
+			}
+			if board.TaskGroupFrom(text) == "" {
+				if r.BranchSnapshot, err = p.newBranchSnapshot(api.BranchSnapshotTask, branchMode); err != nil {
+					return outcome{err: err}
+				}
+			}
 		}
 		r.TokenHash = tokenHash(p.server.token(p.info.ID, r.TaskID, r.ExecutionID, r.Generation))
 		if req.Start != nil {
@@ -551,7 +586,7 @@ func (p *project) claim(scope receiptScope, id string, req api.ClaimRequest) out
 		}
 		return p.activate(r), true
 	}
-	return p.withToken(p.idempotent(scope, "claim:"+id, req, run, applied))
+	return p.withToken(p.idempotentChecked(scope, "claim:"+id, req, check, run, applied))
 }
 
 func (p *project) activate(r claimRecord) outcome {
@@ -598,7 +633,7 @@ func (p *project) renew(id string, h holder) (api.Renewal, error) {
 	if err != nil {
 		return api.Renewal{}, err
 	}
-	return api.Renewal{Claim: *r.view(p.server.now())}, nil
+	return p.policyRenewal(api.Renewal{Claim: *r.view(p.server.now())}), nil
 }
 
 // takeover hands a lost claim to a new execution with the next generation.
@@ -612,6 +647,12 @@ func (p *project) takeover(scope receiptScope, id string, req api.ClaimRequest, 
 	if strings.TrimSpace(req.Decision) == "" {
 		return outcome{err: apiError(api.CodeInvalidRequest, "a takeover needs a decision reference")}
 	}
+	// A takeover keeps the branch snapshot the card has and creates none, so
+	// it depends on no policy: the policy context is only validated.
+	if err := validReportedBranchMode(req.BranchMode); err != nil {
+		return outcome{err: err}
+	}
+	req.PolicyRevision, req.BranchMode = 0, ""
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
@@ -684,6 +725,7 @@ func (p *project) takeover(scope receiptScope, id string, req api.ClaimRequest, 
 		r := claimRecord{
 			TaskID: t.TaskID, ClientID: req.ClientID, ExecutionID: req.ExecutionID, Owner: req.Owner,
 			Generation: previous.Generation + 1, Status: api.ClaimActive, RenewedAt: now, ExpiresAt: now.Add(p.server.ttl),
+			BranchSnapshot: previous.BranchSnapshot,
 			Handoffs: append(previous.Handoffs, api.Handoff{
 				At: now, FromGeneration: previous.Generation, ToGeneration: previous.Generation + 1,
 				FromClient: previous.ClientID, ToClient: req.ClientID, Owner: req.Owner, Decision: req.Decision,

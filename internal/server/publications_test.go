@@ -24,11 +24,11 @@ func prepareJointReview(t *testing.T) jointReview {
 	a, b := fixture.project("host-a"), fixture.project("host-b")
 	first := todoTask(t, a, "joint-one", "20261112-joint-group")
 	second := todoTask(t, b, "joint-two", "20261112-joint-group")
-	one, err := a.Claim(t.Context(), "", first.TaskID, api.ClaimRequest{ClientID: "host-a", ExecutionID: "first-execution", Owner: "codex"})
+	one, err := a.Claim(t.Context(), "", first.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "first-execution", Owner: "codex"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	two, err := b.Claim(t.Context(), "", second.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "second-execution", Owner: "codex"})
+	two, err := b.Claim(t.Context(), "", second.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "second-execution", Owner: "codex"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestJointReviewRejectsChangedVersionsAndExecutions(t *testing.T) {
 				}
 				joint.fixture.clock.advance(46 * time.Second)
 				successor := joint.fixture.project("host-c")
-				if _, err := successor.Takeover(t.Context(), "", secondID, api.ClaimRequest{ClientID: "host-c", ExecutionID: "successor", Owner: "codex", ExpectedGeneration: second.Claim.Generation, Decision: "explicit test takeover"}); err != nil {
+				if _, err := successor.Takeover(t.Context(), "", secondID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-c", ExecutionID: "successor", Owner: "codex", ExpectedGeneration: second.Claim.Generation, Decision: "explicit test takeover"}); err != nil {
 					t.Fatal(err)
 				}
 			}

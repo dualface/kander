@@ -88,7 +88,7 @@ func newLogFixture(t *testing.T, level slog.Level) *logFixture {
 	p := c.Project(info.ID)
 	f.id, f.p = info.ID, p
 	f.task = gcTodoTask(t, p, "alpha", "").TaskID
-	grant, err := p.Claim(t.Context(), "", f.task, api.ClaimRequest{ClientID: "log-host", ExecutionID: "exec-a", Owner: "claude"})
+	grant, err := p.Claim(t.Context(), "", f.task, api.ClaimRequest{BranchMode: "main-develop", ClientID: "log-host", ExecutionID: "exec-a", Owner: "claude"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +239,7 @@ func TestFailedSlowAndOtherRequestsKeepTheirLevel(t *testing.T) {
 	}{
 		{http.MethodPut, doc, "put-notes", api.Document{Path: "notes.md", Text: notes, SHA256: hex.EncodeToString(digest[:]), ExpectedRevision: card.Revision}, &f.proof},
 		{http.MethodPost, move, "move-backlog", api.Move{State: "backlog"}, nil},
-		{http.MethodPost, claim, "claim-gamma", api.ClaimRequest{ClientID: "log-host", ExecutionID: "exec-c", Owner: "codex"}, nil},
+		{http.MethodPost, claim, "claim-gamma", api.ClaimRequest{BranchMode: "main-develop", ClientID: "log-host", ExecutionID: "exec-c", Owner: "codex"}, nil},
 	} {
 		if code := f.call(t, c.method, c.path, c.key, c.body, c.claim); code != http.StatusOK {
 			t.Fatalf("%s %s = %d", c.method, c.path, code)

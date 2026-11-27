@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/dualface/kander/v2/internal/command"
 	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/install"
 	"github.com/dualface/kander/v2/internal/terminal/builtin"
@@ -211,6 +212,7 @@ func printDoctorWithBinaries(tools TerminalTools, repair bool, interactive bool,
 		healthy = false
 	} else {
 		reportIgnoredConfig(loaded)
+		reportPolicyOverrides(loaded)
 		cfgPath, _ := config.ConfigPath()
 		if loaded.WelcomeComplete {
 			success(config.Text("menu.config", cfgPath))
@@ -260,6 +262,24 @@ func reportIgnoredConfig(cfg *config.Config) {
 	}
 	for _, notice := range config.UnknownAgentRefNotices(cfg) {
 		warning(notice)
+	}
+}
+
+// reportPolicyOverrides lists the configuration file values the cached project policy replaces,
+// one hint line each. The files stay as they are and the line does not make doctor unhealthy:
+// the policy is the value in force.
+func reportPolicyOverrides(cfg *config.Config) {
+	if len(cfg.Policy.Overrides) == 0 {
+		return
+	}
+	hint(config.Text("policy.doctor_heading", cfg.Policy.Revision))
+	for _, override := range cfg.Policy.Overrides {
+		hint(config.PolicyOverrideText(override))
+		// With --json the same items are also project_policy_override notices, as in
+		// kander config, so a reader of notices sees them too.
+		if command.JSON() {
+			command.Notify(config.NoticePolicyOverride, config.PolicyOverrideText(override))
+		}
 	}
 }
 

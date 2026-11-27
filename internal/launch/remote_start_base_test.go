@@ -162,7 +162,14 @@ func TestRemoteStartBasesACardWithoutTargetOnTheMainlineBranch(t *testing.T) {
 	} {
 		t.Run(tc.mode, func(t *testing.T) {
 			f := newStartBaseFixture(t)
-			f.cfg.Git.BranchMode = tc.mode
+			// The server policy decides the branch mode; the local value is the other one.
+			policy := config.Clone(f.cfg)
+			policy.Git.BranchMode = tc.mode
+			putTestPolicy(t, f.session, policy)
+			f.cfg.Git.BranchMode = config.GitBranchModeMainOnly
+			if tc.mode == config.GitBranchModeMainOnly {
+				f.cfg.Git.BranchMode = config.GitBranchModeMainDevelop
+			}
 			card := f.todo(t, "start-base-mainline")
 			f.start(t, card.TaskID, f.commits[tc.branch])
 		})

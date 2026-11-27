@@ -56,7 +56,8 @@ func newImportCommand(factory func() IssueProvider, stdout, stderr io.Writer) *c
 func runImport(factory func() IssueProvider, options issueImportOptions, stdout, stderr io.Writer) int {
 	taskType := strings.TrimSpace(options.taskType)
 	language := strings.TrimSpace(options.language)
-	if language != "" {
+	fromConfig := language == ""
+	if !fromConfig {
 		language, _ = config.ValidateAgentLanguage(language)
 	} else {
 		cfg, err := config.Load(false)
@@ -73,7 +74,7 @@ func runImport(factory func() IssueProvider, options issueImportOptions, stdout,
 	}
 	ctx, cancel := commandContext()
 	defer cancel()
-	importOptions := ImportOptions{Type: taskType, Large: options.large, Language: language, Comments: options.comments}
+	importOptions := ImportOptions{Type: taskType, Large: options.large, Language: language, Comments: options.comments, languageFromConfig: fromConfig}
 	result, err := importCard(ctx, provider, repository, options.number, importOptions)
 	if err != nil {
 		return fail(stderr, err, 1)

@@ -122,14 +122,14 @@ func TestIntegrationTargetMainFollowsBranchMode(t *testing.T) {
 
 func TestPortableWrapUpTargetMainFollowsBranchMode(t *testing.T) {
 	cwd, _ := integrationGit(t)
-	if err := verifyPortableWrapUpTarget(cwd, "main", "refs/heads/main"); err == nil {
+	if err := verifyPortableWrapUpTarget(cwd, "main", "refs/heads/main", nil); err == nil {
 		t.Fatal("main accepted as a declared target in main-develop mode")
 	}
-	if err := verifyPortableWrapUpTarget(cwd, "", "refs/heads/main"); err != nil {
+	if err := verifyPortableWrapUpTarget(cwd, "", "refs/heads/main", nil); err != nil {
 		t.Fatalf("legacy receipt validation changed without a declared target: %v", err)
 	}
 	useGitBranchMode(t, config.GitBranchModeMainOnly)
-	if err := verifyPortableWrapUpTarget(cwd, "main", "refs/heads/main"); err != nil {
+	if err := verifyPortableWrapUpTarget(cwd, "main", "refs/heads/main", nil); err != nil {
 		t.Fatalf("main rejected in main-only mode: %v", err)
 	}
 }

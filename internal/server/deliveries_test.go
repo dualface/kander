@@ -42,7 +42,7 @@ func TestDeliveryIsBoundToContentAndExecution(t *testing.T) {
 	_, err = a.Move(t.Context(), "stale-delivery", card.TaskID, api.Move{State: "review", DeliveryCommit: commit}, &proof)
 	expectCode(t, err, api.CodeEvidenceIncomplete)
 	f.clock.advance(91 * time.Second)
-	successor, err := b.Takeover(t.Context(), "", card.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "successor", Owner: "codex", Decision: "explicit takeover", ExpectedGeneration: 1})
+	successor, err := b.Takeover(t.Context(), "", card.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "successor", Owner: "codex", Decision: "explicit takeover", ExpectedGeneration: 1})
 	if err != nil {
 		t.Fatal(err)
 	}

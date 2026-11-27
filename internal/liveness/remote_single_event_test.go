@@ -20,11 +20,21 @@ import (
 // fails the test.
 func runSingleRemote(t *testing.T, service *remote.Session, opts subscribeOptions, act func()) ([]groupEvent, error) {
 	t.Helper()
+	return runSingleRemoteObserved(t, service, opts, act, nil)
+}
+
+// runSingleRemoteObserved is runSingleRemote that also calls observe, when it
+// is set, as each event is written.
+func runSingleRemoteObserved(t *testing.T, service *remote.Session, opts subscribeOptions, act func(), observe func(groupEvent)) ([]groupEvent, error) {
+	t.Helper()
 	opts.Follow = false
 	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 	defer cancel()
 	seen := make(chan struct{})
 	writer := &clockEvents{onEvent: func(event groupEvent) error {
+		if observe != nil {
+			observe(event)
+		}
 		if event.Event == "snapshot" {
 			closeOnce(seen)
 		}
@@ -56,7 +66,7 @@ func TestSingleEventExitsAfterCoordinatorChange(t *testing.T) {
 	const group = "20261121-single-coordinator-group"
 	task := subscriptionRemoteCard(t, executor, "single-coordinator", group)
 	events, err := runSingleRemote(t, service, subscribeOptions{Watch: []string{group}, Refresh: 0.01, Heartbeat: 3600}, func() {
-		_, claimErr := executor.ClaimGroup(t.Context(), "", group, api.GroupClaim{ExecutionID: "single-coordinator-run", Request: board.CoordinatorClaim{GroupID: group, Owner: "coordinator", Token: "public-label", Basis: "confirmed subscription fixture", Members: []string{task.TaskID}}}, nil)
+		_, claimErr := executor.ClaimGroup(t.Context(), "", group, api.GroupClaim{BranchMode: "main-develop", ExecutionID: "single-coordinator-run", Request: board.CoordinatorClaim{GroupID: group, Owner: "coordinator", Token: "public-label", Basis: "confirmed subscription fixture", Members: []string{task.TaskID}}}, nil)
 		if claimErr != nil {
 			t.Error(claimErr)
 		}
@@ -74,7 +84,7 @@ func TestSingleEventExitsAfterClaimChange(t *testing.T) {
 	if _, err := executor.Move(t.Context(), "", task.TaskID, api.Move{State: "todo"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	grant, err := executor.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{ClientID: "executor-host", ExecutionID: "single-claim-run", Owner: "codex", Start: &api.StartInput{Session: "codex single-session", Window: "tmux:$999:@999:%999"}})
+	grant, err := executor.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "executor-host", ExecutionID: "single-claim-run", Owner: "codex", Start: &api.StartInput{Session: "codex single-session", Window: "tmux:$999:@999:%999"}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -155,7 +155,7 @@ func TestReviewRuntimeRejectsForeignWriterAndLateGeneration(t *testing.T) {
 	expectCode(t, err, api.CodeHeldByOther)
 	f.clock.advance(91 * time.Second)
 	successor := f.project("host-b")
-	if _, err := successor.Takeover(t.Context(), "", grant.Task.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "successor", Owner: "codex", ExpectedGeneration: grant.Claim.Generation, Decision: "explicit test takeover"}); err != nil {
+	if _, err := successor.Takeover(t.Context(), "", grant.Task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "successor", Owner: "codex", ExpectedGeneration: grant.Claim.Generation, Decision: "explicit test takeover"}); err != nil {
 		t.Fatal(err)
 	}
 	_, err = p.ReviewRuntime(t.Context(), "late", run.RunID, "finalize", runtimeFinalization(run), &proof)

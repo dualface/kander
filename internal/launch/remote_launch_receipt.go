@@ -30,7 +30,7 @@ func recoverRemoteLaunch(ctx context.Context, service *remote.Session, journal *
 			grant, err = service.Project.Takeover(ctx, value.ClaimKey, value.TaskID, *value.ClaimInput)
 		}
 	} else {
-		grant, err = service.Project.Claim(ctx, value.ClaimKey, value.TaskID, *value.ClaimInput)
+		grant, err = claimJournaled(ctx, service, journal, nil)
 	}
 	if err != nil {
 		return errors.Join(err, launchError("remote.launch_reconciliation_required", journal.Path))
@@ -58,6 +58,34 @@ func recoverRemoteLaunch(ctx context.Context, service *remote.Session, journal *
 		return err
 	}
 	return &UnresolvedError{TaskID: current.TaskID, Window: credential.Window, Reason: fmt.Sprintf("%s (%s)", t("remote.launch_reconciliation_required", journal.Path), value.ExecutionID), Command: "kander"}
+}
+
+// claimJournaled sends the claim the journal froze, with its key. When the
+// server refuses its policy revision as stale, the policy is read again, the
+// journal takes the new revision and branch mode in one atomic save, and the
+// claim is sent once more with the same key: a stale refusal writes no
+// receipt, and the revision is not part of the claim identity. refreshed
+// runs after the refresh and before the journal save.
+func claimJournaled(ctx context.Context, service *remote.Session, journal *remote.ActionJournal, refreshed func() error) (api.ClaimGrant, error) {
+	value := &journal.Value
+	grant, err := service.Project.Claim(ctx, value.ClaimKey, value.TaskID, *value.ClaimInput)
+	if !api.IsCode(err, api.CodePolicyRevisionStale) {
+		return grant, err
+	}
+	if err := service.RefreshPolicy(ctx); err != nil {
+		return grant, err
+	}
+	if refreshed != nil {
+		if err := refreshed(); err != nil {
+			return grant, err
+		}
+	}
+	value.ClaimInput.PolicyRevision, value.ClaimInput.BranchMode = service.PolicyRevision(), service.BranchMode()
+	if err := journal.Save(); err != nil {
+		return grant, err
+	}
+	grant, err = service.Project.Claim(ctx, value.ClaimKey, value.TaskID, *value.ClaimInput)
+	return grant, service.StillStale(ctx, err)
 }
 
 func freezeRemoteLaunch(journal *remote.ActionJournal, task string, input api.ClaimRequest, proof *client.Claim, takeover bool, taskFile string) error {

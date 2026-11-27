@@ -169,7 +169,11 @@ Resolve each role from the first explicitly specified source by precedence:
 - `skip`: N/A by default unless a higher-precedence source explicitly requires running.
 - `required`: run by default once review is triggered unless a higher-precedence source explicitly skips.
 
-Example wording for tier (2): `Security is always N/A in this repository`, or `Skip PMQA for this task`. Skipped roles are recorded N/A in the delivery notes with the basis. When the user explicitly asks to run a skipped role, the user instruction prevails. Example policy requiring PMQA and leaving Security to auto at both scales:
+Example wording for tier (2): `Security is always N/A in this repository`, or `Skip PMQA for this task`. Skipped roles are recorded N/A in the delivery notes with the basis. When the user explicitly asks to run a skipped role, the user instruction prevails.
+
+When tier 1 or 2 makes N/A a role that the project policy (`kander policy show`) requires for the batch's scale, first record that decision with `kander decision record` on a member card, then pass its record ID with `--requirement-decision <ROLE>=<id>` or the batch's `requirement_decisions` (`snippets/commands/review.md`); otherwise the server refuses the new batch with `policy_requirement_unmet`.
+
+Example policy requiring PMQA and leaving Security to auto at both scales:
 
 ```json
 {

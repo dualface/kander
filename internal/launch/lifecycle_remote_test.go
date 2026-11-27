@@ -57,6 +57,7 @@ func remoteLifecycleFixture(t *testing.T, slug string, origin ...string) (*confi
 	if err != nil {
 		t.Fatal(err)
 	}
+	initTestPolicy(t, session)
 	card := remoteLifecycleTodo(t, session, slug)
 	previousWorker := ensureRemoteWorker
 	ensureRemoteWorker = func(string) (string, error) { return "", nil }
@@ -86,7 +87,7 @@ func remoteLifecycleTodo(t *testing.T, session *remote.Session, slug string) api
 
 func TestRemoteAdoptionProvesLocalProcessWithoutReadingBoard(t *testing.T) {
 	cfg, session, card, forbidden, _ := remoteLifecycleFixture(t, "adopt-local-process")
-	grant, err := session.Project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{ClientID: session.Client.ClientID(), ExecutionID: "adopt-process", Owner: "codex", Start: &api.StartInput{Session: "codex local-process", Window: "foreground"}})
+	grant, err := session.Project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{BranchMode: "main-develop", PolicyRevision: session.PolicyRevision(), ClientID: session.Client.ClientID(), ExecutionID: "adopt-process", Owner: "codex", Start: &api.StartInput{Session: "codex local-process", Window: "foreground"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,10 +183,14 @@ func TestRemoteStartCreatesExecutionWorktreeAndPublishesItsActualHead(t *testing
 	bare := filepath.Join(t.TempDir(), "common.git")
 	lifecycleGit(t, source, "clone", "--bare", source, bare)
 	cfg, session, card, forbidden, fakeRoot := remoteLifecycleFixture(t, "managed-execution-worktree", bare)
+	// The project policy says ja, the card says en: the card language must win, and only a card
+	// without LANGUAGE falls back to the policy (asserted after the start).
 	cfg.AgentLanguage = "ja"
-	if _, err := config.Save(cfg); err != nil {
+	// cfg carries the fixture's project policy; the scope file changes through Update.
+	if _, err := config.Update(func(scope *config.Config) error { scope.AgentLanguage = cfg.AgentLanguage; return nil }); err != nil {
 		t.Fatal(err)
 	}
+	putTestPolicy(t, session, cfg)
 	root, err := session.LocalDataRoot()
 	if err != nil {
 		t.Fatal(err)
@@ -203,6 +208,9 @@ func TestRemoteStartCreatesExecutionWorktreeAndPublishesItsActualHead(t *testing
 	}
 	command := lastCommand(t, fakeRoot)
 	assertTaskLanguage(t, command, taskFileFromCommand(t, command), "en")
+	if language, err := resolvePromptLanguage("# A card without LANGUAGE\n", config.InstallPaths{}); err != nil || language != "ja" {
+		t.Fatalf("fallback language %q (%v), want the policy's ja", language, err)
+	}
 	credential, found, err := session.Credential(card.TaskID)
 	if err != nil || !found || credential.Worktree != worktree || credential.Branch == "" || credential.BaseCommit != head {
 		t.Fatalf("managed workspace: %+v %v", credential, err)

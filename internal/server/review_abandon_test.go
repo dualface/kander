@@ -95,7 +95,7 @@ func TestPublishFailsOnceTheWriterIsLost(t *testing.T) {
 		u := finalizedUnpublished(t)
 		u.f.clock.advance(91 * time.Second)
 		successor := u.f.project("host-b")
-		if _, err := successor.Takeover(t.Context(), "", u.grant.Task.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "successor", Owner: "codex", ExpectedGeneration: u.grant.Claim.Generation, Decision: "explicit test takeover"}); err != nil {
+		if _, err := successor.Takeover(t.Context(), "", u.grant.Task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "successor", Owner: "codex", ExpectedGeneration: u.grant.Claim.Generation, Decision: "explicit test takeover"}); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := u.p.ReviewRuntime(t.Context(), "publish-after-takeover", u.run.RunID, "publish", map[string]string{}, &u.writer); err == nil {
@@ -227,7 +227,7 @@ func TestAbandonAfterTheClaimWasTakenOver(t *testing.T) {
 	u := finalizedUnpublished(t)
 	u.f.clock.advance(91 * time.Second)
 	successor := u.f.project("host-b")
-	taken, err := successor.Takeover(t.Context(), "", u.grant.Task.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "successor", Owner: "codex", ExpectedGeneration: u.grant.Claim.Generation, Decision: "explicit test takeover"})
+	taken, err := successor.Takeover(t.Context(), "", u.grant.Task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "successor", Owner: "codex", ExpectedGeneration: u.grant.Claim.Generation, Decision: "explicit test takeover"})
 	if err != nil {
 		t.Fatal(err)
 	}

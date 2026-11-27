@@ -164,7 +164,7 @@ func TestDispatchPreparationRefinesTheKernel(t *testing.T) {
 		proposal := h.propose(t, "proposal", input, 120*time.Second)
 		input = *proposal.Dispatch
 		h.f.clock.advance(91 * time.Second)
-		successor, err := h.sender.Takeover(t.Context(), "", h.task, api.ClaimRequest{ClientID: "host-b", ExecutionID: "successor", Owner: "codex", Decision: "test explicit handoff", ExpectedGeneration: h.grant.Claim.Generation})
+		successor, err := h.sender.Takeover(t.Context(), "", h.task, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "successor", Owner: "codex", Decision: "test explicit handoff", ExpectedGeneration: h.grant.Claim.Generation})
 		if err != nil {
 			t.Fatal(err)
 		}

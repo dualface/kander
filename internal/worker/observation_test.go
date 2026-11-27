@@ -38,7 +38,7 @@ func TestAgentExitIsReportedWithoutTreatingWorkerPresenceAsAgentLife(t *testing.
 		t.Fatalf("agent exit not reported independently: %+v %v", stopped, err)
 	}
 	successor := h.project("host-b")
-	_, err = successor.Takeover(t.Context(), "no-preemption", credential.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "premature", Owner: "codex", Decision: "foreign takeover fixture", ExpectedGeneration: credential.Generation})
+	_, err = successor.Takeover(t.Context(), "no-preemption", credential.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "premature", Owner: "codex", Decision: "foreign takeover fixture", ExpectedGeneration: credential.Generation})
 	if !api.IsCode(err, api.CodeLeaseActive) {
 		t.Fatalf("agent presence preempted a healthy worker: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestAgentExitIsReportedWithoutTreatingWorkerPresenceAsAgentLife(t *testing.
 	if _, err := project.Execution(t.Context(), "release-for-handoff", credential.TaskID, api.ExecutionUpdate{Action: api.ExecutionRelease, ExpectedRevision: state.Task.Revision, ObservationTicket: state.ObservationTicket, Decision: "holder explicitly releases the stopped executor", Presence: &api.AgentObservation{Status: "stopped"}}, *credential.Claim()); err != nil {
 		t.Fatal(err)
 	}
-	grant, err := successor.Takeover(t.Context(), "", credential.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "after-exit", Owner: "codex", Decision: "explicit takeover after confirmed exit", ExpectedGeneration: credential.Generation})
+	grant, err := successor.Takeover(t.Context(), "", credential.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "after-exit", Owner: "codex", Decision: "explicit takeover after confirmed exit", ExpectedGeneration: credential.Generation})
 	if err != nil || grant.Claim.Generation != credential.Generation+1 {
 		t.Fatalf("confirmed exit did not allow explicit takeover: %+v %v", grant, err)
 	}

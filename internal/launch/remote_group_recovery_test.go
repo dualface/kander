@@ -83,7 +83,7 @@ func TestRemoteGroupRecoveryReplaysFrozenRequestAfterUnknownResponse(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	taskGrant, err := other.Project(session.Info.ID).Claim(t.Context(), "", members[0], api.ClaimRequest{ClientID: "predecessor-host", ExecutionID: "predecessor-execution", Owner: "codex"})
+	taskGrant, err := other.Project(session.Info.ID).Claim(t.Context(), "", members[0], api.ClaimRequest{BranchMode: "main-develop", ClientID: "predecessor-host", ExecutionID: "predecessor-execution", Owner: "codex"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -340,7 +340,7 @@ func TestPublicationViewConfirmedAndStale(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		next, err := r.coordinate.Project.Takeover(t.Context(), "stale-takeover", r.ids[0], api.ClaimRequest{ClientID: "host-b", ExecutionID: "second-execution", Owner: "codex", Decision: "stale fixture", ExpectedGeneration: own.Generation})
+		next, err := r.coordinate.Project.Takeover(t.Context(), "stale-takeover", r.ids[0], api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "second-execution", Owner: "codex", Decision: "stale fixture", ExpectedGeneration: own.Generation})
 		if err != nil || next.Claim.Generation == own.Generation {
 			t.Fatalf("takeover: %+v %v", next, err)
 		}

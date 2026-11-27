@@ -189,6 +189,7 @@ func FormatConfigLinesFor(cfg *Config, boardPath, stored string) ([]string, erro
 	lines = append(lines, Text("config.server_url")+": "+serverURL)
 	lines = append(lines, Text("config.project_name")+": "+cmp.Or(binding.Project.Name, "-"))
 	lines = append(lines, Text("config.server_board_path")+": "+cmp.Or(boardPath, Text("config.server_board_unavailable")))
+	lines = append(lines, Text("policy.config_line")+": "+FormatPolicyStatus(cfg.Policy.Status()))
 	lines = append(lines, Text("config.git_branch_mode")+": "+effective.Git.BranchMode)
 	language := stored
 	if language == "" {
@@ -225,4 +226,12 @@ func ReviewStageLines(cfg *Config) ([]string, error) {
 		}
 	}
 	return lines, nil
+}
+
+// FormatPolicyStatus is the one-line summary of where the project policy values come from.
+func FormatPolicyStatus(status PolicyStatus) string {
+	if status.Source == PolicySourceLocal {
+		return Text("policy.source_local")
+	}
+	return Text("policy.source_"+status.Source, status.Revision, status.Epoch)
 }

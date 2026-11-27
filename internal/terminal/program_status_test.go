@@ -37,7 +37,8 @@ func TestPaneFactsMatchAgent(t *testing.T) {
 func TestPaneFactsMatchAgentCustomDeclaration(t *testing.T) {
 	resetLanguage(t)
 	writeTestConfig(t)
-	cfg, err := config.Load(false)
+	// The scope file alone: a project overlay of the working directory must not reach the save.
+	cfg, err := config.LoadScope(false)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -47,12 +47,13 @@ func setupPaneAdoption(t *testing.T, launcher, sessionValue string, worktree boo
 				ProgramStatus: &config.ProgramStatus{Reports: true, App: agent},
 			},
 		}
-		if _, err := config.Save(cfg); err != nil {
+		// cfg carries the fixture's project policy; the scope file changes through Update.
+		if _, err := config.Update(func(scope *config.Config) error { scope.Agents = cfg.Agents; return nil }); err != nil {
 			t.Fatal(err)
 		}
 	}
 	window := launcher + ":$42:@9:%9"
-	grant, err := service.Project.Claim(t.Context(), client.NewKey(), task.TaskID, api.ClaimRequest{
+	grant, err := service.Project.Claim(t.Context(), client.NewKey(), task.TaskID, api.ClaimRequest{BranchMode: "main-develop", PolicyRevision: service.PolicyRevision(),
 		ClientID: service.Client.ClientID(), ExecutionID: "pane-adoption", Owner: agent,
 		Start: &api.StartInput{Session: sessionValue, Window: window},
 	})
@@ -435,8 +436,9 @@ func TestRemoteAdoptionCannotUseAnotherProjectsRollout(t *testing.T) {
 	oldPrompt := testAdoptionLaunchPrompt(t, first, old, "start")
 	oldCreated := time.Now().UTC()
 
+	// cfg carries the fixture's project policy now; the scope file changes through Update.
 	cfg.Project.Name = "rebound-project"
-	if _, err := config.Save(cfg); err != nil {
+	if _, err := config.Update(func(scope *config.Config) error { scope.Project.Name = cfg.Project.Name; return nil }); err != nil {
 		t.Fatal(err)
 	}
 	second, err := remote.Open(t.Context(), cfg, cwd)

@@ -29,7 +29,7 @@ type requestKindFixture struct {
 func newRequestKindFixture(t *testing.T, slug string) requestKindFixture {
 	t.Helper()
 	_, session, card, _, _ := remoteLifecycleFixture(t, slug)
-	grant, err := session.Project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{ClientID: session.Client.ClientID(), ExecutionID: "kind-holder", Owner: "claude", Start: &api.StartInput{Session: "claude kinds", Window: "tmux:$1:@1:%1"}})
+	grant, err := session.Project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{BranchMode: "main-develop", PolicyRevision: session.PolicyRevision(), ClientID: session.Client.ClientID(), ExecutionID: "kind-holder", Owner: "claude", Start: &api.StartInput{Session: "claude kinds", Window: "tmux:$1:@1:%1"}})
 	if err != nil {
 		t.Fatal(err)
 	}

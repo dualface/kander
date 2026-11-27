@@ -252,6 +252,8 @@ func Serve(ctx context.Context, o Options) error {
 	// holds worker.lock acts on credentials.
 	w.startRenewals(ctx)
 	defer w.stopRenewals()
+	w.startPolicyRefresh(ctx)
+	defer w.stopPolicyRefresh()
 	idleSince := o.Now()
 	ticker := time.NewTicker(o.Tick)
 	defer ticker.Stop()
@@ -319,6 +321,12 @@ type loop struct {
 	// missingDirs holds, per credential, the recorded agent configuration
 	// directory last found missing (agent_config.go).
 	missingDirs map[credentialKey]string
+	// policyHints holds, per project, the policy version the last confirmed
+	// renewal answered and the work loop has not compared yet (policy.go).
+	policyHints map[policyProject]policyHint
+	// policyWake wakes the policy loop after a renewal recorded a hint.
+	policyWake chan struct{}
+	policies   *renewals
 }
 
 type outage struct{ since, last time.Time }
@@ -341,6 +349,8 @@ func newLoop(o Options) *loop {
 		deliveries:   map[credentialKey]*deliveryScope{},
 		replays:      map[credentialKey]*replayTable{},
 		missingDirs:  map[credentialKey]string{},
+		policyHints:  map[policyProject]policyHint{},
+		policyWake:   make(chan struct{}, 1),
 	}
 }
 

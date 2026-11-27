@@ -170,7 +170,7 @@ func TestQuittingTheTUIDoesNotStopWorkerRenewals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	grant, err := session.Project.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{ClientID: session.Client.ClientID(), ExecutionID: "ui-independent-worker", Owner: "codex"})
+	grant, err := session.Project.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: session.Client.ClientID(), ExecutionID: "ui-independent-worker", Owner: "codex"})
 	if err != nil {
 		t.Fatal(err)
 	}

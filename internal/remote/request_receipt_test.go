@@ -80,7 +80,7 @@ func newRequestReceiptFixture(t *testing.T, blockFacts bool) *requestReceiptFixt
 	if _, err := f.holder.Move(t.Context(), "", card.TaskID, api.Move{State: "todo"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	f.grant, err = f.holder.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{ClientID: "holder", ExecutionID: "request-execution", Owner: "codex"})
+	f.grant, err = f.holder.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "holder", ExecutionID: "request-execution", Owner: "codex"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestRequestReceiptRestartNeverRebindsUncertaintyToSuccessor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := successor.Project(f.sender.Info.ID).Takeover(t.Context(), "successor", f.grant.Task.TaskID, api.ClaimRequest{ClientID: "successor", ExecutionID: "new-execution", Owner: "codex", Decision: "explicit successor fixture", ExpectedGeneration: 1}); err != nil {
+	if _, err := successor.Project(f.sender.Info.ID).Takeover(t.Context(), "successor", f.grant.Task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "successor", ExecutionID: "new-execution", Owner: "codex", Decision: "explicit successor fixture", ExpectedGeneration: 1}); err != nil {
 		t.Fatal(err)
 	}
 	f.blockFacts.Store(false)

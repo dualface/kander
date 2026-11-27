@@ -107,7 +107,7 @@ func TestServerGCReleaseReceiptReplayCannotChangeTheLease(t *testing.T) {
 	group := "20261101-ended-group"
 	one := gcTodoTask(t, a, "coordinator-one", group)
 	two := gcTodoTask(t, a, "coordinator-two", group)
-	claim := api.GroupClaim{ExecutionID: "coordinator", Request: board.CoordinatorClaim{GroupID: group, Owner: "codex", Token: "public-session", Basis: "gc fixture", Members: []string{one.TaskID, two.TaskID}}}
+	claim := api.GroupClaim{BranchMode: "main-develop", ExecutionID: "coordinator", Request: board.CoordinatorClaim{GroupID: group, Owner: "codex", Token: "public-session", Basis: "gc fixture", Members: []string{one.TaskID, two.TaskID}}}
 	grant, err := a.ClaimGroup(ctx, "", group, claim, nil)
 	if err != nil {
 		t.Fatal(err)

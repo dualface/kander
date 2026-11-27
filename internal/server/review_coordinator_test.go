@@ -111,7 +111,7 @@ func newCoordWorld(t *testing.T, mutate ...func(*worldSpec)) *coordWorld {
 			grouped = append(grouped, card.TaskID)
 		}
 	}
-	w.request = api.GroupClaim{ExecutionID: "coordinator-execution", Request: board.CoordinatorClaim{GroupID: coordGroup, Owner: "codex", Token: "public-session", Basis: "coordinated review fixture", Members: grouped}}
+	w.request = api.GroupClaim{BranchMode: "main-develop", ExecutionID: "coordinator-execution", Request: board.CoordinatorClaim{GroupID: coordGroup, Owner: "codex", Token: "public-session", Basis: "coordinated review fixture", Members: grouped}}
 	lease, err := w.coordinator.ClaimGroup(t.Context(), "", coordGroup, w.request, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -298,7 +298,7 @@ func (w *coordWorld) otherLease() api.GroupGrant {
 	w.t.Helper()
 	one := todoTask(w.t, w.hosts[0], "coord-other-one", coordOtherGroup)
 	two := todoTask(w.t, w.hosts[0], "coord-other-two", coordOtherGroup)
-	request := api.GroupClaim{ExecutionID: "other-coordinator", Request: board.CoordinatorClaim{GroupID: coordOtherGroup, Owner: "codex", Token: "other-session", Basis: "another group", Members: []string{one.TaskID, two.TaskID}}}
+	request := api.GroupClaim{BranchMode: "main-develop", ExecutionID: "other-coordinator", Request: board.CoordinatorClaim{GroupID: coordOtherGroup, Owner: "codex", Token: "other-session", Basis: "another group", Members: []string{one.TaskID, two.TaskID}}}
 	grant, err := w.f.project("other-coordinator").ClaimGroup(w.t.Context(), "", coordOtherGroup, request, nil)
 	if err != nil {
 		w.t.Fatal(err)
@@ -456,7 +456,7 @@ func TestCoordinatorReviewRefusesAStaleBasis(t *testing.T) {
 		w := newCoordWorld(t)
 		old := w.proof(w.tasks[0])
 		w.f.clock.advance(91 * time.Second)
-		if _, err := w.f.project("host-c").Takeover(t.Context(), "", w.tasks[0], api.ClaimRequest{ClientID: "host-c", ExecutionID: "successor", Owner: "codex", Decision: "explicit takeover fixture", ExpectedGeneration: w.grants[0].Claim.Generation}); err != nil {
+		if _, err := w.f.project("host-c").Takeover(t.Context(), "", w.tasks[0], api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-c", ExecutionID: "successor", Owner: "codex", Decision: "explicit takeover fixture", ExpectedGeneration: w.grants[0].Claim.Generation}); err != nil {
 			t.Fatal(err)
 		}
 		// The coordinator learned the new revision but not the new generation.

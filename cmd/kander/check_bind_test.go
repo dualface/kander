@@ -41,7 +41,7 @@ func TestCheckCommandUsesLivenessInFullBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := readyCard(t, "full-binary-check")
-	grant, err := service.Project.Claim(t.Context(), "", id, api.ClaimRequest{ClientID: service.Client.ClientID(), ExecutionID: "check-observation", Owner: "codex"})
+	grant, err := service.Project.Claim(t.Context(), "", id, api.ClaimRequest{BranchMode: "main-develop", ClientID: service.Client.ClientID(), ExecutionID: "check-observation", Owner: "codex"})
 	if err != nil {
 		t.Fatal(err)
 	}

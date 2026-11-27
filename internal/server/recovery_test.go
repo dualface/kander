@@ -59,13 +59,13 @@ func TestClaimInterruptedAfterTheMoveRecovers(t *testing.T) {
 	s, h := openTest(t, dir, nil)
 	p, id := prepareTodo(t, h.URL)
 	proj, _ := s.project(p.ID())
-	req := api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-1", Owner: "claude"}
+	req := api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "exec-1", Owner: "claude"}
 	r := claimRecord{TaskID: id, ClientID: req.ClientID, ExecutionID: req.ExecutionID, Owner: req.Owner, Generation: 1, Status: claimPending}
 	r.TokenHash = tokenHash(s.token(proj.info.ID, id, r.ExecutionID, 1))
 	if err := proj.writeClaim(r); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeJSON(proj.root, scopedReceiptPath("claim:"+id, "key-crash", ""), receipt{Key: "key-crash", Operation: "claim:" + id, Digest: requestDigest("claim:"+id, req), Status: receiptPending}); err != nil {
+	if err := writeJSON(proj.root, scopedReceiptPath("claim:"+id, "key-crash", ""), receipt{Key: "key-crash", Operation: "claim:" + id, Digest: requestDigest("claim:"+id, claimIdentity(req)), Status: receiptPending}); err != nil {
 		t.Fatal(err)
 	}
 	view, _ := board.LoadBoard(proj.board)
@@ -112,7 +112,7 @@ func TestClaimInterruptedBeforeTheMoveIsReleased(t *testing.T) {
 		t.Fatalf("an uncommitted claim must be released: %+v %v", r, err)
 	}
 	c, _ := client.New(h.URL, "host-b")
-	g, err := c.Project(p.ID()).Claim(t.Context(), "", id, api.ClaimRequest{ClientID: "host-b", ExecutionID: "exec-b", Owner: "codex"})
+	g, err := c.Project(p.ID()).Claim(t.Context(), "", id, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "exec-b", Owner: "codex"})
 	if err != nil || g.Claim.Generation != 2 {
 		t.Fatalf("the task must stay claimable with the next generation: %+v %v", g.Claim, err)
 	}
@@ -149,7 +149,7 @@ func TestStartupReleasesClaimsOfFinishedCards(t *testing.T) {
 	dir := t.TempDir()
 	s, h := openTest(t, dir, nil)
 	p, id := prepareTodo(t, h.URL)
-	if _, err := p.Claim(t.Context(), "", id, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-1", Owner: "claude"}); err != nil {
+	if _, err := p.Claim(t.Context(), "", id, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "exec-1", Owner: "claude"}); err != nil {
 		t.Fatal(err)
 	}
 	proj, _ := s.project(p.ID())
@@ -180,7 +180,7 @@ func TestClaimAndTakeoverPersistInTheCardJournal(t *testing.T) {
 	defer h.Close()
 	p, id := prepareTodo(t, h.URL)
 	proj, _ := s.project(p.ID())
-	request := api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-a", Owner: "codex"}
+	request := api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "exec-a", Owner: "codex"}
 	grant, err := p.Claim(t.Context(), "atomic-claim", id, request)
 	if err != nil {
 		t.Fatal(err)
@@ -223,7 +223,7 @@ func TestReleasedExecutionCannotModifyUnclaimedCard(t *testing.T) {
 	defer s.Close()
 	defer h.Close()
 	p, id := prepareTodo(t, h.URL)
-	grant, err := p.Claim(t.Context(), "", id, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-a", Owner: "codex", Start: &api.StartInput{Session: "codex pending"}})
+	grant, err := p.Claim(t.Context(), "", id, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "exec-a", Owner: "codex", Start: &api.StartInput{Session: "codex pending"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,4 +242,11 @@ func TestReleasedExecutionCannotModifyUnclaimedCard(t *testing.T) {
 	if _, err := p.Document(t.Context(), id, "report.md"); !api.IsCode(err, api.CodeNotFound) {
 		t.Fatalf("stale report became visible: %v", err)
 	}
+}
+
+// claimIdentity is the part of a claim request its receipt digest covers: the
+// policy context is checked, never part of the identity.
+func claimIdentity(req api.ClaimRequest) api.ClaimRequest {
+	req.PolicyRevision, req.BranchMode = 0, ""
+	return req
 }

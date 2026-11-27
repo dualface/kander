@@ -122,7 +122,7 @@ func newSingleMemberOf(t *testing.T, cardGroup, coordGroup string, trashed bool)
 			t.Fatal(err)
 		}
 	}
-	f.grant, err = f.holder.Project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{ClientID: a.ClientID(), ExecutionID: "execution-host-a", Owner: "codex"})
+	f.grant, err = f.holder.Project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: a.ClientID(), ExecutionID: "execution-host-a", Owner: "codex"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func newSingleMemberOf(t *testing.T, cardGroup, coordGroup string, trashed bool)
 	var second remote.Credential
 	if trashed {
 		other := f.todo("left-card", cardGroup)
-		grant, err := f.holder.Project.Claim(t.Context(), "", other.TaskID, api.ClaimRequest{ClientID: a.ClientID(), ExecutionID: "execution-left", Owner: "codex"})
+		grant, err := f.holder.Project.Claim(t.Context(), "", other.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: a.ClientID(), ExecutionID: "execution-left", Owner: "codex"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -366,7 +366,7 @@ func TestCoordinatorWithStaleMemberCredentialAsksCurrentHolder(t *testing.T) {
 	}
 	f.clock.Add(int64(91 * time.Second))
 	successor, _ := client.New(f.url, "host-c")
-	grant, err := successor.Project(f.coordinate.Info.ID).Takeover(t.Context(), "", f.ids[0], api.ClaimRequest{ClientID: "host-c", ExecutionID: "successor", Owner: "codex", ExpectedGeneration: f.grant.Claim.Generation, Decision: "explicit test takeover"})
+	grant, err := successor.Project(f.coordinate.Info.ID).Takeover(t.Context(), "", f.ids[0], api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-c", ExecutionID: "successor", Owner: "codex", ExpectedGeneration: f.grant.Claim.Generation, Decision: "explicit test takeover"})
 	if err != nil {
 		t.Fatal(err)
 	}

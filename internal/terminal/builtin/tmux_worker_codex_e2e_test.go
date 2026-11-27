@@ -112,7 +112,7 @@ func deliverRealCodexRequest(t *testing.T, window, ref, message string, resolve 
 	}
 	const execution = "codex-e2e"
 	session := "codex " + ref
-	claim, err := board.Claim(ctx, "", task.TaskID, api.ClaimRequest{
+	claim, err := board.Claim(ctx, "", task.TaskID, api.ClaimRequest{BranchMode: "main-develop",
 		ClientID: "host-holder", Owner: "codex", ExecutionID: execution,
 		Start: &api.StartInput{Window: window, Session: session},
 	})

@@ -188,7 +188,7 @@ func TestDeliveryGuardRefusesAnotherExecutionThroughTheKernel(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.clock.advance(91 * time.Second)
-	successor, err := b.Takeover(t.Context(), "", card.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "successor", Owner: "codex", Decision: "explicit takeover", ExpectedGeneration: grant.Claim.Generation})
+	successor, err := b.Takeover(t.Context(), "", card.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "successor", Owner: "codex", Decision: "explicit takeover", ExpectedGeneration: grant.Claim.Generation})
 	if err != nil {
 		t.Fatal(err)
 	}

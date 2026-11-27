@@ -37,9 +37,11 @@ kander init --server http://127.0.0.1:7878 --project demo /tmp/checkout
 - Registers or reads the service project, binds or checks its Git remote against the exact text `git remote get-url origin` prints for the checkout, and sparsely saves explicitly requested binding fields.
 - Never creates or recovers local `kanban/`, changes Git excludes, migrates cards, or prunes evidence. `KANBAN_DIR` does not select a client board.
 
+- When the bound project has no project policy (revision 0), a call from a terminal (stdin and stderr are terminals, no `--json`, no `KANDER_EXECUTION_ID` or `KANDER_COORDINATOR_EXECUTION_ID`) runs the confirmation of `kander policy init`: it shows the values that would become the policy and writes them only on `y`. Any other call writes no policy and gives the `project_policy_unset` remark. A failed initialization is a `project_policy_init_failed` remark; the binding stands. `init` has no `--yes`; use `kander policy init --yes` (`snippets/commands/policy.md`).
+
 ## Output
 
-- The service project binding, then the project's board path on the server host when the server reports one. With `--json`: `project_name`, `project_id`, `server_url`, and `board_path` (omitted when the server reports none).
+- The service project binding, then the project's board path on the server host when the server reports one, then the result of the policy step. With `--json`: `project_name`, `project_id`, `server_url`, and `board_path` (omitted when the server reports none); the policy remark is in `notices`.
 
 ## Rejections
 

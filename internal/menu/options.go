@@ -94,6 +94,7 @@ type Session struct {
 	agents          map[string]agentState
 	exec            []Choice
 	review          []Choice
+	policy          sessionPolicy
 }
 
 // NewSession probes agents and launchers, and prepares the editable config from existing.
@@ -361,13 +362,10 @@ func (s *Session) SetReviewer(scale, role, agent string) {
 
 // SetReviewStage sets the stage policy of one review role for one task scale.
 func (s *Session) SetReviewStage(scale, role, mode string) {
-	if s.Config.ReviewStages == nil {
-		s.Config.ReviewStages = map[string]map[string]string{}
+	if s.policyEdit(func(cfg *config.Config) { setReviewStage(cfg, scale, role, mode) }) {
+		return
 	}
-	if s.Config.ReviewStages[scale] == nil {
-		s.Config.ReviewStages[scale] = map[string]string{}
-	}
-	s.Config.ReviewStages[scale][role] = mode
+	setReviewStage(s.Config, scale, role, mode)
 	if s.EditingOverlay() {
 		s.expandOverlayReviewStages()
 	}
@@ -383,6 +381,9 @@ func (s *Session) SetLanguage(language string) {
 
 // SetAgentLanguage sets the language the agent uses when talking to the user.
 func (s *Session) SetAgentLanguage(language string) {
+	if s.policyEdit(func(cfg *config.Config) { cfg.AgentLanguage = strings.TrimSpace(language) }) {
+		return
+	}
 	s.Config.AgentLanguage = strings.TrimSpace(language)
 	s.noteOverride([]string{"agent_language"}, s.Config.AgentLanguage)
 }

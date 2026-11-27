@@ -54,7 +54,9 @@ func evidenceSchemaDocs() map[string]map[string]schemaMeta {
 			"batches[].base":                                     req(""),
 			"batches[].target_commit":                            req(""),
 			"batches[].requirements":                             req(""),
+			"batches[].requirement_decisions":                    opt(""),
 			"recorded_at":                                        opt(""),
+			"policy_revision":                                    opt(""),
 		},
 		"extend-plan": {
 			"rebind_cycles":                          opt(""),
@@ -90,9 +92,11 @@ func evidenceSchemaDocs() map[string]map[string]schemaMeta {
 			"batch.base":                             opt(""),
 			"batch.target_commit":                    opt(""),
 			"batch.requirements":                     opt(""),
+			"batch.requirement_decisions":            opt(""),
 			"seal":                                   opt("true | false"),
 			"author":                                 req(""),
 			"basis":                                  req(""),
+			"policy_revision":                        opt(""),
 		},
 		"interpret": {
 			"run_id":                                     req(""),

@@ -200,6 +200,7 @@ func (a *App) renderStartPopup(lines []string) (popupBox, string) {
 
 func (a *App) requestQuit() {
 	a.cancelBoardEvents()
+	a.cancelPolicy()
 	if a.updateCheckCancel != nil {
 		a.updateCheckCancel()
 	}
