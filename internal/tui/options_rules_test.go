@@ -180,8 +180,10 @@ func TestRulesPageEditsInstallRulesOnScopeTabOnly(t *testing.T) {
 	if codex == nil || global == nil || !*codex || !*global {
 		t.Fatalf("switch fields=%v", panel.bind.installRules)
 	}
-	if _, ok := panel.bind.installRules["claude"]; ok {
-		t.Fatal("an agent the scope does not cover has a switch")
+	// kander init writes the project rules file of every built-in agent, so each has a switch
+	// whether or not its global config directory exists.
+	if _, ok := panel.bind.installRules["claude"]; !ok {
+		t.Fatal("an agent with a project rules file has no switch")
 	}
 	*codex = false
 	panel.bind.apply(panel)

@@ -369,30 +369,6 @@ func TestFlowScopeTabsAndScaleKeys(t *testing.T) {
 	}
 }
 
-func TestFlowHintOmitsScopeWhenSingleTab(t *testing.T) {
-	_, panel := openPanel(t)
-	attachProjectTab(t, panel.session)
-	panel.dispatch(sectionFlow)
-	plain := ansi.Strip(panelView(panel))
-	if strings.Contains(plain, " · "+uiText("tui.switch_scope_tabs")) || strings.Contains(plain, uiText("tui.tab_global")) {
-		t.Fatalf("single-tab flow listed Global/Project keys:\n%s", plain)
-	}
-	if !strings.Contains(plain, uiText("tui.flow_scale_scroll_esc")) {
-		t.Fatalf("missing scale keys:\n%s", plain)
-	}
-	if !flowHintHasBlankLine(panel, uiText("tui.flow_scale_scroll_esc")) {
-		t.Fatal("need a blank line between the chart and the status bar")
-	}
-	drivePanel(panel, keyMsg("tab"))
-	if panel.flowScale != "large" {
-		t.Fatalf("tab changed scale to %s", panel.flowScale)
-	}
-	drivePanel(panel, keyMsg("right"))
-	if panel.flowScale != "small" {
-		t.Fatalf("right scale=%s", panel.flowScale)
-	}
-}
-
 func flowHintHasBlankLine(panel *optionsPanel, hint string) bool {
 	inner := panel.innerWidth()
 	_, body := panel.content(themePalette(panel.app.Theme), inner, 24)

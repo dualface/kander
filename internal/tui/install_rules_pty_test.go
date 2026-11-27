@@ -11,7 +11,7 @@ import (
 )
 
 // TestInstallWizardListsFilesAndCancelWritesNothing drives kander install up to the rules
-// confirmation and cancels there: the plan names the agent file, and nothing is written.
+// confirmation and cancels there: the plan names the skill files, and nothing is written.
 func TestInstallWizardListsFilesAndCancelWritesNothing(t *testing.T) {
 	bin := buildKander(t)
 	home, env := isolatedHome(t)
@@ -32,14 +32,15 @@ func TestInstallWizardListsFilesAndCancelWritesNothing(t *testing.T) {
 		t.Fatalf("missing language step: %s", session.text())
 	}
 	session.send("\r")
-	if !session.waitForPlain("Global (configuration and agent rules)", 10*time.Second) {
-		t.Fatalf("missing scope step: %s", session.text())
-	}
-	session.send("\r")
-	for _, want := range []string{"Kander will write these agent files", "create  ~/.claude/CLAUDE.md (Claude)", "kander-leader/SKILL.md"} {
+	// No scope step follows the language: Kander is installed globally only, and the plan
+	// lists no agent rules file, only the extensions and skills.
+	for _, want := range []string{"Kander will write these agent files", "kander-leader/SKILL.md"} {
 		if !session.waitForPlain(want, 10*time.Second) {
 			t.Fatalf("missing %q: %s", want, session.text())
 		}
+	}
+	if strings.Contains(session.text(), "CLAUDE.md") || strings.Contains(session.text(), "Global (configuration") {
+		t.Fatalf("the wizard offers a scope or a global rules file: %s", session.text())
 	}
 	session.send("\x03")
 	select {

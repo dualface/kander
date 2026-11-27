@@ -3,6 +3,7 @@ package menu
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/install"
@@ -94,7 +95,7 @@ func boundMainWorktree() (string, bool) {
 
 // displayProjectPath shows a path below the main worktree relative to it, with forward slashes.
 func displayProjectPath(root, path string) string {
-	if rel, err := filepath.Rel(root, path); err == nil && rel != ".." && !filepath.IsAbs(rel) && (len(rel) < 3 || rel[:3] != ".."+string(filepath.Separator)) {
+	if rel, err := filepath.Rel(root, path); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return filepath.ToSlash(rel)
 	}
 	return path

@@ -191,7 +191,7 @@ func runGlobalCleanup(paths config.InstallPaths, force bool) GlobalCleanup {
 		return result
 	}
 	defer lock.Unlock()
-	// Another process may have finished while this one waited for the lock: plan again.
+	// Another process may have finished between the first plan and the lock: plan again.
 	plan = planGlobalInjectionCleanup(paths)
 	if !force && plan.Err == nil && globalCleanupRecorded(paths, plan.ConfigDirs) {
 		return result

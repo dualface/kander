@@ -154,14 +154,6 @@ func TestOptionsTabsFollowInstallMode(t *testing.T) {
 		t.Fatalf("missing overlay should not show the filename:\n%s", plain)
 	}
 
-	_, panel = openPanel(t)
-	attachProjectTab(t, panel.session)
-	pumpPanel(panel, panel.openRoot())
-	_, view = panel.view()
-	plain = ansi.Strip(view)
-	if strings.Contains(plain, uiText("tui.tab_global")) && strings.Contains(plain, uiText("tui.tab_project")) {
-		t.Fatalf("project install should hide the tab bar:\n%s", plain)
-	}
 }
 
 func TestOptionsTabSwitchKeepsEditsAndDoesNotSave(t *testing.T) {
@@ -773,13 +765,6 @@ func TestOptionsHintOmitsTabSwitchWhenUnavailable(t *testing.T) {
 	// The scope hint is appended after the page hint, so match it with its separator.
 	keys := " · " + scopeSwitchHint()
 	_, panel := openPanel(t)
-	attachProjectTab(t, panel.session)
-	pumpPanel(panel, panel.openRoot())
-	if strings.Contains(ansi.Strip(panelView(panel)), keys) {
-		t.Fatalf("project install showed tab switch:\n%s", ansi.Strip(panelView(panel)))
-	}
-
-	_, panel = openPanel(t)
 	attachTempOverlay(t, panel.session)
 	panel.markDirty()
 	pumpPanel(panel, panel.openCloseConfirm())
@@ -830,24 +815,5 @@ func TestOptionsHintKeepsTabSwitchWhenNarrow(t *testing.T) {
 	plain := ansi.Strip(panelView(panel))
 	if !strings.Contains(plain, "Tab") || strings.Contains(plain, "Tab [") {
 		t.Fatalf("narrow hint must show only the Tab key:\n%s", plain)
-	}
-}
-
-func TestOptionsTabDoesNotStealSingleTarget(t *testing.T) {
-	_, panel := openPanel(t)
-	attachProjectTab(t, panel.session)
-	pumpPanel(panel, panel.openSection(sectionInterface))
-	beforeTarget := panel.session.Target
-	before := panel.form.GetFocusedField()
-	if before == nil {
-		t.Fatal("interface section has no focused field")
-	}
-	drivePanel(panel, keyMsg("tab"))
-	if panel.session.Target != beforeTarget {
-		t.Fatalf("single-tab Tab switched %s -> %s", beforeTarget, panel.session.Target)
-	}
-	after := panel.form.GetFocusedField()
-	if after == nil || after == before {
-		t.Fatal("single-tab Tab did not move field focus")
 	}
 }

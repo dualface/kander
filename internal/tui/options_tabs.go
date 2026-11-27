@@ -27,10 +27,7 @@ func (p *optionsPanel) canCycleTabs() bool {
 	if p.session == nil || p.confirming || p.restoreConfirming || p.confirm != nil {
 		return false
 	}
-	if p.report != nil && !p.viewingFlow() {
-		return false
-	}
-	return len(p.session.AvailableTargets()) > 1
+	return p.report == nil || p.viewingFlow()
 }
 
 func tabLabel(target string) string {
