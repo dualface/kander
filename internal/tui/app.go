@@ -40,6 +40,7 @@ type boardHit struct {
 
 type App struct {
 	boardEvents       boardEventWatch
+	policy            policyWatch
 	UpdateDialog      *updateDialog
 	pendingUpdate     *install.UpdateInfo
 	updateCheck       func(context.Context) (*install.UpdateInfo, error)

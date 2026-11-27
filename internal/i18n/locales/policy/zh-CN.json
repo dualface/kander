@@ -42,5 +42,12 @@
   "review.requirement_decision_role": "--requirement-decision 的角色只能是 PMQA 或 Security，不是 {{.V0}}",
   "review.requirement_decision_repeated": "--requirement-decision 多次给出了角色 {{.V0}}",
   "review.requirement_decision_needs_requirements": "--requirement-decision 只用于新批次的审核要求，需要同时给出 --requirements-file",
-  "liveness.policy_refresh_failed": "无法重新读取项目策略（{{.V0}}）；使用策略值之前请先运行 kander config --json。"
+  "liveness.policy_refresh_failed": "无法重新读取项目策略（{{.V0}}）；使用策略值之前请先运行 kander config --json。",
+  "tui.policy_source": "(项目策略 r{{.V0}})",
+  "tui.policy_unset_hint": "(无项目策略: kander policy init)",
+  "tui.policy_refresh_failed": "无法重新读取项目策略，继续使用原来的值：{{.V0}}",
+  "tui.policy_changed_on_server": "服务端的项目策略已改变（revision {{.V0}}）；未保存的策略修改已保留。",
+  "tui.policy_conflict": "保存前服务端的项目策略已被修改；策略修改没有写入，现在显示服务端的值。",
+  "tui.policy_saved": "项目策略已保存为 revision {{.V0}}。",
+  "tui.policy_save_failed": "项目策略保存失败：{{.V0}}"
 }

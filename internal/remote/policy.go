@@ -322,18 +322,31 @@ func runPolicySet(key, raw string) error {
 // retry and refreshes the cache with the answer. A revision conflict is
 // returned as it is: the command never retries it.
 func putPolicy(ctx context.Context, s *Session, write api.PolicyWrite) (*api.ProjectPolicy, error) {
-	write.Submitter = GitSubmitter(ctx)
-	var written api.ProjectPolicy
-	cacheErr, err := RefreshPolicy(ctx, s.Home, s.ServerURL, s.Info.ID, func() (*api.ProjectPolicy, error) {
-		answer, err := s.Project.PutPolicy(ctx, client.NewKey(), write)
-		written = answer
-		return &answer, err
-	})
+	written, cacheErr, err := s.WritePolicy(ctx, write)
 	if err != nil {
 		return nil, err
 	}
 	reportCacheFailure(cacheErr)
 	return &written, nil
+}
+
+// WritePolicy writes the project policy with one idempotency key for every
+// transport retry, with the Git user name of the current directory as the
+// submitter, and refreshes the policy cache with the answer. A failed cache
+// write is returned as cacheErr beside the written policy. A revision conflict
+// is returned as it is: it is never retried.
+func (s *Session) WritePolicy(ctx context.Context, write api.PolicyWrite) (written api.ProjectPolicy, cacheErr, err error) {
+	write.Submitter = GitSubmitter(ctx)
+	key := client.NewKey()
+	cacheErr, err = RefreshPolicy(ctx, s.Home, s.ServerURL, s.Info.ID, func() (*api.ProjectPolicy, error) {
+		answer, err := s.Project.PutPolicy(ctx, key, write)
+		written = answer
+		return &answer, err
+	})
+	if err != nil {
+		return api.ProjectPolicy{}, nil, err
+	}
+	return written, cacheErr, nil
 }
 
 func reportPolicyWrite(policy api.ProjectPolicy) error {

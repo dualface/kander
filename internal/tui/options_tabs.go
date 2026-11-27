@@ -173,6 +173,9 @@ func (p *optionsPanel) renderScopeChrome(palette palette, width int) (string, in
 	} else if base := overlayBasePath(p); base != "" {
 		lines = append(lines, pad+dim.Render(clipPath(t("tui.base_config", homePath(base)), innerWidth)))
 	}
+	if p.policyNotice != "" {
+		lines = append(lines, pad+styleFor("popup-warn", palette).Render(clipText(p.policyNotice, innerWidth)))
+	}
 	if len(lines) == 0 {
 		return "", 0
 	}

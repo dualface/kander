@@ -13,6 +13,9 @@ func (s *Session) SetRules(rules config.Rules) error {
 	if err := config.ValidateRules(rules); err != nil {
 		return err
 	}
+	if s.policyEdit(func(cfg *config.Config) { cfg.Rules = rules.Clone() }) {
+		return nil
+	}
 	previous := s.Config.Rules.Clone()
 	if s.EditingOverlay() {
 		return s.applyOverlayEdit(func(candidate map[string]any) {
@@ -77,7 +80,7 @@ func (s *Session) SetIssueResultOnDone(mode string) error {
 	if !slices.Contains(config.IssueResultModes, mode) {
 		return fmt.Errorf("%s", config.Text("config.must_be_one_of", "issue.result_on_done", strings.Join(config.IssueResultModes, ", ")))
 	}
-	if s.Config.Issue.ResultOnDone == mode {
+	if s.Config.Issue.ResultOnDone == mode || s.policyEdit(func(cfg *config.Config) { cfg.Issue.ResultOnDone = mode }) {
 		return nil
 	}
 	if s.EditingOverlay() {
@@ -97,7 +100,7 @@ func (s *Session) SetGitBranchMode(mode string) error {
 	if !slices.Contains(config.GitBranchModes, mode) {
 		return fmt.Errorf("%s", config.Text("config.must_be_one_of", "git.branch_mode", strings.Join(config.GitBranchModes, ", ")))
 	}
-	if s.Config.Git.BranchMode == mode {
+	if s.Config.Git.BranchMode == mode || s.policyEdit(func(cfg *config.Config) { cfg.Git.BranchMode = mode }) {
 		return nil
 	}
 	if s.EditingOverlay() {

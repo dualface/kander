@@ -71,13 +71,21 @@ func (s *Session) RefreshPolicy(ctx context.Context) error {
 	if cacheErr != nil {
 		remark("project_policy_cache_failed", config.Text("policy.cache_write_failed", cacheErr.Error()))
 	}
+	s.AdoptPolicy(policy)
+	return nil
+}
+
+// AdoptPolicy makes policy, an answer of the server, the policy of the session
+// and applies it to its configuration. A long-running process that reads the
+// policy itself, and reports a failed cache write its own way, adopts the
+// answer here.
+func (s *Session) AdoptPolicy(policy api.ProjectPolicy) {
 	sessionPolicyMu.Lock()
 	defer sessionPolicyMu.Unlock()
 	s.Info.Policy = &policy
 	if s.config != nil {
 		config.ApplyServerPolicy(s.config, PolicySnapshot(policy))
 	}
-	return nil
 }
 
 // WithCurrentPolicy sends a request that carries the policy revision and

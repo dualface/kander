@@ -42,5 +42,12 @@
   "review.requirement_decision_role": "--requirement-decision のロールは PMQA または Security です。{{.V0}} は使えません",
   "review.requirement_decision_repeated": "--requirement-decision でロール {{.V0}} が複数回指定されています",
   "review.requirement_decision_needs_requirements": "--requirement-decision は新しいバッチの要件に使うもので、--requirements-file が必要です",
-  "liveness.policy_refresh_failed": "プロジェクトポリシーを再読み込みできませんでした（{{.V0}}）。ポリシーの値を使う前に kander config --json を実行してください。"
+  "liveness.policy_refresh_failed": "プロジェクトポリシーを再読み込みできませんでした（{{.V0}}）。ポリシーの値を使う前に kander config --json を実行してください。",
+  "tui.policy_source": "(プロジェクトポリシー r{{.V0}})",
+  "tui.policy_unset_hint": "(プロジェクトポリシーなし: kander policy init)",
+  "tui.policy_refresh_failed": "プロジェクトポリシーを再読み込みできませんでした。以前の値を使います：{{.V0}}",
+  "tui.policy_changed_on_server": "サーバーのプロジェクトポリシーが変更されました（revision {{.V0}}）。未保存のポリシー編集は保持されています。",
+  "tui.policy_conflict": "保存前にサーバーのプロジェクトポリシーが変更されました。ポリシーの編集は書き込まれず、サーバーの値を表示しています。",
+  "tui.policy_saved": "プロジェクトポリシーを revision {{.V0}} として保存しました。",
+  "tui.policy_save_failed": "プロジェクトポリシーを保存できませんでした：{{.V0}}"
 }

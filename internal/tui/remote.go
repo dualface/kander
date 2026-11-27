@@ -22,6 +22,7 @@ func attachRemoteBoard(app *App, session *remote.Session) {
 	app.boardEvents = boardEventWatch{seq: app.boardEvents.seq, poll: func(ctx context.Context, cursor string) (api.EventPage, error) {
 		return session.Project.Events(ctx, cursor, 25*time.Second)
 	}}
+	app.attachPolicy(session)
 	app.boardRoot = session.Location("")
 	app.missingBoard = false
 	app.GetBoardCtx = func(ctx context.Context) (BoardPayload, error) { return session.ListView(ctx, true) }

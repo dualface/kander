@@ -72,6 +72,7 @@ func (a *App) applyBoardEvents(result boardEventResult) {
 		a.requestBoardRefresh(false)
 		return
 	}
+	a.notePolicyPage(result.page)
 	if result.page.Reset || len(result.page.Events) > 0 || result.page.Cursor == "" {
 		// Never adopt a reset page cursor before obtaining the complete snapshot.
 		watch.waitingSnapshot = true

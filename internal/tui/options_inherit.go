@@ -22,6 +22,10 @@ func optionTitle(name string) string {
 
 func (p *optionsPanel) inheritTitle(title, display string, path ...string) string {
 	title = optionTitle(title)
+	// A value of the project policy shows where it comes from on both tabs.
+	if label := p.session.PolicyLabel(path...); label != "" {
+		return title + "  " + label
+	}
 	if p.session == nil || !p.session.EditingOverlay() || p.session.FieldOverridden(path...) {
 		return title
 	}
