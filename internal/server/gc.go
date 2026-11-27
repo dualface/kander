@@ -582,9 +582,10 @@ type receiptBinding struct {
 // receiptOperations maps each operation prefix that names one card to the
 // kind of that object. The card ID runs to the next ':' or the end. Every
 // other operation stays unbound and its receipt is kept: new, issue-import,
-// issue-result-save, integration-*, the review writes, and the group and run
-// operations. A group lease write replays as a new write for as long as the
-// lease record is active, whatever its members' states, and a run receipt
+// issue-result-save, integration-*, the review writes, run operations, and the
+// group operations except a release (see groupReleaseDue). A group claim,
+// reconcile, recovery, or member removal replays as a new write for as long as
+// the lease record is active, whatever its members' states, and a run receipt
 // binds a run that archive pruning removes with its archived cards.
 var receiptOperations = map[string]string{
 	"move": "task", "put": "task", "claim": "task", "takeover": "task", "execution": "task",
@@ -617,8 +618,8 @@ var refusedOnceTerminal = map[string]bool{"claim": true, "takeover": true, "conf
 // after gcLivenessAge. Any other done receipt goes after the retention period
 // once a late retry of it can no longer write: a claim, takeover, or
 // confirmation when its card is terminal; any other card operation when its
-// card is archived. Receipts that cannot be bound to a card stay. A busy
-// board lock fails with board.lock_busy.
+// card is archived; a group release under groupReleaseDue. Receipts that
+// cannot be bound stay. A busy board lock fails with board.lock_busy.
 func receiptDue(r receipt, now time.Time, olderThan time.Duration, facts *bindingFacts) (bool, error) {
 	if r.Status != receiptDone || r.CreatedAt.IsZero() {
 		return false, nil
@@ -629,6 +630,9 @@ func receiptDue(r receipt, now time.Time, olderThan time.Duration, facts *bindin
 	}
 	if age < olderThan {
 		return false, nil
+	}
+	if group, ok := strings.CutPrefix(r.Operation, groupReleasePrefix); ok {
+		return groupReleaseDue(r, group, facts)
 	}
 	binding := bindingOf(r.Operation)
 	if binding.kind != "task" {
@@ -641,6 +645,23 @@ func receiptDue(r receipt, now time.Time, olderThan time.Duration, facts *bindin
 	return facts.inStates([]string{binding.id}, "archived")
 }
 
+const groupReleasePrefix = "group-release:"
+
+// groupReleaseDue reports whether the receipt of a successful group release
+// may go: the release already set that lease generation to released, so a late
+// retry with the old credential can neither release it again nor touch a later
+// generation; once every member card of the group is archived or in trash,
+// the group ended the way archive pruning settles it (board.PruneArchived), and
+// nothing waits for the replay. A failed release (any HTTP status but 200), a
+// group with no card on the board, or a board with a card whose text cannot be
+// read keeps the receipt.
+func groupReleaseDue(r receipt, group string, facts *bindingFacts) (bool, error) {
+	if group == "" || r.HTTP != http.StatusOK {
+		return false, nil
+	}
+	return facts.groupEnded(group)
+}
+
 // bindingFacts reads the board state one receipt batch decides on, once. The
 // scan never waits for a lock: a busy one fails every decision of the batch
 // with board.lock_busy, and any other failed scan fails them the same way.
@@ -648,6 +669,11 @@ type bindingFacts struct {
 	board   string
 	scanned *board.Board
 	scanErr error
+	// groups maps each task group of the scanned cards to whether every
+	// member is archived or in trash; unreadable is set when a card's text
+	// could not be read, so no group can be known to have ended.
+	groups     map[string]bool
+	unreadable bool
 }
 
 func (f *bindingFacts) scan() (*board.Board, error) {
@@ -660,6 +686,33 @@ func (f *bindingFacts) scan() (*board.Board, error) {
 		}
 	}
 	return f.scanned, f.scanErr
+}
+
+// groupEnded reports whether the board holds at least one card of group and
+// every such card is archived or in trash. The members come from the card
+// texts of the same scan; no other read takes a lock.
+func (f *bindingFacts) groupEnded(group string) (bool, error) {
+	b, err := f.scan()
+	if err != nil {
+		return false, err
+	}
+	if f.groups == nil {
+		f.groups = map[string]bool{}
+		for id, entry := range b.Entries {
+			text, err := b.Document(id)
+			if err != nil {
+				f.unreadable = true
+				continue
+			}
+			g := board.TaskGroupFrom(text)
+			if g == "" {
+				continue
+			}
+			ended, seen := f.groups[g]
+			f.groups[g] = (ended || !seen) && (entry.State == "archived" || entry.State == "trash")
+		}
+	}
+	return !f.unreadable && f.groups[group], nil
 }
 
 // inStates reports whether every card exists and is in one of states. An
