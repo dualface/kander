@@ -5,5 +5,8 @@
   "launch.integration_preflight_path": "事前確認のリクエストには絶対パスが必要です",
   "launch.integration_preflight_git": "wrap_up.git が必要です",
   "launch.integration_preflight_cwd": "統合用チェックアウトには絶対パスが必要です",
-  "launch.integration_preflight_range": "候補の範囲が終了済みのレビュープランと一致しません"
+  "launch.integration_preflight_range": "候補の範囲が終了済みのレビュープランと一致しません",
+  "launch.start_base_group_invalid": "TASK_GROUP の値 {{.V0}} が不正です: タスクグループ ID は YYYYMMDD-<slug>-group の形式です",
+  "launch.start_base_main_in_develop_mode": "git.branch_mode が main-develop のとき INTEGRATION_TARGET に main は指定できません: main は develop からのみ進みます。フィールドを削除するか別のブランチを指定してから再試行してください。",
+  "remote.start_branch_missing": "開始ブランチ {{.V0}} が登録済みのリモートにありません。Kander は別のブランチにフォールバックしません。ブランチをプッシュするか、INTEGRATION_TARGET または git.branch_mode を修正してから再試行してください。"
 }

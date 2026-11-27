@@ -21,6 +21,7 @@ func applyAgentDelivery(plan *LaunchPlan, cfg *config.Config, agent string) erro
 	} else {
 		plan.PromptDelivery = config.PromptDelivery{Mode: "argv"}
 	}
+	plan.rename = resolveSessionRename(definition, plan.PromptDelivery)
 	if err := rejectUnreportedAgent(plan, definition); err != nil {
 		return err
 	}
@@ -73,23 +74,22 @@ func rejectPaneDirectLauncher(plan LaunchPlan) error {
 
 func attachPrompt(plan *LaunchPlan, args []string, prompt string) []string {
 	plan.Prompt = prompt
-	if plan.PromptDelivery.Mode == "pane" {
+	if plan.usesPanePrompt() {
 		return args
 	}
 	return append(args, prompt)
 }
 
-func completePaneDelivery(plan LaunchPlan, outcome LaunchOutcome) error {
-	if plan.capabilities().ProgramStatus {
-		if err := waitProgramStatus(plan, outcome); err != nil {
+func completePaneDelivery(plan LaunchPlan, outcome LaunchOutcome, label string) error {
+	if !plan.renameMovesPrompt() {
+		if err := waitBaselinePaneDelivery(plan, outcome); err != nil {
 			return err
 		}
-	} else {
-		deadline, err := waitAgentTUI(plan, outcome)
-		if err != nil {
+	}
+	if plan.rename.command != "" {
+		if err := renameAgentSession(plan, outcome, label); err != nil {
 			return err
 		}
-		waitAgentRecognized(plan, outcome, deadline)
 	}
 	if plan.beforePrompt != nil {
 		if err := plan.beforePrompt(); err != nil {
@@ -100,6 +100,20 @@ func completePaneDelivery(plan LaunchPlan, outcome LaunchOutcome) error {
 		output := resumedAgentFailureOutput(plan, outcome)
 		return launchError("launch.pane_prompt_rejected", err.Error(), output)
 	}
+	return nil
+}
+
+// Keep the original readiness and failure behavior for agents whose
+// definitions already use pane delivery.
+func waitBaselinePaneDelivery(plan LaunchPlan, outcome LaunchOutcome) error {
+	if plan.capabilities().ProgramStatus {
+		return waitProgramStatus(plan, outcome)
+	}
+	deadline, err := waitAgentTUI(plan, outcome)
+	if err != nil {
+		return err
+	}
+	waitAgentRecognized(plan, outcome, deadline)
 	return nil
 }
 
@@ -172,17 +186,9 @@ func waitAgentTUI(plan LaunchPlan, outcome LaunchOutcome) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, launchError("launch.pane_ready_timeout", err.Error())
 	}
-	type blockedRule struct {
-		match  func(string) bool
-		reason string
-	}
-	var blocked []blockedRule
-	for _, item := range delivery.Blocked {
-		fn, err := compileDeliveryMatch(item.Match)
-		if err != nil {
-			return time.Time{}, launchError("launch.pane_ready_timeout", err.Error())
-		}
-		blocked = append(blocked, blockedRule{match: fn, reason: item.Reason})
+	blocked, err := compileBlockedRules(delivery.Blocked)
+	if err != nil {
+		return time.Time{}, launchError("launch.pane_ready_timeout", err.Error())
 	}
 	var lastOutput string
 	for {
@@ -215,6 +221,23 @@ func waitAgentTUI(plan LaunchPlan, outcome LaunchOutcome) (time.Time, error) {
 		}
 		sleepFn(slice)
 	}
+}
+
+type blockedRule struct {
+	match  func(string) bool
+	reason string
+}
+
+func compileBlockedRules(items []config.PromptBlocked) ([]blockedRule, error) {
+	rules := make([]blockedRule, 0, len(items))
+	for _, item := range items {
+		fn, err := compileDeliveryMatch(item.Match)
+		if err != nil {
+			return nil, err
+		}
+		rules = append(rules, blockedRule{fn, item.Reason})
+	}
+	return rules, nil
 }
 
 func compileDeliveryMatch(match string) (func(string) bool, error) {

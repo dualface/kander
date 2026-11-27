@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/dualface/kander/v2/internal/board"
 	"github.com/dualface/kander/v2/internal/config"
 )
 
@@ -111,6 +112,77 @@ func TestRemoteOrchestratorUncertainLaunchIsNeverRepeated(t *testing.T) {
 	}
 	if _, err := os.Stat(journal.Value.TaskFile); err != nil {
 		t.Fatalf("uncertain launch lost task file: %v", err)
+	}
+}
+
+func renameRetryAgent(t *testing.T, cfg *config.Config) {
+	t.Helper()
+	freezeClock(t)
+	command := "/rename {name}"
+	cfg.Agents["claude"] = config.AgentDefinition{
+		RenameCommand: &command,
+		RenameDelivery: &config.RenameDelivery{
+			Ready:   &config.PromptReady{Match: "READY", TimeoutMS: 200},
+			Blocked: []config.PromptBlocked{{Match: "TRUST_DIALOG", Reason: "test trust dialog"}},
+		},
+	}
+	t.Setenv("KANBAN_TMUX_PANE_OUTPUT", "TRUST_DIALOG")
+}
+
+func TestRemoteOrchestratorCanRetryAClosedPaneThatNeverReceivedThePrompt(t *testing.T) {
+	skipOnWindows(t)
+	cfg, service, card, _, fakeRoot := remoteLifecycleFixture(t, "orchestrate-rename-retry")
+	renameRetryAgent(t, cfg)
+	request := OrchestrateRequest{References: []string{card.TaskID}, Handover: "Continue the plan.", Agent: "claude", Launcher: "tmux"}
+	if _, err := StartOrchestrator(request); err == nil || err.Error() != config.Text("launch.pane_ready_blocked", "test trust dialog", "TRUST_DIALOG") {
+		t.Fatalf("launch with startup dialog: %v", err)
+	}
+	logical := orchestrateReceiptInput{request.References, request.Handover, request.Agent, request.Launcher, request.OperationID}
+	first, found, err := service.PeekAction("orchestrate", logical)
+	if err != nil || !found || first.Phase != "failed" || first.TaskFile != "" || !containerClosed(fakeRoot) {
+		t.Fatalf("first launch not safely closed and recorded: %+v, found=%t, err=%v", first, found, err)
+	}
+	t.Setenv("KANBAN_TMUX_PANE_OUTPUT", "READY")
+	if _, err := StartOrchestrator(request); err != nil {
+		t.Fatal(err)
+	}
+	next, found, err := service.PeekAction("orchestrate", logical)
+	if err != nil || !found || next.Phase != "complete" || next.ExecutionID == first.ExecutionID {
+		t.Fatalf("same action did not start a new execution: %+v, found=%t, err=%v", next, found, err)
+	}
+	t.Cleanup(func() { _ = os.Remove(next.TaskFile) })
+}
+
+func TestIssueResultCanRetryAClosedPaneThatNeverReceivedThePrompt(t *testing.T) {
+	skipOnWindows(t)
+	cfg, service, card, _, fakeRoot := remoteLifecycleFixture(t, "issue-result-rename-retry")
+	renameRetryAgent(t, cfg)
+	request := triageRequest(t, fakeRoot)
+	request.CardID, request.ResultSync, request.Agent, request.Launcher = card.TaskID, true, "claude", "tmux"
+	request.CardSnapshot = &board.TaskSummary{TaskID: card.TaskID, State: "done", Document: card.Text}
+	t.Setenv("KANBAN_LAUNCH_CWD", filepath.Dir(fakeRoot))
+	logical := "test-issued-result-launch"
+	run := func() (string, string, error) {
+		journal, fresh, err := service.BeginAction("issue-result-start", logical)
+		if err != nil || !fresh {
+			t.Fatalf("expected a new receipt attempt, fresh=%t error=%v", fresh, err)
+		}
+		defer journal.Close()
+		request.Action = journal
+		_, err = StartTriage(request)
+		if file := journal.Value.TaskFile; file != "" {
+			t.Cleanup(func() { _ = os.Remove(file) })
+		}
+		return journal.Value.ExecutionID, journal.Value.Phase, err
+	}
+	initial, phase, err := run()
+	if phase != "failed" || err == nil || !containerClosed(fakeRoot) {
+		t.Fatalf("first result launch phase=%q, err=%v", phase, err)
+	}
+	t.Setenv("KANBAN_TMUX_PANE_OUTPUT", "READY")
+	retry, phase, err := run()
+	if phase != "launched" || retry == initial || err != nil {
+		t.Fatalf("result launch retry phase=%q, reused id=%t, err=%v", phase, retry == initial, err)
 	}
 }
 

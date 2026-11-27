@@ -2,7 +2,7 @@
 
 ## Purpose and users
 
-Confirms a request card at the revision the submitter read. Only the submitter personally runs this command. Agents and Leaders do not run it, even on the submitter's behalf. An embedding host can authorize the dedicated route separately and limit how it is called, for example to browser sessions.
+Confirms a request card at the revision the submitter read. It is not `kander review confirm`, which confirms a prepared review publication. Only the submitter personally runs this command. Agents and Leaders do not run it, even on the submitter's behalf. An embedding host can authorize the dedicated route separately and limit how it is called, for example to browser sessions.
 
 ## Syntax
 

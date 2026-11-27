@@ -94,7 +94,7 @@ var samplePositionals = map[string][]string{
 	"issue show":                   {"42"},
 	"issue triage":                 {"42"},
 	"list":                         {},
-	"move":                         {sampleTask, "todo"},
+	"move":                         {sampleTask, "working"},
 	"new":                          {"chore", "slug", "A", "title"},
 	"notify":                       {sampleTask},
 	"orchestrate":                  {sampleTask},
@@ -147,7 +147,7 @@ var sampleValues = map[string]string{
 	"file": "input.md", "from": "/tmp/board", "group": "20261125-example-group", "head": "HEAD", "heartbeat": "5", "kind": "fix", "label": "bug",
 	"language": "en", "launcher": "herdr", "limit": "5", "listen": "127.0.0.1:7878", "log-keep": "64MiB", "message": "hello",
 	"message-file": "message.md", "older-than": "7d", "operation-id": "operation-1", "owner": "codex", "pane": "pane-1", "previous-run-id": "run-0",
-	"project": "demo", "reason": "because", "refresh": "2", "remote": "https://example.com/r.git", "renew": "10s",
+	"project": "demo", "reason": "because", "refresh": "2", "git-remote": "https://example.com/r.git", "renew": "10s",
 	"repo": "github.com/owner/repo", "requirements-file": "requirements.json", "result": "completed", "run-id": "run-1",
 	"search": "query", "server": "http://127.0.0.1:7878", "source": "HEAD", "state": "open", "submitter": "bob", "task": sampleTask,
 	"timeout": "5", "ttl": "60s", "type": "feature", "watch": sampleTask,
@@ -197,6 +197,7 @@ var companionFlags = map[string][]string{
 	"cursor":          {"--limit", "5"},
 	"dispatch-id":     {"--execution-epoch", "2"},
 	"execution-epoch": {"--dispatch-id", "d1"},
+	"file":            {"--action", "apply"},
 }
 
 func sampleArguments(t *testing.T, leaf leafCommand) []string {
@@ -417,6 +418,7 @@ func TestRemovedAndRetiredForms(t *testing.T) {
 		{[]string{"nosuchcommand"}, 2},
 		{[]string{"dispatch"}, 2},
 		{[]string{"dispatch", "nosuch"}, 2},
+		{[]string{"server", "import", "--project", "demo", "--remote", "https://example.com/r.git"}, 2},
 	} {
 		if result := runKander(t, test.args...); result.code != test.code {
 			t.Errorf("%v: exit=%d stderr=%s", test.args, result.code, result.stderr)

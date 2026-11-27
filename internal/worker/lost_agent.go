@@ -15,10 +15,11 @@ import (
 
 // StopAgent is provided by the terminal layer. It verifies the locally recorded
 // session, stops only that agent and preserves its pane, worktree and branch.
-var StopAgent func(context.Context, string, string) error
+var StopAgent func(context.Context, AgentAddress) error
 
 func (w *loop) stopLost(ctx context.Context, log *slog.Logger, c remote.Credential) {
 	w.closeDeliveryScope(keyOf(c))
+	w.forgetReplays(keyOf(c))
 	if c.AgentPID == 0 && (c.Window == "" || c.Session == "") {
 		return
 	}
@@ -54,7 +55,7 @@ func (w *loop) stopLost(ctx context.Context, log *slog.Logger, c remote.Credenti
 			err = process.TerminateObserved(ctx, process.ProcessFacts{PID: c.AgentPID, Start: c.AgentStart}, c.BootID)
 		}
 	case StopAgent != nil:
-		err = StopAgent(ctx, c.Window, c.Session)
+		err = StopAgent(ctx, AgentAddress{Window: c.Window, Session: c.Session, ConfigDir: w.agentConfigDir(c)})
 	default:
 		err = errors.New("terminal agent stop is unavailable")
 	}

@@ -72,7 +72,7 @@ func recognitionPlan(t *testing.T, backend *recognitionBackend) LaunchPlan {
 func TestPaneDeliveryWaitsForTheBackendToRecognizeTheAgent(t *testing.T) {
 	backend := &recognitionBackend{name: "recognition-late-" + terminal.ProjectKey(t.TempDir()), unrecognized: 3}
 	plan := recognitionPlan(t, backend)
-	if err := completePaneDelivery(plan, LaunchOutcome{Container: "tab", Pane: "pane"}); err != nil {
+	if err := completePaneDelivery(plan, LaunchOutcome{Container: "tab", Pane: "pane"}, "task"); err != nil {
 		t.Fatal(err)
 	}
 	if len(backend.delivered) != 1 || backend.delivered[0] != plan.Prompt {
@@ -86,7 +86,7 @@ func TestPaneDeliveryWaitsForTheBackendToRecognizeTheAgent(t *testing.T) {
 func TestPaneDeliveryStillSendsWhenTheAgentStaysUnrecognized(t *testing.T) {
 	backend := &recognitionBackend{name: "recognition-never-" + terminal.ProjectKey(t.TempDir()), unrecognized: 1 << 30}
 	plan := recognitionPlan(t, backend)
-	if err := completePaneDelivery(plan, LaunchOutcome{Container: "tab", Pane: "pane"}); err != nil {
+	if err := completePaneDelivery(plan, LaunchOutcome{Container: "tab", Pane: "pane"}, "task"); err != nil {
 		t.Fatal(err)
 	}
 	if len(backend.delivered) != 1 {

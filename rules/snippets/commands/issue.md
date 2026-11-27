@@ -24,9 +24,9 @@ kander issue result NUMBER --card TASK_ID [--repo HOST/OWNER/REPO] [--agent NAME
 - `show NUMBER [--repo ...] [--comments]`: print one issue.
 - `import NUMBER [--repo ...] [--comments] [--type feature|bug|chore|research] [--large] [--language LANG]`: create a card from an issue. `--comments` also reads the issue comments. Without `--type`, the type comes from the issue labels. `--large` and `--language` work as for `kander new`.
 - `triage NUMBER [--card TASK_ID] [--repo ...] [--agent NAME] [--launcher NAME]`: start a triage session.
-- `result NUMBER --card TASK_ID [--repo ...] [--agent NAME] [--launcher NAME] [--action start|inspect|apply|decide] [--file JSON]`: reconcile the completed result of the issue's work set (the anchor card plus its `SOURCE_ISSUE` siblings, `KANDER-ISSUE-RULES.md` "Completed Result Reconciliation"). `--card` is always the anchor card. `--action` defaults to `start`. `--file JSON` is the input of `apply` and `decide`, at most 64 KiB; `start` and `inspect` do not read it.
-- `--agent NAME`: for `triage` and `result`, a configured execution agent; default `kanban_agents.small`.
-- `--launcher NAME`: for `triage` and `result`; default the configured `launcher`. Follow `snippets/commands/start.md` "Choosing the Launcher".
+- `result NUMBER --card TASK_ID [--repo ...] [--agent NAME] [--launcher NAME] [--action start|inspect|apply|decide] [--file JSON]`: reconcile the completed result of the issue's work set (the anchor card plus its `SOURCE_ISSUE` siblings, `KANDER-ISSUE-RULES.md` "Completed Result Reconciliation"). `--card` is always the anchor card. `--action` defaults to `start`. `--file JSON` is the required input of `apply` and `decide`, at most 64 KiB; with `start` or `inspect` it is refused.
+- `--agent NAME`: for `triage` and `result`, a configured execution agent; default `kanban_agents.small`. With `result` it applies only to `--action start`; the other actions refuse it.
+- `--launcher NAME`: for `triage` and `result`; default the configured `launcher`. With `result` it applies only to `--action start`; the other actions refuse it. Follow `snippets/commands/start.md` "Choosing the Launcher".
 - `--operation-id <stable-id>`: with `result` and `--action start` (the default), distinguishes an intentionally new result session; see "Additional Syntax".
 
 ## Examples
@@ -73,6 +73,7 @@ Human-readable lines. With `--json`, one object:
 ## Rejections
 
 - A missing subcommand, an unknown subcommand, a missing NUMBER or `--card`, or an unknown option is a usage error.
+- `result` refuses, as a usage error, `--file` with `start` or `inspect`, a missing `--file` with `apply` or `decide`, and `--agent` or `--launcher` with any action other than `start`.
 - `result` fails while any member of the work set is incomplete, naming the pending cards, and fails for a sibling `--card`, naming the anchor card.
 
 ## Additional Syntax

@@ -5,16 +5,19 @@ import (
 	"errors"
 	"time"
 
-	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/liveness"
 	"github.com/dualface/kander/v2/internal/probe"
 	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 // TargetProbe is the probe of a direct-delivery target: ready / busy / stale / fallback.
+// Session marks a probe that failed on the pane's session identity: a
+// reported session that differs or cannot be verified, or a session marker
+// that is missing or differs.
 type TargetProbe struct {
-	State  string
-	Detail string
+	State   string
+	Detail  string
+	Session bool
 }
 
 func probeConn(program string) terminal.Conn {
@@ -47,7 +50,7 @@ func AgentNotifyTarget(backend terminal.Backend, program, paneID string, session
 	if err != nil {
 		return terminal.PaneFacts{}, err
 	}
-	switch pane.MatchAgent(session.Agent) {
+	switch pane.MatchAgentWith(session.Agent, session.Lookup) {
 	case terminal.AgentDiffers:
 		return terminal.PaneFacts{}, notifyError(
 			"notify.agent_mismatch_task_pane", session.Agent, orNA(pane.ReportedAgent()),
@@ -79,7 +82,7 @@ func AgentNotifyTarget(backend terminal.Backend, program, paneID string, session
 func matchSession(session liveness.TaskSession, pane terminal.PaneFacts) (terminal.SessionMatch, string) {
 	ctx, cancel := probe.WithDefaultTimeout(context.Background())
 	defer cancel()
-	return terminal.MatchAgentSession(ctx, session.Agent, pane.AgentSessionKind, pane.AgentSession, session.Reference)
+	return terminal.MatchAgentSessionWith(ctx, session.Lookup, session.Agent, pane.AgentSessionKind, pane.AgentSession, session.Reference)
 }
 
 // AgentNotifyProbe classifies an agent-aware target: stale / busy / ready. A
@@ -98,7 +101,7 @@ func AgentNotifyProbe(backend terminal.Backend, program, paneID string, session 
 			"launch.pane_does_not_exist", paneID, pane.GoneDetail,
 		)}
 	}
-	switch pane.MatchAgent(session.Agent) {
+	switch pane.MatchAgentWith(session.Agent, session.Lookup) {
 	case terminal.AgentDiffers:
 		return TargetProbe{State: "stale", Detail: t(
 			"notify.agent_mismatch_task_pane", session.Agent, orNA(pane.ReportedAgent()),
@@ -111,11 +114,11 @@ func AgentNotifyProbe(backend terminal.Backend, program, paneID string, session 
 	verdict, detail := matchSession(session, pane)
 	switch verdict {
 	case terminal.SessionDiffers:
-		return TargetProbe{State: "stale", Detail: t(
+		return TargetProbe{State: "stale", Session: true, Detail: t(
 			"notify.session_mismatch_task_pane", session.Reference, orNA(pane.AgentSession),
 		)}
 	case terminal.SessionUncertain:
-		return TargetProbe{State: "uncertain", Detail: t(
+		return TargetProbe{State: "uncertain", Session: true, Detail: t(
 			"notify.session_uncertain_task_pane", detail,
 		)}
 	}
@@ -149,8 +152,8 @@ func ExplicitPaneTarget(backend terminal.Backend, program, paneID string) (conta
 	return pane.Container, paneID, nil
 }
 
-func agentCommandName(agent string) (string, error) {
-	definition, err := config.LoadAgent(agent)
+func agentCommandName(session liveness.TaskSession) (string, error) {
+	definition, err := session.Lookup.Agent(session.Agent)
 	return definition.ProcessName, err
 }
 
@@ -172,7 +175,7 @@ func ProcessNotifyTarget(backend terminal.Backend, program, paneID string, sessi
 	if facts.InMode != "0" {
 		return notifyError("launch.tmux_pane_is_in_copy_mode", paneID)
 	}
-	expected, err := agentCommandName(session.Agent)
+	expected, err := agentCommandName(session)
 	if err != nil {
 		return err
 	}
@@ -210,7 +213,7 @@ func ProcessNotifyProbe(backend terminal.Backend, program, paneID string, sessio
 	if facts.Dead != "0" {
 		return TargetProbe{State: "stale", Detail: t("launch.tmux_pane_is_dead", paneID)}
 	}
-	expected, err := agentCommandName(session.Agent)
+	expected, err := agentCommandName(session)
 	if err != nil {
 		return TargetProbe{State: "fallback", Detail: err.Error()}
 	}
@@ -220,12 +223,12 @@ func ProcessNotifyProbe(backend terminal.Backend, program, paneID string, sessio
 		)}
 	}
 	if facts.SessionMarker == "" {
-		return TargetProbe{State: "fallback", Detail: t(
+		return TargetProbe{State: "fallback", Session: true, Detail: t(
 			"launch.tmux_pane_has_no_session_marker", paneID,
 		)}
 	}
 	if facts.SessionMarker != session.Reference {
-		return TargetProbe{State: "stale", Detail: t(
+		return TargetProbe{State: "stale", Session: true, Detail: t(
 			"launch.tmux_session_mismatch_task_pane", session.Reference, facts.SessionMarker,
 		)}
 	}

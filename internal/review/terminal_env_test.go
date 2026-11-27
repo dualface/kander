@@ -11,5 +11,6 @@ import (
 
 func TestMain(m *testing.M) {
 	terminaltest.ClearEnv()
+	clearExecutionEnv()
 	os.Exit(m.Run())
 }

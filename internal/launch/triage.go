@@ -3,7 +3,6 @@ package launch
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -162,16 +161,14 @@ func StartTriage(request issue.TriageLaunch) (result issue.TriageOutcome, err er
 			return result, err
 		}
 		inv = withExecutionIdentity(plan, inv, request.Action.Value.ExecutionID)
-		plan.beforePrompt = func() error { request.Action.Value.Phase = "prompt-attempted"; return request.Action.Save() }
-		plan.judge = func() launchVerdict { return verdictKeep }
+		bindLaunchPromptReceipt(&plan, request.Action)
 	}
 	// A takeover session owns no card, so it records no pane session marker and
 	// reports no Herdr agent session; those identities belong to card launches.
 	outcome, err := launchAgent(plan, filepath.Join(projectDir, "task-context"), triageWindowName(request.Repository, request.Number), inv, location, nil, nil)
 	if err != nil {
 		if request.Action != nil {
-			handedOff = true
-			return result, errors.Join(err, launchError("remote.launch_reconciliation_required", request.Action.Path))
+			handedOff, err = recordLaunchPromptFailure(plan, request.Action, err)
 		}
 		return result, err
 	}

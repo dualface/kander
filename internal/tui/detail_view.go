@@ -201,7 +201,7 @@ func (a *App) renderDetailView() string {
 		contentWidth = 1
 	}
 
-	meta := joinNonEmpty(task.TaskID, a.Context.stateLabel(task.State), a.Context.sizeLabel(task.Kind), task.Type, orUnassigned(task.Owner, a.Context.Unassigned))
+	meta := joinNonEmpty(task.TaskID, a.Context.stateLabel(task.State), a.Context.sizeLabel(task.Kind), task.Type, a.executionLabel(task))
 	metaRow := a.panelRow(p, state, panelPad(p, styleFor("dim", p).Render(padLine(clipText(meta, contentWidth), contentWidth))), w, true)
 
 	var ruleRow string

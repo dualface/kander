@@ -25,5 +25,8 @@
   "terminal.process_facts_invalid": "Invalid process observation",
   "terminal.process_facts_limit": "Process observation exceeds 64 processes",
   "terminal.process_facts_identity_invalid": "Invalid foreground process identity",
-  "launch.session_repair_directory_mismatch": "The open rollout launch directory does not match this task"
+  "launch.session_repair_directory_mismatch": "The open rollout launch directory does not match this task",
+  "notify.request_session_without_id": "The card SESSION records only the agent name {{.V0}} and no session ID, so no pane can be verified. Next: the holder reads the request with kander request show <task-id> <request-id>, or stop the old agent in the pane first and then take over with kander resume --agent {{.V0}} --decision <reference> --message <message> <task-id>",
+  "notify.request_session_mode_none": "Agent {{.V0}} records no session ID, so the worker cannot deliver to it directly. Next: the holder reads the request with kander request show <task-id> <request-id>",
+  "notify.request_session_marker_hint": "{{.V0}}; the card SESSION has a session ID, but the pane's session marker is missing or differs. Next: check liveness with kander check <task-id>; the holder can read the request with kander request show <task-id> <request-id>"
 }

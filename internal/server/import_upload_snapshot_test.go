@@ -42,7 +42,7 @@ func TestUploadWithholdsCompletionWhenAnAlreadySentFileChanges(t *testing.T) {
 	peer, _ := client.New(h.URL, "host-a")
 	finished := make(chan error, 1)
 	go func() {
-		_, err := peer.UploadImport(t.Context(), "demo", reader, nil)
+		_, err := peer.UploadImport(t.Context(), "demo", reader, nil, nil)
 		finished <- err
 	}()
 	changed := false
@@ -52,7 +52,7 @@ func TestUploadWithholdsCompletionWhenAnAlreadySentFileChanges(t *testing.T) {
 			changed = true
 		}
 	}}
-	err := writeBoardUpload(t.Context(), out, api.ImportRequest{Project: "demo", From: source}, nil)
+	err := writeBoardUpload(t.Context(), out, api.ImportRequest{Project: "demo", From: source}, nil, nil)
 	_ = writer.CloseWithError(err)
 	if !changed || !api.IsCode(err, api.CodeBoardRejected) || !strings.Contains(err.Error(), "changed during upload") {
 		t.Fatalf("changed=%v producer refused: %v", changed, err)
@@ -74,7 +74,7 @@ func TestUploadManifestUsesSlashRelativePathsAndHasIndependentWindowsSource(t *t
 	writeImportFixture(t, source, native, "hello")
 
 	var archive bytes.Buffer
-	if err := writeBoardUpload(t.Context(), &archive, api.ImportRequest{Project: "demo", From: source}, nil); err != nil {
+	if err := writeBoardUpload(t.Context(), &archive, api.ImportRequest{Project: "demo", From: source}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	manifest, err := readUploadManifest(&archive, defaultUploadLimits())
@@ -102,7 +102,7 @@ func TestUploadManifestUsesSlashRelativePathsAndHasIndependentWindowsSource(t *t
 	}
 	remote.Write(archive.Bytes())
 	peer, _ := client.New(h.URL, "host-a")
-	got, err := peer.UploadImport(t.Context(), "demo", io.NopCloser(&remote), nil)
+	got, err := peer.UploadImport(t.Context(), "demo", io.NopCloser(&remote), nil, nil)
 	if err != nil || got.Source != manifest.From || got.Project.BoardPath != "" {
 		t.Fatalf("wrong remote source metadata: %+v %v", got, err)
 	}
@@ -133,7 +133,7 @@ func TestUploadRefusesRatherThanWaitingWhenSlotsAreFull(t *testing.T) {
 	}
 	m := uploadFixtureManifest("backlog/fixture.md", "abc")
 	peer, _ := client.New(h.URL, "host-a")
-	_, err := peer.UploadImport(t.Context(), "demo", io.NopCloser(bytes.NewReader(packUpload(t, m, "abc"+api.ImportUploadComplete))), nil)
+	_, err := peer.UploadImport(t.Context(), "demo", io.NopCloser(bytes.NewReader(packUpload(t, m, "abc"+api.ImportUploadComplete))), nil, nil)
 	var refusal *api.Error
 	if !errors.As(err, &refusal) || refusal.Code != api.CodeNotReady || refusal.Status != http.StatusServiceUnavailable ||
 		!strings.Contains(refusal.Message, "retry later") {
@@ -150,6 +150,7 @@ func TestUploadBoundsAStalledRequest(t *testing.T) {
 	h := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		limits := defaultUploadLimits()
 		limits.timeout = 250 * time.Millisecond
+		limits.deadline = func(int64) time.Duration { return 250 * time.Millisecond }
 		s.handleImportUpload(w, r, "demo", limits)
 	}))
 	defer h.Close()

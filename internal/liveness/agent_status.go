@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/probe"
 	"github.com/dualface/kander/v2/internal/terminal"
 )
@@ -16,6 +17,9 @@ type AgentStatusInput struct {
 	TaskID  string
 	Session string
 	Window  string
+	// Lookup reads the definition of the session's agent; nil reads it with
+	// config.LoadAgent, from the configuration of the process directory.
+	Lookup config.AgentLookup
 }
 
 // resolveWindow parses a WINDOW value; tests replace it with fake backends.
@@ -84,6 +88,7 @@ func groupAgentTargets(inputs []AgentStatusInput, reports []Report) (map[string]
 			reports[index] = report(entry, session, Unknown, "unknown", input.Window, t("liveness.window_metadata_is_empty_or_invalid"), "")
 			continue
 		}
+		session.Lookup = input.Lookup
 		target := agentTarget{index: index, entry: entry, session: *session, backend: backend, address: address}
 		if caps := backend.Capabilities(); !caps.AgentIdentity {
 			if caps.ForegroundProcess {

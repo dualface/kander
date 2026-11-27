@@ -23,6 +23,7 @@ func TestMain(m *testing.M) {
 		os.Exit(runWindowsFakeReviewer())
 	}
 	terminaltest.ClearEnv()
+	clearExecutionEnv()
 	os.Exit(m.Run())
 }
 

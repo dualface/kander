@@ -175,7 +175,7 @@ if [ "$1" = "display-message" ]; then
   exit 0
 fi
 if [ "$1" = "show-options" ]; then
-  printf '%s\n' "${KANBAN_TMUX_PANE_SESSION:-session-1}"
+  printf '%s\n' "${KANBAN_TMUX_PANE_SESSION-session-1}"
   exit 0
 fi
 if [ "$1" = "list-panes" ]; then

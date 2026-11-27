@@ -154,7 +154,7 @@ func TestAnExpiredProposalIsRejectedAfterAServerErrorAndARestart(t *testing.T) {
 	if h.requests(c)[0].Status != api.RequestOpen {
 		t.Fatal("the failed rejection leaves the proposal open")
 	}
-	h.loop = newLoop(h.workerOptions())
+	h.restartLoop()
 	armed.Store(false)
 	h.workAfter(time.Second)
 	if got := h.requests(c)[0]; got.ID != r.ID || got.Status != api.RequestRejected {

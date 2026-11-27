@@ -3,6 +3,7 @@ package takeover
 import (
 	"github.com/dualface/kander/v2/internal/launch"
 	"github.com/dualface/kander/v2/internal/terminal"
+	"github.com/dualface/kander/v2/internal/worker"
 	"os"
 	"strings"
 	"testing"
@@ -23,7 +24,7 @@ func TestWorkerStopsBusySessionAndPreservesItsContainer(t *testing.T) {
 	// Hide the optional process inspector to exercise the supported exit-command
 	// fallback of a backend with session facts alone.
 	plain := struct{ terminal.Backend }{backend}
-	if err := stopWorkerPane(t.Context(), plain, program, address, launch.AgentSession{Agent: "claude", Reference: "session-1"}); err != nil {
+	if err := stopWorkerPane(t.Context(), plain, program, address, launch.AgentSession{Agent: "claude", Reference: "session-1"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	log, err := os.ReadFile(os.Getenv("KANBAN_HERDR_LOG") + ".prompt")
@@ -42,7 +43,7 @@ func TestWorkerRefusesAReplacedTerminalSession(t *testing.T) {
 	setupBoard(t)
 	t.Setenv("KANBAN_HERDR_AGENT", "claude")
 	t.Setenv("KANBAN_HERDR_SESSION", "replacement")
-	if err := stopWorkerAgent(t.Context(), "herdr:w1:t8:w1:p8", "claude session-1"); err == nil {
+	if err := stopWorkerAgent(t.Context(), worker.AgentAddress{Window: "herdr:w1:t8:w1:p8", Session: "claude session-1"}); err == nil {
 		t.Fatal("stopped another session")
 	}
 	if _, err := os.Stat(os.Getenv("KANBAN_HERDR_LOG") + ".prompt"); !os.IsNotExist(err) {

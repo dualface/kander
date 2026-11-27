@@ -34,7 +34,7 @@ func launchAgent(
 		// Pane delivery fails before the prompt is sent (blocked or ready
 		// timeout). That outcome is known, so close the container even on a
 		// durable dispatch instead of leaving a stuck tab and an unrolled card.
-		if sendAttempted && len(durable) > 0 && durable[0] && plan.PromptDelivery.Mode != "pane" {
+		if sendAttempted && len(durable) > 0 && durable[0] && !plan.usesPanePrompt() {
 			return &LaunchFailure{Err: err, DeliveryUnknown: true, Outcome: running}
 		}
 		// This is the last moment the judgement can change anything: past it the
@@ -75,6 +75,9 @@ func launchAgent(
 				}
 			}
 		}
+		if plan.rename.command != "" {
+			plan.warn(t("launch.rename_no_pane"))
+		}
 		return running, nil
 	}
 	startupDir := filepath.Dir(root)
@@ -85,7 +88,7 @@ func launchAgent(
 	if err != nil {
 		return LaunchOutcome{}, fail(err)
 	}
-	paneDelivery := plan.PromptDelivery.Mode == "pane"
+	paneDelivery := plan.usesPanePrompt()
 	locateNow := location
 	if paneDelivery {
 		locateNow = nil
@@ -140,13 +143,17 @@ func launchAgent(
 		return LaunchOutcome{}, fail(launchError("launch.pane_ended_before_agent_started", startupDir))
 	}
 	if paneDelivery {
-		if err := completePaneDelivery(plan, outcome); err != nil {
+		if err := completePaneDelivery(plan, outcome, name); err != nil {
 			return LaunchOutcome{}, fail(err)
 		}
 		if location != nil {
 			if err := location(outcome); err != nil {
 				return LaunchOutcome{}, fail(err)
 			}
+		}
+	} else if plan.rename.command != "" {
+		if err := renameAgentSession(plan, outcome, name); err != nil {
+			return LaunchOutcome{}, fail(err)
 		}
 	}
 	if paneSession != nil {

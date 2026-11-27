@@ -122,7 +122,7 @@ func NewImportCommand() *cobra.Command {
 	c.PreRunE = func(*cobra.Command, []string) error { return command.Required(c, "project") }
 	c.Flags().StringVar(&o.data, "data", "", "")
 	c.Flags().StringVar(&o.name, "project", "", "")
-	c.Flags().StringVar(&o.remote, "remote", "", "")
+	c.Flags().StringVar(&o.remote, "git-remote", "", "")
 	c.Flags().StringVar(&o.from, "from", "", "")
 	c.Flags().BoolVar(&o.skipConflicts, "skip-conflicts", false, "")
 	return c
@@ -189,6 +189,7 @@ func importCommand(o importOptions, target string, stdout, stderr io.Writer, tty
 			}
 			return 130
 		}
+		err = localizeImportError(err)
 		logger.Error("import failed", "error", err)
 		return fail(err)
 	}
@@ -198,6 +199,18 @@ func importCommand(o importOptions, target string, stdout, stderr io.Writer, tty
 	out, _ := json.MarshalIndent(result, "", "  ")
 	fmt.Fprintln(stdout, string(out))
 	return 0
+}
+
+// localizeImportError renders a server-side cancellation in the language of
+// this process, keeping its code and status. The server message says why.
+func localizeImportError(err error) error {
+	var canceled *api.Error
+	if !errors.As(err, &canceled) || canceled.Code != api.CodeImportCanceled {
+		return err
+	}
+	local := *canceled
+	local.Message = config.Text("server.import_canceled", canceled.Message)
+	return &local
 }
 
 // importInterrupt turns the first Ctrl+C into a cancellation of the import
@@ -293,8 +306,6 @@ func importBoard(ctx context.Context, target, dir string, request api.ImportRequ
 		if run.offline != nil {
 			run.offline.Store(true)
 		}
-		ctx, cancel := context.WithTimeout(ctx, ImportTimeout)
-		defer cancel()
 		result, err = s.importV1Board(ctx, request, run.report)
 		return result, false, err
 	}

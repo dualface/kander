@@ -65,6 +65,7 @@ type LaunchPlan struct {
 	PromptDelivery   config.PromptDelivery
 	beforePrompt     func() error
 	Prompt           string
+	rename           sessionRename
 
 	// extendedTimeouts carries extended_launch_timeouts into the launch-time
 	// waits; see launchTimeout.

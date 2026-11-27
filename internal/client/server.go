@@ -52,10 +52,12 @@ func (c *Client) Shutdown(ctx context.Context, token string) error {
 	return nil
 }
 
-// importTimeout outlasts the server's 5-minute bound on the snapshot lock
-// wait and the copy. Validation and publication are not bounded, so a timeout
-// here does not tell whether the import was published.
-const importTimeout = 6 * time.Minute
+// importTimeout bounds an import answered with a single JSON, and the wait
+// for the response headers of a streamed one. It outlasts the server's
+// 5-minute bound on the snapshot lock wait. The scan, the copy, validation
+// and publication are not bounded, so a timeout here does not tell whether
+// the import was published. Tests shorten it.
+var importTimeout = 6 * time.Minute
 
 // ErrImportUnsupported reports a running server that predates online import.
 var ErrImportUnsupported = errors.New("the running server does not support online import")
@@ -81,6 +83,9 @@ func (c *Client) ImportWithProgress(ctx context.Context, token string, in api.Im
 	}
 	u := *c.base
 	u.Path += "/api/v1/server/import"
+	// A streamed import runs as long as its lines keep arriving.
+	ctx, watch := newImportWatch(ctx, importTimeout)
+	defer watch.stop()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(payload))
 	if err != nil {
 		return out, err
@@ -93,7 +98,7 @@ func (c *Client) ImportWithProgress(ctx context.Context, token string, in api.Im
 		req.Header.Set("Accept", api.ImportStreamType)
 	}
 	h := *c.http
-	h.Timeout = importTimeout
+	h.Timeout = 0 // The watch bounds the request instead.
 	h.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	resp, err := h.Do(req)
 	if err != nil {
@@ -101,7 +106,9 @@ func (c *Client) ImportWithProgress(ctx context.Context, token string, in api.Im
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusOK && importStreamed(resp) {
-		return readImportStream(resp.Body, progress)
+		watch.stream()
+		out, err := readImportStream(resp.Body, progress, watch.alive)
+		return out, watch.failure(ctx, err)
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
@@ -133,11 +140,15 @@ func importStreamed(resp *http.Response) bool {
 // readImportStream reads the lines of a streamed import up to its last line.
 // A stream that ends without a result or an error is a transport failure: the
 // server went away, and the import may or may not have been published.
-func readImportStream(body io.Reader, progress func(api.ImportProgress)) (api.ImportResult, error) {
+// alive, when set, is called after every line.
+func readImportStream(body io.Reader, progress func(api.ImportProgress), alive func()) (api.ImportResult, error) {
 	var out api.ImportResult
 	lines := bufio.NewScanner(body)
 	lines.Buffer(nil, importLineLimit)
 	for lines.Scan() {
+		if alive != nil {
+			alive()
+		}
 		var line api.ImportStreamLine
 		if err := json.Unmarshal(lines.Bytes(), &line); err != nil {
 			return out, fmt.Errorf("server answer is malformed: %w", err)

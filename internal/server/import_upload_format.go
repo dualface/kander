@@ -5,8 +5,11 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"io/fs"
+	"math"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -18,25 +21,59 @@ import (
 	"github.com/dualface/kander/v2/api"
 )
 
+// uploadLimits are the effective limits of one server, with the receive
+// deadline rules that tests shorten.
 type uploadLimits struct {
 	files, dirs, manifest int
 	bytes, fileBytes      int64
-	timeout               time.Duration
+	// timeout bounds the request until its manifest is read.
+	timeout time.Duration
+	// deadline bounds the whole request once the manifest declared its bytes.
+	deadline func(bytes int64) time.Duration
+	// idle bounds a stall while file bodies arrive.
+	idle time.Duration
 }
 
+// uploadIdleTimeout ends an upload whose file bodies stop arriving.
+const uploadIdleTimeout = 5 * time.Minute
+
 func defaultUploadLimits() uploadLimits {
-	return uploadLimits{
-		files: api.ImportUploadMaxFiles, dirs: api.ImportUploadMaxDirs, manifest: api.ImportUploadMaxManifest,
-		bytes: api.ImportUploadMaxBytes, fileBytes: api.ImportUploadMaxFileBytes, timeout: api.ImportUploadTimeout,
+	limits, _ := newUploadLimits(api.DefaultImportUploadLimits())
+	return limits
+}
+
+// newUploadLimits validates the limits an embedding host configured.
+func newUploadLimits(l api.ImportUploadLimits) (uploadLimits, error) {
+	if l.Files <= 0 || l.Dirs <= 0 || l.Bytes <= 0 || l.FileBytes <= 0 || l.Manifest <= 0 {
+		return uploadLimits{}, errors.New("import upload limits must all be positive")
 	}
+	if int64(l.Manifest) > math.MaxUint32 {
+		return uploadLimits{}, errors.New("import upload manifest limit exceeds the 32-bit length prefix")
+	}
+	if l.Bytes > math.MaxInt64-int64(l.Manifest)-4-int64(len(api.ImportUploadComplete)) {
+		return uploadLimits{}, errors.New("import upload limits overflow the request size")
+	}
+	return uploadLimits{
+		files: l.Files, dirs: l.Dirs, manifest: l.Manifest, bytes: l.Bytes, fileBytes: l.FileBytes,
+		timeout: api.ImportUploadTimeout, deadline: api.ImportUploadDeadline, idle: uploadIdleTimeout,
+	}, nil
+}
+
+// clientUploadLimits checks only the archive format before sending: the
+// receiving server decides its own limits, which may differ from ours.
+func clientUploadLimits() uploadLimits {
+	return uploadLimits{files: math.MaxInt, dirs: math.MaxInt, manifest: math.MaxUint32, bytes: math.MaxInt64, fileBytes: math.MaxInt64}
 }
 
 func (l uploadLimits) wireBytes() int64 {
 	return l.bytes + int64(l.manifest) + 4 + int64(len(api.ImportUploadComplete))
 }
 
-func uploadTooLarge() error {
-	return &api.Error{Code: api.CodeInvalidRequest, Status: http.StatusRequestEntityTooLarge, Message: "board upload exceeds its size or entry limit"}
+// uploadTooLarge names the limit a declared value exceeds. It never quotes
+// a path.
+func uploadTooLarge(limit string, declared, max int64) error {
+	return &api.Error{Code: api.CodeInvalidRequest, Status: http.StatusRequestEntityTooLarge,
+		Message: fmt.Sprintf("board upload exceeds the %s limit: declared %d, limit %d", limit, declared, max)}
 }
 
 func invalidUpload() error {
@@ -74,18 +111,26 @@ func readUploadManifest(r io.Reader, limits uploadLimits) (api.ImportUploadManif
 	var m api.ImportUploadManifest
 	var size uint32
 	if err := binary.Read(r, binary.BigEndian, &size); err != nil {
-		return m, invalidUpload()
+		return m, uploadReceiveFailed("manifest", err)
 	}
 	if int64(size) > int64(limits.manifest) {
-		return m, uploadTooLarge()
+		return m, uploadTooLarge("manifest bytes", int64(size), int64(limits.manifest))
 	}
-	body := &io.LimitedReader{R: r, N: int64(size)}
+	read := &readFailure{r: r}
+	body := &io.LimitedReader{R: read, N: int64(size)}
 	d := json.NewDecoder(body)
 	d.DisallowUnknownFields()
+	// When the body failed rather than its JSON, keep the cause for the log.
 	if err := decodeUploadManifest(d, &m, limits); err != nil {
+		if cause := read.failure(body.N); cause != nil {
+			return m, uploadReceiveFailed("manifest", cause)
+		}
 		return m, err
 	}
 	if _, err := d.Token(); err != io.EOF || body.N != 0 {
+		if cause := read.failure(body.N); cause != nil {
+			return m, uploadReceiveFailed("manifest", cause)
+		}
 		return m, invalidUpload()
 	}
 	if err := checkUploadManifest(m, limits); err != nil {
@@ -120,12 +165,12 @@ func decodeUploadManifest(d *json.Decoder, m *api.ImportUploadManifest, limits u
 		case "snapshot":
 			err = d.Decode(&m.Snapshot)
 		case "directories":
-			if err := readUploadEntries(d, &m.Directories, limits.dirs); err != nil {
+			if err := readUploadEntries(d, &m.Directories, "directories", limits.dirs); err != nil {
 				return err
 			}
 		case "files":
 			var entries []uploadFileEntry
-			if err := readUploadEntries(d, &entries, limits.files); err != nil {
+			if err := readUploadEntries(d, &entries, "files", limits.files); err != nil {
 				return err
 			}
 			m.Files = make([]api.ImportUploadFile, 0, len(entries))
@@ -154,19 +199,31 @@ type uploadFileEntry struct {
 	SHA256 string `json:"sha256"`
 }
 
-func readUploadEntries[T any](d *json.Decoder, entries *[]T, limit int) error {
+// readUploadEntries keeps at most limit entries. Past the limit it counts the
+// rest without keeping them, bounded by the manifest size, so the refusal
+// can name the declared count.
+func readUploadEntries[T any](d *json.Decoder, entries *[]T, name string, limit int) error {
 	if token, err := d.Token(); err != nil || token != json.Delim('[') {
 		return invalidUpload()
 	}
+	declared := 0
 	for d.More() {
-		if len(*entries) == limit {
-			return uploadTooLarge()
+		declared++
+		if declared > limit {
+			var skipped json.RawMessage
+			if err := d.Decode(&skipped); err != nil {
+				return invalidUpload()
+			}
+			continue
 		}
 		var entry T
 		if err := d.Decode(&entry); err != nil {
 			return invalidUpload()
 		}
 		*entries = append(*entries, entry)
+	}
+	if declared > limit {
+		return uploadTooLarge(name, int64(declared), int64(limit))
 	}
 	if token, err := d.Token(); err != nil || token != json.Delim(']') {
 		return invalidUpload()
@@ -178,8 +235,14 @@ func checkUploadManifest(m api.ImportUploadManifest, limits uploadLimits) error 
 	if !api.ValidProjectName(m.Project) || !validUploadSource(m.From) || len(m.Remote) > 16<<10 || (m.Remote != "" && !api.SafeGitRemote(m.Remote)) {
 		return invalidUpload()
 	}
-	if len(m.Files) > limits.files || len(m.Directories) > limits.dirs {
-		return uploadTooLarge()
+	if len(m.Files) > limits.files {
+		return uploadTooLarge("files", int64(len(m.Files)), int64(limits.files))
+	}
+	if len(m.Directories) > limits.dirs {
+		return uploadTooLarge("directories", int64(len(m.Directories)), int64(limits.dirs))
+	}
+	if total := declaredUploadBytes(m); total > limits.bytes {
+		return uploadTooLarge("total bytes", total, limits.bytes)
 	}
 	dirs := make(map[string]struct{}, len(m.Directories)+1)
 	dirs["."] = struct{}{}
@@ -189,7 +252,6 @@ func checkUploadManifest(m api.ImportUploadManifest, limits uploadLimits) error 
 		}
 		dirs[dir] = struct{}{}
 	}
-	var total int64
 	hash := sha256.New()
 	for i, file := range m.Files {
 		_, isDir := dirs[file.Path]
@@ -197,10 +259,9 @@ func checkUploadManifest(m api.ImportUploadManifest, limits uploadLimits) error 
 		if !validUploadPath(file.Path) || !parent || isDir || file.Size < 0 || (i > 0 && m.Files[i-1].Path >= file.Path) {
 			return invalidUpload()
 		}
-		if file.Size > limits.fileBytes || file.Size > limits.bytes-total {
-			return uploadTooLarge()
+		if file.Size > limits.fileBytes {
+			return uploadTooLarge("file bytes", file.Size, limits.fileBytes)
 		}
-		total += file.Size
 		var sum [sha256.Size]byte
 		if len(file.SHA256) != sha256.Size*2 || strings.ToLower(file.SHA256) != file.SHA256 {
 			return invalidUpload()
@@ -212,6 +273,54 @@ func checkUploadManifest(m api.ImportUploadManifest, limits uploadLimits) error 
 	}
 	if hex.EncodeToString(hash.Sum(nil)) != m.Snapshot {
 		return invalidUpload()
+	}
+	return nil
+}
+
+// declaredUploadBytes sums the declared file sizes, saturating instead of
+// overflowing. Negative sizes are left to the manifest check, which refuses
+// them.
+func declaredUploadBytes(m api.ImportUploadManifest) int64 {
+	var total int64
+	for _, file := range m.Files {
+		if file.Size <= 0 {
+			continue
+		}
+		if file.Size > math.MaxInt64-total {
+			return math.MaxInt64
+		}
+		total += file.Size
+	}
+	return total
+}
+
+// readFailure remembers the first read error of a framed read, and whether
+// the input ended.
+type readFailure struct {
+	r   io.Reader
+	err error
+	eof bool
+}
+
+func (f *readFailure) Read(p []byte) (int, error) {
+	n, err := f.r.Read(p)
+	switch {
+	case err == io.EOF:
+		f.eof = true
+	case err != nil && f.err == nil:
+		f.err = err
+	}
+	return n, err
+}
+
+// failure is the read error, or io.ErrUnexpectedEOF when the input ended
+// with missing bytes of the frame left; nil when the bytes arrived.
+func (f *readFailure) failure(missing int64) error {
+	switch {
+	case f.err != nil:
+		return f.err
+	case f.eof && missing > 0:
+		return io.ErrUnexpectedEOF
 	}
 	return nil
 }

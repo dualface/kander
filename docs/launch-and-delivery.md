@@ -52,6 +52,49 @@ An entrance returns `ExecutionResult.Advanced`: the card revision or column diff
 - The container shell parses the agent command. POSIX uses sh quoting and rejects carriage return, line feed, and NUL. On Windows, the herdr pane and the shell herdr-core starts use PowerShell. The typed line carries argv in variables that `cmd.exe` expands. PowerShell values are single-quoted with all five single-quote characters (U+0027, U+2018, U+2019, U+201A, U+201B) doubled. Before creating a Windows container, Kander rejects control characters (C0, DEL, C1) in the command values and the forwarded `KANBAN_DIR`, `KANDER_CONFIG`, `KANDER_LANG`, and `KANDER_CLIENT_HOME`. The line editor interprets those characters as keys.
 - A native `.exe` in a Windows pane uses `cmd.exe /d /s /v:on /c`. The delayed `!VAR!` references insert the arguments after cmd.exe parses the command, and the native program reads a backslash followed by a double quote as a literal double quote. A `.cmd` or `.bat` uses `/v:off`, `%VAR%`, and doubled quotes so the encoding survives the script's reparse of `%*`. An argument with an odd number of double quotes can still split differently if the batch script forwards it to a program that uses older C runtime rules.
 
+## Interactive Session Naming
+
+With a nonempty `rename_command`, Kander attempts one local slash command
+inside each newly launched interactive agent. This includes card starts,
+native resumes and takeovers, orchestration, Chat, and issue triage and
+result. The v2 `notify` command sends a request to an existing execution
+generation. It does not restart an agent. Use `resume` to restart a stopped
+agent. A non-interactive reviewer is never renamed. Kander uses the existing
+launch label to derive the session name
+and uses the backend's pane text operation, not a shell command or a startup
+`--name` argument. The [agent definition](custom-agents.md#interactive-session-names)
+describes the filter and matching rules.
+
+For an agent that must be idle for renaming, a container launch leaves the
+initial prompt out of argv and waits for the interactive composer. A matching
+startup dialog takes precedence over readiness, even on a program-status
+launcher. Kander types nothing while the dialog remains. If it clears and the
+composer becomes ready, Kander sends the rename command, checks for the
+configured acknowledgement or the ready composer with no pending rename
+draft, then sends the prompt. If the startup budget expires, Kander types
+nothing and fails with `launch.pane_ready_blocked` for a detected dialog or
+`launch.pane_ready_timeout` otherwise. These failures use the pane-prompt
+rollback path and do not publish `WINDOW` before the prompt.
+
+A definition with `rename_delivery.after_argv` keeps the prompt in argv. It
+uses the same readiness observations but skips renaming with one warning if
+the pane is blocked or does not become ready. Otherwise it sends the rename
+command without resending the prompt. Program-status launchers require a
+matching app and idle or done status in either policy, as well as any
+configured screen match. A working status alone is not input readiness.
+
+An unsuccessful rename or a missing acknowledgement after three seconds
+warns and leaves an already delivered argv prompt alone. For a pending pane
+prompt, Kander continues if the composer is ready and has no leftover rename
+draft. If the pane cannot safely accept input, Kander does not append the
+prompt to a draft or submit it into a dialog. It uses the same readiness
+failure and rollback as before the rename. A distributed orchestration or
+issue-result launch is retryable after this failure only when the prompt was
+never attempted and the pane was closed. `foreground` and `console` retain their
+original arguments and warn because there is no pane to type into. Without a
+rename command, the original delivery mode and readiness behavior are
+unchanged, including the existing pane-prompt behavior of Droid and Kimi.
+
 ## Launchers
 
 - Eight built-in launchers, plus the launchers provided by loaded terminal definitions (JSON files in the global or project share directory `terminals/`; the project copy replaces the global one, which replaces an embedded one of the same name). `auto` is resolved at start time and never written back to the configuration.
@@ -185,7 +228,7 @@ The check runs these steps. The first one that fails decides the result:
 
 - An explicit `--agent <name>` allocates a brand-new session even when the name equals the original agent; the old CLI context is not migrated. When new-session preparation such as Cursor `create-chat` fails, the card is unchanged. Before launch, `OWNER`/`SESSION`/`WINDOW` are overwritten with the new agent, session, and launcher; `STARTED_AT` is unchanged.
 - A Codex takeover on a launcher that marks the pane (`pane_metadata`: herdr-core, tmux, tmux-session, dsh) or reports the session (herdr) discovers this invocation's exact session id, writes it as `codex <id>` through the same confirmation as `start`, and sets the pane marker when supported. Process-type Codex launchers retain `codex` and resolve by rollout mtime in later recoveries. Devin and OpenCode takeovers discover and persist the exact id on every launcher; Kimi and Droid takeovers do so on the container launchers they support.
-- A takeover of a `pending` or `unresolved` record needs `--decision`, and the `handoff` link records it. The launcher of the replaced record steps aside. A failed takeover follows [Late Failures](#late-failures); without evidence, `rollback` restores the replaced record with its status and failure.
+- Every takeover needs `--decision`, and the `handoff` link records it. The launcher of the replaced record steps aside. A failed takeover follows [Late Failures](#late-failures); without evidence, `rollback` restores the replaced record with its status and failure.
 - After the new agent passes liveness validation and before printing `taken over`, the command attempts a graceful exit and closes the original herdr/tmux container under the identity and single-pane topology gate of `dismiss`. The gate applies to the located target, and a kept drifted pane is reported by its own address. When the original agent is already dead, it closes only when the container topology can be proven; when the original address is empty, foreground/console, or the same as the new address, it records N/A. When validation, exit, or close fails, it prints only `original container kept` with the reason, does not force-kill, does not roll back the new agent, and still succeeds. Cleanup and liveness observation may each use one full `--timeout`, so the worst case takes about 2x timeout. On success it prints `cleaned up original container: ...` first, then `taken over: ...`.
 
 ## Missing Identity Repair
@@ -196,7 +239,12 @@ An execution started before that behavior, by a remote start on a launcher with 
 
 ## Notify Probe Classes
 
-When `notify` probes the recorded `WINDOW`, it handles three classes, and this classification takes precedence over the recovery overview of the rules:
+The probe and delivery details in this and the next section describe legacy
+direct delivery. In distributed v2 the client submits a request and the
+worker resolves its existing execution. See
+[collaboration request delivery](distributed-server.md#collaboration-requests).
+
+When the legacy command probes the recorded `WINDOW`, it handles these classes:
 
 - **Ready**: the pane exists and the agent/session match; herdr additionally reports `idle`, `done`, or `working`, and tmux additionally is not in copy-mode. A `working` agent receives the prompt while its current turn runs and handles it afterwards, so the acknowledgement may arrive after `--timeout`; that only yields the delivered-but-unconfirmed warning. A durable dispatch accepted after its persisted deadline is still rejected and follows the expiry handling.
 - **Busy**: the pane exists and the agent/session match, but herdr reports any other status (such as `blocked`, which may be a permission or confirmation dialog that typed text would answer) or tmux is in copy-mode. The probe is retried at a fixed interval within the same `--timeout` budget; on timeout the command returns non-zero with "target agent busy, not delivered" and starts no recovery instance, creates no body payload, and changes neither card state nor message body; verified identity metadata may already have been repaired. A missing tmux session marker means identity cannot be proven; it counts as neither busy nor stale and goes through the recovery channel.
@@ -221,8 +269,11 @@ When `notify` probes the recorded `WINDOW`, it handles three classes, and this c
 
 ## Notify Recovery
 
-- No direct delivery channel, or a failed probe or delivery action make the command recover the original session internally. A card on `foreground` or `console` has no direct channel and no recovery ([process identity](#process-identity)), so the command fails with the next step. herdr recovery liveness follows the new-pane criteria of `resume`: the state accepts only `idle`, `working`, `blocked` and rejects `done` and `unknown`.
-- When tab/window/process cleanup after a failed recovery validation fails, it is reported together with the original error, noting that the new agent may still be alive. When both paths fail, the command exits non-zero and reports both reasons; the card body and original state are unchanged. After a successful recovery or takeover, the new container address is written back to the card `WINDOW`.
+The legacy direct-delivery command could recover a session on a new pane.
+Distributed v2 `notify` does not perform that recovery. A failed worker
+delivery does not start a second process. To restart a stopped executor,
+use [resume](#resume) or the authorized [takeover](#takeover-resume---agent)
+path, which records the new execution and its location.
 
 ## Dismiss
 

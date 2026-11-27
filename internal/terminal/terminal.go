@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/probe"
 )
 
@@ -155,6 +156,9 @@ type Identity struct {
 	// ProcessName resolves the expected foreground command lazily, so a
 	// collection failure is reported before an agent definition error.
 	ProcessName func() (string, error)
+	// Lookup reads the agent definition a session identity row is resolved
+	// with; nil reads it with config.LoadAgent.
+	Lookup config.AgentLookup
 }
 
 // SessionReport is one out-of-band session identity report.

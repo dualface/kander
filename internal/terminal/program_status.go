@@ -44,6 +44,12 @@ const (
 // status pane is compared by the app the agent declares for OSC 7501; an
 // agent without a reporting declaration never matches such a pane.
 func (f PaneFacts) MatchAgent(agent string) AgentMatch {
+	return f.MatchAgentWith(agent, nil)
+}
+
+// MatchAgentWith is MatchAgent with the agent declaration read through
+// lookup; a nil lookup reads it like MatchAgent.
+func (f PaneFacts) MatchAgentWith(agent string, lookup config.AgentLookup) AgentMatch {
 	if !f.ProgramStatus {
 		if f.Agent == agent {
 			return AgentMatches
@@ -53,7 +59,7 @@ func (f PaneFacts) MatchAgent(agent string) AgentMatch {
 	if f.AgentApp == "" {
 		return AgentUndecided
 	}
-	definition, err := config.LoadAgent(agent)
+	definition, err := lookup.Agent(agent)
 	if err != nil {
 		return AgentUndecided
 	}

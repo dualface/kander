@@ -195,8 +195,23 @@ jobs:
         run: go test -v -p 1 -count=1 -timeout 30m -skip '^TestModel' ./internal/board
 
   race:
+    name: race (${{ matrix.shard }})
     runs-on: ubuntu-latest
+    # Each shard leaves room for one package to reach the 20-minute go test
+    # timeout and still print its panic before the job is canceled. With -p 1
+    # the packages run in the listed order, so the slowest come last: a hang
+    # then waits only for the faster packages before it.
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: server
+            packages: ./internal/server
+          - shard: launch-review
+            packages: ./internal/issue ./internal/liveness ./internal/review ./internal/launch
+          - shard: remote-worker-tui
+            packages: ./internal/tui ./internal/worker ./internal/remote
     env:
       GOMEMLIMIT: 2GiB
     steps:
@@ -205,7 +220,12 @@ jobs:
         with:
           go-version: '1.27.3'
       - name: Distributed and lifecycle race tests
-        run: go test -race -p 1 -count=1 -timeout 20m ./internal/server ./internal/worker ./internal/remote ./internal/launch ./internal/review ./internal/issue ./internal/liveness ./internal/tui
+        env:
+          PACKAGES: ${{ matrix.packages }}
+        # PACKAGES is a space-separated list; bash splits it into arguments.
+        run: |
+          # shellcheck disable=SC2086
+          go test -race -p 1 -count=1 -timeout 20m $PACKAGES
 
   dsh:
     strategy:

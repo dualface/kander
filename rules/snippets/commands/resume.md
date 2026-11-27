@@ -4,12 +4,12 @@ Source: moved from `KANDER-KANBAN-RULES.md` "Command Contract" ("Resuming the Or
 
 ## Purpose and users
 
-Wakes the original executing agent of a `working/` or `review/` card with a message. With `--agent` it hands the card to a brand-new session (a user-authorized takeover); with `--adopt` it keeps the running executor of an unfinished start. Used by the orchestrator only through `notify`, which chooses resumption itself; used directly by the user.
+Sends a message to the original executing agent of a `working/` or `review/` card. While the executor runs, or its state is unknown, the message is queued as by `notify`. When this host confirmed the executor stopped after a finished start, the card's own agent session continues in a new execution generation (a native continuation). With `--agent` it hands the card to a brand-new session (a user-authorized takeover); with `--adopt` it keeps the running executor of an unfinished start. The orchestrator sends messages and dispatch rounds with `notify`, which only queues them and never continues a stopped executor: after a stop, the host that holds the execution runs `resume` itself. Used by the orchestrator and directly by the user.
 
 ## Syntax
 
 ```text
-kander resume [--agent <configured-agent> [--decision <reference>]] [--timeout SECONDS] (--message TEXT | --message-file FILE) [--launcher <launcher>] [--dispatch-id <id>] [--kind fix|sync|wrap-up] [--base <full-SHA>] [--evidence-file <JSON>] <task-id>
+kander resume [--agent <configured-agent>] [--decision <reference>] [--timeout SECONDS] (--message TEXT | --message-file FILE) [--launcher <launcher>] [--dispatch-id <id>] [--kind fix|sync|wrap-up] [--base <full-SHA>] [--evidence-file <JSON>] <task-id>
 kander resume --adopt --decision <reference> <task-id>
 ```
 
@@ -17,12 +17,13 @@ kander resume --adopt --decision <reference> <task-id>
 
 - `task-id`: the card.
 - `--message TEXT | --message-file FILE`: exactly one, non-empty.
-- `--timeout SECONDS`: a finite number greater than 60; default 120.
-- `--agent <configured-agent>`: takeover by a new session (see "Taking Over with a New Session").
+- `--timeout SECONDS`: for a durable dispatch round that the resume sends (any of `--dispatch-id`, `--kind`, `--base`, `--evidence-file`), how long the executing agent has to accept the round, in seconds. The value must be more than 60; default 120. When the resume sends the message through `notify`, the value must also be at most 86400. Otherwise the value is only checked.
+- `--agent <configured-agent>`: start a brand-new session of this agent that takes the card over, even when the name equals the current agent; the original session is not woken. Needs `--decision`. Omit it to wake the original session (see "Taking Over with a New Session").
 - `--adopt`: keep the running executor and start nothing (see "Adopting an Unfinished Start"). It takes only the task ID and `--decision`.
-- `--decision <reference>`: the user decision. Required with `--adopt`, and with `--agent` when the current execution record is `pending` or `unresolved`. `--agent` on a `running` record may omit it. Kander records the reference and does not verify it.
+- `--decision <reference>`: free text that cites the user's decision: who decided, when, and the words. Kander stores it without checking it; it is not the ID of a `kander decision` record. Required with `--agent`, `--adopt`, and `--release`. Without them, it asks for an explicit native continuation: on this host, with the executor confirmed stopped, the card's own agent session continues in a new execution generation (see "Distributed restart and explicit release").
 - `--launcher <launcher>`: as for `start`. Follow `snippets/commands/start.md` "Choosing the Launcher".
-- `--dispatch-id`, `--kind fix|sync|wrap-up`, `--base <full-SHA>`, `--evidence-file <JSON>`: durable dispatch (`snippets/commands/dispatch.md`).
+- `--dispatch-id`, `--kind fix|sync|wrap-up`, `--evidence-file <JSON>`: select durable dispatch (`snippets/commands/dispatch.md`).
+- `--base <full-SHA>`: a full commit SHA. When the command starts a new execution generation of a project bound to a Git remote, the new worktree starts from it. That happens in a takeover (`--agent`), in an explicit native continuation (`--decision`), and in a plain resume whose executor this host confirmed stopped after a finished start. A native continuation, explicit or plain, refuses a value other than the `HEAD` of the stopped execution's worktree and takes that `HEAD` when the option is omitted. A takeover without it starts from the card's published delivery commit; a card without a delivery is refused. With a dispatch option it is also the commit the round is bound to, as for `notify` (`snippets/commands/notify.md`): for `fix`, the current target of the review batch; for `sync`, the commit the round starts from; for `wrap-up`, the `source_commit` of the wrap-up evidence. When the command only queues the message and the option is omitted, the round uses the `HEAD` of the task worktree that this host records for the card, otherwise the `HEAD` of the current directory. It is not the `--base <ref>` of `kander check delivery`.
 - `--release`: with `--decision`, ends the lease of a stopped local execution without changing the card content; it takes only the task ID and `--decision`. See "Additional Syntax".
 
 ## Examples
@@ -32,13 +33,16 @@ kander resume --adopt --decision <reference> <task-id>
 kander resume --message "Please continue" 20261118-example-task
 
 # Take a card over with a new session
-kander resume --agent codex --decision user-2026-11-19 --message "Continue the work" 20261118-example-task
+kander resume --agent codex --decision "user 2026-11-19: take the card over" --message "Continue the work" 20261118-example-task
 
 # Keep the running executor of an unfinished start
-kander resume --adopt --decision user-2026-11-19 20261118-example-task
+kander resume --adopt --decision "user 2026-11-19: keep the running executor" 20261118-example-task
 
 # Release the stopped execution of a card
-kander resume --release --decision user-2026-11-19 20261118-example-task
+kander resume --release --decision "user 2026-11-19: release the stopped execution" 20261118-example-task
+
+# Continue the stopped executor's own session in a new generation
+kander resume --decision "user 2026-11-19: continue the stopped session" --message "Continue the work" 20261118-example-task
 ```
 
 ## Preconditions
@@ -90,11 +94,11 @@ kander resume --release --decision user-2026-11-19 20261118-example-task
 - A task group `review/` card without a dispatch option, unless the takeover ends an unfinished start.
 - A card outside `review/` or `working/`, a missing `SESSION`, a claimed or reclaimed card without `--agent` (the error names `snippets/failure-recovery.md`), a pin violation, an immediate agent exit, or a dispatch conflict.
 - A plain `resume` on a `pending` or `unresolved` record: the error names adoption and takeover, or only the takeover for an old card shape or for an unmarked pane that adoption cannot mark. That judgement uses static facts only (a session in `SESSION`, or a `codex` card); the error never runs session discovery and writes nothing.
-- `--agent` without `--decision` on a `pending` or `unresolved` record.
+- `--agent` without `--decision`.
 - `--adopt` on a record in another status, on a card whose `OWNER` or `SESSION` differs from the start attempt, or with an executor that is not confirmed alive. The last two name the takeover as the next step.
 - `--adopt` when a pane session cannot be proven or the marker write fails. The card and credential stay unchanged. The error names the takeover, after stopping the old executor by hand.
 - `--adopt` when the card or the attempt changed after the probe and before the marker write. No marker is written; the error tells you to run `kander check <task-id>` and act on its result.
-- A missing or doubled message, a timeout of 60 seconds or less, a missing task ID, or an unknown option is a usage error. So are `--adopt` with any option except `--decision`, `--adopt` without `--decision`, and `--decision` without `--adopt` or `--agent`.
+- A missing or doubled message, a timeout of 60 seconds or less, a missing task ID, or an unknown option is a usage error. So are `--adopt` or `--release` with any option except `--decision`, and `--adopt` or `--release` without `--decision`.
 
 ## Distributed adoption
 

@@ -15,11 +15,11 @@ kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--owner
 ## Arguments
 
 - `task-id`, `state`: the card and its new state (`backlog`, `todo`, `working`, `review`, `done`, `archived`, `trash`).
-- `--owner <agent>`: manual claiming into `working/` writes `OWNER` and `STARTED_AT`; `--decision <reference>` records the user decision and is required for a reclaim from `review/`.
+- `--owner <agent>`: only with the target `working`: claim the card for this session; writes `OWNER` and `STARTED_AT`. A claim takes only `--decision`, which is required for a reclaim from `review/`; it refuses `--dispatch-id`, `--expect-revision`, `--result`, `--reason`, `--duplicate-of`, `--delivery-commit`, and `--disposition`.
 - `--result <result>`: `completed` for `done/`; `cancelled`, `duplicate`, `wontfix`, or `completed` for `archived/`; `trashed` for `trash/`.
-- `--reason <reason> --decision <reference>`: required for `archived/` and `trash/`; they record the user decision.
+- `--reason <reason> --decision <reference>`: required for `archived/` and `trash/`; they record the user decision. `--decision` is free text that cites the user's decision: who decided, when, and the words. Kander stores it without checking it; it is not the ID of a `kander decision` record.
 - `--duplicate-of <task-id>`: the replacement card for `--result duplicate`.
-- `--expect-revision <revision>`: compare-and-swap on the card revision.
+- `--expect-revision <revision>`: refuse the move unless the card revision from `kander show --json` still matches. Not with `--owner`.
 - `--dispatch-id <id> --execution-epoch <epoch>`: the durable dispatch grant from the dispatch prompt (`snippets/commands/dispatch.md`).
 - `--delivery-commit <full-SHA>`: the final delivery commit of a bound completion. In distributed mode it is also the delivery commit that a move into `review/` publishes; for a single card it is the closed review target `C`. A wrap-up completion instead passes the `source_commit` of its wrap-up evidence: `intent.evidence.wrap_up.git.source_commit` in the output of `kander dispatch show <task-id> <dispatch-id>` (it equals `intent.base`; in distributed mode it is readable once `kander dispatch prepare` ran), or `source_commit` in `kander show --document dispatches/<dispatch-id>/integration.json <task-id>`.
 - `--disposition <card-relative-path>`: the disposition artifact of a bound fix or sync completion. A wrap-up completion takes none; `dispatches/<dispatch-id>/integration.json` is read-only evidence, not a disposition.
@@ -37,7 +37,7 @@ kander move 20261118-example-task review
 kander move 20261118-example-task done --result completed
 
 # Archive a card that the user cancelled
-kander move 20261118-example-task archived --result cancelled --reason "Cancelled by the user" --decision user-2026-11-19
+kander move 20261118-example-task archived --result cancelled --reason "Cancelled by the user" --decision "user 2026-11-19: cancel the card"
 ```
 
 ## Preconditions
@@ -81,4 +81,4 @@ Source: moved from `KANDER-KANBAN-RULES.md` "Claiming, Starting, and Coordinatio
 - A missing gate record, an unknown state, a missing result or decision, or a plain move on a bound card.
 - A wrap-up completion whose `--delivery-commit` is not the `source_commit` of its wrap-up evidence (`board.dispatch_evidence_invalid`; the message gives the expected `source_commit` and the value passed), or that carries `--disposition` (same code; the message says a wrap-up completion takes no `--disposition` and gives the `--delivery-commit` to use). Nothing is written; run the move again with `--delivery-commit <source_commit>` and no `--disposition`.
 - A wrap-up of a group with a coordinator checkpoint whose Git facts fail verification, or with no checkout in reach that holds the target commit. Run the move from a checkout of the repository.
-- A missing task ID or state, an option without a value, or an unknown option is a usage error.
+- A missing task ID or state, an option without a value, or an unknown option is a usage error. So are `--owner` with a target other than `working`, and `--owner` with `--dispatch-id`, `--expect-revision`, `--result`, `--reason`, `--duplicate-of`, `--delivery-commit`, or `--disposition`.

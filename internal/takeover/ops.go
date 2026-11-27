@@ -34,7 +34,13 @@ func takeoverError(id string, args ...any) error {
 // including dialect inheritance. An omitted or empty value is refused so
 // dismiss keeps the container.
 func AgentExitCommand(agent string) (string, error) {
-	definition, err := config.LoadAgent(agent)
+	return agentExitCommand(nil, agent)
+}
+
+// agentExitCommand is AgentExitCommand with the definition read through
+// lookup; a nil lookup reads it like AgentExitCommand.
+func agentExitCommand(lookup config.AgentLookup, agent string) (string, error) {
+	definition, err := lookup.Agent(agent)
 	if err != nil {
 		return "", err
 	}
@@ -127,8 +133,10 @@ func orNA(v string) string {
 	return v
 }
 
-func agentCommandName(agent string) (string, error) {
-	definition, err := config.LoadAgent(agent)
+// agentCommandName is the foreground process name of agent, read through
+// lookup; a nil lookup reads it with config.LoadAgent.
+func agentCommandName(lookup config.AgentLookup, agent string) (string, error) {
+	definition, err := lookup.Agent(agent)
 	return definition.ProcessName, err
 }
 

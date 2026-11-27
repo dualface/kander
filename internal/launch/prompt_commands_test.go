@@ -41,6 +41,11 @@ var promptActions = regexp.MustCompile(`--action ([a-z]+)`)
 // resultActions are the actions the result prompt must name, each as a command line of its own.
 var resultActions = []string{"inspect", "apply", "decide"}
 
+// resultActionInput is what the protocol the result prompt points at adds to an action's command
+// line: apply and decide read their JSON from --file (KANDER-ISSUE-RULES.md "Completed Result
+// Reconciliation"), and issue result refuses either of them without it.
+var resultActionInput = map[string]string{"apply": " --file /abs/result.json", "decide": " --file /abs/result.json"}
+
 // promptCommandLines are the command lines a rendered prompt tells an agent to run. The three
 // actions of `issue result` stand in the sentence after the line, so they are added to it; a
 // prompt that lost one of them has lost a command line, which fails the test.
@@ -61,7 +66,7 @@ func promptCommandLines(t *testing.T, name, text string, referenced map[string]b
 			var actions []string
 			for _, action := range promptActions.FindAllStringSubmatch(text, -1) {
 				actions = append(actions, action[1])
-				lines = append(lines, line+" --action "+action[1])
+				lines = append(lines, line+" --action "+action[1]+resultActionInput[action[1]])
 			}
 			if !slices.Equal(actions, resultActions) {
 				t.Errorf("%s: the result prompt names the actions %v, want %v", name, actions, resultActions)

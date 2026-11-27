@@ -104,6 +104,8 @@ type embeddedAgent struct {
 	SupportsEffort   bool                   `json:"supports_effort"`
 	PromptDelivery   PromptDelivery         `json:"prompt_delivery"`
 	ExitCommand      string                 `json:"exit_command"`
+	RenameCommand    embeddedRenameCommand  `json:"rename_command"`
+	RenameDelivery   *RenameDelivery        `json:"rename_delivery"`
 	ProgramStatus    *ProgramStatus         `json:"program_status"`
 	Review           embeddedReview         `json:"review"`
 	RulesTarget      agentRulesTarget       `json:"rules_target"`
@@ -236,6 +238,12 @@ func parseEmbeddedAgentFile(fileName string, data []byte) (embeddedAgent, error)
 	}
 	if !validExitCommandText(agent.ExitCommand) {
 		return embeddedAgent{}, embedAgentError(fileName, "exit_command")
+	}
+	if !validRenameCommand(string(agent.RenameCommand)) {
+		return embeddedAgent{}, embedAgentError(fileName, "rename_command")
+	}
+	if err := validateRenameDelivery(fileName, agent.RenameDelivery); err != nil {
+		return embeddedAgent{}, err
 	}
 	if !validAgentText(agent.DisplayName) {
 		return embeddedAgent{}, embedAgentError(fileName, "display_name")
@@ -524,30 +532,33 @@ func validatePromptDelivery(name string, d *PromptDelivery) error {
 		if d.Ready == nil {
 			return agentDefinitionError(name, Text("config.agent_prompt_delivery", "ready"))
 		}
-		if !validAgentText(d.Ready.Match) {
-			return agentDefinitionError(name, Text("config.agent_prompt_delivery", "ready.match"))
-		}
-		if d.Ready.TimeoutMS <= 0 {
-			return agentDefinitionError(name, Text("config.agent_prompt_delivery", "ready.timeout_ms"))
-		}
-		if err := compileDeliveryPattern(d.Ready.Match); err != nil {
-			return agentDefinitionError(name, Text("config.agent_prompt_delivery", "ready.match"))
-		}
-		for _, blocked := range d.Blocked {
-			if !validAgentText(blocked.Match) {
-				return agentDefinitionError(name, Text("config.agent_prompt_delivery", "blocked.match"))
-			}
-			if strings.TrimSpace(blocked.Reason) == "" || strings.ContainsAny(blocked.Reason, "\n\r") {
-				return agentDefinitionError(name, Text("config.agent_prompt_delivery", "blocked.reason"))
-			}
-			if err := compileDeliveryPattern(blocked.Match); err != nil {
-				return agentDefinitionError(name, Text("config.agent_prompt_delivery", "blocked.match"))
-			}
+		if field := invalidDeliveryReadiness(d.Ready, d.Blocked); field != "" {
+			return agentDefinitionError(name, Text("config.agent_prompt_delivery", field))
 		}
 	default:
 		return agentDefinitionError(name, Text("config.agent_prompt_delivery", "mode"))
 	}
 	return nil
+}
+
+func invalidDeliveryReadiness(ready *PromptReady, blocked []PromptBlocked) string {
+	if ready != nil {
+		if !validAgentText(ready.Match) || compileDeliveryPattern(ready.Match) != nil {
+			return "ready.match"
+		}
+		if ready.TimeoutMS <= 0 {
+			return "ready.timeout_ms"
+		}
+	}
+	for _, item := range blocked {
+		if !validAgentText(item.Match) || compileDeliveryPattern(item.Match) != nil {
+			return "blocked.match"
+		}
+		if strings.TrimSpace(item.Reason) == "" || strings.ContainsAny(item.Reason, "\n\r") {
+			return "blocked.reason"
+		}
+	}
+	return ""
 }
 
 func compileDeliveryPattern(match string) error {

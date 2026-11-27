@@ -41,6 +41,28 @@
     "mode": "generated"
   },
   "exit_command": "/exit",
+  "rename_command": "/rename {name}",
+  "rename_delivery": {
+    "ready": {
+      "match": "regex:(?m)^❯[ \\t\\x{00a0}]*$",
+      "timeout_ms": 15000
+    },
+    "complete": "Session renamed to: {name}",
+    "blocked": [
+      {
+        "match": "Quick safety check:",
+        "reason": "Claude Code is asking whether to trust the startup directory."
+      },
+      {
+        "match": "Yes, I trust this folder",
+        "reason": "Claude Code is asking whether to trust the startup directory."
+      },
+      {
+        "match": "WARNING: Claude Code running in Bypass Permissions mode",
+        "reason": "Claude Code is asking to confirm Bypass Permissions mode."
+      }
+    ]
+  },
   "program_status": {"reports": true, "app": "claude-code"},
   "display_name": "Claude",
   "supports_effort": true,

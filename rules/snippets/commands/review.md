@@ -40,7 +40,7 @@ kander review <plan|extend-plan|assign|disposition|interpret|advance|close|aband
 - `[reviewed-commit]`: for an incremental round, the commit this role reviewed in the previous round; a first round omits it.
 - `plan`, `extend-plan`, `assign`, `disposition`, `interpret`, `map-legacy`, `abandon`, `aggregate`, `advance`, `close`, `progress`, `publication`: select an evidence subcommand; each takes an absolute CWD and a JSON file or an ID as shown in Syntax.
 - `publication`: the subcommand that reads the stored material of a joint publication before a holder confirms it; it is read-only and needs no credential (`## Distributed holder confirmation (v2)`).
-- `confirm`: the subcommand that confirms a prepared publication as its holder; the confirmation binds the task revision, the execution generation, and the digest of the material; see "Additional Syntax".
+- `confirm`: the subcommand that confirms a prepared publication as its holder; the confirmation binds the task revision, the execution generation, and the digest of the material; see "Additional Syntax". It is not the top-level `kander confirm`, which confirms a request card.
 - `--schema`: prints the JSON schema of the input of a subcommand.
 - `batch`: not a subcommand (no documented caller); batches are named in the plan by `plan` and `extend-plan`, advanced by `advance`, and closed by `close`.
 - `resolve_batch`: a field of the `extend-plan` input that accepts an unplanned batch that already ran, on the evidence of one closed planned batch (`snippets/review-evidence-gate.md` "Review Evidence Completion Gate").

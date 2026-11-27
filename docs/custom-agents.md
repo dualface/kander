@@ -6,6 +6,8 @@ Shared stdout/file/pane output parsing used by templates, review, and later term
 
 A project may also commit `.kander-config.json` at the Git main worktree root (or, outside Git, the first file of that name found walking up from the current directory). Its keys overlay the scope `config.json` at runtime, including `agents` executable paths and argv templates. That is accepted at the same trust level as checking out and running the repository. The Options Global tab, `Save`/`Update`, doctor repair, and the installer still write only the scope config file. The Options Project tab writes only this overlay file; it never writes `.kander/config.json`. Unedited keys stay inherited.
 
+The background worker (`kander worker`) runs in the client home, outside every project, and serves the executions of every project of that home. It reads the agent definitions of an execution (process name, session settings, program status, session file, and exit command) with the overlay of the directory that execution records: the main worktree of the checkout it was started from (the start directory itself outside Git), or, when an older record has none, its execution worktree. When the recorded directory is empty, or no longer exists, the worker uses the scope `config.json` and logs a warning for a missing directory; it never searches for an overlay above a missing directory. An overlay that is not valid fails those reads, as it does for a command run in the project.
+
 ## Executable Name and Process Name
 
 ```json
@@ -59,6 +61,56 @@ A card pin (`EXEC_EFFORT`, `REVIEW_<ROLE>_EFFORT`) is accepted only when the age
 Neither the allocate command nor the argument templates use shell interpolation; terminal launches still go through the existing platform argument encoding. The configuration can execute programs declared by the local user, which does not constitute a new inter-user privilege boundary.
 
 ## Session Policies
+
+### Interactive session names
+
+An agent can declare `rename_command`, for example `"/rename {name}"`. It
+must be a single line containing the literal placeholder `{name}`, with no
+control characters, Unicode format characters, or Unicode line or paragraph
+separators. Kander rejects invalid values in both built-in and user definitions.
+A missing field inherits the built-in command of the effective dialect, if
+there is one. A scope setting replaces that default, and a project overlay
+replaces the scope setting. An explicit empty string disables renaming without
+changing how that agent normally receives its prompt.
+
+Kander substitutes the filtered terminal label for every `{name}`. Unicode
+letters (L*), combining marks (M*) and decimal digits (Nd), plus `-`, `_` and
+`.`, are retained. Control and format characters (Cc and Cf) are removed.
+Everything else becomes `-`. Repeated hyphens collapse and leading and trailing
+hyphens are removed. This does not change the terminal label itself.
+
+`rename_delivery` can describe the interactive composer separately from
+`prompt_delivery`. It uses the same `ready` and `blocked` structures and
+supports literal matches or the `regex:` prefix. Omitting the object inherits
+the dialect's object, or reuses the baseline pane delivery rules if the
+dialect has none. Its optional `complete` screen match can also contain
+`{name}` (escaped as literal text inside a regular expression). Without a
+completion match, Kander looks for the ready composer again after a short
+pause without a new rename draft. Screen matches see the original backend
+output, including terminal line endings. After successful delivery, Kander can
+exclude one command echo next to a fresh acknowledgement from the draft
+check. An acknowledgement that stays in place cannot hide an adjacent draft.
+If a new acknowledgement uses the same row as an older one, the retained
+viewport lines must show that the older match moved higher on the screen.
+If the number of matches does not increase, a repeated acknowledgement and
+its echo must appear below the retained viewport lines after an older match
+scrolls out. Both checks apply when one older match moves and another scrolls
+out. After a delivery error, no acknowledgement can hide a visible rename
+draft.
+`after_argv: true` preserves the
+initial prompt argument. Use it only for a client verified to handle the
+rename command locally without interfering with that first prompt.
+Keep the default when the client must be renamed while idle, before it
+receives its first prompt. Match the available composer in `ready.match`
+for launchers without OSC 7501 status. Supply `blocked` matches for startup
+dialogs that may appear.
+
+These are trusted CLI declarations. Verify the command and readiness against
+the actual CLI version before enabling renaming for an agent. In particular,
+confirm that the CLI treats the command as local, not as a message to the
+model. See [launch and delivery](launch-and-delivery.md#interactive-session-naming).
+
+### Session identity
 
 - `generated`: generates a UUID and saves it to the card's SESSION, for use by `{session}` and resume.
 - `allocated`: first executes the `session.allocate` argv (the first element is the program), waiting at most 10 seconds; successful output must be a single ID, or a top-level JSON string field designated via `session.json_field`. An ID accepts only 1–128 letters, digits, `.`, `_`, `:`, and `-`. Program failure, invalid output, and timeout are all reported before the task is claimed.

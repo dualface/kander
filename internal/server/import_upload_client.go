@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"path/filepath"
 	"slices"
 	"time"
@@ -33,15 +34,16 @@ func uploadImport(ctx context.Context, target string, req api.ImportRequest, run
 	produceCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	produced := make(chan error, 1)
+	declared := make(chan int64, 1)
 	go func() {
-		err := writeBoardUpload(produceCtx, writer, req, run.report)
+		err := writeBoardUpload(produceCtx, writer, req, declared, run.report)
 		if err == nil && run.uploadSent != nil {
 			run.uploadSent.Store(true)
 		}
 		_ = writer.CloseWithError(err)
 		produced <- err
 	}()
-	out, err = peer.UploadImport(ctx, req.Project, body, run.report)
+	out, err = peer.UploadImport(ctx, req.Project, body, declared, run.report)
 	cancel()
 	_ = body.Close()
 	writeErr := <-produced
@@ -53,10 +55,24 @@ func uploadImport(ctx context.Context, target string, req api.ImportRequest, run
 		// the server can see only a truncated request.
 		return out, writeErr
 	}
-	return out, err
+	return out, uploadLimitHint(err)
 }
 
-func writeBoardUpload(ctx context.Context, dst io.Writer, req api.ImportRequest, report func(api.ImportProgress)) error {
+// uploadLimitHint adds to a 413 refusal that an older server has lower
+// limits: this client no longer refuses a large board itself.
+func uploadLimitHint(err error) error {
+	var refused *api.Error
+	if !errors.As(err, &refused) || refused.Status != http.StatusRequestEntityTooLarge {
+		return err
+	}
+	hinted := *refused
+	hinted.Message += "; " + config.Text("server.import_upload_limit_hint")
+	return &hinted
+}
+
+// writeBoardUpload sends declared the file bytes of the manifest before the
+// first file body.
+func writeBoardUpload(ctx context.Context, dst io.Writer, req api.ImportRequest, declared chan<- int64, report func(api.ImportProgress)) error {
 	progress := newImportEmitter(report)
 	defer progress.stop()
 	progress.phase(api.ImportPhaseLock)
@@ -64,9 +80,11 @@ func writeBoardUpload(ctx context.Context, dst io.Writer, req api.ImportRequest,
 		return fmt.Errorf("recover the source board first: %w", err)
 	}
 	return board.WithImportSnapshot(ctx, req.From, func() error {
-		limits := defaultUploadLimits()
+		// Only the format is checked here. The server applies its own
+		// limits to the manifest, before any file body is sent.
+		limits := clientUploadLimits()
 		progress.phase(api.ImportPhaseScan)
-		tree, err := scanImportTree(ctx, req.From, progress.counter(api.ImportPhaseScan, 0), &limits)
+		tree, err := scanImportTree(ctx, req.From, progress.counter(api.ImportPhaseScan, 0), true)
 		if err != nil {
 			return err
 		}
@@ -78,6 +96,9 @@ func writeBoardUpload(ctx context.Context, dst io.Writer, req api.ImportRequest,
 		for _, rel := range tree.files {
 			sum := tree.sums[rel]
 			m.Files = append(m.Files, api.ImportUploadFile{Path: rel, Size: tree.sizes[rel], SHA256: hex.EncodeToString(sum[:])})
+		}
+		if declared != nil {
+			declared <- tree.bytes
 		}
 		if err := writeUploadManifest(dst, m, limits); err != nil {
 			return err
@@ -95,7 +116,7 @@ func writeBoardUpload(ctx context.Context, dst io.Writer, req api.ImportRequest,
 			}
 			w.done++
 		}
-		again, err := scanImportTree(ctx, req.From, nil, &limits)
+		again, err := scanImportTree(ctx, req.From, nil, true)
 		if err != nil {
 			return err
 		}
@@ -122,7 +143,7 @@ func writeUploadManifest(dst io.Writer, m api.ImportUploadManifest, limits uploa
 		return err
 	}
 	if len(payload) > limits.manifest {
-		return uploadTooLarge()
+		return uploadTooLarge("manifest bytes", int64(len(payload)), int64(limits.manifest))
 	}
 	if err := binary.Write(dst, binary.BigEndian, uint32(len(payload))); err != nil {
 		return err

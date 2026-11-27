@@ -43,6 +43,19 @@
     "mode": "hook:codex-rollout"
   },
   "exit_command": "/exit",
+  "rename_command": "/rename {name}",
+  "rename_delivery": {
+    "ready": {
+      "match": "regex:(?m)^› Ask Codex to do anything\\s*$",
+      "timeout_ms": 15000
+    },
+    "blocked": [
+      {
+        "match": "Trust this folder?",
+        "reason": "Codex is asking whether to trust the startup directory."
+      }
+    ]
+  },
   "program_status": {"reports": true, "app": "codex"},
   "display_name": "Codex",
   "supports_effort": true,

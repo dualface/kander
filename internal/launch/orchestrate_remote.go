@@ -38,7 +38,7 @@ func remoteOrchestrateBoard(ctx context.Context, cfg *config.Config) (board.Boar
 func bindRemoteOrchestrator(plan *LaunchPlan, inv process.ProcessInvocation, session *AgentSession, service *remote.Session, program *process.AgentProgram, task, project, prompt string, journal *remote.ActionJournal) (process.ProcessInvocation, func(LaunchOutcome) error, func() (AgentSession, error), error) {
 	execution := journal.Value.ExecutionID
 	inv = withInvocationEnvironment(*plan, inv, map[string]string{remote.EnvExecutionID: execution, remote.EnvCoordinatorExecutionID: execution})
-	value := remote.ExecutionContext{ServerURL: service.ServerURL, ClientID: service.Client.ClientID(), ProjectID: service.Info.ID, ExecutionID: execution}
+	value := remote.ExecutionContext{ServerURL: service.ServerURL, ClientID: service.Client.ClientID(), ProjectID: service.Info.ID, ExecutionID: execution, ProjectDir: project}
 	if session.Reference != "" {
 		value.Session = session.Render()
 	}

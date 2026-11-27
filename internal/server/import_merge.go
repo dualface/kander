@@ -14,15 +14,18 @@ import (
 )
 
 type importStage struct {
-	source, target treeScan
-	sourceFiles    []string
-	sourceDirs     []string
-	defaulted      map[string]string // relative spec path to normalized text
-	merge          bool
-	added          int
-	tasks          int
-	existing       []string
-	skipped        []api.ImportConflict
+	// source is the whole scanned source; copied is the part the import
+	// copies, without the leftovers of interrupted atomic writes.
+	source, copied, target treeScan
+	remnants               []api.ImportWarning
+	sourceFiles            []string
+	sourceDirs             []string
+	defaulted              map[string]string // relative spec path to normalized text
+	merge                  bool
+	added                  int
+	tasks                  int
+	existing               []string
+	skipped                []api.ImportConflict
 }
 
 type mergeCard struct {
@@ -78,9 +81,14 @@ func catalogImport(view board.Board, root string, tree treeScan) mergeTree {
 	return out
 }
 
+// checkImportRecordLayout refuses unknown files below .kander. The leftover
+// of an interrupted atomic write is not refused: planImport skips it.
 func checkImportRecordLayout(files []string) error {
 	for _, rel := range files {
 		top, _, _ := strings.Cut(rel, "/")
+		if _, remnant := board.ImportAtomicRemnant(rel); remnant {
+			continue
+		}
 		if strings.EqualFold(top, ".kander") && board.ImportRecord(rel) == (board.ImportRecordKey{}) {
 			return importRejected(fmt.Sprintf("unrecognized or unrecovered v1 board record %q; nothing was published", rel))
 		}
