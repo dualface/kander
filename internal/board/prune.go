@@ -309,6 +309,11 @@ func settleCompactionBackups(root string) (stuck map[string]bool, failures []err
 	for _, entry := range entries {
 		id, ok := strings.CutSuffix(entry.Name, ".json")
 		if !ok || !ValidReviewID(id) {
+			// A link names no run to keep, but it is still reported: an
+			// unexpected link here is never silently accepted.
+			if entry.Kind == fs.KindLink {
+				failures = append(failures, reviewError(filepath.Join(dir, entry.Name)+": not a regular file"))
+			}
 			continue
 		}
 		gone, e := settleCompactionBackup(root, id, entry.Kind)
@@ -331,7 +336,18 @@ func settleCompactionBackup(root, id string, kind fs.Kind) (gone bool, err error
 		return false, err
 	}
 	if kind != fs.KindFile {
-		return !exists, reviewError(backup + ": not a regular file")
+		// Such an entry is never removed, so its run is gone only when the run
+		// directory is: a run directory that lost its run.json may still be
+		// restored, and keeping the run keeps everything it reads.
+		notFile := reviewError(backup + ": not a regular file")
+		if exists {
+			return false, notFile
+		}
+		present, err := fs.DirectoryExists(root, control(root, "groups", reviewControlGroup, "runs", id))
+		if err != nil {
+			return false, errors.Join(notFile, err)
+		}
+		return !present, notFile
 	}
 	if exists {
 		data, ok, err := readReceiptFile(root, backup)

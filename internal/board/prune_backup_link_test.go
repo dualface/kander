@@ -104,3 +104,48 @@ func TestArchivePruneSettlesAnOrphanBesideTheSymlinkBackupOfAGoneRun(t *testing.
 	}
 	requireLinkUntouched(t, linked, target)
 }
+
+// A symlink backup keeps its run while runs/<run>/ is still there, even when
+// its run.json is missing: the run is not known to be gone, so nothing it
+// reads is removed.
+func TestArchivePruneKeepsTheRunDirectoryOfASymlinkBackup(t *testing.T) {
+	f := &backupFixture{root: tempBoard(t)}
+	a := f.compactedRun(t, "backup-link-norun-a")
+	f.archive(t)
+	linked, target := linkBackup(t, f.root, a.RunID)
+	if err := os.Remove(reviewPath(f.root, "runs", a.RunID, "run.json")); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := PruneArchived(f.root)
+	if err == nil || !strings.Contains(err.Error(), linked) {
+		t.Fatalf("want the error of %s, got %v", linked, err)
+	}
+	requireExists(t, reviewPath(f.root, "runs", a.RunID), true)
+	requireExists(t, reviewPath(f.root, "batches", a.BatchID+".json"), true)
+	requireExists(t, reviewPath(f.root, "plans", "plan-"+a.RunID+".json"), true)
+	requireLinkUntouched(t, linked, target)
+}
+
+// A link in compaction-backups/ under a name that is no backup is reported as
+// well; the orphan backup beside it still goes and the link stays.
+func TestArchivePruneReportsALinkThatIsNoBackup(t *testing.T) {
+	root := tempBoard(t)
+	orphan := orphanBackup(t, root, "backup-stray-link-b-run")
+	target := filepath.Join(t.TempDir(), "target.json")
+	if err := os.WriteFile(target, []byte("outside\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stray := filepath.Join(filepath.Dir(orphan), "restore-link")
+	// Windows needs SeCreateSymbolicLinkPrivilege or developer mode.
+	if err := os.Symlink(target, stray); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	_, err := PruneArchived(root)
+	requireBackupGone(t, orphan)
+	if err == nil || !strings.Contains(err.Error(), stray) {
+		t.Fatalf("want the error of %s, got %v", stray, err)
+	}
+	requireLinkUntouched(t, stray, target)
+}
