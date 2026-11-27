@@ -516,11 +516,17 @@ type Event struct {
 
 // EventPage is GET .../events?cursor=C&wait=S. Reset means the cursor is no
 // longer valid (unknown epoch or pruned); the client re-reads the full task
-// list and continues from its cursor.
+// list and continues from its cursor. PolicyEpoch and PolicyRevision are the
+// project policy version when the page was answered (absent while the project
+// has none), read after its events: a client that continues from the cursor of
+// a later board snapshot may skip a policy change event, but never a later
+// page's version.
 type EventPage struct {
-	Cursor string  `json:"cursor"`
-	Reset  bool    `json:"reset,omitzero"`
-	Events []Event `json:"events"`
+	Cursor         string  `json:"cursor"`
+	Reset          bool    `json:"reset,omitzero"`
+	Events         []Event `json:"events"`
+	PolicyEpoch    string  `json:"policy_epoch,omitempty"`
+	PolicyRevision uint64  `json:"policy_revision,omitzero"`
 }
 
 // Duration marshals as integer milliseconds.

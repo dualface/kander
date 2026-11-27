@@ -236,7 +236,12 @@ func (s *Server) registerRoutes(mux *routeTable) {
 		stop := context.AfterFunc(s.shutdown, cancel)
 		defer stop()
 		defer cancel()
-		return outcome{status: http.StatusOK, body: p.events.read(ctx, r.URL.Query().Get("cursor"), wait)}
+		page := p.events.read(ctx, r.URL.Query().Get("cursor"), wait)
+		// Read after the events: a policy write publishes the policy before its
+		// event, so the version is never older than an event of the page.
+		policy := p.policyView()
+		page.PolicyEpoch, page.PolicyRevision = policy.Epoch, policy.Revision
+		return outcome{status: http.StatusOK, body: page}
 	})
 	s.reviewRoutes(mux)
 	s.reviewActionRoutes(mux)

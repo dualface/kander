@@ -35,6 +35,18 @@ func (s *Session) CurrentPolicy() api.ProjectPolicy {
 	return *s.Info.Policy
 }
 
+// PolicyAnnounced reports whether a policy version a server announced (an
+// event page, a change event, a lease renewal) is newer than the policy this
+// session works with, so the policy should be read again. Revision 0 announces
+// nothing: an older server sends no version.
+func (s *Session) PolicyAnnounced(epoch string, revision uint64) bool {
+	if revision == 0 {
+		return false
+	}
+	known := s.CurrentPolicy()
+	return epoch != known.Epoch || revision > known.Revision
+}
+
 // BranchMode is the git.branch_mode in effect for this session: the policy
 // value when a policy applies, otherwise the local one. A session built
 // without a configuration has no local value and reports the default, as a

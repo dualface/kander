@@ -33,6 +33,9 @@ func TestPolicyWriteAppendsOneChangeEventWithTheNewRevision(t *testing.T) {
 	f := newFixture(t)
 	p := f.project("host-a")
 	_, cursor := policyEvents(t, p, "")
+	if page, err := p.Events(t.Context(), cursor, 0); err != nil || page.PolicyEpoch != "" || page.PolicyRevision != 0 {
+		t.Fatalf("an unset policy shows %q/%d on the event page: %v", page.PolicyEpoch, page.PolicyRevision, err)
+	}
 	first := putPolicy(t, p, requiredPMQA())
 	second := putPolicy(t, p, enforcedPolicy{mode: "main-only", smallPMQA: "auto", largePM: "auto", review: true})
 	events, _ := policyEvents(t, p, cursor)
@@ -43,6 +46,15 @@ func TestPolicyWriteAppendsOneChangeEventWithTheNewRevision(t *testing.T) {
 		if e.TaskID != "" || e.GroupID != "" || e.State != "" {
 			t.Fatalf("a policy event names a resource: %+v", e)
 		}
+	}
+	// Every page carries the policy version it was answered with, also an empty one.
+	current, err := p.Policy(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := p.Events(t.Context(), cursor, 0)
+	if err != nil || page.PolicyEpoch != current.Epoch || page.PolicyRevision != second {
+		t.Fatalf("event page policy %q/%d %v, want %q/%d", page.PolicyEpoch, page.PolicyRevision, err, current.Epoch, second)
 	}
 }
 
@@ -99,9 +111,11 @@ func TestLeaseRenewalsCarryTheCurrentPolicyVersion(t *testing.T) {
 	}
 	groupProof := client.Claim{Token: group.Token, Generation: group.Claim.Generation}
 	renewals := map[string]func() (api.Renewal, error){
-		"task":        func() (api.Renewal, error) { return p.Renew(t.Context(), member.TaskID, taskProof) },
-		"group":       func() (api.Renewal, error) { return p.RenewGroup(t.Context(), request.Request.GroupID, groupProof) },
-		"integration": func() (api.Renewal, error) { return p.RenewIntegration(t.Context(), integration.Integration.ID, integrationProof) },
+		"task":  func() (api.Renewal, error) { return p.Renew(t.Context(), member.TaskID, taskProof) },
+		"group": func() (api.Renewal, error) { return p.RenewGroup(t.Context(), request.Request.GroupID, groupProof) },
+		"integration": func() (api.Renewal, error) {
+			return p.RenewIntegration(t.Context(), integration.Integration.ID, integrationProof)
+		},
 	}
 	check := func(epoch string, revision uint64) {
 		t.Helper()
