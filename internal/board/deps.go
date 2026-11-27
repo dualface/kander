@@ -2,6 +2,7 @@ package board
 
 import (
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -400,12 +401,14 @@ func checkBoard(root string, taskIDs []string, includeAll, importHistory bool) (
 			}
 		}
 	}
+	// A compaction line is information: a lookup that failed is one more
+	// problem, never the loss of the summary and the other diagnostics.
+	notes, err := compactionNotes(root, board, taskIDs, includeAll)
+	if err != nil && !slices.ContainsFunc(allProblems, func(p Problem) bool { return p.Message == err.Error() }) {
+		allProblems = append(allProblems, Problem{Path: root, Message: err.Error()})
+	}
 	for _, problem := range allProblems {
 		stderr = append(stderr, t("board.invalid", problem.Message))
-	}
-	notes, err := compactionNotes(root, board, taskIDs, includeAll)
-	if err != nil {
-		return 1, "", nil, err
 	}
 	if len(allProblems) > 0 {
 		return 1, t(
@@ -426,12 +429,9 @@ func compactionNotes(root string, board Board, taskIDs []string, includeAll bool
 		ids = append(ids, id)
 	}
 	compacted, err := CompactedReviewRuns(root, ids)
-	if err != nil {
-		return "", err
-	}
 	var notes strings.Builder
 	for _, id := range sortedKeys(compacted) {
 		notes.WriteString(t("board.check_review_compacted", id, strings.Join(compacted[id], ", ")) + "\n")
 	}
-	return notes.String(), nil
+	return notes.String(), err
 }

@@ -189,25 +189,20 @@ func ReviewRunCompacted(root, id string) (compacted bool, err error) {
 // invalid receipt is reported by CheckReviewEvidence instead. Each run that
 // binds one of ids reads its receipt by path, like every other reader, so a
 // run whose receipt an interrupted archive pruning left only as its backup
-// is found too, and neither receipt directory needs to be listable.
+// is found too, and neither receipt directory needs to be listable. When
+// runs/ cannot be listed, the runs named in the receipt directories are still
+// checked: the result holds what could be read, and the error says what
+// could not.
 func CompactedReviewRuns(root string, ids []string) (map[string][]string, error) {
 	result := map[string][]string{}
 	if len(ids) == 0 {
 		return result, nil
 	}
+	var failures []error
 	err := WithTransaction(root, reviewScope(nil, true), func(tx *Transaction) error {
-		entries, e := fs.ListDirectory(root, control(root, "groups", reviewControlGroup, "runs"))
-		if errors.Is(e, os.ErrNotExist) {
-			return nil
-		}
-		if e != nil {
-			return e
-		}
-		for _, entry := range entries {
-			runID := entry.Name
-			if entry.Kind != fs.KindDirectory || !ValidReviewID(runID) {
-				continue
-			}
+		candidates, e := compactionCandidates(root)
+		failures = e
+		for _, runID := range candidates {
 			var run ReviewRun
 			exists, e := readReviewJSON(tx, reviewRunName(runID), &run)
 			if e != nil || !exists || !slices.ContainsFunc(run.TaskIDs, func(id string) bool { return slices.Contains(ids, id) }) {
@@ -227,7 +222,36 @@ func CompactedReviewRuns(root string, ids []string) (map[string][]string, error)
 	for id := range result {
 		slices.Sort(result[id])
 	}
-	return result, err
+	return result, errors.Join(append(failures, err)...)
+}
+
+// compactionCandidates names the runs that may have a compaction receipt: every
+// run in runs/, or, when runs/ cannot be listed, every run that has a receipt
+// or a backup. It returns the sorted names it found and the listing errors.
+func compactionCandidates(root string) ([]string, []error) {
+	names := map[string]bool{}
+	entries, err := fs.ListDirectory(root, control(root, "groups", reviewControlGroup, "runs"))
+	if err == nil || errors.Is(err, os.ErrNotExist) {
+		for _, entry := range entries {
+			if entry.Kind == fs.KindDirectory && ValidReviewID(entry.Name) {
+				names[entry.Name] = true
+			}
+		}
+		return sortedKeys(names), nil
+	}
+	failures := []error{err}
+	for _, dir := range []string{"compactions", "compaction-backups"} {
+		entries, e := fs.ListDirectory(root, control(root, "groups", pruneControlGroup, dir))
+		if e != nil && !errors.Is(e, os.ErrNotExist) {
+			failures = append(failures, e)
+		}
+		for _, entry := range entries {
+			if runID, ok := strings.CutSuffix(entry.Name, ".json"); ok && entry.Kind == fs.KindFile && ValidReviewID(runID) {
+				names[runID] = true
+			}
+		}
+	}
+	return sortedKeys(names), failures
 }
 
 // compactionLookup returns, for one run, whether a file it lists is compacted.

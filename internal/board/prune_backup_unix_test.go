@@ -310,3 +310,61 @@ func TestCompactedReviewRunsIgnoresAnUnreadableBackupDirectory(t *testing.T) {
 		t.Fatalf("check output %q %v lacks %q", stdout, err, marker)
 	}
 }
+
+// A symlink in place of a backup fails the listing of compaction-backups/,
+// yet only its run stays: the backups are settled by path, the link and its
+// target are left alone, and an unrelated batch still goes.
+func TestArchivePruneKeepsOnlyTheRunOfASymlinkBackup(t *testing.T) {
+	f := &backupFixture{root: tempBoard(t)}
+	a := f.compactedRun(t, "backup-link-a")
+	b := f.settledRun(t, "backup-link-b")
+	f.archive(t)
+	target := filepath.Join(t.TempDir(), "target.json")
+	if err := os.WriteFile(target, []byte("outside\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensurePruneDir(f.root, "compaction-backups"); err != nil {
+		t.Fatal(err)
+	}
+	backup := compactionBackupPath(f.root, a.RunID)
+	if err := os.Symlink(target, backup); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := PruneArchived(f.root)
+	if err == nil || !strings.Contains(err.Error(), backup) {
+		t.Fatalf("want the error of %s, got %v", backup, err)
+	}
+	if !slices.Equal(report.Runs, []string{b.RunID}) {
+		t.Fatalf("pruned runs %v, want only %s", report.Runs, b.RunID)
+	}
+	requireRunPruned(t, f.root, b, true)
+	requireRunPruned(t, f.root, a, false)
+	requireReceipt(t, f.root, a)
+	if link, err := os.Readlink(backup); err != nil || link != target {
+		t.Fatalf("the symlink backup changed: %q %v", link, err)
+	}
+	if data, err := os.ReadFile(target); err != nil || string(data) != "outside\n" {
+		t.Fatalf("the link target changed: %q %v", data, err)
+	}
+}
+
+// An entry of runs/ that fails its listing costs check one diagnostic, never
+// its summary or the compaction lines it can still find through the receipts.
+func TestCheckKeepsItsOutputWhenRunsCannotBeListed(t *testing.T) {
+	root, id, run := compactionBoard(t, "compact-runs-link")
+	compact(t, root, false)
+	if err := os.Symlink(t.TempDir(), reviewPath(root, "runs", "zz-link")); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr, err := CheckBoard(root, []string{id}, false)
+	if err != nil || code != 1 || len(stderr) == 0 {
+		t.Fatalf("check: %d %q %v %v", code, stdout, stderr, err)
+	}
+	if marker := config.Text("board.check_review_compacted", id, run.RunID); !strings.Contains(stdout, marker+"\n") {
+		t.Fatalf("check output %q lacks %q", stdout, marker)
+	}
+	if !slices.ContainsFunc(stderr, func(line string) bool { return strings.Contains(line, "zz-link") }) {
+		t.Fatalf("check diagnostics %v do not name the link", stderr)
+	}
+}
