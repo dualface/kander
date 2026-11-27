@@ -21,12 +21,14 @@ func projectLookup(t *testing.T, codex map[string]any) config.AgentLookup {
 }
 
 // overlayProject creates a Git project with the given overlay, and moves the
-// process into a directory outside any project.
+// process into a directory outside any project. The move comes before the
+// scope configuration is saved: its launcher check loads the terminal
+// definitions of the process directory's project.
 func overlayProject(t *testing.T, overlay map[string]any) string {
 	t.Helper()
 	isolateUserEnvironment(t)
-	writeTestConfig(t)
 	t.Chdir(t.TempDir())
+	writeTestConfig(t)
 	project := t.TempDir()
 	if out, err := exec.Command("git", "init", "-q", project).CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v %s", err, out)
