@@ -53,6 +53,7 @@ var catalogFiles = []string{
 	"locales/theme/en.json", "locales/theme/zh-CN.json", "locales/theme/ja.json",
 	"locales/recovery/en.json", "locales/recovery/zh-CN.json", "locales/recovery/ja.json",
 	"locales/rulesinjection/en.json", "locales/rulesinjection/zh-CN.json", "locales/rulesinjection/ja.json",
+	"locales/uninstall/en.json", "locales/uninstall/zh-CN.json", "locales/uninstall/ja.json",
 	"locales/server/en.json", "locales/server/zh-CN.json", "locales/server/ja.json",
 	"locales/document/en.json", "locales/document/zh-CN.json", "locales/document/ja.json",
 	"locales/integrationtarget/en.json", "locales/integrationtarget/zh-CN.json", "locales/integrationtarget/ja.json",

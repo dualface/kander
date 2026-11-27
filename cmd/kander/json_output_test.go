@@ -454,8 +454,22 @@ func TestJSONInteractiveFormsAreRefusedWithoutEffects(t *testing.T) {
 	if entries, _ := os.ReadDir(filepath.Join(root, "launch-actions")); len(entries) != 0 {
 		t.Fatalf("a launch receipt was written before the refusal: %v", entries)
 	}
-	// uninstall with --yes needs no answer.
-	uninstalled := requireResult(t, runKander(t, "uninstall", "--json", "--yes"), "uninstall --yes", "mode", "config_file", "rules_dir", "items")
+	// uninstall with --yes needs no answer. It stops the loopback server its configuration
+	// names; the fixture's server cannot be shut down that way, so the configuration of this
+	// run names a closed port.
+	closed := httptest.NewServer(http.NotFoundHandler())
+	closedURL := closed.URL
+	closed.Close()
+	cfg, err := config.LoadScope(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Server.URL = closedURL
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	uninstalled := requireResult(t, runKander(t, "uninstall", "--json", "--yes"), "uninstall --yes", "mode", "rules_dir", "items", "leases", "failures")
 	if uninstalled["mode"] != "global" {
 		t.Fatalf("uninstall: %v", uninstalled)
 	}

@@ -635,7 +635,7 @@ Both import routes answer in one of two forms. Checks before import (including a
 
 ## Build and release
 
-`make build` and `make-windows.cmd` build only `kander` (`kander.exe` on Windows). Release archives and MSIX bundles contain that one executable. `kander install` copies only it; uninstall also removes an obsolete standalone service file. There is no separate service alias, installer or updater. Prerelease tags (`v2.Y.Z-(alpha|beta|rc).N`, cut from the `v2` branch) remain GitHub prereleases, never replace the Latest release or sync the Homebrew formula, and skip MSIX publication; a prerelease binary updates only to a newer 2.x prerelease (see [Automatic updates](install-and-permissions.md#automatic-updates)). Store installations use Store updates.
+`make build` and `make-windows.cmd` build only `kander` (`kander.exe` on Windows). Release archives and MSIX bundles contain that one executable. `kander install` copies only it, and `kander uninstall` stops the local server and worker and deletes it (see [Uninstall](install-and-permissions.md#uninstall)). There is no separate service alias, installer or updater. Prerelease tags (`v2.Y.Z-(alpha|beta|rc).N`, cut from the `v2` branch) remain GitHub prereleases, never replace the Latest release or sync the Homebrew formula, and skip MSIX publication; a prerelease binary updates only to a newer 2.x prerelease (see [Automatic updates](install-and-permissions.md#automatic-updates)). Store installations use Store updates.
 
 ## Local service lifecycle
 

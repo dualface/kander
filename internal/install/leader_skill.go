@@ -333,6 +333,7 @@ func removeSkillFile(item UninstallItem) error {
 	if err != nil {
 		return err
 	}
+	observeUninstallWrite(item.Path)
 	_, err = fs.RemoveRegularFileIfExists(anchor, item.Path)
 	return err
 }

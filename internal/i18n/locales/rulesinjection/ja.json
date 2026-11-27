@@ -21,21 +21,5 @@
   "install.rules_confirm": "インストールを開始しますか？",
   "install.rules_confirm_yes": "インストール",
   "install.rules_confirm_no": "キャンセル",
-  "install.rules_injection_disabled": "ルール注入はオフです（{{.V0}}）。書き込みません: {{.V1}}",
-  "install.uninstall_plan_global": "kander uninstall はグローバルスコープを変更します:",
-  "install.uninstall_plan_edit": "  編集  {{.V0}}（Kander の読み込み指示を削除）",
-  "install.uninstall_plan_remove": "  削除  {{.V0}}",
-  "install.uninstall_plan_rules": "  削除  {{.V1}} 内の Kander ルールファイルと状態ファイル {{.V0}} 個、続いて空になったディレクトリ",
-  "install.uninstall_plan_keep": "  保持  {{.V0}}: {{.V1}}",
-  "install.uninstall_plan_config": "設定: {{.V0}} に install_rules: false を書き込み、すべての agents.<name>.install_rules を削除します。",
-  "install.uninstall_plan_untouched": "削除しないもの: バイナリ、config.json、share ディレクトリ、キャッシュ、ボード。",
-  "install.uninstall_question": "アンインストールしますか？ [y/N]: ",
-  "install.uninstall_requires_yes": "端末以外で kander uninstall を実行するときは --yes が必要です。",
-  "install.uninstall_cancelled": "アンインストールをキャンセルしました。ファイルは変更していません。",
-  "install.uninstall_extension_modified": "ルール拡張がローカルで変更されています",
-  "install.uninstall_not_kander_file": "Kander がインストールしたファイルではありません",
-  "install.uninstall_config_written": "ルール注入をオフにしました: {{.V0}}",
-  "install.uninstall_edited": "Kander の読み込み指示を削除しました: {{.V0}}",
-  "install.uninstall_removed": "削除しました: {{.V0}}",
-  "install.uninstall_rules_removed": "{{.V1}} 内の Kander ルールファイルと状態ファイル {{.V0}} 個を削除しました"
+  "install.rules_injection_disabled": "ルール注入はオフです（{{.V0}}）。書き込みません: {{.V1}}"
 }

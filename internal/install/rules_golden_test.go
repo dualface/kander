@@ -2,6 +2,7 @@ package install
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -193,7 +194,7 @@ func (g *goldenTranscript) outcome(o IntegrationOutcome, err error) string {
 }
 
 func goldenUninstall(g *goldenTranscript, paths config.InstallPaths, files ...string) {
-	plan := PlanUninstall(paths)
+	plan := PlanUninstall(context.Background(), paths)
 	for _, item := range plan.Items {
 		for _, file := range files {
 			if item.Path != file {
@@ -215,20 +216,19 @@ func (g *goldenTranscript) text(raw string) string {
 // prompt shown before the confirmation, the printed output, the error, the install_rules switch
 // it writes, and what is left of each file.
 func goldenApplyUninstall(g *goldenTranscript, paths config.InstallPaths, files ...string) {
-	plan := PlanUninstall(paths)
+	plan := PlanUninstall(context.Background(), paths)
 	g.line("apply uninstall plan prompt: %s", g.text(planText(plan)))
+	before, beforeErr := os.ReadFile(paths.ConfigPath)
 	var out bytes.Buffer
-	err := ApplyUninstall(plan, &out)
+	err := ApplyUninstall(context.Background(), plan, &out)
 	g.line("apply uninstall: err=%t", err != nil)
 	if err != nil {
 		g.line("apply uninstall error: %s", g.text(err.Error()))
 	}
 	g.line("apply uninstall output: %s", g.text(out.String()))
-	// Only the switch is recorded: the rest of the file is the default configuration, which
-	// other changes own.
-	if data, err := os.ReadFile(plan.ConfigFile); err == nil {
-		g.line("apply uninstall config: install_rules=false %t", strings.Contains(string(data), `"install_rules": false`))
-	}
+	// Uninstall never writes the configuration.
+	after, afterErr := os.ReadFile(paths.ConfigPath)
+	g.line("apply uninstall config: unchanged %t", bytes.Equal(before, after) && (beforeErr == nil) == (afterErr == nil))
 	for _, file := range files {
 		info, err := os.Lstat(file)
 		switch {

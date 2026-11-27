@@ -21,21 +21,5 @@
   "install.rules_confirm": "开始安装？",
   "install.rules_confirm_yes": "安装",
   "install.rules_confirm_no": "取消",
-  "install.rules_injection_disabled": "规则注入已关闭（{{.V0}}），未写入：{{.V1}}",
-  "install.uninstall_plan_global": "kander uninstall 将处理全局范围：",
-  "install.uninstall_plan_edit": "  编辑  {{.V0}}（删除 Kander 加载指令）",
-  "install.uninstall_plan_remove": "  删除  {{.V0}}",
-  "install.uninstall_plan_rules": "  删除  {{.V1}} 中 {{.V0}} 个 Kander 规则文件和状态文件，随后删除变空的目录",
-  "install.uninstall_plan_keep": "  保留  {{.V0}}：{{.V1}}",
-  "install.uninstall_plan_config": "配置：在 {{.V0}} 中写入 install_rules: false，并删除所有 agents.<name>.install_rules。",
-  "install.uninstall_plan_untouched": "不删除：二进制、config.json、share 目录、缓存和看板。",
-  "install.uninstall_question": "执行卸载？[y/N]: ",
-  "install.uninstall_requires_yes": "kander uninstall 不在终端中运行时，必须带 --yes。",
-  "install.uninstall_cancelled": "已取消卸载，没有修改任何文件。",
-  "install.uninstall_extension_modified": "规则扩展被本地修改过",
-  "install.uninstall_not_kander_file": "不是 Kander 安装的文件",
-  "install.uninstall_config_written": "已关闭规则注入：{{.V0}}",
-  "install.uninstall_edited": "已删除 Kander 加载指令：{{.V0}}",
-  "install.uninstall_removed": "已删除：{{.V0}}",
-  "install.uninstall_rules_removed": "已删除 {{.V1}} 中 {{.V0}} 个 Kander 规则文件和状态文件"
+  "install.rules_injection_disabled": "规则注入已关闭（{{.V0}}），未写入：{{.V1}}"
 }

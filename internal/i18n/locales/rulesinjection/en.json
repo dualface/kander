@@ -21,21 +21,5 @@
   "install.rules_confirm": "Start the installation?",
   "install.rules_confirm_yes": "Install",
   "install.rules_confirm_no": "Cancel",
-  "install.rules_injection_disabled": "Rules injection is turned off ({{.V0}}); not written: {{.V1}}",
-  "install.uninstall_plan_global": "kander uninstall will change the global scope:",
-  "install.uninstall_plan_edit": "  edit    {{.V0}} (drop the Kander load commands)",
-  "install.uninstall_plan_remove": "  delete  {{.V0}}",
-  "install.uninstall_plan_rules": "  delete  {{.V0}} Kander rule and state files in {{.V1}}, then the directories left empty",
-  "install.uninstall_plan_keep": "  keep    {{.V0}}: {{.V1}}",
-  "install.uninstall_plan_config": "Config: writes install_rules: false into {{.V0}} and drops every agents.<name>.install_rules.",
-  "install.uninstall_plan_untouched": "Kept: the binary, config.json, the share directory, caches, and the board.",
-  "install.uninstall_question": "Uninstall now? [y/N]: ",
-  "install.uninstall_requires_yes": "kander uninstall needs --yes when it does not run in a terminal.",
-  "install.uninstall_cancelled": "Uninstall cancelled; no file was changed.",
-  "install.uninstall_extension_modified": "the rules extension was modified locally",
-  "install.uninstall_not_kander_file": "not installed by Kander",
-  "install.uninstall_config_written": "Turned rules injection off: {{.V0}}",
-  "install.uninstall_edited": "Dropped the Kander load commands: {{.V0}}",
-  "install.uninstall_removed": "Deleted: {{.V0}}",
-  "install.uninstall_rules_removed": "Deleted {{.V0}} Kander rule and state files in {{.V1}}"
+  "install.rules_injection_disabled": "Rules injection is turned off ({{.V0}}); not written: {{.V1}}"
 }

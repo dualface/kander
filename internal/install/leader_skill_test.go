@@ -2,6 +2,7 @@ package install
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"os"
@@ -71,7 +72,7 @@ func TestInstallLeaderSkillLifecycle(t *testing.T) {
 			if got := readBytes(t, custom); got != "my leader" {
 				t.Fatalf("customized skill overwritten: %q", got)
 			}
-			if err := ApplyUninstall(PlanUninstall(result.Paths), io.Discard); err != nil {
+			if err := ApplyUninstall(context.Background(), PlanUninstall(context.Background(), result.Paths), io.Discard); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := os.Lstat(shared); !os.IsNotExist(err) {
@@ -108,7 +109,7 @@ func TestLeaderSkillPreservesManualDirectoryAndClaudeLink(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := ApplyUninstall(PlanUninstall(result.Paths), io.Discard); err != nil {
+	if err := ApplyUninstall(context.Background(), PlanUninstall(context.Background(), result.Paths), io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Readlink(link); err != nil || readBytes(t, entry) != "my own" {
@@ -143,9 +144,9 @@ func TestLeaderUninstallRechecksPreview(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := filepath.Join(home, ".agents", "skills", leaderName)
-	plan := PlanUninstall(result.Paths)
+	plan := PlanUninstall(context.Background(), result.Paths)
 	writeIntegrateFile(t, filepath.Join(dir, "SKILL.md"), "changed at confirmation")
-	if err := ApplyUninstall(plan, io.Discard); err == nil {
+	if err := ApplyUninstall(context.Background(), plan, io.Discard); err == nil {
 		t.Fatal("expected stale preview error")
 	}
 	if readBytes(t, filepath.Join(dir, "references", "deployment.md")) == "" {
@@ -162,7 +163,7 @@ func TestLeaderUninstallKeepsExtraFiles(t *testing.T) {
 	dir := filepath.Join(home, ".agents", "skills", leaderName)
 	extra := filepath.Join(dir, "references", "personal.md")
 	writeIntegrateFile(t, extra, "personal notes")
-	if err := ApplyUninstall(PlanUninstall(result.Paths), io.Discard); err != nil {
+	if err := ApplyUninstall(context.Background(), PlanUninstall(context.Background(), result.Paths), io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	if got := readBytes(t, extra); got != "personal notes" {
@@ -185,7 +186,7 @@ func TestLeaderUninstallSharedAgentConfigRoot(t *testing.T) {
 	}
 	dir := filepath.Join(root, "skills", leaderName)
 	assertSkill(t, dir)
-	if err := ApplyUninstall(PlanUninstall(result.Paths), io.Discard); err != nil {
+	if err := ApplyUninstall(context.Background(), PlanUninstall(context.Background(), result.Paths), io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Lstat(dir); !os.IsNotExist(err) {
@@ -208,7 +209,7 @@ func TestLeaderUninstallPreservesCopiedReceipt(t *testing.T) {
 	if _, err := Perform(req); err != nil {
 		t.Fatal(err)
 	}
-	if err := ApplyUninstall(PlanUninstall(result.Paths), io.Discard); err != nil {
+	if err := ApplyUninstall(context.Background(), PlanUninstall(context.Background(), result.Paths), io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	assertSkill(t, dst)
@@ -269,7 +270,7 @@ func TestLeaderSkillSkipsLinkedParent(t *testing.T) {
 		t.Fatalf("missing linked path diagnostic: %v", result.SkippedSkills)
 	}
 	assertSkill(t, filepath.Join(home, ".agents", "skills", leaderName))
-	if err := ApplyUninstall(PlanUninstall(result.Paths), io.Discard); err != nil {
+	if err := ApplyUninstall(context.Background(), PlanUninstall(context.Background(), result.Paths), io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	if readBytes(t, entry) != "personal skill" {
@@ -299,7 +300,7 @@ func TestLeaderSkillConfigRootCaseChange(t *testing.T) {
 		if err := os.CopyFS(other, os.DirFS(dir)); err != nil {
 			t.Fatal(err)
 		}
-		if err := ApplyUninstall(PlanUninstall(result.Paths), io.Discard); err != nil {
+		if err := ApplyUninstall(context.Background(), PlanUninstall(context.Background(), result.Paths), io.Discard); err != nil {
 			t.Fatal(err)
 		}
 		assertSkill(t, other)
@@ -314,7 +315,7 @@ func TestLeaderSkillConfigRootCaseChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertSkill(t, other)
-	if err := ApplyUninstall(PlanUninstall(result.Paths), io.Discard); err != nil {
+	if err := ApplyUninstall(context.Background(), PlanUninstall(context.Background(), result.Paths), io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Lstat(dir); !os.IsNotExist(err) {

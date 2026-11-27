@@ -2,6 +2,7 @@ package install
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -70,9 +71,9 @@ func TestUninstallRemovesKanderWritesOnly(t *testing.T) {
 	piRules := filepath.Join(home, ".pi", "agent", "AGENTS.md")
 	writeIntegrateFile(t, piRules, "# Pi\n\n"+readBytes(t, piRules))
 
-	plan := PlanUninstall(paths)
+	plan := PlanUninstall(context.Background(), paths)
 	var out bytes.Buffer
-	if err := ApplyUninstall(plan, &out); err != nil {
+	if err := ApplyUninstall(context.Background(), plan, &out); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
 	for _, gone := range []string{
@@ -96,10 +97,6 @@ func TestUninstallRemovesKanderWritesOnly(t *testing.T) {
 		if got := readBytes(t, path); got != want {
 			t.Errorf("%s=%q want %q", path, got, want)
 		}
-	}
-	switches, err := config.ScopeInstallRules(paths)
-	if err != nil || switches.Global || len(switches.Agents) != 0 {
-		t.Fatalf("switches=%+v err=%v", switches, err)
 	}
 	for _, kept := range []string{config.Text("install.uninstall_not_kander_file"), userFile} {
 		if !strings.Contains(planText(plan), kept) {
@@ -139,8 +136,8 @@ func TestUninstallKeepsModifiedExtensionAndEditsSymlinkedRules(t *testing.T) {
 	if err := os.Symlink(real, link); err != nil {
 		t.Fatal(err)
 	}
-	plan := PlanUninstall(paths)
-	if err := ApplyUninstall(plan, &bytes.Buffer{}); err != nil {
+	plan := PlanUninstall(context.Background(), paths)
+	if err := ApplyUninstall(context.Background(), plan, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	if got := readBytes(t, ext); got != "// my edit\n" {
@@ -171,8 +168,8 @@ func TestUninstallRefusesSymlinkedRulesDir(t *testing.T) {
 	if err := os.Symlink(elsewhere, paths.RulesDir); err != nil {
 		t.Fatal(err)
 	}
-	plan := PlanUninstall(paths)
-	if err := ApplyUninstall(plan, &bytes.Buffer{}); err != nil {
+	plan := PlanUninstall(context.Background(), paths)
+	if err := ApplyUninstall(context.Background(), plan, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	if got := readBytes(t, filepath.Join(elsewhere, "KANDER-AGENTS.md")); got != "# victim\n" {
@@ -212,9 +209,6 @@ func TestRunUninstallConfirmation(t *testing.T) {
 	if _, err := os.Stat(claude); err != nil {
 		t.Fatalf("declined uninstall changed files: %v", err)
 	}
-	if switches, _ := config.ScopeInstallRules(paths); !switches.Global {
-		t.Fatal("declined uninstall wrote the switch")
-	}
 	in = "y\n"
 	if code := run(); code != 0 {
 		t.Fatalf("confirmed: code=%d", code)
@@ -224,10 +218,8 @@ func TestRunUninstallConfirmation(t *testing.T) {
 			t.Fatalf("%s kept: %v", gone, err)
 		}
 	}
-	for _, kept := range []string{paths.ConfigPath, paths.ShareDir} {
-		if _, err := os.Stat(kept); err != nil {
-			t.Fatalf("uninstall removed %s: %v", kept, err)
-		}
+	if _, err := os.Stat(paths.ShareDir); err != nil {
+		t.Fatalf("uninstall removed %s: %v", paths.ShareDir, err)
 	}
 	if code := run("--force"); code != 2 {
 		t.Fatalf("unknown option: code=%d", code)
@@ -249,8 +241,8 @@ func TestUninstallEmptiesFileBehindSymlinkedDirectory(t *testing.T) {
 	paths, _ := config.GlobalInstallPaths()
 	real := filepath.Join(dotfiles, "AGENTS.md")
 	writeIntegrateFile(t, real, globalBlock("codex"))
-	plan := PlanUninstall(paths)
-	if err := ApplyUninstall(plan, &bytes.Buffer{}); err != nil {
+	plan := PlanUninstall(context.Background(), paths)
+	if err := ApplyUninstall(context.Background(), plan, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	if got := readBytes(t, real); got != "" {
