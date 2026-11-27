@@ -57,11 +57,13 @@ func InspectUninstallBackground(ctx context.Context) install.UninstallBackground
 	return found
 }
 
-// localServers returns the loopback servers this host runs: the one at the configured URL and
-// the one the default data directory recorded, each once.
+// localServers returns the loopback servers this host runs: the one at the URL of the scope
+// configuration and the one the default data directory recorded, each once.
 func localServers(ctx context.Context, dataDir string) ([]install.UninstallProcess, error) {
 	targets := []string{config.DefaultServerURL}
-	if cfg, err := config.Load(true); err == nil {
+	// The scope file only: reading the effective configuration also reads the project overlay
+	// of the working directory, which removes an empty overlay, and the plan must change nothing.
+	if cfg, err := config.LoadScope(true); err == nil {
 		targets[0] = config.ServerURL(cfg)
 	}
 	if dataDir != "" {

@@ -5,14 +5,17 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/command/commandtest"
 	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/install"
+	"github.com/dualface/kander/v2/internal/install/installtest"
 )
 
 // uninstallEnvironment isolates the client home, the configuration, and the server data
@@ -121,4 +124,68 @@ func TestInspectUninstallBackgroundWithNothingRunning(t *testing.T) {
 	if found.Err != nil || len(found.Processes) != 0 || len(found.Leases) != 0 {
 		t.Fatalf("found=%+v", found)
 	}
+}
+
+// The plan of kander uninstall, with the real inspection of this package, reads the
+// configuration without the side effects of a normal read: an empty project overlay in the
+// working directory stays, and the configuration directory gets no lock file. A refused and a
+// confirmed uninstall plan the same way; cancelling at the prompt plans the same way as well.
+func TestUninstallWithTheRealInspectionLeavesTheOverlay(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	installtest.IsolateAgentConfigEnv(t)
+	closed := httptest.NewServer(http.NotFoundHandler())
+	url := closed.URL
+	closed.Close()
+	uninstallEnvironment(t, url)
+	configDir := filepath.Dir(os.Getenv(config.EnvConfig))
+	repo := filepath.Join(t.TempDir(), "repo")
+	if out, err := exec.Command("git", "init", "-q", repo).CombinedOutput(); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	overlay := filepath.Join(repo, ".kander-config.json")
+	if err := os.WriteFile(overlay, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(repo)
+	// No terminal, so the run without --yes is refused after the plan.
+	devNull, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer devNull.Close()
+	stdin := os.Stdin
+	os.Stdin = devNull
+	t.Cleanup(func() { os.Stdin = stdin })
+
+	snapshot := func() []string {
+		entries, err := os.ReadDir(configDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var names []string
+		for _, entry := range entries {
+			names = append(names, entry.Name())
+		}
+		return names
+	}
+	before := snapshot()
+	check := func(step string) {
+		t.Helper()
+		if data, err := os.ReadFile(overlay); err != nil || string(data) != "{}\n" {
+			t.Fatalf("%s: the overlay changed: %q %v", step, data, err)
+		}
+		if got := snapshot(); strings.Join(got, ",") != strings.Join(before, ",") {
+			t.Fatalf("%s: the configuration directory changed: %v -> %v", step, before, got)
+		}
+	}
+	if code, _, _ := commandtest.Capture(func() int { return commandtest.Run(install.NewUninstallCommand()) }); code != 2 {
+		t.Fatalf("refused: code=%d", code)
+	}
+	check("refused")
+	if code, stdout, stderr := commandtest.Capture(func() int { return commandtest.Run(install.NewUninstallCommand(), "--yes") }); code != 0 {
+		t.Fatalf("confirmed: code=%d\n%s\n%s", code, stdout, stderr)
+	}
+	check("confirmed")
 }
