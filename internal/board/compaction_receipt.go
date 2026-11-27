@@ -186,30 +186,38 @@ func ReviewRunCompacted(root, id string) (compacted bool, err error) {
 
 // CompactedReviewRuns maps each of ids to the sorted runs with a valid
 // compaction receipt that bind it. Check prints them as information; an
-// invalid receipt is reported by CheckReviewEvidence instead.
+// invalid receipt is reported by CheckReviewEvidence instead. A run whose
+// receipt archive pruning removed before an interruption is found through
+// its backup, which readers take for the receipt.
 func CompactedReviewRuns(root string, ids []string) (map[string][]string, error) {
 	result := map[string][]string{}
 	if len(ids) == 0 {
 		return result, nil
 	}
 	err := WithTransaction(root, reviewScope(nil, true), func(tx *Transaction) error {
-		entries, e := fs.ListDirectory(root, control(root, "groups", pruneControlGroup, "compactions"))
-		if errors.Is(e, os.ErrNotExist) {
-			return nil
-		}
-		if e != nil {
-			return e
-		}
-		for _, entry := range entries {
-			runID, ok := strings.CutSuffix(entry.Name, ".json")
-			if entry.Kind != fs.KindFile || !ok || !ValidReviewID(runID) {
+		runIDs := map[string]bool{}
+		for _, dir := range []string{"compactions", "compaction-backups"} {
+			entries, e := fs.ListDirectory(root, control(root, "groups", pruneControlGroup, dir))
+			if errors.Is(e, os.ErrNotExist) {
 				continue
 			}
+			if e != nil {
+				return e
+			}
+			for _, entry := range entries {
+				runID, ok := strings.CutSuffix(entry.Name, ".json")
+				if entry.Kind == fs.KindFile && ok && ValidReviewID(runID) {
+					runIDs[runID] = true
+				}
+			}
+		}
+		for _, runID := range sortedKeys(runIDs) {
 			var run ReviewRun
 			exists, e := readReviewJSON(tx, reviewRunName(runID), &run)
 			if e != nil || !exists {
 				continue
 			}
+			// The receipt wins over its backup, as for every other reader.
 			if _, valid, e := runCompaction(root, runID, run.TaskIDs); e != nil || !valid {
 				continue
 			}
