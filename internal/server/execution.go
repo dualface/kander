@@ -101,7 +101,7 @@ func (p *project) cursor(task string, generation uint64) (board.Entry, error) {
 }
 
 // execution applies one launcher fact of the live holder.
-func (p *project) execution(key, id string, u api.ExecutionUpdate, h holder) outcome {
+func (p *project) execution(scope receiptScope, id string, u api.ExecutionUpdate, h holder) outcome {
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
@@ -178,14 +178,14 @@ func (p *project) execution(key, id string, u api.ExecutionUpdate, h holder) out
 				return err
 			}
 		}
-		extension := p.taskTransaction(key, "execution:"+id, u, id, validate, &nextClaim, false)
+		extension := p.taskTransaction(scope, "execution:"+id, u, id, validate, &nextClaim, false)
 		switch u.Action {
 		case api.ExecutionRelease:
 			if u.ExpectedRevision == 0 || strings.TrimSpace(u.Decision) == "" || u.Presence == nil || u.Presence.Status != "stopped" {
 				return outcome{err: apiError(api.CodeEvidenceIncomplete, "lease release requires a decision and a fresh confirmed stopped executor")}
 			}
 			err = p.boardTransaction(board.LockScope{Tasks: []string{id}}, func(tx *board.Transaction) error {
-				return stageJSON(tx, "releases/"+id+"/"+digest(key)+".json", struct {
+				return stageJSON(tx, "releases/"+id+"/"+digest(scope.key)+".json", struct {
 					Generation  uint64    `json:"generation"`
 					ExecutionID string    `json:"execution_id"`
 					ClientID    string    `json:"client_id"`
@@ -245,5 +245,5 @@ func (p *project) execution(key, id string, u api.ExecutionUpdate, h holder) out
 	// Execution writes are fenced by the board ledger; a retry of an applied
 	// confirmation is a board replay, and a retried window or session write
 	// of the same value changes nothing.
-	return p.idempotent(key, "execution:"+id, u, run, func() (outcome, bool) { return outcome{}, false })
+	return p.idempotent(scope, "execution:"+id, u, run, func() (outcome, bool) { return outcome{}, false })
 }

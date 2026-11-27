@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"maps"
 	"net/http"
-	"path/filepath"
 	"reflect"
 	"slices"
 
@@ -132,7 +131,7 @@ func (s *Server) reviewRuntimeRoutes(mux *routeTable) {
 			}
 			return request.Input.TaskIDs, nil
 		}
-		return p.reviewWrite(r.Header.Get(api.HeaderIdempotencyKey), "review-prepare", request, scope, holderOf(r), func(extension board.TransactionExtension) (any, error) {
+		return p.reviewWrite(scopeOf(r), "review-prepare", request, scope, holderOf(r), func(extension board.TransactionExtension) (any, error) {
 			writer := reviewWriter{PrepareDigest: requestDigest("review-prepare", request), RunID: request.Input.RunID, ClientID: client, Hash: request.WriterHash, Generations: map[string]uint64{}}
 			bind := board.TransactionExtension{Before: func(tx *board.Transaction) error {
 				var old reviewWriter
@@ -182,7 +181,7 @@ func (s *Server) reviewRuntimeRoutes(mux *routeTable) {
 			return outcome{err: err}
 		}
 		if action == "publish" {
-			return p.reviewWrite(r.Header.Get(api.HeaderIdempotencyKey), "review-publish:"+id, id, p.runTasks(id), holderOf(r), func(extension board.TransactionExtension) (any, error) {
+			return p.reviewWrite(scopeOf(r), "review-publish:"+id, id, p.runTasks(id), holderOf(r), func(extension board.TransactionExtension) (any, error) {
 				writer, err := p.writer(id, r.Header.Get(api.HeaderClientID), r.Header.Get(api.HeaderReviewWriter))
 				if err != nil {
 					return nil, err
@@ -199,8 +198,8 @@ func (s *Server) reviewRuntimeRoutes(mux *routeTable) {
 		if err != nil {
 			return outcome{err: err}
 		}
-		key, operation := r.Header.Get(api.HeaderIdempotencyKey), "review-runtime:"+id+":"+action
-		return p.idempotent(key, operation, payload, func() outcome {
+		scope, operation := scopeOf(r), "review-runtime:"+id+":"+action
+		return p.idempotent(scope, operation, payload, func() outcome {
 			run, err := board.ReadReviewRun(p.board, id)
 			if err != nil {
 				return outcome{err: err}
@@ -210,11 +209,7 @@ func (s *Server) reviewRuntimeRoutes(mux *routeTable) {
 				if err := p.validateWriter(tx, writer); err != nil {
 					return err
 				}
-				data, err := json.Marshal(tx.OperationResult())
-				if err != nil {
-					return err
-				}
-				return stageJSON(tx, filepath.Join("receipts", filepath.Base(receiptPath(key))), receipt{Key: key, Operation: operation, Digest: requestDigest(operation, payload), Status: receiptDone, HTTP: http.StatusOK, Body: data, CreatedAt: p.server.now()})
+				return p.stageOperationReceipt(tx, scope, operation, payload, tx.OperationResult())
 			}
 			switch action {
 			case "update":

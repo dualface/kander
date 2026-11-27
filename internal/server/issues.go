@@ -63,6 +63,6 @@ func (s *Server) issueRoutes(mux *routeTable) {
 		}
 		// The importer rechecks source-key uniqueness inside its exclusive board
 		// transaction, including after a crash before the HTTP receipt was saved.
-		return p.idempotent(r.Header.Get(api.HeaderIdempotencyKey), "issue-import", request, run, func() (outcome, bool) { return outcome{}, false })
+		return p.idempotent(scopeOf(r), "issue-import", request, run, func() (outcome, bool) { return outcome{}, false })
 	})
 }

@@ -10,12 +10,12 @@ import (
 	"github.com/dualface/kander/v2/internal/board"
 )
 
-func (p *project) groupWrite(key, operation, group string, request any, h holder, apply func(board.TransactionExtension) (board.CoordinatorCheckpoint, error)) outcome {
+func (p *project) groupWrite(scope receiptScope, operation, group string, request any, h holder, apply func(board.TransactionExtension) (board.CoordinatorCheckpoint, error)) outcome {
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
 	defer p.unlockBoard()
-	return p.idempotent(key, operation, request, func() outcome {
+	return p.idempotent(scope, operation, request, func() outcome {
 		if _, err := p.requireGroup(group, h); err != nil {
 			return outcome{err: err}
 		}
@@ -39,7 +39,7 @@ func (p *project) groupWrite(key, operation, group string, request any, h holder
 			if !ok {
 				return apiError(api.CodeInternal, "coordinator producer omitted its transaction result")
 			}
-			return p.stageOperationReceipt(tx, key, operation, request, value)
+			return p.stageOperationReceipt(tx, scope, operation, request, value)
 		}}
 		checkpoint, err := apply(guard)
 		if err == nil || len(checkpoint.Members) > 0 {
@@ -98,7 +98,7 @@ func (s *Server) groupRoutes(mux *routeTable) {
 		if err := decode(r, &input); err != nil {
 			return outcome{err: err}
 		}
-		return p.claimGroup(r.Context(), r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("group"), r.Header.Get(api.HeaderClientID), input, holderOf(r))
+		return p.claimGroup(r.Context(), scopeOf(r), r.PathValue("group"), r.Header.Get(api.HeaderClientID), input, holderOf(r))
 	})
 	route("POST "+base+"/renew", func(p *project, r *http.Request) outcome {
 		value, err := p.renewGroup(r.PathValue("group"), holderOf(r))
@@ -142,7 +142,7 @@ func (s *Server) groupRoutes(mux *routeTable) {
 			}
 			checks[digest] = check
 		}
-		return p.groupWrite(r.Header.Get(api.HeaderIdempotencyKey), "group-reconcile:"+input.Request.GroupID, input.Request.GroupID, input, holderOf(r), func(extension board.TransactionExtension) (board.CoordinatorCheckpoint, error) {
+		return p.groupWrite(scopeOf(r), "group-reconcile:"+input.Request.GroupID, input.Request.GroupID, input, holderOf(r), func(extension board.TransactionExtension) (board.CoordinatorCheckpoint, error) {
 			return board.ReconcileCoordinatorWithTransaction(r.Context(), p.board, input.Request, func(_ context.Context, facts board.CoordinatorGitFacts) error {
 				if check, found := checks[requestDigest("coordinator-fact", facts)]; found && reflect.DeepEqual(check.Facts, facts) {
 					if check.Error != "" {
@@ -162,7 +162,7 @@ func (s *Server) groupRoutes(mux *routeTable) {
 		if input.GroupID != r.PathValue("group") {
 			return outcome{err: apiError(api.CodeInvalidRequest, "removal group differs from its route")}
 		}
-		written := p.groupWrite(r.Header.Get(api.HeaderIdempotencyKey), "group-remove-member:"+input.GroupID, input.GroupID, input, holderOf(r), func(extension board.TransactionExtension) (board.CoordinatorCheckpoint, error) {
+		written := p.groupWrite(scopeOf(r), "group-remove-member:"+input.GroupID, input.GroupID, input, holderOf(r), func(extension board.TransactionExtension) (board.CoordinatorCheckpoint, error) {
 			return board.RemoveCoordinatorMemberWithTransaction(r.Context(), p.board, input, extension, p.memberUnclaimed(input.Member))
 		})
 		if written.err == nil && written.status == http.StatusOK {
@@ -181,12 +181,12 @@ func (s *Server) groupRoutes(mux *routeTable) {
 		}
 		h := holderOf(r)
 		if input.Lost != nil {
-			return p.recoverLostMember(r.Context(), r.Header.Get(api.HeaderIdempotencyKey), input, h)
+			return p.recoverLostMember(r.Context(), scopeOf(r), input, h)
 		}
 		if input.Observation.Status != "stopped" {
 			return outcome{err: errOwnedRecoveryNotStopped()}
 		}
-		return p.groupWrite(r.Header.Get(api.HeaderIdempotencyKey), "group-recover:"+input.Request.GroupID, input.Request.GroupID, input, h, func(extension board.TransactionExtension) (board.CoordinatorCheckpoint, error) {
+		return p.groupWrite(scopeOf(r), "group-recover:"+input.Request.GroupID, input.Request.GroupID, input, h, func(extension board.TransactionExtension) (board.CoordinatorCheckpoint, error) {
 			readiness := board.TransactionExtension{Before: func(tx *board.Transaction) error {
 				return p.ownedRecoveryReady(tx, input, h)
 			}}

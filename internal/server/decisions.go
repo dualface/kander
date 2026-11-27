@@ -33,8 +33,8 @@ func (s *Server) registerDecisionRoutes(mux *routeTable, task string) {
 				return outcome{err: apiError(api.CodeAttributionRequired, config.Text("remote.error_attribution_required"))}
 			}
 			input.RecordedBy = actor
-			id, key := r.PathValue("task"), r.Header.Get(api.HeaderIdempotencyKey)
-			return p.writeDecision(id, key, "decision-"+string(kind), input, http.StatusCreated, func(tx *board.Transaction) (any, error) {
+			id, scope := r.PathValue("task"), scopeOf(r)
+			return p.writeDecision(id, scope, "decision-"+string(kind), input, http.StatusCreated, func(tx *board.Transaction) (any, error) {
 				return tx.RecordDecision(id, kind, input, s.now())
 			})
 		})
@@ -44,8 +44,8 @@ func (s *Server) registerDecisionRoutes(mux *routeTable, task string) {
 		if err := decode(r, &input); err != nil {
 			return outcome{err: err}
 		}
-		id, key := r.PathValue("task"), r.Header.Get(api.HeaderIdempotencyKey)
-		return p.writeDecision(id, key, "decision-mode", input, http.StatusOK, func(tx *board.Transaction) (any, error) {
+		id, scope := r.PathValue("task"), scopeOf(r)
+		return p.writeDecision(id, scope, "decision-mode", input, http.StatusOK, func(tx *board.Transaction) (any, error) {
 			if err := tx.SetDecisionMode(id, input.Mode); err != nil {
 				return nil, err
 			}
@@ -67,7 +67,7 @@ func canonicalTaskID(id string) (string, error) {
 	return canonical, nil
 }
 
-func (p *project) writeDecision(id, key, action string, input any, status int, apply func(*board.Transaction) (any, error)) outcome {
+func (p *project) writeDecision(id string, scope receiptScope, action string, input any, status int, apply func(*board.Transaction) (any, error)) outcome {
 	if _, err := canonicalTaskID(id); err != nil {
 		return outcome{err: err}
 	}
@@ -82,14 +82,14 @@ func (p *project) writeDecision(id, key, action string, input any, status int, a
 			return outcome{err: err}
 		}
 		var body any
-		scope := board.LockScope{Tasks: []string{id}, Groups: []string{serviceGroup}}
-		err = p.boardTransaction(scope, func(tx *board.Transaction) error {
+		lock := board.LockScope{Tasks: []string{id}, Groups: []string{serviceGroup}}
+		err = p.boardTransaction(lock, func(tx *board.Transaction) error {
 			var err error
 			body, err = apply(tx)
 			if err != nil {
 				return err
 			}
-			return p.stageOperationReceiptStatus(tx, key, operation, input, status, body)
+			return p.stageOperationReceiptStatus(tx, scope, operation, input, status, body)
 		})
 		if err != nil {
 			return outcome{err: err}
@@ -99,5 +99,5 @@ func (p *project) writeDecision(id, key, action string, input any, status int, a
 	}
 	// The completed receipt is inseparable from the board write. A recovered
 	// pending receipt has no mutation to infer from a later card revision.
-	return p.idempotent(key, operation, input, run, func() (outcome, bool) { return outcome{}, false })
+	return p.idempotent(scope, operation, input, run, func() (outcome, bool) { return outcome{}, false })
 }

@@ -99,13 +99,13 @@ func (p *project) auditMemberClaim(current claimRecord, found bool, lost *api.Re
 
 // recoverLostMember is an explicit user-directed reset, not an ordinary group
 // write. It allocates a released audit generation, never a runnable task claim.
-func (p *project) recoverLostMember(ctx context.Context, key string, input api.GroupRecover, h holder) outcome {
+func (p *project) recoverLostMember(ctx context.Context, scope receiptScope, input api.GroupRecover, h holder) outcome {
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
 	defer p.unlockBoard()
 	operation := "group-recover:" + input.Request.GroupID
-	return p.idempotent(key, operation, input, func() outcome {
+	return p.idempotent(scope, operation, input, func() outcome {
 		c, err := p.groupLease(input.Request.GroupID, h)
 		if err != nil {
 			return outcome{err: err}
@@ -189,7 +189,7 @@ func (p *project) recoverLostMember(ctx context.Context, key string, input api.G
 			if err := p.stageSupersedeRequests(tx, next.TaskID, next.Generation); err != nil {
 				return err
 			}
-			return p.stageOperationReceipt(tx, key, operation, input, checkpoint)
+			return p.stageOperationReceipt(tx, scope, operation, input, checkpoint)
 		}}
 		checkpoint, err := board.RecoverCoordinatorWithTransaction(ctx, p.board, input.Request, input.ObservedRevision, extension)
 		if err == nil {

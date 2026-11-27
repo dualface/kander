@@ -100,8 +100,8 @@ func (p *project) integrationToken(out outcome) outcome {
 	grant.Token = p.server.token(p.info.ID, "integration:"+grant.Integration.ID, grant.Integration.Request.ExecutionID, grant.Integration.Generation)
 	return outcome{status: out.status, body: grant}
 }
-func (p *project) claimIntegration(key, id string, input api.IntegrationRequest, h holder) outcome {
-	scope, err := integrationScope(input)
+func (p *project) claimIntegration(scope receiptScope, id string, input api.IntegrationRequest, h holder) outcome {
+	lock, err := integrationScope(input)
 	if err != nil {
 		return outcome{err: err}
 	}
@@ -117,7 +117,7 @@ func (p *project) claimIntegration(key, id string, input api.IntegrationRequest,
 		return outcome{err: apiError(api.CodeInvalidRequest, "integration must bind a registered common remote and target")}
 	}
 	operation := "integration-claim:" + id
-	out := p.idempotent(key, operation, input, func() outcome {
+	out := p.idempotent(scope, operation, input, func() outcome {
 		previous, found, err := p.readIntegration(id)
 		if err != nil {
 			return outcome{err: err}
@@ -155,7 +155,7 @@ func (p *project) claimIntegration(key, id string, input api.IntegrationRequest,
 			return integrationRefusal(factsErr)
 		}
 		grant := api.IntegrationGrant{Integration: next.Value, RenewInterval: api.DurationOf(p.server.renew), TTL: api.DurationOf(p.server.ttl)}
-		err = p.boardTransaction(scope, func(tx *board.Transaction) error {
+		err = p.boardTransaction(lock, func(tx *board.Transaction) error {
 			if err := guard(tx); err != nil {
 				return err
 			}
@@ -166,7 +166,7 @@ func (p *project) claimIntegration(key, id string, input api.IntegrationRequest,
 			if err := p.stageIntegration(tx, old, next); err != nil {
 				return err
 			}
-			return p.stageOperationReceipt(tx, key, operation, input, grant)
+			return p.stageOperationReceipt(tx, scope, operation, input, grant)
 		}, board.TransactionExtension{After: guard})
 		if err == nil {
 			p.integrationChanged(next.Value)
@@ -210,13 +210,13 @@ func (p *project) renewIntegration(id string, h holder) (api.Renewal, error) {
 	})
 	return api.Renewal{Claim: api.ClaimView{ClientID: record.Value.ClientID, ExecutionID: record.Value.Request.ExecutionID, Owner: "integration", Generation: record.Value.Generation, Status: record.Value.Status, RenewedAt: record.Value.RenewedAt, ExpiresAt: record.Value.ExpiresAt}}, err
 }
-func (p *project) integrationAction(key, id string, input api.IntegrationCommand, h holder) outcome {
+func (p *project) integrationAction(scope receiptScope, id string, input api.IntegrationCommand, h holder) outcome {
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
 	defer p.unlockBoard()
 	operation := "integration-action:" + id
-	return p.idempotent(key, operation, input, func() outcome {
+	return p.idempotent(scope, operation, input, func() outcome {
 		release := input.Action == "release"
 		lease := p.integrationHolder
 		if release {
@@ -231,7 +231,7 @@ func (p *project) integrationAction(key, id string, input api.IntegrationCommand
 		if !held.kernel.accepts(action.check()) {
 			return outcome{err: action.revisionError()}
 		}
-		scope, err := integrationScope(record.Value.Request)
+		lock, err := integrationScope(record.Value.Request)
 		if err != nil {
 			return outcome{err: err}
 		}
@@ -282,14 +282,14 @@ func (p *project) integrationAction(key, id string, input api.IntegrationCommand
 			}
 			return nil
 		}
-		err = p.boardTransaction(scope, func(tx *board.Transaction) error {
+		err = p.boardTransaction(lock, func(tx *board.Transaction) error {
 			if err := guard(tx); err != nil {
 				return err
 			}
 			if err := p.stageIntegration(tx, &record, next); err != nil {
 				return err
 			}
-			return p.stageOperationReceipt(tx, key, operation, input, next.Value)
+			return p.stageOperationReceipt(tx, scope, operation, input, next.Value)
 		}, board.TransactionExtension{After: guard})
 		if err == nil {
 			p.integrationChanged(next.Value)
@@ -316,7 +316,7 @@ func (s *Server) integrationRoutes(mux *routeTable) {
 		if err := decode(r, &input); err != nil {
 			return outcome{err: err}
 		}
-		return p.claimIntegration(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("integration"), input, holderOf(r))
+		return p.claimIntegration(scopeOf(r), r.PathValue("integration"), input, holderOf(r))
 	})
 	s.projectRoute(mux, "POST "+base+"/renew", func(p *project, r *http.Request) outcome {
 		value, err := p.renewIntegration(r.PathValue("integration"), holderOf(r))
@@ -327,7 +327,7 @@ func (s *Server) integrationRoutes(mux *routeTable) {
 		if err := decode(r, &input); err != nil {
 			return outcome{err: err}
 		}
-		return p.integrationAction(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("integration"), input, holderOf(r))
+		return p.integrationAction(scopeOf(r), r.PathValue("integration"), input, holderOf(r))
 	})
 }
 

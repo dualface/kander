@@ -122,7 +122,7 @@ func TestCreationRetryKeepsItsOriginalSnapshotAfterInterruptionAndLaterEdits(t *
 			if err != nil || !found {
 				t.Fatalf("creation redo: %v", err)
 			}
-			receiptFile, err := filepath.Rel(stored.board, filepath.Join(stored.root, receiptPath("creation-key")))
+			receiptFile, err := filepath.Rel(stored.board, filepath.Join(stored.root, scopedReceiptPath("new", "creation-key", "")))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -157,7 +157,7 @@ func TestLegacyPendingCreationRequiresInspectionInsteadOfGuessing(t *testing.T) 
 	}
 	request := api.NewTask{Type: "chore", Slug: "legacy-uncertain", Title: "Original title", Language: "en"}
 	pending := receipt{Key: "legacy-create-key", Operation: "new", Digest: requestDigest("new", request), Status: receiptPending}
-	path := receiptPath(pending.Key)
+	path := legacyReceiptPath(pending.Key)
 	if err := writeJSON(stored.root, path, pending); err != nil {
 		t.Fatal(err)
 	}

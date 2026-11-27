@@ -199,7 +199,7 @@ func (s *Server) GroupRecoverUnchecked(ctx context.Context, id, key string, inpu
 		return err
 	}
 	h := holder{token: token, generation: generation, members: members}
-	out := p.groupWrite(key, "group-recover:"+input.Request.GroupID, input.Request.GroupID, input, h, func(extension board.TransactionExtension) (board.CoordinatorCheckpoint, error) {
+	out := p.groupWrite(receiptScope{key: key, holder: holderDigest(h)}, "group-recover:"+input.Request.GroupID, input.Request.GroupID, input, h, func(extension board.TransactionExtension) (board.CoordinatorCheckpoint, error) {
 		return board.RecoverCoordinatorWithTransaction(ctx, p.board, input.Request, input.ObservedRevision, extension)
 	})
 	if out.err != nil {

@@ -135,7 +135,7 @@ func (s *Server) registerRoutes(mux *routeTable) {
 		if err != nil {
 			return outcome{err: err}
 		}
-		return p.newTask(r.Header.Get(api.HeaderIdempotencyKey), req, submitter)
+		return p.newTask(scopeOf(r), req, submitter)
 	})
 	s.projectRoute(mux, "GET "+task, func(p *project, r *http.Request) outcome {
 		t, err := p.show(r.PathValue("task"))
@@ -153,14 +153,14 @@ func (s *Server) registerRoutes(mux *routeTable) {
 		if doc.Path != r.PathValue("path") {
 			return outcome{err: apiError(api.CodeInvalidRequest, "document path does not match the URL")}
 		}
-		return p.putDocument(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("task"), doc, holderOf(r))
+		return p.putDocument(scopeOf(r), r.PathValue("task"), doc, holderOf(r))
 	})
 	s.projectRoute(mux, "POST "+task+"/move", func(p *project, r *http.Request) outcome {
 		var req api.Move
 		if err := decode(r, &req); err != nil {
 			return outcome{err: err}
 		}
-		return p.move(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("task"), req, holderOf(r))
+		return p.move(scopeOf(r), r.PathValue("task"), req, holderOf(r))
 	})
 	s.projectRoute(mux, "POST "+task+"/confirm", confirmRequest)
 	s.projectRoute(mux, "POST "+task+"/assignee", func(p *project, r *http.Request) outcome {
@@ -171,7 +171,7 @@ func (s *Server) registerRoutes(mux *routeTable) {
 		if err := s.authorizeAssignment(r, req.Assignee); err != nil {
 			return outcome{err: err}
 		}
-		return p.assign(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("task"), req)
+		return p.assign(scopeOf(r), r.PathValue("task"), req)
 	})
 	s.registerDecisionRoutes(mux, task)
 	s.projectRoute(mux, "POST "+task+"/claim", func(p *project, r *http.Request) outcome {
@@ -179,14 +179,14 @@ func (s *Server) registerRoutes(mux *routeTable) {
 		if err := decode(r, &req); err != nil {
 			return outcome{err: err}
 		}
-		return p.claim(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("task"), req)
+		return p.claim(scopeOf(r), r.PathValue("task"), req)
 	})
 	s.projectRoute(mux, "POST "+task+"/takeover", func(p *project, r *http.Request) outcome {
 		var req api.ClaimRequest
 		if err := decode(r, &req); err != nil {
 			return outcome{err: err}
 		}
-		return p.takeover(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("task"), req, holderOf(r))
+		return p.takeover(scopeOf(r), r.PathValue("task"), req, holderOf(r))
 	})
 	s.projectRoute(mux, "GET "+task+"/execution/record", func(p *project, r *http.Request) outcome {
 		record, _, err := board.CurrentExecution(p.board, r.PathValue("task"))
@@ -201,7 +201,7 @@ func (s *Server) registerRoutes(mux *routeTable) {
 		if err := decode(r, &req); err != nil {
 			return outcome{err: err}
 		}
-		return p.execution(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("task"), req, holderOf(r))
+		return p.execution(scopeOf(r), r.PathValue("task"), req, holderOf(r))
 	})
 	s.projectRoute(mux, "POST "+task+"/renew", func(p *project, r *http.Request) outcome {
 		renewal, err := p.renew(r.PathValue("task"), holderOf(r))
@@ -216,14 +216,14 @@ func (s *Server) registerRoutes(mux *routeTable) {
 		if err := decode(r, &req); err != nil {
 			return outcome{err: err}
 		}
-		return p.createRequest(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("task"), req)
+		return p.createRequest(scopeOf(r), r.PathValue("task"), req)
 	})
 	s.projectRoute(mux, "POST "+task+"/requests/{request}/answer", func(p *project, r *http.Request) outcome {
 		var req api.CollabAnswer
 		if err := decode(r, &req); err != nil {
 			return outcome{err: err}
 		}
-		return p.answerRequest(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("task"), r.PathValue("request"), req, holderOf(r))
+		return p.answerRequest(scopeOf(r), r.PathValue("task"), r.PathValue("request"), req, holderOf(r))
 	})
 	s.projectRoute(mux, projectEvents, func(p *project, r *http.Request) outcome {
 		wait, err := eventWait(r)

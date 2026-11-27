@@ -26,7 +26,7 @@ func (p *project) readDelivery(task, commit string) (api.DeliveryEvidence, error
 	return value, err
 }
 
-func (p *project) publishDelivery(key, task string, input api.DeliveryEvidence, h holder) outcome {
+func (p *project) publishDelivery(scope receiptScope, task string, input api.DeliveryEvidence, h holder) outcome {
 	if (input.Purpose != "" && input.Purpose != "delivery" && input.Purpose != "baseline") || input.TaskID != task || !api.CommitSHA(input.Commit) || !api.ValidIdentity(input.ExecutionID) || input.Generation == 0 || input.CardRevision == 0 || input.Ref != api.DeliveryRef(p.info.ID, task, input.Generation, input.Commit) || input.Remote == "" || input.ObservedAt.IsZero() {
 		return outcome{err: apiError(api.CodeEvidenceIncomplete, "delivery must bind the registered remote, exact commit, card version and generation")}
 	}
@@ -39,7 +39,7 @@ func (p *project) publishDelivery(key, task string, input api.DeliveryEvidence, 
 		return outcome{err: apiError(api.CodeEvidenceIncomplete, "delivery must bind the registered remote, exact commit, card version and generation")}
 	}
 	operation := "delivery:" + task
-	return p.idempotent(key, operation, input, func() outcome {
+	return p.idempotent(scope, operation, input, func() outcome {
 		err := p.boardTransaction(board.LockScope{Groups: []string{serviceGroup}, Tasks: []string{task}}, func(tx *board.Transaction) error {
 			claim, err := p.requireHolder(task, h)
 			if err != nil {
@@ -92,7 +92,7 @@ func (p *project) publishDelivery(key, task string, input api.DeliveryEvidence, 
 			if err := stageJSON(tx, deliveryPath(task, "latest"), input); err != nil {
 				return err
 			}
-			return p.stageOperationReceipt(tx, key, operation, input, input)
+			return p.stageOperationReceipt(tx, scope, operation, input, input)
 		})
 		return result(http.StatusOK, input, err)
 	}, func() (outcome, bool) { return outcome{}, false })
@@ -141,7 +141,7 @@ func (s *Server) deliveryRoutes(mux *routeTable) {
 		if err := decode(r, &input); err != nil {
 			return outcome{err: err}
 		}
-		return p.publishDelivery(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("task"), input, holderOf(r))
+		return p.publishDelivery(scopeOf(r), r.PathValue("task"), input, holderOf(r))
 	})
 	s.projectRoute(mux, "GET "+base+"/{commit}", func(p *project, r *http.Request) outcome {
 		value, err := p.readDelivery(r.PathValue("task"), r.PathValue("commit"))

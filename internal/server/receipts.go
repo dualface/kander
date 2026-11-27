@@ -44,11 +44,6 @@ type outcome struct {
 	stream func(http.ResponseWriter) int
 }
 
-func receiptPath(key string) string {
-	sum := sha256.Sum256([]byte(key))
-	return servicePath("receipts", hex.EncodeToString(sum[:])+".json")
-}
-
 // liveReceiptDir holds the receipt slots of the liveness operations, below
 // the receipts directory.
 const liveReceiptDir = "live"
@@ -75,10 +70,6 @@ type receiptAt struct {
 	slot bool
 }
 
-func keyReceipt(key string) receiptAt {
-	return receiptAt{name: filepath.Join("receipts", filepath.Base(receiptPath(key)))}
-}
-
 func liveReceipt(operation, token string) receiptAt {
 	return receiptAt{name: liveReceiptName(operation, token), slot: true}
 }
@@ -94,13 +85,16 @@ func requestDigest(operation string, request any) string {
 
 // idempotent runs one write under the project lock. applied inspects the
 // current state for the effect of an interrupted earlier attempt; it returns
-// ok=false when the effect is not visible and the operation may run.
-func (p *project) idempotent(key, operation string, request any, run func() outcome, applied func() (outcome, bool)) outcome {
-	return p.idempotentAt(keyReceipt(key), key, operation, request, run, applied)
+// ok=false when the effect is not visible and the operation may run. The
+// receipt is kept per operation and receipt scope, so the same key in another
+// scope neither replays this receipt nor is refused by it.
+func (p *project) idempotent(scope receiptScope, operation string, request any, run func() outcome, applied func() (outcome, bool)) outcome {
+	return p.idempotentAt(scope.receipt(operation), scope, operation, request, run, applied)
 }
 
 // idempotentAt is idempotent with the receipt kept at at.
-func (p *project) idempotentAt(at receiptAt, key, operation string, request any, run func() outcome, applied func() (outcome, bool)) outcome {
+func (p *project) idempotentAt(at receiptAt, scope receiptScope, operation string, request any, run func() outcome, applied func() (outcome, bool)) outcome {
+	key := scope.key
 	if !api.ValidIdentity(key) {
 		return outcome{err: &api.Error{Code: api.CodeInvalidRequest, Message: "Idempotency-Key header is required and must be an identity"}}
 	}
@@ -114,17 +108,27 @@ func (p *project) idempotentAt(at receiptAt, key, operation string, request any,
 	if found && at.slot && r.Key != key {
 		found = false
 	}
-	if !found && at.slot {
-		// A receipt a server before the slots wrote for this key still answers
-		// it. It is only read: neither moved nor removed, and never written over
-		// the slot.
+	if !found {
+		// A receipt a server before the receipt scopes wrote for this key still
+		// answers the same operation and request: its done receipt replays, and
+		// a pending one is inspected and finished at the scoped receipt, which
+		// the operation stages too. It is only read: neither moved nor removed.
+		// A legacy receipt of another operation or request may be another
+		// caller's and is ignored rather than refusing this request.
 		var legacy receipt
-		ok, err := readJSON(p.root, keyReceipt(key).rel(), &legacy)
+		ok, err := readJSON(p.root, legacyReceipt(key).rel(), &legacy)
 		if err != nil {
 			return outcome{err: err}
 		}
-		if ok && legacy.Status == receiptDone && legacy.Key == key && legacy.Operation == operation && legacy.Digest == digest {
-			return p.replayReceipt(legacy)
+		if ok && legacy.Key == key && legacy.Operation == operation && legacy.Digest == digest {
+			if legacy.Status == receiptDone {
+				return p.replayReceipt(legacy)
+			}
+			// A liveness slot never continued a legacy pending receipt: the
+			// holder, generation, and lease checks make running it again safe.
+			if !at.slot {
+				r, found = legacy, true
+			}
 		}
 	}
 	if found {

@@ -47,7 +47,7 @@ func TestIssueResultPartialRedoRecoversStateAndExactReceipt(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			receiptRel, err := filepath.Rel(p.board, filepath.Join(p.root, receiptPath(key)))
+			receiptRel, err := filepath.Rel(p.board, filepath.Join(p.root, scopedReceiptPath("issue-result-save:"+input.Query.SourceKey, key, "")))
 			if err != nil {
 				t.Fatal(err)
 			}
