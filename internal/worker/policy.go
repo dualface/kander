@@ -23,22 +23,65 @@ type policyHint struct {
 	revision uint64
 }
 
-// notePolicy records the policy version a confirmed renewal answered. The
-// renewal loop only records it; the work loop reads the policy, so a slow
-// policy read never delays a renewal.
+// notePolicy records the policy version a confirmed renewal answered and wakes
+// the policy loop. The renewal loop only records it, so a slow policy read
+// never delays a renewal.
 func (w *loop) notePolicy(c remote.Credential, renewal api.Renewal) {
 	w.mu.Lock()
-	defer w.mu.Unlock()
 	w.policyHints[policyProject{c.ServerURL, c.ProjectID}] = policyHint{clientID: c.ClientID, epoch: renewal.PolicyEpoch, revision: renewal.PolicyRevision}
+	w.mu.Unlock()
+	select {
+	case w.policyWake <- struct{}{}:
+	default:
+	}
+}
+
+// startPolicyRefresh starts the policy loop: a goroutine of its own, beside the
+// renewal loop and the work loop, so neither a renewal nor a slow terminal
+// step of the work loop delays a policy read. It does nothing while the loop
+// runs.
+func (w *loop) startPolicyRefresh(ctx context.Context) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.policies != nil {
+		return
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	r := &renewals{cancel: cancel, done: make(chan struct{})}
+	w.policies = r
+	go func() {
+		defer close(r.done)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-w.policyWake:
+				w.refreshPolicies(ctx)
+			}
+		}
+	}()
+}
+
+// stopPolicyRefresh cancels the policy loop and waits until it has exited.
+func (w *loop) stopPolicyRefresh() {
+	w.mu.Lock()
+	r := w.policies
+	w.policies = nil
+	w.mu.Unlock()
+	if r == nil {
+		return
+	}
+	r.cancel()
+	<-r.done
 }
 
 // refreshPolicies reads the policy of every project whose last renewal named a
 // newer policy version than the policy cache of this client home holds, so
 // the executing agents read the new values at their next kander config. The
 // hints are taken, so a project is read at most once per renewal: a failed
-// read is tried again when the next renewal still names a newer version. The
-// work loop runs one step at a time, so one project is never refreshed twice
-// at once by this worker.
+// read is tried again when the next renewal still names a newer version. Only
+// the policy loop calls it, one read at a time, so one project is never
+// refreshed twice at once by this worker.
 func (w *loop) refreshPolicies(ctx context.Context) {
 	w.mu.Lock()
 	hints := w.policyHints

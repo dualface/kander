@@ -252,6 +252,8 @@ func Serve(ctx context.Context, o Options) error {
 	// holds worker.lock acts on credentials.
 	w.startRenewals(ctx)
 	defer w.stopRenewals()
+	w.startPolicyRefresh(ctx)
+	defer w.stopPolicyRefresh()
 	idleSince := o.Now()
 	ticker := time.NewTicker(o.Tick)
 	defer ticker.Stop()
@@ -322,6 +324,9 @@ type loop struct {
 	// policyHints holds, per project, the policy version the last confirmed
 	// renewal answered and the work loop has not compared yet (policy.go).
 	policyHints map[policyProject]policyHint
+	// policyWake wakes the policy loop after a renewal recorded a hint.
+	policyWake chan struct{}
+	policies   *renewals
 }
 
 type outage struct{ since, last time.Time }
@@ -345,6 +350,7 @@ func newLoop(o Options) *loop {
 		replays:      map[credentialKey]*replayTable{},
 		missingDirs:  map[credentialKey]string{},
 		policyHints:  map[policyProject]policyHint{},
+		policyWake:   make(chan struct{}, 1),
 	}
 }
 
@@ -411,7 +417,6 @@ func (w *loop) workRound(ctx context.Context) (int, error) {
 	// A lease lost during the last work step is stopped in this round, not the
 	// next one, which may be a handover away.
 	w.stopMarked(ctx, stopped)
-	w.refreshPolicies(ctx)
 	w.warnSlow("work round exceeded the renewal interval", started, credentials)
 	return live, nil
 }
