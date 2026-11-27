@@ -17,6 +17,7 @@ Source: moved from `KANDER-TASK-GROUP-RULES.md` "Review Batches and Dispatch-Bac
 - Use `notify --kind fix --evidence-file <JSON>` for findings, `--kind sync` for task-branch synchronization, and `--kind wrap-up --evidence-file <JSON>` after integration. Bind the actual review run, finding, assignment, and existing author originals for fix, and verified mainline branch integration for wrap-up, per the command protocol. Record the printed dispatch ID, frozen baseline, and original message; retries reuse the same ID and payload.
 - Read `kander dispatch show <task-id> <dispatch-id>` to reconcile uncertainty. State changes and terminal echo do not replace accepted or completed receipts. Before working, the executing owner uses the ID/epoch move command from the generated prompt; a replayed receipt authorizes no duplicate work. Completion carries the same grant and the final delivery and evidence references.
 - When `notify` returns nonzero, preserve the actual dispatch state and report the reason. Never invent a new round or invoke `resume` to escape uncertainty. A same-ID retry follows the command protocol's persisted deadline, readiness, and stopped/unknown rules.
+- A round that expired without an accepted receipt is ended and replaced in two steps per `snippets/orchestrate-start.md` "Durable Coordinator Recovery".
 
 **Dispatching Findings Back**
 
