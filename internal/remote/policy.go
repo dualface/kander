@@ -26,8 +26,19 @@ import (
 // CodePolicyUnsupported reports a server that keeps no project policies.
 const CodePolicyUnsupported = "policy_unsupported"
 
-// policyLockWait bounds the wait for the policy cache lock of a refresh; tests shorten it.
-var policyLockWait = 30 * time.Second
+// policyLockWait is the longest wait for the policy cache lock of a refresh; tests change it.
+var policyLockWait = 2 * time.Second
+
+// policyLockBudget is the wait for the policy cache lock under ctx: policyLockWait, and at most a
+// quarter of the time ctx has left, so a refresh that cannot get the lock still leaves its
+// request and the rest of the command most of their time.
+func policyLockBudget(ctx context.Context) time.Duration {
+	wait := policyLockWait
+	if deadline, ok := ctx.Deadline(); ok {
+		wait = min(wait, time.Until(deadline)/4)
+	}
+	return max(wait, 0)
+}
 
 // PolicySnapshot converts a policy answer to the form the policy cache keeps.
 func PolicySnapshot(p api.ProjectPolicy) config.PolicySnapshot {
@@ -45,17 +56,20 @@ func PolicySnapshot(p api.ProjectPolicy) config.PolicySnapshot {
 // fetch returns nil for a server without project policies: nothing is stored, and the rest of
 // the command reads the policy as unset. The answer also stays in this process for the running
 // command (config.RememberServerPolicy), so a later configuration read uses it even when the cache
-// cannot be written. err is the error of fetch; cacheErr is a lock or write failure of the cache,
-// which never fails the caller. When the lock cannot be taken before ctx ends, fetch runs without
-// it and nothing is stored.
+// cannot be written. err is the error of fetch, or of ctx when it ended before the lock; cacheErr
+// is a lock or write failure of the cache, which never fails the caller. When the lock cannot be
+// taken within its short wait, fetch runs without it and nothing is stored.
 func RefreshPolicy(ctx context.Context, home, serverURL, projectID string, fetch func() (*api.ProjectPolicy, error)) (cacheErr, err error) {
-	// The wait for the lock has its own bound, so a refresh held up by another process leaves
-	// the request the rest of the command's time.
-	lockCtx, cancel := context.WithTimeout(ctx, policyLockWait)
+	// The wait for the lock has a short bound of its own (policyLockBudget): a refresh another
+	// process holds up, waiting for a slow answer, runs its request without the lock and stores
+	// nothing, instead of spending the command's time. An explicit cancellation still ends it.
+	lockCtx, cancel := context.WithTimeout(ctx, policyLockBudget(ctx))
 	refresh, cacheErr := config.BeginPolicyRefresh(lockCtx, home, serverURL, projectID)
 	cancel()
 	if refresh != nil {
 		defer refresh.End()
+	} else if err := ctx.Err(); err != nil {
+		return cacheErr, err
 	}
 	policy, err := fetch()
 	if err != nil {

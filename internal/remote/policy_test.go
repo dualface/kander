@@ -515,3 +515,64 @@ func TestRefreshPolicyWithoutTheLockStoresNothing(t *testing.T) {
 		t.Fatalf("the cache holds %s without the lock", got)
 	}
 }
+
+// A command with a short deadline whose project cache lock another process holds, waiting for a
+// slow answer, still opens the project: the lock wait takes only a share of the deadline, the
+// registration runs without the lock against a server that answers at once, the answer applies,
+// and the cache failure is only a remark.
+func TestOpenWithAShortDeadlineDoesNotWaitOutAHeldPolicyLock(t *testing.T) {
+	isolatePolicyCommands(t)
+	values := strings.Replace(newerPolicyValues, `"agent_language":"en"`, `"agent_language":"ja"`, 1)
+	fake := &fakePolicyServer{project: true, policy: api.ProjectPolicy{Epoch: "e1", Revision: 1, Values: json.RawMessage(values)}}
+	url := fake.serve(t)
+	client := newPolicyClient(t, url, nil)
+	held, err := config.BeginPolicyRefresh(t.Context(), client.home, url, api.ProjectID("golf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.End()
+	var remarks bytes.Buffer
+	stderr = &remarks
+	cfg, err := config.Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	started := time.Now()
+	if _, err := Open(ctx, cfg, t.TempDir()); err != nil {
+		t.Fatalf("Open failed after %s: %v", time.Since(started), err)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("Open took %s; the lock wait used the deadline", elapsed)
+	}
+	if cfg.AgentLanguage != "ja" || cfg.Policy.Source != config.PolicySourceServer {
+		t.Fatalf("the server policy did not apply: %q %+v", cfg.AgentLanguage, cfg.Policy)
+	}
+	if !strings.Contains(remarks.String(), "could not be written") {
+		t.Fatalf("no cache remark: %q", remarks.String())
+	}
+	if got := cachedVersion(client.home, url, api.ProjectID("golf")); got != "none" {
+		t.Fatalf("the cache was written without the lock: %s", got)
+	}
+}
+
+// An explicit cancellation before the lock ends the refresh without its request.
+func TestRefreshPolicyStopsOnCancellationBeforeTheLock(t *testing.T) {
+	home := t.TempDir()
+	held, err := config.BeginPolicyRefresh(t.Context(), home, "http://127.0.0.1:1", "p-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.End()
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	fetched := false
+	_, err = RefreshPolicy(ctx, home, "http://127.0.0.1:1", "p-1", func() (*api.ProjectPolicy, error) {
+		fetched = true
+		return &api.ProjectPolicy{}, nil
+	})
+	if !errors.Is(err, context.Canceled) || fetched {
+		t.Fatalf("err=%v fetched=%v", err, fetched)
+	}
+}
