@@ -18,19 +18,21 @@ const (
 	LogName        = "server.log"
 	LogArchiveName = "server.log.1.gz"
 	logArchiveTemp = "server.log.1.gz.tmp"
+	logArchiveOld  = "server.log.1.gz.old"
 	logTailName    = "server.log.tail"
 	logTailTemp    = "server.log.tail.tmp"
 )
 
 // LogTrim describes one trim of server.log. Size is the size of the log
 // before the trim; Bytes is the head moved into the archive (zero when the log
-// was not larger than the limit). Recovered reports that the tail of an
-// interrupted earlier trim was appended back first.
+// was not larger than the limit). Recovered is the size of the tail of an
+// interrupted earlier trim: appended back first, or in a dry run, waiting to
+// be appended back.
 type LogTrim struct {
 	Path      string
 	Size      int64
 	Bytes     int64
-	Recovered bool
+	Recovered int64
 }
 
 // logTrimMu keeps two trims of one process from interleaving: an online gc
@@ -38,7 +40,7 @@ type LogTrim struct {
 var logTrimMu sync.Mutex
 
 // logTrimStep, when set by a test, may stop a trim after the named step:
-// "archive", "tail" or "truncate".
+// "archive-aside", "archive", "tail" or "truncate".
 var logTrimStep func(step string) error
 
 // lineFlush bounds the bytes appendLines buffers before it writes whole lines.
@@ -49,13 +51,15 @@ const lineFlush = 1 << 20
 // keeps one generation. The server holds the log in append mode, so the trim
 // copies the tail aside, truncates the log and appends the tail back; the
 // server's next write lands after it. A missing log, or one not larger than
-// keep, is left alone. A dry run only measures and changes no file.
+// keep, is left alone. A dry run only measures and changes no file; it also
+// reports the tail an interrupted trim left to append back.
 //
 // Lines the server writes between the end of the tail copy and the truncation
 // are lost; lines it writes between the truncation and the end of the append
 // come before the kept tail. A trim interrupted after its tail copy is
 // finished by the next trim, which appends the saved tail back first: the tail
-// is never lost, but it may then follow newer lines or appear twice.
+// is never lost, but it may then follow newer lines or appear twice. The
+// previous archive stays until the new one is in place.
 func TrimLog(dataDir string, keep int64, dryRun bool) (result LogTrim, err error) {
 	if keep <= 0 {
 		return result, errors.New("log trim needs a positive size to keep")
@@ -65,7 +69,14 @@ func TrimLog(dataDir string, keep int64, dryRun bool) (result LogTrim, err error
 	root := filepath.Dir(dataDir)
 	path := func(name string) string { return filepath.Join(dataDir, name) }
 	result.Path = path(LogName)
-	if !dryRun {
+	if dryRun {
+		if result.Recovered, err = savedTailSize(root, dataDir); err != nil {
+			return result, err
+		}
+	} else {
+		if err := recoverLogArchive(root, dataDir); err != nil {
+			return result, err
+		}
 		if result.Recovered, err = recoverLogTail(root, dataDir); err != nil {
 			return result, err
 		}
@@ -149,7 +160,9 @@ func lineStart(log *os.File, from, end int64) (int64, error) {
 }
 
 // writeLogArchive compresses [0, cut) of the log into a temporary file and
-// then replaces the archive with it.
+// then replaces the archive with it. The previous archive is renamed aside
+// first and removed only after the new one is in place; a trim interrupted in
+// between leaves it aside, and the next trim puts it back.
 func writeLogArchive(root, dataDir string, log *os.File, cut int64) (err error) {
 	temp := filepath.Join(dataDir, logArchiveTemp)
 	if _, err := fs.RemoveRegularFileIfExists(root, temp); err != nil {
@@ -174,11 +187,63 @@ func writeLogArchive(root, dataDir string, log *os.File, cut int64) (err error) 
 	if err = errors.Join(err, file.Close()); err != nil {
 		return err
 	}
-	target := filepath.Join(dataDir, LogArchiveName)
-	if _, err = fs.RemoveRegularFileIfExists(root, target); err != nil {
+	target, old := filepath.Join(dataDir, LogArchiveName), filepath.Join(dataDir, logArchiveOld)
+	previous, err := fs.RegularFileExists(root, target)
+	if err != nil {
 		return err
 	}
-	return fs.Rename(root, temp, target)
+	if previous {
+		if err = fs.Rename(root, target, old); err != nil {
+			return err
+		}
+		if err = stopAfter("archive-aside"); err != nil {
+			return err
+		}
+	}
+	if err = fs.Rename(root, temp, target); err != nil {
+		if previous {
+			err = errors.Join(err, fs.Rename(root, old, target))
+		}
+		return err
+	}
+	if previous {
+		_, err = fs.RemoveRegularFileIfExists(root, old)
+	}
+	return err
+}
+
+// recoverLogArchive finishes an archive replacement that stopped with the
+// previous archive renamed aside: it goes back when no new archive took its
+// place, and is removed when one did.
+func recoverLogArchive(root, dataDir string) error {
+	target, old := filepath.Join(dataDir, LogArchiveName), filepath.Join(dataDir, logArchiveOld)
+	aside, err := fs.RegularFileExists(root, old)
+	if err != nil || !aside {
+		return err
+	}
+	replaced, err := fs.RegularFileExists(root, target)
+	if err != nil {
+		return err
+	}
+	if replaced {
+		_, err = fs.RemoveRegularFileIfExists(root, old)
+		return err
+	}
+	return fs.Rename(root, old, target)
+}
+
+// savedTailSize is the size of the tail an interrupted trim saved, or zero.
+func savedTailSize(root, dataDir string) (int64, error) {
+	tail, err := fs.OpenRegularFileIfExists(root, filepath.Join(dataDir, logTailName))
+	if err != nil || tail == nil {
+		return 0, err
+	}
+	defer tail.Close()
+	info, err := tail.Stat()
+	if err != nil {
+		return 0, err
+	}
+	return info.Size(), nil
 }
 
 // saveLogTail copies the log from cut to its current end into server.log.tail.
@@ -207,16 +272,20 @@ func saveLogTail(root, dataDir string, log *os.File, cut int64) (err error) {
 }
 
 // recoverLogTail finishes an interrupted trim: a partial tail copy is removed,
-// a complete one is appended back to the log.
-func recoverLogTail(root, dataDir string) (bool, error) {
+// a complete one is appended back to the log. It returns the size appended.
+func recoverLogTail(root, dataDir string) (int64, error) {
 	if _, err := fs.RemoveRegularFileIfExists(root, filepath.Join(dataDir, logTailTemp)); err != nil {
-		return false, err
+		return 0, err
+	}
+	size, err := savedTailSize(root, dataDir)
+	if err != nil {
+		return 0, err
 	}
 	saved, err := fs.RegularFileExists(root, filepath.Join(dataDir, logTailName))
 	if err != nil || !saved {
-		return false, err
+		return 0, err
 	}
-	return true, appendLogTail(root, dataDir)
+	return size, appendLogTail(root, dataDir)
 }
 
 // appendLogTail appends server.log.tail to the log in whole lines, so a line

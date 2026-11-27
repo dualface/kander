@@ -83,7 +83,7 @@ func TestTrimLogKeepsTheTailAndArchivesTheHead(t *testing.T) {
 	if cut == int64(len(data))-keep {
 		t.Fatal("the test needs a limit that falls inside a line")
 	}
-	if result.Size != int64(len(data)) || result.Bytes != cut || result.Recovered {
+	if result.Size != int64(len(data)) || result.Bytes != cut || result.Recovered != 0 {
 		t.Fatalf("result = %+v, want size %d and bytes %d", result, len(data), cut)
 	}
 	kept, err := os.ReadFile(filepath.Join(dir, LogName))
@@ -96,7 +96,7 @@ func TestTrimLogKeepsTheTailAndArchivesTheHead(t *testing.T) {
 	if got := gunzip(t, filepath.Join(dir, LogArchiveName)); !bytes.Equal(got, data[:cut]) {
 		t.Fatal("server.log.1.gz must hold exactly the head and replace the older generation")
 	}
-	for _, name := range []string{logArchiveTemp, logTailName, logTailTemp} {
+	for _, name := range []string{logArchiveTemp, logArchiveOld, logTailName, logTailTemp} {
 		if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
 			t.Fatalf("%s left behind: %v", name, err)
 		}
@@ -189,8 +189,12 @@ func TestTrimLogRecoversAnInterruptedTail(t *testing.T) {
 			if _, err := os.Stat(filepath.Join(dir, logTailName)); err != nil {
 				t.Fatalf("the saved tail must survive the interruption: %v", err)
 			}
+			plan, err := TrimLog(dir, 1<<30, true)
+			if err != nil || plan.Recovered != int64(len(data))-cut {
+				t.Fatalf("a dry run must report the tail to append back: %+v, %v", plan, err)
+			}
 			result, err := TrimLog(dir, 1<<30, false)
-			if err != nil || !result.Recovered {
+			if err != nil || result.Recovered != int64(len(data))-cut {
 				t.Fatalf("recovery = %+v, %v", result, err)
 			}
 			kept, _ := os.ReadFile(filepath.Join(dir, LogName))
@@ -207,6 +211,66 @@ func TestTrimLogRecoversAnInterruptedTail(t *testing.T) {
 	}
 }
 
+// An archive replacement that stops after the previous archive went aside,
+// or whose final rename fails, never loses the previous generation.
+func TestTrimLogKeepsThePreviousArchiveUntilTheNewOneIsInPlace(t *testing.T) {
+	data := logData(4000)
+	dir := logDir(t, data)
+	older := []byte("older generation")
+	if err := os.WriteFile(filepath.Join(dir, LogArchiveName), older, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stop := errors.New("interrupted")
+	logTrimStep = func(s string) error {
+		if s == "archive-aside" {
+			return stop
+		}
+		return nil
+	}
+	_, err := TrimLog(dir, 4096, false)
+	logTrimStep = nil
+	if !errors.Is(err, stop) {
+		t.Fatalf("interrupt: %v", err)
+	}
+	if aside, err := os.ReadFile(filepath.Join(dir, logArchiveOld)); err != nil || !bytes.Equal(aside, older) {
+		t.Fatalf("the previous archive must wait aside: %v", err)
+	}
+	if kept, _ := os.ReadFile(filepath.Join(dir, LogName)); !bytes.Equal(kept, data) {
+		t.Fatal("the log must not change before the archive is in place")
+	}
+	if _, err := TrimLog(dir, 1<<30, false); err != nil {
+		t.Fatal(err)
+	}
+	if back, err := os.ReadFile(filepath.Join(dir, LogArchiveName)); err != nil || !bytes.Equal(back, older) {
+		t.Fatalf("the next trim must put the previous archive back: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, logArchiveOld)); !os.IsNotExist(err) {
+		t.Fatalf("nothing may stay aside after recovery: %v", err)
+	}
+
+	// The final rename fails: the temporary archive disappears after the
+	// previous one went aside, so the rename cannot complete.
+	logTrimStep = func(s string) error {
+		if s == "archive-aside" {
+			if err := os.Remove(filepath.Join(dir, logArchiveTemp)); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	_, err = TrimLog(dir, 4096, false)
+	logTrimStep = nil
+	if err == nil {
+		t.Fatal("a failed archive rename must fail the trim")
+	}
+	if back, err := os.ReadFile(filepath.Join(dir, LogArchiveName)); err != nil || !bytes.Equal(back, older) {
+		t.Fatalf("a failed rename must put the previous archive back: %v", err)
+	}
+	if kept, _ := os.ReadFile(filepath.Join(dir, LogName)); !bytes.Equal(kept, data) {
+		t.Fatal("a failed archive must leave the log alone")
+	}
+}
+
 func TestTrimLogRemovesAPartialTailCopy(t *testing.T) {
 	data := logData(200)
 	dir := logDir(t, data)
@@ -214,7 +278,7 @@ func TestTrimLogRemovesAPartialTailCopy(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := TrimLog(dir, int64(len(data)), false)
-	if err != nil || result.Recovered {
+	if err != nil || result.Recovered != 0 {
 		t.Fatalf("result = %+v, %v", result, err)
 	}
 	if kept, _ := os.ReadFile(filepath.Join(dir, LogName)); !bytes.Equal(kept, data) {
