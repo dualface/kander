@@ -447,8 +447,11 @@ func NewMoveCommand() *cobra.Command {
 	c := command.RequireProject(&cobra.Command{
 		Use:  "move <task-id> <state>",
 		Args: command.Args(2, 2),
-		PreRunE: func(c *cobra.Command, _ []string) error {
-			return command.Together(c, "dispatch-id", "execution-epoch")
+		PreRunE: func(c *cobra.Command, args []string) error {
+			if err := command.Together(c, "dispatch-id", "execution-epoch"); err != nil {
+				return err
+			}
+			return validateMoveFlags(o, args[1])
 		},
 	})
 	c.RunE = func(_ *cobra.Command, args []string) error { return runMove(args[0], args[1], o) }
@@ -474,14 +477,43 @@ type moveOptions struct {
 	revision, epoch                                          uint64
 }
 
-func runMove(task, state string, o moveOptions) error {
-	authorization, authErr := executionAuthorization(o.dispatchID, o.epoch)
-	if authErr != nil {
-		return command.UsageText(authErr.Error())
+// claimFlags are the move options a claim (`--owner`) would drop: the claim request carries
+// only the owner and the decision, so these are refused instead of being ignored.
+var claimFlags = []string{"expect-revision", "result", "reason", "duplicate-of", "delivery-commit", "disposition"}
+
+// claimFlagConflict refuses --owner outside a claim into working, and a claim combined with an
+// option it would not use. A flag counts as given when it is on the command line, even empty.
+func claimFlagConflict(c *cobra.Command, state string) error {
+	if !c.Flags().Changed("owner") {
+		return nil
+	}
+	if state != "working" {
+		return command.Usage("cli.error_flag_needs", "--owner", "target state working")
+	}
+	for _, name := range claimFlags {
+		if c.Flags().Changed(name) {
+			return command.Usage("cli.error_flags_exclusive", "--owner, --"+name)
+		}
+	}
+	return nil
+}
+
+// validateMoveFlags refuses a malformed move command line in PreRunE, before the project
+// binding is checked, so it is a usage error (exit 2) in a bound and an unbound checkout alike.
+func validateMoveFlags(o moveOptions, state string) error {
+	authorization, err := executionAuthorization(o.dispatchID, o.epoch)
+	if err != nil {
+		return command.UsageText(err.Error())
 	}
 	if authorization.DispatchID != "" && o.owner != "" {
 		return command.Usage("cli.error_flags_exclusive", "--dispatch-id, --owner")
 	}
+	return claimFlagConflict(o.cmd, state)
+}
+
+func runMove(task, state string, o moveOptions) error {
+	// validateMoveFlags already refused a malformed authorization.
+	authorization, _ := executionAuthorization(o.dispatchID, o.epoch)
 
 	ctx, cancel := commandContext()
 	defer cancel()

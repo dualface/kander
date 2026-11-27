@@ -101,7 +101,7 @@ func NewImportCommand() *cobra.Command {
 	c.PreRunE = func(*cobra.Command, []string) error { return command.Required(c, "project") }
 	c.Flags().StringVar(&o.data, "data", "", "")
 	c.Flags().StringVar(&o.name, "project", "", "")
-	c.Flags().StringVar(&o.remote, "remote", "", "")
+	c.Flags().StringVar(&o.remote, "git-remote", "", "")
 	c.Flags().StringVar(&o.from, "from", "", "")
 	c.Flags().BoolVar(&o.skipConflicts, "skip-conflicts", false, "")
 	return c
