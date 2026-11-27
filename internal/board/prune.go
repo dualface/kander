@@ -119,18 +119,21 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 	if err = requireNoPendingOperations(root, warnings); err != nil {
 		return report, err
 	}
-	if err = settleCompactionBackups(root); err != nil {
-		return report, err
-	}
-	plan, err := planPrune(root, &report, nil)
+	// stuck holds every run this round keeps for a receipt or backup it could
+	// not settle. Planning keeps those runs and what they read, so only they
+	// stay behind while unrelated batches are still removed.
+	stuck, failures, err := settleCompactionBackups(root)
 	if err != nil {
 		return report, err
 	}
+	plan, err := planPrune(root, &report, stuck)
+	if err != nil {
+		return report, errors.Join(append(failures, err)...)
+	}
 	defer func() { err = errors.Join(err, plan.runLocks.close()) }()
 	if err = writePruneReceipts(root, plan); err != nil {
-		return report, err
+		return report, errors.Join(append(failures, err)...)
 	}
-	var failures []error
 	remove := func(path string, tree bool) {
 		files, bytes, e := removePath(root, path, tree)
 		report.Files += files
@@ -153,7 +156,7 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 		bytes int64
 	}
 	removedReceipts := map[string]removedReceipt{}
-	stuck := map[string]bool{}
+	settled := len(stuck)
 	for _, id := range sortedKeys(plan.runs) {
 		path := compactionReceiptPath(root, id)
 		data, exists, e := readReceiptFile(root, path)
@@ -179,7 +182,9 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 			return report, errors.Join(append(failures, e)...)
 		}
 	}
-	if len(stuck) > 0 {
+	// Plan again only when this loop kept another run; the same stuck set
+	// still holds the runs the backups kept.
+	if len(stuck) > settled {
 		if err = plan.runLocks.close(); err != nil {
 			return report, errors.Join(append(failures, err)...)
 		}
@@ -273,44 +278,64 @@ var pruneInterrupt func(step string) error
 
 // settleCompactionBackups finishes what an interrupted round left in
 // compaction-backups/: a run that still exists gets its receipt back, and the
-// backup of a run that is gone is removed.
-func settleCompactionBackups(root string) error {
+// backup of a run that is gone is removed. One backup that cannot be settled
+// never stops the others: its error goes into failures and, unless its run is
+// known to be gone, its run goes into stuck so the round keeps it. A backup
+// that is not a regular file is never opened or removed. Only a directory
+// that cannot be listed fails the round, since then no run is known to be safe.
+func settleCompactionBackups(root string) (stuck map[string]bool, failures []error, err error) {
+	stuck = map[string]bool{}
 	dir := control(root, "groups", pruneControlGroup, "compaction-backups")
 	entries, err := fs.ListDirectory(root, dir)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil
+		return stuck, nil, nil
 	}
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	for _, entry := range entries {
 		id, ok := strings.CutSuffix(entry.Name, ".json")
-		if entry.Kind != fs.KindFile || !ok || !ValidReviewID(id) {
+		if !ok || !ValidReviewID(id) {
 			continue
 		}
-		backup := compactionBackupPath(root, id)
-		exists, err := fs.RegularFileExists(root, control(root, "groups", reviewControlGroup, "runs", id, "run.json"))
-		if err != nil {
-			return err
-		}
-		if exists {
-			data, ok, err := readReceiptFile(root, backup)
-			if err != nil || !ok {
-				return err
+		gone, e := settleCompactionBackup(root, id, entry.Kind)
+		if e != nil {
+			if !gone {
+				stuck[id] = true
 			}
-			if _, present, err := readReceiptFile(root, compactionReceiptPath(root, id)); err != nil {
-				return err
-			} else if !present {
-				if err = fs.WriteTextAtomic(root, compactionReceiptPath(root, id), string(data), false); err != nil {
-					return err
-				}
-			}
-		}
-		if _, err = fs.RemoveRegularFileIfExists(root, backup); err != nil {
-			return err
+			failures = append(failures, e)
 		}
 	}
-	return nil
+	return stuck, failures, nil
+}
+
+// settleCompactionBackup settles the backup of one run and reports whether
+// that run is known to be gone, so a failure need not keep it.
+func settleCompactionBackup(root, id string, kind fs.Kind) (gone bool, err error) {
+	backup := compactionBackupPath(root, id)
+	exists, err := fs.RegularFileExists(root, control(root, "groups", reviewControlGroup, "runs", id, "run.json"))
+	if err != nil {
+		return false, err
+	}
+	if kind != fs.KindFile {
+		return !exists, reviewError(backup + ": not a regular file")
+	}
+	if exists {
+		data, ok, err := readReceiptFile(root, backup)
+		if err != nil || !ok {
+			// A backup that is gone already needs nothing more.
+			return false, err
+		}
+		if _, present, err := readReceiptFile(root, compactionReceiptPath(root, id)); err != nil {
+			return false, err
+		} else if !present {
+			if err = fs.WriteTextAtomic(root, compactionReceiptPath(root, id), string(data), false); err != nil {
+				return false, err
+			}
+		}
+	}
+	_, err = fs.RemoveRegularFileIfExists(root, backup)
+	return !exists, err
 }
 
 // RequireNoPendingOperations fails with board.transaction_pending while an
