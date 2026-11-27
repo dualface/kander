@@ -47,7 +47,8 @@ func setupPaneAdoption(t *testing.T, launcher, sessionValue string, worktree boo
 				ProgramStatus: &config.ProgramStatus{Reports: true, App: agent},
 			},
 		}
-		if _, err := config.Save(cfg); err != nil {
+		// cfg carries the fixture's project policy; the scope file changes through Update.
+		if _, err := config.Update(func(scope *config.Config) error { scope.Agents = cfg.Agents; return nil }); err != nil {
 			t.Fatal(err)
 		}
 	}

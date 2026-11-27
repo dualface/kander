@@ -87,7 +87,8 @@ func TestImplicitNativeResumeReopensFrozenHandoffAfterUnknownResponse(t *testing
 	}))
 	t.Cleanup(proxy.Close)
 	cfg.Server.URL = proxy.URL
-	if _, err := config.Save(cfg); err != nil {
+	// cfg carries the fixture's project policy; the scope file changes through Update.
+	if _, err := config.Update(func(scope *config.Config) error { scope.Server.URL = cfg.Server.URL; return nil }); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := StartRemote("claude", "tmux", task.TaskID); err != nil {

@@ -186,7 +186,8 @@ func TestRemoteStartCreatesExecutionWorktreeAndPublishesItsActualHead(t *testing
 	// The project policy says ja, the card says en: the card language must win, and only a card
 	// without LANGUAGE falls back to the policy (asserted after the start).
 	cfg.AgentLanguage = "ja"
-	if _, err := config.Save(cfg); err != nil {
+	// cfg carries the fixture's project policy; the scope file changes through Update.
+	if _, err := config.Update(func(scope *config.Config) error { scope.AgentLanguage = cfg.AgentLanguage; return nil }); err != nil {
 		t.Fatal(err)
 	}
 	putTestPolicy(t, session, cfg)
