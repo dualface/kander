@@ -17,20 +17,70 @@ import (
 // codex definition, read from a process directory outside any project.
 func projectLookup(t *testing.T, codex map[string]any) config.AgentLookup {
 	t.Helper()
+	return config.AgentLookupIn(overlayProject(t, map[string]any{"agents": map[string]any{"codex": codex}}))
+}
+
+// overlayProject creates a Git project with the given overlay, and moves the
+// process into a directory outside any project.
+func overlayProject(t *testing.T, overlay map[string]any) string {
+	t.Helper()
+	isolateUserEnvironment(t)
 	writeTestConfig(t)
 	t.Chdir(t.TempDir())
 	project := t.TempDir()
 	if out, err := exec.Command("git", "init", "-q", project).CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v %s", err, out)
 	}
-	data, err := json.Marshal(map[string]any{"agents": map[string]any{"codex": codex}})
+	data, err := json.Marshal(overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(project, config.OverlayFilename), data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	return config.AgentLookupIn(project)
+	return project
+}
+
+// isolateUserEnvironment keeps the user's home, its terminal definitions and
+// its Git configuration out of the test: the definitions are read again from
+// the temporary home, and again by the next test.
+func isolateUserEnvironment(t *testing.T) {
+	t.Helper()
+	global := filepath.Join(t.TempDir(), "gitconfig")
+	if err := os.WriteFile(global, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("GIT_CONFIG_GLOBAL", global)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	ReloadDefinitions()
+	t.Cleanup(ReloadDefinitions)
+}
+
+// A project may default to a launcher that only its own share directory
+// defines. Read from outside the project, its configuration still gives the
+// agent definitions, and the launcher is not registered in this process.
+func TestAgentLookupAcceptsALauncherOfTheProjectShare(t *testing.T) {
+	resetLanguage(t)
+	project := overlayProject(t, map[string]any{"launcher": "faketerm", "agents": map[string]any{"codex": map[string]any{"process_name": "codex-project"}}})
+	share, err := config.ProjectInstallPaths(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	definitions := filepath.Join(share.ShareDir, DefinitionsDirName)
+	if err := os.MkdirAll(definitions, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(definitions, "faketerm.json"), []byte(fixtureDefinition), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	definition, err := config.AgentLookupIn(project).Agent("codex")
+	if err != nil || definition.ProcessName != "codex-project" {
+		t.Fatalf("definition=%+v err=%v", definition, err)
+	}
+	if _, ok := Lookup("faketerm"); ok {
+		t.Fatal("the launcher of another project was registered in this process")
+	}
 }
 
 func TestMatchAgentWithReadsTheProgramStatusOfTheLookup(t *testing.T) {

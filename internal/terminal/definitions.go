@@ -66,6 +66,7 @@ var DefinitionDirs = defaultDefinitionDirs
 
 func init() {
 	config.RegisterLauncherNameSource(definitionLauncherNames)
+	config.RegisterProjectLauncherNameSource(projectDefinitionLauncherNames)
 }
 
 // defaultDefinitionDirs returns the global share directory and, inside a Git
@@ -76,11 +77,40 @@ func defaultDefinitionDirs() []DefinitionDir {
 		dirs = append(dirs, DefinitionDir{Source: SourceGlobal, Root: global.ShareDir, Path: filepath.Join(global.ShareDir, DefinitionsDirName)})
 	}
 	if cwd, err := os.Getwd(); err == nil {
-		if project, err := config.ProjectInstallPaths(cwd); err == nil {
-			dirs = append(dirs, DefinitionDir{Source: SourceProject, Root: project.ShareDir, Path: filepath.Join(project.ShareDir, DefinitionsDirName)})
+		if project, ok := projectDefinitionDir(cwd); ok {
+			dirs = append(dirs, project)
 		}
 	}
 	return dirs
+}
+
+// projectDefinitionDir is the project install definition directory of the
+// project of dir.
+func projectDefinitionDir(dir string) (DefinitionDir, bool) {
+	project, err := config.ProjectInstallPaths(dir)
+	if err != nil {
+		return DefinitionDir{}, false
+	}
+	return DefinitionDir{Source: SourceProject, Root: project.ShareDir, Path: filepath.Join(project.ShareDir, DefinitionsDirName)}, true
+}
+
+// projectDefinitionLauncherNames lists the launcher names of the valid
+// definitions in the project install share directory of dir, for validating
+// that project's configuration from a process outside it. The definitions
+// are only named, never registered as backends of this process.
+func projectDefinitionLauncherNames(dir string) []string {
+	project, ok := projectDefinitionDir(dir)
+	if !ok {
+		return nil
+	}
+	var reports []DefinitionReport
+	var names []string
+	for _, file := range readDefinitionDir(project, &reports) {
+		if def, err := DecodeDefinition(file.path, file.data); err == nil {
+			names = append(names, def.LauncherNames()...)
+		}
+	}
+	return names
 }
 
 // RegisterDefinition registers a built-in definition embedded in the binary.

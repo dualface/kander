@@ -8,9 +8,17 @@ import (
 )
 
 // isolateLookup gives the test a scope config, and a process directory outside
-// any project whose overlay sets no agent, as the background worker has.
+// any project whose overlay sets no agent, as the background worker has. The
+// user's home and Git configuration stay out of the fixture repositories.
 func isolateLookup(t *testing.T) {
 	t.Helper()
+	global := filepath.Join(t.TempDir(), "gitconfig")
+	if err := os.WriteFile(global, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("GIT_CONFIG_GLOBAL", global)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	writeScopeFile(t, filepath.Join(t.TempDir(), "config.json"))
 	t.Chdir(t.TempDir())
 }
@@ -57,6 +65,29 @@ func TestAgentLookupInKeepsTheProcessDirectoryForAnUnusableDirectory(t *testing.
 		if got := lookupProcessName(t, AgentLookupIn(dir)); got != "codex" {
 			t.Fatalf("directory %q read %q: an overlay above an unusable directory was used", dir, got)
 		}
+	}
+}
+
+// A directory removed after it was checked, while its overlay is located, may
+// let the search continue above it; that result is never used.
+func TestAgentLookupInIgnoresTheOverlayAboveADirectoryRemovedMeanwhile(t *testing.T) {
+	isolateLookup(t)
+	parent := t.TempDir()
+	writeAgentOverlay(t, parent, map[string]any{"process_name": "codex-parent"})
+	dir := filepath.Join(parent, "checkout")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	previous := readAgentLayers
+	readAgentLayers = func(dir string) (layerDocuments, error) {
+		if err := os.Remove(dir); err != nil {
+			t.Fatal(err)
+		}
+		return previous(dir)
+	}
+	t.Cleanup(func() { readAgentLayers = previous })
+	if got := lookupProcessName(t, AgentLookupIn(dir)); got != "codex" {
+		t.Fatalf("read %q: the overlay above a removed directory was used", got)
 	}
 }
 

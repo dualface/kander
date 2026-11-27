@@ -139,10 +139,16 @@ func readLayers(cwd string, missingOK bool) (layerDocuments, error) {
 // effective merges the layers and validates the result: the configuration in force, with the
 // merged raw document it was validated from.
 func (l layerDocuments) effective() (*Config, map[string]any, error) {
+	return l.effectiveWith(LauncherNames)
+}
+
+// effectiveWith is effective with the launcher checked against the names that
+// launchers returns.
+func (l layerDocuments) effectiveWith(launchers func() []string) (*Config, map[string]any, error) {
 	if l.overlay == nil {
 		return l.scopeConfig, l.scope, nil
 	}
-	effective, merged, err := validateLayers(l.scope, l.overlay)
+	effective, merged, err := validateLayersWith(l.scope, l.overlay, launchers)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -156,19 +162,25 @@ func (l layerDocuments) effective() (*Config, map[string]any, error) {
 // so a configuration is merged, defaulted and checked for ignored content the same way wherever
 // it comes from. The arguments are not modified.
 func validateLayers(scope, overlay map[string]any) (*Config, map[string]any, error) {
+	return validateLayersWith(scope, overlay, LauncherNames)
+}
+
+// validateLayersWith is validateLayers with the launcher checked against the
+// names that launchers returns.
+func validateLayersWith(scope, overlay map[string]any, launchers func() []string) (*Config, map[string]any, error) {
 	if scope == nil {
 		scope = map[string]any{}
 	}
 	base := cloneRawObjectDeep(scope)
 	if len(overlay) == 0 {
-		cfg, err := Validate(base)
+		cfg, err := validateWithLaunchers(base, launchers)
 		return cfg, base, err
 	}
 	merged, err := mergeOverlayRaw(base, overlay)
 	if err != nil {
 		return nil, nil, err
 	}
-	cfg, err := Validate(merged)
+	cfg, err := validateWithLaunchers(merged, launchers)
 	return cfg, merged, err
 }
 

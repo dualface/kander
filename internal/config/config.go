@@ -405,7 +405,13 @@ func launcherPlatformError() *Error {
 }
 
 func validateLauncher(value any) (string, error) {
-	launcher, err := validateChoice(value, LauncherNames(), "launcher")
+	return validateLauncherIn(value, LauncherNames)
+}
+
+// validateLauncherIn is validateLauncher against the launcher names that
+// names returns.
+func validateLauncherIn(value any, names func() []string) (string, error) {
+	launcher, err := validateChoice(value, names(), "launcher")
 	if err != nil {
 		return "", err
 	}
@@ -719,6 +725,12 @@ func schemaVersionOf(raw any) any {
 
 // Validate checks and completes the schema; an unknown scale or an illegal agent is rejected.
 func Validate(raw any) (*Config, error) {
+	return validateWithLaunchers(raw, LauncherNames)
+}
+
+// validateWithLaunchers is Validate with the launcher checked against the
+// names that launchers returns.
+func validateWithLaunchers(raw any, launchers func() []string) (*Config, error) {
 	obj, ok := asObject(raw)
 	if !ok {
 		return nil, configErrorf("config.config_root_must_be_a_json_object")
@@ -766,7 +778,7 @@ func Validate(raw any) (*Config, error) {
 			return nil, err
 		}
 	}
-	launcher, err := validateLauncher(obj["launcher"])
+	launcher, err := validateLauncherIn(obj["launcher"], launchers)
 	if err != nil {
 		return nil, err
 	}

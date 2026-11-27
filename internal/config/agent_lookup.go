@@ -41,12 +41,7 @@ func UsableConfigDir(dir string) bool {
 // operation builds a new lookup and sees a changed overlay. It is safe for
 // concurrent use.
 func AgentLookupIn(dir string) AgentLookup {
-	load := sync.OnceValues(func() (*Config, error) {
-		if !UsableConfigDir(dir) {
-			return Load(false)
-		}
-		return LoadFor(dir)
-	})
+	load := sync.OnceValues(func() (*Config, error) { return loadForAgents(dir) })
 	return func(name string) (AgentDefinition, error) {
 		cfg, err := load()
 		if err != nil {
@@ -55,6 +50,32 @@ func AgentLookupIn(dir string) AgentLookup {
 		return agentOf(cfg, name)
 	}
 }
+
+// loadForAgents reads the effective configuration of the project of dir for
+// AgentLookupIn. The directory is checked again after the overlay was
+// located: a directory removed meanwhile may have let the search continue
+// above it, so its result is discarded and the configuration of the process
+// directory is read instead. The launcher of the project configuration may
+// name a definition of that project's own share directory, which the process
+// does not load; it is accepted as a command run in the project accepts it.
+func loadForAgents(dir string) (*Config, error) {
+	if !UsableConfigDir(dir) {
+		return Load(false)
+	}
+	layers, err := readAgentLayers(dir)
+	if !UsableConfigDir(dir) {
+		return Load(false)
+	}
+	if err != nil {
+		return nil, err
+	}
+	cfg, _, err := layers.effectiveWith(func() []string { return launcherNamesIn(dir) })
+	return cfg, err
+}
+
+// readAgentLayers reads the layers of loadForAgents; tests replace it to
+// remove the directory while the overlay is located.
+var readAgentLayers = func(dir string) (layerDocuments, error) { return readLayers(dir, false) }
 
 // agentOf is the definition of name in a loaded configuration.
 func agentOf(cfg *Config, name string) (AgentDefinition, error) {
