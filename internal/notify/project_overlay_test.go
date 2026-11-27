@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/terminal"
 	"github.com/dualface/kander/v2/internal/worker"
 )
 
@@ -18,10 +19,27 @@ import (
 const herdrWindow = "herdr:w1:t9:w1:p9"
 
 // outsideProjects moves the process into a directory that belongs to no
-// project, as the worker's directory does.
+// project, as the worker's directory does, with the user environment kept out.
 func outsideProjects(t *testing.T) {
 	t.Helper()
+	isolateUserEnvironment(t)
 	t.Chdir(t.TempDir())
+}
+
+// isolateUserEnvironment keeps the user's home, its terminal definitions and
+// its Git configuration out of the test: the definitions are read again from
+// the temporary home, and again by the next test.
+func isolateUserEnvironment(t *testing.T) {
+	t.Helper()
+	global := filepath.Join(t.TempDir(), "gitconfig")
+	if err := os.WriteFile(global, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("GIT_CONFIG_GLOBAL", global)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	terminal.ReloadDefinitions()
+	t.Cleanup(terminal.ReloadDefinitions)
 }
 
 // overlayProject creates a Git project whose overlay holds the given text.

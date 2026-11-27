@@ -21,6 +21,13 @@ func processNameProject(t *testing.T) string {
 	useFakeBackends(t, &fakeAgentBackend{name: "proc", process: true, facts: map[string]terminal.PaneFacts{
 		"p1": {Command: "codex-project", Dead: "0", InMode: "0", SessionMarker: "id-1"},
 	}})
+	global := filepath.Join(t.TempDir(), "gitconfig")
+	if err := os.WriteFile(global, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("GIT_CONFIG_GLOBAL", global)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	project := t.TempDir()
 	if out, err := exec.Command("git", "init", "-q", project).CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v %s", err, out)

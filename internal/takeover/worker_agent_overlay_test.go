@@ -9,10 +9,27 @@ import (
 	"time"
 
 	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/terminal"
 	"github.com/dualface/kander/v2/internal/worker"
 )
 
 const overlayExitCommand = "/quit-project"
+
+// isolateUserEnvironment keeps the user's home, its terminal definitions and
+// its Git configuration out of the test: the definitions are read again from
+// the temporary home, and again by the next test.
+func isolateUserEnvironment(t *testing.T) {
+	t.Helper()
+	global := filepath.Join(t.TempDir(), "gitconfig")
+	if err := os.WriteFile(global, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("GIT_CONFIG_GLOBAL", global)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	terminal.ReloadDefinitions()
+	t.Cleanup(terminal.ReloadDefinitions)
+}
 
 // stopAddress is a lost codex execution on a tmux pane that runs the
 // foreground process its project overlay names, stopped from a process
@@ -21,6 +38,7 @@ const overlayExitCommand = "/quit-project"
 func stopAddress(t *testing.T) (worker.AgentAddress, string) {
 	t.Helper()
 	root, _ := setupBoard(t)
+	isolateUserEnvironment(t)
 	t.Chdir(t.TempDir())
 	project := t.TempDir()
 	if out, err := exec.Command("git", "init", "-q", project).CombinedOutput(); err != nil {

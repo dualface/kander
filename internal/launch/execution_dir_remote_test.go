@@ -16,6 +16,7 @@ import (
 	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/remote"
 	"github.com/dualface/kander/v2/internal/server"
+	"github.com/dualface/kander/v2/internal/terminal"
 )
 
 // realDir is dir with its symbolic links resolved, as Git reports a main
@@ -47,13 +48,24 @@ func requireExecutionDir(t *testing.T, got, checkout string) {
 	}
 }
 
+// isolateExecutionDirTest keeps the user's Git configuration out of the
+// fixture repositories and reads the terminal definitions again after the
+// fixture moved HOME, and again for the next test.
+func isolateExecutionDirTest(t *testing.T) {
+	t.Helper()
+	isolateTestGit(t)
+	t.Cleanup(terminal.ReloadDefinitions)
+}
+
 func TestRemoteStartWithAWorktreeRecordsTheMainCheckout(t *testing.T) {
 	skipOnWindows(t)
+	isolateExecutionDirTest(t)
 	source, head := integrationGit(t)
 	lifecycleGit(t, source, "branch", "v2", head)
 	bare := filepath.Join(t.TempDir(), "common.git")
 	lifecycleGit(t, source, "clone", "--bare", source, bare)
 	_, session, card, _, _ := remoteLifecycleFixture(t, "execution-dir-worktree", bare)
+	terminal.ReloadDefinitions()
 	checkout, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -77,7 +89,9 @@ func TestRemoteStartWithAWorktreeRecordsTheMainCheckout(t *testing.T) {
 
 func TestRemoteStartWithoutAWorktreeRecordsTheMainCheckout(t *testing.T) {
 	skipOnWindows(t)
+	isolateExecutionDirTest(t)
 	_, session, card, _, _ := remoteLifecycleFixture(t, "execution-dir-in-place")
+	terminal.ReloadDefinitions()
 	checkout, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +111,9 @@ func TestRemoteStartWithoutAWorktreeRecordsTheMainCheckout(t *testing.T) {
 
 func TestRemoteOrchestratorRecordsTheMainCheckout(t *testing.T) {
 	skipOnWindows(t)
+	isolateExecutionDirTest(t)
 	_, _, _ = setupBoard(t)
+	terminal.ReloadDefinitions()
 	checkout := t.TempDir()
 	lifecycleGit(t, checkout, "init", "-q")
 	lifecycleGit(t, checkout, "commit", "--allow-empty", "-q", "-m", "fixture")
