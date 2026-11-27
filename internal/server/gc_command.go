@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -39,6 +40,10 @@ var (
 	gcServerURL = func() (string, error) { return importTarget() }
 	// gcProbe finds the loopback server at a URL that serves a data directory.
 	gcProbe = servicectl.ServerFor
+	// gcDiscoverPatience bounds how long a held data directory lock is
+	// taken for a server still starting: it recovers its projects before it
+	// listens and records its address.
+	gcDiscoverPatience = 30 * time.Second
 	// gcInterrupt is the context an interrupt cancels.
 	gcInterrupt = func() (context.Context, context.CancelFunc) {
 		return signal.NotifyContext(context.Background(), os.Interrupt)
@@ -181,26 +186,38 @@ func gcExecutorFor(ctx context.Context, dir string, request api.ServerGCRequest)
 	if !errors.Is(err, ErrDataDirInUse) {
 		return nil, nil, err
 	}
-	// A server holds the lock. Ask the configured URL again, since it may have
-	// finished starting, then the address the server of dir recorded, which
-	// differs when it was started with another --listen.
-	var candidates []string
-	if local {
-		candidates = append(candidates, target)
-	}
-	if recorded, err := servicectl.RecordedURL(dir); err == nil && recorded != "" && recorded != target {
-		candidates = append(candidates, recorded)
-	}
-	if len(candidates) == 0 {
-		return nil, nil, errors.New(config.Text("gc.local_only", target))
-	}
+	// A server holds the lock, perhaps one still starting. Until
+	// gcDiscoverPatience ends, ask the configured URL and the address the
+	// server of dir recorded (read again each time, since a starting server
+	// writes it once it listens, and it differs with another --listen).
+	deadline := time.Now().Add(gcDiscoverPatience)
 	var last error
-	for _, candidate := range candidates {
-		info, err := gcProbe(ctx, candidate, dir)
-		if err == nil {
-			return online(info)
+	for {
+		var candidates []string
+		if local {
+			candidates = append(candidates, target)
 		}
-		last = err
+		if recorded, err := servicectl.RecordedURL(dir); err == nil && recorded != "" && recorded != target {
+			candidates = append(candidates, recorded)
+		}
+		for _, candidate := range candidates {
+			info, err := gcProbe(ctx, candidate, dir)
+			if err == nil {
+				return online(info)
+			}
+			last = err
+		}
+		if !time.Now().Before(deadline) {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return nil, nil, ctx.Err()
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
+	if last == nil {
+		return nil, nil, errors.New(config.Text("gc.local_only", target))
 	}
 	if errors.Is(last, servicectl.ErrNoServer) {
 		return nil, nil, errors.New(config.Text("gc.no_server", dir, target))

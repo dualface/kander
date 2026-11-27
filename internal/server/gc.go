@@ -30,11 +30,6 @@ var gcCompact = board.CompactReviewRuns
 // Its only use is the replay of a late retry, which never comes this late.
 const gcLivenessAge = 24 * time.Hour
 
-// gcLockPatience bounds how long a receipt batch tries for the project lock,
-// which every request of the project holds briefly. A project whose lock stays
-// taken longer is skipped and reported, never waited for.
-var gcLockPatience = time.Second
-
 // errGCProjectBusy reports a project a gc skips because a long-running
 // operation, such as a board import, holds it.
 var errGCProjectBusy = errors.New("another maintenance operation of this project is running; the project was skipped")
@@ -50,22 +45,18 @@ type gcOptions struct {
 // gcTarget is one project a gc works on. enter excludes the operations that
 // replace the board directory, such as an import, for the whole gc of the
 // project; lock serializes a receipt batch with the project's requests. Both
-// return without waiting (lock within gcLockPatience) or fail. An offline gc
-// holds the data directory lock and needs neither.
+// return at once, holding the lock or failing. An offline gc holds the data
+// directory lock and needs neither.
 type gcTarget struct {
 	name, root, board string
 	enter, lock       func() (unlock func(), err error)
 }
 
-// tryLockBoard is lockBoard that gives up with not_ready when mu stays taken
-// for longer than patience.
-func (p *project) tryLockBoard(patience time.Duration) error {
-	deadline := time.Now().Add(patience)
-	for !p.mu.TryLock() {
-		if time.Now().After(deadline) {
-			return apiError(api.CodeNotReady, "project "+p.info.Name+" stayed busy; its remaining receipts were skipped")
-		}
-		time.Sleep(5 * time.Millisecond)
+// tryLockBoard is lockBoard that never waits: a taken mu fails at once with
+// not_ready.
+func (p *project) tryLockBoard() error {
+	if !p.mu.TryLock() {
+		return apiError(api.CodeNotReady, "project "+p.info.Name+" was busy; its remaining receipts were skipped")
 	}
 	if p.server.closing.Load() {
 		p.mu.Unlock()
@@ -128,7 +119,7 @@ func (s *Server) gcTargets(project string) []gcTarget {
 				return p.maintenance.Unlock, nil
 			},
 			lock: func() (func(), error) {
-				if err := p.tryLockBoard(gcLockPatience); err != nil {
+				if err := p.tryLockBoard(); err != nil {
 					return nil, err
 				}
 				return p.unlockBoard, nil
@@ -149,6 +140,9 @@ func (g gcRun) run(ctx context.Context, o gcOptions) api.ServerGCReport {
 		}
 		project := api.ServerGCProject{Name: target.name}
 		if leave, err := target.enter(); err != nil {
+			project.Errors = append(project.Errors, err.Error())
+		} else if err := importPending(target.root); err != nil {
+			leave()
 			project.Errors = append(project.Errors, err.Error())
 		} else {
 			g.compact(ctx, target, o, &project)
@@ -173,8 +167,25 @@ func (g gcRun) run(ctx context.Context, o gcOptions) api.ServerGCReport {
 // execution lock of the run or of a settled successor is condition 7.
 var gcProtective = []board.CompactionCondition{board.CompactionRunFinal, board.CompactionPublished, board.CompactionBatchClosed, board.CompactionRunLock, board.CompactionRemoval}
 
+// importPending refuses a project whose board import recorded its publication
+// intent but did not finish it: its recovery compares the board with the
+// digests of the intent, so a gc must not change that board first. The gc
+// leaves the recovery to the server that opens the project.
+func importPending(root string) error {
+	found, err := fs.RegularFileExists(root, filepath.Join(root, "control", "import-pending.json"))
+	if err != nil {
+		return errors.New("the project was skipped: its board import intent cannot be read: " + err.Error())
+	}
+	if found {
+		return errors.New("the project was skipped: a board import of it waits for recovery; start the server to finish it, then run gc again")
+	}
+	return nil
+}
+
 func (g gcRun) compact(ctx context.Context, target gcTarget, o gcOptions, project *api.ServerGCProject) {
-	result, err := gcCompact(ctx, target.board, board.CompactionOptions{OlderThan: o.olderThan, Now: g.now(), DryRun: o.dryRun, KanderVersion: g.version})
+	// NoWait: a board writer that holds the board lock makes the compaction
+	// of this project skip and report instead of holding up the other projects.
+	result, err := gcCompact(ctx, target.board, board.CompactionOptions{OlderThan: o.olderThan, Now: g.now(), DryRun: o.dryRun, KanderVersion: g.version, NoWait: true})
 	project.Compaction.Runs, project.Compaction.Files, project.Compaction.Bytes = len(result.Runs), result.Files, result.Bytes
 	for _, skipped := range result.Skipped {
 		if len(skipped.Conditions) > 0 && !slices.ContainsFunc(skipped.Conditions, func(c board.CompactionCondition) bool { return !slices.Contains(gcProtective, c) }) {
@@ -200,7 +211,7 @@ func (g gcRun) expireReceipts(ctx context.Context, target gcTarget, o gcOptions,
 		}
 		return
 	}
-	finished, err := g.finishReceiptIntent(target, o, project)
+	carry, finished, err := g.finishReceiptIntent(target, o, project)
 	if err != nil {
 		project.Errors = append(project.Errors, "idempotency receipts: "+err.Error())
 		return
@@ -222,27 +233,30 @@ func (g gcRun) expireReceipts(ctx context.Context, target gcTarget, o gcOptions,
 			project.Errors = append(project.Errors, "idempotency receipts stopped: "+err.Error())
 			return
 		}
-		if err := g.receiptBatch(target, o, names[start:min(start+gcReceiptBatch, len(names))], project); err != nil {
+		if carry, err = g.receiptBatch(target, o, names[start:min(start+gcReceiptBatch, len(names))], carry, project); err != nil {
 			project.Errors = append(project.Errors, "idempotency receipts: "+err.Error())
 			return
 		}
 	}
 }
 
-// receiptIntent is the set one receipt batch removes, written before the
-// first removal and deleted after the last. OlderThan is the retention of the
-// gc that wrote it; finishing the batch decides with it, so the same set ends.
+// receiptIntent is the set the receipt batches of a gc remove: written before
+// the first removal of a batch, and after its last removal rewritten to the
+// members still unresolved, or removed when none is left. Each member keeps
+// the retention of the gc that recorded it, so a later gc ends it with that
+// retention.
 type receiptIntent struct {
-	Schema    int                   `json:"schema"`
-	OlderThan string                `json:"older_than"`
-	Receipts  []receiptIntentMember `json:"receipts"`
+	Schema   int                   `json:"schema"`
+	Receipts []receiptIntentMember `json:"receipts"`
 }
 
-// receiptIntentMember names one receipt by file name, content hash, and size.
+// receiptIntentMember names one receipt by file name, content hash, and size,
+// with the retention it was found due under.
 type receiptIntentMember struct {
-	Name   string `json:"name"`
-	SHA256 string `json:"sha256"`
-	Bytes  int64  `json:"bytes"`
+	Name      string `json:"name"`
+	SHA256    string `json:"sha256"`
+	Bytes     int64  `json:"bytes"`
+	OlderThan string `json:"older_than"`
 }
 
 // receiptIntentRel is the receipt intent below the project directory.
@@ -250,37 +264,36 @@ var receiptIntentRel = filepath.Join("control", "gc-receipts.json")
 
 func receiptIntentPath(root string) string { return filepath.Join(root, receiptIntentRel) }
 
-// finishReceiptIntent completes the batch an interrupted gc recorded. A member
+// finishReceiptIntent completes the set an interrupted gc recorded. A member
 // is removed only when its file still has the recorded content and is still
-// due under the recorded retention; one already gone counts as removed. A dry
-// run counts what it would remove. It returns the members it decided on, so
-// the scan that follows skips them.
-func (g gcRun) finishReceiptIntent(target gcTarget, o gcOptions, project *api.ServerGCProject) (map[string]bool, error) {
+// due under its recorded retention; one already gone counts as removed, in a
+// plan too, so a set whose removals all happened still makes the gc run and
+// end it. A member that cannot be read or removed now stays recorded and is
+// returned as carry. It also returns every member it decided on or carries,
+// so the scan that follows skips them; a replaced member goes to the scan.
+func (g gcRun) finishReceiptIntent(target gcTarget, o gcOptions, project *api.ServerGCProject) (carry []receiptIntentMember, decided map[string]bool, err error) {
 	data, found, err := fs.ReadRegularFileIfExists(target.root, receiptIntentPath(target.root))
 	if err != nil || !found {
-		return nil, err
+		return nil, nil, err
 	}
 	var intent receiptIntent
 	if err := json.Unmarshal(data, &intent); err != nil {
-		return nil, errors.New("receipt gc intent is damaged: " + err.Error())
-	}
-	olderThan, err := time.ParseDuration(intent.OlderThan)
-	if err != nil || olderThan < command.MinRetention {
-		return nil, errors.New("receipt gc intent has an invalid retention")
+		return nil, nil, errors.New("receipt gc intent is damaged: " + err.Error())
 	}
 	unlock, err := target.lock()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer unlock()
 	if err := board.RequireNoPendingOperations(target.board); err != nil {
-		return nil, gcPendingTransaction(err)
+		return nil, nil, gcPendingTransaction(err)
 	}
 	facts := &bindingFacts{board: target.board}
 	now := g.now()
-	decided := map[string]bool{}
+	decided = map[string]bool{}
 	for _, member := range intent.Receipts {
-		if !receiptFileName(member.Name) {
+		olderThan, err := time.ParseDuration(member.OlderThan)
+		if !receiptFileName(member.Name) || err != nil || olderThan < command.MinRetention {
 			continue
 		}
 		decided[member.Name] = true
@@ -288,17 +301,16 @@ func (g gcRun) finishReceiptIntent(target gcTarget, o gcOptions, project *api.Se
 		data, found, err := fs.ReadRegularFileIfExists(target.root, path)
 		if err != nil {
 			project.Receipts.Kept = append(project.Receipts.Kept, api.ServerGCKept{ID: strings.TrimSuffix(member.Name, ".json"), Reason: err.Error()})
+			carry = append(carry, member)
 			continue
 		}
 		if !found {
-			if !o.dryRun {
-				project.Receipts.Files++
-				project.Receipts.Bytes += member.Bytes
-			}
+			project.Receipts.Files++
+			project.Receipts.Bytes += member.Bytes
 			continue
 		}
 		if contentHash(data) != member.SHA256 {
-			// Replaced since the batch was recorded: the scan decides on it anew.
+			// Replaced since the set was recorded: the scan decides on it anew.
 			delete(decided, member.Name)
 			continue
 		}
@@ -311,36 +323,39 @@ func (g gcRun) finishReceiptIntent(target gcTarget, o gcOptions, project *api.Se
 			delete(decided, member.Name)
 			continue
 		}
-		g.removeReceipt(target, o, member.Name, path, data, project)
-	}
-	if !o.dryRun {
-		if _, err := fs.RemoveRegularFileIfExists(target.root, receiptIntentPath(target.root)); err != nil {
-			return nil, err
+		if !g.removeReceipt(target, o, member.Name, path, data, project) {
+			carry = append(carry, member)
 		}
 	}
-	return decided, nil
+	if o.dryRun {
+		return carry, decided, nil
+	}
+	return carry, decided, settleReceiptIntent(target.root, carry)
 }
 
-func (g gcRun) receiptBatch(target gcTarget, o gcOptions, names []string, project *api.ServerGCProject) error {
+// receiptBatch removes the due receipts among names. carry are the members an
+// earlier batch left unresolved; they stay recorded with the batch's own
+// members, and the members left unresolved after the batch are returned.
+func (g gcRun) receiptBatch(target gcTarget, o gcOptions, names []string, carry []receiptIntentMember, project *api.ServerGCProject) ([]receiptIntentMember, error) {
 	unlock, err := target.lock()
 	if err != nil {
-		return err
+		return carry, err
 	}
 	defer unlock()
 	// Recovery of a prepared board transaction compares the receipt it staged
 	// with the recorded content; a removed receipt would stop the project
 	// from opening. Until the server recovers such a record, no receipt goes.
 	if err := board.RequireNoPendingOperations(target.board); err != nil {
-		return gcPendingTransaction(err)
+		return carry, gcPendingTransaction(err)
 	}
 	facts := &bindingFacts{board: target.board}
 	now := g.now()
 	type due struct {
-		name, path string
-		data       []byte
+		member receiptIntentMember
+		path   string
+		data   []byte
 	}
 	var batch []due
-	intent := receiptIntent{Schema: 1, OlderThan: o.olderThan.String()}
 	kept := func(name, reason string) {
 		project.Receipts.Kept = append(project.Receipts.Kept, api.ServerGCKept{ID: strings.TrimSuffix(name, ".json"), Reason: reason})
 	}
@@ -365,42 +380,60 @@ func (g gcRun) receiptBatch(target gcTarget, o gcOptions, names []string, projec
 			continue
 		}
 		if ok {
-			batch = append(batch, due{name, path, data})
-			intent.Receipts = append(intent.Receipts, receiptIntentMember{Name: name, SHA256: contentHash(data), Bytes: int64(len(data))})
+			member := receiptIntentMember{Name: name, SHA256: contentHash(data), Bytes: int64(len(data)), OlderThan: o.olderThan.String()}
+			batch = append(batch, due{member, path, data})
 		}
 	}
 	if len(batch) == 0 {
-		return nil
+		return carry, nil
 	}
 	if !o.dryRun {
+		intent := receiptIntent{Schema: 1, Receipts: slices.Clone(carry)}
+		for _, d := range batch {
+			intent.Receipts = append(intent.Receipts, d.member)
+		}
 		if err := writeReceiptIntent(target.root, intent); err != nil {
-			return err
+			return carry, err
 		}
 	}
+	left := slices.Clone(carry)
 	for _, d := range batch {
-		g.removeReceipt(target, o, d.name, d.path, d.data, project)
+		if !g.removeReceipt(target, o, d.member.Name, d.path, d.data, project) {
+			left = append(left, d.member)
+		}
 	}
 	if o.dryRun {
-		return nil
+		return carry, nil
 	}
-	_, err = fs.RemoveRegularFileIfExists(target.root, receiptIntentPath(target.root))
+	return left, settleReceiptIntent(target.root, left)
+}
+
+// settleReceiptIntent records the members still unresolved, or removes the
+// intent when none is left.
+func settleReceiptIntent(root string, left []receiptIntentMember) error {
+	if len(left) > 0 {
+		return writeReceiptIntent(root, receiptIntent{Schema: 1, Receipts: left})
+	}
+	_, err := fs.RemoveRegularFileIfExists(root, receiptIntentPath(root))
 	return err
 }
 
-// removeReceipt removes one due receipt, or in a dry run only counts it.
-func (g gcRun) removeReceipt(target gcTarget, o gcOptions, name, path string, data []byte, project *api.ServerGCProject) {
+// removeReceipt removes one due receipt, or in a dry run only counts it. It
+// reports whether the receipt is gone (or would be).
+func (g gcRun) removeReceipt(target gcTarget, o gcOptions, name, path string, data []byte, project *api.ServerGCProject) bool {
 	if !o.dryRun {
 		if err := receiptRemoveStep(name); err != nil {
 			project.Receipts.Kept = append(project.Receipts.Kept, api.ServerGCKept{ID: strings.TrimSuffix(name, ".json"), Reason: err.Error()})
-			return
+			return false
 		}
 		if _, err := fs.RemoveRegularFileIfExists(target.root, path); err != nil {
 			project.Receipts.Kept = append(project.Receipts.Kept, api.ServerGCKept{ID: strings.TrimSuffix(name, ".json"), Reason: err.Error()})
-			return
+			return false
 		}
 	}
 	project.Receipts.Files++
 	project.Receipts.Bytes += int64(len(data))
+	return true
 }
 
 // receiptRemoveStep, when a test sets it, runs before each receipt removal
@@ -439,21 +472,21 @@ func livenessReceipt(operation string) bool {
 
 // receiptBinding is the object a receipt's operation acts on.
 type receiptBinding struct {
-	kind string // "task", "group", "run", or "" when nothing reliable is bound
+	kind string // "task", or "" when nothing reliable is bound
 	id   string
 }
 
-// receiptOperations maps each operation prefix that names one object to the
-// kind of that object. The object identity runs to the next ':' or the end.
-// Every other operation (new, issue-import, issue-result-save, integration-*,
-// review-plan and the other review writes without a run) stays unbound.
+// receiptOperations maps each operation prefix that names one card to the
+// kind of that object. The card ID runs to the next ':' or the end. Every
+// other operation stays unbound and its receipt is kept: new, issue-import,
+// issue-result-save, integration-*, the review writes, and the group and run
+// operations. A group lease write replays as a new write for as long as the
+// lease record is active, whatever its members' states, and a run receipt
+// binds a run that archive pruning removes with its archived cards.
 var receiptOperations = map[string]string{
 	"move": "task", "put": "task", "claim": "task", "takeover": "task", "execution": "task",
 	"dispatch": "task", "delivery": "task", "assign": "task", "confirm": "task", "request": "task",
 	"answer": "task", "decision-human": "task", "decision-leader": "task", "decision-mode": "task",
-	"group-claim": "group", "group-release": "group", "group-reconcile": "group", "group-recover": "group",
-	"group-remove-member": "group",
-	"review-runtime":      "run", "review-publish": "run",
 }
 
 func bindingOf(operation string) receiptBinding {
@@ -480,9 +513,8 @@ var refusedOnceTerminal = map[string]bool{"claim": true, "takeover": true, "conf
 // receiptDue reports whether a gc removes r. A done liveness receipt goes
 // after gcLivenessAge. Any other done receipt goes after the retention period
 // once a late retry of it can no longer write: a claim, takeover, or
-// confirmation when its card is terminal; any other operation when its card,
-// every card of its group, or every card of its review run is archived.
-// Receipts that cannot be bound stay.
+// confirmation when its card is terminal; any other card operation when its
+// card is archived. Receipts that cannot be bound to a card stay.
 func receiptDue(r receipt, now time.Time, olderThan time.Duration, facts *bindingFacts) (bool, error) {
 	if r.Status != receiptDone || r.CreatedAt.IsZero() {
 		return false, nil
@@ -495,28 +527,14 @@ func receiptDue(r receipt, now time.Time, olderThan time.Duration, facts *bindin
 		return false, nil
 	}
 	binding := bindingOf(r.Operation)
-	prefix, _, _ := strings.Cut(r.Operation, ":")
-	switch binding.kind {
-	case "task":
-		if refusedOnceTerminal[prefix] {
-			return facts.inStates([]string{binding.id}, "done", "archived", "trash")
-		}
-		return facts.inStates([]string{binding.id}, "archived")
-	case "group":
-		members, err := facts.groupMembers(binding.id)
-		if err != nil || len(members) == 0 {
-			return false, err
-		}
-		return facts.inStates(members, "archived")
-	case "run":
-		run, err := board.ReadReviewRun(facts.board, binding.id)
-		if err != nil || len(run.TaskIDs) == 0 {
-			// A run that archive cleanup removed, or one that cannot be read, binds nothing reliable.
-			return false, nil
-		}
-		return facts.inStates(run.TaskIDs, "archived")
+	if binding.kind != "task" {
+		return false, nil
 	}
-	return false, nil
+	prefix, _, _ := strings.Cut(r.Operation, ":")
+	if refusedOnceTerminal[prefix] {
+		return facts.inStates([]string{binding.id}, "done", "archived", "trash")
+	}
+	return facts.inStates([]string{binding.id}, "archived")
 }
 
 // bindingFacts reads the board state one receipt batch decides on, once. A
@@ -525,7 +543,6 @@ type bindingFacts struct {
 	board   string
 	scanned *board.Board
 	scanErr error
-	groups  map[string][]string
 }
 
 func (f *bindingFacts) scan() (*board.Board, error) {
@@ -558,30 +575,6 @@ func (f *bindingFacts) inStates(ids []string, states ...string) (bool, error) {
 		}
 	}
 	return true, nil
-}
-
-// groupMembers lists the cards whose TASK_GROUP names group. A card that
-// cannot be read makes every group unknown, as compaction treats it.
-func (f *bindingFacts) groupMembers(group string) ([]string, error) {
-	if f.groups == nil {
-		b, err := f.scan()
-		if err != nil {
-			return nil, err
-		}
-		groups := map[string][]string{}
-		for id, entry := range b.Entries {
-			text, err := board.ReadDocument(entry)
-			if err != nil {
-				f.groups = map[string][]string{}
-				return nil, nil
-			}
-			if g := board.TaskGroupFrom(text); g != "" {
-				groups[g] = append(groups[g], id)
-			}
-		}
-		f.groups = groups
-	}
-	return f.groups[group], nil
 }
 
 // gcRoute answers POST /api/v1/server/gc. Only a loopback peer with the

@@ -284,10 +284,10 @@ func TestReceiptBindings(t *testing.T) {
 		"dispatch:20261101-a-task:accept":      {"task", "20261101-a-task"},
 		"answer:20261101-a-task:req-1":         {"task", "20261101-a-task"},
 		"decision-leader:20261101-a-task":      {"task", "20261101-a-task"},
-		"group-claim:20261101-g-group":         {"group", "20261101-g-group"},
-		"group-remove-member:20261101-g-group": {"group", "20261101-g-group"},
-		"review-runtime:run-1:finalize":        {"run", "run-1"},
-		"review-publish:run-1":                 {"run", "run-1"},
+		"group-claim:20261101-g-group":         {},
+		"group-remove-member:20261101-g-group": {},
+		"review-runtime:run-1:finalize":        {},
+		"review-publish:run-1":                 {},
 		"new":                                  {},
 		"issue-import":                         {},
 		"issue-result-save:github.com/a/b#1":   {},
@@ -404,20 +404,20 @@ func TestServerGCExpiresReceipts(t *testing.T) {
 	f.clock.advance(24 * time.Hour)
 	report, err = f.gc(request)
 	// The replayed observation wrote a new liveness receipt at 25 hours; it is due as
-	// well, and so is the receipt of the group whose only member is archived.
-	if err != nil || report.Projects[0].Receipts.Files != boundA+2 || report.Incomplete() {
-		t.Fatalf("49h: %+v %v (want %d)", report, err, boundA+2)
+	// well. Group receipts stay even when every member is archived.
+	if err != nil || report.Projects[0].Receipts.Files != boundA+1 || report.Incomplete() {
+		t.Fatalf("49h: %+v %v (want %d)", report, err, boundA+1)
 	}
 	left := receiptFiles(t, f.s, "demo")
 	if left[pending] != "pending move:"+a.TaskID {
 		t.Fatal("a pending receipt must stay")
 	}
-	if _, ok := left[closedGroup]; ok {
-		t.Fatal("the receipt of a group whose members are all terminal must go")
+	if _, ok := left[closedGroup]; !ok {
+		t.Fatal("a group lease receipt must stay: a late retry can still refresh an active lease")
 	}
 	for _, operation := range []string{"group-claim:20261101-open-group", "group-claim:20261101-empty-group", "review-publish:run-gone"} {
 		if !slices.Contains(slices.Collect(mapValues(left)), "done "+operation) {
-			t.Fatalf("%s must stay: an open group, a group without members, or a run that is gone binds nothing terminal", operation)
+			t.Fatalf("%s must stay: group and run receipts are bound to nothing a gc can rely on", operation)
 		}
 	}
 	for _, v := range left {

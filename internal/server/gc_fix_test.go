@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/dualface/kander/v2/api"
 	"github.com/dualface/kander/v2/internal/board"
+	"github.com/dualface/kander/v2/internal/fs"
 	"github.com/dualface/kander/v2/internal/servicectl"
 )
 
@@ -301,7 +303,7 @@ func TestServerGCFinishesTheReceiptBatchAnInterruptedGCRecorded(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return receiptIntentMember{Name: name, SHA256: contentHash(data), Bytes: int64(len(data))}
+		return receiptIntentMember{Name: name, SHA256: contentHash(data), Bytes: int64(len(data)), OlderThan: "1h"}
 	}
 	same, gone, replaced := recorded("same"), recorded("gone"), recorded("replaced")
 	if err := os.Remove(receiptFile(p.root, "gone")); err != nil {
@@ -309,13 +311,13 @@ func TestServerGCFinishesTheReceiptBatchAnInterruptedGCRecorded(t *testing.T) {
 	}
 	// A fresh receipt now holds the name: it is not due, so it stays.
 	writeReceipt(t, f.s, "demo", receipt{Key: "replaced", Operation: "observation:20261101-a-task", Digest: "d", Status: receiptDone, CreatedAt: f.clock.now().UTC()})
-	intent := receiptIntent{Schema: 1, OlderThan: "1h", Receipts: []receiptIntentMember{same, gone, replaced}}
+	intent := receiptIntent{Schema: 1, Receipts: []receiptIntentMember{same, gone, replaced}}
 	if err := writeReceiptIntent(p.root, intent); err != nil {
 		t.Fatal(err)
 	}
 	request := api.ServerGCRequest{DryRun: true, OlderThan: "1h", LogKeep: 1 << 20}
 	plan, err := f.gc(request)
-	if err != nil || plan.Projects[0].Receipts.Files != 1 || !fileExists(receiptIntentPath(p.root)) {
+	if err != nil || plan.Projects[0].Receipts.Files != 2 || !fileExists(receiptIntentPath(p.root)) {
 		t.Fatalf("plan: %+v %v", plan.Projects[0], err)
 	}
 	request.DryRun = false
@@ -342,6 +344,9 @@ func TestServerGCCommandFindsAServerThroughItsRecordedAddress(t *testing.T) {
 		calls++
 		return board.CompactionReport{}, nil
 	})
+	previous := gcDiscoverPatience
+	t.Cleanup(func() { gcDiscoverPatience = previous })
+	gcDiscoverPatience = 300 * time.Millisecond
 	code, stdout, stderr := runGCCommand("--data", f.s.data, "--yes", "--json")
 	if code != 1 || calls != 0 {
 		t.Fatalf("without a record no server is found: exit %d, compactions %d\n%s\n%s", code, calls, stdout, stderr)
@@ -512,5 +517,175 @@ func TestServerGCCommandTurnsOnlineWhenTheLockIsHeld(t *testing.T) {
 	var result api.ServerGCReport
 	if code != 0 || probes != 2 || json.Unmarshal([]byte(stdout), &result) != nil || len(result.Projects) != 1 {
 		t.Fatalf("exit %d, probes %d\n%s\n%s", code, probes, stdout, stderr)
+	}
+}
+
+// An import interrupted after it recorded its publication intent is finished by
+// the server that opens the project, against the digests of that intent. An
+// offline gc skips the project and changes nothing in it meanwhile.
+func TestOfflineGCSkipsAProjectWhoseImportWaitsForRecovery(t *testing.T) {
+	target, _ := newImportFixture(t, "existing")
+	source, _ := newImportFixture(t, "incoming")
+	dir := t.TempDir()
+	s, err := Open(Options{DataDir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, _ := importProject(t, s, target)
+	// A due receipt the board held before the import started.
+	key := "old-liveness"
+	if err := writeJSON(p.root, receiptPath(key), receipt{Key: key, Operation: "observation:20261101-a-task", Digest: "d", Status: receiptDone, CreatedAt: time.Now().UTC().Add(-48 * time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	s.importFault = func(step string) error {
+		if step == "prepared" {
+			return errImportCrash
+		}
+		return nil
+	}
+	if _, err := s.Import("demo", "", source); !errors.Is(err, errImportCrash) {
+		t.Fatalf("simulated crash: %v", err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	before := dataFiles(t, p.root)
+	offline, err := OpenOfflineGC(dir, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := offline.Run(t.Context(), api.ServerGCRequest{OlderThan: "1h", LogKeep: 1 << 20})
+	if closeErr := offline.Close(); err != nil || closeErr != nil {
+		t.Fatal(err, closeErr)
+	}
+	if !report.Incomplete() || !slices.ContainsFunc(report.Projects[0].Errors, func(e string) bool { return strings.Contains(e, "import") }) || report.Projects[0].Receipts.Files != 0 {
+		t.Fatalf("the project must be skipped and reported: %+v", report.Projects[0])
+	}
+	if !mapsEqual(before, dataFiles(t, p.root)) {
+		t.Fatal("a skipped project must not change")
+	}
+	reopened, err := Open(Options{DataDir: dir})
+	if err != nil {
+		t.Fatalf("the import must still recover: %v", err)
+	}
+	reopened.Close()
+}
+
+// A board writer that holds the board lock, or a request that holds the project
+// lock, makes the gc skip that part of the project at once and go on.
+func TestServerGCSkipsABusyBoardWithoutWaiting(t *testing.T) {
+	f := newGCFixture(t)
+	f.project("busy")
+	f.project("free")
+	info, _ := f.s.projectByName("busy")
+	p, _ := f.s.project(info.ID)
+	lockFile, err := fs.OpenLockFile(p.board, filepath.Join(p.board, ".kander", "locks", "board.lock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	held, err := fs.LockExclusive(lockFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := time.Now()
+	report, err := f.gc(api.ServerGCRequest{OlderThan: "1h", LogKeep: 1 << 20})
+	held.Unlock()
+	lockFile.Close()
+	if err != nil || time.Since(started) > 5*time.Second || len(report.Projects) != 2 {
+		t.Fatalf("a busy board: %+v %v", report, err)
+	}
+	busy, free := report.Projects[0], report.Projects[1]
+	if !slices.ContainsFunc(busy.Errors, func(e string) bool { return strings.Contains(e, "review run compaction") }) || len(free.Errors) != 0 {
+		t.Fatalf("only the busy project reports its compaction: %+v / %+v", busy, free)
+	}
+
+	p.mu.Lock()
+	writeReceipt(t, f.s, "busy", receipt{Key: "due", Operation: "observation:20261101-a-task", Digest: "d", Status: receiptDone, CreatedAt: f.clock.now().UTC().Add(-48 * time.Hour)})
+	started = time.Now()
+	report, err = f.gc(api.ServerGCRequest{Project: "busy", OlderThan: "1h", LogKeep: 1 << 20})
+	p.mu.Unlock()
+	if err != nil || time.Since(started) > 5*time.Second || report.Projects[0].Receipts.Files != 0 ||
+		!slices.ContainsFunc(report.Projects[0].Errors, func(e string) bool { return strings.Contains(e, "busy") }) {
+		t.Fatalf("a busy project lock: %+v %v", report, err)
+	}
+}
+
+// A member that cannot be removed now stays recorded with its own retention,
+// so a later gc with another retention still ends it; a set whose removals all
+// happened is a plan item, so the command runs and removes its record.
+func TestServerGCKeepsUnresolvedIntentMembersAndEndsEmptySets(t *testing.T) {
+	f := newGCFixture(t)
+	f.project("demo")
+	stubCompaction(t, noCompaction)
+	info, _ := f.s.projectByName("demo")
+	p, _ := f.s.project(info.ID)
+	created := f.clock.now().UTC().Add(-48 * time.Hour)
+	previous := receiptRemoveStep
+	t.Cleanup(func() { receiptRemoveStep = previous })
+
+	// A due member whose removal fails stays recorded with its retention.
+	live := writeReceipt(t, f.s, "demo", receipt{Key: "live", Operation: "observation:20261101-a-task", Digest: "d", Status: receiptDone, CreatedAt: created})
+	data, _ := os.ReadFile(receiptFile(p.root, "live"))
+	intent := receiptIntent{Schema: 1, Receipts: []receiptIntentMember{{Name: live, SHA256: contentHash(data), Bytes: int64(len(data)), OlderThan: "1h"}}}
+	if err := writeReceiptIntent(p.root, intent); err != nil {
+		t.Fatal(err)
+	}
+	receiptRemoveStep = func(name string) error {
+		if name == live {
+			return errors.New("removal failed")
+		}
+		return nil
+	}
+	report, err := f.gc(api.ServerGCRequest{Project: "demo", OlderThan: "720h", LogKeep: 1 << 20})
+	if err != nil || !report.Incomplete() {
+		t.Fatalf("a failed removal: %+v %v", report, err)
+	}
+	var left receiptIntent
+	raw, err := os.ReadFile(receiptIntentPath(p.root))
+	if err != nil || json.Unmarshal(raw, &left) != nil || len(left.Receipts) != 1 || left.Receipts[0].Name != live || left.Receipts[0].OlderThan != "1h" {
+		t.Fatalf("the unresolved member must stay with its retention: %s %v", raw, err)
+	}
+	receiptRemoveStep = previous
+	report, err = f.gc(api.ServerGCRequest{Project: "demo", OlderThan: "720h", LogKeep: 1 << 20})
+	if err != nil || report.Incomplete() || fileExists(receiptFile(p.root, "live")) || fileExists(receiptIntentPath(p.root)) {
+		t.Fatalf("the next gc must end the member: %+v %v", report, err)
+	}
+
+	// A set whose removals all happened: the plan counts them, so the
+	// command runs and removes the record.
+	intent = receiptIntent{Schema: 1, Receipts: []receiptIntentMember{{Name: live, SHA256: contentHash(data), Bytes: int64(len(data)), OlderThan: "1h"}}}
+	if err := writeReceiptIntent(p.root, intent); err != nil {
+		t.Fatal(err)
+	}
+	gcCommandEnv(t, f.http.URL, "tty:y\n")
+	code, stdout, stderr := runGCCommand("--data", f.s.data, "--project", "demo")
+	if code != 0 || fileExists(receiptIntentPath(p.root)) {
+		t.Fatalf("a finished set must be ended: exit %d\n%s\n%s", code, stdout, stderr)
+	}
+}
+
+// A server that holds the lock while it recovers its projects records its
+// address only once it listens; the command keeps asking until it does.
+func TestServerGCCommandWaitsForAStartingServer(t *testing.T) {
+	f := newGCFixture(t)
+	f.project("demo")
+	gcCommandEnv(t, unusedTarget, "")
+	stubCompaction(t, noCompaction)
+	previous := gcProbe
+	t.Cleanup(func() { gcProbe = previous })
+	probes := 0
+	gcProbe = func(ctx context.Context, target, dir string) (api.ServerInfo, error) {
+		probes++
+		if probes == 3 {
+			// The server starts listening and records its address.
+			if err := writeJSON(f.s.data, servicectl.ListenRecordName, servicectl.ListenRecord{Listen: f.http.Listener.Addr().String()}); err != nil {
+				t.Error(err)
+			}
+		}
+		return previous(ctx, target, dir)
+	}
+	code, stdout, stderr := runGCCommand("--data", f.s.data, "--yes", "--json")
+	if code != 0 || probes < 4 {
+		t.Fatalf("exit %d after %d probes\n%s\n%s", code, probes, stdout, stderr)
 	}
 }
