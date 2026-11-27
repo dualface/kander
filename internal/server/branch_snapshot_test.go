@@ -136,3 +136,45 @@ func TestGroupClaimFixesTheSnapshotOfTheGroupForItsMembers(t *testing.T) {
 	}
 	wantSnapshot(t, "later group", laterGrant.Claim.BranchSnapshot, "main-only", second, api.BranchSnapshotGroup)
 }
+
+// With a policy the snapshot takes the policy's branch mode, but a claim that
+// creates a snapshot still has to report a valid one, as without a policy: an
+// empty or invalid mode is refused for a card and for a group, and writes
+// nothing. A claim that creates no snapshot is not asked for one.
+func TestFirstClaimWithPolicyStillNeedsTheReportedBranchMode(t *testing.T) {
+	english(t)
+	p := newFixture(t).project("host-a")
+	revision := putPolicy(t, p, branchPolicy("main-only"))
+	task := todoTask(t, p, "policy-reported-mode")
+	for _, mode := range []string{"", "trunk"} {
+		_, err := claimFor(t, p, "card-"+mode, task.TaskID, "exec-"+mode, revision, mode)
+		refusal(t, err, api.CodeInvalidRequest, http.StatusBadRequest, "", "branch_mode")
+	}
+	if shown, err := p.Show(t.Context(), task.TaskID); err != nil || shown.State != "todo" || shown.Claim != nil {
+		t.Fatalf("a refused claim wrote: %+v %v", shown, err)
+	}
+	grant, err := claimFor(t, p, "card-reported", task.TaskID, "exec-reported", revision, "main-develop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSnapshot(t, "grant", grant.Claim.BranchSnapshot, "main-only", revision, api.BranchSnapshotTask)
+
+	request := groupRequest(t, p)
+	request.PolicyRevision, request.BranchMode = revision, ""
+	_, err = p.ClaimGroup(t.Context(), "group-empty", request.Request.GroupID, request, nil)
+	refusal(t, err, api.CodeInvalidRequest, http.StatusBadRequest, "", "branch_mode")
+	if view, err := p.Group(t.Context(), request.Request.GroupID); err != nil || view.Claim != nil {
+		t.Fatalf("a refused group claim wrote: %+v %v", view.Claim, err)
+	}
+	request.BranchMode = "main-develop"
+	groupGrant, err := p.ClaimGroup(t.Context(), "group-reported", request.Request.GroupID, request, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSnapshot(t, "group grant", groupGrant.Claim.BranchSnapshot, "main-only", revision, api.BranchSnapshotGroup)
+	member, err := claimFor(t, p, "member-empty", request.Request.Members[0], "exec-member", revision, "")
+	if err != nil {
+		t.Fatalf("a member claim, which creates no snapshot, needs a branch mode: %v", err)
+	}
+	wantSnapshot(t, "member grant", member.Claim.BranchSnapshot, "main-only", revision, api.BranchSnapshotGroup)
+}

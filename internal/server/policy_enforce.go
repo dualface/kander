@@ -69,7 +69,8 @@ func (p *project) newBranchSnapshot(scope, reported string) (*api.BranchSnapshot
 
 // checkSnapshotClaim is the check of a claim request that runs before its
 // receipt is written. Only a claim that will create a snapshot depends on the
-// policy: it needs a valid branch mode and a current policy revision.
+// policy: it needs a valid branch mode, also when the policy supplies the
+// snapshot's, and a current policy revision.
 func (p *project) checkSnapshotClaim(creates bool, revision uint64, branchMode string) error {
 	if err := validReportedBranchMode(branchMode); err != nil {
 		return err
@@ -77,13 +78,10 @@ func (p *project) checkSnapshotClaim(creates bool, revision uint64, branchMode s
 	if !creates {
 		return nil
 	}
-	if err := p.requireCurrentPolicy(revision); err != nil {
-		return err
+	if branchMode == "" {
+		return apiError(api.CodeInvalidRequest, "a first claim needs the branch_mode of the client")
 	}
-	if p.policyView().Revision == 0 && branchMode == "" {
-		return apiError(api.CodeInvalidRequest, "a first claim of a project without a policy needs the branch_mode of the client")
-	}
-	return nil
+	return p.requireCurrentPolicy(revision)
 }
 
 // taskClaimCreatesSnapshot reports whether a claim of task id creates its
