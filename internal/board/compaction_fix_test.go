@@ -343,3 +343,59 @@ func TestArchivePruneRestoresTheReceiptOfARunItKeeps(t *testing.T) {
 	}
 	requirePrunedCheck(t, root, id)
 }
+
+// An archive cleanup stopped after it removed the receipts leaves their
+// backups: while another receipt of the batch stays stuck, the kept run still
+// reads as compacted, and the next rounds restore and finally remove it.
+func TestArchivePruneKeepsReceiptsAcrossAnInterruption(t *testing.T) {
+	root, id, runs := twoRoleCompactionBoard(t, "compact-halt")
+	compact(t, root, false)
+	kept, stuck := runs[0], runs[1]
+	receipt := compactionReceiptPath(root, stuck.RunID)
+	data, err := os.ReadFile(receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Remove(receipt); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Mkdir(receipt, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	relocateCards(t, root, "archived", id)
+	halted := errors.New("halted")
+	pruneInterrupt = func(string) error { return halted }
+	t.Cleanup(func() { pruneInterrupt = nil })
+	if _, err = PruneArchived(root); !errors.Is(err, halted) {
+		t.Fatalf("want the interruption, got %v", err)
+	}
+	requireExists(t, compactionReceiptPath(root, kept.RunID), false)
+	requireExists(t, compactionBackupPath(root, kept.RunID), true)
+	_, err = ReadReviewOriginal(root, kept.RunID, "evidence.txt")
+	requireBoardCode(t, err, "board.review_compacted")
+
+	pruneInterrupt = nil
+	if report, err := PruneArchived(root); err == nil || len(report.Runs) != 0 {
+		t.Fatalf("a stuck receipt let the batch go: %+v %v", report, err)
+	}
+	requireExists(t, compactionReceiptPath(root, kept.RunID), true)
+	requireExists(t, compactionBackupPath(root, kept.RunID), false)
+	_, err = ReadReviewOriginal(root, kept.RunID, "evidence.txt")
+	requireBoardCode(t, err, "board.review_compacted")
+
+	if err = os.Remove(receipt); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(receipt, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if report, err := PruneArchived(root); err != nil || len(report.Runs) != 2 {
+		t.Fatalf("retry: %+v %v", report, err)
+	}
+	for _, run := range runs {
+		requireExists(t, compactionReceiptPath(root, run.RunID), false)
+		requireExists(t, compactionBackupPath(root, run.RunID), false)
+		requireExists(t, reviewPath(root, "runs", run.RunID), false)
+	}
+	requirePrunedCheck(t, root, id)
+}

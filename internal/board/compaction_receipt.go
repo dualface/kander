@@ -3,6 +3,7 @@ package board
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"slices"
 	"strings"
@@ -49,6 +50,28 @@ func compactionReceiptPath(root, runID string) string {
 	return control(root, "groups", pruneControlGroup, compactionReceiptName(runID))
 }
 
+// compactionBackupPath holds the copy archive pruning writes before it removes
+// a receipt. Until the round knows which runs it deletes, the copy stands for
+// the receipt, so an interrupted round never leaves a kept run without one.
+func compactionBackupPath(root, runID string) string {
+	return control(root, "groups", pruneControlGroup, "compaction-backups", runID+".json")
+}
+
+// readReceiptFile reads an optional receipt through a no-follow, non-blocking
+// handle whose type is checked before any read, so a FIFO or another special
+// file in its place fails instead of hanging the board.
+func readReceiptFile(root, path string) ([]byte, bool, error) {
+	f, err := fs.OpenRegularFileIfExists(root, path)
+	if err != nil || f == nil {
+		return nil, false, err
+	}
+	data, err := io.ReadAll(f)
+	if err = errors.Join(err, f.Close()); err != nil {
+		return nil, true, err
+	}
+	return data, true, nil
+}
+
 // covers reports whether the receipt lists name at location. A tree entry
 // covers every file below its location.
 func (r compactionReceipt) covers(location, name string) bool {
@@ -83,7 +106,12 @@ func readCompactionReceipt(root, runID string) (r compactionReceipt, exists bool
 	if !ValidReviewID(runID) {
 		return r, false, reviewError("run_id")
 	}
-	data, ok, err := fs.ReadRegularFileIfExists(root, compactionReceiptPath(root, runID))
+	data, ok, err := readReceiptFile(root, compactionReceiptPath(root, runID))
+	if err == nil && !ok {
+		// An archive cleanup that removed the receipt and stopped before it
+		// deleted the run leaves the copy it wrote first.
+		data, ok, err = readReceiptFile(root, compactionBackupPath(root, runID))
+	}
 	if err != nil || !ok {
 		return r, false, err
 	}

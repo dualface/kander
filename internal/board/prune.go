@@ -119,6 +119,9 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 	if err = requireNoPendingOperations(root, warnings); err != nil {
 		return report, err
 	}
+	if err = settleCompactionBackups(root); err != nil {
+		return report, err
+	}
 	plan, err := planPrune(root, &report, nil)
 	if err != nil {
 		return report, err
@@ -137,12 +140,13 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 		}
 	}
 	// Compaction receipts go before anything else. The prune receipt already
-	// covers their runs, so an interruption leaves no receipt without a run. A
-	// receipt that cannot be removed keeps its run, and planning again keeps
-	// what that run reads: its batch, its plan and its predecessors. A kept run
-	// whose receipt was already removed here gets it back from the bytes read
-	// before the removal, so its compacted originals still read as compacted.
-	// The next round removes them all.
+	// covers their runs. Each receipt is first copied to compaction-backups/,
+	// which readers take for a missing receipt, so no interruption leaves a
+	// kept run without one. A receipt that cannot be copied or removed keeps
+	// its run, and planning again keeps what that run reads: its batch, its
+	// plan, its predecessors and the other runs of its batch. Every kept run
+	// gets its receipt back; the backups of deleted runs go with them. The next
+	// round removes them all.
 	type removedReceipt struct {
 		data  []byte
 		files int
@@ -152,7 +156,13 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 	stuck := map[string]bool{}
 	for _, id := range sortedKeys(plan.runs) {
 		path := compactionReceiptPath(root, id)
-		data, exists, e := fs.ReadRegularFileIfExists(root, path)
+		data, exists, e := readReceiptFile(root, path)
+		if e == nil && exists {
+			e = ensurePruneDir(root, "compaction-backups")
+		}
+		if e == nil && exists {
+			e = fs.WriteTextAtomic(root, compactionBackupPath(root, id), string(data), true)
+		}
 		if e == nil && exists {
 			var r removedReceipt
 			r.files, r.bytes, e = removePath(root, path, false)
@@ -162,6 +172,11 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 		if e != nil {
 			failures = append(failures, e)
 			stuck[id] = true
+		}
+	}
+	if pruneInterrupt != nil {
+		if e := pruneInterrupt("compaction-receipts"); e != nil {
+			return report, errors.Join(append(failures, e)...)
 		}
 	}
 	if len(stuck) > 0 {
@@ -180,7 +195,14 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 		if plan.runs[id] {
 			report.Files += r.files
 			report.Bytes += r.bytes
-		} else if e := fs.WriteTextAtomic(root, compactionReceiptPath(root, id), string(r.data), false); e != nil {
+			continue
+		}
+		// The backup stays until the receipt is back, so a reader always finds one.
+		e := fs.WriteTextAtomic(root, compactionReceiptPath(root, id), string(r.data), false)
+		if e == nil {
+			_, e = fs.RemoveRegularFileIfExists(root, compactionBackupPath(root, id))
+		}
+		if e != nil {
 			failures = append(failures, e)
 		}
 	}
@@ -197,7 +219,13 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 		return control(root, append([]string{"groups", reviewControlGroup}, parts...)...)
 	}
 	for _, id := range sortedKeys(plan.runs) {
+		failed := len(failures)
 		remove(review("runs", id), true)
+		if _, backedUp := removedReceipts[id]; backedUp && len(failures) == failed {
+			if _, e := fs.RemoveRegularFileIfExists(root, compactionBackupPath(root, id)); e != nil {
+				failures = append(failures, e)
+			}
+		}
 	}
 	for _, id := range sortedKeys(plan.batches) {
 		remove(review("closures", id+".json"), false)
@@ -237,6 +265,52 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 		return report, err
 	}
 	return report, clearPruneIntents(root)
+}
+
+// pruneInterrupt, when set by a test, may stop archive pruning after it removed
+// the compaction receipts of the planned runs.
+var pruneInterrupt func(step string) error
+
+// settleCompactionBackups finishes what an interrupted round left in
+// compaction-backups/: a run that still exists gets its receipt back, and the
+// backup of a run that is gone is removed.
+func settleCompactionBackups(root string) error {
+	dir := control(root, "groups", pruneControlGroup, "compaction-backups")
+	entries, err := fs.ListDirectory(root, dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		id, ok := strings.CutSuffix(entry.Name, ".json")
+		if entry.Kind != fs.KindFile || !ok || !ValidReviewID(id) {
+			continue
+		}
+		backup := compactionBackupPath(root, id)
+		exists, err := fs.RegularFileExists(root, control(root, "groups", reviewControlGroup, "runs", id, "run.json"))
+		if err != nil {
+			return err
+		}
+		if exists {
+			data, ok, err := readReceiptFile(root, backup)
+			if err != nil || !ok {
+				return err
+			}
+			if _, present, err := readReceiptFile(root, compactionReceiptPath(root, id)); err != nil {
+				return err
+			} else if !present {
+				if err = fs.WriteTextAtomic(root, compactionReceiptPath(root, id), string(data), false); err != nil {
+					return err
+				}
+			}
+		}
+		if _, err = fs.RemoveRegularFileIfExists(root, backup); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func requireNoPendingOperations(root string, warnings *WarningLog) error {
