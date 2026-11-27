@@ -245,3 +245,7 @@ Go runtime writes of configuration, board migration, the review runtime, Git exc
 - [Distributed server](docs/distributed-server.md): the v2 server/client split, data directory, protocol and error codes, idempotency, claims, leases, generations and takeover, collaboration requests, events, and the planned stages.
 - [Formal verification](docs/formal-verification.md): the Lean state machine definition language, semantics and generic theorems, proof obligations, the generated Go interface, differential vectors, the check command and CI job, the trust boundary, adding a machine, and the v2 state machine inventory.
 - [Composite state model test](docs/model-test.md): the bounded search over card flow, reading a failure, adding a transition, the dead-end allow list, and the invariant registry.
+
+## Kander Rules Entry
+
+At the start of every session, read `~/.agents/kander/KANDER-AGENTS.md` and follow it as the Kander workflow rules entry; when that file does not exist, skip this section.
