@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -320,4 +321,145 @@ func TestServerGCExpiresLivenessSlots(t *testing.T) {
 	}
 	_, err = f.p.ObserveAgent(ctx, "observe", f.task, alive("x"), f.taskProof)
 	notServerError(t, "replay after the slot expired", err)
+}
+
+// slotOf is the slot file of the latest observation of operation.
+func (f *liveFixture) slotOf(t *testing.T, operation string) string {
+	t.Helper()
+	names := f.livenessReceipts(t, operation)
+	if len(names) != 1 || !strings.HasPrefix(names[0], liveReceiptDir+"/") {
+		t.Fatalf("%s: slots %v", operation, names)
+	}
+	return filepath.Join(f.proj.root, servicePath("receipts", filepath.FromSlash(names[0])))
+}
+
+// An observation whose board transaction stopped after it was prepared leaves
+// its pending receipt in the slot for the recovery. A later observation of the
+// same execution with another key must not write its own pending receipt over
+// it: the recovery would find neither its before nor its after image, and the
+// server would not start.
+func TestLivenessSlotWaitsForThePreparedTransactionThatStagesIt(t *testing.T) {
+	f := newLiveFixture(t)
+	ctx := t.Context()
+	first, err := f.p.ObserveAgent(ctx, "observe-a", f.task, alive("a"), f.taskProof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	slot := f.slotOf(t, "observation:"+f.task)
+	after, err := os.ReadFile(slot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Turn the committed observation back into the state a failed apply
+	// leaves: the slot holds A's pending receipt and a prepared record stages
+	// A's done receipt over it.
+	var done receipt
+	if err := json.Unmarshal(after, &done); err != nil {
+		t.Fatal(err)
+	}
+	pending := done
+	pending.Status, pending.HTTP, pending.Body = receiptPending, 0, nil
+	before, _ := json.MarshalIndent(pending, "", "  ")
+	beforeText := string(before) + "\n"
+	if err := os.WriteFile(slot, []byte(beforeText), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rel, _ := filepath.Rel(f.proj.board, slot)
+	record := board.OperationRecord{Schema: 1, ID: "0123456789abcdef0123456789abcdef", Phase: "prepared", Revisions: map[string]uint64{}, Groups: []string{serviceGroup},
+		Files: []board.FileChange{{Path: rel, Before: &beforeText, After: string(after)}}}
+	data, _ := json.MarshalIndent(record, "", "  ")
+	pendingDir := filepath.Join(f.proj.board, ".kander", "operations", "pending")
+	if err := os.MkdirAll(pendingDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pendingDir, record.ID+".json"), data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// B of the same execution waits for the recovery and leaves the slot alone.
+	if _, err := f.p.ObserveAgent(ctx, "observe-b", f.task, alive("b"), f.taskProof); !api.IsCode(err, api.CodeNotReady) {
+		t.Fatalf("an observation while the slot waits for recovery: %v", err)
+	}
+	if kept, err := os.ReadFile(slot); err != nil || string(kept) != beforeText {
+		t.Fatalf("the slot must keep the pending receipt the recovery expects: %v", err)
+	}
+
+	// A restart recovers A, and A's key replays its answer.
+	f.http.Close()
+	if err := f.s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(Options{DataDir: f.s.data, Now: f.clock.now, Version: "test", Logger: f.s.log})
+	if err != nil {
+		t.Fatalf("the restart must recover the prepared observation: %v", err)
+	}
+	h := httptest.NewServer(s.Handler())
+	t.Cleanup(func() { h.Close(); s.Close() })
+	c, err := client.New(h.URL, "gc-host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := c.Project(f.proj.info.ID)
+	if recovered, err := os.ReadFile(slot); err != nil || string(recovered) != string(after) {
+		t.Fatalf("the recovery must leave A's done receipt in the slot: %v", err)
+	}
+	again, err := p.ObserveAgent(ctx, "observe-a", f.task, alive("a"), f.taskProof)
+	if err != nil || !reflect.DeepEqual(first, again) {
+		t.Fatalf("A's key after the recovery = %+v %v, want %+v", again, err, first)
+	}
+	if _, err := p.ObserveAgent(ctx, "observe-b", f.task, alive("b"), f.taskProof); err != nil {
+		t.Fatalf("B after the recovery: %v", err)
+	}
+}
+
+// legacyReceipt moves the slot receipt of operation to the place a server
+// before the slots kept the receipt of key.
+func (f *liveFixture) legacyReceipt(t *testing.T, operation, key string) {
+	t.Helper()
+	slot := f.slotOf(t, operation)
+	if err := os.Rename(slot, filepath.Join(f.proj.root, keyReceipt(key).rel())); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// After an upgrade, a retry of a key an older server answered replays that
+// answer from the receipt it left at the top. The receipt stays where it is and
+// no slot is written.
+func TestLivenessReplaysTheReceiptOfAServerBeforeTheSlots(t *testing.T) {
+	f := newLiveFixture(t)
+	ctx := t.Context()
+	first, err := f.p.ObserveAgent(ctx, "legacy", f.task, alive("legacy"), f.taskProof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.legacyReceipt(t, "observation:"+f.task, "legacy")
+	stopped := api.AgentObservation{Status: "stopped", Reason: "coordinator ended"}
+	firstGroup, err := f.p.ObserveGroup(ctx, "group-legacy", f.group, stopped, f.groupProof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.legacyReceipt(t, "group-observation:"+f.group, "group-legacy")
+	f.clock.advance(time.Second)
+	before := dataFiles(t, f.proj.board)
+
+	again, err := f.p.ObserveAgent(ctx, "legacy", f.task, alive("legacy"), f.taskProof)
+	if err != nil || !reflect.DeepEqual(first, again) {
+		t.Fatalf("replay of an older server's receipt = %+v %v, want %+v", again, err, first)
+	}
+	// The lease of that generation has ended; the answer is still the one sent.
+	againGroup, err := f.p.ObserveGroup(ctx, "group-legacy", f.group, stopped, f.groupProof)
+	if err != nil || !reflect.DeepEqual(firstGroup, againGroup) {
+		t.Fatalf("replay of an older server's stopped answer = %+v %v, want %+v", againGroup, err, firstGroup)
+	}
+	if after := dataFiles(t, f.proj.board); !mapsEqual(before, after) {
+		t.Fatal("a replay of an older server's receipt must not change the board")
+	}
+	for _, operation := range []string{"observation:" + f.task, "group-observation:" + f.group} {
+		if names := f.livenessReceipts(t, operation); len(names) != 1 || strings.Contains(names[0], "/") {
+			t.Fatalf("%s: the older receipt must stay at the top, alone: %v", operation, names)
+		}
+	}
+	// The same key with another body is not that request.
+	_, err = f.p.ObserveAgent(ctx, "legacy", f.task, alive("changed"), f.taskProof)
+	notServerError(t, "an older server's key with another body", err)
 }

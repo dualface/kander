@@ -44,6 +44,11 @@ func pending(root string, ids []string) error {
 	return pendingContext(nil, root, ids)
 }
 
+// RequireNoPendingFor fails with board.transaction_pending while an operation
+// record of the board at root that names one of ids, as a card or a group, is
+// prepared but not applied: the check a transaction of that scope makes first.
+func RequireNoPendingFor(root string, ids ...string) error { return pendingContext(nil, root, ids) }
+
 func pendingContext(ctx context.Context, root string, ids []string, warnings ...*WarningLog) error {
 	var records []OperationRecord
 	var err error

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/board"
 )
 
 // receipt is the durable outcome of one idempotent write. A pending receipt
@@ -113,6 +114,19 @@ func (p *project) idempotentAt(at receiptAt, key, operation string, request any,
 	if found && at.slot && r.Key != key {
 		found = false
 	}
+	if !found && at.slot {
+		// A receipt a server before the slots wrote for this key still answers
+		// it. It is only read: neither moved nor removed, and never written over
+		// the slot.
+		var legacy receipt
+		ok, err := readJSON(p.root, keyReceipt(key).rel(), &legacy)
+		if err != nil {
+			return outcome{err: err}
+		}
+		if ok && legacy.Status == receiptDone && legacy.Key == key && legacy.Operation == operation && legacy.Digest == digest {
+			return p.replayReceipt(legacy)
+		}
+	}
 	if found {
 		if r.Digest != digest || r.Operation != operation {
 			return outcome{err: &api.Error{Code: api.CodeIdempotencyMismatch, Message: "idempotency key reused with a different request"}}
@@ -130,6 +144,15 @@ func (p *project) idempotentAt(at receiptAt, key, operation string, request any,
 			return p.finish(rel, r, out)
 		}
 	} else {
+		if at.slot {
+			// The slot may hold the receipt an earlier request staged in a board
+			// transaction that waits for recovery, which needs the slot as that
+			// transaction left it. Such a transaction names the service group;
+			// the board lock taken by the caller keeps a new one from starting.
+			if err := board.RequireNoPendingFor(p.board, serviceGroup); err != nil {
+				return outcome{err: err}
+			}
+		}
 		r = receipt{Schema: receiptSchema, Key: key, Operation: operation, Digest: digest, Status: receiptPending, CreatedAt: time.Now().UTC()}
 		if err := writeJSON(p.root, rel, r); err != nil {
 			return outcome{err: err}
