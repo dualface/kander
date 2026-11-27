@@ -50,21 +50,13 @@ assert.equal(ext.contextReferencesKander([{ path: "/x/AGENTS.md", content: "no r
 assert.equal(ext.contextReferencesKander([]), false);
 assert.equal(ext.contextReferencesKander(undefined), false);
 
-// Rules root resolution: cwd project rules win, then the main worktree via the
-// git common dir, then the global root; nothing found resolves to null.
-const files = new Set([j("/proj/.kander/rules/KANDER-AGENTS.md"), j("/main/.kander/rules/KANDER-AGENTS.md"), j("/home/.agents/kander/KANDER-AGENTS.md")]);
-const deps = {
-  exists: (p) => files.has(p),
-  homedir: () => "/home",
-  gitCommonDir: (cwd) => cwd === "/proj" || cwd === "/main/wt" ? "/main/.git" : null,
-};
-assert.deepEqual(ext.resolveRulesRoot("/proj", deps), { root: j("/proj/.kander/rules"), scope: "project" });
-assert.deepEqual(ext.resolveRulesRoot("/main/wt", deps), { root: j("/main/.kander/rules"), scope: "project" });
-files.delete(j("/proj/.kander/rules/KANDER-AGENTS.md"));
-files.delete(j("/main/.kander/rules/KANDER-AGENTS.md"));
-assert.deepEqual(ext.resolveRulesRoot("/elsewhere", deps), { root: j("/home/.agents/kander"), scope: "global" });
+// Rules root resolution: only the global root counts, whatever a checkout
+// holds; nothing found resolves to null.
+const files = new Set([j("/home/.agents/kander/KANDER-AGENTS.md"), j("/proj/.kander/rules/KANDER-AGENTS.md")]);
+const deps = { exists: (p) => files.has(p), homedir: () => "/home" };
+assert.deepEqual(ext.resolveRulesRoot(deps), { root: j("/home/.agents/kander") });
 files.delete(j("/home/.agents/kander/KANDER-AGENTS.md"));
-assert.equal(ext.resolveRulesRoot("/elsewhere", deps), null);
+assert.equal(ext.resolveRulesRoot(deps), null);
 
 // Injection block: every rule file, the absolute paths, the rules root, and
 // the still-required config probe are named; a missing file yields no block.
@@ -88,7 +80,7 @@ assert.equal(ext.applyCommand(state, "on"), "on");
 assert.equal(ext.shouldInject(state, { PI_KANDER_RULES: "0" }, ctx), false);
 assert.equal(ext.applyCommand(state, "status"), "status");
 assert.equal(ext.applyCommand(state, "bogus"), "usage");
-assert.ok(ext.statusText(state, {}, { root: "/r", scope: "global" }).includes("/r"));
+assert.ok(ext.statusText(state, {}, { root: "/r" }).includes("/r"));
 
 console.log("kander-rules extension harness: ok");
 `

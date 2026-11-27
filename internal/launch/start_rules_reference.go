@@ -66,14 +66,14 @@ func (c *startReferenceCheck) check(ctx context.Context, commit, branch string) 
 		}
 		commit, branch = strings.TrimSpace(string(head)), "HEAD"
 	}
-	found, err := install.ProjectReferenceInTree(c.agent, paths, main, commitTreeReader(ctx, c.cwd, commit))
+	missing, err := install.MissingProjectReferenceInTree(c.agent, paths, main, commitTreeReader(ctx, c.cwd, commit))
 	if err != nil {
 		return err
 	}
-	if found {
+	if missing == "" {
 		return nil
 	}
-	return command.Coded(CodeRulesReferenceMissing, launchError("projectrules.start_reference_missing", rel, branch, commit))
+	return command.Coded(CodeRulesReferenceMissing, launchError("projectrules.start_reference_missing", missing, branch, commit))
 }
 
 // commitTreeReader reads paths of commit, relative to its root whatever directory of the

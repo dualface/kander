@@ -1,6 +1,6 @@
 /**
  * Kander Rules Extension
- * kander-extension-version: 1
+ * kander-extension-version: 2
  *
  * Installed by `kander install` / `kander doctor --repair` into pi's extension
  * directory. Injects KANDER-AGENTS.md, KANDER-BASE-RULES.md and
@@ -17,10 +17,9 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { execFileSync } from "node:child_process";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-export const KANDER_RULES_EXTENSION_VERSION = "1";
+export const KANDER_RULES_EXTENSION_VERSION = "2";
 export const KANDER_RULE_FILES = [
 	"KANDER-AGENTS.md",
 	"KANDER-BASE-RULES.md",
@@ -40,12 +39,10 @@ export interface ExtensionState {
 export interface RootDeps {
 	exists?: (target: string) => boolean;
 	homedir?: () => string;
-	gitCommonDir?: (cwd: string) => string | null;
 }
 
 export interface ResolvedRulesRoot {
 	root: string;
-	scope: "project" | "global";
 }
 
 /** True when any loaded context file mentions the Kander rules entry. */
@@ -72,46 +69,18 @@ export function shouldInject(
 	return state.enabled && !envDisabled(env) && contextReferencesKander(contextFiles);
 }
 
-function defaultGitCommonDir(cwd: string): string | null {
-	try {
-		const out = execFileSync(
-			"git",
-			["rev-parse", "--path-format=absolute", "--git-common-dir"],
-			{ cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 5000 },
-		).trim();
-		return out === "" ? null : out;
-	} catch {
-		return null;
-	}
-}
-
 /**
- * Resolve the Kander rules root for a working directory: the project rules
- * root (<main worktree>/.kander/rules/) wins, then the global rules root
- * (~/.agents/kander/). A directory counts only when the entry file exists.
- * The git common dir makes linked worktrees resolve to the main worktree;
- * when git is unavailable or the cwd is not a repository, only the cwd and
- * the global root are tried.
+ * Resolve the Kander rules root: the global rules root (~/.agents/kander/),
+ * which counts only when the entry file exists. Kander installs globally
+ * only, so a .kander/rules/ directory a retired project install left in a
+ * checkout is never read.
  */
-export function resolveRulesRoot(cwd: string, deps: RootDeps = {}): ResolvedRulesRoot | null {
+export function resolveRulesRoot(deps: RootDeps = {}): ResolvedRulesRoot | null {
 	const exists = deps.exists ?? ((target: string) => fs.existsSync(target));
-	const hasEntry = (root: string) => exists(path.join(root, ENTRY_FILE));
-
-	const cwdRules = path.join(cwd, ".kander", "rules");
-	if (hasEntry(cwdRules)) {
-		return { root: cwdRules, scope: "project" };
-	}
-	const common = (deps.gitCommonDir ?? defaultGitCommonDir)(cwd);
-	if (common) {
-		const mainRules = path.join(path.dirname(common), ".kander", "rules");
-		if (mainRules !== cwdRules && hasEntry(mainRules)) {
-			return { root: mainRules, scope: "project" };
-		}
-	}
 	const home = (deps.homedir ?? os.homedir)();
 	const globalRules = path.join(home, ".agents", "kander");
-	if (hasEntry(globalRules)) {
-		return { root: globalRules, scope: "global" };
+	if (exists(path.join(globalRules, ENTRY_FILE))) {
+		return { root: globalRules };
 	}
 	return null;
 }
@@ -192,9 +161,9 @@ export default function kanderRulesExtension(pi: ExtensionAPI) {
 		if (!shouldInject(state, process.env, event.systemPromptOptions?.contextFiles)) {
 			return;
 		}
-		// Resolve every turn: a project install that appears mid-session must
-		// win over a previously resolved (or missing) rules root.
-		const resolved = resolveRulesRoot(ctx.cwd ?? process.cwd());
+		// Resolve every turn: an install that appears mid-session takes effect
+		// without restarting pi.
+		const resolved = resolveRulesRoot();
 		if (!resolved) {
 			return;
 		}
@@ -213,7 +182,7 @@ export default function kanderRulesExtension(pi: ExtensionAPI) {
 				ctx.ui.notify("Usage: /kander-rules on|off|status", "warning");
 				return;
 			}
-			const resolved = resolveRulesRoot(ctx.cwd ?? process.cwd());
+			const resolved = resolveRulesRoot();
 			ctx.ui.notify(statusText(state, process.env, resolved), "info");
 		},
 	});

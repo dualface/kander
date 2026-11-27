@@ -149,12 +149,20 @@ func AutoCleanGlobalInjection(paths config.InstallPaths) GlobalCleanup {
 		// A test of another package that runs a command must never touch the real home.
 		return GlobalCleanup{}
 	}
-	// Without a rules root no release installed Kander for this user, so no command writes
-	// a marker or a lock into a home Kander never used; install and doctor still clean.
-	if info, err := os.Lstat(paths.RulesDir); err != nil || !info.IsDir() {
+	// Without the rules root, the cleanup runs only when there is something to remove: an
+	// earlier release may have installed the flat layout (~/.agents/KANDER-AGENTS.md) and
+	// written its references, but a home Kander never used gets no marker or lock.
+	if info, err := os.Lstat(paths.RulesDir); (err != nil || !info.IsDir()) && !planRemovesContent(planGlobalInjectionCleanup(paths)) {
 		return GlobalCleanup{}
 	}
 	return runGlobalCleanup(paths, false)
+}
+
+// planRemovesContent reports whether the plan edits or removes a file.
+func planRemovesContent(plan globalCleanupPlan) bool {
+	return slices.ContainsFunc(plan.Items, func(item UninstallItem) bool {
+		return item.Action == UninstallEdit || item.Action == UninstallRemove
+	})
 }
 
 // autoCleanInjected lets a test of the automatic cleanup run it; every other test skips it.

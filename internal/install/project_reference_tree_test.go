@@ -1,6 +1,7 @@
 package install
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/dualface/kander/v2/internal/config"
@@ -23,7 +24,7 @@ func (f fakeTree) read(rel string) (TreeFile, error) {
 	return TreeFile{}, nil
 }
 
-func TestProjectReferenceInTree(t *testing.T) {
+func TestMissingProjectReferenceInTree(t *testing.T) {
 	project, _ := projectFixture(t)
 	block := referenceBlock("codex")
 	for _, tt := range []struct {
@@ -32,6 +33,11 @@ func TestProjectReferenceInTree(t *testing.T) {
 		tree  fakeTree
 		want  bool
 	}{
+		{"override without reference", "codex", fakeTree{files: map[string]string{"AGENTS.md": block, "AGENTS.override.md": "# Local\n"}}, false},
+		{"override with reference", "codex", fakeTree{files: map[string]string{"AGENTS.md": block, "AGENTS.override.md": "# Local\n\n" + block}}, true},
+		{"override linked to AGENTS.md", "codex", fakeTree{files: map[string]string{"AGENTS.md": block}, links: map[string]string{"AGENTS.override.md": "AGENTS.md"}}, true},
+		{"override escaping the tree", "codex", fakeTree{files: map[string]string{"AGENTS.md": block}, links: map[string]string{"AGENTS.override.md": "../outside.md"}}, false},
+		{"claude ignores the override", "claude", fakeTree{files: map[string]string{"CLAUDE.md": "@~/.agents/kander/KANDER-AGENTS.md\n", "AGENTS.override.md": "# Local\n"}}, true},
 		{"claude import", "claude", fakeTree{files: map[string]string{"CLAUDE.md": "@~/.agents/kander/KANDER-AGENTS.md\n"}}, true},
 		{"claude missing", "claude", fakeTree{files: map[string]string{"AGENTS.md": block}}, false},
 		{"claude without reference", "claude", fakeTree{files: map[string]string{"CLAUDE.md": "# Mine\n"}}, false},
@@ -48,9 +54,12 @@ func TestProjectReferenceInTree(t *testing.T) {
 		{"markdown file does not follow imports", "codex", fakeTree{files: map[string]string{"AGENTS.md": "@docs/rules.md\n", "docs/rules.md": block}}, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ProjectReferenceInTree(tt.agent, project.Paths, project.Root, tt.tree.read)
-			if err != nil || got != tt.want {
-				t.Fatalf("got=%v err=%v want %v", got, err, tt.want)
+			missing, err := MissingProjectReferenceInTree(tt.agent, project.Paths, project.Root, tt.tree.read)
+			if err != nil || (missing == "") != tt.want {
+				t.Fatalf("missing=%q err=%v want present=%v", missing, err, tt.want)
+			}
+			if !tt.want && strings.Contains(tt.name, "override") && missing != "AGENTS.override.md" {
+				t.Fatalf("missing=%q, want the override", missing)
 			}
 		})
 	}

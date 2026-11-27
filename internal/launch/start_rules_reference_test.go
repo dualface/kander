@@ -32,6 +32,26 @@ func TestRemoteStartRefusesABaseWithoutTheProjectReference(t *testing.T) {
 	f.start(t, card.TaskID, f.commits["develop"])
 }
 
+// An AGENTS.override.md shadows AGENTS.md for Codex: a start base whose override lacks the
+// reference is refused before the claim, naming the override, although AGENTS.md has it.
+func TestRemoteStartRefusesAnOverrideWithoutTheProjectReference(t *testing.T) {
+	skipOnWindows(t)
+	f := newStartBaseFixture(t)
+	card := f.todo(t, "start-rules-override", "- INTEGRATION_TARGET: develop")
+	blob := lifecycleGitInput(t, f.bare, "# Local notes\n", "hash-object", "-w", "--stdin")
+	listing := lifecycleGit(t, f.bare, "ls-tree", f.commits["develop"])
+	tree := lifecycleGitInput(t, f.bare, listing+"\n100644 blob "+blob+"\tAGENTS.override.md\n", "mktree")
+	shadowed := lifecycleGit(t, f.bare, "commit-tree", "-p", f.commits["develop"], "-m", "add an override", tree)
+	lifecycleGit(t, f.bare, "update-ref", "refs/heads/develop", shadowed)
+	t.Setenv("KANBAN_LAUNCH_CWD", f.worktree(t, card.TaskID))
+	_, err := StartRemote("codex", "tmux", card.TaskID)
+	f.refused(t, card.TaskID, err, "AGENTS.override.md")
+	var failure *command.Failure
+	if !errors.As(err, &failure) || failure.Code != CodeRulesReferenceMissing {
+		t.Fatalf("refusal=%v", err)
+	}
+}
+
 // An agent the reference check does not apply to starts with a notice.
 func TestRemoteStartSkipsTheReferenceCheckWhenTheSwitchIsOff(t *testing.T) {
 	skipOnWindows(t)
