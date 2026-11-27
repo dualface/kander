@@ -72,43 +72,42 @@ func init() {
 // defaultDefinitionDirs returns the global share directory and, inside a Git
 // repository, the project install share directory of its main worktree.
 func defaultDefinitionDirs() []DefinitionDir {
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = ""
+	}
+	return definitionDirsFor(cwd)
+}
+
+// definitionDirsFor returns the global share directory and, when project is
+// inside a Git repository, the project install share directory of its main
+// worktree.
+func definitionDirsFor(project string) []DefinitionDir {
 	var dirs []DefinitionDir
 	if global, err := config.GlobalInstallPaths(); err == nil {
 		dirs = append(dirs, DefinitionDir{Source: SourceGlobal, Root: global.ShareDir, Path: filepath.Join(global.ShareDir, DefinitionsDirName)})
 	}
-	if cwd, err := os.Getwd(); err == nil {
-		if project, ok := projectDefinitionDir(cwd); ok {
-			dirs = append(dirs, project)
-		}
+	if project == "" {
+		return dirs
+	}
+	if paths, err := config.ProjectInstallPaths(project); err == nil {
+		dirs = append(dirs, DefinitionDir{Source: SourceProject, Root: paths.ShareDir, Path: filepath.Join(paths.ShareDir, DefinitionsDirName)})
 	}
 	return dirs
 }
 
-// projectDefinitionDir is the project install definition directory of the
-// project of dir.
-func projectDefinitionDir(dir string) (DefinitionDir, bool) {
-	project, err := config.ProjectInstallPaths(dir)
-	if err != nil {
-		return DefinitionDir{}, false
-	}
-	return DefinitionDir{Source: SourceProject, Root: project.ShareDir, Path: filepath.Join(project.ShareDir, DefinitionsDirName)}, true
-}
-
-// projectDefinitionLauncherNames lists the launcher names of the valid
-// definitions in the project install share directory of dir, for validating
-// that project's configuration from a process outside it. The definitions
-// are only named, never registered as backends of this process.
+// projectDefinitionLauncherNames lists the launcher names in force for the
+// project of dir, as a process inside it loads them, for validating that
+// project's configuration from a process outside it. The definitions are only
+// named, never registered as backends of this process.
 func projectDefinitionLauncherNames(dir string) []string {
-	project, ok := projectDefinitionDir(dir)
-	if !ok {
-		return nil
-	}
-	var reports []DefinitionReport
+	definitionRegistry.Lock()
+	embedded := append([]*loadedDefinition{}, definitionRegistry.embedded...)
+	definitionRegistry.Unlock()
+	active, _ := loadDefinitions(embedded, definitionDirsFor(dir))
 	var names []string
-	for _, file := range readDefinitionDir(project, &reports) {
-		if def, err := DecodeDefinition(file.path, file.data); err == nil {
-			names = append(names, def.LauncherNames()...)
-		}
+	for _, loaded := range active {
+		names = append(names, loaded.def.LauncherNames()...)
 	}
 	return names
 }
@@ -237,9 +236,17 @@ func ensureDefinitionsLocked() {
 	if definitionRegistry.userLoaded {
 		return
 	}
-	active := append([]*loadedDefinition{}, definitionRegistry.embedded...)
+	definitionRegistry.active, definitionRegistry.reports = loadDefinitions(definitionRegistry.embedded, DefinitionDirs())
+	definitionRegistry.userLoaded = true
+}
+
+// loadDefinitions resolves the definitions in force from the embedded ones
+// and the files of dirs, in ascending precedence, with the rules of
+// ensureDefinitionsLocked. It changes no registry state.
+func loadDefinitions(embedded []*loadedDefinition, dirs []DefinitionDir) ([]*loadedDefinition, []DefinitionReport) {
+	active := append([]*loadedDefinition{}, embedded...)
 	var reports []DefinitionReport
-	for _, dir := range DefinitionDirs() {
+	for _, dir := range dirs {
 		for _, file := range readDefinitionDir(dir, &reports) {
 			report := DefinitionReport{Source: dir.Source, Path: file.path}
 			def, err := DecodeDefinition(file.path, file.data)
@@ -268,9 +275,7 @@ func ensureDefinitionsLocked() {
 			active = replaceDefinition(active, loaded)
 		}
 	}
-	definitionRegistry.active = active
-	definitionRegistry.reports = reports
-	definitionRegistry.userLoaded = true
+	return active, reports
 }
 
 func replaceDefinition(active []*loadedDefinition, loaded *loadedDefinition) []*loadedDefinition {
