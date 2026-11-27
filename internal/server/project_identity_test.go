@@ -496,3 +496,34 @@ func TestClientRegistrationBindsTheRemoteOfAnUnboundProject(t *testing.T) {
 		t.Fatalf("lookup: %+v, %v", found, err)
 	}
 }
+
+// A project is also read by its ID, through the project route and its access
+// control; an unknown ID is not_found and creates nothing.
+func TestProjectIsReadByItsID(t *testing.T) {
+	dir := t.TempDir()
+	s := openIdentityServer(t, dir, nil)
+	defer s.Close()
+	h := httptest.NewServer(s.Handler())
+	defer h.Close()
+	c, err := client.New(h.URL, "test-client")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Backoff = time.Millisecond
+	registered, err := c.Register(t.Context(), "golf", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	found, err := c.Project(registered.ID).Info(t.Context())
+	if err != nil || found.ID != registered.ID || found.Name != "golf" || found.BoardPath != registered.BoardPath {
+		t.Fatalf("read by ID: %+v, %v", found, err)
+	}
+	missing := api.ProjectID("tennis")
+	_, err = c.Project(missing).Info(t.Context())
+	if !api.IsCode(err, api.CodeNotFound) {
+		t.Fatalf("read of a missing project: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(dir, "projects", api.ProjectDirName("tennis"))); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the read created a project directory: %v", err)
+	}
+}

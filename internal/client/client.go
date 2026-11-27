@@ -296,6 +296,13 @@ func taskPath(id string, rest ...string) []string {
 	return append([]string{"tasks", url.PathEscape(id)}, rest...)
 }
 
+// Info reads the project itself by its ID; it registers nothing.
+func (p *Project) Info(ctx context.Context) (api.Project, error) {
+	var info api.Project
+	err := p.c.do(ctx, call{method: http.MethodGet, path: p.path()}, &info)
+	return info, err
+}
+
 // List reads the task list, optionally limited to one state.
 func (p *Project) List(ctx context.Context, state string) (api.TaskList, error) {
 	return p.ListWithOptions(ctx, api.TaskListOptions{State: state})
