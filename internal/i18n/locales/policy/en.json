@@ -49,5 +49,6 @@
   "tui.policy_changed_on_server": "The project policy changed on the server (revision {{.V0}}); your unsaved policy edits are kept.",
   "tui.policy_conflict": "The project policy changed on the server before this save; your policy edits were not written, and the server values are shown.",
   "tui.policy_saved": "Project policy saved as revision {{.V0}}.",
-  "tui.policy_save_failed": "The project policy could not be saved: {{.V0}}"
+  "tui.policy_save_failed": "The project policy could not be saved: {{.V0}}",
+  "tui.policy_cache_failed": "The project policy cache could not be written; it is read again at the next event: {{.V0}}"
 }

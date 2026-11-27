@@ -68,9 +68,15 @@ func (s *Session) ResetPolicy(snapshot config.PolicySnapshot) {
 }
 
 // AcceptPolicyWrite records the answer of a successful policy write: the
-// written policy becomes the base, and the panel shows it.
+// written policy becomes the base of the edits. An edit made after the write
+// was sent stays pending, so it is still unsaved against the new base.
 func (s *Session) AcceptPolicyWrite(written config.PolicySnapshot) {
+	edited, backed := s.policy.edited, s.PolicyBacked()
 	s.ResetPolicy(written)
+	if backed && s.PolicyBacked() {
+		s.policy.edited = edited
+		s.showPolicy()
+	}
 }
 
 // PolicyBacked reports whether the five policy values of the panel come from

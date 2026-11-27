@@ -102,8 +102,8 @@ func TestPolicyResetReadsThePolicyAgain(t *testing.T) {
 func TestPolicyReadFailureKeepsTheOldValues(t *testing.T) {
 	app := newPanelApp(t)
 	app.policy.known = config.PolicySnapshot{Epoch: "e1", Revision: 2}
-	app.policy.read = func(context.Context) (config.PolicySnapshot, error) {
-		return config.PolicySnapshot{}, errors.New("policy endpoint unavailable")
+	app.policy.read = func(context.Context) (config.PolicySnapshot, error, error) {
+		return config.PolicySnapshot{}, nil, errors.New("policy endpoint unavailable")
 	}
 	app.notePolicyPage(api.EventPage{Events: []api.Event{{Kind: api.EventProjectPolicyChanged, Revision: 3}}})
 	runPolicyRequest(t, app)
@@ -122,16 +122,27 @@ func TestPolicyReadFailureKeepsTheOldValues(t *testing.T) {
 
 // policyPanel opens Options on page with the server policy at revision 2
 // (main-only) and fake policy requests.
-func policyPanel(t *testing.T, page string) (*App, *optionsPanel, *[]policyWriteRequest) {
+// sentPolicy is one policy write a fake server received.
+type sentPolicy struct {
+	expected uint64
+	values   json.RawMessage
+}
+
+// readsPolicy makes the policy reads of app answer snapshot.
+func readsPolicy(app *App, snapshot config.PolicySnapshot) {
+	app.policy.read = func(context.Context) (config.PolicySnapshot, error, error) { return snapshot, nil, nil }
+}
+
+func policyPanel(t *testing.T, page string) (*App, *optionsPanel, *[]sentPolicy) {
 	t.Helper()
 	app, panel := openPanel(t)
 	app.policy.known = config.PolicySnapshot{Epoch: "e1", Revision: 2, Values: tuiPolicyValues(t, "main-only", "ask")}
 	panel.session.AttachPolicy(app.policy.known)
-	writes := &[]policyWriteRequest{}
-	app.policy.read = func(context.Context) (config.PolicySnapshot, error) { return app.policy.known, nil }
-	app.policy.write = func(_ context.Context, expected uint64, values json.RawMessage) (config.PolicySnapshot, error) {
-		*writes = append(*writes, policyWriteRequest{expected: expected, values: values})
-		return config.PolicySnapshot{Epoch: "e1", Revision: expected + 1, Values: values}, nil
+	writes := &[]sentPolicy{}
+	readsPolicy(app, app.policy.known)
+	app.policy.write = func(_ context.Context, expected uint64, values json.RawMessage) (config.PolicySnapshot, error, error) {
+		*writes = append(*writes, sentPolicy{expected: expected, values: values})
+		return config.PolicySnapshot{Epoch: "e1", Revision: expected + 1, Values: values}, nil, nil
 	}
 	pumpPanel(panel, panel.dispatch(page))
 	return app, panel, writes
@@ -150,7 +161,7 @@ func TestOptionsShowTheServerPolicyWithItsRevision(t *testing.T) {
 func TestOptionsRefreshShowsTheNewPolicy(t *testing.T) {
 	app, panel, _ := policyPanel(t, sectionRules)
 	next := config.PolicySnapshot{Epoch: "e1", Revision: 3, Values: tuiPolicyValues(t, "main-develop", "off")}
-	app.policy.read = func(context.Context) (config.PolicySnapshot, error) { return next, nil }
+	readsPolicy(app, next)
 	app.policy.readQueued = true
 	runPolicyRequest(t, app)
 	if *panel.bind.gitBranchMode != "main-develop" || *panel.bind.issueResult != "off" || panel.session.PolicyRevision() != 3 {
@@ -169,9 +180,7 @@ func TestOptionsSavePolicyThroughTheServerWithTheLoadedRevision(t *testing.T) {
 		t.Fatal("the branch mode edit is not a policy edit")
 	}
 	// The server changes while the edit is open: the edit and its base stay.
-	app.policy.read = func(context.Context) (config.PolicySnapshot, error) {
-		return config.PolicySnapshot{Epoch: "e1", Revision: 3, Values: tuiPolicyValues(t, "main-only", "auto")}, nil
-	}
+	readsPolicy(app, config.PolicySnapshot{Epoch: "e1", Revision: 3, Values: tuiPolicyValues(t, "main-only", "auto")})
 	app.policy.readQueued = true
 	runPolicyRequest(t, app)
 	if *panel.bind.gitBranchMode != "main-develop" || !strings.Contains(panel.policyNotice, "3") {
@@ -196,8 +205,8 @@ func TestOptionsSavePolicyThroughTheServerWithTheLoadedRevision(t *testing.T) {
 
 func TestOptionsPolicyConflictShowsTheServerValues(t *testing.T) {
 	app, panel, _ := policyPanel(t, sectionRules)
-	app.policy.write = func(context.Context, uint64, json.RawMessage) (config.PolicySnapshot, error) {
-		return config.PolicySnapshot{}, &api.Error{Code: api.CodePolicyRevisionConflict, Status: 409, Message: "conflict"}
+	app.policy.write = func(context.Context, uint64, json.RawMessage) (config.PolicySnapshot, error, error) {
+		return config.PolicySnapshot{}, nil, &api.Error{Code: api.CodePolicyRevisionConflict, Status: 409, Message: "conflict"}
 	}
 	*panel.bind.gitBranchMode = "main-develop"
 	panel.bind.apply(panel)
@@ -207,7 +216,7 @@ func TestOptionsPolicyConflictShowsTheServerValues(t *testing.T) {
 		t.Fatalf("conflict notice %q", panel.policyNotice)
 	}
 	server := config.PolicySnapshot{Epoch: "e1", Revision: 4, Values: tuiPolicyValues(t, "main-only", "off")}
-	app.policy.read = func(context.Context) (config.PolicySnapshot, error) { return server, nil }
+	readsPolicy(app, server)
 	runPolicyRequest(t, app)
 	if panel.session.PolicyDirty() || panel.session.PolicyRevision() != 4 || panel.session.Config.Git.BranchMode != "main-only" || panel.session.Config.Issue.ResultOnDone != "off" {
 		t.Fatalf("after the conflict the panel shows %+v at revision %d", config.PolicyValuesOf(panel.session.Config), panel.session.PolicyRevision())
@@ -216,7 +225,7 @@ func TestOptionsPolicyConflictShowsTheServerValues(t *testing.T) {
 
 func TestOptionsWithoutAPolicyPointAtPolicyInit(t *testing.T) {
 	app, panel := openPanel(t)
-	app.policy.read = func(context.Context) (config.PolicySnapshot, error) { return config.PolicySnapshot{}, nil }
+	readsPolicy(app, config.PolicySnapshot{})
 	panel.session.AttachPolicy(config.PolicySnapshot{})
 	pumpPanel(panel, panel.dispatch(sectionRules))
 	if view := ansi.Strip(app.View()); !strings.Contains(view, "kander policy init") {
@@ -225,7 +234,7 @@ func TestOptionsWithoutAPolicyPointAtPolicyInit(t *testing.T) {
 	*panel.bind.gitBranchMode = "main-only"
 	panel.bind.apply(panel)
 	drivePanel(panel, keyMsg("enter"))
-	if app.policy.writeQueued != nil {
+	if app.policy.writeFor != nil {
 		t.Fatal("an edit without a policy was sent to the server")
 	}
 	if saved, _ := config.LoadScope(true); saved.Git.BranchMode != "main-only" {
@@ -235,3 +244,128 @@ func TestOptionsWithoutAPolicyPointAtPolicyInit(t *testing.T) {
 
 // catalogText renders a catalog message the way the panel does.
 func catalogText(key string, args ...any) string { return t(key, args...) }
+
+func TestOptionsLoadTakesThePolicyKnownWhenItIsInstalled(t *testing.T) {
+	app := newPanelApp(t)
+	_ = newTestSession(t)
+	useTestOptionsSession(t)
+	app.policy.known = config.PolicySnapshot{Epoch: "e1", Revision: 2, Values: tuiPolicyValues(t, "main-only", "ask")}
+	readsPolicy(app, config.PolicySnapshot{Epoch: "e1", Revision: 3, Values: tuiPolicyValues(t, "main-develop", "off")})
+	app.HandleKey("o")
+	// The refresh finishes while the session still loads: no panel session to update.
+	app.policy.readQueued = true
+	runPolicyRequest(t, app)
+	finishOptionsLoad(t, app)
+	session := app.Options.session
+	if session.PolicyRevision() != 3 || session.Config.Git.BranchMode != "main-develop" || session.Config.Issue.ResultOnDone != "off" {
+		t.Fatalf("the loaded panel shows %+v at revision %d, not the policy refreshed during the load", config.PolicyValuesOf(session.Config), session.PolicyRevision())
+	}
+}
+
+func TestOptionsEditsMadeWhileAWriteRunsStayPending(t *testing.T) {
+	app, panel, writes := policyPanel(t, sectionRules)
+	*panel.bind.gitBranchMode = "main-develop"
+	panel.bind.apply(panel)
+	drivePanel(panel, keyMsg("enter"))
+	cmd := app.takePolicy()
+	if cmd == nil {
+		t.Fatal("the save did not start a policy write")
+	}
+	// The user edits again before the server answers the first write.
+	pumpPanel(panel, panel.dispatch(sectionRules))
+	*panel.bind.issueResult = "off"
+	panel.bind.apply(panel)
+	if next := app.applyWork(eventMessage(t, cmd).(workMsg).payload); next != nil {
+		pumpPanel(panel, next)
+	}
+	session := panel.session
+	if session.PolicyRevision() != 3 || !session.PolicyDirty() || session.Config.Issue.ResultOnDone != "off" || session.Config.Git.BranchMode != "main-develop" || !panel.dirty {
+		t.Fatalf("after the first write: revision %d, dirty %v, shown %+v", session.PolicyRevision(), session.PolicyDirty(), config.PolicyValuesOf(session.Config))
+	}
+	drivePanel(panel, keyMsg("enter"))
+	runPolicyRequest(t, app)
+	if len(*writes) != 2 || (*writes)[1].expected != 3 || !strings.Contains(string((*writes)[1].values), `"result_on_done":"off"`) {
+		t.Fatalf("the second write %+v does not carry the later edit against revision 3", *writes)
+	}
+	if session.PolicyDirty() || session.PolicyRevision() != 4 {
+		t.Fatalf("after the second write: dirty %v, revision %d", session.PolicyDirty(), session.PolicyRevision())
+	}
+}
+
+func TestOptionsWriteOfAClosedPanelDoesNotResetANewOne(t *testing.T) {
+	app, panel, _ := policyPanel(t, sectionRules)
+	*panel.bind.gitBranchMode = "main-develop"
+	panel.bind.apply(panel)
+	drivePanel(panel, keyMsg("enter"))
+	cmd := app.takePolicy()
+	// The panel is closed and opened again with its own unsaved policy edit.
+	reopened := newTestSession(t)
+	reopened.AttachPolicy(config.PolicySnapshot{Epoch: "e1", Revision: 2, Values: tuiPolicyValues(t, "main-only", "ask")})
+	if err := reopened.SetIssueResultOnDone("off"); err != nil {
+		t.Fatal(err)
+	}
+	panel.session = reopened
+	app.applyWork(eventMessage(t, cmd).(workMsg).payload)
+	if !reopened.PolicyDirty() || reopened.PolicyRevision() != 2 || reopened.Config.Issue.ResultOnDone != "off" {
+		t.Fatalf("the write of the closed panel reset the new one: revision %d, dirty %v", reopened.PolicyRevision(), reopened.PolicyDirty())
+	}
+	if app.policy.known.Revision != 3 || !strings.Contains(panel.policyNotice, "3") {
+		t.Fatalf("the process did not learn the written policy: known %d, notice %q", app.policy.known.Revision, panel.policyNotice)
+	}
+}
+
+func TestPolicyCacheFailureIsShownAndStoredAtTheNextEvent(t *testing.T) {
+	app, panel, writes := policyPanel(t, sectionRules)
+	app.policy.write = func(_ context.Context, expected uint64, values json.RawMessage) (config.PolicySnapshot, error, error) {
+		*writes = append(*writes, sentPolicy{expected: expected, values: values})
+		return config.PolicySnapshot{Epoch: "e1", Revision: expected + 1, Values: values}, errors.New("cache lock busy"), nil
+	}
+	*panel.bind.gitBranchMode = "main-develop"
+	panel.bind.apply(panel)
+	drivePanel(panel, keyMsg("enter"))
+	runPolicyRequest(t, app)
+	if !strings.Contains(panel.policyNotice, "cache lock busy") || !strings.Contains(app.CopyNotice, "cache lock busy") || !app.policy.cacheStale {
+		t.Fatalf("a failed cache write was not reported: notice %q", panel.policyNotice)
+	}
+	// An event page of the same version reads again, and never writes again.
+	reads := 0
+	app.policy.read = func(context.Context) (config.PolicySnapshot, error, error) {
+		reads++
+		return app.policy.known, nil, nil
+	}
+	app.notePolicyPage(api.EventPage{PolicyEpoch: "e1", PolicyRevision: 3})
+	runPolicyRequest(t, app)
+	if reads != 1 || len(*writes) != 1 || app.policy.cacheStale {
+		t.Fatalf("after the event: %d reads, %d writes, stale %v", reads, len(*writes), app.policy.cacheStale)
+	}
+	app.notePolicyPage(api.EventPage{PolicyEpoch: "e1", PolicyRevision: 3})
+	if app.takePolicy() != nil {
+		t.Fatal("a stored cache still asks for reads")
+	}
+}
+
+func TestPolicyRefreshRedrawsTheWorkflowChart(t *testing.T) {
+	app, panel, _ := policyPanel(t, sectionRules)
+	panel.current = ""
+	panel.openFlow()
+	chart := func() string {
+		var lines []string
+		for _, line := range panel.report.lines {
+			lines = append(lines, line.Text)
+		}
+		return strings.Join(lines, "\n")
+	}
+	before := chart()
+	values := config.PolicyValuesOf(config.DefaultConfig())
+	values.Rules[config.RuleReview] = false
+	raw, err := json.Marshal(values)
+	if err != nil {
+		t.Fatal(err)
+	}
+	readsPolicy(app, config.PolicySnapshot{Epoch: "e1", Revision: 3, Values: raw})
+	app.policy.readQueued = true
+	runPolicyRequest(t, app)
+	if after := chart(); after == before || panel.session.Config.Rules[config.RuleReview] {
+		t.Fatalf("the workflow chart did not follow the policy without review:\n%s", after)
+	}
+}

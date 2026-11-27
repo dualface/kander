@@ -49,5 +49,6 @@
   "tui.policy_changed_on_server": "服务端的项目策略已改变（revision {{.V0}}）；未保存的策略修改已保留。",
   "tui.policy_conflict": "保存前服务端的项目策略已被修改；策略修改没有写入，现在显示服务端的值。",
   "tui.policy_saved": "项目策略已保存为 revision {{.V0}}。",
-  "tui.policy_save_failed": "项目策略保存失败：{{.V0}}"
+  "tui.policy_save_failed": "项目策略保存失败：{{.V0}}",
+  "tui.policy_cache_failed": "项目策略缓存写入失败，下一次事件时重新读取：{{.V0}}"
 }

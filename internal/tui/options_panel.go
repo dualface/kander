@@ -142,14 +142,9 @@ var newOptionsSession = menu.NewSession
 
 func (p *optionsPanel) requestSession() {
 	seq := p.loadSeq
-	// The session shows the policy this process knows; a later refresh updates it.
-	policy, bound := p.app.policy.known, p.app.policy.read != nil
 	p.app.pendingWork = func() any {
 		result := loadOptionsSession()
 		result.seq = seq
-		if bound && result.session != nil {
-			result.session.AttachPolicy(policy)
-		}
 		return result
 	}
 }
@@ -290,6 +285,9 @@ func (a *App) applyWork(payload any) tea.Cmd {
 		}
 		a.Session = result.session
 		panel.session = result.session
+		// The policy this process knows now, not when the load started: a refresh that
+		// finished while the session loaded found no session to update.
+		a.attachKnownPolicy(panel.session)
 		// Prefer the Project tab when an overlay already has settings; an invalid
 		// overlay merge stays on Global so Options can still open.
 		_ = panel.session.PreferProjectTabIfPresent()
