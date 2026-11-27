@@ -398,6 +398,12 @@ func withConfigLockFile(dataPath, lockPath string, fn func() error) error {
 // The file's current content is read inside the caller's lock, and what this version
 // ignores in it (see Ignored) is written back into the new document unchanged.
 func saveConfigAt(path string, cfg *Config) (string, error) {
+	if cfg.Policy.Applied() {
+		// A configuration Load returned carries the project policy in its fields. The
+		// file gets the values the policy replaced, never the policy values.
+		cfg = Clone(cfg)
+		LocalPolicyValues(cfg).ApplyTo(cfg)
+	}
 	encoded, err := json.Marshal(cfg)
 	if err != nil {
 		return "", wrapSaveError("", err)

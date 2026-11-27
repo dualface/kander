@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dualface/kander/v2/internal/fs"
@@ -299,14 +300,52 @@ func applyPolicyCache(cfg *Config, layers []policyLayer) {
 		cfg.Policy.Notices = []PolicyNotice{{NoticePolicyCacheInvalid, Text("policy.cache_invalid", err.Error())}}
 		return
 	}
-	cache := ReadPolicyCache(home, ServerURL(cfg), ProjectIDForName(cfg.Project.Name))
+	serverURL, projectID := ServerURL(cfg), ProjectIDForName(cfg.Project.Name)
+	if snapshot, ok := rememberedPolicy(home, serverURL, projectID); ok {
+		// This command already read the policy from the server: use that answer, whatever
+		// the cache holds, so every consumer of one command sees the same values even when
+		// the cache could not be written.
+		ApplyServerPolicy(cfg, snapshot)
+		if cfg.Policy.Source == PolicySourceServer {
+			values, _, _ := ReadPolicyValues(snapshot.Values)
+			addPolicyOverrides(cfg, values, layers)
+		}
+		return
+	}
+	cache := ReadPolicyCache(home, serverURL, projectID)
 	ApplyPolicyCache(cfg, cache)
 	if cache.Status == PolicyCacheSet {
-		cfg.Policy.Overrides = policyOverrides(cache.Values, layers)
-		for _, override := range cfg.Policy.Overrides {
-			cfg.Policy.Notices = append(cfg.Policy.Notices, PolicyNotice{NoticePolicyOverride, PolicyOverrideText(override)})
-		}
+		addPolicyOverrides(cfg, cache.Values, layers)
 	}
+}
+
+// addPolicyOverrides lists the file values the applied policy values replace.
+func addPolicyOverrides(cfg *Config, values PolicyValues, layers []policyLayer) {
+	cfg.Policy.Overrides = policyOverrides(values, layers)
+	for _, override := range cfg.Policy.Overrides {
+		cfg.Policy.Notices = append(cfg.Policy.Notices, PolicyNotice{NoticePolicyOverride, PolicyOverrideText(override)})
+	}
+}
+
+// rememberedPolicies holds, per cache file, the last policy a server answered in the running
+// command. command.Execute forgets them when a command starts.
+var rememberedPolicies sync.Map
+
+// ForgetServerPolicies drops the policies RememberServerPolicy recorded.
+func ForgetServerPolicies() { rememberedPolicies.Clear() }
+
+// RememberServerPolicy records the policy a server answered for one project in the running
+// command. Load prefers it over the cache file until the next command starts.
+func RememberServerPolicy(home, serverURL, projectID string, snapshot PolicySnapshot) {
+	rememberedPolicies.Store(PolicyCachePath(home, serverURL, projectID), snapshot)
+}
+
+func rememberedPolicy(home, serverURL, projectID string) (PolicySnapshot, bool) {
+	value, ok := rememberedPolicies.Load(PolicyCachePath(home, serverURL, projectID))
+	if !ok {
+		return PolicySnapshot{}, false
+	}
+	return value.(PolicySnapshot), true
 }
 
 // ApplyPolicyCache applies the result of a cache read to cfg the way Load

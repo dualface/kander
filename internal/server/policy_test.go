@@ -9,9 +9,11 @@ import (
 	"io"
 	"log"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -199,8 +201,12 @@ func TestPolicyWritesCompareAndSwapAndKeepTheEpoch(t *testing.T) {
 		!strings.Contains(string(r.OldValues), "main-only") || !strings.Contains(string(r.NewValues), "main-develop") || r.At.IsZero() {
 		t.Fatalf("audit record %+v", r)
 	}
-	if records[0].OldValues != nil {
+	if string(records[0].OldValues) != "null" {
 		t.Fatalf("the first record has old values: %s", records[0].OldValues)
+	}
+	_, audit := f.files()
+	if !bytes.Contains(audit, []byte(`"old_values":null`)) {
+		t.Fatalf("the first write does not record its missing old values explicitly:\n%s", audit)
 	}
 
 	policyBefore, auditBefore := f.files()
@@ -313,7 +319,7 @@ func TestPolicyCrashBeforeTheReplacementIsVoidedAndRunsAgain(t *testing.T) {
 		t.Fatal("the interrupted write changed policy.json")
 	}
 	records := f.auditRecords()
-	if len(records) != 3 || records[2].Void == nil || *records[2].Void != (policyVoid{Epoch: first.Epoch, Revision: 2, IdempotencyKey: "k-two"}) || records[2].Reason != policyVoidReason {
+	if len(records) != 3 || records[2].Void == nil || *records[2].Void != (policyVoid{Attempt: records[1].Attempt, Epoch: first.Epoch, Revision: 2, IdempotencyKey: "k-two"}) || records[2].Reason != policyVoidReason {
 		t.Fatalf("audit %+v", records)
 	}
 	// Opening the project again voids nothing twice.
@@ -434,4 +440,150 @@ func TestPolicyVoidedWriteIsNotAppliedWhenAnotherWriteTookItsRevision(t *testing
 	}
 	_, err := f.put("k-two", 1, policyValues("main-develop"))
 	requireAPICode(t, err, api.CodePolicyRevisionConflict, 409)
+}
+
+// A retry of a voided attempt is a new attempt: when it takes effect and its receipt is lost
+// again, the next retry answers its result instead of reading it as voided.
+func TestPolicyChainedCrashesAnswerTheAttemptThatTookEffect(t *testing.T) {
+	f := newPolicyFixture(t, Hooks{})
+	if _, err := f.put("k-one", 0, policyValues("main-only")); err != nil {
+		t.Fatal(err)
+	}
+	f.policyProject().policyFaultHook = func(stage string) {
+		if stage == "audit-appended" {
+			panic("injected crash after the audit append")
+		}
+	}
+	if _, err := f.put("k-two", 1, policyValues("main-develop")); err == nil {
+		t.Fatal("the first interrupted attempt answered")
+	}
+	f.restart()
+	f.policyProject().policyFaultHook = func(stage string) {
+		if stage == "policy-replaced" {
+			panic("injected crash after the replacement")
+		}
+	}
+	if _, err := f.put("k-two", 1, policyValues("main-develop")); err == nil {
+		t.Fatal("the second interrupted attempt answered")
+	}
+	f.restart()
+	retry, err := f.put("k-two", 1, policyValues("main-develop"))
+	if err != nil || retry.Revision != 2 || !strings.Contains(string(retry.Values), "main-develop") {
+		t.Fatalf("retry %+v %v", retry, err)
+	}
+	if got, _ := f.project.Policy(t.Context()); got.Revision != 2 {
+		t.Fatalf("policy %+v", got)
+	}
+}
+
+// An append that wrote its line but failed afterwards is voided at once, so a retry runs the
+// write instead of answering a write that never took effect.
+func TestPolicyFailedAuditAppendIsVoidedBeforeARetry(t *testing.T) {
+	f := newPolicyFixture(t, Hooks{})
+	failed := false
+	f.policyProject().policyAppendFault = func() error {
+		if !failed {
+			failed = true
+			return errors.New("injected sync failure")
+		}
+		return nil
+	}
+	if _, err := f.put("k-one", 0, policyValues("main-only")); err == nil {
+		t.Fatal("the failed append answered")
+	}
+	if got, _ := f.project.Policy(t.Context()); got.Revision != 0 {
+		t.Fatalf("the failed write took effect: %+v", got)
+	}
+	retry, err := f.put("k-one", 0, policyValues("main-only"))
+	if err != nil || retry.Revision != 1 {
+		t.Fatalf("retry %+v %v", retry, err)
+	}
+	if got, _ := f.project.Policy(t.Context()); got.Revision != 1 || got.Epoch != retry.Epoch {
+		t.Fatalf("policy %+v after retry %+v", got, retry)
+	}
+	records := f.auditRecords()
+	if len(records) != 3 || records[1].Void == nil || records[1].Void.Attempt != records[0].Attempt || records[2].Attempt == records[0].Attempt {
+		t.Fatalf("audit %+v", records)
+	}
+}
+
+func TestPolicyMaintainIgnoresADamagedPolicyFile(t *testing.T) {
+	f := newPolicyFixture(t, Hooks{})
+	f.close()
+	path := filepath.Join(f.root(), policyFile)
+	if err := os.WriteFile(path, []byte("{damaged"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Maintain(maintenanceOptions(f.data), "golf", true); err != nil {
+		t.Fatalf("maintain failed on a damaged policy file: %v", err)
+	}
+	if data, _ := os.ReadFile(path); string(data) != "{damaged" {
+		t.Fatalf("maintain changed the policy file: %q", data)
+	}
+}
+
+func putPolicyRaw(t *testing.T, f *policyFixture, key, clientID, body string) (int, string) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPut, f.http.URL+"/api/v1/projects/"+f.info.ID+"/policy", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set(api.HeaderProtocol, strconv.Itoa(api.ProtocolVersion))
+	req.Header.Set(api.HeaderIdempotencyKey, key)
+	if clientID != "" {
+		req.Header.Set(api.HeaderClientID, clientID)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, string(data)
+}
+
+func TestPolicyWriteRequiresTheExpectedRevisionAndTheClientID(t *testing.T) {
+	f := newPolicyFixture(t, Hooks{})
+	values := string(policyValues("main-only"))
+	for name, body := range map[string]string{
+		"missing": `{"values":` + values + `}`,
+		"null":    `{"expected_revision":null,"values":` + values + `}`,
+	} {
+		if status, answer := putPolicyRaw(t, f, "k-"+name, "policy-client", body); status != 400 || !strings.Contains(answer, "expected_revision") {
+			t.Errorf("%s: %d %s", name, status, answer)
+		}
+	}
+	if status, answer := putPolicyRaw(t, f, "k-no-client", "", `{"expected_revision":0,"values":`+values+`}`); status != 400 || !strings.Contains(answer, api.HeaderClientID) {
+		t.Errorf("no client ID: %d %s", status, answer)
+	}
+	if policy, audit := f.files(); policy != nil || audit != nil {
+		t.Fatal("a refused write left files")
+	}
+	if status, answer := putPolicyRaw(t, f, "k-zero", "policy-client", `{"expected_revision":0,"values":`+values+`}`); status != 200 || !strings.Contains(answer, `"updated_by":""`) {
+		t.Fatalf("explicit 0 without a submitter: %d %s", status, answer)
+	}
+	unset, err := json.Marshal(api.ProjectPolicy{})
+	if err != nil || string(unset) != `{"revision":0}` {
+		t.Fatalf("the unset policy encodes as %s %v", unset, err)
+	}
+}
+
+// A refused request leaves no idempotency receipt, so a corrected request may reuse its key.
+func TestPolicyRefusedValuesLeaveNoReceipt(t *testing.T) {
+	f := newPolicyFixture(t, Hooks{})
+	bad := json.RawMessage(strings.Replace(string(policyValues("main-only")), `"ask"`, `"later"`, 1))
+	_, err := f.put("k-fix", 0, bad)
+	requireAPICode(t, err, api.CodeInvalidRequest, 400)
+	receipt := filepath.Join(f.root(), receiptPath("k-fix"))
+	if _, statErr := os.Stat(receipt); !os.IsNotExist(statErr) {
+		t.Fatalf("a refused request left a receipt: %v", statErr)
+	}
+	written, err := f.put("k-fix", 0, policyValues("main-only"))
+	if err != nil || written.Revision != 1 {
+		t.Fatalf("the corrected request with the same key: %+v %v", written, err)
+	}
+	replayed, err := f.put("k-fix", 0, policyValues("main-only"))
+	if err != nil || replayed.Epoch != written.Epoch || replayed.Revision != 1 {
+		t.Fatalf("the replay: %+v %v", replayed, err)
+	}
 }

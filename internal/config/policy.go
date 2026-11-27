@@ -232,17 +232,21 @@ func policyChoice(raw any, section, key string, choices []string, problems *Poli
 }
 
 func policyReviewStages(raw any, problems *PolicyProblems) map[string]map[string]string {
+	// Keys that are neither a scale nor a role are listed first, so a section whose shape is
+	// refused below still names them.
+	if obj, ok := asObject(raw); ok {
+		for _, key := range sortedKeys(obj) {
+			if !slices.Contains(TaskScales, key) && !containsKey(historicalReviewRoleSet(), key) {
+				problems.Unknown = append(problems.Unknown, PolicyKeyReviewStages+"."+key)
+			}
+		}
+	}
 	normalized, err := NormalizeReviewStages(raw)
 	if err != nil {
 		problems.Invalid = append(problems.Invalid, err.Error())
 		return nil
 	}
 	stages := map[string]map[string]string{}
-	for _, key := range sortedKeys(normalized) {
-		if !slices.Contains(TaskScales, key) {
-			problems.Unknown = append(problems.Unknown, PolicyKeyReviewStages+"."+key)
-		}
-	}
 	for _, scale := range TaskScales {
 		path := PolicyKeyReviewStages + "." + scale
 		value, exists := normalized[scale]

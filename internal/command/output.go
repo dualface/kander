@@ -13,6 +13,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 // Stable error codes that the output layer itself assigns. Packages add the codes of their own
@@ -134,6 +136,8 @@ type session struct {
 	notices     []Notice
 	failure     error
 	reported    bool
+	// remarked holds the keys FirstRemark has seen in this run.
+	remarked map[string]bool
 }
 
 var current session
@@ -143,6 +147,23 @@ func (s *session) reset() {
 	defer s.mu.Unlock()
 	s.json, s.provisional, s.streaming, s.started = false, false, false, false
 	s.result, s.status, s.notices, s.failure, s.reported = nil, 0, nil, nil, false
+	s.remarked = nil
+}
+
+// FirstRemark reports whether key is new in the running command and records it, for a remark
+// that a command must make once although several of its steps reach it (one per opened service
+// session, for example).
+func FirstRemark(key string) bool {
+	current.mu.Lock()
+	defer current.mu.Unlock()
+	if current.remarked[key] {
+		return false
+	}
+	if current.remarked == nil {
+		current.remarked = map[string]bool{}
+	}
+	current.remarked[key] = true
+	return true
 }
 
 // JSON reports whether the running command was given --json.
@@ -499,6 +520,8 @@ func writeFailed(err error) int {
 // begin resets the session for a run of args.
 func begin(args []string) {
 	current.reset()
+	// The policy answers a server gave apply to the command that read them, never to the next.
+	config.ForgetServerPolicies()
 	current.mu.Lock()
 	current.provisional = scanJSON(args)
 	current.mu.Unlock()

@@ -121,8 +121,11 @@ func (s *policyServer) restart() {
 
 func (s *policyServer) url() string { return "http://" + s.addr }
 
+// loadedConfig reads the configuration the way a later command does, which starts without the
+// policy answers of the commands before it.
 func loadedConfig(t *testing.T) *config.Config {
 	t.Helper()
+	config.ForgetServerPolicies()
 	cfg, err := config.Load(false)
 	if err != nil {
 		t.Fatal(err)

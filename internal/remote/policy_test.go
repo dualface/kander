@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -285,5 +286,63 @@ func TestInitOffersThePolicyInitializationOnlyInATerminal(t *testing.T) {
 	code, out, errOut = runCommand(NewInitCommand)
 	if code != 0 || !strings.Contains(errOut, "[y/N]") || !strings.Contains(out, "revision 1") || len(fake.writes()) != 1 {
 		t.Fatalf("interactive init: code=%d out=%q err=%q writes=%d", code, out, errOut, len(fake.writes()))
+	}
+}
+
+// A command that opens the project twice makes the unset remark once.
+func TestPolicyRemarkIsMadeOncePerCommand(t *testing.T) {
+	isolatePolicyCommands(t)
+	fake := &fakePolicyServer{project: true}
+	newPolicyClient(t, fake.serve(t), nil)
+	twice := &cobra.Command{Use: "twice", RunE: func(*cobra.Command, []string) error {
+		for range 2 {
+			cfg, err := config.Load(false)
+			if err != nil {
+				return err
+			}
+			if _, err := Open(t.Context(), cfg, t.TempDir()); err != nil {
+				return err
+			}
+		}
+		return nil
+	}}
+	code, _, errOut := runCommand(func() *cobra.Command { return twice })
+	if code != 0 || strings.Count(errOut, "kander policy init") != 1 {
+		t.Fatalf("code=%d err=%q", code, errOut)
+	}
+}
+
+// When the cache cannot be written, a later configuration read of the same process still uses
+// the policy the server answered.
+func TestConfigurationReadsAfterOpenUseTheServerAnswerWithoutACache(t *testing.T) {
+	isolatePolicyCommands(t)
+	values := strings.Replace(newerPolicyValues, `"agent_language":"en"`, `"agent_language":"ja"`, 1)
+	fake := &fakePolicyServer{project: true, policy: api.ProjectPolicy{Epoch: "e1", Revision: 3, Values: json.RawMessage(values)}}
+	client := newPolicyClient(t, fake.serve(t), nil)
+	if err := os.MkdirAll(client.home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// A file where the cache directory belongs keeps every cache write from succeeding.
+	if err := os.WriteFile(filepath.Join(client.home, "policies"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var remarks bytes.Buffer
+	stderr = &remarks
+	cfg, err := config.Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(t.Context(), cfg, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(remarks.String(), "could not be written") {
+		t.Fatalf("no cache failure remark: %q", remarks.String())
+	}
+	again, err := config.Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.AgentLanguage != "ja" || again.Policy.Source != config.PolicySourceServer || again.Policy.Revision != 3 {
+		t.Fatalf("a later read used %q %+v", again.AgentLanguage, again.Policy)
 	}
 }

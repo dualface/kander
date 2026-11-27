@@ -37,6 +37,9 @@ func PolicySnapshot(p api.ProjectPolicy) config.PolicySnapshot {
 // configured server URL and the project ID of its session, the worker the
 // ServerURL and ProjectID of an execution credential.
 func RefreshPolicy(home, serverURL, projectID string, policy api.ProjectPolicy) (bool, error) {
+	// The answer also stays in this process, so a later configuration read of the same
+	// command uses it even when the cache cannot be written.
+	config.RememberServerPolicy(home, serverURL, projectID, PolicySnapshot(policy))
 	return config.StorePolicy(home, serverURL, projectID, PolicySnapshot(policy))
 }
 
@@ -67,7 +70,7 @@ func applySessionPolicy(cfg *config.Config, home, serverURL string, info api.Pro
 	var snapshot config.PolicySnapshot
 	if info.Policy != nil {
 		snapshot = PolicySnapshot(*info.Policy)
-		if _, err := config.StorePolicy(home, serverURL, info.ID, snapshot); err != nil {
+		if _, err := RefreshPolicy(home, serverURL, info.ID, *info.Policy); err != nil {
 			remark("project_policy_cache_failed", config.Text("policy.cache_write_failed", err.Error()))
 		}
 	}
@@ -76,7 +79,9 @@ func applySessionPolicy(cfg *config.Config, home, serverURL string, info api.Pro
 		return
 	}
 	for _, notice := range cfg.Policy.Notices {
-		if notice.Code != config.NoticePolicyOverride {
+		// A command that opens the project more than once (start, a takeover resume) makes
+		// each policy remark once.
+		if notice.Code != config.NoticePolicyOverride && command.FirstRemark("policy\x00"+notice.Code+"\x00"+notice.Message) {
 			remark(notice.Code, notice.Message)
 		}
 	}

@@ -485,3 +485,48 @@ func loadedPolicyConfig(t *testing.T) *Config {
 	}
 	return cfg
 }
+
+// Save of a configuration Load returned writes the file values the policy replaced, together
+// with the host setting the caller changed.
+func TestSaveOfALoadedConfigurationKeepsThePolicyOut(t *testing.T) {
+	home, scopePath := isolatePolicyClient(t, map[string]any{"git": map[string]any{"branch_mode": "main-develop"}})
+	storePolicy(t, home, policySnapshot(t, "e1", 1, validPolicyDocument()))
+	cfg := loadedPolicyConfig(t)
+	if cfg.Git.BranchMode != "main-only" {
+		t.Fatalf("policy not applied: %q", cfg.Git.BranchMode)
+	}
+	cfg.TUI.Columns = 4
+	if _, err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(scopePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range []string{"main-only", "zh-CN", `"required"`, `"ask"`} {
+		if strings.Contains(string(data), value) {
+			t.Errorf("the scope file holds the policy value %s:\n%s", value, data)
+		}
+	}
+	scope, err := LoadScope(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scope.TUI.Columns != 4 || scope.Git.BranchMode != "main-develop" {
+		t.Fatalf("scope after save: columns %d branch mode %q", scope.TUI.Columns, scope.Git.BranchMode)
+	}
+	if cfg.Git.BranchMode != "main-only" {
+		t.Fatal("Save changed the caller's configuration")
+	}
+}
+
+// A review_stages section with both scale and role keys is refused and still names its unknown keys.
+func TestValidatePolicyValuesNamesUnknownStageKeysOfAMixedSection(t *testing.T) {
+	doc := validPolicyDocument()
+	doc["review_stages"] = map[string]any{"large": map[string]any{"PMQA": "auto", "Security": "auto"}, "PMQA": "auto", "future": "x"}
+	_, err := ValidatePolicyValues(policyJSON(t, doc))
+	problems := policyProblems(t, err)
+	if !slices.Equal(problems.Unknown, []string{"review_stages.future"}) || len(problems.Invalid) == 0 {
+		t.Fatalf("problems %+v", problems)
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/dualface/kander/v2/internal/command"
 	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/install"
 	"github.com/dualface/kander/v2/internal/terminal/builtin"
@@ -274,6 +275,11 @@ func reportPolicyOverrides(cfg *config.Config) {
 	hint(config.Text("policy.doctor_heading", cfg.Policy.Revision))
 	for _, override := range cfg.Policy.Overrides {
 		hint(config.PolicyOverrideText(override))
+		// With --json the same items are also project_policy_override notices, as in
+		// kander config, so a reader of notices sees them too.
+		if command.JSON() {
+			command.Notify(config.NoticePolicyOverride, config.PolicyOverrideText(override))
+		}
 	}
 }
 

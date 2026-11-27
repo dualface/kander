@@ -33,3 +33,16 @@ type PolicyWrite struct {
 	Values           json.RawMessage `json:"values"`
 	Submitter        string          `json:"submitter,omitempty"`
 }
+
+// MarshalJSON keeps the answer of an unset policy to its revision and writes
+// updated_by for every set policy, also when the submitter was empty.
+func (p ProjectPolicy) MarshalJSON() ([]byte, error) {
+	type plain ProjectPolicy
+	if p.Revision == 0 {
+		return json.Marshal(plain(p))
+	}
+	return json.Marshal(struct {
+		plain
+		UpdatedBy string `json:"updated_by"`
+	}{plain(p), p.UpdatedBy})
+}

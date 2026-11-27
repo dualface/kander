@@ -59,6 +59,9 @@ type project struct {
 	policyBroken bool
 	// policyFaultHook interrupts a policy write at a named stage in tests.
 	policyFaultHook func(stage string)
+	// policyAppendFault fails an audit append after its line was written, as a
+	// failed sync would, in tests.
+	policyAppendFault func() error
 }
 
 func (p *project) log() *slog.Logger { return p.server.log.With("project", p.info.ID) }
@@ -84,8 +87,11 @@ func (p *project) open() error {
 	if err := ensureDir(p.root, "control"); err != nil {
 		return err
 	}
-	if err := p.openPolicy(); err != nil {
-		return err
+	// Offline maintenance neither reads nor writes the project policy.
+	if p.server.maintenance == nil {
+		if err := p.openPolicy(); err != nil {
+			return err
+		}
 	}
 	if err := p.recoverImport(); err != nil {
 		return err

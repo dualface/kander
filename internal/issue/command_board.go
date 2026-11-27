@@ -24,6 +24,11 @@ func importThroughServer(ctx context.Context, provider IssueProvider, repository
 		return ImportResult{}, err
 	}
 	defer finish()
+	if options.languageFromConfig {
+		// The configuration read before the session may predate the project policy the
+		// session applied; an explicit --language always stays.
+		options.Language = session.cfg.AgentLanguage
+	}
 	return ImportRemote(session.ctx, session.session, provider, repository, number, options)
 }
 
@@ -54,6 +59,8 @@ func openResultBoardThroughServer(ctx context.Context) (context.Context, string,
 type serverSession struct {
 	ctx     context.Context
 	session *remote.Session
+	// cfg is the configuration the session opened with, the project policy applied.
+	cfg *config.Config
 }
 
 // openServerSession binds the working directory's project, refusing a client
@@ -77,5 +84,5 @@ func openServerSession(ctx context.Context, missingOK bool) (serverSession, stri
 		return serverSession{}, "", nil, err
 	}
 	operationCtx, finish := session.OperationContext(ctx)
-	return serverSession{ctx: operationCtx, session: session}, cwd, finish, nil
+	return serverSession{ctx: operationCtx, session: session, cfg: cfg}, cwd, finish, nil
 }

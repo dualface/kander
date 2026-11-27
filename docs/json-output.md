@@ -57,7 +57,7 @@ The code of a failure is the first of these that applies:
 | `project_policy_cache_missing` | `config` | No project policy is cached yet |
 | `project_policy_cache_invalid` | `config`, any command that opens the service | The cached policy, or the server's, cannot be used; the local values apply |
 | `project_policy_ignored` | `config`, `policy show`, any command that opens the service | A key of the project policy that this version does not know is ignored |
-| `project_policy_override` | `config` | A configuration file value differs from the project policy, which applies |
+| `project_policy_override` | `config`, `doctor` | A configuration file value differs from the project policy, which applies |
 | `project_policy_cache_failed` | `policy`, any command that opens the service | The project policy cache could not be written |
 | `project_policy_init_failed` | `init` | The policy step of `init` failed; the binding stands |
 | `check_diagnostic` | `check` | A diagnostic line of the structural check |

@@ -2,11 +2,16 @@ package menu
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/spf13/cobra"
 
 	"github.com/dualface/kander/v2/internal/command"
 	"github.com/dualface/kander/v2/internal/command/commandtest"
@@ -123,5 +128,90 @@ func TestConfigJSONUnboundHasNoPolicyNotice(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(os.Getenv(config.EnvClientHome), "policies")); !os.IsNotExist(err) {
 		t.Fatalf("kander config created the cache directory: %v", err)
+	}
+}
+
+// doctor --json carries each replaced file value as a project_policy_override notice beside its
+// report line.
+func TestDoctorJSONReportsPolicyOverridesAsNotices(t *testing.T) {
+	home := boundPolicyConfig(t, "golf")
+	if _, err := config.StorePolicy(home, "http://127.0.0.1:7878", config.ProjectIDForName("golf"), config.PolicySnapshot{
+		Epoch: "e1", Revision: 2, Values: json.RawMessage(cachedPolicyValues),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report := &cobra.Command{Use: "report", RunE: func(*cobra.Command, []string) error {
+		lines := CaptureReport(func() { reportPolicyOverrides(cfg) })
+		return command.Exit(command.Result(map[string]any{"lines": len(lines)}))
+	}}
+	code, stdout, stderr := commandtest.Capture(func() int { return commandtest.Run(report, "--json") })
+	var result struct {
+		Lines   int              `json:"lines"`
+		Notices []command.Notice `json:"notices"`
+	}
+	if code != 0 || stderr != "" || json.Unmarshal([]byte(stdout), &result) != nil {
+		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if len(result.Notices) != len(cfg.Policy.Overrides) || len(result.Notices) == 0 || result.Lines != len(result.Notices)+1 {
+		t.Fatalf("lines %d notices %+v overrides %+v", result.Lines, result.Notices, cfg.Policy.Overrides)
+	}
+	for i, notice := range result.Notices {
+		if notice.Code != config.NoticePolicyOverride || notice.Message != config.PolicyOverrideText(cfg.Policy.Overrides[i]) {
+			t.Fatalf("notice %d: %+v", i, notice)
+		}
+	}
+}
+
+// kander config --json reads only the cache: the unset and the unusable cache give their notices
+// and the bound server gets no request.
+func TestConfigJSONReportsUnsetAndInvalidCachesWithoutARequest(t *testing.T) {
+	var requests atomic.Int32
+	hs := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		http.NotFound(w, nil)
+	}))
+	t.Cleanup(hs.Close)
+	for _, c := range []struct {
+		name   string
+		cache  func(home string) error
+		notice string
+	}{
+		{"unset", func(home string) error {
+			_, err := config.StorePolicy(home, hs.URL, config.ProjectIDForName("golf"), config.PolicySnapshot{})
+			return err
+		}, config.NoticePolicyUnset},
+		{"invalid", func(home string) error {
+			path := config.PolicyCachePath(home, hs.URL, config.ProjectIDForName("golf"))
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				return err
+			}
+			return os.WriteFile(path, []byte("{damaged"), 0o600)
+		}, config.NoticePolicyCacheInvalid},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			home := boundPolicyConfig(t, "golf")
+			cfg, err := config.LoadScope(false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg.Server.URL = hs.URL
+			if _, err := config.Save(cfg); err != nil {
+				t.Fatal(err)
+			}
+			if err := c.cache(home); err != nil {
+				t.Fatal(err)
+			}
+			result := runPolicyConfigJSON(t)
+			if result.ProjectPolicy != (config.PolicyStatus{Source: config.PolicySourceLocal}) || noticeCodes(result.Notices) != c.notice {
+				t.Fatalf("result %+v", result)
+			}
+		})
+	}
+	if requests.Load() != 0 {
+		t.Fatalf("kander config --json sent %d requests", requests.Load())
 	}
 }
