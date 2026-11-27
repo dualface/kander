@@ -285,6 +285,13 @@ func TestLoadKeepsLocalValuesWithoutAUsablePolicy(t *testing.T) {
 			if cfg.Git.BranchMode != "main-develop" || cfg.Policy.Status().Source != PolicySourceLocal || !hasPolicyNotice(cfg, c.notice) {
 				t.Fatalf("branch mode %q policy %+v", cfg.Git.BranchMode, cfg.Policy)
 			}
+			// The next refresh replaces whatever the cache held.
+			if !storePolicy(t, home, policySnapshot(t, "e9", 1, validPolicyDocument())) {
+				t.Fatal("the refresh did not replace the cache")
+			}
+			if cfg := loadedPolicyConfig(t); cfg.Git.BranchMode != "main-only" || cfg.Policy.Revision != 1 {
+				t.Fatalf("after the refresh: %q %+v", cfg.Git.BranchMode, cfg.Policy)
+			}
 		})
 	}
 }
@@ -468,4 +475,13 @@ func TestConfigWritesNeverStoreCachedPolicyValues(t *testing.T) {
 			}
 		}
 	}
+}
+
+func loadedPolicyConfig(t *testing.T) *Config {
+	t.Helper()
+	cfg, err := Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg
 }
