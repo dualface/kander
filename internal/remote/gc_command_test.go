@@ -428,3 +428,12 @@ func TestGCCommandTextPlanShowsTheBytesOfEveryCategory(t *testing.T) {
 		t.Fatalf("the line must carry every byte count:\n%s", out)
 	}
 }
+
+// A server plan that only ends members of an interrupted receipt gc still has
+// work: running it removes the intent record.
+func TestGCReportWithOnlySettledReceiptsIsNotEmpty(t *testing.T) {
+	report := GCReport{Server: GCServer{Report: &api.ServerGCReport{DryRun: true, Projects: []api.ServerGCProject{{Name: "demo", Receipts: api.ServerGCReceipts{Settled: 1}}}}}}
+	if report.Empty() {
+		t.Fatal("a plan with a settled receipt intent member must not be empty")
+	}
+}

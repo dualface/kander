@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"path/filepath"
 
 	"github.com/dualface/kander/v2/api"
@@ -48,13 +49,15 @@ var ErrNoServer = errors.New("no server answers")
 
 // ServerFor returns the info of the loopback server at target when it serves
 // dataDir. It returns ErrNoServer when nothing answers at target, and an error
-// when the server serves another data directory.
+// when the server serves another data directory. A request that timed out
+// returns its own error, for which TimedOut is true: something may hold the
+// address without answering, which is not the same as no server.
 func ServerFor(ctx context.Context, target, dataDir string) (api.ServerInfo, error) {
 	if !Local(target) {
 		return api.ServerInfo{}, errors.New(config.Text("gc.local_only", target))
 	}
 	info, err := Info(ctx, target)
-	if client.IsUnreachable(err) {
+	if client.IsUnreachable(err) && !TimedOut(err) {
 		return api.ServerInfo{}, ErrNoServer
 	}
 	if err != nil {
@@ -64,6 +67,13 @@ func ServerFor(ctx context.Context, target, dataDir string) (api.ServerInfo, err
 		return api.ServerInfo{}, errors.New(config.Text("gc.data_mismatch", target, info.DataDir, dataDir))
 	}
 	return info, nil
+}
+
+// TimedOut reports an error that a deadline ended: a context deadline or a
+// transport timeout.
+func TimedOut(err error) bool {
+	var timeout net.Error
+	return errors.Is(err, context.DeadlineExceeded) || errors.As(err, &timeout) && timeout.Timeout()
 }
 
 // GC sends one gc request with the administration token to the local server
