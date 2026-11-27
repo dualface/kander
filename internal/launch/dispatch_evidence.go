@@ -134,12 +134,16 @@ func checkIntegrationTarget(ctx context.Context, g board.DispatchIntegration, ta
 	return nil
 }
 
-// verifyPortableWrapUpTarget binds a distributed receipt to a declared card
-// target. For older cards the receipt itself supplies the target as before.
-// snapshot is the branch snapshot of the card or its group, as in
-// checkIntegrationTarget.
+// verifyPortableWrapUpTarget binds a distributed receipt to the integration
+// target of the card: the declared target, or without one the mainline branch
+// of the branch snapshot of the card or its group, as in
+// checkIntegrationTarget. A card with neither, claimed before snapshots, lets
+// the receipt supply the target as before.
 func verifyPortableWrapUpTarget(cwd, target, ref string, snapshot *api.BranchSnapshot) error {
 	if target == "" {
+		if snapshot != nil && ref != "refs/heads/"+config.MainlineBranchFor(snapshot.BranchMode) {
+			return launchError("board.dispatch_evidence_invalid", "integration CWD or target ref")
+		}
 		return nil
 	}
 	if ref != "refs/heads/"+target {
@@ -157,11 +161,12 @@ func verifyPortableWrapUpTarget(cwd, target, ref string, snapshot *api.BranchSna
 	return nil
 }
 
-// portableTargetNeedsMainline reports whether verifyPortableWrapUpTarget
-// reads the mainline branch for target: only main needs it, to refuse main as
+// portableTargetNeedsSnapshot reports whether verifyPortableWrapUpTarget
+// uses the branch snapshot for target: a card without a declared target
+// integrates into the mainline branch of its snapshot, and main is refused as
 // the target of a main-develop card or group. Callers look the branch
 // snapshot up only then.
-func portableTargetNeedsMainline(target string) bool { return target == "main" }
+func portableTargetNeedsSnapshot(target string) bool { return target == "" || target == "main" }
 
 // integrationMainline is the mainline branch an integration is checked
 // against: that of the branch snapshot of the card or its group, or without

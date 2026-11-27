@@ -257,7 +257,7 @@ func completeRemoteDispatchInput(ctx context.Context, session *remote.Session, c
 		return err
 	}
 	var snapshot *api.BranchSnapshot
-	if portableTargetNeedsMainline(target) {
+	if portableTargetNeedsSnapshot(target) {
 		if snapshot, err = branchSnapshotOf(ctx, session, card); err != nil {
 			return err
 		}
@@ -331,7 +331,7 @@ func authorizeRemoteWrapUp(ctx context.Context, session *remote.Session, cwd str
 			return value, err
 		}
 		var snapshot *api.BranchSnapshot
-		if portableTargetNeedsMainline(target) {
+		if portableTargetNeedsSnapshot(target) {
 			if snapshot, err = branchSnapshotOf(ctx, session, current); err != nil {
 				return value, err
 			}

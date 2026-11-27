@@ -209,3 +209,67 @@ func TestJournaledClaimTakesTheNewPolicyRevision(t *testing.T) {
 		t.Fatalf("snapshot: %+v", s)
 	}
 }
+
+// A card without a declared integration target integrates into the mainline
+// branch of its branch snapshot: a distributed wrap-up receipt for another
+// branch is refused, even after the policy moved to that branch's model. A
+// card claimed before snapshots keeps letting the receipt supply the target.
+func TestPortableWrapUpTargetDefaultsToTheSnapshotMainline(t *testing.T) {
+	cwd, _ := integrationGit(t)
+	refused := launchError("board.dispatch_evidence_invalid", "integration CWD or target ref").Error()
+	develop := &api.BranchSnapshot{BranchMode: config.GitBranchModeMainDevelop, Scope: api.BranchSnapshotGroup}
+	mainOnly := &api.BranchSnapshot{BranchMode: config.GitBranchModeMainOnly, PolicyRevision: 2, Scope: api.BranchSnapshotTask}
+	useGitBranchMode(t, config.GitBranchModeMainOnly)
+	for _, tc := range []struct {
+		name     string
+		snapshot *api.BranchSnapshot
+		ref      string
+		ok       bool
+	}{
+		{"main-develop snapshot, develop", develop, "refs/heads/develop", true},
+		{"main-develop snapshot, main", develop, "refs/heads/main", false},
+		{"main-develop snapshot, other branch", develop, "refs/heads/v2", false},
+		{"main-only snapshot, main", mainOnly, "refs/heads/main", true},
+		{"main-only snapshot, develop", mainOnly, "refs/heads/develop", false},
+		{"no snapshot", nil, "refs/heads/v2", true},
+	} {
+		err := verifyPortableWrapUpTarget(cwd, "", tc.ref, tc.snapshot)
+		if tc.ok && err != nil || !tc.ok && (err == nil || err.Error() != refused) {
+			t.Errorf("%s: %v", tc.name, err)
+		}
+	}
+	if !portableTargetNeedsSnapshot("") || !portableTargetNeedsSnapshot("main") || portableTargetNeedsSnapshot("v2") {
+		t.Fatal("the snapshot lookup does not cover the default target")
+	}
+}
+
+// The coordinator Git facts of a wrap-up are checked against the group's
+// snapshot through the service: a group claimed under main-develop keeps
+// refusing an integration receipt for main after the policy moved to
+// main-only, before any receipt or Git verification.
+func TestCoordinatorWrapUpFactsRefuseAReceiptOutsideTheSnapshotMainline(t *testing.T) {
+	url := snapshotServer(t)
+	a, _ := snapshotHost(t, url, "host-a")
+	policyMode(t, a, config.GitBranchModeMainDevelop)
+	b, _ := snapshotHost(t, url, "host-b")
+	group := "20261127-wrap-up-target-group"
+	member := readyCard(t, a, "wrap-up-target", group).TaskID
+	if _, err := b.AcquireCoordinator(t.Context(), board.CoordinatorClaim{GroupID: group, Owner: "codex", Token: "public-label", Basis: "snapshot fixture", Members: []string{member}}, "snapshot fixture"); err != nil {
+		t.Fatal(err)
+	}
+	policyMode(t, a, config.GitBranchModeMainOnly)
+
+	cwd, _ := integrationGit(t)
+	refused := launchError("board.dispatch_evidence_invalid", "integration CWD or target ref").Error()
+	facts := board.CoordinatorGitFacts{Integration: board.DispatchIntegration{TaskID: member, TargetRef: "refs/heads/main"}}
+	if err := verifyRemoteCoordinatorGitFacts(t.Context(), a, cwd, facts); err == nil || err.Error() != refused {
+		t.Fatalf("a receipt for main passed the group's main-develop snapshot: %v", err)
+	}
+	// develop passes the target check and reaches the receipt verification,
+	// which refuses this incomplete receipt for its own reason.
+	facts.Integration.TargetRef = "refs/heads/develop"
+	if err := verifyRemoteCoordinatorGitFacts(t.Context(), a, cwd, facts); err == nil || err.Error() == refused {
+		t.Fatalf("develop was refused as the target of the group: %v", err)
+	}
+}
+

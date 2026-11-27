@@ -22,7 +22,7 @@ func verifyRemoteCoordinatorGitFacts(ctx context.Context, s *remote.Session, cwd
 		return err
 	}
 	var snapshot *api.BranchSnapshot
-	if portableTargetNeedsMainline(facts.IntegrationTarget) {
+	if portableTargetNeedsSnapshot(facts.IntegrationTarget) {
 		task, err := s.Project.Show(ctx, facts.Integration.TaskID)
 		if err != nil {
 			return err
