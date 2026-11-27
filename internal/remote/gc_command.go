@@ -27,10 +27,9 @@ import (
 // GCReport is the plan or the outcome of `kander gc`: one entry per project,
 // the client project directories that match no project of the bound server,
 // those whose project could not be confirmed, the part of the local server
-// gc, and the failures outside any project. Skipped says why nothing ran.
+// gc, and the failures outside any project.
 type GCReport struct {
 	DryRun     bool        `json:"dry_run"`
-	Skipped    string      `json:"skipped,omitempty"`
 	Projects   []GCProject `json:"projects"`
 	Unmatched  []string    `json:"unmatched,omitempty"`
 	Unverified []GCEntry   `json:"unverified,omitempty"`
@@ -178,15 +177,12 @@ func runClientGC(o clientGCFlags, probe ExecutorProbe, stdout io.Writer) int {
 	ctx, stop := gcInterrupt()
 	defer stop()
 	s, cfg, err := gcOpen(ctx)
-	if errors.Is(err, errNoClientHome) {
-		return gcClientOutput(stdout, GCReport{DryRun: true, Skipped: config.Text("gc.client_no_home"), Projects: []GCProject{}})
-	}
 	if err != nil {
 		return command.Fail(err)
 	}
 	g := &clientGC{flags: o, sessions: []*Session{s}, request: api.ServerGCRequest{OlderThan: olderThan.String(), LogKeep: command.DefaultLogKeep}}
 	g.checkout, _ = os.Getwd()
-	g.opts = GCOptions{OlderThan: olderThan, Probe: probe, Mainline: config.MainlineBranch(cfg)}
+	g.opts = GCOptions{OlderThan: olderThan, Probe: probe, Mainline: config.MainlineBranch(cfg), Unidentified: s.Client.ClientID() == gcUnidentifiedClient}
 	if !o.allProjects {
 		g.request.Project = s.Info.Name
 	}
@@ -282,7 +278,9 @@ func (g *clientGC) callServer(ctx context.Context, report *GCReport, dryRun bool
 // selectProjects adds, with --all-projects, every client project directory of
 // this host whose project the bound server confirms. The directory's own
 // records name its project ID, and a read of that project, which the server's
-// access control governs, confirms it. A directory whose records name a
+// access control governs, confirms it. A directory whose records name no
+// project matches a project of the administration's server gc plan, when
+// there is one, whose ID gives the directory's namespace. A directory whose records name a
 // project of another server, or a project the bound server does not have, is
 // unmatched; one that names no project or whose project cannot be read is
 // unverified. Neither is changed.
@@ -305,6 +303,14 @@ func (g *clientGC) selectProjects(ctx context.Context, report *GCReport) {
 		}
 	}
 	slices.Sort(names)
+	// The administration plan lists every project by name; a registered
+	// project's ID follows from its name.
+	planned := map[string]string{}
+	if plan := report.Server.Report; plan != nil {
+		for _, project := range plan.Projects {
+			planned[projectNamespace(bound.ServerURL, api.ProjectID(project.Name))] = project.Name
+		}
+	}
 	for _, name := range names {
 		ids, foreign, err := directoryProjects(bound.Home, bound.ServerURL, name)
 		switch {
@@ -314,6 +320,13 @@ func (g *clientGC) selectProjects(ctx context.Context, report *GCReport) {
 		case len(ids) != 1 && foreign:
 			report.Unmatched = append(report.Unmatched, name)
 			continue
+		case len(ids) != 1 && planned[name] != "":
+			info, err := bound.Client.ProjectByName(ctx, planned[name])
+			if err != nil || projectNamespace(bound.ServerURL, info.ID) != name {
+				report.Unverified = append(report.Unverified, GCEntry{ID: name, Reason: errors.Join(err, errors.New(config.Text("gc.client_directory_unidentified"))).Error()})
+				continue
+			}
+			ids = []string{info.ID}
 		case len(ids) != 1:
 			report.Unverified = append(report.Unverified, GCEntry{ID: name, Reason: config.Text("gc.client_directory_unidentified")})
 			continue
@@ -348,11 +361,11 @@ func printClientGC(w io.Writer, r GCReport) {
 		header = "gc.plan_header"
 	}
 	fmt.Fprintln(w, config.Text(header))
-	if r.Skipped != "" {
-		fmt.Fprintln(w, config.Text("gc.client_skipped", oneLine(r.Skipped)))
-	}
 	for _, p := range r.Projects {
-		fmt.Fprintln(w, config.Text("gc.client_project_line", p.Name, p.Worktrees.Count, command.FormatBytes(p.Worktrees.Bytes), p.Branches.Count, p.ReviewRuntime.Count, command.FormatBytes(p.ReviewRuntime.Bytes), p.Journal.Count, command.FormatBytes(p.Journal.Bytes), p.EvidenceRefs.Count, p.TrackingRefs.Count))
+		fmt.Fprintln(w, config.Text("gc.client_project_line", p.Name,
+			p.Worktrees.Count, command.FormatBytes(p.Worktrees.Bytes), p.Branches.Count, command.FormatBytes(p.Branches.Bytes),
+			p.ReviewRuntime.Count, command.FormatBytes(p.ReviewRuntime.Bytes), p.Journal.Count, command.FormatBytes(p.Journal.Bytes),
+			p.EvidenceRefs.Count, command.FormatBytes(p.EvidenceRefs.Bytes), p.TrackingRefs.Count, command.FormatBytes(p.TrackingRefs.Bytes)))
 		for _, c := range []struct {
 			key      string
 			category GCCategory

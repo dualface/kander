@@ -1,6 +1,7 @@
 package remote
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -189,17 +190,58 @@ func TestGCKeepsABranchThatMovedAfterAnInterruptedRemoval(t *testing.T) {
 	}
 }
 
+// usePartialClone makes the fixture work in a blobless partial clone of its
+// origin, whose promisor remote would serve missing objects on demand.
+func (f *gcFixture) usePartialClone() string {
+	f.t.Helper()
+	gcGit(f.t, f.bare, "config", "uploadpack.allowFilter", "true")
+	gcGit(f.t, f.bare, "config", "uploadpack.allowAnySHA1InWant", "true")
+	partial := filepath.Join(f.t.TempDir(), "partial")
+	gcGit(f.t, filepath.Dir(partial), "clone", "--filter=blob:none", "--no-checkout", "file://"+f.bare, partial)
+	gcGit(f.t, partial, "remote", "set-url", "origin", f.bare)
+	gcGit(f.t, partial, "checkout", "-q", "-B", "main", f.base)
+	f.repo, f.checkout = partial, partial
+	return partial
+}
+
+// withoutLazyFetchControl stands for a Git older than 2.45, which cannot be
+// kept from fetching lazily.
+func withoutLazyFetchControl(t *testing.T) {
+	previous := gcLazyFetchControl
+	t.Cleanup(func() { gcLazyFetchControl = previous })
+	gcLazyFetchControl = func() bool { return false }
+}
+
+// A Git that cannot be kept from fetching lazily runs no probe in a partial
+// clone's dry run: the worktree is deferred before any of them, and the object
+// store does not change. A full clone has nothing to fetch lazily.
+func TestGCDryRunDefersAPartialCloneWhenGitCannotStopLazyFetch(t *testing.T) {
+	withoutLazyFetchControl(t)
+	f := newGCFixture(t)
+	partial := f.usePartialClone()
+	f.card(gcTask, "done")
+	f.worktree(gcTask, 1)
+	before := gcGit(t, partial, "count-objects", "-v")
+	plan := f.run(true)
+	if len(plan.Worktrees.Deferred) != 1 || plan.Worktrees.Deferred[0].Reason != config.Text("gc.client_lazy_fetch_deferred") || plan.Worktrees.Count != 0 {
+		t.Fatalf("plan: %+v", plan.Worktrees)
+	}
+	if after := gcGit(t, partial, "count-objects", "-v"); after != before {
+		t.Fatalf("the object store changed:\n%s\n%s", before, after)
+	}
+	full := newGCFixture(t)
+	full.card(gcTask, "done")
+	full.worktree(gcTask, 1)
+	if plan := full.run(true); plan.Worktrees.Count != 1 || len(plan.Worktrees.Deferred) != 0 {
+		t.Fatalf("a full clone is judged as before: %+v", plan.Worktrees)
+	}
+}
+
 // A dry run in a partial clone never fetches a missing object lazily: the
 // worktree is deferred and the object store does not change.
 func TestGCDryRunNeverFetchesLazilyInAPartialClone(t *testing.T) {
 	f := newGCFixture(t)
-	gcGit(t, f.bare, "config", "uploadpack.allowFilter", "true")
-	gcGit(t, f.bare, "config", "uploadpack.allowAnySHA1InWant", "true")
-	partial := filepath.Join(t.TempDir(), "partial")
-	gcGit(t, filepath.Dir(partial), "clone", "--filter=blob:none", "--no-checkout", "file://"+f.bare, partial)
-	gcGit(t, partial, "remote", "set-url", "origin", f.bare)
-	gcGit(t, partial, "checkout", "-q", "-B", "main", f.base)
-	f.repo, f.checkout = partial, partial
+	partial := f.usePartialClone()
 	f.card(gcTask, "done")
 	w := f.worktree(gcTask, 1)
 	tip := f.commit(w, "delivered\n")
@@ -324,18 +366,51 @@ func gcCLI(t *testing.T, home string, project api.Project) (run func(args ...str
 }
 
 // On a host that never ran a client command, a dry run creates no client
-// identity and asks the server nothing.
+// identity or directory and sends only reads; the server part is still
+// planned, because a local server can hold data without a client here.
 func TestGCCommandCreatesNothingOnAnEmptyHome(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "client")
 	run, methods := gcCLI(t, home, api.Project{ID: "p-gcopen", Name: "demo"})
-	code, out, errOut := run("--dry-run", "--client-only")
-	if code != 0 || !strings.Contains(out, config.Text("gc.client_no_home")) || exists(t, home) || len(methods()) != 0 {
-		t.Fatalf("exit %d, requests %v\n%s\n%s", code, methods(), out, errOut)
+	previous := resolveServerGC
+	t.Cleanup(func() { resolveServerGC = previous })
+	planned := 0
+	resolveServerGC = func(context.Context, string) (serverGC, string, error) {
+		return func(_ context.Context, req api.ServerGCRequest) (api.ServerGCReport, error) {
+			planned++
+			return api.ServerGCReport{DryRun: req.DryRun}, nil
+		}, "", nil
 	}
-	code, out, _ = run("--dry-run", "--json")
+	code, out, errOut := run("--dry-run", "--json")
 	var report GCReport
-	if err := json.Unmarshal([]byte(out), &report); err != nil || code != 0 || report.Projects == nil || report.Skipped == "" || exists(t, home) {
-		t.Fatalf("the JSON result has an empty project list and the reason: %d %s", code, out)
+	if err := json.Unmarshal([]byte(out), &report); err != nil || code != 0 || len(report.Projects) != 1 || exists(t, home) || planned != 1 {
+		t.Fatalf("exit %d, planned %d\n%s\n%s", code, planned, out, errOut)
+	}
+	for _, request := range methods() {
+		if !strings.HasPrefix(request, http.MethodGet+" ") || !strings.Contains(request, "/api/v1/") {
+			t.Fatalf("an unidentified plan sends only reads: %v", methods())
+		}
+	}
+}
+
+// Without a client identity the local categories cannot tell this host's
+// claims and credentials: local data of the project is reported and kept,
+// while the evidence refs are still handled through the checkout.
+func TestGCReportsLocalDataItCannotJudgeWithoutAnIdentity(t *testing.T) {
+	f := newGCFixture(t)
+	f.card(gcTask, "done")
+	w := f.worktree(gcTask, 1)
+	ref := api.DeliveryRef(f.s.Info.ID, gcTask, 1, f.base)
+	f.pushEvidence(ref)
+	f.svc.taskScopes[gcTask] = api.EvidenceCleanup{Ready: true, Tasks: []string{gcTask}}
+	before := snapshot(t, f.root)
+	opts := f.options(false)
+	opts.Unidentified = true
+	result := f.s.CollectGarbage(t.Context(), opts)
+	if len(result.Errors) != 1 || !strings.Contains(result.Errors[0], "client-id") || result.EvidenceRefs.Count != 1 || f.remoteHas(ref) {
+		t.Fatalf("result: %+v", result)
+	}
+	if !f.registered(w.Path) || !sameSnapshot(before, snapshot(t, f.root)) {
+		t.Fatal("the local data must stay")
 	}
 }
 
@@ -363,5 +438,35 @@ func TestGCCommandOnlyReadsWhilePlanning(t *testing.T) {
 		if !strings.HasPrefix(request, http.MethodGet+" ") {
 			t.Fatalf("a plan sends only reads: %v", methods())
 		}
+	}
+}
+
+// A failed `git worktree remove` whose worktree directory is gone counts as
+// removed: the branch, the intent and the record go in the same run. A Git
+// wrapper runs the real removal and then reports an error, the way a removal
+// that finished before its process was reaped does.
+func TestGCFinishesARemovalWhoseGitErrorLeftNoDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the Git wrapper is a POSIX shell script")
+	}
+	f := newGCFixture(t)
+	f.card(gcTask, "done")
+	w := f.worktree(gcTask, 1)
+	real, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bin := t.TempDir()
+	script := "#!/bin/sh\n\"" + real + "\" \"$@\"\ncode=$?\ncase \"$*\" in *\"worktree remove\"*) exit 1;; esac\nexit $code\n"
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	result := f.run(false)
+	if result.Worktrees.Count != 1 || result.Incomplete() {
+		t.Fatalf("the removal must count: %+v", result)
+	}
+	if f.registered(w.Path) || f.branchExists(w.Branch) || exists(t, filepath.Join(f.root, "worktree-intents", gcTask, "g1.json")) || exists(t, filepath.Join(f.root, "gc-removals", gcTask, "g1.json")) {
+		t.Fatalf("worktree, branch, intent and record must go: %+v", result)
 	}
 }

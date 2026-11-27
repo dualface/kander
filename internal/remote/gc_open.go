@@ -14,14 +14,17 @@ import (
 	"github.com/dualface/kander/v2/internal/fs"
 )
 
-// errNoClientHome reports a host with no client identity: it never ran a
-// client command, so there is no client data to reclaim.
-var errNoClientHome = errors.New("no client identity")
+// gcUnidentifiedClient is the client identity a gc reads with on a host that
+// has none of its own. It cannot be a generated identity, which is hex after
+// "c-"; it is never stored and only sent with reads.
+const gcUnidentifiedClient = "c-gc-unidentified"
 
 // openGC opens the bound project for `kander gc` without changing anything:
 // it reads the existing client identity instead of creating one, starts no
 // server and no credential worker, and resolves the configured project by
-// name instead of registering it.
+// name instead of registering it. A host without a client identity reads with
+// gcUnidentifiedClient: its common remote and its local server can still
+// hold data to reclaim.
 func openGC(ctx context.Context) (*Session, *config.Config, error) {
 	cfg, err := config.Load(false)
 	if err != nil {
@@ -34,6 +37,9 @@ func openGC(ctx context.Context) (*Session, *config.Config, error) {
 	id, err := existingClientID(home)
 	if err != nil {
 		return nil, nil, err
+	}
+	if id == "" {
+		id = gcUnidentifiedClient
 	}
 	c, err := client.New(config.ServerURL(cfg), id)
 	if err != nil {
@@ -49,15 +55,15 @@ func openGC(ctx context.Context) (*Session, *config.Config, error) {
 	return &Session{ServerURL: config.ServerURL(cfg), Client: c, Project: c.Project(info.ID), Info: info, Home: home}, cfg, nil
 }
 
-// existingClientID reads the client identity of home, or reports
-// errNoClientHome when there is none.
+// existingClientID reads the client identity of home, or "" when there is
+// none.
 func existingClientID(home string) (string, error) {
 	exists, err := fs.DirectoryExists(filepath.Dir(home), home)
 	if err != nil {
 		return "", err
 	}
 	if !exists {
-		return "", errNoClientHome
+		return "", nil
 	}
 	path := filepath.Join(home, "client-id")
 	data, found, err := fs.ReadRegularFileIfExists(home, path)
@@ -65,7 +71,7 @@ func existingClientID(home string) (string, error) {
 		return "", err
 	}
 	if !found {
-		return "", errNoClientHome
+		return "", nil
 	}
 	id := strings.TrimSpace(string(data))
 	if !api.ValidIdentity(id) {
@@ -76,8 +82,8 @@ func existingClientID(home string) (string, error) {
 
 // directoryProjects lists the project IDs of serverURL that the records of
 // one client project directory name: the execution credentials and retained
-// executions below the namespace, and the task branches of its worktree
-// intents. Only an ID whose namespace is the directory's own counts. foreign
+// executions below the namespace, its request-call records, and the task
+// branches of its worktree intents. Only an ID whose namespace is the directory's own counts. foreign
 // says a record names the directory's project on another server.
 func directoryProjects(home, serverURL, namespace string) (projects []string, foreign bool, err error) {
 	found := map[string]bool{}
@@ -104,6 +110,18 @@ func directoryProjects(home, serverURL, namespace string) (projects []string, fo
 		if err != nil {
 			return nil, false, err
 		}
+	}
+	err = eachFile(home, filepath.Join(home, "projects", namespace, "request-calls"), func(data []byte) {
+		var record struct {
+			ServerURL string `json:"server_url"`
+			ProjectID string `json:"project_id"`
+		}
+		if json.Unmarshal(data, &record) == nil {
+			note(record.ServerURL, record.ProjectID)
+		}
+	})
+	if err != nil {
+		return nil, false, err
 	}
 	err = eachRecord(home, filepath.Join(home, "projects", namespace, "worktree-intents"), func(data []byte) {
 		var intent ExecutionWorktree
@@ -134,23 +152,33 @@ func eachRecord(home, dir string, fn func([]byte)) error {
 		return err
 	}
 	for _, task := range tasks {
-		if task.Kind != fs.KindDirectory {
+		if task.Kind == fs.KindDirectory {
+			if err := eachFile(home, filepath.Join(dir, task.Name), fn); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// eachFile calls fn with each JSON file in dir. A missing directory has none.
+func eachFile(home, dir string, fn func([]byte)) error {
+	entries, err := fs.ListDirectory(home, dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.Kind != fs.KindFile || !strings.HasSuffix(entry.Name, ".json") {
 			continue
 		}
-		entries, err := fs.ListDirectory(home, filepath.Join(dir, task.Name))
+		data, err := fs.ReadRegularFile(home, filepath.Join(dir, entry.Name))
 		if err != nil {
 			return err
 		}
-		for _, entry := range entries {
-			if entry.Kind != fs.KindFile || !strings.HasSuffix(entry.Name, ".json") {
-				continue
-			}
-			data, err := fs.ReadRegularFile(home, filepath.Join(dir, task.Name, entry.Name))
-			if err != nil {
-				return err
-			}
-			fn(data)
-		}
+		fn(data)
 	}
 	return nil
 }

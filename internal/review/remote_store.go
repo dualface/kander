@@ -40,19 +40,32 @@ func (s *remoteReviewStore) Lock(id string) (func() error, error) {
 	if !board.ValidReviewID(id) {
 		return nil, archiveError("run identity")
 	}
+	// The stable lock beside the run directory comes first: kander gc takes
+	// it too and removes the run directory, never this file, while it holds
+	// it. A process waiting here therefore finds the directory as the gc left
+	// it, never one whose path another process recreated.
+	stableFile, err := fs.OpenLockFile(s.root, filepath.Join(s.root, id+".lock"))
+	if err != nil {
+		return nil, err
+	}
+	stable, err := fs.LockExclusive(stableFile)
+	if err != nil {
+		return nil, errors.Join(err, stableFile.Close())
+	}
+	releaseStable := func() error { return errors.Join(stable.Unlock(), stableFile.Close()) }
 	dir := filepath.Join(s.root, id)
 	if err := fs.EnsurePrivateDirectory(s.root, dir, true); err != nil {
-		return nil, err
+		return nil, errors.Join(err, releaseStable())
 	}
 	file, err := fs.OpenLockFile(s.root, filepath.Join(dir, "runtime.lock"))
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(err, releaseStable())
 	}
 	lock, err := fs.LockExclusive(file)
 	if err != nil {
-		return nil, errors.Join(err, file.Close())
+		return nil, errors.Join(err, file.Close(), releaseStable())
 	}
-	unlock := func() error { return errors.Join(lock.Unlock(), file.Close()) }
+	unlock := func() error { return errors.Join(lock.Unlock(), file.Close(), releaseStable()) }
 	secretPath := filepath.Join(dir, "writer-secret")
 	data, found, err := fs.ReadRegularFileIfExists(s.root, secretPath)
 	if err == nil && !found {

@@ -5,9 +5,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/fs"
 )
 
@@ -27,6 +30,10 @@ type GCOptions struct {
 	// Checkout is a clone of this project the command runs in, or empty. When
 	// set, its common Git directory must be the one of every worktree.
 	Checkout string
+	// Unidentified says this host has no client identity: the local
+	// categories need it to tell this host's claims and credentials, so they
+	// do not run, and local data of the project is reported as not cleanable.
+	Unidentified bool
 }
 
 // ExecutorProbe classifies each retained execution, in input order, with the
@@ -134,8 +141,46 @@ type gcRun struct {
 func (r *gcRun) fail(err error) { r.report.Errors = append(r.report.Errors, err.Error()) }
 
 // gcNoLazyFetch keeps a Git command from fetching missing objects of a partial
-// clone from its promisor remote, so a dry run writes no object.
+// clone from its promisor remote, so a dry run writes no object. Git honors it
+// from 2.45, the release that added --no-lazy-fetch; an older Git ignores it.
 var gcNoLazyFetch = []string{"GIT_NO_LAZY_FETCH=1"}
+
+// gcLazyFetchControl reports whether this Git can be kept from fetching
+// lazily: it accepts --no-lazy-fetch, the option the variable mirrors. Tests
+// replace it.
+var gcLazyFetchControl = sync.OnceValue(func() bool {
+	_, err := gitCommand(context.Background(), "", "--no-lazy-fetch", "version")
+	return err == nil
+})
+
+// lazyFetchRisk reports whether a dry run's Git probes in repo could fetch
+// missing objects: the repository is a partial clone and this Git cannot be
+// kept from fetching lazily. A configuration that cannot be read counts as a
+// risk.
+func (r *gcRun) lazyFetchRisk(ctx context.Context, repo string, cache *gcRepository) bool {
+	if !r.opts.DryRun || gcLazyFetchControl() {
+		return false
+	}
+	if !cache.lazyChecked {
+		cache.lazyChecked = true
+		listed, err := r.git(ctx, repo, "config", "--list")
+		cache.lazyRisk = err != nil || partialClone(listed)
+	}
+	return cache.lazyRisk
+}
+
+// partialClone reports whether a `git config --list` output names a promisor
+// remote or a partial clone filter.
+func partialClone(listed string) bool {
+	for line := range strings.Lines(listed) {
+		key, value, _ := strings.Cut(strings.TrimSpace(line), "=")
+		key = strings.ToLower(key)
+		if key == "extensions.partialclone" && value != "" || strings.HasPrefix(key, "remote.") && strings.HasSuffix(key, ".promisor") && strings.EqualFold(value, "true") {
+			return true
+		}
+	}
+	return false
+}
 
 // git runs one Git command of the pass; a dry run never fetches lazily.
 func (r *gcRun) git(ctx context.Context, dir string, args ...string) (string, error) {
@@ -155,8 +200,8 @@ func (r *gcRun) ancestor(ctx context.Context, dir, source, target string) (bool,
 }
 
 // CollectGarbage plans (opts.DryRun) or runs the client gc of this project.
-// The local categories need the project's client directory; the evidence refs
-// need only a checkout.
+// The local categories need the project's client directory and this host's
+// client identity; the evidence refs need only a checkout.
 // The worktree category runs before the evidence refs, so a worktree whose
 // branch tip only an evidence ref holds is judged while the ref still exists.
 func (s *Session) CollectGarbage(ctx context.Context, opts GCOptions) GCProject {
@@ -178,7 +223,14 @@ func (s *Session) CollectGarbage(ctx context.Context, opts GCOptions) GCProject 
 	}
 	// Without a client project directory there is no local data, but the
 	// common remote can still hold evidence refs of the project.
-	if exists {
+	switch {
+	case exists && opts.Unidentified:
+		if entries, err := fs.ListDirectory(s.Home, root); err != nil {
+			r.fail(err)
+		} else if len(entries) > 0 {
+			r.fail(errors.New(config.Text("gc.client_no_identity", root)))
+		}
+	case exists:
 		r.collectWorktrees(ctx)
 		r.collectReviewRuntime(ctx)
 		r.collectJournal()

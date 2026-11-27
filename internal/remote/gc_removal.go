@@ -3,6 +3,7 @@ package remote
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -31,8 +32,10 @@ func (r *gcRun) removalPath(task string, generation uint64) string {
 
 // removeWorktree records the removal, removes the registered worktree, then
 // finishes the removal: the task branch, the intent record and the removal
-// record. A failed worktree removal drops the record again, keeps the branch
-// and the intent, and returns false.
+// record. A Git error with the worktree directory gone counts as removed; with
+// the directory still there it drops the record again, keeps the branch and
+// the intent, and returns false; when the directory cannot be checked the
+// record stays for the next run.
 func (r *gcRun) removeWorktree(ctx context.Context, w gcWorktree, repo string, repos map[string]*gcRepository) bool {
 	tip, err := r.git(ctx, repo, "rev-parse", "--verify", "refs/heads/"+w.intent.Branch+"^{commit}")
 	if err != nil {
@@ -50,14 +53,26 @@ func (r *gcRun) removeWorktree(ctx context.Context, w gcWorktree, repo string, r
 		r.report.Worktrees.keep(w.id, err.Error())
 		return false
 	}
-	if _, err := r.git(ctx, repo, "worktree", "remove", w.intent.Path); err != nil {
-		r.report.Worktrees.keep(w.id, err.Error())
-		if _, rmErr := fs.RemoveRegularFileIfExists(r.s.Home, path); rmErr != nil {
-			r.fail(rmErr)
-		}
-		return false
-	}
 	repos[repo].pruned = true
+	if _, err := r.git(ctx, repo, "worktree", "remove", w.intent.Path); err != nil {
+		// A Git error does not prove the worktree is still there: the removal
+		// may have finished before the process was reaped. Look again under the
+		// same lock; when that cannot settle it, the record stays and the next
+		// run looks under the generation's lock.
+		exists, statErr := fs.DirectoryExists(r.s.Home, w.intent.Path)
+		switch {
+		case statErr == nil && !exists:
+		case statErr == nil:
+			r.report.Worktrees.keep(w.id, err.Error())
+			if _, rmErr := fs.RemoveRegularFileIfExists(r.s.Home, path); rmErr != nil {
+				r.fail(rmErr)
+			}
+			return false
+		default:
+			r.report.Worktrees.keep(w.id, errors.Join(err, statErr).Error())
+			return false
+		}
+	}
 	r.finishRemoval(ctx, w.task, record, path)
 	return true
 }

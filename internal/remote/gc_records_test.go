@@ -123,6 +123,54 @@ func TestGCReviewRuntimeDecidesUnderTheRuntimeLock(t *testing.T) {
 	}
 }
 
+// A reviewer that waits on the run's stable lock while the gc removes the run
+// directory gets that same lock file afterwards: the gc never removes it.
+func TestGCReviewRuntimeKeepsTheStableLockAReviewerWaitsOn(t *testing.T) {
+	f := newGCFixture(t)
+	dir := f.runtimeDir("run-gone", false)
+	stable := dir + ".lock"
+	type acquired struct {
+		same bool
+		err  error
+	}
+	done := make(chan acquired, 1)
+	f.svc.onRun = func(string) {
+		go func() {
+			file, err := kfs.OpenLockFile(f.s.Home, stable)
+			if err != nil {
+				done <- acquired{err: err}
+				return
+			}
+			defer file.Close()
+			lock, err := kfs.LockExclusive(file)
+			if err != nil {
+				done <- acquired{err: err}
+				return
+			}
+			defer lock.Unlock()
+			held, err := file.Stat()
+			if err != nil {
+				done <- acquired{err: err}
+				return
+			}
+			current, err := os.Stat(stable)
+			done <- acquired{same: err == nil && os.SameFile(held, current), err: err}
+		}()
+	}
+	if result := f.run(false); result.ReviewRuntime.Count != 1 || exists(t, dir) {
+		t.Fatalf("result: %+v", result.ReviewRuntime)
+	}
+	got := <-done
+	if got.err != nil || !got.same {
+		t.Fatalf("the waiting reviewer must hold the lock file that is still at its path: %+v", got)
+	}
+	f.holdLock(stable)
+	f.runtimeDir("run-gone", false)
+	if result := f.run(false); keptReason(result.ReviewRuntime, "run-gone") != config.Text("gc.client_locked", stable) || !exists(t, dir) {
+		t.Fatalf("a held stable lock keeps the run: %+v", result.ReviewRuntime)
+	}
+}
+
 func TestGCReviewRuntimeStaysWhenTheServerFails(t *testing.T) {
 	f := newGCFixture(t)
 	dir := f.runtimeDir("run-final", false)

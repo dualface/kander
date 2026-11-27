@@ -42,12 +42,27 @@ func (r *gcRun) collectReviewRuntime(ctx context.Context) {
 	}
 }
 
-// collectRuntime decides on one run directory and removes it, all under its
-// runtime lock: a reviewer takes the same lock before it prepares, finalizes
-// or publishes the run, so the pending record and the server state read here
-// cannot change before the removal. The lock file goes last, after the lock
-// is released, so the removal also works where an open file cannot be deleted.
+// collectRuntime decides on one run directory and removes it, all under the
+// run's stable lock and its runtime lock: a reviewer takes both before it
+// prepares, finalizes or publishes the run, so the pending record and the
+// server state read here cannot change before the removal. The runtime lock
+// file goes last, after that lock is released, so the removal also works
+// where an open file cannot be deleted; the stable lock file stays.
 func (r *gcRun) collectRuntime(ctx context.Context, id, dir string) {
+	// The stable lock beside the directory first, the one a reviewer takes
+	// before the run's own runtime.lock; it is never removed, so a reviewer
+	// waiting on it cannot end up holding a lock of a removed directory.
+	stablePath := dir + ".lock"
+	releaseStable, held, err := r.tryLock(stablePath)
+	if err != nil {
+		r.report.ReviewRuntime.keep(id, err.Error())
+		return
+	}
+	if !held {
+		r.report.ReviewRuntime.keep(id, config.Text("gc.client_locked", stablePath))
+		return
+	}
+	defer r.releaseLock(releaseStable)
 	lockPath := filepath.Join(dir, "runtime.lock")
 	release, held, err := r.tryLock(lockPath)
 	if err != nil {

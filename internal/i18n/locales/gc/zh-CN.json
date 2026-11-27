@@ -25,7 +25,7 @@
   "gc.data_mismatch": "{{.V0}} 上的服务端使用的数据目录是 {{.V1}}，不是 {{.V2}}。",
   "gc.unsupported": "{{.V0}} 上的服务端不支持 server gc；请用当前版本的 kander 重启它。",
   "gc.client_requires_yes": "kander gc 不在终端中运行或带 --json 时，必须带 --yes 或 --dry-run。",
-  "gc.client_project_line": "项目 {{.V0}}：worktree {{.V1}} 个（{{.V2}}）；任务分支 {{.V3}} 个；review 运行时 {{.V4}} 个（{{.V5}}）；journal 记录 {{.V6}} 条（{{.V7}}）；证据 ref {{.V8}} 个；过期跟踪 ref {{.V9}} 个",
+  "gc.client_project_line": "项目 {{.V0}}：worktree {{.V1}} 个（{{.V2}}）；任务分支 {{.V3}} 个（{{.V4}}）；review 运行时 {{.V5}} 个（{{.V6}}）；journal 记录 {{.V7}} 条（{{.V8}}）；证据 ref {{.V9}} 个（{{.V10}}）；过期跟踪 ref {{.V11}} 个（{{.V12}}）",
   "gc.client_kept_worktree": "  保留 worktree {{.V0}}：{{.V1}}",
   "gc.client_kept_branch": "  保留任务分支 {{.V0}}：{{.V1}}",
   "gc.client_kept_runtime": "  保留 review 运行时 {{.V0}}：{{.V1}}",
@@ -64,7 +64,8 @@
   "gc.client_branch_moved": "worktree 删除后该分支已从 {{.V0}} 移到 {{.V1}}",
   "gc.client_removal_damaged": "删除记录 {{.V0}} 已损坏，请人工检查",
   "gc.client_directory_unidentified": "目录中没有记录指明绑定 server 上的项目",
-  "gc.client_no_home": "本机没有 client 目录，没有可回收的 client 数据",
   "gc.client_kept_tracking": "  保留跟踪 ref {{.V0}}：{{.V1}}",
-  "gc.client_unverified": "未能确认所属项目的 client 项目目录（未修改）："
+  "gc.client_unverified": "未能确认所属项目的 client 项目目录（未修改）：",
+  "gc.client_no_identity": "{{.V0}} 中有该项目的数据，但本机没有 client 身份（client-id），无法区分本机的认领与凭据，因此不清理",
+  "gc.client_lazy_fetch_deferred": "此 Git 无法禁止在该部分克隆中按需拉取缺失对象（需要 Git 2.45 或更高版本），dry run 不对其做探测；执行时在 fetch 后判定"
 }

@@ -25,7 +25,7 @@
   "gc.data_mismatch": "The server at {{.V0}} serves {{.V1}}, not {{.V2}}.",
   "gc.unsupported": "The server at {{.V0}} does not support server gc; restart it with this kander version.",
   "gc.client_requires_yes": "kander gc needs --yes or --dry-run when it does not run in a terminal or when --json is given.",
-  "gc.client_project_line": "project {{.V0}}: worktrees {{.V1}} ({{.V2}}); task branches {{.V3}}; review runtime {{.V4}} ({{.V5}}); journal records {{.V6}} ({{.V7}}); evidence refs {{.V8}}; stale tracking refs {{.V9}}",
+  "gc.client_project_line": "project {{.V0}}: worktrees {{.V1}} ({{.V2}}); task branches {{.V3}} ({{.V4}}); review runtime {{.V5}} ({{.V6}}); journal records {{.V7}} ({{.V8}}); evidence refs {{.V9}} ({{.V10}}); stale tracking refs {{.V11}} ({{.V12}})",
   "gc.client_kept_worktree": "  kept worktree {{.V0}}: {{.V1}}",
   "gc.client_kept_branch": "  kept task branch {{.V0}}: {{.V1}}",
   "gc.client_kept_runtime": "  kept review runtime {{.V0}}: {{.V1}}",
@@ -64,7 +64,8 @@
   "gc.client_branch_moved": "the branch moved from {{.V0}} to {{.V1}} after its worktree was removed",
   "gc.client_removal_damaged": "the removal record {{.V0}} is damaged; check it by hand",
   "gc.client_directory_unidentified": "no record in the directory names a project of the bound server",
-  "gc.client_no_home": "this host has no client directory, so there is no client data to reclaim",
   "gc.client_kept_tracking": "  kept tracking ref {{.V0}}: {{.V1}}",
-  "gc.client_unverified": "client project directories whose project could not be confirmed (not changed):"
+  "gc.client_unverified": "client project directories whose project could not be confirmed (not changed):",
+  "gc.client_no_identity": "{{.V0}} holds data of this project, but this host has no client identity (client-id), so its claims and credentials cannot be told apart; it is not cleaned",
+  "gc.client_lazy_fetch_deferred": "this Git cannot be kept from fetching missing objects of this partial clone (it needs Git 2.45 or later), so a dry run does not probe it; the run decides after its fetch"
 }

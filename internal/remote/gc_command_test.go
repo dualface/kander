@@ -358,3 +358,73 @@ func TestGCCommandStopsAtAnInterruptDuringThePrompt(t *testing.T) {
 type writerFunc func([]byte) (int, error)
 
 func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
+
+// A project that only sent collaboration requests from here is matched by its
+// request-call records, and one whose directory holds no record at all by the
+// administration's server gc plan.
+func TestGCCommandAllProjectsMatchesRequestCallsAndThePlan(t *testing.T) {
+	f := newGCFixture(t)
+	requester := api.Project{ID: api.ProjectID("requester"), Name: "requester"}
+	planned := api.Project{ID: api.ProjectID("planned"), Name: "planned"}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/api/v1/projects" && r.URL.Query().Get("name") == planned.Name:
+			_ = json.NewEncoder(w).Encode(planned)
+		case r.URL.Path == "/api/v1/projects/"+requester.ID:
+			_ = json.NewEncoder(w).Encode(requester)
+		case r.URL.Path == "/api/v1/projects/"+planned.ID:
+			_ = json.NewEncoder(w).Encode(planned)
+		case strings.HasSuffix(r.URL.Path, "/tasks"):
+			_ = json.NewEncoder(w).Encode(api.TaskList{})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(api.Error{Code: api.CodeNotFound, Message: r.URL.Path})
+		}
+	}))
+	t.Cleanup(server.Close)
+	cl, err := client.New(server.URL, "c-gc-host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cl.Retries = 0
+	if err := os.Remove(f.root); err != nil {
+		t.Fatal(err)
+	}
+	f.s.ServerURL, f.s.Client = server.URL, cl
+	if f.root, err = f.s.LocalDataRoot(); err != nil {
+		t.Fatal(err)
+	}
+	call, _ := json.Marshal(requestCall{Schema: 1, ServerURL: server.URL, ProjectID: requester.ID, TaskID: gcTask, Phase: "complete"})
+	f.write(filepath.Join(f.s.Home, "projects", projectNamespace(server.URL, requester.ID), "request-calls"), "a.json", string(call))
+	f.write(filepath.Join(f.s.Home, "projects", projectNamespace(server.URL, planned.ID), "launch-actions"), "a.json", `{"schema":1,"phase":"complete","task_id":"`+gcTask+`"}`)
+	c := &gcCommand{f: f, server: func(_ context.Context, req api.ServerGCRequest) (api.ServerGCReport, error) {
+		return api.ServerGCReport{DryRun: req.DryRun, Projects: []api.ServerGCProject{{Name: "demo"}, {Name: planned.Name}}}, nil
+	}}
+	code, out, errOut := c.run(t, "--json", "--dry-run", "--all-projects")
+	var report GCReport
+	if err := json.Unmarshal([]byte(out), &report); err != nil || code != 0 {
+		t.Fatalf("exit %d: %s %s", code, out, errOut)
+	}
+	var names []string
+	for _, project := range report.Projects {
+		names = append(names, project.Name)
+	}
+	slices.Sort(names)
+	if !slices.Equal(names, []string{"demo", "planned", "requester"}) || len(report.Unmatched)+len(report.Unverified) != 0 {
+		t.Fatalf("both directories are matched: %s", out)
+	}
+}
+
+// The text plan gives every category its bytes, 0 B for the ref categories.
+func TestGCCommandTextPlanShowsTheBytesOfEveryCategory(t *testing.T) {
+	f, _ := removable(t)
+	c := &gcCommand{f: f, skipped: "remote"}
+	code, out, _ := c.run(t, "--dry-run")
+	line := config.Text("gc.client_project_line", "demo", 1, "X", 1, command.FormatBytes(0), 0, command.FormatBytes(0), 0, command.FormatBytes(0), 0, command.FormatBytes(0), 0, command.FormatBytes(0))
+	prefix, _, _ := strings.Cut(line, "X")
+	suffix := line[strings.Index(line, "X")+1:]
+	if code != 0 || !strings.Contains(out, prefix) || !strings.Contains(out, suffix) || strings.Contains(out, "{{") {
+		t.Fatalf("the line must carry every byte count:\n%s", out)
+	}
+}

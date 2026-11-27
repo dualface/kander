@@ -28,6 +28,10 @@ type gcRepository struct {
 	// remote, or nil once it was verified; checked says it was looked at.
 	origin  error
 	checked bool
+	// lazyRisk says a dry run's probes could fetch objects lazily here;
+	// lazyChecked says it was looked at.
+	lazyRisk    bool
+	lazyChecked bool
 }
 
 // gcTarget is the remote integration target of one repository: the commit
@@ -273,6 +277,9 @@ func (r *gcRun) judgeWorktree(ctx context.Context, w gcWorktree, repos map[strin
 	}
 	if r.repository == "" {
 		r.repository = repo
+	}
+	if r.lazyFetchRisk(ctx, repo, repos[repo]) {
+		return config.Text("gc.client_lazy_fetch_deferred"), true, repo
 	}
 	status, err := r.git(ctx, w.intent.Path, "--no-optional-locks", "status", "--porcelain", "--untracked-files=all")
 	if err != nil {
