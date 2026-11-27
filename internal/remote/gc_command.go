@@ -276,9 +276,9 @@ func (g *clientGC) callServer(ctx context.Context, report *GCReport, dryRun bool
 }
 
 // selectProjects adds, with --all-projects, every client project directory of
-// this host whose project the bound server confirms. The directory's own
-// records name its project ID, and a read of that project, which the server's
-// access control governs, confirms it. A directory whose records name no
+// this host whose project the bound server confirms. The directory's identity
+// marker and its own records name its project ID, and a read of that project,
+// which the server's access control governs, confirms it. A directory whose records name no
 // project matches a project of the administration's server gc plan, when
 // there is one, whose ID gives the directory's namespace. A directory whose records name a
 // project of another server, or a project the bound server does not have, is

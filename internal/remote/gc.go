@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -163,23 +164,51 @@ func (r *gcRun) lazyFetchRisk(ctx context.Context, repo string, cache *gcReposit
 	}
 	if !cache.lazyChecked {
 		cache.lazyChecked = true
-		listed, err := r.git(ctx, repo, "config", "--list")
+		listed, err := r.git(ctx, repo, "config", "--list", "-z")
 		cache.lazyRisk = err != nil || partialClone(listed)
 	}
 	return cache.lazyRisk
 }
 
-// partialClone reports whether a `git config --list` output names a promisor
-// remote or a partial clone filter.
+// partialClone reports whether a `git config --list -z` output names a partial
+// clone filter or a promisor remote. A promisor value counts unless Git reads
+// it as false, so a value Git would not accept counts as a risk too. The NUL
+// separated form keeps each value exactly, surrounding white space included,
+// which Git does not accept in a boolean; an entry without a newline is a key
+// without a value.
 func partialClone(listed string) bool {
-	for line := range strings.Lines(listed) {
-		key, value, _ := strings.Cut(strings.TrimSpace(line), "=")
-		key = strings.ToLower(key)
-		if key == "extensions.partialclone" && value != "" || strings.HasPrefix(key, "remote.") && strings.HasSuffix(key, ".promisor") && strings.EqualFold(value, "true") {
+	for entry := range strings.SplitSeq(listed, "\x00") {
+		key, value, set := strings.Cut(entry, "\n")
+		key = strings.ToLower(strings.TrimSpace(key))
+		if key == "extensions.partialclone" && strings.TrimSpace(value) != "" || strings.HasPrefix(key, "remote.") && strings.HasSuffix(key, ".promisor") && !gitFalse(value, set) {
 			return true
 		}
 	}
 	return false
+}
+
+// gitFalse reports whether Git reads a boolean configuration value as false:
+// "false", "no" or "off" in any case, the empty value, or an integer that is
+// zero, in the decimal, octal or hexadecimal form with the optional leading
+// white space, sign and k, m or g unit Git accepts. A key without a value
+// (set false) is true for Git.
+func gitFalse(value string, set bool) bool {
+	if !set {
+		return false
+	}
+	switch strings.ToLower(value) {
+	case "", "false", "no", "off":
+		return true
+	}
+	digits := strings.TrimLeft(value, " \t\n\v\f\r")
+	digits = strings.TrimPrefix(strings.TrimPrefix(digits, "+"), "-")
+	if len(digits) > 0 && strings.ContainsRune("kKmMgG", rune(digits[len(digits)-1])) {
+		digits = digits[:len(digits)-1]
+	}
+	if hex, ok := strings.CutPrefix(strings.ToLower(digits), "0x"); ok {
+		digits = hex
+	}
+	return digits != "" && strings.Trim(digits, "0") == ""
 }
 
 // git runs one Git command of the pass; a dry run never fetches lazily.
@@ -225,19 +254,58 @@ func (s *Session) CollectGarbage(ctx context.Context, opts GCOptions) GCProject 
 	// common remote can still hold evidence refs of the project.
 	switch {
 	case exists && opts.Unidentified:
+		// The identity marker alone is no data of the project.
 		if entries, err := fs.ListDirectory(s.Home, root); err != nil {
 			r.fail(err)
-		} else if len(entries) > 0 {
+		} else if slices.ContainsFunc(entries, func(entry fs.DirEntry) bool { return entry.Kind != fs.KindFile || entry.Name != projectIdentityName }) {
 			r.fail(errors.New(config.Text("gc.client_no_identity", root)))
 		}
 	case exists:
-		r.collectWorktrees(ctx)
-		r.collectReviewRuntime(ctx)
-		r.collectJournal()
+		r.collectLocal(ctx)
 	}
 	r.collectEvidenceRefs(ctx)
 	report.work = r.work
 	return report
+}
+
+// collectLocal runs the categories of the project's client directory. A run
+// first gives a directory created before identity markers its marker: the
+// records that named its project for `kander gc --all-projects` may be the
+// ones this run removes. When the marker cannot be written, or an existing one
+// does not name this project, nothing below the directory is removed and the
+// marker is left as it is; a dry run checks an existing marker the same way,
+// so the plan matches the run. Every session the gc runs for names a project
+// the bound server confirmed.
+func (r *gcRun) collectLocal(ctx context.Context) {
+	if err := r.checkIdentity(); err != nil {
+		r.fail(err)
+		return
+	}
+	r.collectWorktrees(ctx)
+	r.collectReviewRuntime(ctx)
+	r.collectJournal()
+}
+
+// checkIdentity checks that the identity marker of the project's client
+// directory names this project. A run first writes a missing marker; a dry run
+// writes nothing and passes a missing marker, which the run will write.
+func (r *gcRun) checkIdentity() error {
+	path := filepath.Join(r.root, projectIdentityName)
+	if !r.opts.DryRun {
+		if err := writeProjectIdentity(r.s.Home, r.root, r.s.ServerURL, r.s.Info.ID); err != nil {
+			return err
+		}
+	} else if found, err := fs.RegularFileExists(r.s.Home, path); err != nil || !found {
+		return err
+	}
+	identity, valid, err := readProjectIdentity(r.s.Home, r.root)
+	if err != nil {
+		return err
+	}
+	if !valid || identity.ServerURL != r.s.ServerURL || identity.ProjectID != r.s.Info.ID {
+		return errors.New(config.Text("gc.client_identity_mismatch", path))
+	}
+	return nil
 }
 
 // terminalTask returns the list row of a card in a terminal state.

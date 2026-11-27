@@ -67,5 +67,8 @@
   "gc.client_kept_tracking": "  追跡 ref {{.V0}} を保持: {{.V1}}",
   "gc.client_unverified": "所属プロジェクトを確認できない client プロジェクトディレクトリ（変更しません）:",
   "gc.client_no_identity": "{{.V0}} にこのプロジェクトのデータがありますが、このホストには client 識別子（client-id）がないため、自ホストの claim と資格情報を区別できません。クリーンアップしません",
-  "gc.client_lazy_fetch_deferred": "この Git では、この部分クローンで不足オブジェクトの遅延取得を止められません（Git 2.45 以降が必要）。dry run では調べず、実行時の fetch 後に判定します"
+  "gc.client_lazy_fetch_deferred": "この Git では、この部分クローンで不足オブジェクトの遅延取得を止められません（Git 2.45 以降が必要）。dry run では調べず、実行時の fetch 後に判定します",
+  "gc.client_still_registered": "worktree ディレクトリ {{.V0}} はありませんが、Git はまだこの worktree を登録しています。ブランチ、intent、削除記録は次回まで残します",
+  "gc.client_registration_unknown": "worktree ディレクトリ {{.V0}} はありませんが、Git がまだ登録しているか確認できません。ブランチ、intent、削除記録は次回まで残します: {{.V1}}",
+  "gc.client_identity_mismatch": "識別マーカー {{.V0}} はこのプロジェクトを示していません。手動で確認するまで、そのディレクトリ内は何もクリーンアップしません"
 }
