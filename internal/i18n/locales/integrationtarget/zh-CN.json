@@ -5,5 +5,8 @@
   "launch.integration_preflight_path": "预检请求文件必须使用绝对路径",
   "launch.integration_preflight_git": "必须提供 wrap_up.git",
   "launch.integration_preflight_cwd": "集成检出目录必须使用绝对路径",
-  "launch.integration_preflight_range": "候选范围与封闭的审核计划不同"
+  "launch.integration_preflight_range": "候选范围与封闭的审核计划不同",
+  "launch.start_base_group_invalid": "TASK_GROUP 的值 {{.V0}} 非法：任务组 ID 的格式为 YYYYMMDD-<slug>-group",
+  "launch.start_base_main_in_develop_mode": "git.branch_mode 为 main-develop 时 INTEGRATION_TARGET 不能是 main：main 只从 develop 前进。请删除该字段或改为其他分支后重试。",
+  "remote.start_branch_missing": "起点分支 {{.V0}} 在登记的远端上不存在；Kander 不会回退到其他分支。请推送该分支，或修正 INTEGRATION_TARGET 或 git.branch_mode 后重试。"
 }
