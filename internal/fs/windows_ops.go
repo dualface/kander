@@ -392,6 +392,20 @@ func listNames(handle windows.Handle, path string, remaining int) ([]string, err
 }
 
 func ListDirectory(root, path string) ([]DirEntry, error) {
+	return listDirectory(root, path, false)
+}
+
+// ListDirectoryWithLinks reports any reparse point member (symlink, junction and the like) as KindLink instead of
+// failing the whole listing. Members are probed for attributes only and opened without following reparse points.
+func ListDirectoryWithLinks(root, path string) ([]DirEntry, error) {
+	return listDirectory(root, path, true)
+}
+
+func listDirectory(root, path string, reportLinks bool) ([]DirEntry, error) {
+	probeKind := kindAny
+	if reportLinks {
+		probeKind = kindAnyWithReparse
+	}
 	candidate, handle, cleanup, err := openChain(root, path, windows.FILE_LIST_DIRECTORY|windows.FILE_READ_ATTRIBUTES, kindDirectory)
 	if err != nil {
 		return nil, err
@@ -404,7 +418,7 @@ func ListDirectory(root, path string) ([]DirEntry, error) {
 	entries := make([]DirEntry, 0, len(names))
 	for _, name := range names {
 		child := filepath.Join(candidate, name)
-		h, err := tryOpenLeaf(handle, name, child, windows.FILE_READ_ATTRIBUTES, kindAny, true, false)
+		h, err := tryOpenLeaf(handle, name, child, windows.FILE_READ_ATTRIBUTES, probeKind, true, false)
 		if err != nil {
 			if isMissingWin(err) || isNotExist(err) {
 				continue
@@ -420,7 +434,9 @@ func ListDirectory(root, path string) ([]DirEntry, error) {
 			return nil, err
 		}
 		kind := KindFile
-		if info.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY != 0 {
+		if info.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+			kind = KindLink
+		} else if info.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY != 0 {
 			kind = KindDirectory
 		}
 		entries = append(entries, DirEntry{Name: name, Kind: kind})
