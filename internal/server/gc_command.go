@@ -283,7 +283,7 @@ func printGCReport(w io.Writer, r api.ServerGCReport) {
 	}
 	fmt.Fprintln(w, config.Text(header))
 	for _, p := range r.Projects {
-		fmt.Fprintln(w, config.Text("gc.project_line", p.Name, p.Compaction.Runs, p.Compaction.Files, formatBytes(p.Compaction.Bytes), p.Receipts.Files, formatBytes(p.Receipts.Bytes)))
+		fmt.Fprintln(w, config.Text("gc.project_line", p.Name, p.Compaction.Runs, p.Compaction.Files, command.FormatBytes(p.Compaction.Bytes), p.Receipts.Files, command.FormatBytes(p.Receipts.Bytes)))
 		for _, kept := range p.Compaction.Kept {
 			fmt.Fprintln(w, config.Text("gc.kept_run", kept.ID, oneLine(kept.Reason)))
 		}
@@ -298,13 +298,13 @@ func printGCReport(w io.Writer, r api.ServerGCReport) {
 		}
 	}
 	if r.Log != nil {
-		fmt.Fprintln(w, config.Text("gc.log_line", r.Log.Path, formatBytes(r.Log.Size), formatBytes(r.Log.Bytes)))
+		fmt.Fprintln(w, config.Text("gc.log_line", r.Log.Path, command.FormatBytes(r.Log.Size), command.FormatBytes(r.Log.Bytes)))
 		if r.Log.Recovered > 0 {
 			key := "gc.log_recovered"
 			if r.DryRun {
 				key = "gc.log_recover"
 			}
-			fmt.Fprintln(w, config.Text(key, formatBytes(r.Log.Recovered)))
+			fmt.Fprintln(w, config.Text(key, command.FormatBytes(r.Log.Recovered)))
 		}
 		if r.Log.Kept != "" {
 			fmt.Fprintln(w, config.Text("gc.kept_log", oneLine(r.Log.Kept)))
@@ -320,22 +320,6 @@ func printGCReport(w io.Writer, r api.ServerGCReport) {
 
 // oneLine keeps a server-provided reason on one visible line.
 func oneLine(text string) string { return command.Escape(strings.TrimSpace(text)) }
-
-// formatBytes renders a size with a binary unit.
-func formatBytes(n int64) string {
-	const unit = 1024
-	if n < unit {
-		return fmt.Sprintf("%d B", n)
-	}
-	value, suffix := float64(n), "B"
-	for _, s := range []string{"KiB", "MiB", "GiB", "TiB"} {
-		if value < unit {
-			break
-		}
-		value, suffix = value/unit, s
-	}
-	return fmt.Sprintf("%.1f %s", value, suffix)
-}
 
 // askGC asks y/N on stderr; anything but y or yes, including EOF, is no. An
 // interrupt while it waits is no as well: the read is left behind, and the

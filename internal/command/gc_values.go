@@ -1,6 +1,7 @@
 package command
 
 import (
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -65,4 +66,20 @@ func ParseByteSize(flag, raw string) (int64, error) {
 		return 0, Usage("gc.invalid_size", "--"+flag, Escape(raw))
 	}
 	return n << shift, nil
+}
+
+// FormatBytes renders a size with a binary unit, as the gc commands print it.
+func FormatBytes(n int64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	value, suffix := float64(n), "B"
+	for _, s := range []string{"KiB", "MiB", "GiB", "TiB"} {
+		if value < unit {
+			break
+		}
+		value, suffix = value/unit, s
+	}
+	return fmt.Sprintf("%.1f %s", value, suffix)
 }

@@ -83,3 +83,10 @@ func GC(ctx context.Context, info api.ServerInfo, req api.ServerGCRequest) (api.
 	}
 	return report, err
 }
+
+// CheckAdminToken reports whether this user can read the administration token
+// of the data directory a local server reported, the way stop and gc read it.
+func CheckAdminToken(dataDir string) error {
+	_, err := adminToken(dataDir)
+	return err
+}
