@@ -119,7 +119,7 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 	if err = requireNoPendingOperations(root, warnings); err != nil {
 		return report, err
 	}
-	plan, err := planPrune(root, &report)
+	plan, err := planPrune(root, &report, nil)
 	if err != nil {
 		return report, err
 	}
@@ -136,6 +136,30 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 			failures = append(failures, e)
 		}
 	}
+	// Compaction receipts go before anything else. The prune receipt already
+	// covers their runs, so an interruption leaves no receipt without a run. A
+	// receipt that cannot be removed keeps its run, and planning again keeps
+	// what that run reads: its batch, its plan and its predecessors. The next
+	// round removes both.
+	stuck := map[string]bool{}
+	for _, id := range sortedKeys(plan.runs) {
+		failed := len(failures)
+		remove(compactionReceiptPath(root, id), false)
+		if len(failures) > failed {
+			stuck[id] = true
+		}
+	}
+	if len(stuck) > 0 {
+		if err = plan.runLocks.close(); err != nil {
+			return report, errors.Join(append(failures, err)...)
+		}
+		var replanned PruneReport
+		next, e := planPrune(root, &replanned, stuck)
+		if e != nil {
+			return report, errors.Join(append(failures, e)...)
+		}
+		plan, report.Warnings = next, replanned.Warnings
+	}
 	for _, path := range plan.copies {
 		remove(path, true)
 	}
@@ -149,15 +173,6 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 		return control(root, append([]string{"groups", reviewControlGroup}, parts...)...)
 	}
 	for _, id := range sortedKeys(plan.runs) {
-		// The prune receipt already covers the run, and a receipt removed first
-		// is never left behind by an interruption with no run to name it. A
-		// receipt that cannot be removed keeps its run, so the next round,
-		// which plans from the runs that exist, removes both.
-		failed := len(failures)
-		remove(compactionReceiptPath(root, id), false)
-		if len(failures) > failed {
-			continue
-		}
 		remove(review("runs", id), true)
 	}
 	for _, id := range sortedKeys(plan.batches) {
@@ -220,7 +235,9 @@ func requireNoPendingOperations(root string, warnings *WarningLog) error {
 
 // planPrune decides every deletion from records whose IDs pass validation;
 // anything it cannot read or validate is kept and reported as a warning.
-func planPrune(root string, report *PruneReport) (*prunePlan, error) {
+// keep names runs that must stay whatever their state; their dependencies are
+// kept with them.
+func planPrune(root string, report *PruneReport, keep map[string]bool) (*prunePlan, error) {
 	b, err := scan(root)
 	if err != nil {
 		return nil, err
@@ -316,7 +333,7 @@ func planPrune(root string, report *PruneReport) (*prunePlan, error) {
 		_, hasBatch := batches[v.BatchID]
 		// Unfinished runs of final cards can never complete, so they go too,
 		// unless a review gate still holds the run's execution lock.
-		plan.runs[id] = allSettled(v.TaskIDs) && (!hasBatch || plan.batches[v.BatchID])
+		plan.runs[id] = !keep[id] && allSettled(v.TaskIDs) && (!hasBatch || plan.batches[v.BatchID])
 	}
 	for _, id := range sortedKeys(plan.runs) {
 		if !plan.runs[id] {

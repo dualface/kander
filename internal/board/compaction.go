@@ -264,22 +264,27 @@ func executeCompaction(ctx context.Context, root string, options CompactionOptio
 	if err := interrupt("receipts"); err != nil {
 		return err
 	}
+	// removed holds the runs with at least one completed removal: a file, or a
+	// tree down to its emptied directory. A run whose removals all failed is
+	// only skipped.
 	removed := map[string]*CompactedRun{}
 	failed := map[string][]string{}
 	var failures []error
 	remove := func(c *compactionCandidate, cards bool) {
-		r := removed[c.run.RunID]
-		if r == nil {
-			r = &CompactedRun{RunID: c.run.RunID}
-			removed[c.run.RunID] = r
-		}
 		for _, target := range c.targets {
 			if strings.HasPrefix(target.location, compactedCardPre) != cards {
 				continue
 			}
 			files, bytes, err := removePath(root, target.path, target.tree)
-			r.Files += files
-			r.Bytes += bytes
+			if err == nil || files > 0 {
+				r := removed[c.run.RunID]
+				if r == nil {
+					r = &CompactedRun{RunID: c.run.RunID}
+					removed[c.run.RunID] = r
+				}
+				r.Files += files
+				r.Bytes += bytes
+			}
 			if err != nil {
 				failures = append(failures, err)
 				failed[c.run.RunID] = append(failed[c.run.RunID], err.Error())
@@ -289,8 +294,9 @@ func executeCompaction(ctx context.Context, root string, options CompactionOptio
 	finish := func() {
 		for _, c := range runs {
 			id := c.run.RunID
-			// A run counts once it was processed, even when only an emptied
-			// directory was left from an interrupted round, as a dry run counts it.
+			// A run counts once a removal of it completed, even when only an
+			// emptied directory was left from an interrupted round, as a dry run
+			// counts it.
 			if r := removed[id]; r != nil {
 				addCompactedRun(report, *r)
 			}
@@ -650,8 +656,16 @@ func compactionTargets(root string, run ReviewRun, entries map[string]Entry, war
 			return
 		}
 		for _, entry := range list {
-			if !slices.Contains(known, entry.Name) {
+			want := fs.KindFile
+			if entry.Name == "dispositions" {
+				want = fs.KindDirectory
+			}
+			switch {
+			case !slices.Contains(known, entry.Name):
 				warn(filepath.Join(dir, entry.Name), reviewError("unknown review evidence entry; kept"))
+			case entry.Kind != want:
+				// A link or special file under a known name is kept and reported too.
+				warn(filepath.Join(dir, entry.Name), reviewError("review evidence entry of an unexpected type; kept"))
 			}
 		}
 	}

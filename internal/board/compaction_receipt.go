@@ -149,7 +149,8 @@ func ReviewRunCompacted(root, id string) (compacted bool, err error) {
 		if e != nil || !exists {
 			return e
 		}
-		_, compacted, e = runCompaction(root, id, run.TaskIDs)
+		_, receipt, e := runCompaction(root, id, run.TaskIDs)
+		compacted = receipt && e == nil
 		return e
 	})
 	return

@@ -2,15 +2,17 @@ package board
 
 import (
 	"fmt"
-	"slices"
+	"strings"
+
+	"github.com/dualface/kander/v2/internal/fs"
 )
 
 // ReadReviewInput reads the frozen input even after a crash before finalization.
 func ReadReviewInput(root, id, name string) (data []byte, err error) {
 	frozen := name == "task-context.md" || name == "review-context.md"
-	// Only the frozen contexts are readable. Another stored input is named only
-	// to say that a compaction removed it.
-	if !ValidReviewID(id) || !frozen && !slices.Contains(reviewArtifactNames, name) {
+	// Only the frozen contexts are readable. Any other single file name below
+	// inputs/ is named only to say that a compaction removed it.
+	if !ValidReviewID(id) || !frozen && !safeInputName(name) {
 		return nil, reviewError("review input name")
 	}
 	err = WithTransaction(root, reviewScope(nil, true), func(tx *Transaction) error {
@@ -27,9 +29,20 @@ func ReadReviewInput(root, id, name string) (data []byte, err error) {
 			if e != nil {
 				return e
 			}
-			if _, present, e := tx.ReadGroup(reviewControlGroup, "runs/"+id+"/inputs/"+name); e != nil {
+			// Existence only: the content of such an input is never read.
+			path, e := tx.groupPath(reviewControlGroup, "runs/"+id+"/inputs/"+name)
+			if e != nil {
 				return e
-			} else if !present && compacted(compactedInputs, name) {
+			}
+			f, e := fs.OpenRegularFileIfExists(tx.root, path)
+			if f != nil {
+				e = f.Close()
+				return firstError(e, reviewError("review input name"))
+			}
+			if e != nil {
+				return e
+			}
+			if compacted(compactedInputs, name) {
 				return compactedError(id, name)
 			}
 			return reviewError("review input name")
@@ -121,4 +134,10 @@ func incrementalReviewContext(tx *Transaction, run ReviewRun) (data []byte, err 
 		return nil
 	}()
 	return
+}
+
+// safeInputName accepts one path segment that names a plain file: no
+// separator, no traversal, no hidden or reserved spelling.
+func safeInputName(name string) bool {
+	return name != "" && len(name) <= 255 && !strings.HasPrefix(name, ".") && !strings.ContainsAny(name, "/\\:\x00") && strings.TrimRight(name, " .") == name
 }

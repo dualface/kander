@@ -6,6 +6,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -156,10 +157,17 @@ func TestArchivePruneKeepsARunWhoseReceiptCannotBeRemoved(t *testing.T) {
 		t.Fatal(err)
 	}
 	relocateCards(t, root, "archived", id)
-	if report, err := PruneArchived(root); err == nil {
-		t.Fatalf("prune did not report the stuck receipt: %+v", report)
+	if report, err := PruneArchived(root); err == nil || slices.Contains(report.Runs, run.RunID) {
+		t.Fatalf("prune did not keep the run of the stuck receipt: %+v %v", report, err)
 	}
+	// The kept run still reads its batch, its closure and its plan.
 	requireExists(t, reviewPath(root, "runs", run.RunID, "run.json"), true)
+	for _, path := range []string{reviewPath(root, "batches", run.BatchID+".json"), reviewPath(root, "closures", run.BatchID+".json"), reviewPath(root, "plans", "plan-"+run.RunID+".json")} {
+		requireExists(t, path, true)
+	}
+	if _, err := ReadReviewBatch(root, run.BatchID); err != nil {
+		t.Fatalf("the batch of the kept run: %v", err)
+	}
 	if err = os.Remove(receipt); err != nil {
 		t.Fatal(err)
 	}
@@ -174,19 +182,52 @@ func TestArchivePruneKeepsARunWhoseReceiptCannotBeRemoved(t *testing.T) {
 	requirePrunedCheck(t, root, id)
 }
 
-// A compacted stored input other than the frozen contexts reads as compacted;
-// before compaction it stays unreadable as before.
+// Any stored input other than the frozen contexts that a compaction removed
+// with inputs/ reads as compacted; before compaction, or under an unsafe name,
+// it stays unreadable as before.
 func TestCompactedStoredInputReadsAsCompacted(t *testing.T) {
 	root, _, run := compactionBoard(t, "compact-input")
-	_, err := ReadReviewInput(root, run.RunID, "evidence.txt")
-	requireBoardCode(t, err, "board.review_evidence_invalid")
-	_, err = ReadReviewInput(root, run.RunID, "../run.json")
-	requireBoardCode(t, err, "board.review_evidence_invalid")
+	if err := os.WriteFile(reviewPath(root, "runs", run.RunID, "inputs", "notes.txt"), []byte("historical input\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	unsafe := []string{"", "../run.json", ".hidden", "a/b", `a\b`, "name.", "c:d"}
+	for _, name := range append([]string{"evidence.txt", "notes.txt", "never-written.txt"}, unsafe...) {
+		_, err := ReadReviewInput(root, run.RunID, name)
+		requireBoardCode(t, err, "board.review_evidence_invalid")
+	}
 	compact(t, root, false)
-	_, err = ReadReviewInput(root, run.RunID, "evidence.txt")
-	requireBoardCode(t, err, "board.review_compacted")
-	_, err = ReadReviewInput(root, run.RunID, "unknown.txt")
-	requireBoardCode(t, err, "board.review_evidence_invalid")
+	for _, name := range []string{"evidence.txt", "notes.txt", "never-written.txt"} {
+		_, err := ReadReviewInput(root, run.RunID, name)
+		requireBoardCode(t, err, "board.review_compacted")
+	}
+	for _, name := range unsafe {
+		_, err := ReadReviewInput(root, run.RunID, name)
+		requireBoardCode(t, err, "board.review_evidence_invalid")
+	}
+}
+
+// A run whose only removal fails makes no progress: it is skipped, not counted.
+func TestCompactionCountsOnlyRunsWithACompletedRemoval(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("directory permissions do not block removal on Windows")
+	}
+	root, _, run := compactionBoard(t, "compact-stalled")
+	compact(t, root, false)
+	dir := reviewPath(root, "runs", run.RunID)
+	if err := os.Mkdir(filepath.Join(dir, "inputs"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	report, err := compactAt(t, root, time.Now().Add(8*24*time.Hour), false)
+	if err == nil || len(report.Runs) != 0 {
+		t.Fatalf("a failed removal counted as progress: %+v %v", report, err)
+	}
+	if i := slices.IndexFunc(report.Skipped, func(s SkippedRun) bool { return s.RunID == run.RunID }); i < 0 || !slices.Equal(report.Skipped[i].Conditions, []CompactionCondition{CompactionRemoval}) {
+		t.Fatalf("the run is not skipped for its removal: %+v", report.Skipped)
+	}
 }
 
 // An entry of a protected directory that no producer writes is kept and reported.
