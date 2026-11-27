@@ -125,11 +125,28 @@ func TestLargeUploadStagingIsRemovedAtEveryEnd(t *testing.T) {
 		url, handled := limitedUploads(t, s, defaultUploadLimits())
 		reader, writer := io.Pipe()
 		ctx, cancel := context.WithCancel(t.Context())
+		canceled := make(chan struct{})
 		go func() {
 			_, _ = writer.Write(partial)
 			cancel()
+			// Without this the transport's write loop can stay in a read of
+			// the pipe after the cancel, and Do never returns.
+			_ = writer.CloseWithError(context.Canceled)
+			close(canceled)
 		}()
-		if _, err := http.DefaultClient.Do(uploadRequest(t, url, reader).WithContext(ctx)); err == nil {
+		req := uploadRequest(t, url, reader).WithContext(ctx)
+		answered := make(chan error, 1)
+		go func() {
+			resp, err := http.DefaultClient.Do(req)
+			if err == nil {
+				resp.Body.Close()
+			}
+			answered <- err
+		}()
+		// Sending the partial body has no bound: it waits for the server to
+		// read it. The bounded wait starts only after the cancel.
+		<-canceled
+		if err := waitFor(t, answered, "the canceled upload to return"); err == nil {
 			t.Fatal("a canceled upload answered")
 		}
 		waitFor(t, handled, "the handler after the disconnect")
