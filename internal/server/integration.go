@@ -208,7 +208,11 @@ func (p *project) renewIntegration(id string, h holder) (api.Renewal, error) {
 		record.Value.ExpiresAt = record.Value.RenewedAt.Add(p.server.ttl)
 		return stageJSON(tx, integrationName(id), record)
 	})
-	return api.Renewal{Claim: api.ClaimView{ClientID: record.Value.ClientID, ExecutionID: record.Value.Request.ExecutionID, Owner: "integration", Generation: record.Value.Generation, Status: record.Value.Status, RenewedAt: record.Value.RenewedAt, ExpiresAt: record.Value.ExpiresAt}}, err
+	renewal := api.Renewal{Claim: api.ClaimView{ClientID: record.Value.ClientID, ExecutionID: record.Value.Request.ExecutionID, Owner: "integration", Generation: record.Value.Generation, Status: record.Value.Status, RenewedAt: record.Value.RenewedAt, ExpiresAt: record.Value.ExpiresAt}}
+	if err != nil {
+		return renewal, err
+	}
+	return p.policyRenewal(renewal), nil
 }
 func (p *project) integrationAction(key, id string, input api.IntegrationCommand, h holder) outcome {
 	if err := p.lockBoard(); err != nil {

@@ -166,12 +166,13 @@ func (w *loop) renewOne(ctx context.Context, c remote.Credential) {
 	callCtx, cancel := context.WithTimeout(ctx, min(interval, 10*time.Second))
 	defer cancel()
 	project := cl.Project(c.ProjectID)
+	var renewal api.Renewal
 	if c.ResourceKind == "integration" {
-		_, err = project.RenewIntegration(callCtx, c.TaskID, *c.Claim())
+		renewal, err = project.RenewIntegration(callCtx, c.TaskID, *c.Claim())
 	} else if c.ResourceKind == "group" {
-		_, err = project.RenewGroup(callCtx, c.TaskID, *c.Claim())
+		renewal, err = project.RenewGroup(callCtx, c.TaskID, *c.Claim())
 	} else {
-		_, err = project.Renew(callCtx, c.TaskID, *c.Claim())
+		renewal, err = project.Renew(callCtx, c.TaskID, *c.Claim())
 	}
 	if err != nil && ctx.Err() != nil {
 		// The renewal loop was stopped: the call was cancelled, not refused.
@@ -187,6 +188,7 @@ func (w *loop) renewOne(ctx context.Context, c remote.Credential) {
 		w.mu.Lock()
 		w.owed[keyOf(c)] = struct{}{}
 		w.mu.Unlock()
+		w.notePolicy(c, renewal)
 	case api.IsCode(err, api.CodeTakenOver):
 		// A newer generation took the lease over: this execution may never
 		// write again.

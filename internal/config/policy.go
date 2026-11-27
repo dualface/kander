@@ -57,6 +57,40 @@ func (v PolicyValues) ApplyTo(cfg *Config) {
 	cfg.Issue = v.Issue
 }
 
+// MergePolicyValues lays values over base, the values a server answered, and
+// returns the document a policy write sends: a key of base this version does
+// not know, at any depth, stays as it is.
+func MergePolicyValues(base json.RawMessage, values PolicyValues) (json.RawMessage, error) {
+	merged := map[string]any{}
+	if len(base) > 0 {
+		if err := json.Unmarshal(base, &merged); err != nil {
+			return nil, err
+		}
+	}
+	data, err := json.Marshal(values)
+	if err != nil {
+		return nil, err
+	}
+	var edited map[string]any
+	if err := json.Unmarshal(data, &edited); err != nil {
+		return nil, err
+	}
+	mergeJSONObjects(merged, edited)
+	return json.Marshal(merged)
+}
+
+func mergeJSONObjects(dst, src map[string]any) {
+	for key, value := range src {
+		if from, ok := value.(map[string]any); ok {
+			if into, ok := dst[key].(map[string]any); ok {
+				mergeJSONObjects(into, from)
+				continue
+			}
+		}
+		dst[key] = value
+	}
+}
+
 // PolicyLeaf is one value of a project policy and its JSON path.
 type PolicyLeaf struct {
 	Path  string

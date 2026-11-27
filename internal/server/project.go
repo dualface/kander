@@ -633,7 +633,7 @@ func (p *project) renew(id string, h holder) (api.Renewal, error) {
 	if err != nil {
 		return api.Renewal{}, err
 	}
-	return api.Renewal{Claim: *r.view(p.server.now())}, nil
+	return p.policyRenewal(api.Renewal{Claim: *r.view(p.server.now())}), nil
 }
 
 // takeover hands a lost claim to a new execution with the next generation.

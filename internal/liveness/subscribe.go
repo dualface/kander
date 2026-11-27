@@ -85,6 +85,9 @@ type groupEvent struct {
 	Changed                []changeEvent                     `json:"changed,omitempty"`
 	Watched                []string                          `json:"watched,omitempty"`
 	Liveness               map[string]livenessJSON           `json:"liveness,omitempty"`
+	// PolicyRevision is the project policy revision of a policy-change event;
+	// every other event omits it.
+	PolicyRevision *uint64 `json:"policy_revision,omitempty"`
 }
 
 var nowFn = time.Now
@@ -181,8 +184,8 @@ func Subscribe(root string, opts subscribeOptions, w io.Writer, stop <-chan stru
 
 // subscribeContext runs one subscription. Without opts.Follow it returns nil
 // after the scan that wrote the first wake-up event: a membership, state, task,
-// blocked, coordinator, claim, reset or heartbeat event, or a dispatch-attention
-// event that dispatchAttention reports as a wake-up.
+// blocked, coordinator, claim, reset, policy or heartbeat event, or a
+// dispatch-attention event that dispatchAttention reports as a wake-up.
 func subscribeContext(ctx context.Context, root string, opts subscribeOptions, w io.Writer, service *remote.Session) (result error) {
 	refresh, valid := subscriptionInterval(opts.Refresh)
 	if !valid {
@@ -246,6 +249,7 @@ func subscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 		wait = session.dispatchWait(snapshot, nowFn(), wait)
 		probeCompleted := false
 		reset := false
+		readPolicy, announced := false, uint64(0)
 		timerWait := wait
 		if service != nil {
 			timerWait = 0
@@ -275,6 +279,9 @@ func subscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 					session.reconciliation = true
 					reset = true
 				}
+				// A reset may hide a policy change, so it reads the policy too.
+				announced, readPolicy = session.policyAnnounced(page)
+				readPolicy = readPolicy || page.Reset
 			}
 		}
 		current, err := session.readTolerant(ctx, root, refresh, w, output)
@@ -290,6 +297,13 @@ func subscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 				return err
 			}
 			woke = true
+		}
+		if readPolicy {
+			changed, err := session.refreshPolicy(output.ctx, w, current, announced)
+			if err != nil {
+				return err
+			}
+			woke = woke || changed
 		}
 
 		var changed []changeEvent

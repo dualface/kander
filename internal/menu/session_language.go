@@ -81,7 +81,7 @@ func (s *Session) RestoreLanguage(state LanguageState) error {
 		scope.Language = state.scopeLanguage
 	}
 	if merged != nil {
-		s.Config = merged
+		s.setConfig(merged)
 	}
 	return nil
 }

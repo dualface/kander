@@ -20,11 +20,21 @@ import (
 // fails the test.
 func runSingleRemote(t *testing.T, service *remote.Session, opts subscribeOptions, act func()) ([]groupEvent, error) {
 	t.Helper()
+	return runSingleRemoteObserved(t, service, opts, act, nil)
+}
+
+// runSingleRemoteObserved is runSingleRemote that also calls observe, when it
+// is set, as each event is written.
+func runSingleRemoteObserved(t *testing.T, service *remote.Session, opts subscribeOptions, act func(), observe func(groupEvent)) ([]groupEvent, error) {
+	t.Helper()
 	opts.Follow = false
 	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 	defer cancel()
 	seen := make(chan struct{})
 	writer := &clockEvents{onEvent: func(event groupEvent) error {
+		if observe != nil {
+			observe(event)
+		}
 		if event.Event == "snapshot" {
 			closeOnce(seen)
 		}

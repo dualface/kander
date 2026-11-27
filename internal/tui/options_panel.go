@@ -99,6 +99,8 @@ type optionsPanel struct {
 	chromeLines   int
 	headerX       int
 	headerY       int
+	// policyNotice is the last result of a project policy refresh or write.
+	policyNotice string
 
 	// The geometry and body lines of the most recent render, for mouse hit testing.
 	box        popupBox
@@ -140,9 +142,14 @@ var newOptionsSession = menu.NewSession
 
 func (p *optionsPanel) requestSession() {
 	seq := p.loadSeq
+	// The session shows the policy this process knows; a later refresh updates it.
+	policy, bound := p.app.policy.known, p.app.policy.read != nil
 	p.app.pendingWork = func() any {
 		result := loadOptionsSession()
 		result.seq = seq
+		if bound && result.session != nil {
+			result.session.AttachPolicy(policy)
+		}
 		return result
 	}
 }
@@ -217,6 +224,8 @@ func (a *App) applyWork(payload any) tea.Cmd {
 	case boardEventResult:
 		a.applyBoardEvents(result)
 		return nil
+	case policyResult:
+		return a.applyPolicyResult(result)
 	case boardReadResult:
 		a.applyBoardRead(result)
 		return nil
@@ -656,6 +665,7 @@ func (p *optionsPanel) savesOnSubmit() bool {
 
 // persistNow writes the current session to the config file, UI preferences included.
 func (p *optionsPanel) persistNow() error {
+	p.queuePolicySave()
 	if p.session != nil && p.session.EditingOverlay() {
 		if _, err := p.session.Save(); err != nil {
 			return err
@@ -733,6 +743,7 @@ func (p *optionsPanel) save() {
 		p.showReport(t("tui.save_failed"), finishLines, err.Error())
 		return
 	}
+	p.queuePolicySave()
 	path, err := p.session.SaveAllDirty()
 	p.advanceLanguageBaseline()
 	if err != nil {

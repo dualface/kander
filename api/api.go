@@ -389,10 +389,16 @@ type ClaimGrant struct {
 	TTL           Duration  `json:"ttl"`
 }
 
-// Renewal is POST .../tasks/{task}/renew. The claim headers carry the token
-// and generation. A renewal never changes the card revision.
+// Renewal answers POST .../tasks/{task}/renew, and the renewals of a group
+// lease and an integration lease. The claim headers carry the token and
+// generation. A renewal never changes the card revision. PolicyEpoch and
+// PolicyRevision are the current project policy version (absent while the
+// project has none): an invalidation hint that tells the background worker
+// when to read the policy again, never the policy itself.
 type Renewal struct {
-	Claim ClaimView `json:"claim"`
+	Claim          ClaimView `json:"claim"`
+	PolicyEpoch    string    `json:"policy_epoch,omitempty"`
+	PolicyRevision uint64    `json:"policy_revision,omitzero"`
 }
 
 // Handoff is one takeover record kept with the claim history.
@@ -488,6 +494,10 @@ const (
 	EventTaskChanged  = "task_changed"
 	EventClaimChanged = "claim_changed"
 	EventRequest      = "request_changed"
+	// EventProjectPolicyChanged follows every successful write of the project
+	// policy; Revision is the new policy revision. Like every event it is only
+	// a hint: a client reads the policy itself.
+	EventProjectPolicyChanged = "project_policy_changed"
 )
 
 // Event is one change notification. Events carry identities, not bodies; a
@@ -506,11 +516,17 @@ type Event struct {
 
 // EventPage is GET .../events?cursor=C&wait=S. Reset means the cursor is no
 // longer valid (unknown epoch or pruned); the client re-reads the full task
-// list and continues from its cursor.
+// list and continues from its cursor. PolicyEpoch and PolicyRevision are the
+// project policy version when the page was answered (absent while the project
+// has none), read after its events: a client that continues from the cursor of
+// a later board snapshot may skip a policy change event, but never a later
+// page's version.
 type EventPage struct {
-	Cursor string  `json:"cursor"`
-	Reset  bool    `json:"reset,omitzero"`
-	Events []Event `json:"events"`
+	Cursor         string  `json:"cursor"`
+	Reset          bool    `json:"reset,omitzero"`
+	Events         []Event `json:"events"`
+	PolicyEpoch    string  `json:"policy_epoch,omitempty"`
+	PolicyRevision uint64  `json:"policy_revision,omitzero"`
 }
 
 // Duration marshals as integer milliseconds.

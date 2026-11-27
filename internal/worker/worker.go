@@ -319,6 +319,9 @@ type loop struct {
 	// missingDirs holds, per credential, the recorded agent configuration
 	// directory last found missing (agent_config.go).
 	missingDirs map[credentialKey]string
+	// policyHints holds, per project, the policy version the last confirmed
+	// renewal answered and the work loop has not compared yet (policy.go).
+	policyHints map[policyProject]policyHint
 }
 
 type outage struct{ since, last time.Time }
@@ -341,6 +344,7 @@ func newLoop(o Options) *loop {
 		deliveries:   map[credentialKey]*deliveryScope{},
 		replays:      map[credentialKey]*replayTable{},
 		missingDirs:  map[credentialKey]string{},
+		policyHints:  map[policyProject]policyHint{},
 	}
 }
 
@@ -407,6 +411,7 @@ func (w *loop) workRound(ctx context.Context) (int, error) {
 	// A lease lost during the last work step is stopped in this round, not the
 	// next one, which may be a handover away.
 	w.stopMarked(ctx, stopped)
+	w.refreshPolicies(ctx)
 	w.warnSlow("work round exceeded the renewal interval", started, credentials)
 	return live, nil
 }

@@ -113,6 +113,16 @@ type PolicyCache struct {
 	Err error
 }
 
+// Behind reports whether a policy version a server announced (an event or a
+// lease renewal) is newer than this cache, so the policy should be read
+// again. A missing or unusable cache is behind every set policy.
+func (c PolicyCache) Behind(epoch string, revision uint64) bool {
+	if c.Status != PolicyCacheSet && c.Status != PolicyCacheUnset {
+		return revision > 0
+	}
+	return policyVersionNewer(PolicySnapshot{Epoch: epoch, Revision: revision}, c.Snapshot)
+}
+
 // ReadPolicyCache reads the cache of one project of one server. It never
 // fails: a file that cannot be read or does not validate is PolicyCacheInvalid
 // with the reason, and the next refresh replaces it.
