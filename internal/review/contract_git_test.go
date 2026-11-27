@@ -10,7 +10,9 @@ import (
 	"github.com/dualface/kander/v2/internal/config"
 )
 
-func TestReviewGitInspectionIgnoresUserOverlaysAndDialect(t *testing.T) {
+// The removed git_inspection field stays an ignored key in user overlays: the
+// configuration loads and the key is reported.
+func TestReviewOverlayIgnoresRemovedGitCapabilityKey(t *testing.T) {
 	agy := jsonObjectOf(t, config.AgentFor(nil, "agy").Review)
 	agy["git_inspection"] = true
 	codex := jsonObjectOf(t, config.AgentFor(nil, "codex").Review)
@@ -37,13 +39,10 @@ func TestReviewGitInspectionIgnoresUserOverlaysAndDialect(t *testing.T) {
 		if !config.HasReviewTemplate(cfg, agent) {
 			t.Errorf("%s has no usable review definition", agent)
 		}
-		if got := config.EmbeddedReviewGitInspection(agent); got != (agent != "agy") {
-			t.Errorf("%s has unexpected Git inspection capability %v", agent, got)
-		}
 	}
 }
 
-func TestReviewGitInspectionContract(t *testing.T) {
+func TestReviewContractGitInstructions(t *testing.T) {
 	isolateBuiltinConfig(t)
 	ctx := promptContractContext("codex")
 	for _, reviewed := range []string{"", baselineReviewed} {

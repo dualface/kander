@@ -7,8 +7,8 @@
     "resume": ["--conversation", "{session}", "--model", "{model}", "--effort", "{effort}", "--prompt-interactive"],
     "review": [
       "--model", "{model}", "--effort", "{effort}",
-      "--mode", "plan", "--add-dir", "{runtime}", "--add-dir", "{rules_dir}",
-      "--settings", "{{\"permissions\":{{\"deny\":[\"write_file(*)\",\"command(*)\",\"mcp(*)\",\"read_url(*)\",\"execute_url(*)\"]}}}}",
+      "--add-dir", "{runtime}", "--add-dir", "{rules_dir}",
+      "--settings", "{{\"permissions\":{{\"allow\":[\"command(*)\"],\"deny\":[\"write_file(*)\",\"mcp(*)\",\"read_url(*)\",\"execute_url(*)\"]}}}}",
       "--output-format", "json", "--print", "{instruction} This is an isolated reviewer session. Use the supplied bootstrap and review contract as your instructions. Read the provided Git evidence and worktree, then return the complete report as your final answer. Skip executor setup, global workflow files, and planning artifacts."
     ]
   },
@@ -19,12 +19,11 @@
   "supports_effort": true,
   "prompt_delivery": {"mode": "argv"},
   "review": {
-    "git_inspection": false,
     "last_message_report": true,
     "cwd": "root",
     "home_policy": "optional",
     "output_name": "output.json",
-    "inspection": "Read the supplied Git evidence and source files using read and search tools only.",
+    "inspection": "Use read and search tools and shell commands that do not write, including read-only Git in the review worktree; never create, modify, or delete any file.",
     "spawns_helpers": true,
     "snapshot_spec": true,
     "stdin": "none",

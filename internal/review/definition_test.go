@@ -2,6 +2,7 @@ package review
 
 import (
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -46,7 +47,7 @@ func TestBuiltinReviewDefinitionsMatchPrevious(t *testing.T) {
 		},
 		"grok": {
 			cwd: "root", output: "output.json", homeEnv: "GROK_HOME",
-			inspection: "Use only read_file, grep, and list_dir to inspect code.",
+			inspection: "Use read_file, grep, list_dir, and shell commands that do not write, including read-only Git in the review worktree; never create, modify, or delete any file.",
 			env:        []string{"GROK_HOME"},
 		},
 	}
@@ -147,15 +148,14 @@ func previousBuiltinArgv(t *testing.T, agent, model, effort, root, runtime, outp
 		return append(append([]string{"--cwd", runtime}, modelArgs...),
 			"--effort", effort,
 			"--output-format", "json",
-			"--permission-mode", "dontAsk",
+			"--permission-mode", "bypassPermissions",
 			"--allow", "Read",
 			"--allow", "Grep",
-			"--tools", "read_file,grep,list_dir",
-			"--disallowed-tools", "Agent,run_terminal_command,search_tool,use_tool,web_search,web_fetch,search_replace,todo_write,scheduler_create,scheduler_delete,scheduler_list,monitor,workflow,enter_plan_mode,exit_plan_mode,ask_user_question,image_gen,image_edit,image_to_video,reference_to_video,write",
+			"--tools", "read_file,grep,list_dir,run_terminal_cmd",
+			"--disallowed-tools", "Agent,search_tool,use_tool,web_search,web_fetch,search_replace,todo_write,scheduler_create,scheduler_delete,scheduler_list,monitor,workflow,enter_plan_mode,exit_plan_mode,ask_user_question,image_gen,image_edit,image_to_video,reference_to_video,write",
 			"--deny", "Edit",
 			"--deny", "Write",
 			"--deny", "MCPTool(*)",
-			"--sandbox", "read-only",
 			"--disable-web-search",
 			"--no-memory",
 			"--no-subagents",
@@ -274,8 +274,8 @@ func TestDevinReviewDefinitionUsesArgvInstruction(t *testing.T) {
 }
 
 // OpenCode reviews run `opencode run` non-interactively: the instruction is an
-// argv positional, stdin stays unused, and OPENCODE_PERMISSION keeps the run
-// read-only even when the agent would otherwise auto-approve.
+// argv positional, stdin stays unused, and OPENCODE_PERMISSION denies everything
+// except reading, searching, and bash, which the reviewer needs for read-only Git.
 func TestOpenCodeReviewDefinitionUsesArgvInstruction(t *testing.T) {
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "missing.json"))
 	t.Setenv("HOME", filepath.Join(t.TempDir(), "home"))
@@ -286,10 +286,6 @@ func TestOpenCodeReviewDefinitionUsesArgvInstruction(t *testing.T) {
 	if settings.stdin != config.ReviewStdinNone || settings.cwd != "root" ||
 		settings.outputName != "output.jsonl" || !settings.spawnsHelperProcesses || settings.snapshotSpec {
 		t.Fatalf("settings %+v", settings)
-	}
-	permission := settings.env["OPENCODE_PERMISSION"]
-	if !strings.Contains(permission, `"*":"deny"`) || !strings.Contains(permission, `"read":"allow"`) {
-		t.Fatalf("OPENCODE_PERMISSION=%q", permission)
 	}
 	ctx := reviewContext{
 		agent: "opencode", settings: settings, root: "/work",
@@ -313,14 +309,20 @@ func TestOpenCodeReviewDefinitionUsesArgvInstruction(t *testing.T) {
 		!strings.HasPrefix(last, "Output contract: your final message is the complete review report") {
 		t.Fatalf("argv\n got %q\nwant %q + output contract", inv.Argv[1:], want)
 	}
-	if !strings.Contains(inv.Env["OPENCODE_PERMISSION"], `"*":"deny"`) {
-		t.Fatal("review env lost OPENCODE_PERMISSION deny-all")
+	var permission map[string]string
+	if err := json.Unmarshal([]byte(inv.Env["OPENCODE_PERMISSION"]), &permission); err != nil {
+		t.Fatalf("OPENCODE_PERMISSION=%q: %v", inv.Env["OPENCODE_PERMISSION"], err)
+	}
+	wantPermission := map[string]string{"*": "deny", "bash": "allow", "read": "allow", "glob": "allow", "grep": "allow", "list": "allow", "external_directory": "allow"}
+	if !maps.Equal(permission, wantPermission) {
+		t.Fatalf("OPENCODE_PERMISSION=%v, want %v", permission, wantPermission)
 	}
 }
 
-// Kimi reviews run `kimi --prompt ... --output-format stream-json` under a
-// read-only agent file rendered into the private runtime; the run must never
-// carry --auto/--yolo or a guessed model.
+// Kimi reviews run `kimi --prompt ... --output-format stream-json` under an
+// agent file rendered into the private runtime. Non-interactive --prompt already
+// approves tool calls and refuses --auto/--yolo, so the run carries neither, and
+// it never guesses a model.
 func TestKimiReviewDefinitionUsesAgentFile(t *testing.T) {
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "missing.json"))
 	t.Setenv("HOME", filepath.Join(t.TempDir(), "home"))
@@ -335,11 +337,12 @@ func TestKimiReviewDefinitionUsesAgentFile(t *testing.T) {
 	if settings.homePolicy != config.ReviewHomeOptional || len(settings.promptFiles) != 1 {
 		t.Fatalf("settings %+v", settings)
 	}
-	for _, want := range []string{"name: kander-reviewer", "tools: [Read, Grep, Glob]", "disallowedTools", "Bash", "AgentSwarm"} {
+	for _, want := range []string{"name: kander-reviewer", "tools: [Read, Grep, Glob, Bash]", "disallowedTools", "AgentSwarm"} {
 		if !strings.Contains(settings.promptFiles[0].Template, want) {
-			t.Errorf("Kimi's embedded read-only profile lacks %q", want)
+			t.Errorf("Kimi's embedded review profile lacks %q", want)
 		}
 	}
+	assertKimiReviewerAllowsShell(t, settings.promptFiles[0].Template)
 	ctx := reviewContext{
 		agent: "kimi", settings: settings, root: "/work",
 		program:         process.AgentProgram{Path: "/bin/reviewer"},
@@ -439,7 +442,10 @@ func TestAgyReviewDefinitionStaysReadOnly(t *testing.T) {
 		t.Fatalf("cwd %s", cwd)
 	}
 	args := inv.Argv[1:]
-	for _, pair := range [][]string{{"--mode", "plan"}, {"--add-dir", "/rt"}, {"--add-dir", rulesDir}, {"--output-format", "json"}} {
+	if slices.Contains(args, "--mode") {
+		t.Fatalf("review argv selects a mode that may refuse shell commands: %q", args)
+	}
+	for _, pair := range [][]string{{"--add-dir", "/rt"}, {"--add-dir", rulesDir}, {"--output-format", "json"}} {
 		if !containsPair(args, pair[0], pair[1]) {
 			t.Fatalf("argv lacks %v: %q", pair, args)
 		}
@@ -454,13 +460,19 @@ func TestAgyReviewDefinitionStaysReadOnly(t *testing.T) {
 	}
 	var policy struct {
 		Permissions struct {
-			Deny []string `json:"deny"`
+			Allow []string `json:"allow"`
+			Deny  []string `json:"deny"`
 		} `json:"permissions"`
 	}
 	if err := json.Unmarshal([]byte(args[i+1]), &policy); err != nil {
 		t.Fatalf("--settings is not JSON: %q: %v", args[i+1], err)
 	}
-	wantDeny := []string{"write_file(*)", "command(*)", "mcp(*)", "read_url(*)", "execute_url(*)"}
+	// Headless agy soft-denies a command it cannot get approval for, so the
+	// review allows commands explicitly; writes stay denied (deny beats allow).
+	if want := []string{"command(*)"}; !slices.Equal(policy.Permissions.Allow, want) {
+		t.Fatalf("allow rules %v, want %v", policy.Permissions.Allow, want)
+	}
+	wantDeny := []string{"write_file(*)", "mcp(*)", "read_url(*)", "execute_url(*)"}
 	if !slices.Equal(policy.Permissions.Deny, wantDeny) {
 		t.Fatalf("deny rules %v, want %v", policy.Permissions.Deny, wantDeny)
 	}
@@ -532,5 +544,22 @@ func TestReviewOutputParsingUsesProcessEntry(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("review parsing must use the review-subset entry")
+	}
+}
+
+// assertKimiReviewerAllowsShell checks that the kimi reviewer agent file lets the
+// reviewer run Bash for read-only Git while it still forbids file changes.
+func assertKimiReviewerAllowsShell(t *testing.T, template string) {
+	t.Helper()
+	for line := range strings.SplitSeq(template, "\n") {
+		if denied, ok := strings.CutPrefix(line, "disallowedTools:"); ok && strings.Contains(denied, "Bash") {
+			t.Errorf("Kimi's review profile still disallows Bash: %s", line)
+		}
+	}
+	if strings.Contains(template, "Never run commands") {
+		t.Error("Kimi's review profile still forbids running commands")
+	}
+	if !strings.Contains(template, "Never create, modify, delete, move, or rename any file") {
+		t.Error("Kimi's review profile no longer forbids file changes")
 	}
 }
