@@ -25,8 +25,7 @@ The approach follows the QuickTUI server Store package: an MSIX bundle for x64 a
 All of this applies only while `install.Packaged()` is true; every other install behaves as before.
 
 - Updates belong to the Store. The bare-TUI startup check (`install.CheckUpdate`) returns no update without any network request, so no update dialog appears. `install.ApplyUpdate` refuses before any download or file write with `install.update_store_managed` ("kander was installed from Microsoft Store; updates are managed by Microsoft Store").
-- No PATH copy. The bare-TUI startup copy question (`install.CheckStartupCopy`) is skipped, and `kander install` in global scope does not copy the binary and prints no PATH hint: the execution alias is already on PATH, and a copy outside the package would leave the Store's update channel.
-- A project install still copies the binary into `<main worktree>/.kander/bin`. That copy has no package identity and behaves like any direct install, including self-updates.
+- No PATH copy. The bare-TUI startup copy question (`install.CheckStartupCopy`) is skipped, and `kander install` does not copy the binary and prints no PATH hint: the execution alias is already on PATH, and a copy outside the package would leave the Store's update channel. Kander has no project install, so the Store package is the only `kander` of such a machine.
 
 ## Build
 

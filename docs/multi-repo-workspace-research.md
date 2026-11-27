@@ -38,7 +38,7 @@ Investigation date: 2026-10-16. The source inspection and isolated reproductions
 | Delivery and overlap checks | Both are board-free analyzers using the process working directory. | They can run separately in each repository, but do not aggregate unrelated histories. See [Git runner](../internal/check/git.go). |
 | Launch and recovery | Launch, session discovery, and repair derive execution context from the board parent. | A shared board does not select the correct task repository. See [start](../internal/launch/start.go), [agent launch](../internal/launch/agent.go), and [session repair](../internal/launch/session_repair.go). |
 | Project overlay | Inside Git, overlay lookup checks the main worktree root; otherwise it walks upward. | Entering a child repository can stop applying the workspace overlay. See [overlay lookup](../internal/config/overlay.go). |
-| Project installation | Project install resolution requires a Git repository. | A project-scoped install at the reported non-Git root is rejected. See [install paths](../internal/config/paths.go). |
+| Project installation | Retired: Kander is installed globally only, and a project opts in with the references `kander init` writes into its rules files. | A non-Git workspace root gets the binding but no project reference. See [install paths](../internal/config/paths.go). |
 | Review and coordinator records | A review plan has one CWD. Coordinator reconciliation accepts one CWD for Git validation. | These contracts do not directly represent a cross-repository execution. See [review plans](../internal/board/review_plan.go) and [coordinator reconciliation](../internal/launch/coordinator.go). |
 | Completion | `move done` checks the card's review plan. | Joint completion would require an additional group gate, not just better prompts. See [card moves](../internal/board/snapshot.go). |
 
@@ -108,7 +108,7 @@ The proposed configuration order is scope configuration, workspace overlay, then
 
 Workspace presentation and chat use workspace configuration. Task execution and repository review use the task's effective configuration. Group planning must validate all members' effective policies and freeze the applicable requirements. A child overlay cannot silently turn a required group stage into an exemption.
 
-Project installation should also accept a declared non-Git workspace and place its payload under the workspace `.kander/`. Rules lookup, generated task prompts, command paths, and the Pi rules extension must resolve that same installation from child repositories and linked worktrees. This is a prerequisite for claiming complete project-scope support.
+Project installation has since been retired: every repository loads the global rules through the project references `kander init` writes, so a workspace needs those references in each child repository instead of one shared installation.
 
 ### Execution and session recovery
 

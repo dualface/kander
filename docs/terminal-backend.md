@@ -158,7 +158,7 @@ The embedded [`luvus.json`](../internal/terminal/builtin/definitions/luvus.json)
 - **Directory check**: an older CLI silently ignores `--cwd`, and an older server ignores the directory a newer CLI sends; the split still succeeds in the anchor pane's directory. `create_container` therefore reads the new pane back with `agent get` (polling briefly until the directory is reported) and accepts it only when the reported directory equals the requested one or its symlink-resolved form. Otherwise it closes the new pane and fails with an upgrade message, so `start` rolls the card back to `todo/` and no agent starts.
 - **Session identity**: luvus reports an agent's session through its own integration hooks. Run `luvus integration install <agent>` once per agent so `pane_facts` and reverse lookup carry the session id. Kander binds no session hook of its own.
 - **Known limits**: the calling pane briefly loses focus while the new pane moves to its tab. Agents without a luvus integration hook (for example cursor and pi) report no session: liveness can still confirm the agent and status of the recorded pane, but direct `notify` delivery is unavailable and a reverse lookup of a moved pane stays incomplete (`unknown`), never `stopped`. A plain shell pane reports the shell name as its agent. Inside nested tmux and luvus, `auto` follows the priorities above.
-- A user definition named `luvus.json` in the global or project share directory replaces this embedded definition as a whole; remove an older hand-written copy to use the built-in one.
+- A user definition named `luvus.json` in the global share directory replaces this embedded definition as a whole; remove an older hand-written copy to use the built-in one.
 
 ---
 

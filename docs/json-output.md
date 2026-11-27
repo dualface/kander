@@ -25,6 +25,7 @@ Every command except the bare `kander` and the internal `worker` accepts the glo
 | `check_<kind>` | 2 or 3 | An analysis of `check delivery` or `check overlap` that could not finish: `check_invalid_ref`, `check_not_ancestor`, `check_not_repository`, `check_git_unavailable`, `check_no_merge_base`, `check_output_limit`, `check_parse`, `check_internal` |
 | `review_failed` | 1, 2 | A review that failed before it published evidence; the message holds the messages of the run |
 | `launch_unresolved` | 3 | A start or a takeover that failed late with executor evidence; the message holds the next steps |
+| `rules_reference_missing` | 1 | `start`: the start base does not reference the Kander rules in the executing agent's project rules file; the message names the file, the start branch, and the commit. Run `kander init`, then commit and push |
 | `server_not_running` | 1 | `server status` found no server |
 | `cancelled` | 130 | `server import` was interrupted |
 | `gc_timeout` | 1 | The `server gc` call timed out; the server may still run the gc |
@@ -38,7 +39,7 @@ Every command except the bare `kander` and the internal `worker` accepts the glo
 
 The code of a failure is the first of these that applies:
 
-1. The code the command gave it: `usage`, `interactive_required`, `launch_unresolved`, `check_<kind>`, `review_failed`, `server_not_running`, `cancelled`, `gc_timeout`.
+1. The code the command gave it: `usage`, `interactive_required`, `launch_unresolved`, `rules_reference_missing`, `check_<kind>`, `review_failed`, `server_not_running`, `cancelled`, `gc_timeout`.
 2. A service error: the board code when the service reports one, otherwise the service code. The message of a service error that carries a board code is the text the service sent; its language is decided by the service, not by `--lang`. Any other service error has a message of the client (`--lang`) followed by the service text.
 3. An unreachable service: `unreachable`.
 4. A checkout without a binding: `not_configured`.
@@ -60,6 +61,11 @@ The code of a failure is the first of these that applies:
 | `project_policy_override` | `config`, `doctor` | A configuration file value differs from the project policy, which applies |
 | `project_policy_cache_failed` | `policy`, any command that opens the service | The project policy cache could not be written |
 | `project_policy_init_failed` | `init` | The policy step of `init` failed; the binding stands |
+| `project_rules_commit` | `init` | `init` wrote project rules files (listed in `rules_files`); commit and push them |
+| `project_rules_not_written`, `project_rules_disabled`, `project_rules_not_git` | `init` | A project rules file was not written: an error, an agent with `install_rules` off that reads it, or a directory outside Git; the binding stands |
+| `project_rules_check_skipped` | `start` | The executing agent is not checked for the project reference: its switch is off, or it is not a built-in agent with a project rules file |
+| `project_install_retired` | every command except `version`, `help`, `uninstall`, `worker`, the foreground server, and `guard-write` | The binary runs from a retired project install; it uses the global paths, and `kander doctor` cleans up |
+| `global_rules_cleaned`, `global_rules_kept`, `global_rules_cleanup_failed` | the same commands | The once-per-configuration-directory cleanup of what earlier releases wrote into the agents' global rules files: what was removed (run `kander init` in each project), a file kept by design, or a failure the next command retries |
 | `check_diagnostic` | `check` | A diagnostic line of the structural check |
 | `launch_warning` | `start`, `resume`, `orchestrate`, `issue triage` | A warning of the launch |
 | `rules_embedded_fallback` | any command that renders a rules template | The installed copy of a template is missing and the embedded one was used; run `kander doctor` |

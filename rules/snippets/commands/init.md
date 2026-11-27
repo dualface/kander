@@ -4,7 +4,7 @@ Source: moved from `KANDER-KANBAN-RULES.md` "Command Contract" ("Initializing th
 
 ## Purpose and users
 
-Binds a checkout to a service project. Used by the user when configuring a client. Normal clients never open local board storage.
+Binds a checkout to a service project and writes the project reference to the Kander rules into its project rules files. Used by the user when configuring a client. Normal clients never open local board storage.
 
 ## Syntax
 
@@ -36,12 +36,15 @@ kander init --server http://127.0.0.1:7878 --project demo /tmp/checkout
 
 - Registers or reads the service project, binds or checks its Git remote against the exact text `git remote get-url origin` prints for the checkout, and sparsely saves explicitly requested binding fields.
 - Never creates or recovers local `kanban/`, changes Git excludes, migrates cards, or prunes evidence. `KANBAN_DIR` does not select a client board.
+- After the binding succeeded, in a Git checkout, writes the project reference into the project rules file of every built-in agent below the main worktree (`CLAUDE.md` for Claude, a one-line `@~/.agents/kander/KANDER-AGENTS.md` import; `AGENTS.md` for the others, a `## Kander Rules Entry` block that names `~/.agents/kander/KANDER-AGENTS.md` and tells a reader to skip it when that file does not exist). A missing file is created; a shared file is written once; a file that already references the entry is not changed; a reference to the retired `.kander/rules/KANDER-AGENTS.md` of a project install is replaced. The `install_rules` switches decide the files: a file that an agent with its switch off reads is not written (`snippets/commands/install.md`).
+- A project rules file that resolves outside the main worktree, directly or through a symlink, is not written and is reported; a symlink inside the main worktree (`CLAUDE.md -> AGENTS.md`) is written in its target. The binding stands either way. Outside a Git checkout only the binding is written, with the reason.
+- Runs no `git add`, `git commit`, or `git push`. The Kander rules apply in task worktrees and on other hosts only after the user commits and pushes the files.
 
 - When the bound project has no project policy (revision 0), a call from a terminal (stdin and stderr are terminals, no `--json`, no `KANDER_EXECUTION_ID` or `KANDER_COORDINATOR_EXECUTION_ID`) runs the confirmation of `kander policy init`: it shows the values that would become the policy and writes them only on `y`. Any other call writes no policy and gives the `project_policy_unset` remark. A failed initialization is a `project_policy_init_failed` remark; the binding stands. `init` has no `--yes`; use `kander policy init --yes` (`snippets/commands/policy.md`).
 
 ## Output
 
-- The service project binding, then the project's board path on the server host when the server reports one, then the result of the policy step. With `--json`: `project_name`, `project_id`, `server_url`, and `board_path` (omitted when the server reports none); the policy remark is in `notices`.
+- The service project binding, then the project's board path on the server host when the server reports one, then one line per project rules file written (or already referencing the entry) with the reminder to commit and push them, then the result of the policy step. With `--json`: `project_name`, `project_id`, `server_url`, `board_path` (omitted when the server reports none), and `rules_files` (the absolute paths of the project rules files written, omitted when none); the reminder is the `project_rules_commit` notice, a file not written is `project_rules_not_written`, `project_rules_disabled`, or `project_rules_not_git`, and the policy remark is in `notices`.
 
 ## Rejections
 

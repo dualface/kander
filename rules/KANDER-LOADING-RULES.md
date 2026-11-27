@@ -1,23 +1,23 @@
 # Kander Rule Loading
 
-This file says where the Kander scope lives, which optional rule files exist, and when each one is read. `KANDER-AGENTS.md` sends every session here after the configuration and `KANDER-BASE-RULES.md`. This file is read in every session and is not controlled by the module switches.
+This file says where Kander is installed, which optional rule files exist, and when each one is read. `KANDER-AGENTS.md` sends every session here after the configuration and `KANDER-BASE-RULES.md`. This file is read in every session and is not controlled by the module switches.
 
 ## Scope
 
-The rules root is the directory containing `KANDER-AGENTS.md`. It decides the scope and the paths below:
+Kander is installed globally, once per user; there is no project install. The rules root is the directory containing `KANDER-AGENTS.md`:
 
-| Logical name    | Global install                             | Project install                        |
-| --------------- | ------------------------------------------ | -------------------------------------- |
-| Rules root      | `~/.agents/kander`                         | `<main worktree>/.kander/rules`        |
-| Command root    | `kander` on PATH (optional `~/.local/bin`) | `<main worktree>/.kander/bin`          |
-| Config file     | `~/.config/kander/config.json`             | `<main worktree>/.kander/config.json`  |
-| Share dir       | `~/.local/share/kander`                    | `<main worktree>/.kander/share`        |
-| Project overlay | `<main worktree>/.kander-config.json`      | same                                   |
+| Logical name    | Path                                       |
+| --------------- | ------------------------------------------ |
+| Rules root      | `~/.agents/kander`                         |
+| Command root    | `kander` on PATH (optional `~/.local/bin`) |
+| Config file     | `~/.config/kander/config.json`             |
+| Share dir       | `~/.local/share/kander`                    |
+| Project overlay | `<main worktree>/.kander-config.json`      |
 
 - Effective configuration = project overlay > scope `config.json` (or `KANDER_CONFIG`) > defaults. The overlay is merged at read time and is never copied into the scope file.
 - The overlay may set `agents` executable paths and argv templates; trust it like the repository's own code.
-- A project install keeps its payload only in the main worktree's `.kander/`; task worktrees share it and never copy it.
-- In every rule file, `kander` means the entry of the current scope: a global install uses `kander` on PATH, a project install uses the absolute path `<command root>/kander` and never a global command from PATH.
+- The Kander rules apply in a project whose committed project rules files (`AGENTS.md`, and `CLAUDE.md` for Claude) reference the rules entry `~/.agents/kander/KANDER-AGENTS.md`. `kander init` writes that reference; Kander writes no agent's global rules file.
+- In every rule file, `kander` means the global `kander` on PATH.
 
 ## Language Details
 
