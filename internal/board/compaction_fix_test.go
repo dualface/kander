@@ -253,3 +253,93 @@ func TestCompactionReportsUnknownEntriesItKeeps(t *testing.T) {
 		}
 	}
 }
+
+// twoRoleCompactionBoard is a done card with two settled runs in one batch,
+// one per required role.
+func twoRoleCompactionBoard(t *testing.T, slug string) (root, id string, runs []ReviewRun) {
+	t.Helper()
+	root = tempBoard(t)
+	id = pruneCard(t, root, slug, "")
+	batch := slug + "-batch"
+	requirements := map[string]string{"PMQA": "required", "Security": "required"}
+	p := ReviewPlan{Schema: 1, Sealed: true, PlanID: "plan-" + slug, Author: "coordinator", Basis: "two-role compaction fixture", CWD: "/repo", ReportLanguage: "en", TaskIDs: []string{id}, Batches: []ReviewPlanBatch{{BatchID: batch, TaskIDs: []string{id}, Base: strings.Repeat("a", 40), TargetCommit: strings.Repeat("b", 40), Requirements: requirements}}}
+	if err := CreateReviewPlan(root, p); err != nil {
+		t.Fatal(err)
+	}
+	roles := map[string]ReviewRoleConclusion{}
+	for _, role := range []string{"PMQA", "Security"} {
+		input := archiveInput([]string{id}, slug+"-"+strings.ToLower(role), role)
+		input.BatchID = batch
+		run, _, err := PrepareReviewRun(root, input, nil, nil, archiveOriginals(), "test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = StoreReviewArtifact(root, run.RunID, "evidence.txt", []byte(compactionMarker+"\n")); err != nil {
+			t.Fatal(err)
+		}
+		run.LaunchStatus, run.ExecutionStatus = "started", "ok"
+		if run, err = FinalizeReviewRun(root, run, structuredReport(emptyFindings())); err != nil {
+			t.Fatal(err)
+		}
+		run = publishRun(t, root, run.RunID)
+		assignGate(t, root, run, map[string][]string{})
+		roles[role] = passRole(run)
+		runs = append(runs, run)
+	}
+	v, err := ReadReviewBatchView(root, batch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := ReviewCloseRequest{BatchID: batch, ExpectedRevision: v.Batch.Revision, ViewHash: ReviewViewDigest(v), Author: "coordinator", Roles: roles}
+	edges, _, err := ReviewClosureEdges(v, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = CloseReviewBatch(root, r, ReviewGitEvidence{CWD: "/repo", Head: v.Batch.TargetCommit, VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano), Edges: edges}); err != nil {
+		t.Fatal(err)
+	}
+	relocateCards(t, root, "done", id)
+	return root, id, runs
+}
+
+// When one receipt of a batch cannot be removed, the other run of the batch
+// stays with it and keeps its receipt, so its originals still read as compacted.
+func TestArchivePruneRestoresTheReceiptOfARunItKeeps(t *testing.T) {
+	root, id, runs := twoRoleCompactionBoard(t, "compact-pair")
+	if report := compact(t, root, false); len(report.Runs) != 2 {
+		t.Fatalf("pair not compacted: %+v", report)
+	}
+	kept, stuck := runs[0], runs[1]
+	receipt := compactionReceiptPath(root, stuck.RunID)
+	data, err := os.ReadFile(receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Remove(receipt); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Mkdir(receipt, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	relocateCards(t, root, "archived", id)
+	if report, err := PruneArchived(root); err == nil || len(report.Runs) != 0 {
+		t.Fatalf("prune removed runs of a batch it keeps: %+v %v", report, err)
+	}
+	requireExists(t, compactionReceiptPath(root, kept.RunID), true)
+	_, err = ReadReviewOriginal(root, kept.RunID, "evidence.txt")
+	requireBoardCode(t, err, "board.review_compacted")
+	if err = os.Remove(receipt); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(receipt, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if report, err := PruneArchived(root); err != nil || !slices.Equal(report.Runs, []string{kept.RunID, stuck.RunID}) {
+		t.Fatalf("retry: %+v %v", report, err)
+	}
+	for _, run := range runs {
+		requireExists(t, compactionReceiptPath(root, run.RunID), false)
+		requireExists(t, reviewPath(root, "runs", run.RunID), false)
+	}
+	requirePrunedCheck(t, root, id)
+}

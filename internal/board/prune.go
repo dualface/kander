@@ -139,13 +139,28 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 	// Compaction receipts go before anything else. The prune receipt already
 	// covers their runs, so an interruption leaves no receipt without a run. A
 	// receipt that cannot be removed keeps its run, and planning again keeps
-	// what that run reads: its batch, its plan and its predecessors. The next
-	// round removes both.
+	// what that run reads: its batch, its plan and its predecessors. A kept run
+	// whose receipt was already removed here gets it back from the bytes read
+	// before the removal, so its compacted originals still read as compacted.
+	// The next round removes them all.
+	type removedReceipt struct {
+		data  []byte
+		files int
+		bytes int64
+	}
+	removedReceipts := map[string]removedReceipt{}
 	stuck := map[string]bool{}
 	for _, id := range sortedKeys(plan.runs) {
-		failed := len(failures)
-		remove(compactionReceiptPath(root, id), false)
-		if len(failures) > failed {
+		path := compactionReceiptPath(root, id)
+		data, exists, e := fs.ReadRegularFileIfExists(root, path)
+		if e == nil && exists {
+			var r removedReceipt
+			r.files, r.bytes, e = removePath(root, path, false)
+			r.data = data
+			removedReceipts[id] = r
+		}
+		if e != nil {
+			failures = append(failures, e)
 			stuck[id] = true
 		}
 	}
@@ -159,6 +174,15 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 			return report, errors.Join(append(failures, e)...)
 		}
 		plan, report.Warnings = next, replanned.Warnings
+	}
+	for _, id := range sortedKeys(removedReceipts) {
+		r := removedReceipts[id]
+		if plan.runs[id] {
+			report.Files += r.files
+			report.Bytes += r.bytes
+		} else if e := fs.WriteTextAtomic(root, compactionReceiptPath(root, id), string(r.data), false); e != nil {
+			failures = append(failures, e)
+		}
 	}
 	for _, path := range plan.copies {
 		remove(path, true)
