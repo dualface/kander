@@ -243,6 +243,19 @@ func policyReviewStages(raw any, problems *PolicyProblems) map[string]map[string
 	}
 	normalized, err := NormalizeReviewStages(raw)
 	if err != nil {
+		// The shape is refused before the scales are read: name the unknown roles of the
+		// scale objects here, so one correction can fix every key.
+		if obj, ok := asObject(raw); ok {
+			for _, scale := range TaskScales {
+				if roles, ok := asObject(obj[scale]); ok {
+					for _, key := range sortedKeys(roles) {
+						if !slices.Contains(ReviewRoles, key) {
+							problems.Unknown = append(problems.Unknown, PolicyKeyReviewStages+"."+scale+"."+key)
+						}
+					}
+				}
+			}
+		}
 		problems.Invalid = append(problems.Invalid, err.Error())
 		return nil
 	}

@@ -33,5 +33,6 @@
   "policy.set_boolean": "{{.V0}} 只接受 true 或 false，不接受 {{.V1}}",
   "policy.set_unset": "项目还没有项目策略；请先运行 kander policy init。",
   "policy.written": "项目策略 revision {{.V0}}（epoch {{.V1}}）已保存。",
-  "remote.error_policy_revision_conflict": "项目策略在读取后已被修改，请重新读取"
+  "remote.error_policy_revision_conflict": "项目策略在读取后已被修改，请重新读取",
+  "config.save_layered_config": "该配置含有项目覆盖层或项目策略的值，不能保存到 config.json；请通过只读作用域文件的配置（LoadScope）或 Update 修改作用域文件。"
 }

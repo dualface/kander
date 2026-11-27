@@ -162,14 +162,40 @@ func decodePolicyCache(data []byte, serverURL, projectID string) (policyCacheRec
 	return record, nil
 }
 
-// StorePolicy is the cache half of the policy refresh. Under the lock of the
-// cache file it compares snapshot with the cached policy version and writes it
-// only when it is newer: another epoch, or the same epoch with a larger
-// revision. A cache that cannot be read counts as no cache. A snapshot of
-// revision 0 replaces a cached policy with the unset record, so the values of
-// a project that was removed and imported again are not kept. It reports
-// whether it wrote.
-func StorePolicy(home, serverURL, projectID string, snapshot PolicySnapshot) (bool, error) {
+// PolicyObservation is what the cache of one project held when a refresh sent its request: the
+// digest of the cache file, or "" when there was none. StorePolicy compares it with the cache it
+// finds when the answer arrives.
+type PolicyObservation struct {
+	digest string
+}
+
+// ObservePolicyCache records the state of the cache of one project before a refresh asks the
+// server. A refresh observes first and stores the answer with the observation.
+func ObservePolicyCache(home, serverURL, projectID string) PolicyObservation {
+	path := PolicyCachePath(home, serverURL, projectID)
+	data, found, err := readPolicyCacheFile(home, path)
+	if err != nil {
+		return PolicyObservation{digest: "unreadable"}
+	}
+	if !found {
+		return PolicyObservation{}
+	}
+	sum := sha256.Sum256(data)
+	return PolicyObservation{digest: hex.EncodeToString(sum[:])}
+}
+
+// StorePolicy is the cache half of the policy refresh. Under the lock of the cache file it
+// writes snapshot only when its policy version is newer than the cached one: another epoch, or
+// the same epoch with a larger revision. A cache that cannot be read counts as no cache. A
+// snapshot of revision 0 replaces a cached policy with the unset record, so the values of a
+// project that was removed and imported again are not kept.
+//
+// The version alone cannot order answers of different epochs or an unset answer, so observed
+// decides those: when the cache changed after the refresh observed it, another process stored
+// an answer while this request was in flight, and only a same-epoch answer with a larger
+// revision may still replace it. An older answer of a concurrent process therefore never
+// replaces a newer cache. It reports whether it wrote.
+func StorePolicy(home, serverURL, projectID string, observed PolicyObservation, snapshot PolicySnapshot) (bool, error) {
 	path := PolicyCachePath(home, serverURL, projectID)
 	if err := ensurePrivateDir(home, filepath.Dir(path)); err != nil {
 		return false, err
@@ -179,6 +205,11 @@ func StorePolicy(home, serverURL, projectID string, snapshot PolicySnapshot) (bo
 		current := ReadPolicyCache(home, serverURL, projectID)
 		if current.Status == PolicyCacheSet || current.Status == PolicyCacheUnset {
 			if !policyVersionNewer(snapshot, current.Snapshot) {
+				return nil
+			}
+			changed := ObservePolicyCache(home, serverURL, projectID) != observed
+			sameEpochNewer := snapshot.Revision > 0 && snapshot.Epoch == current.Snapshot.Epoch
+			if changed && !sameEpochNewer {
 				return nil
 			}
 		}
@@ -404,6 +435,7 @@ func applyPolicyValues(cfg *Config, source string, snapshot PolicySnapshot, valu
 		cfg.policyLocal = &local
 	}
 	values.ApplyTo(cfg)
+	cfg.layered = true
 	state := PolicyState{Source: source, Epoch: snapshot.Epoch, Revision: snapshot.Revision}
 	for _, path := range ignored {
 		state.Notices = append(state.Notices, PolicyNotice{NoticePolicyIgnored, Text("policy.ignored_key", path)})

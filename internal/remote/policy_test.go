@@ -78,7 +78,7 @@ func TestRefreshPolicyWritesOnlyNewerVersions(t *testing.T) {
 		{api.ProjectPolicy{Epoch: "e1", Revision: 3, Values: values}, true},
 		{api.ProjectPolicy{Epoch: "e2", Revision: 1, Values: values}, true},
 	} {
-		stored, err := RefreshPolicy(home, "http://127.0.0.1:1", "p-1", step.policy)
+		stored, err := RefreshPolicy(home, "http://127.0.0.1:1", "p-1", ObservePolicy(home, "http://127.0.0.1:1", "p-1"), step.policy)
 		if err != nil || stored != step.stored {
 			t.Fatalf("%+v: stored=%v err=%v", step.policy, stored, err)
 		}
@@ -344,5 +344,41 @@ func TestConfigurationReadsAfterOpenUseTheServerAnswerWithoutACache(t *testing.T
 	}
 	if again.AgentLanguage != "ja" || again.Policy.Source != config.PolicySourceServer || again.Policy.Revision != 3 {
 		t.Fatalf("a later read used %q %+v", again.AgentLanguage, again.Policy)
+	}
+}
+
+// A server that answers without a policy (an older one) is an unset policy for the whole command:
+// a later configuration read does not take the values of a cache an earlier server wrote.
+func TestServerWithoutPoliciesIsUnsetForLaterReadsOfTheCommand(t *testing.T) {
+	isolatePolicyCommands(t)
+	fake := &fakePolicyServer{project: false}
+	url := fake.serve(t)
+	client := newPolicyClient(t, url, func(cfg *config.Config) { cfg.AgentLanguage = "en" })
+	values := strings.Replace(newerPolicyValues, `"agent_language":"en"`, `"agent_language":"ja"`, 1)
+	id := api.ProjectID("golf")
+	if _, err := config.StorePolicy(client.home, url, id, config.ObservePolicyCache(client.home, url, id), config.PolicySnapshot{Epoch: "e1", Revision: 2, Values: json.RawMessage(values)}); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, err := config.Load(false); err != nil || cfg.AgentLanguage != "ja" {
+		t.Fatalf("the cached policy did not apply before the command: %v %+v", err, cfg)
+	}
+	var remarks bytes.Buffer
+	stderr = &remarks
+	cfg, err := config.Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(t.Context(), cfg, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	again, err := config.Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AgentLanguage != "en" || again.AgentLanguage != "en" || again.Policy.Source != config.PolicySourceLocal {
+		t.Fatalf("after Open: %q, later read %q %+v", cfg.AgentLanguage, again.AgentLanguage, again.Policy)
+	}
+	if code, _, errOut := runCommand(NewPolicyCommand, "show", "--json"); code != 1 || !strings.Contains(errOut, CodePolicyUnsupported) {
+		t.Fatalf("policy show: code=%d err=%q", code, errOut)
 	}
 }

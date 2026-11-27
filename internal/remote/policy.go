@@ -36,22 +36,31 @@ func PolicySnapshot(p api.ProjectPolicy) config.PolicySnapshot {
 // wrote. serverURL and projectID key the cache: a command passes its
 // configured server URL and the project ID of its session, the worker the
 // ServerURL and ProjectID of an execution credential.
-func RefreshPolicy(home, serverURL, projectID string, policy api.ProjectPolicy) (bool, error) {
+//
+// observed is ObservePolicy taken before the request that produced policy was sent; it keeps a
+// slow answer from replacing what another process stored meanwhile.
+func RefreshPolicy(home, serverURL, projectID string, observed config.PolicyObservation, policy api.ProjectPolicy) (bool, error) {
 	// The answer also stays in this process, so a later configuration read of the same
 	// command uses it even when the cache cannot be written.
 	config.RememberServerPolicy(home, serverURL, projectID, PolicySnapshot(policy))
-	return config.StorePolicy(home, serverURL, projectID, PolicySnapshot(policy))
+	return config.StorePolicy(home, serverURL, projectID, observed, PolicySnapshot(policy))
+}
+
+// ObservePolicy records the policy cache of one project before a refresh sends its request.
+func ObservePolicy(home, serverURL, projectID string) config.PolicyObservation {
+	return config.ObservePolicyCache(home, serverURL, projectID)
 }
 
 // FetchPolicy reads the policy of the session's project from the server,
 // refreshes the policy cache with it, and returns it. A failed cache write is
 // returned as cacheErr beside the policy.
 func (s *Session) FetchPolicy(ctx context.Context) (policy api.ProjectPolicy, cacheErr error, err error) {
+	observed := ObservePolicy(s.Home, s.ServerURL, s.Info.ID)
 	policy, err = s.Project.Policy(ctx)
 	if err != nil {
 		return api.ProjectPolicy{}, nil, err
 	}
-	_, cacheErr = RefreshPolicy(s.Home, s.ServerURL, s.Info.ID, policy)
+	_, cacheErr = RefreshPolicy(s.Home, s.ServerURL, s.Info.ID, observed, policy)
 	return policy, cacheErr, nil
 }
 
@@ -66,13 +75,18 @@ func CredentialPolicy(home string, c Credential) config.PolicyCache {
 // values. A server without project policies counts as an unset policy. A
 // failed cache write is only a remark. The remarks about the policy go out
 // unless quiet.
-func applySessionPolicy(cfg *config.Config, home, serverURL string, info api.Project, quiet bool) {
+func applySessionPolicy(cfg *config.Config, home, serverURL string, observed config.PolicyObservation, info api.Project, quiet bool) {
 	var snapshot config.PolicySnapshot
 	if info.Policy != nil {
 		snapshot = PolicySnapshot(*info.Policy)
-		if _, err := RefreshPolicy(home, serverURL, info.ID, *info.Policy); err != nil {
+		if _, err := RefreshPolicy(home, serverURL, info.ID, observed, *info.Policy); err != nil {
 			remark("project_policy_cache_failed", config.Text("policy.cache_write_failed", err.Error()))
 		}
+	} else {
+		// A server without project policies counts as unset for the whole command: a later
+		// configuration read must not take the values of a cache an earlier server wrote.
+		// The cache itself stays; the policy commands still report the server as too old.
+		config.RememberServerPolicy(home, serverURL, info.ID, snapshot)
 	}
 	config.ApplyServerPolicy(cfg, snapshot)
 	if quiet {
@@ -277,11 +291,12 @@ func runPolicySet(key, raw string) error {
 // returned as it is: the command never retries it.
 func putPolicy(ctx context.Context, s *Session, write api.PolicyWrite) (*api.ProjectPolicy, error) {
 	write.Submitter = GitSubmitter(ctx)
+	observed := ObservePolicy(s.Home, s.ServerURL, s.Info.ID)
 	written, err := s.Project.PutPolicy(ctx, client.NewKey(), write)
 	if err != nil {
 		return nil, err
 	}
-	_, cacheErr := RefreshPolicy(s.Home, s.ServerURL, s.Info.ID, written)
+	_, cacheErr := RefreshPolicy(s.Home, s.ServerURL, s.Info.ID, observed, written)
 	reportCacheFailure(cacheErr)
 	return &written, nil
 }

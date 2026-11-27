@@ -33,5 +33,6 @@
   "policy.set_boolean": "{{.V0}} takes true or false, not {{.V1}}",
   "policy.set_unset": "The project has no project policy yet; run kander policy init first.",
   "policy.written": "Project policy revision {{.V0}} (epoch {{.V1}}) is saved.",
-  "remote.error_policy_revision_conflict": "the project policy changed since it was read; read it again"
+  "remote.error_policy_revision_conflict": "the project policy changed since it was read; read it again",
+  "config.save_layered_config": "This configuration holds project overlay or project policy values and cannot be saved to config.json; change the scope file through a scope read (LoadScope) or Update."
 }

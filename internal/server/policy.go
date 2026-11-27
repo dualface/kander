@@ -219,7 +219,10 @@ func (p *project) appendPolicyLine(line []byte) error {
 // the whole policy on its revision, with an audit line per write attempt. The
 // request is checked before the idempotency receipt exists, so a refused
 // request leaves no receipt and the client may send a corrected one with the
-// same key.
+// same key. The submitter comes from the Attribution hook when there is one,
+// and its value can differ between a request and its retry, so it is checked
+// only for a write that runs: a retry whose receipt exists replays the first
+// result whatever the hook answers now.
 func (p *project) putPolicy(key string, req api.PolicyWrite, submitter, clientID string) outcome {
 	if !api.ValidIdentity(clientID) {
 		return outcome{err: apiError(api.CodeInvalidRequest, api.HeaderClientID+" header is required and must be an identity")}
@@ -227,10 +230,6 @@ func (p *project) putPolicy(key string, req api.PolicyWrite, submitter, clientID
 	values, err := config.ValidatePolicyValues(req.Values)
 	if err != nil {
 		return outcome{err: apiError(api.CodeInvalidRequest, err.Error())}
-	}
-	updatedBy, err := board.NormalizePersonField("submitter", submitter)
-	if err != nil {
-		return outcome{err: err}
 	}
 	canonical, err := json.Marshal(values)
 	if err != nil {
@@ -243,7 +242,26 @@ func (p *project) putPolicy(key string, req api.PolicyWrite, submitter, clientID
 	if p.policyBroken {
 		return outcome{err: apiError(api.CodeNotReady, "project "+p.info.Name+" has a project policy write that could not be settled; restart the server to recover it")}
 	}
-	run := func() outcome { return p.writePolicy(key, req.ExpectedRevision, canonical, updatedBy, clientID) }
+	if api.ValidIdentity(key) {
+		var existing receipt
+		found, err := readJSON(p.root, keyReceipt(key).rel(), &existing)
+		if err != nil {
+			return outcome{err: err}
+		}
+		if !found {
+			// A new request: refuse a bad submitter before its receipt exists.
+			if _, err := board.NormalizePersonField("submitter", submitter); err != nil {
+				return outcome{err: err}
+			}
+		}
+	}
+	run := func() outcome {
+		updatedBy, err := board.NormalizePersonField("submitter", submitter)
+		if err != nil {
+			return outcome{err: err}
+		}
+		return p.writePolicy(key, req.ExpectedRevision, canonical, updatedBy, clientID)
+	}
 	return p.idempotent(key, policyOperation, req, run, func() (outcome, bool) { return p.policyApplied(key) })
 }
 

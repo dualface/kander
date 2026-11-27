@@ -117,6 +117,7 @@ func (l layerDocuments) withPolicy(cfg *Config) *Config {
 	}
 	scope.path, _ = ConfigPath()
 	applyPolicyCache(out, []policyLayer{scope, {path: l.overlayPath, doc: l.overlay}})
+	out.layered = out.layered || l.overlay != nil
 	return out
 }
 
@@ -310,7 +311,7 @@ func Effective(cfg *Config) (*Config, error) {
 			return nil, err
 		}
 		carryIgnored(validated, cfg)
-		validated.Policy, validated.policyLocal = cfg.Policy, cfg.policyLocal
+		validated.Policy, validated.policyLocal, validated.layered = cfg.Policy, cfg.policyLocal, cfg.layered
 		cfg = validated
 	}
 	if cfg.WelcomeComplete {
@@ -321,7 +322,7 @@ func Effective(cfg *Config) (*Config, error) {
 	if cfg.Policy.Applied() {
 		// The project policy applies whether or not this host finished its welcome.
 		PolicyValuesOf(cfg).ApplyTo(defaults)
-		defaults.Policy, defaults.policyLocal = cfg.Policy, cfg.policyLocal
+		defaults.Policy, defaults.policyLocal, defaults.layered = cfg.Policy, cfg.policyLocal, cfg.layered
 	}
 	// Service binding is independent of completing the interface welcome.
 	defaults.Server, defaults.Project = cfg.Server, cfg.Project
@@ -398,11 +399,10 @@ func withConfigLockFile(dataPath, lockPath string, fn func() error) error {
 // The file's current content is read inside the caller's lock, and what this version
 // ignores in it (see Ignored) is written back into the new document unchanged.
 func saveConfigAt(path string, cfg *Config) (string, error) {
-	if cfg.Policy.Applied() {
-		// A configuration Load returned carries the project policy in its fields. The
-		// file gets the values the policy replaced, never the policy values.
-		cfg = Clone(cfg)
-		LocalPolicyValues(cfg).ApplyTo(cfg)
+	if cfg.layered {
+		// Overlay and policy values sit in the same fields as the file's own; writing
+		// them would move project settings into the scope file.
+		return "", configErrorf("config.save_layered_config")
 	}
 	encoded, err := json.Marshal(cfg)
 	if err != nil {

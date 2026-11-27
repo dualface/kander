@@ -183,6 +183,10 @@ type Config struct {
 	Policy PolicyState `json:"-"`
 	// policyLocal are the file values a policy replaced; nil while none did.
 	policyLocal *PolicyValues
+	// layered marks a configuration that holds more than the scope file: a project
+	// overlay or a project policy merged by Load, or the display of kander config.
+	// Save refuses it, so neither ever lands in config.json.
+	layered bool
 }
 
 // Clone deep-copies the config so a long-lived editing session can keep its baseline.

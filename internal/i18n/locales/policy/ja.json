@@ -33,5 +33,6 @@
   "policy.set_boolean": "{{.V0}} には true か false を指定してください（{{.V1}} は不可）",
   "policy.set_unset": "プロジェクトにはまだプロジェクトポリシーがありません。先に kander policy init を実行してください。",
   "policy.written": "プロジェクトポリシー revision {{.V0}}（epoch {{.V1}}）を保存しました。",
-  "remote.error_policy_revision_conflict": "読み込んだ後にプロジェクトポリシーが変更されました。もう一度読み込んでください"
+  "remote.error_policy_revision_conflict": "読み込んだ後にプロジェクトポリシーが変更されました。もう一度読み込んでください",
+  "config.save_layered_config": "この設定にはプロジェクトのオーバーレイまたはプロジェクトポリシーの値が含まれるため、config.json に保存できません。スコープファイルのみを読み込んだ設定（LoadScope）か Update で変更してください。"
 }

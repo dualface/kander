@@ -224,11 +224,13 @@ func OpenWith(ctx context.Context, cfg *config.Config, dir string, options OpenO
 	if err != nil {
 		return nil, err
 	}
+	// The cache is observed before the registration asks for the policy (see RefreshPolicy).
+	observed := ObservePolicy(home, config.ServerURL(cfg), config.ProjectIDForName(cfg.Project.Name))
 	info, err := c.Register(ctx, cfg.Project.Name, repository)
 	if err != nil {
 		return nil, err
 	}
-	applySessionPolicy(cfg, home, config.ServerURL(cfg), info, options.QuietPolicy)
+	applySessionPolicy(cfg, home, config.ServerURL(cfg), observed, info, options.QuietPolicy)
 	return &Session{afterQuestion: prompted, operationBudget: operationBudget, ServerURL: config.ServerURL(cfg), Client: c, Project: c.Project(info.ID), Info: info, Home: home}, nil
 }
 

@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -585,5 +586,27 @@ func TestPolicyRefusedValuesLeaveNoReceipt(t *testing.T) {
 	replayed, err := f.put("k-fix", 0, policyValues("main-only"))
 	if err != nil || replayed.Epoch != written.Epoch || replayed.Revision != 1 {
 		t.Fatalf("the replay: %+v %v", replayed, err)
+	}
+}
+
+// A retry replays the first result even when the Attribution hook answers another, invalid name
+// now; a new request with that name is refused before any receipt exists.
+func TestPolicyRetryReplaysWhenTheAttributionChanges(t *testing.T) {
+	var name atomic.Value
+	name.Store("Dev One")
+	f := newPolicyFixture(t, Hooks{Attribution: func(context.Context) (string, bool) { return name.Load().(string), true }})
+	first, err := f.put("k-one", 0, policyValues("main-only"))
+	if err != nil || first.UpdatedBy != "Dev One" {
+		t.Fatalf("first %+v %v", first, err)
+	}
+	name.Store(strings.Repeat("x", 300))
+	retry, err := f.put("k-one", 0, policyValues("main-only"))
+	if err != nil || retry.Epoch != first.Epoch || retry.Revision != 1 || retry.UpdatedBy != "Dev One" {
+		t.Fatalf("retry %+v %v", retry, err)
+	}
+	_, err = f.put("k-two", 1, policyValues("main-develop"))
+	requireAPICode(t, err, api.CodeInvalidRequest, 400)
+	if _, statErr := os.Stat(filepath.Join(f.root(), receiptPath("k-two"))); !os.IsNotExist(statErr) {
+		t.Fatalf("the refused request left a receipt: %v", statErr)
 	}
 }

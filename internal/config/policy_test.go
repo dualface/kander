@@ -183,7 +183,8 @@ func isolatePolicyClient(t *testing.T, scope map[string]any) (home, scopePath st
 
 func storePolicy(t *testing.T, home string, snapshot PolicySnapshot) bool {
 	t.Helper()
-	stored, err := StorePolicy(home, "http://example.test:7878", ProjectIDForName("golf"), snapshot)
+	observed := ObservePolicyCache(home, "http://example.test:7878", ProjectIDForName("golf"))
+	stored, err := StorePolicy(home, "http://example.test:7878", ProjectIDForName("golf"), observed, snapshot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,7 +397,7 @@ func TestPolicyCacheIsPrivateAtomicAndRefusesLinks(t *testing.T) {
 	if got := ReadPolicyCache(home, "http://example.test:7878", ProjectIDForName("golf")); got.Status != PolicyCacheInvalid {
 		t.Fatalf("a symlinked cache read as %v", got.Status)
 	}
-	if _, err := StorePolicy(home, "http://example.test:7878", ProjectIDForName("golf"), policySnapshot(t, "e1", 2, validPolicyDocument())); err == nil {
+	if _, err := StorePolicy(home, "http://example.test:7878", ProjectIDForName("golf"), ObservePolicyCache(home, "http://example.test:7878", ProjectIDForName("golf")), policySnapshot(t, "e1", 2, validPolicyDocument())); err == nil {
 		if info, lerr := os.Lstat(path); lerr == nil && info.Mode()&os.ModeSymlink != 0 {
 			t.Fatal("the store wrote through the symlink")
 		}
@@ -486,47 +487,120 @@ func loadedPolicyConfig(t *testing.T) *Config {
 	return cfg
 }
 
-// Save of a configuration Load returned writes the file values the policy replaced, together
-// with the host setting the caller changed.
-func TestSaveOfALoadedConfigurationKeepsThePolicyOut(t *testing.T) {
+// Save refuses a configuration that holds more than the scope file: a Load result with an
+// overlay or a policy, and the display of kander config. The scope file stays as it was, and
+// Update still changes a host setting.
+func TestSaveRefusesLoadedAndDisplayedConfigurations(t *testing.T) {
 	home, scopePath := isolatePolicyClient(t, map[string]any{"git": map[string]any{"branch_mode": "main-develop"}})
-	storePolicy(t, home, policySnapshot(t, "e1", 1, validPolicyDocument()))
-	cfg := loadedPolicyConfig(t)
-	if cfg.Git.BranchMode != "main-only" {
-		t.Fatalf("policy not applied: %q", cfg.Git.BranchMode)
-	}
-	cfg.TUI.Columns = 4
-	if _, err := Save(cfg); err != nil {
-		t.Fatal(err)
-	}
-	data, err := os.ReadFile(scopePath)
+	before, err := os.ReadFile(scopePath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, value := range []string{"main-only", "zh-CN", `"required"`, `"ask"`} {
-		if strings.Contains(string(data), value) {
-			t.Errorf("the scope file holds the policy value %s:\n%s", value, data)
+	refused := func(name string, cfg *Config) {
+		t.Helper()
+		cfg.TUI.Columns = 4
+		if _, err := Save(cfg); err == nil || err.Error() != Text("config.save_layered_config") {
+			t.Fatalf("%s: Save returned %v", name, err)
+		}
+		if after, _ := os.ReadFile(scopePath); string(after) != string(before) {
+			t.Fatalf("%s: the scope file changed:\n%s", name, after)
 		}
 	}
+	// A project overlay, no policy.
+	writeJSONFile(t, filepath.Join(mustGetwd(t), OverlayFilename), map[string]any{"agent_language": "ja"})
+	refused("overlay", loadedPolicyConfig(t))
+	// A cached policy.
+	storePolicy(t, home, policySnapshot(t, "e1", 1, validPolicyDocument()))
+	refused("policy", loadedPolicyConfig(t))
+	layered, err := LoadWithDisplay(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	refused("display", layered.Display)
+	refused("loaded", layered.Loaded)
+	// A configuration a server policy was applied to.
 	scope, err := LoadScope(false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if scope.TUI.Columns != 4 || scope.Git.BranchMode != "main-develop" {
-		t.Fatalf("scope after save: columns %d branch mode %q", scope.TUI.Columns, scope.Git.BranchMode)
+	ApplyServerPolicy(scope, policySnapshot(t, "e1", 2, validPolicyDocument()))
+	refused("server policy", scope)
+	// The scope read and Update still save.
+	if _, err := Update(func(cfg *Config) error { cfg.TUI.Columns = 4; return nil }); err != nil {
+		t.Fatal(err)
 	}
-	if cfg.Git.BranchMode != "main-only" {
-		t.Fatal("Save changed the caller's configuration")
+	plain, err := LoadScope(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plain.TUI.Columns != 4 || plain.Git.BranchMode != "main-develop" || plain.AgentLanguage == "ja" {
+		t.Fatalf("scope after update: %+v", plain)
+	}
+	if _, err := Save(plain); err != nil {
+		t.Fatalf("a scope read could not be saved: %v", err)
 	}
 }
 
 // A review_stages section with both scale and role keys is refused and still names its unknown keys.
 func TestValidatePolicyValuesNamesUnknownStageKeysOfAMixedSection(t *testing.T) {
 	doc := validPolicyDocument()
-	doc["review_stages"] = map[string]any{"large": map[string]any{"PMQA": "auto", "Security": "auto"}, "PMQA": "auto", "future": "x"}
+	doc["review_stages"] = map[string]any{"large": map[string]any{"PMQA": "auto", "Security": "auto", "future": "auto"}, "PMQA": "auto", "future": "x"}
 	_, err := ValidatePolicyValues(policyJSON(t, doc))
 	problems := policyProblems(t, err)
-	if !slices.Equal(problems.Unknown, []string{"review_stages.future"}) || len(problems.Invalid) == 0 {
+	if !slices.Equal(problems.Unknown, []string{"review_stages.future", "review_stages.large.future"}) || len(problems.Invalid) == 0 {
 		t.Fatalf("problems %+v", problems)
+	}
+}
+
+// An answer that was in flight while another process stored a policy never replaces it with an
+// unset record or another epoch; a same-epoch answer with a larger revision still does.
+func TestStorePolicyRefusesAStaleAnswerOfAConcurrentRefresh(t *testing.T) {
+	home, _ := isolatePolicyClient(t, nil)
+	const url = "http://example.test:7878"
+	id := ProjectIDForName("golf")
+	read := func() PolicyCache { return ReadPolicyCache(home, url, id) }
+	store := func(observed PolicyObservation, snapshot PolicySnapshot) bool {
+		t.Helper()
+		stored, err := StorePolicy(home, url, id, observed, snapshot)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return stored
+	}
+
+	// A asks before the first initialization, B after it; B's answer is stored first.
+	observedByA := ObservePolicyCache(home, url, id)
+	if !store(ObservePolicyCache(home, url, id), policySnapshot(t, "e1", 1, validPolicyDocument())) {
+		t.Fatal("B's answer was not stored")
+	}
+	if store(observedByA, PolicySnapshot{}) {
+		t.Fatal("A's older unset answer replaced the initialized policy")
+	}
+	if got := read(); got.Status != PolicyCacheSet || got.Snapshot.Revision != 1 {
+		t.Fatalf("cache %+v", got)
+	}
+
+	// An answer of another epoch that was in flight while a newer revision was stored loses too,
+	// while a same-epoch answer with a larger revision still wins.
+	observedByA = ObservePolicyCache(home, url, id)
+	if !store(ObservePolicyCache(home, url, id), policySnapshot(t, "e1", 2, validPolicyDocument())) {
+		t.Fatal("revision 2 was not stored")
+	}
+	if store(observedByA, policySnapshot(t, "e0", 7, validPolicyDocument())) {
+		t.Fatal("a stale answer of another epoch replaced the cache")
+	}
+	if !store(observedByA, policySnapshot(t, "e1", 3, validPolicyDocument())) {
+		t.Fatal("a same-epoch answer with a larger revision was refused")
+	}
+
+	// Nothing stored in between: a real unset transition and a new epoch apply.
+	if !store(ObservePolicyCache(home, url, id), PolicySnapshot{}) {
+		t.Fatal("a real unset transition was refused")
+	}
+	if !store(ObservePolicyCache(home, url, id), policySnapshot(t, "e2", 1, validPolicyDocument())) {
+		t.Fatal("the policy of a new epoch was refused")
+	}
+	if got := read(); got.Status != PolicyCacheSet || got.Snapshot.Epoch != "e2" {
+		t.Fatalf("cache %+v", got)
 	}
 }

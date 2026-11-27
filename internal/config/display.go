@@ -61,6 +61,7 @@ func LoadWithDisplay(missingOK bool) (LayeredConfig, error) {
 			PolicyValuesOf(loaded).ApplyTo(display)
 		}
 		display.Policy = loaded.Policy
+		display.layered = true
 	}
 	return LayeredConfig{Loaded: loaded, Display: display, Language: language}, nil
 }
