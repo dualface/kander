@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix (v2, tests) — The `internal/server` import tests no longer read the server address from the developer's configuration. With a project overlay (`.kander-config.json` in the main worktree) that names a non-loopback `server.url`, seven import tests uploaded their fixture board to that real server instead of importing into their temporary data directory, and failed with `board import conflicts` once the day's fixture IDs existed there. `TestMain` now pins the import target to the loopback default; only the test that checks the configured target reads the configuration.
 - Fix (v2, launch) — Renaming an agent session waits for the agent state the terminal reports, not for composer text. Claude Code fills its empty composer with prompt suggestions such as `Try "fix lint errors"`, so the old composer match never held: on herdr-core the TUI chat and `kander start` launched Claude without its prompt and failed with `Timed out waiting for the agent TUI`. On herdr-core the pane must report the agent's app as idle or done; on herdr and luvus the terminal must recognize the agent (or its dialect) as idle or done. On tmux, tmux-session, and dsh, which report no agent state, the session is not renamed, the prompt stays in argv, and one warning says so. The built-in Claude, Codex, and Cursor definitions no longer carry `rename_delivery.ready`; a user definition that has one still loads, but it is not used. See [Interactive session naming](docs/launch-and-delivery.md#interactive-session-naming).
 
 ## v2.0.0-beta.3 — 2026-11-28
