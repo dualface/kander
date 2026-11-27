@@ -164,6 +164,17 @@ func (p *project) createRequest(scope receiptScope, id string, input api.NewColl
 			}
 			return request, apiError(api.CodeLeaseInvalid, "request target generation is not the claim's")
 		}
+		// The request ID derives from the key alone. A creation in another
+		// receipt scope with the same key reaches this point without a receipt
+		// and must never replace, nor be answered with, the request another
+		// scope created, also when it repeats the dispatch of that request.
+		newID := requestID(scope.key)
+		if taken, err := p.requestIDTaken(newID); err != nil || taken {
+			if err == nil {
+				err = apiError(api.CodeIdempotencyMismatch, "idempotency key already created another request")
+			}
+			return request, err
+		}
 		if input.Dispatch != nil {
 			previous, err := p.readRequests(normalized)
 			if err != nil {
@@ -191,16 +202,6 @@ func (p *project) createRequest(scope receiptScope, id string, input api.NewColl
 					return request, err
 				}
 			}
-		}
-		// The request ID derives from the key alone. A creation in another
-		// receipt scope with the same key reaches this point without a receipt
-		// and must never replace the request another scope created.
-		newID := requestID(scope.key)
-		if taken, err := p.requestIDTaken(newID); err != nil || taken {
-			if err == nil {
-				err = apiError(api.CodeIdempotencyMismatch, "idempotency key already created another request")
-			}
-			return request, err
 		}
 		now := p.server.now()
 		dispatch := input.Dispatch

@@ -185,7 +185,17 @@ func (p *project) execution(scope receiptScope, id string, u api.ExecutionUpdate
 				return outcome{err: apiError(api.CodeEvidenceIncomplete, "lease release requires a decision and a fresh confirmed stopped executor")}
 			}
 			err = p.boardTransaction(board.LockScope{Tasks: []string{id}}, func(tx *board.Transaction) error {
-				return stageJSON(tx, "releases/"+id+"/"+digest(scope.key)+".json", struct {
+				// The record name derives from the key alone. A release of a later
+				// generation in another receipt scope with the same key must never
+				// replace the record of an earlier release.
+				name := "releases/" + id + "/" + digest(scope.key) + ".json"
+				if _, found, err := tx.ReadGroup(serviceGroup, name); err != nil || found {
+					if err == nil {
+						err = apiError(api.CodeIdempotencyMismatch, "idempotency key already recorded another release")
+					}
+					return err
+				}
+				return stageJSON(tx, name, struct {
 					Generation  uint64    `json:"generation"`
 					ExecutionID string    `json:"execution_id"`
 					ClientID    string    `json:"client_id"`

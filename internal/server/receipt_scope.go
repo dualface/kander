@@ -70,8 +70,10 @@ func holderDigest(h holder) string {
 }
 
 // receiptScopeDomain separates the names of scoped receipts from the legacy
-// names, which hash the key alone.
-const receiptScopeDomain = "receipt-scope-v1"
+// names, which hash the key alone. It ends in a NUL byte, which no key can
+// hold (api.ValidIdentity), so no legacy name hashes the same bytes even when
+// a key spells out the printable rest of a scoped encoding.
+const receiptScopeDomain = "receipt-scope-v1\x00"
 
 // receipt is where the receipt of operation in this scope is kept: one file
 // below the receipts directory whose name hashes the operation, the scope, and
