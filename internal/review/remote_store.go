@@ -299,9 +299,12 @@ func (s *remoteReviewStore) status(id string) (bool, error) {
 	}
 	return value.NeedsInterpretation, err
 }
+
+// Compacted reads the optional compacted field of the run resource; a server
+// that predates compaction omits it, and its runs are never compacted.
 func (s *remoteReviewStore) Compacted(id string) (bool, error) {
-	raw, err := s.session.Project.ReviewEvidence(context.Background(), id, "compaction", "")
-	var value api.ReviewCompaction
+	raw, err := s.session.Project.ReviewResource(context.Background(), "runs", id)
+	var value api.ReviewRunState
 	if err == nil {
 		err = json.Unmarshal(raw, &value)
 	}

@@ -3,7 +3,6 @@ package server
 import (
 	"net/http"
 
-	"github.com/dualface/kander/v2/api"
 	"github.com/dualface/kander/v2/internal/board"
 )
 
@@ -34,10 +33,6 @@ func (s *Server) reviewEvidenceRoutes(mux *routeTable) {
 			return outcome{err: apiError("invalid_request", "unsupported review evidence kind")}
 		}
 		return result(http.StatusOK, data, err)
-	})
-	s.projectRoute(mux, "GET "+base+"/compaction", func(p *project, r *http.Request) outcome {
-		compacted, err := board.ReviewRunCompacted(p.board, r.PathValue("run"))
-		return result(http.StatusOK, api.ReviewCompaction{Compacted: compacted}, err)
 	})
 	s.projectRoute(mux, "GET "+base+"/incremental", func(p *project, r *http.Request) outcome {
 		data, err := board.ReviewIncrementalContext(p.board, r.PathValue("run"))

@@ -15,10 +15,13 @@ type ReviewPrepare struct {
 	WriterHash   string               `json:"writer_hash"`
 }
 
-// ReviewCompaction is GET .../reviews/evidence/{run}/compaction: whether a
-// settled run was compacted. An unknown run is not compacted.
-type ReviewCompaction struct {
-	Compacted bool `json:"compacted"`
+// ReviewRunState is GET .../reviews/runs/{run}: the stored run and, when a
+// compaction removed its large evidence after it settled, compacted set to
+// true. A server before compaction never sends the field, which reads as not
+// compacted.
+type ReviewRunState struct {
+	board.ReviewRun
+	Compacted bool `json:"compacted,omitempty"`
 }
 
 type ReviewArtifact struct {

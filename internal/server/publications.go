@@ -224,33 +224,20 @@ func (s *Server) publicationRoutes(mux *routeTable) {
 }
 
 // compactedPublicationRuns lists the runs a material names that are compacted
-// now. A review-prepare material names its run in input.run_id, a
-// review-publish:<run> operation in its name, and the interpret, map-legacy,
-// abandon, assign and disposition materials in run_id or disposition.run_id.
-// The material itself never changes; only the response shows the state.
+// now. The material itself never changes; only the response shows the state.
 func (p *project) compactedPublicationRuns(value api.Publication) ([]string, error) {
 	ids := map[string]bool{}
 	if id, ok := strings.CutPrefix(value.Operation, "review-publish:"); ok {
 		ids[id] = true
 	}
-	var material struct {
-		RunID string `json:"run_id"`
-		Input struct {
-			RunID string `json:"run_id"`
-		} `json:"input"`
-		Disposition struct {
-			RunID string `json:"run_id"`
-		} `json:"disposition"`
-	}
-	// Materials that are no JSON object, such as the run ID of a publish, name no run here.
+	var material any
+	// A material that is no JSON names no run beyond its operation.
 	if json.Unmarshal(value.Payload, &material) == nil {
-		for _, id := range []string{material.RunID, material.Input.RunID, material.Disposition.RunID} {
-			ids[id] = id != ""
-		}
+		publicationRunReferences(material, "", ids)
 	}
 	var compacted []string
 	for _, id := range slices.Sorted(maps.Keys(ids)) {
-		if !ids[id] || !board.ValidReviewID(id) {
+		if !board.ValidReviewID(id) {
 			continue
 		}
 		ok, err := board.ReviewRunCompacted(p.board, id)
@@ -262,4 +249,42 @@ func (p *project) compactedPublicationRuns(value api.Publication) ([]string, err
 		}
 	}
 	return compacted, nil
+}
+
+// publicationRunReferences collects the review runs a material names at any
+// depth, by the field names the review records use for them: run_id and
+// previous_run_id (prepare input, assign, disposition, interpret, map-legacy,
+// abandon, close roles and mechanical assessments, resolve-batch findings and
+// runs), run_ids, and the keys and replacements of superseded_runs.
+func publicationRunReferences(value any, parent string, ids map[string]bool) {
+	add := func(v any) {
+		if id, ok := v.(string); ok && id != "" {
+			ids[id] = true
+		}
+	}
+	switch v := value.(type) {
+	case []any:
+		for _, item := range v {
+			publicationRunReferences(item, parent, ids)
+		}
+	case map[string]any:
+		for key, item := range v {
+			switch {
+			case key == "run_id" || key == "previous_run_id":
+				add(item)
+			case key == "run_ids":
+				if list, ok := item.([]any); ok {
+					for _, id := range list {
+						add(id)
+					}
+				}
+			case parent == "superseded_runs":
+				add(key)
+				if run, ok := item.(map[string]any); ok {
+					add(run["replacement"])
+				}
+			}
+			publicationRunReferences(item, key, ids)
+		}
+	}
 }

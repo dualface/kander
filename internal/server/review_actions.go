@@ -29,7 +29,11 @@ func (s *Server) reviewActionRoutes(mux *routeTable) {
 		if err == nil && !found {
 			err = apiError(api.CodeNotFound, "review run does not exist")
 		}
-		return result(http.StatusOK, value, err)
+		state := api.ReviewRunState{ReviewRun: value}
+		if err == nil {
+			state.Compacted, err = board.ReviewRunCompacted(p.board, value.RunID)
+		}
+		return result(http.StatusOK, state, err)
 	})
 	s.projectRoute(mux, "POST "+base+"/actions/{action}", func(p *project, r *http.Request) outcome {
 		key, action, h := r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("action"), holderOf(r)
