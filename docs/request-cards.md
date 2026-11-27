@@ -32,9 +32,12 @@ ordinary attachment. Archiving or trashing a request card retains both the
 marker and the record.
 
 The creation idempotency key binds the original request, including the
-description. Repeating the same request returns the same response and
-does not create a second card or event. Changing the description under the
-same key returns `idempotency_mismatch`.
+description. Repeating the same request in the same receipt scope returns
+the same response and does not create a second card or event. Changing the
+description under the same key in that scope returns
+`idempotency_mismatch`. The receipt scope is the operation, the claim
+credentials of the request, and the caller the host attributes it to; see
+[Idempotency](distributed-server.md#idempotency).
 
 ## Description validation
 
@@ -164,7 +167,7 @@ authenticated submitter only. See [Confirmation authorization](embedding.md#conf
 | 409 `revision_conflict` | The revision changed since it was read |
 | 409 `confirmation_required` | A normal move attempted to admit a request card |
 | 422 `board_rejected` | `board.confirm_requires_request_card`, `board.confirm_requires_backlog`, `board.request_questions_open`, or a `todo` gate error such as `board.task_requires_self_review_record` or `board.task_requires_card_review_record` |
-| 422 `idempotency_mismatch` | Key re-used for a different request or attributed actor |
+| 422 `idempotency_mismatch` | Key re-used for a different request in the same receipt scope |
 
 ### State transitions
 
