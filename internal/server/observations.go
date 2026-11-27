@@ -3,7 +3,6 @@ package server
 import (
 	"encoding/json"
 	"net/http"
-	"path/filepath"
 	"slices"
 
 	"github.com/dualface/kander/v2/api"
@@ -28,7 +27,11 @@ func (s *Server) observationRoutes(mux *routeTable) {
 		}
 		defer p.unlockBoard()
 		key, operation := r.Header.Get(api.HeaderIdempotencyKey), "observation:"+id
-		return p.idempotent(key, operation, input, func() outcome {
+		// An observation keeps one receipt slot per execution, not one
+		// receipt per key: the agents of every execution send one each round.
+		presented, _ := holderOf(r).forTask(id)
+		slot := liveReceipt(operation, presented.token)
+		return p.idempotentAt(slot, key, operation, input, func() outcome {
 			var view api.ClaimView
 			err := p.boardTransaction(board.LockScope{Groups: []string{serviceGroup}, Tasks: []string{id}}, func(tx *board.Transaction) error {
 				claim, err := p.requireHolder(id, holderOf(r))
@@ -53,7 +56,7 @@ func (s *Server) observationRoutes(mux *routeTable) {
 				if err != nil {
 					return err
 				}
-				return stageJSON(tx, filepath.Join("receipts", filepath.Base(receiptPath(key))), receipt{Key: key, Operation: operation, Digest: requestDigest(operation, input), Status: receiptDone, HTTP: http.StatusOK, Body: data, CreatedAt: p.server.now()})
+				return stageJSON(tx, slot.name, receipt{Key: key, Operation: operation, Digest: requestDigest(operation, input), Status: receiptDone, HTTP: http.StatusOK, Body: data, CreatedAt: p.server.now()})
 			})
 			if err == nil {
 				_ = p.events.append(api.Event{Kind: api.EventClaimChanged, TaskID: id, Generation: view.Generation})

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -47,6 +48,43 @@ func receiptPath(key string) string {
 	return servicePath("receipts", hex.EncodeToString(sum[:])+".json")
 }
 
+// liveReceiptDir holds the receipt slots of the liveness operations, below
+// the receipts directory.
+const liveReceiptDir = "live"
+
+// liveReceiptName is the one receipt slot of a liveness operation for the
+// execution whose claim token the request presents, relative to the service
+// group. The token is derived from the execution and its generation, so each
+// execution keeps one slot however many observations it sends, and a request
+// with another token never replaces the slot of the current holder. The slot
+// holds the receipt of the latest key only: a retry of that key replays it,
+// and an older key runs again, which the holder, generation, and lease checks
+// of the operation keep from moving a claim back.
+func liveReceiptName(operation, token string) string {
+	sum := sha256.Sum256([]byte(operation + "\n" + tokenHash(token)))
+	return filepath.Join("receipts", liveReceiptDir, hex.EncodeToString(sum[:])+".json")
+}
+
+// receiptAt is where idempotent keeps the receipt of one request.
+type receiptAt struct {
+	// name is the receipt file relative to the service group.
+	name string
+	// slot marks a liveness slot: a receipt of another key there belongs to
+	// an earlier request, and the request runs as a new one.
+	slot bool
+}
+
+func keyReceipt(key string) receiptAt {
+	return receiptAt{name: filepath.Join("receipts", filepath.Base(receiptPath(key)))}
+}
+
+func liveReceipt(operation, token string) receiptAt {
+	return receiptAt{name: liveReceiptName(operation, token), slot: true}
+}
+
+// rel is the receipt file below the project directory.
+func (at receiptAt) rel() string { return servicePath(at.name) }
+
 func requestDigest(operation string, request any) string {
 	data, _ := json.Marshal(request)
 	sum := sha256.Sum256(append([]byte(operation+"\n"), data...))
@@ -57,15 +95,23 @@ func requestDigest(operation string, request any) string {
 // current state for the effect of an interrupted earlier attempt; it returns
 // ok=false when the effect is not visible and the operation may run.
 func (p *project) idempotent(key, operation string, request any, run func() outcome, applied func() (outcome, bool)) outcome {
+	return p.idempotentAt(keyReceipt(key), key, operation, request, run, applied)
+}
+
+// idempotentAt is idempotent with the receipt kept at at.
+func (p *project) idempotentAt(at receiptAt, key, operation string, request any, run func() outcome, applied func() (outcome, bool)) outcome {
 	if !api.ValidIdentity(key) {
 		return outcome{err: &api.Error{Code: api.CodeInvalidRequest, Message: "Idempotency-Key header is required and must be an identity"}}
 	}
 	digest := requestDigest(operation, request)
-	rel := receiptPath(key)
+	rel := at.rel()
 	var r receipt
 	found, err := readJSON(p.root, rel, &r)
 	if err != nil {
 		return outcome{err: err}
+	}
+	if found && at.slot && r.Key != key {
+		found = false
 	}
 	if found {
 		if r.Digest != digest || r.Operation != operation {

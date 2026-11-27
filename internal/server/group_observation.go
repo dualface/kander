@@ -8,12 +8,14 @@ import (
 	"github.com/dualface/kander/v2/internal/board"
 )
 
-func (p *project) updateGroupLease(key, group, operation string, input any, h holder, event groupEvent, update func(*claimRecord) error) outcome {
+// updateGroupLease applies one holder write to a group lease. Its receipt is
+// kept at at.
+func (p *project) updateGroupLease(at receiptAt, key, group, operation string, input any, h holder, event groupEvent, update func(*claimRecord) error) outcome {
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
 	defer p.unlockBoard()
-	return p.idempotent(key, operation, input, func() outcome {
+	return p.idempotentAt(at, key, operation, input, func() outcome {
 		var view api.ClaimView
 		err := p.boardTransaction(board.LockScope{Groups: []string{serviceGroup}}, func(tx *board.Transaction) error {
 			c, err := p.groupLease(group, h)
@@ -31,7 +33,7 @@ func (p *project) updateGroupLease(key, group, operation string, input any, h ho
 				return err
 			}
 			view = *p.groupClaimView(claim)
-			return p.stageOperationReceipt(tx, key, operation, input, api.Renewal{Claim: view})
+			return p.stageReceiptAt(tx, at, key, operation, input, http.StatusOK, api.Renewal{Claim: view})
 		})
 		if err == nil {
 			_ = p.events.append(api.Event{Kind: api.EventGroupChanged, GroupID: group, Generation: view.Generation})
@@ -47,8 +49,10 @@ func (p *project) observeGroup(r *http.Request) outcome {
 	if observation.Status != "alive" && observation.Status != "stopped" && observation.Status != "unknown" || len(observation.Reason) > 4096 || len(observation.RuntimeState) > 32 {
 		return outcome{err: apiError(api.CodeInvalidRequest, "invalid coordinator observation")}
 	}
-	group := r.PathValue("group")
-	return p.updateGroupLease(r.Header.Get(api.HeaderIdempotencyKey), group, "group-observation:"+group, observation, holderOf(r), observeGroupEvent(observation.Status == "stopped"), func(claim *claimRecord) error {
+	group, h := r.PathValue("group"), holderOf(r)
+	// Like a task observation, one receipt slot per coordinator execution.
+	operation := "group-observation:" + group
+	return p.updateGroupLease(liveReceipt(operation, h.token), r.Header.Get(api.HeaderIdempotencyKey), group, operation, observation, h, observeGroupEvent(observation.Status == "stopped"), func(claim *claimRecord) error {
 		observation.ObservedAt = p.server.now()
 		claim.Observation = &observation
 		if observation.Status == "stopped" {
@@ -67,5 +71,6 @@ func (p *project) releaseGroup(r *http.Request) outcome {
 	if input.GroupID != group || strings.TrimSpace(input.Decision) == "" || strings.TrimSpace(input.Reason) == "" {
 		return outcome{err: apiError(api.CodeInvalidRequest, "group release needs its identity, reason and decision")}
 	}
-	return p.updateGroupLease(r.Header.Get(api.HeaderIdempotencyKey), group, "group-release:"+group, input, holderOf(r), releaseGroupEvent, func(claim *claimRecord) error { claim.Status = api.ClaimReleased; return nil })
+	key := r.Header.Get(api.HeaderIdempotencyKey)
+	return p.updateGroupLease(keyReceipt(key), key, group, "group-release:"+group, input, holderOf(r), releaseGroupEvent, func(claim *claimRecord) error { claim.Status = api.ClaimReleased; return nil })
 }

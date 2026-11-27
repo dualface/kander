@@ -216,17 +216,12 @@ func (g gcRun) expireReceipts(ctx context.Context, target gcTarget, o gcOptions,
 		project.Errors = append(project.Errors, "idempotency receipts: "+err.Error())
 		return
 	}
-	entries, err := fs.ListDirectory(target.root, dir)
+	names, err := receiptNames(target.root, dir)
 	if err != nil {
 		project.Errors = append(project.Errors, "idempotency receipts: "+err.Error())
 		return
 	}
-	var names []string
-	for _, entry := range entries {
-		if entry.Kind == fs.KindFile && strings.HasSuffix(entry.Name, ".json") && !finished[entry.Name] {
-			names = append(names, entry.Name)
-		}
-	}
+	names = slices.DeleteFunc(names, func(name string) bool { return finished[name] })
 	slices.Sort(names)
 	for start := 0; start < len(names); start += gcReceiptBatch {
 		if err := ctx.Err(); err != nil {
@@ -238,6 +233,39 @@ func (g gcRun) expireReceipts(ctx context.Context, target gcTarget, o gcOptions,
 			return
 		}
 	}
+}
+
+// receiptNames lists the receipt files of dir by name: the receipts of a key
+// at the top, and the liveness slots as live/<name>. Other directories are not
+// receipts and are left alone.
+func receiptNames(root, dir string) ([]string, error) {
+	entries, err := fs.ListDirectory(root, dir)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, entry := range entries {
+		switch {
+		case entry.Kind == fs.KindFile && strings.HasSuffix(entry.Name, ".json"):
+			names = append(names, entry.Name)
+		case entry.Kind == fs.KindDirectory && entry.Name == liveReceiptDir:
+			slots, err := fs.ListDirectory(root, filepath.Join(dir, liveReceiptDir))
+			if err != nil {
+				return nil, err
+			}
+			for _, slot := range slots {
+				if slot.Kind == fs.KindFile && strings.HasSuffix(slot.Name, ".json") {
+					names = append(names, liveReceiptDir+"/"+slot.Name)
+				}
+			}
+		}
+	}
+	return names, nil
+}
+
+// receiptNamePath is the path of the receipt file a receipt name names.
+func receiptNamePath(root, name string) string {
+	return filepath.Join(root, servicePath("receipts", filepath.FromSlash(name)))
 }
 
 // receiptIntent is the set the receipt batches of a gc remove: written before
@@ -297,7 +325,7 @@ func (g gcRun) finishReceiptIntent(target gcTarget, o gcOptions, project *api.Se
 			continue
 		}
 		decided[member.Name] = true
-		path := filepath.Join(target.root, servicePath("receipts", member.Name))
+		path := receiptNamePath(target.root, member.Name)
 		data, found, err := fs.ReadRegularFileIfExists(target.root, path)
 		if err != nil {
 			project.Receipts.Kept = append(project.Receipts.Kept, api.ServerGCKept{ID: strings.TrimSuffix(member.Name, ".json"), Reason: err.Error()})
@@ -360,7 +388,7 @@ func (g gcRun) receiptBatch(target gcTarget, o gcOptions, names []string, carry 
 		project.Receipts.Kept = append(project.Receipts.Kept, api.ServerGCKept{ID: strings.TrimSuffix(name, ".json"), Reason: reason})
 	}
 	for _, name := range names {
-		path := filepath.Join(target.root, servicePath("receipts", name))
+		path := receiptNamePath(target.root, name)
 		data, found, err := fs.ReadRegularFileIfExists(target.root, path)
 		if err != nil {
 			kept(name, err.Error())
@@ -454,8 +482,9 @@ func contentHash(data []byte) string {
 }
 
 // receiptFileName accepts only the name of a receipt file: the hex SHA-256 of
-// a key and .json.
+// a key and .json, or a liveness slot, live/ and the same form.
 func receiptFileName(name string) bool {
+	name = strings.TrimPrefix(name, liveReceiptDir+"/")
 	hash, ok := strings.CutSuffix(name, ".json")
 	if !ok || len(hash) != 64 {
 		return false

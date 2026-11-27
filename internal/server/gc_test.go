@@ -94,7 +94,8 @@ func gcTodoTask(t *testing.T, p *client.Project, slug, group string) api.Task {
 	return task
 }
 
-// receiptFiles maps each receipt file of the project to its operation and status.
+// receiptFiles maps each receipt file of the project, the liveness slots as
+// live/<name>, to its operation and status.
 func receiptFiles(t *testing.T, s *Server, name string) map[string]string {
 	t.Helper()
 	info, err := s.projectByName(name)
@@ -103,13 +104,13 @@ func receiptFiles(t *testing.T, s *Server, name string) map[string]string {
 	}
 	p, _ := s.project(info.ID)
 	dir := filepath.Join(p.root, servicePath("receipts"))
-	entries, err := os.ReadDir(dir)
+	names, err := receiptNames(p.root, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	out := map[string]string{}
-	for _, entry := range entries {
-		data, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+	for _, name := range names {
+		data, err := os.ReadFile(receiptNamePath(p.root, name))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -117,7 +118,7 @@ func receiptFiles(t *testing.T, s *Server, name string) map[string]string {
 		if err := json.Unmarshal(data, &r); err != nil {
 			t.Fatal(err)
 		}
-		out[entry.Name()] = r.Status + " " + r.Operation
+		out[name] = r.Status + " " + r.Operation
 	}
 	return out
 }
