@@ -196,21 +196,66 @@ func TestGlobalCleanupKeepsUserContent(t *testing.T) {
 	}
 }
 
-func TestAutoCleanupNeedsAnInstalledRulesRoot(t *testing.T) {
+// A home without the rules root and without Kander content gets no marker or lock; once a
+// global rules file holds a Kander reference, the first command removes it.
+func TestAutoCleanupWithoutARulesRootRunsOnlyForKanderContent(t *testing.T) {
 	home := setupInstallHome(t)
 	autoCleanInjected.Store(true)
 	t.Cleanup(func() { autoCleanInjected.Store(false) })
 	paths, _ := config.GlobalInstallPaths()
-	writeIntegrateFile(t, filepath.Join(home, ".claude", "CLAUDE.md"), "@~/.agents/kander/KANDER-AGENTS.md\n")
+	claude := filepath.Join(home, ".claude", "CLAUDE.md")
+	writeIntegrateFile(t, claude, "# Mine\n")
 	if result := AutoCleanGlobalInjection(paths); result.Ran {
-		t.Fatalf("cleanup ran without a rules root: %+v", result)
+		t.Fatalf("cleanup ran in a home without Kander content: %+v", result)
 	}
 	if _, err := os.Lstat(paths.RulesDir); !os.IsNotExist(err) {
 		t.Fatalf("cleanup created the rules root: %v", err)
 	}
-	// install and doctor clean whatever the home holds.
-	if result := CleanGlobalInjection(paths); !result.Ran || len(result.Removed) != 1 {
-		t.Fatalf("forced cleanup=%+v", result)
+	writeIntegrateFile(t, claude, "# Mine\n\n@~/.agents/kander/KANDER-AGENTS.md\n")
+	if result := AutoCleanGlobalInjection(paths); !result.Ran || len(result.Removed) != 1 {
+		t.Fatalf("cleanup with a reference=%+v", result)
+	}
+	if got := readBytes(t, claude); got != "# Mine\n" {
+		t.Fatalf("CLAUDE.md=%q", got)
+	}
+}
+
+// A home with only the flat layout of earlier releases (~/.agents/KANDER-AGENTS.md, no
+// ~/.agents/kander/) still has its global injection removed by the first command.
+func TestAutoCleanupRunsForTheFlatLegacyLayout(t *testing.T) {
+	home := setupInstallHome(t)
+	autoCleanInjected.Store(true)
+	t.Cleanup(func() { autoCleanInjected.Store(false) })
+	paths, _ := config.GlobalInstallPaths()
+	writeIntegrateFile(t, legacyRulesEntry(paths), "# Kander entry\n")
+	claude := filepath.Join(home, ".claude", "CLAUDE.md")
+	writeIntegrateFile(t, claude, "# Mine\n\n@~/.agents/KANDER-AGENTS.md\n")
+	codex := filepath.Join(home, ".codex", "AGENTS.md")
+	if err := os.MkdirAll(filepath.Dir(codex), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" {
+		if err := os.Symlink(legacyRulesEntry(paths), codex); err != nil {
+			t.Fatal(err)
+		}
+	}
+	result := AutoCleanGlobalInjection(paths)
+	if !result.Ran || result.Err != nil || !slices.Contains(result.Removed, claude) {
+		t.Fatalf("result=%+v", result)
+	}
+	if got := readBytes(t, claude); got != "# Mine\n" {
+		t.Fatalf("CLAUDE.md=%q", got)
+	}
+	if runtime.GOOS != "windows" {
+		if _, err := os.Lstat(codex); !os.IsNotExist(err) {
+			t.Fatalf("link to the flat entry kept: %v", err)
+		}
+	}
+	if notices := GlobalCleanupNotices(result); len(notices) == 0 || notices[0].Code != NoticeGlobalRulesCleaned {
+		t.Fatalf("notices=%+v", notices)
+	}
+	if again := AutoCleanGlobalInjection(paths); again.Ran {
+		t.Fatalf("recorded directories cleaned again: %+v", again)
 	}
 }
 
