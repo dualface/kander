@@ -95,6 +95,9 @@ type Server struct {
 	// gcBusy admits one gc at a time; gcWorkers lets Close wait for it.
 	gcBusy    atomic.Bool
 	gcWorkers sync.WaitGroup
+	// gcReported is a test hook: when set, the gc goroutine calls it after
+	// it hands the report to the waiting request and before it exits.
+	gcReported func()
 
 	mu       sync.Mutex
 	projects map[string]*project

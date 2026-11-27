@@ -769,11 +769,19 @@ func (s *Server) gcRoute(r *http.Request) outcome {
 	done := make(chan api.ServerGCReport, 1)
 	go func() {
 		defer s.gcWorkers.Done()
-		defer s.gcBusy.Store(false)
-		run := gcRun{data: s.data, version: s.version, now: s.now, targets: s.gcTargets(o.project)}
-		report := run.run(s.shutdown, o)
+		// The slot is free before the request answers: a client sends its
+		// next gc as soon as it has the answer (the run after the dry run).
+		// The deferred release also frees it when the gc panics.
+		report := func() api.ServerGCReport {
+			defer s.gcBusy.Store(false)
+			run := gcRun{data: s.data, version: s.version, now: s.now, targets: s.gcTargets(o.project)}
+			return run.run(s.shutdown, o)
+		}()
 		s.log.Info("gc finished", "dry_run", o.dryRun, "project_name", o.project, "incomplete", report.Incomplete())
 		done <- report
+		if s.gcReported != nil {
+			s.gcReported()
+		}
 	}()
 	select {
 	case report := <-done:

@@ -214,6 +214,32 @@ func mapsEqual(a, b map[string]string) bool {
 	return true
 }
 
+// A client sends the next gc as soon as the previous one answered (the dry
+// run, then the run), so the server must have released its one-gc slot by
+// the time it answers. The hook holds the first gc goroutine after it handed
+// over its report until the second request returned, so a release that
+// happens only when the goroutine exits refuses the second request every time.
+func TestServerGCAcceptsTheNextGCAfterAnAnswer(t *testing.T) {
+	f := newGCFixture(t)
+	f.project("demo")
+	release := make(chan struct{})
+	defer close(release)
+	var reports atomic.Int32
+	f.s.gcReported = func() {
+		if reports.Add(1) == 1 {
+			<-release
+		}
+	}
+	request := api.ServerGCRequest{OlderThan: "1h", LogKeep: 1 << 20, DryRun: true}
+	if _, err := f.gc(request); err != nil {
+		t.Fatalf("dry run: %v", err)
+	}
+	request.DryRun = false
+	if _, err := f.gc(request); err != nil {
+		t.Fatalf("the gc right after the dry run answered must run, got %v", err)
+	}
+}
+
 func TestServerGCRefusesASecondGCAndInvalidRequests(t *testing.T) {
 	f := newGCFixture(t)
 	f.project("demo")
