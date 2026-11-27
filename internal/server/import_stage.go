@@ -78,11 +78,17 @@ func (p *project) stageImport(ctx context.Context, source, displaySource string,
 	if err := removeImportDirectory(p.root, staging); err != nil {
 		return importPublication{}, err
 	}
-	if err := ensureDir(p.root, "board.import"); err != nil {
-		return importPublication{}, err
-	}
-	if err := p.copyImport(ctx, source, staging, plan, progress); err != nil {
-		return importPublication{}, err
+	if uploaded {
+		if err := p.moveUploadedImport(ctx, source, staging, plan, progress); err != nil {
+			return importPublication{}, err
+		}
+	} else {
+		if err := ensureDir(p.root, "board.import"); err != nil {
+			return importPublication{}, err
+		}
+		if err := p.copyImport(ctx, source, staging, plan, progress); err != nil {
+			return importPublication{}, err
+		}
 	}
 	progress.phase(api.ImportPhaseVerify)
 	if err := board.InitStorage(staging); err != nil {
@@ -119,7 +125,14 @@ func (p *project) stageImport(ctx context.Context, source, displaySource string,
 			if err != nil {
 				return importPublication{}, err
 			}
-			if err := verifyDefaultedTree(source, plan.copied, staged, defaults); err != nil {
+			// A moved upload no longer has its source tree: compare with
+			// the text DefaultMissingSize replaced.
+			if uploaded {
+				err = verifyMovedDefaultedTree(plan.copied, staged, defaults)
+			} else {
+				err = verifyDefaultedTree(source, plan.copied, staged, defaults)
+			}
+			if err != nil {
 				return importPublication{}, err
 			}
 		}
@@ -158,13 +171,18 @@ func (p *project) stageImport(ctx context.Context, source, displaySource string,
 	}
 	record.Warnings = append(plan.remnants, importWarnings(check.Warnings)...)
 	progress.phase(api.ImportPhasePublish)
-	// A non-cooperating external writer must also invalidate publication.
-	_, again, err := snapshotTree(source)
-	if err != nil {
-		return importPublication{}, err
-	}
-	if again != plan.source.digest {
-		return importPublication{}, importRejected("source board changed during import; nothing was published")
+	// A non-cooperating external writer of a local source must also
+	// invalidate publication. An upload has no source left to digest: its
+	// files were moved into the staging, which the server alone writes and
+	// which verify compared with the manifest above.
+	if !uploaded {
+		_, again, err := snapshotTree(source)
+		if err != nil {
+			return importPublication{}, err
+		}
+		if again != plan.source.digest {
+			return importPublication{}, importRejected("source board changed during import; nothing was published")
+		}
 	}
 	// Check only creates empty validation locks. Remove those, not any
 	// pre-existing target locks nor (for an empty project) source locks.
@@ -202,11 +220,35 @@ func (p *project) copyImport(ctx context.Context, source, staging string, plan i
 		dirs = append(dirs, plan.target.dirs...)
 	}
 	dirs = append(dirs, plan.sourceDirs...)
+	if err := p.ensureImportDirectories(ctx, staging, append(dirs, importJobDirs(jobs)...)); err != nil {
+		return err
+	}
+	if err := p.copyImportFiles(ctx, staging, jobs, progress, importCopyCount{total: len(jobs), totalBytes: totalBytes}); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := p.server.importCheckpoint("copied"); err != nil {
+		return err
+	}
+	return writeImportDefaults(staging, plan)
+}
+
+// importJobDirs lists the parent directory of every job below the root.
+func importJobDirs(jobs []importCopyJob) []string {
+	var dirs []string
 	for _, job := range jobs {
 		if dir := path.Dir(job.rel); dir != "." {
 			dirs = append(dirs, dir)
 		}
 	}
+	return dirs
+}
+
+// ensureImportDirectories creates the staging directories dirs name, with
+// their missing parents.
+func (p *project) ensureImportDirectories(ctx context.Context, staging string, dirs []string) error {
 	slices.Sort(dirs)
 	// A large board has tens of thousands of directories: stop between them
 	// as the file copy stops between files.
@@ -218,17 +260,13 @@ func (p *project) copyImport(ctx context.Context, source, staging string, plan i
 			return err
 		}
 	}
-	if err := p.copyImportFiles(ctx, staging, jobs, progress, totalBytes); err != nil {
-		return err
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if err := p.server.importCheckpoint("copied"); err != nil {
-		return err
-	}
-	// Keep progress byte counts on the raw input. The normalized specs are
-	// written only once the cancellable copy is complete.
+	return nil
+}
+
+// writeImportDefaults writes the normalized spec of each merged card that
+// lacked a SIZE line. Progress byte counts stay on the raw input: the
+// normalized specs are written only once the cancellable copy is complete.
+func writeImportDefaults(staging string, plan importStage) error {
 	for rel, text := range plan.defaulted {
 		path := filepath.Join(staging, filepath.FromSlash(rel))
 		data, err := readImportFile(staging, rel)
@@ -263,6 +301,14 @@ func (j importCopyJob) read() ([]byte, error) {
 	return readImportFile(j.root, j.rel)
 }
 
+// importCopyCount is the progress of the copy phase: the files and bytes
+// already in the staging when one copyImportFiles call starts, and the totals
+// of the whole phase.
+type importCopyCount struct {
+	done, total       int
+	bytes, totalBytes int64
+}
+
 // copyImportFiles writes every job into the staging tree on a bounded pool.
 // board.import is a private, single-use directory that verify digests again
 // and stageImport makes durable as a whole before the publication intent, so
@@ -270,7 +316,7 @@ func (j importCopyJob) read() ([]byte, error) {
 // The "copying" checkpoint runs before each source file is handed out, in
 // order, on this goroutine. The first error stops the hand-out; files already
 // handed out finish before it returns.
-func (p *project) copyImportFiles(ctx context.Context, staging string, jobs []importCopyJob, progress *importEmitter, totalBytes int64) error {
+func (p *project) copyImportFiles(ctx context.Context, staging string, jobs []importCopyJob, progress *importEmitter, count importCopyCount) error {
 	ctx, stop := context.WithCancelCause(ctx)
 	defer stop(nil)
 	writers := &importDirWriters{root: p.root, staging: staging, open: map[string]*importDirWriter{}}
@@ -279,8 +325,8 @@ func (p *project) copyImportFiles(ctx context.Context, staging string, jobs []im
 	var (
 		workers sync.WaitGroup
 		mu      sync.Mutex
-		done    int
-		copied  int64
+		done    = count.done
+		copied  = count.bytes
 	)
 	for range importCopyWorkers {
 		workers.Go(func() {
@@ -300,7 +346,7 @@ func (p *project) copyImportFiles(ctx context.Context, staging string, jobs []im
 				mu.Lock()
 				done++
 				copied += int64(len(data))
-				progress.count(api.ImportPhaseCopy, done, len(jobs), copied, totalBytes)
+				progress.count(api.ImportPhaseCopy, done, count.total, copied, count.totalBytes)
 				mu.Unlock()
 			}
 		})

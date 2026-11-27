@@ -277,6 +277,34 @@ func checkUploadManifest(m api.ImportUploadManifest, limits uploadLimits) error 
 	return nil
 }
 
+// manifestTreeScan is the scan of a received upload taken from its manifest,
+// without reading the files: receiveUploadFile already compared each file
+// with the size and SHA-256 the manifest declares, and checkUploadManifest
+// requires the strictly ascending paths that the digest is computed over.
+func manifestTreeScan(m api.ImportUploadManifest) (treeScan, error) {
+	scan := treeScan{
+		files: make([]string, len(m.Files)), dirs: m.Directories,
+		sums: make(map[string][sha256.Size]byte, len(m.Files)), sizes: make(map[string]int64, len(m.Files)),
+	}
+	hash := sha256.New()
+	for i, file := range m.Files {
+		var sum [sha256.Size]byte
+		if _, err := hex.Decode(sum[:], []byte(file.SHA256)); err != nil || (i > 0 && m.Files[i-1].Path >= file.Path) {
+			return treeScan{}, invalidUpload()
+		}
+		scan.files[i] = file.Path
+		scan.sums[file.Path] = sum
+		scan.sizes[file.Path] = file.Size
+		scan.bytes += file.Size
+		hashImportEntry(hash, file.Path, sum)
+	}
+	scan.digest = hex.EncodeToString(hash.Sum(nil))
+	if scan.digest != m.Snapshot {
+		return treeScan{}, invalidUpload()
+	}
+	return scan, nil
+}
+
 // declaredUploadBytes sums the declared file sizes, saturating instead of
 // overflowing. Negative sizes are left to the manifest check, which refuses
 // them.

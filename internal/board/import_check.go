@@ -116,6 +116,8 @@ type SizeDefault struct {
 	TaskID string
 	// Document is the slash-separated path of the card's spec.md below root.
 	Document string
+	// Original is the text the document had before the line was inserted.
+	Original string
 }
 
 // DefaultSize is the SIZE a directory card without one is read with.
@@ -162,7 +164,7 @@ func DefaultMissingSize(root string) ([]SizeDefault, error) {
 		if err := fs.WriteTextAtomicInherited(root, entry.Document, DefaultedSizeText(text), true); err != nil {
 			return changed, err
 		}
-		changed = append(changed, SizeDefault{TaskID: id, Document: filepath.ToSlash(rel)})
+		changed = append(changed, SizeDefault{TaskID: id, Document: filepath.ToSlash(rel), Original: text})
 	}
 	return changed, nil
 }
