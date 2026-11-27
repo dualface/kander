@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -61,6 +63,38 @@ func TestServerGCSettlesAnIntentMemberWhoseFileIsGone(t *testing.T) {
 	}
 	if _, found := readIntent(t, p.root); found {
 		t.Fatal("the run must remove the intent")
+	}
+}
+
+// A member ends only once the intent no longer holds it: when the intent
+// cannot be rewritten, the run reports the error and counts nothing settled.
+func TestServerGCCountsSettledMembersOnlyAfterTheIntentIsRewritten(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs a directory the test user cannot write")
+	}
+	f := newGCFixture(t)
+	f.project("demo")
+	stubCompaction(t, noCompaction)
+	p := gcProject(t, f, "demo")
+	name := writeReceipt(t, f.s, "demo", receipt{Key: "gone", Operation: "observation:20261101-a-task", Digest: "d", Status: receiptDone, CreatedAt: f.clock.now().UTC().Add(-48 * time.Hour)})
+	member := intentMember(t, p.root, name, "1h")
+	if err := os.Remove(receiptNamePath(p.root, name)); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeReceiptIntent(p.root, receiptIntent{Schema: 1, Receipts: []receiptIntentMember{member}}); err != nil {
+		t.Fatal(err)
+	}
+	control := filepath.Dir(receiptIntentPath(p.root))
+	if err := os.Chmod(control, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(control, 0o700) })
+	report, err := f.gc(api.ServerGCRequest{Project: "demo", OlderThan: "1h", LogKeep: 1 << 20})
+	if got := report.Projects[0]; err != nil || got.Receipts.Settled != 0 || len(receiptErrors(got)) != 1 {
+		t.Fatalf("a failed rewrite: %+v %v", got, err)
+	}
+	if intent, found := readIntent(t, p.root); !found || len(intent.Receipts) != 1 || intent.Receipts[0] != member {
+		t.Fatalf("the member must stay recorded: %+v", intent)
 	}
 }
 

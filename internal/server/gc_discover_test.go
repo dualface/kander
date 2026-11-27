@@ -3,11 +3,13 @@ package server
 import (
 	"errors"
 	"net"
+	"net/http"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/client"
 	"github.com/dualface/kander/v2/internal/command"
 	"github.com/dualface/kander/v2/internal/servicectl"
 )
@@ -117,5 +119,19 @@ func TestServerGCDiscoveryGoesOfflineAfterOneProbeLimit(t *testing.T) {
 			second.Close()
 		}
 		t.Fatalf("the executor must be offline and hold the lock: %v", err)
+	}
+}
+
+// A transport whose own timeout ends a probe before gcProbeTimeout does is a
+// timed-out probe, not an address with no server.
+func TestServerGCProbeReportsATransportTimeout(t *testing.T) {
+	dir, _ := offlineData(t)
+	discoveryLimits(t, 10*time.Second, time.Second)
+	client.SetDefaultTransport(&http.Transport{ResponseHeaderTimeout: 100 * time.Millisecond})
+	t.Cleanup(func() { client.SetDefaultTransport(nil) })
+	started := time.Now()
+	_, err := gcProbeOnce(t.Context(), silentListener(t), dir)
+	if !errors.Is(err, errGCProbeTimeout) || time.Since(started) >= gcProbeTimeout {
+		t.Fatalf("want errGCProbeTimeout before the probe limit: %v after %v", err, time.Since(started))
 	}
 }

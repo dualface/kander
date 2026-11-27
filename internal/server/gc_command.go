@@ -244,14 +244,14 @@ func gcExecutorFor(ctx context.Context, dir string, request api.ServerGCRequest)
 var errGCProbeTimeout = errors.New("server probe timed out")
 
 // gcProbeOnce probes one address within gcProbeTimeout. A probe that its own
-// deadline ended reports errGCProbeTimeout: the client reports any failed
-// request as unreachable, which would hide an address that took the
-// connection but never answered.
+// deadline or a transport timeout ended reports errGCProbeTimeout, so an
+// address that took the connection but never answered is not reported as no
+// server.
 func gcProbeOnce(parent context.Context, target, dir string) (api.ServerInfo, error) {
 	ctx, cancel := context.WithTimeout(parent, gcProbeTimeout)
 	defer cancel()
 	info, err := gcProbe(ctx, target, dir)
-	if err != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+	if err != nil && (errors.Is(ctx.Err(), context.DeadlineExceeded) || servicectl.TimedOut(err)) {
 		return info, errGCProbeTimeout
 	}
 	return info, err

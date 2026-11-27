@@ -59,8 +59,9 @@ type CompactionOptions struct {
 	DryRun bool
 	// KanderVersion is recorded in each receipt.
 	KanderVersion string
-	// NoWait takes the exclusive board lock of each round without waiting:
-	// a held lock ends the call with board.lock_busy instead.
+	// NoWait takes the exclusive board lock and the journal lock of each
+	// round without waiting: a held lock ends the call with board.lock_busy
+	// instead.
 	NoWait bool
 }
 
@@ -185,7 +186,12 @@ func compactionRound(ctx context.Context, root string, options CompactionOptions
 		return 0, err
 	}
 	defer func() { err = errors.Join(err, locks.close()) }()
-	if err = requireNoPendingOperations(root, nil); err != nil {
+	if options.NoWait {
+		err = RequireNoPendingOperationsNoWait(root)
+	} else {
+		err = requireNoPendingOperations(root, nil)
+	}
+	if err != nil {
 		return 0, err
 	}
 	plan, err := planCompaction(root, options.Now, options.OlderThan)

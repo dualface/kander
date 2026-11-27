@@ -350,14 +350,17 @@ func (g gcRun) finishReceiptIntent(ctx context.Context, target gcTarget, o gcOpt
 			}
 		}
 		shard := members[next:min(next+gcReceiptBatch, len(members))]
-		handled, left, stop := g.finishIntentShard(target, o, shard, decided, project)
+		handled, left, settled, stop := g.finishIntentShard(target, o, shard, decided, project)
 		carry = append(carry, left...)
 		next += handled
+		// A settled member has ended only once the intent no longer holds it;
+		// a dry run counts what the run would end.
 		if !o.dryRun && handled > 0 {
 			if err := settleReceiptIntent(target.root, append(slices.Clone(carry), members[next:]...)); err != nil {
 				return nil, nil, errors.Join(stop, err)
 			}
 		}
+		project.Receipts.Settled += settled
 		if stop != nil {
 			return nil, nil, stop
 		}
@@ -367,18 +370,20 @@ func (g gcRun) finishReceiptIntent(ctx context.Context, target gcTarget, o gcOpt
 
 // finishIntentShard decides the members of one shard under one project-lock
 // hold. It returns how many members it handled from the start of shard, the
-// handled members left unresolved, and the error that stopped it, if any.
+// handled members left unresolved, how many handled members end without a
+// removal (settled), and the error that stopped it, if any. Removals count in
+// project at once; settled members count once the caller rewrote the intent.
 // An unresolved member keeps its recorded retention: one whose file cannot be
 // read, whose removal failed, or whose eligibility check failed for another
 // reason than a busy lock.
-func (g gcRun) finishIntentShard(target gcTarget, o gcOptions, shard []receiptIntentMember, decided map[string]bool, project *api.ServerGCProject) (handled int, left []receiptIntentMember, err error) {
+func (g gcRun) finishIntentShard(target gcTarget, o gcOptions, shard []receiptIntentMember, decided map[string]bool, project *api.ServerGCProject) (handled int, left []receiptIntentMember, settled int, err error) {
 	unlock, err := target.lock()
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, 0, err
 	}
 	defer unlock()
 	if err := requireNoPendingReceiptStage(target.board); err != nil {
-		return 0, nil, err
+		return 0, nil, 0, err
 	}
 	facts := &bindingFacts{board: target.board}
 	now := g.now()
@@ -400,27 +405,27 @@ func (g gcRun) finishIntentShard(target gcTarget, o gcOptions, shard []receiptIn
 		}
 		if !found {
 			decided[member.Name] = true
-			project.Receipts.Settled++
+			settled++
 			continue
 		}
 		var r receipt
 		if contentHash(data) != member.SHA256 || json.Unmarshal(data, &r) != nil {
 			// Replaced or damaged since the set was recorded: the member
 			// ends, and the scan decides on the file anew.
-			project.Receipts.Settled++
+			settled++
 			continue
 		}
 		due, err := receiptDue(r, now, olderThan, facts)
 		switch {
 		case board.LockBusy(err):
 			// This member and the rest of the shard stay recorded as they are.
-			return i, left, err
+			return i, left, settled, err
 		case err != nil:
 			decided[member.Name] = true
 			keep(member, err.Error())
 			continue
 		case !due:
-			project.Receipts.Settled++
+			settled++
 			continue
 		}
 		decided[member.Name] = true
@@ -428,7 +433,7 @@ func (g gcRun) finishIntentShard(target gcTarget, o gcOptions, shard []receiptIn
 			left = append(left, member)
 		}
 	}
-	return len(shard), left, nil
+	return len(shard), left, settled, nil
 }
 
 // receiptBatch removes the due receipts among names. carry are the members an
@@ -653,8 +658,8 @@ const groupReleasePrefix = "group-release:"
 // generation; once every member card of the group is archived or in trash,
 // the group ended the way archive pruning settles it (board.PruneArchived), and
 // nothing waits for the replay. A failed release (any HTTP status but 200), a
-// group with no card on the board, or a board with a card whose text cannot be
-// read keeps the receipt.
+// group with no card on the board, or a scan problem that may hide a member
+// keeps the receipt.
 func groupReleaseDue(r receipt, group string, facts *bindingFacts) (bool, error) {
 	if group == "" || r.HTTP != http.StatusOK {
 		return false, nil
@@ -669,11 +674,8 @@ type bindingFacts struct {
 	board   string
 	scanned *board.Board
 	scanErr error
-	// groups maps each task group of the scanned cards to whether every
-	// member is archived or in trash; unreadable is set when a card's text
-	// could not be read, so no group can be known to have ended.
-	groups     map[string]bool
-	unreadable bool
+	// membership is the task group expansion of the scan, read once.
+	membership *board.Membership
 }
 
 func (f *bindingFacts) scan() (*board.Board, error) {
@@ -690,29 +692,29 @@ func (f *bindingFacts) scan() (*board.Board, error) {
 
 // groupEnded reports whether the board holds at least one card of group and
 // every such card is archived or in trash. The members come from the card
-// texts of the same scan; no other read takes a lock.
+// texts of the same scan (Board.GroupMembership), so no other read takes a
+// lock. A scan or read problem that may hide a member of group, such as a card
+// directory without spec.md or a text that cannot be read, keeps the group
+// open.
 func (f *bindingFacts) groupEnded(group string) (bool, error) {
 	b, err := f.scan()
 	if err != nil {
 		return false, err
 	}
-	if f.groups == nil {
-		f.groups = map[string]bool{}
-		for id, entry := range b.Entries {
-			text, err := b.Document(id)
-			if err != nil {
-				f.unreadable = true
-				continue
-			}
-			g := board.TaskGroupFrom(text)
-			if g == "" {
-				continue
-			}
-			ended, seen := f.groups[g]
-			f.groups[g] = (ended || !seen) && (entry.State == "archived" || entry.State == "trash")
+	if f.membership == nil {
+		m := b.GroupMembership()
+		f.membership = &m
+	}
+	members := f.membership.Groups[group]
+	if len(members) == 0 || f.membership.ErrFor(group) != nil {
+		return false, nil
+	}
+	for _, id := range members {
+		if entry, ok := b.Entries[id]; !ok || entry.State != "archived" && entry.State != "trash" {
+			return false, nil
 		}
 	}
-	return !f.unreadable && f.groups[group], nil
+	return true, nil
 }
 
 // inStates reports whether every card exists and is in one of states. An

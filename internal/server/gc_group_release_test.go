@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -57,28 +58,42 @@ func TestServerGCExpiresTheReleaseReceiptsOfEndedGroups(t *testing.T) {
 	}
 }
 
-// A board with a card whose text cannot be read cannot tell that a group ended,
-// so a release receipt stays.
-func TestGroupReleaseDueNeedsEveryCardReadable(t *testing.T) {
-	f := newGCFixture(t)
-	a := f.project("demo")
-	group := "20261101-ended-group"
-	gcArchivedCard(t, a, "ended-one", group)
-	other := gcArchivedCard(t, a, "unrelated", "")
-	p := gcProject(t, f, "demo")
-	r := receipt{Operation: "group-release:" + group, Status: receiptDone, HTTP: http.StatusOK, CreatedAt: f.clock.now().UTC().Add(-48 * time.Hour)}
-	if due, err := receiptDue(r, f.clock.now(), time.Hour, &bindingFacts{board: p.board}); err != nil || !due {
-		t.Fatalf("readable board: %v %v", due, err)
-	}
-	b, err := board.ScanNoWait(p.board)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(b.Entries[other].Document, []byte{0xff, 0xfe}, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if due, err := receiptDue(r, f.clock.now(), time.Hour, &bindingFacts{board: p.board}); err != nil || due {
-		t.Fatalf("an unreadable card must keep the receipt: %v %v", due, err)
+// A board scan that may hide a member of the group cannot tell that the group
+// ended, so a release receipt stays: a card whose text cannot be read, and a
+// member card directory whose spec.md is gone, which the scan reports as a
+// problem instead of an entry.
+func TestGroupReleaseDueNeedsACompleteScan(t *testing.T) {
+	for name, damage := range map[string]func(b board.Board, member, other string) error{
+		"unreadable text": func(b board.Board, _, other string) error {
+			return os.WriteFile(b.Entries[other].Document, []byte{0xff, 0xfe}, 0o600)
+		},
+		"missing spec.md": func(b board.Board, member, _ string) error {
+			return os.Remove(b.Entries[member].Document)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newGCFixture(t)
+			a := f.project("demo")
+			group := "20261101-ended-group"
+			gcArchivedCard(t, a, "ended-one", group)
+			member := gcArchivedCard(t, a, "ended-two", group)
+			other := gcArchivedCard(t, a, "unrelated", "")
+			p := gcProject(t, f, "demo")
+			r := receipt{Operation: "group-release:" + group, Status: receiptDone, HTTP: http.StatusOK, CreatedAt: f.clock.now().UTC().Add(-48 * time.Hour)}
+			if due, err := receiptDue(r, f.clock.now(), time.Hour, &bindingFacts{board: p.board}); err != nil || !due {
+				t.Fatalf("complete board: %v %v", due, err)
+			}
+			b, err := board.ScanNoWait(p.board)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := damage(b, member, other); err != nil {
+				t.Fatal(err)
+			}
+			if due, err := receiptDue(r, f.clock.now(), time.Hour, &bindingFacts{board: p.board}); err != nil || due {
+				t.Fatalf("the receipt must stay: %v %v", due, err)
+			}
+		})
 	}
 }
 
@@ -117,20 +132,20 @@ func TestServerGCReleaseReceiptReplayCannotChangeTheLease(t *testing.T) {
 	if releaseReceipt == "" {
 		t.Fatal("the release wrote no receipt")
 	}
-	f.clock.advance(2 * time.Hour)
-	if report, err := f.gc(api.ServerGCRequest{Project: "demo", OlderThan: "1h", LogKeep: 1 << 20}); err != nil || fileExists(receiptNamePath(p.root, releaseReceipt)) {
-		t.Fatalf("the release receipt must go: %+v %v", report, err)
-	}
 	record := filepath.Join(p.root, servicePath(groupClaimName(group)))
 	before, err := os.ReadFile(record)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = a.ReleaseGroup(ctx, "release-key", group, release, proof)
-	if err == nil {
-		t.Fatal("the replayed release must be refused")
+	f.clock.advance(2 * time.Hour)
+	if report, err := f.gc(api.ServerGCRequest{Project: "demo", OlderThan: "1h", LogKeep: 1 << 20}); err != nil || fileExists(receiptNamePath(p.root, releaseReceipt)) {
+		t.Fatalf("the release receipt must go: %+v %v", report, err)
 	}
-	notServerError(t, "replayed release", err)
+	_, err = a.ReleaseGroup(ctx, "release-key", group, release, proof)
+	var refused *api.Error
+	if !errors.As(err, &refused) || refused.Status < 300 || refused.Status >= 500 {
+		t.Fatalf("the replayed release must be refused with a non-2xx answer below 500: %v", err)
+	}
 	after, err := os.ReadFile(record)
 	if err != nil || !bytes.Equal(before, after) {
 		t.Fatalf("the lease record changed:\n%s\n%s", before, after)

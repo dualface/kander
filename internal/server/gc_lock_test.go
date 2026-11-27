@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -76,14 +77,13 @@ func receiptErrors(p api.ServerGCProject) []string {
 
 // A board, card, or journal lock another process holds makes the receipt stage
 // of that project skip at once with one board.lock_busy error; the next project
-// is still handled.
+// is still handled. The real compaction runs first and does not wait either.
 func TestServerGCReceiptStageNeverWaitsForABoardLock(t *testing.T) {
 	for _, held := range []string{"board", "card", "journal"} {
 		t.Run(held, func(t *testing.T) {
 			f := newGCFixture(t)
 			a := f.project("a")
 			f.project("b")
-			stubCompaction(t, noCompaction)
 			card := gcArchivedCard(t, a, "alpha", "")
 			old := f.clock.now().UTC().Add(-48 * time.Hour)
 			cardReceipt := writeReceipt(t, f.s, "a", receipt{Key: "move-alpha", Operation: "move:" + card, Digest: "d", Status: receiptDone, HTTP: 200, CreatedAt: old})
@@ -141,7 +141,8 @@ func TestServerGCKeepsAnIntentMemberAsRecordedWhileTheBoardIsBusy(t *testing.T) 
 	}
 }
 
-// Cancelling a gc whose only project has a busy board ends it at once.
+// Cancelling a gc that reached the receipt stage of its only project, whose
+// board lock another process holds, ends it at once.
 func TestServerGCStopsAtCancellationWhileTheBoardIsBusy(t *testing.T) {
 	f := newGCFixture(t)
 	a := f.project("a")
@@ -149,13 +150,32 @@ func TestServerGCStopsAtCancellationWhileTheBoardIsBusy(t *testing.T) {
 	writeReceipt(t, f.s, "a", receipt{Key: "move-alpha", Operation: "move:" + card, Digest: "d", Status: receiptDone, HTTP: 200, CreatedAt: f.clock.now().UTC().Add(-48 * time.Hour)})
 	pa := gcProject(t, f, "a")
 	holdBoardLock(t, pa.board, "board.lock")
-	run := gcRun{data: f.s.data, version: "test", now: f.clock.now, targets: f.s.gcTargets("a")}
+	target := f.s.gcTargets("a")[0]
+	lock := target.lock
+	entered, cancelled := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	// The first project-lock hold is the receipt stage; it waits there until
+	// the test cancelled, so the cancellation lands inside a running gc.
+	target.lock = func() (func(), error) {
+		once.Do(func() { close(entered); <-cancelled })
+		return lock()
+	}
+	run := gcRun{data: f.s.data, version: "test", now: f.clock.now, targets: []gcTarget{target}}
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan api.ServerGCReport, 1)
 	go func() { done <- run.run(ctx, gcOptions{project: "a", olderThan: time.Hour, logKeep: 1 << 20}) }()
-	cancel()
 	select {
-	case <-done:
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the gc never reached the receipt stage")
+	}
+	cancel()
+	close(cancelled)
+	select {
+	case report := <-done:
+		if errs := receiptErrors(report.Projects[0]); len(errs) != 1 {
+			t.Fatalf("the receipt stage must report one error: %+v", report.Projects[0])
+		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("the gc must return within 2 seconds while the board lock is held")
 	}
