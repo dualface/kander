@@ -21,6 +21,7 @@
   "gc.running": "服务端已有一个 gc 在运行；请等它结束后运行 kander server gc --dry-run 查看剩余部分",
   "gc.timeout": "gc 调用超时，服务端可能仍在执行。请稍后运行 kander server gc --dry-run 查看剩余部分。",
   "gc.no_server": "数据目录 {{.V0}} 被另一个 kander 进程锁定，但 {{.V1}} 和服务端记录的地址上都没有服务该目录的服务端应答。请等待另一个离线命令结束，或把 server.url 设为服务端的监听地址。",
+  "gc.discover_timeout": "数据目录 {{.V0}} 被另一个 kander 进程锁定，但在发现期限结束前，{{.V1}} 和服务端记录的地址都没有在单次探测时限内应答。请检查那里的服务端是否响应，或把 server.url 设为服务端的监听地址。",
   "gc.local_only": "kander server gc 只能在本机执行：{{.V0}} 上的服务端不是回环地址，而本地数据目录已被锁定。",
   "gc.data_mismatch": "{{.V0}} 上的服务端使用的数据目录是 {{.V1}}，不是 {{.V2}}。",
   "gc.unsupported": "{{.V0}} 上的服务端不支持 server gc；请用当前版本的 kander 重启它。",

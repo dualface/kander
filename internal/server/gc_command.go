@@ -44,6 +44,10 @@ var (
 	// taken for a server still starting: it recovers its projects before it
 	// listens and records its address.
 	gcDiscoverPatience = 30 * time.Second
+	// gcProbeTimeout bounds one probe of one address. An address that takes
+	// the connection but never answers HTTP would otherwise hold the command
+	// until the client timeout, and the other address would not be asked.
+	gcProbeTimeout = 3 * time.Second
 	// gcInterrupt is the context an interrupt cancels.
 	gcInterrupt = func() (context.Context, context.CancelFunc) {
 		return signal.NotifyContext(context.Background(), os.Interrupt)
@@ -171,7 +175,7 @@ func gcExecutorFor(ctx context.Context, dir string, request api.ServerGCRequest)
 	}
 	local := servicectl.Local(target)
 	if local {
-		if info, err := gcProbe(ctx, target, dir); err == nil {
+		if info, err := gcProbeOnce(ctx, target, dir); err == nil {
 			return online(info)
 		}
 	}
@@ -190,7 +194,12 @@ func gcExecutorFor(ctx context.Context, dir string, request api.ServerGCRequest)
 	// gcDiscoverPatience ends, ask the configured URL and the address the
 	// server of dir recorded (read again each time, since a starting server
 	// writes it once it listens, and it differs with another --listen).
+	// Only the probes run under the deadline: the waits between rounds
+	// follow ctx, so an interrupt still ends the command with ctx.Err(), while
+	// the end of the patience is the loop condition, not a cancellation.
 	deadline := time.Now().Add(gcDiscoverPatience)
+	probes, stop := context.WithDeadline(ctx, deadline)
+	defer stop()
 	var last error
 	for {
 		var candidates []string
@@ -201,7 +210,10 @@ func gcExecutorFor(ctx context.Context, dir string, request api.ServerGCRequest)
 			candidates = append(candidates, recorded)
 		}
 		for _, candidate := range candidates {
-			info, err := gcProbe(ctx, candidate, dir)
+			if probes.Err() != nil {
+				break
+			}
+			info, err := gcProbeOnce(probes, candidate, dir)
 			if err == nil {
 				return online(info)
 			}
@@ -213,16 +225,36 @@ func gcExecutorFor(ctx context.Context, dir string, request api.ServerGCRequest)
 		select {
 		case <-ctx.Done():
 			return nil, nil, ctx.Err()
-		case <-time.After(250 * time.Millisecond):
+		case <-time.After(min(250*time.Millisecond, time.Until(deadline))):
 		}
 	}
-	if last == nil {
+	switch {
+	case last == nil:
 		return nil, nil, errors.New(config.Text("gc.local_only", target))
-	}
-	if errors.Is(last, servicectl.ErrNoServer) {
+	case errors.Is(last, servicectl.ErrNoServer):
 		return nil, nil, errors.New(config.Text("gc.no_server", dir, target))
+	case errors.Is(last, errGCProbeTimeout):
+		return nil, nil, command.Coded("gc_timeout", errors.New(config.Text("gc.discover_timeout", dir, target)))
 	}
 	return nil, nil, last
+}
+
+// errGCProbeTimeout marks a probe that gcProbeTimeout or the discovery
+// deadline ended before the address answered.
+var errGCProbeTimeout = errors.New("server probe timed out")
+
+// gcProbeOnce probes one address within gcProbeTimeout. A probe that its own
+// deadline ended reports errGCProbeTimeout: the client reports any failed
+// request as unreachable, which would hide an address that took the
+// connection but never answered.
+func gcProbeOnce(parent context.Context, target, dir string) (api.ServerInfo, error) {
+	ctx, cancel := context.WithTimeout(parent, gcProbeTimeout)
+	defer cancel()
+	info, err := gcProbe(ctx, target, dir)
+	if err != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return info, errGCProbeTimeout
+	}
+	return info, err
 }
 
 // gcFailure reports a failed plan or gc. A refused request (bad value, unknown
