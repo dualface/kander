@@ -13,6 +13,7 @@ Global flags: `--lang`, `--json`.
 | `version` | Version | user | `snippets/commands/version.md` |
 | `install` | Installer | user | `snippets/commands/install.md` |
 | `uninstall` | Uninstall | user | `snippets/commands/uninstall.md` |
+| `gc` | Reclaim | user | `snippets/commands/gc.md` |
 | `terminal` | Launchers | user | `snippets/commands/terminal.md` |
 | `init` | Initialize | user | `snippets/commands/init.md` |
 | `list` | Cards | creator/user | `snippets/commands/list.md` |
@@ -51,6 +52,7 @@ kander doctor
 kander version
 kander install
 kander uninstall [--yes]
+kander gc [--dry-run] [--yes] [--older-than D] [--all-projects] [--client-only]
 kander terminal list
 kander terminal test <name> [--keep] [--skip-focus]
 kander init [--server <URL>] [--project <name>] [project-path]

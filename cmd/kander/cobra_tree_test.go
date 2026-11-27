@@ -84,6 +84,7 @@ var samplePositionals = map[string][]string{
 	"dispatch show":                {sampleTask, "d1"},
 	"doctor":                       {},
 	"guard-write":                  {"main.go"},
+	"gc":                           {},
 	"init":                         {},
 	"install":                      {},
 	"issue import":                 {"42"},

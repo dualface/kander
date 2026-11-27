@@ -1,0 +1,247 @@
+package remote
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/client"
+	"github.com/dualface/kander/v2/internal/command/commandtest"
+	"github.com/dualface/kander/v2/internal/config"
+)
+
+// gcCommand runs `kander gc` against the fixture. answer is the terminal's
+// reply; empty means no terminal. server, when set, is the local server gc.
+type gcCommand struct {
+	f       *gcFixture
+	answer  string
+	server  serverGC
+	skipped string
+	opened  bool
+	calls   []api.ServerGCRequest
+	prompt  bytes.Buffer
+}
+
+func (c *gcCommand) run(t *testing.T, args ...string) (int, string, string) {
+	t.Helper()
+	open, terminal, in, out, resolve := gcOpen, gcTerminal, gcPromptIn, gcPromptOut, resolveServerGC
+	t.Cleanup(func() {
+		gcOpen, gcTerminal, gcPromptIn, gcPromptOut, resolveServerGC = open, terminal, in, out, resolve
+	})
+	gcOpen = func() (*Session, *config.Config, error) {
+		c.opened = true
+		cfg := &config.Config{}
+		cfg.Git.BranchMode = config.GitBranchModeMainOnly
+		return c.f.s, cfg, nil
+	}
+	gcTerminal = func() bool { return c.answer != "" }
+	gcPromptIn, gcPromptOut = strings.NewReader(c.answer), &c.prompt
+	resolveServerGC = func(context.Context, string) (serverGC, string, error) {
+		if c.server == nil {
+			return nil, c.skipped, nil
+		}
+		return func(ctx context.Context, req api.ServerGCRequest) (api.ServerGCReport, error) {
+			c.calls = append(c.calls, req)
+			return c.server(ctx, req)
+		}, "", nil
+	}
+	chdir(t, c.f.repo)
+	probe := c.f.options(true).Probe
+	return commandtest.Capture(func() int { return commandtest.Run(NewGCCommand(probe), args...) })
+}
+
+func chdir(t *testing.T, dir string) {
+	t.Helper()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(previous) })
+}
+
+// removable prepares one worktree the gc removes.
+func removable(t *testing.T) (*gcFixture, ExecutionWorktree) {
+	f := newGCFixture(t)
+	f.card(gcTask, "done")
+	return f, f.worktree(gcTask, 1)
+}
+
+func TestGCCommandRefusesWithoutConfirmation(t *testing.T) {
+	f, w := removable(t)
+	for _, args := range [][]string{{"--json"}, {}, {"--older-than", "30m", "--yes"}, {"--older-than", "soon", "--yes"}, {"extra"}} {
+		c := &gcCommand{f: f}
+		code, out, errOut := c.run(t, args...)
+		if code != 2 || c.opened || !f.registered(w.Path) {
+			t.Fatalf("%v: exit %d, opened %v: %s %s", args, code, c.opened, out, errOut)
+		}
+		if len(args) == 1 && args[0] == "--json" && !strings.Contains(errOut, "interactive_required") {
+			t.Fatalf("--json without --yes or --dry-run must say interactive_required: %s", errOut)
+		}
+	}
+}
+
+func TestGCCommandAsksBeforeRemoving(t *testing.T) {
+	for _, answer := range []string{"n\n", "\n"} {
+		f, w := removable(t)
+		c := &gcCommand{f: f, answer: answer}
+		code, out, _ := c.run(t)
+		if code != 1 || !f.registered(w.Path) {
+			t.Fatalf("answer %q: exit %d: %s", answer, code, out)
+		}
+		if !strings.Contains(out, config.Text("gc.plan_header")) || !strings.Contains(c.prompt.String(), config.Text("gc.question")) {
+			t.Fatalf("the plan goes to stdout and the question to stderr: %q %q", out, c.prompt.String())
+		}
+	}
+	f, w := removable(t)
+	c := &gcCommand{f: f, answer: "y\n"}
+	if code, out, errOut := c.run(t); code != 0 || f.registered(w.Path) {
+		t.Fatalf("yes must remove: %d %s %s", code, out, errOut)
+	}
+}
+
+func TestGCCommandMergesTheLocalServerGC(t *testing.T) {
+	f, w := removable(t)
+	c := &gcCommand{f: f}
+	c.server = func(_ context.Context, req api.ServerGCRequest) (api.ServerGCReport, error) {
+		if !req.DryRun && f.registered(w.Path) {
+			t.Error("the client part must run before the server gc")
+		}
+		return api.ServerGCReport{DryRun: req.DryRun, Projects: []api.ServerGCProject{{Name: "demo", Receipts: api.ServerGCReceipts{Files: 3, Bytes: 300}}}}, nil
+	}
+	code, out, errOut := c.run(t, "--json", "--yes")
+	var report GCReport
+	if err := json.Unmarshal([]byte(out), &report); err != nil || code != 0 {
+		t.Fatalf("exit %d: %s %s", code, out, errOut)
+	}
+	if report.Server.Report == nil || report.Server.Report.Projects[0].Receipts.Files != 3 || report.Projects[0].Worktrees.Count != 1 {
+		t.Fatalf("the server result must be part of the output: %s", out)
+	}
+	if len(c.calls) != 2 || !c.calls[0].DryRun || c.calls[1].DryRun || c.calls[0].Project != "demo" || c.calls[0].OlderThan != "168h0m0s" {
+		t.Fatalf("the server is asked for its plan, then runs: %+v", c.calls)
+	}
+}
+
+func TestGCCommandRunsTheClientPartWhenTheServerRefuses(t *testing.T) {
+	f, w := removable(t)
+	c := &gcCommand{f: f}
+	c.server = func(context.Context, api.ServerGCRequest) (api.ServerGCReport, error) {
+		return api.ServerGCReport{}, &api.Error{Status: http.StatusForbidden, Code: api.CodeInvalidRequest}
+	}
+	code, out, _ := c.run(t, "--json", "--yes")
+	var report GCReport
+	if err := json.Unmarshal([]byte(out), &report); err != nil || code != 1 {
+		t.Fatalf("a refused server part exits 1: %d %s", code, out)
+	}
+	if report.Server.Refused != config.Text("gc.refused") || f.registered(w.Path) || len(c.calls) != 1 {
+		t.Fatalf("the client part still runs and the server is not asked again: %s %d", out, len(c.calls))
+	}
+}
+
+func TestGCCommandSkipsTheServer(t *testing.T) {
+	f, _ := removable(t)
+	c := &gcCommand{f: f, server: func(context.Context, api.ServerGCRequest) (api.ServerGCReport, error) {
+		return api.ServerGCReport{}, nil
+	}}
+	code, out, _ := c.run(t, "--dry-run", "--client-only")
+	if code != 0 || len(c.calls) != 0 || !strings.Contains(out, config.Text("gc.client_server_skipped", config.Text("gc.client_server_client_only"))) {
+		t.Fatalf("--client-only never calls the server: %d %d %s", code, len(c.calls), out)
+	}
+	c = &gcCommand{f: f, skipped: "remote"}
+	if code, out, _ := c.run(t, "--dry-run"); code != 0 || !strings.Contains(out, config.Text("gc.client_server_skipped", "remote")) {
+		t.Fatalf("a skipped server part is reported: %d %s", code, out)
+	}
+}
+
+func TestResolveServerGCSkipsRemoteServersAndUnreadableKeys(t *testing.T) {
+	call, skipped, err := resolveServerGC(t.Context(), "http://kander.example.invalid:7878")
+	if call != nil || err != nil || skipped != config.Text("gc.client_server_remote", "http://kander.example.invalid:7878") || !strings.Contains(skipped, "kander server gc") {
+		t.Fatalf("a remote server is skipped: %q %v", skipped, err)
+	}
+	data := t.TempDir()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(api.ServerInfo{DataDir: data})
+	}))
+	t.Cleanup(server.Close)
+	call, skipped, err = resolveServerGC(t.Context(), server.URL)
+	if call != nil || err != nil || !strings.HasPrefix(skipped, strings.SplitN(config.Text("gc.client_server_no_key", data, "x"), "(", 2)[0]) || !strings.Contains(skipped, "kander server gc") {
+		t.Fatalf("an unreadable key skips the server part: %q %v", skipped, err)
+	}
+}
+
+func TestGCCommandAllProjectsListsUnmatchedDirectories(t *testing.T) {
+	f := newGCFixture(t)
+	other := api.Project{ID: api.ProjectID("other"), Name: "other", Remote: f.bare}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/projects":
+			_ = json.NewEncoder(w).Encode(other)
+		case "/api/v1/projects/" + other.ID + "/tasks":
+			_ = json.NewEncoder(w).Encode(api.TaskList{})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	cl, err := client.New(server.URL, "c-gc-host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cl.Retries = 0
+	// Bind the fixture to this server before anything is created below its
+	// namespace.
+	if err := os.Remove(f.root); err != nil {
+		t.Fatal(err)
+	}
+	f.s.ServerURL, f.s.Client = server.URL, cl
+	if f.root, err = f.s.LocalDataRoot(); err != nil {
+		t.Fatal(err)
+	}
+	f.card(gcTask, "done")
+	f.worktree(gcTask, 1)
+	matched := filepath.Join(f.s.Home, "projects", projectNamespace(server.URL, other.ID))
+	stray := filepath.Join(f.s.Home, "projects", strings.Repeat("ab", 32))
+	f.write(stray, "launch-actions/a.json", `{"schema":1,"phase":"complete","task_id":"`+gcTask+`"}`)
+	if err := os.MkdirAll(matched, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	before := snapshot(t, stray)
+	c := &gcCommand{f: f, server: func(_ context.Context, req api.ServerGCRequest) (api.ServerGCReport, error) {
+		return api.ServerGCReport{DryRun: req.DryRun, Projects: []api.ServerGCProject{{Name: "demo"}, {Name: "other"}}}, nil
+	}}
+	code, out, errOut := c.run(t, "--json", "--yes", "--all-projects")
+	var report GCReport
+	if err := json.Unmarshal([]byte(out), &report); err != nil || code != 0 {
+		t.Fatalf("exit %d: %s %s", code, out, errOut)
+	}
+	if len(report.Projects) != 2 || report.Projects[1].Name != "other" || len(report.Unmatched) != 1 || report.Unmatched[0] != filepath.Base(stray) {
+		t.Fatalf("the matched project is covered and the stray directory is listed: %s", out)
+	}
+	if !sameSnapshot(before, snapshot(t, stray)) || c.calls[0].Project != "" {
+		t.Fatalf("an unmatched directory never changes, and the server gc covers every project: %+v", c.calls)
+	}
+}
+
+func TestGCCommandExitsOneAfterHandlingTheRest(t *testing.T) {
+	f, w := removable(t)
+	dirty := "20261101-gc-dirty-task"
+	f.card(dirty, "done")
+	kept := f.worktree(dirty, 1)
+	f.write(kept.Path, "notes.txt", "draft\n")
+	c := &gcCommand{f: f, skipped: "remote"}
+	code, out, _ := c.run(t, "--yes")
+	if code != 1 || f.registered(w.Path) || !f.registered(kept.Path) || !strings.Contains(out, config.Text("gc.client_kept_worktree", dirty+"/g1", config.Text("gc.client_dirty"))) {
+		t.Fatalf("a kept candidate exits 1 after the others were removed: %d %s", code, out)
+	}
+}

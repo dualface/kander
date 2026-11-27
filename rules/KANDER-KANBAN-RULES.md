@@ -38,6 +38,7 @@ kander doctor
 kander version
 kander install
 kander uninstall [--yes]
+kander gc [--dry-run] [--yes] [--older-than D] [--all-projects] [--client-only]
 kander terminal list
 kander terminal test <name> [--keep] [--skip-focus]
 kander init [--server <URL>] [--project <name>] [project-path]

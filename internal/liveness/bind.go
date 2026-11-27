@@ -12,4 +12,6 @@ func init() {
 	cli.Register(NewSubscribeCommand)
 	// list adds the --agent-status observation, which board cannot import.
 	cli.Register(func() *cobra.Command { return remote.NewListCommand(ObserveListAgents) })
+	// gc keeps a worktree while its executor may still run.
+	cli.Register(func() *cobra.Command { return remote.NewGCCommand(ObserveExecutors) })
 }
