@@ -271,12 +271,13 @@ func (s *Session) CollectGarbage(ctx context.Context, opts GCOptions) GCProject 
 // collectLocal runs the categories of the project's client directory. A run
 // first gives a directory created before identity markers its marker: the
 // records that named its project for `kander gc --all-projects` may be the
-// ones this run removes. When the marker cannot be written nothing below the
-// directory is removed. Every session the gc runs for names a project the
+// ones this run removes. When the marker cannot be written, or an existing one
+// does not name this project, nothing below the directory is removed and the
+// marker is left as it is. Every session the gc runs for names a project the
 // bound server confirmed.
 func (r *gcRun) collectLocal(ctx context.Context) {
 	if !r.opts.DryRun {
-		if err := writeProjectIdentity(r.s.Home, r.root, r.s.ServerURL, r.s.Info.ID); err != nil {
+		if err := r.ensureIdentity(); err != nil {
 			r.fail(err)
 			return
 		}
@@ -284,6 +285,22 @@ func (r *gcRun) collectLocal(ctx context.Context) {
 	r.collectWorktrees(ctx)
 	r.collectReviewRuntime(ctx)
 	r.collectJournal()
+}
+
+// ensureIdentity writes the identity marker of the project's client directory
+// unless one exists, and checks that the marker there names this project.
+func (r *gcRun) ensureIdentity() error {
+	if err := writeProjectIdentity(r.s.Home, r.root, r.s.ServerURL, r.s.Info.ID); err != nil {
+		return err
+	}
+	identity, valid, err := readProjectIdentity(r.s.Home, r.root)
+	if err != nil {
+		return err
+	}
+	if !valid || identity.ServerURL != r.s.ServerURL || identity.ProjectID != r.s.Info.ID {
+		return errors.New(config.Text("gc.client_identity_mismatch", filepath.Join(r.root, projectIdentityName)))
+	}
+	return nil
 }
 
 // terminalTask returns the list row of a card in a terminal state.

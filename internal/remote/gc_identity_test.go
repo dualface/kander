@@ -128,10 +128,15 @@ type gcServedProject struct {
 
 // bindToServer starts a server that serves the projects, each with one done
 // card gcTask, and answers anything else not_found; then it binds the
-// fixture's session to that server.
-func (f *gcFixture) bindToServer(projects ...gcServedProject) string {
+// fixture's session to that server. requests lists the paths it was asked.
+func (f *gcFixture) bindToServer(projects ...gcServedProject) (requests func() []string) {
 	f.t.Helper()
+	var mu sync.Mutex
+	var seen []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		seen = append(seen, r.URL.Path)
+		mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		for _, p := range projects {
 			base := "/api/v1/projects/" + p.info.ID
@@ -164,7 +169,11 @@ func (f *gcFixture) bindToServer(projects ...gcServedProject) string {
 	if f.root, err = f.s.LocalDataRoot(); err != nil {
 		f.t.Fatal(err)
 	}
-	return server.URL
+	return func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.Clone(seen)
+	}
 }
 
 // projectDirectory is the client project directory of project on the bound
@@ -297,15 +306,16 @@ func TestGCAllProjectsMatchesADirectoryWithOnlyAReviewRuntime(t *testing.T) {
 
 // A marker is only a lead: a project the server refuses to show is unverified
 // (exit 1) and one it does not have is unmatched, and neither directory
-// changes.
+// changes. The marker is the only lead in both directories: a review runtime
+// names no project.
 func TestGCAllProjectsConfirmsTheMarkerWithTheServer(t *testing.T) {
 	f := newGCFixture(t)
-	refused := api.Project{ID: api.ProjectID("refused"), Name: "refused"}
-	f.bindToServer(gcServedProject{info: refused, status: http.StatusForbidden})
-	denied := f.projectDirectory(refused.ID, true)
-	f.requestCall(denied, refused.ID)
-	gone := f.projectDirectory(api.ProjectID("gone"), true)
-	f.requestCall(gone, api.ProjectID("gone"))
+	refused, missing := api.Project{ID: api.ProjectID("refused"), Name: "refused"}, api.ProjectID("gone")
+	requests := f.bindToServer(gcServedProject{info: refused, status: http.StatusForbidden})
+	denied, gone := f.projectDirectory(refused.ID, true), f.projectDirectory(missing, true)
+	for _, dir := range []string{denied, gone} {
+		f.write(filepath.Join(dir, "review-runtime", "run-gone"), "writer-secret", strings.Repeat("a", 64))
+	}
 	before := map[string]map[string]string{denied: snapshot(t, denied), gone: snapshot(t, gone)}
 	code, report := f.allProjects(&gcCommand{f: f}, "--yes")
 	if code != 1 || !slices.Equal(projectNames(report), []string{"demo"}) {
@@ -314,9 +324,40 @@ func TestGCAllProjectsConfirmsTheMarkerWithTheServer(t *testing.T) {
 	if len(report.Unverified) != 1 || report.Unverified[0].ID != filepath.Base(denied) || !slices.Equal(report.Unmatched, []string{filepath.Base(gone)}) {
 		t.Fatalf("a refused project is unverified and a missing one unmatched: %+v", report)
 	}
+	for _, path := range []string{"/api/v1/projects/" + refused.ID, "/api/v1/projects/" + missing} {
+		if !slices.Contains(requests(), path) {
+			t.Fatalf("the marker's project must be read by ID (%s): %v", path, requests())
+		}
+	}
 	for dir, files := range before {
 		if !sameSnapshot(files, snapshot(t, dir)) {
 			t.Fatalf("%s must not change", dir)
+		}
+	}
+}
+
+// An existing marker that names another project is left as it is, and the
+// run removes nothing below its directory, so the record that still names the
+// project keeps the directory matchable.
+func TestGCAllProjectsKeepsTheRecordsBehindAForeignMarker(t *testing.T) {
+	f := newGCFixture(t)
+	peer := api.Project{ID: api.ProjectID("peer"), Name: "peer"}
+	f.bindToServer(gcServedProject{info: peer})
+	dir := f.projectDirectory(peer.ID, false)
+	if err := writeProjectIdentity(f.s.Home, dir, f.s.ServerURL, api.ProjectID("other")); err != nil {
+		t.Fatal(err)
+	}
+	record := f.requestCall(dir, peer.ID)
+	marker := filepath.Join(dir, projectIdentityName)
+	before, _ := os.ReadFile(marker)
+	for round := 1; round <= 2; round++ {
+		code, report := f.allProjects(&gcCommand{f: f}, "--yes")
+		i := slices.IndexFunc(report.Projects, func(p GCProject) bool { return p.ID == peer.ID })
+		if code != 1 || i < 0 || len(report.Projects[i].Errors) != 1 || !strings.Contains(report.Projects[i].Errors[0], marker) || len(report.Unverified) != 0 {
+			t.Fatalf("round %d: exit %d: %+v", round, code, report)
+		}
+		if after, _ := os.ReadFile(marker); !exists(t, record) || string(after) != string(before) {
+			t.Fatalf("round %d: the record and the marker must stay", round)
 		}
 	}
 }
