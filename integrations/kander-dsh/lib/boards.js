@@ -99,7 +99,7 @@ export class Boards {
     const main = await this.mainWorktree(path)
     if (main && (await isDirectory(main))) return main
     for (let current = resolve(path); ; current = dirname(current)) {
-      if (await isRegularFile(join(current, '.kander-config.json')) || await isRegularFile(join(current, '.kander', 'config.json'))) return current
+      if (await isRegularFile(join(current, '.kander-config.json'))) return current
       if (dirname(current) === current) return null
     }
   }
@@ -112,8 +112,9 @@ export class Boards {
   }
 
   /**
-   * The kander of a project: the configured absolute path, then the project
-   * install <project>/.kander/bin/kander, then PATH.
+   * The kander of a project: the configured absolute path, then the global
+   * kander on PATH. Kander has no project install, so a binary a retired one
+   * left in <project>/.kander/bin/ is never used.
    * @throws BoardError kander-not-found with the places it looked.
    */
   async executable(project) {
@@ -123,9 +124,6 @@ export class Boards {
       if (isAbsolute(this.kander) && (await isExecutable(this.kander))) return this.kander
       throw new BoardError('kander-not-found', `the configured kander ${this.kander} is not an executable absolute path`, { searched })
     }
-    const projectInstall = join(project, '.kander', 'bin', 'kander')
-    searched.push(projectInstall)
-    if (await isExecutable(projectInstall)) return projectInstall
     for (const directory of (this.env.PATH ?? '').split(delimiter)) {
       if (!isAbsolute(directory)) continue
       const candidate = join(directory, 'kander')

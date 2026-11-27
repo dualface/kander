@@ -63,6 +63,13 @@ describe('board resolution', () => {
     assert.equal(await new Boards().projectOf(join(root, 'a', 'b')), root)
   })
 
+  test('a retired project install config does not mark a project', async () => {
+    const root = temporaryDirectory()
+    mkdirSync(join(root, '.kander'), { recursive: true })
+    writeFileSync(join(root, '.kander', 'config.json'), '{}')
+    assert.equal(await new Boards().projectOf(root), null)
+  })
+
   test('no board, a relative path, or a missing directory resolve to null', async () => {
     const root = temporaryDirectory()
     const boards = new Boards()
@@ -90,16 +97,16 @@ describe('kander lookup', () => {
     await assert.rejects(new Boards({ kander: 'kander', env: { PATH: root } }).executable(root), { code: 'kander-not-found' })
   })
 
-  test('the project install comes before PATH', async () => {
+  test('a binary a retired project install left is never used', async () => {
     const root = temporaryDirectory()
     const onPath = join(root, 'path')
     mkdirSync(onPath)
     fakeKander(onPath)
     const project = join(root, 'project')
     mkdirSync(join(project, '.kander', 'bin'), { recursive: true })
-    const installed = fakeKander(join(project, '.kander', 'bin'))
+    fakeKander(join(project, '.kander', 'bin'))
     const boards = new Boards({ env: { PATH: onPath } })
-    assert.equal(await boards.executable(project), installed)
+    assert.equal(await boards.executable(project), join(onPath, 'kander'))
     assert.equal(await boards.executable(root), join(onPath, 'kander'))
   })
 
@@ -107,7 +114,7 @@ describe('kander lookup', () => {
     const root = temporaryDirectory()
     const error = await new Boards({ env: { PATH: `relative:${root}` } }).executable(root).catch((failure) => failure)
     assert.equal(error.code, 'kander-not-found')
-    assert.deepEqual(error.details.searched, [join(root, '.kander', 'bin', 'kander'), join(root, 'kander')])
+    assert.deepEqual(error.details.searched, [join(root, 'kander')])
   })
 })
 
