@@ -14,7 +14,7 @@ func TestLaunchEvidenceSurvivesServerRestartAndLaterLauncherWrites(t *testing.T)
 	f := newFixture(t)
 	project := f.project("host-a")
 	card := todoTask(t, project, "restart-start-cursor")
-	grant, err := project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{ClientID: "host-a", ExecutionID: "restart-launch", Owner: "codex", Start: &api.StartInput{Session: "codex durable-session", Window: "tmux:$1:@1:%1"}})
+	grant, err := project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "restart-launch", Owner: "codex", Start: &api.StartInput{Session: "codex durable-session", Window: "tmux:$1:@1:%1"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestRestartedLauncherWithoutExecutorEvidenceCanRollback(t *testing.T) {
 	f := newFixture(t)
 	project := f.project("host-a")
 	card := todoTask(t, project, "restart-clean-launch")
-	grant, err := project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{ClientID: "host-a", ExecutionID: "clean-launch", Owner: "codex", Start: &api.StartInput{Session: "codex pending-session", Window: "tmux:$1:@1:%1"}})
+	grant, err := project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "clean-launch", Owner: "codex", Start: &api.StartInput{Session: "codex pending-session", Window: "tmux:$1:@1:%1"}})
 	if err != nil {
 		t.Fatal(err)
 	}

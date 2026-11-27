@@ -133,7 +133,7 @@ func newKernelFixtureWith(t *testing.T, slug string, start *api.StartInput) *ker
 	k := &kernelFixture{f: f, holder: f.project("host-a"), sender: f.project("host-b")}
 	card := todoTask(t, k.holder, slug)
 	var err error
-	if k.grant, err = k.holder.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-host-a", Owner: "claude", Start: start}); err != nil {
+	if k.grant, err = k.holder.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "exec-host-a", Owner: "claude", Start: start}); err != nil {
 		t.Fatal(err)
 	}
 	k.proof = client.Claim{Token: k.grant.Token, Generation: k.grant.Claim.Generation}
@@ -363,7 +363,7 @@ func TestHandoffSupersedesRequestsThroughTheKernel(t *testing.T) {
 		before = append(before, frozen{id, rev, state, params})
 	}
 	k.f.clock.advance(91 * time.Second)
-	successor, err := k.sender.Takeover(t.Context(), "", k.task, api.ClaimRequest{ClientID: "host-b", ExecutionID: "successor", Owner: "codex", Decision: "test explicit handoff", ExpectedGeneration: gen})
+	successor, err := k.sender.Takeover(t.Context(), "", k.task, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "successor", Owner: "codex", Decision: "test explicit handoff", ExpectedGeneration: gen})
 	if err != nil {
 		t.Fatal(err)
 	}

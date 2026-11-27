@@ -34,5 +34,12 @@
   "policy.set_unset": "项目还没有项目策略；请先运行 kander policy init。",
   "policy.written": "项目策略 revision {{.V0}}（epoch {{.V1}}）已保存。",
   "remote.error_policy_revision_conflict": "项目策略在读取后已被修改，请重新读取",
-  "config.save_layered_config": "该配置含有项目覆盖层或项目策略的值，不能保存到 config.json；请通过只读作用域文件的配置（LoadScope）或 Update 修改作用域文件。"
+  "config.save_layered_config": "该配置含有项目覆盖层或项目策略的值，不能保存到 config.json；请通过只读作用域文件的配置（LoadScope）或 Update 修改作用域文件。",
+  "remote.error_policy_revision_stale": "项目策略在本 client 读取后已被修改",
+  "remote.error_policy_requirement_unmet": "审核要求不符合项目策略",
+  "remote.policy_still_stale": "重试期间项目策略又被修改：服务端为 revision {{.V0}}，本 client 读到的是 revision {{.V1}}。请用 kander policy show 查看后重新执行命令。",
+  "review.requirement_decision_format": "--requirement-decision 的格式是 ROLE=DECISION-ID，不是 {{.V0}}",
+  "review.requirement_decision_role": "--requirement-decision 的角色只能是 PMQA 或 Security，不是 {{.V0}}",
+  "review.requirement_decision_repeated": "--requirement-decision 多次给出了角色 {{.V0}}",
+  "review.requirement_decision_needs_requirements": "--requirement-decision 只用于新批次的审核要求，需要同时给出 --requirements-file"
 }

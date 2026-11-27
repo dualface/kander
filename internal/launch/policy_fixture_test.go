@@ -33,4 +33,9 @@ func putTestPolicy(t *testing.T, session *remote.Session, cfg *config.Config) {
 	if _, err := session.Project.PutPolicy(t.Context(), client.NewKey(), api.PolicyWrite{ExpectedRevision: current.Revision, Values: values}); err != nil {
 		t.Fatal(err)
 	}
+	// The session works with the policy it wrote, as a command that opens the project after the
+	// write would; requests that depend on the policy carry its revision.
+	if err := session.RefreshPolicy(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 }

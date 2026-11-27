@@ -40,9 +40,16 @@ type ReviewPlanExtension struct {
 	// AddMembers adds started members of the plan's task group to a plan that is
 	// not sealed. A nil slice is no operation; an empty one is refused.
 	AddMembers []string `json:"add_members,omitempty"`
+
+	// PolicyRevision is the project policy revision of a request that appends
+	// a batch; the client fills it in. It is checked and never stored.
+	PolicyRevision uint64 `json:"policy_revision,omitzero"`
 }
 
-func ExtendReviewPlanWithTransaction(root string, x ReviewPlanExtension, extensions ...TransactionExtension) error {
+// ExtendReviewPlanWithTransaction applies x; attest is recorded on the batch x
+// appends when the extension creates it.
+func ExtendReviewPlanWithTransaction(root string, x ReviewPlanExtension, attest BatchAttestations, extensions ...TransactionExtension) error {
+	x.PolicyRevision = 0
 	if x.ResolveBatch != nil {
 		return reviewError("resolve_batch needs the Git evidence of ResolveReviewBatch")
 	}
@@ -164,7 +171,7 @@ func ExtendReviewPlanWithTransaction(root string, x ReviewPlanExtension, extensi
 			return syncPlanTargets(tx, pk, p, x, len(changed) == 0)
 		}
 		if x.Batch != nil {
-			if err = appendPlanBatch(tx, pk, &p, *x.Batch, x.Seal, cycleBatch); err != nil {
+			if err = appendPlanBatch(tx, pk, &p, *x.Batch, x.Seal, cycleBatch, attest); err != nil {
 				return err
 			}
 		} else if x.Seal {
@@ -361,7 +368,7 @@ func syncPlanTargets(tx *Transaction, pk *planKernel, p ReviewPlan, x ReviewPlan
 // appendPlanBatch appends b, sealing the plan with it when seal. The plan kernel
 // decides the append from the batch facts and, under a seal, the seal facts of
 // the plan with the batch; each member's kernel takes the batch.
-func appendPlanBatch(tx *Transaction, pk *planKernel, p *ReviewPlan, b ReviewPlanBatch, seal, owed bool) error {
+func appendPlanBatch(tx *Transaction, pk *planKernel, p *ReviewPlan, b ReviewPlanBatch, seal, owed bool, attest BatchAttestations) error {
 	binding := ValidReviewID(b.BatchID) && validReviewTargets(b.Base, b.TargetCommit, b.Requirements) && b.PreviousBatchID == p.Batches[len(p.Batches)-1].BatchID
 	var refusal error
 	if !binding {
@@ -426,8 +433,12 @@ func appendPlanBatch(tx *Transaction, pk *planKernel, p *ReviewPlan, b ReviewPla
 			if e = validateNewRequirements(b.Requirements); e != nil {
 				requirements, refusal = false, e
 			}
-		case !reflect.DeepEqual(actual, old):
+			attest.attest(&actual)
+		case !reflect.DeepEqual(actual, old.withoutAttestation()):
 			binding, refusal = false, reviewError("extension batch already exists")
+		default:
+			// The stored batch keeps the attestation of the request that created it.
+			actual = old
 		}
 	}
 	assigned, noDropOwed := true, true

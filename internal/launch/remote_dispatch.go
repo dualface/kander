@@ -117,7 +117,7 @@ func runRemoteDispatch(a dispatchArguments, cfg *config.Config) int {
 	}
 	act.CardRevision = current.Revision
 	if action == "prepare" {
-		if err := completeRemoteDispatchInput(ctx, session, cwd, current.Text, act.Input); err != nil {
+		if err := completeRemoteDispatchInput(ctx, session, cwd, current, act.Input); err != nil {
 			return fail(err)
 		}
 	}
@@ -178,7 +178,7 @@ func runRemoteDispatch(a dispatchArguments, cfg *config.Config) int {
 	return 0
 }
 
-func completeRemoteDispatchInput(ctx context.Context, session *remote.Session, cwd, cardText string, input *board.DispatchInput) error {
+func completeRemoteDispatchInput(ctx context.Context, session *remote.Session, cwd string, card api.Task, input *board.DispatchInput) error {
 	if session.Info.Remote != "" {
 		if err := session.FetchCommit(ctx, cwd, input.Base); err != nil {
 			return err
@@ -252,11 +252,17 @@ func completeRemoteDispatchInput(ctx context.Context, session *remote.Session, c
 	if err := session.VerifyWrapUpIntegration(ctx, cwd, w.Git); err != nil {
 		return err
 	}
-	target, err := board.IntegrationTargetOf(cardText)
+	target, err := board.IntegrationTargetOf(card.Text)
 	if err != nil {
 		return err
 	}
-	if err := verifyPortableWrapUpTarget(cwd, target, w.Git.TargetRef); err != nil {
+	var snapshot *api.BranchSnapshot
+	if portableTargetNeedsMainline(target) {
+		if snapshot, err = branchSnapshotOf(ctx, session, card); err != nil {
+			return err
+		}
+	}
+	if err := verifyPortableWrapUpTarget(cwd, target, w.Git.TargetRef, snapshot); err != nil {
 		return err
 	}
 	if w.Git.VerifiedAt.IsZero() {
@@ -285,7 +291,7 @@ func authorizeRemoteWrapUp(ctx context.Context, session *remote.Session, cwd str
 		if err != nil {
 			return value, err
 		}
-		if err := completeRemoteDispatchInput(ctx, session, cwd, current.Text, input.Intent); err != nil {
+		if err := completeRemoteDispatchInput(ctx, session, cwd, current, input.Intent); err != nil {
 			return value, err
 		}
 		value, err = session.Project.DispatchAction(ctx, client.NewKey(), input.TaskID, "prepare", api.DispatchCommand{Input: input.Intent, CardRevision: current.Revision}, *credential.Claim())
@@ -324,7 +330,13 @@ func authorizeRemoteWrapUp(ctx context.Context, session *remote.Session, cwd str
 		if err != nil {
 			return value, err
 		}
-		if err := verifyPortableWrapUpTarget(cwd, target, w.Git.TargetRef); err != nil {
+		var snapshot *api.BranchSnapshot
+		if portableTargetNeedsMainline(target) {
+			if snapshot, err = branchSnapshotOf(ctx, session, current); err != nil {
+				return value, err
+			}
+		}
+		if err := verifyPortableWrapUpTarget(cwd, target, w.Git.TargetRef, snapshot); err != nil {
 			return value, err
 		}
 		if err := session.VerifyWrapUpIntegration(ctx, cwd, w.Git); err != nil {

@@ -16,7 +16,7 @@ func TestExecutionWorkspaceAcceptsTheCurrentAndTheLegacyTaskBranch(t *testing.T)
 		"legacy":  api.LegacyExecutionBranch,
 	} {
 		card := todoTask(t, project, name+"-task-branch")
-		grant, err := project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{ClientID: "host-a", ExecutionID: name + "-branch", Owner: "codex", Start: &api.StartInput{Session: "codex session", Window: "tmux:$1:@1:%1"}})
+		grant, err := project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: name + "-branch", Owner: "codex", Start: &api.StartInput{Session: "codex session", Window: "tmux:$1:@1:%1"}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -36,7 +36,7 @@ func TestExecutionWorkspaceRefusesAnotherGenerationTaskOrProject(t *testing.T) {
 	f := newFixture(t)
 	project := f.project("host-a")
 	card := todoTask(t, project, "refused-task-branch")
-	grant, err := project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{ClientID: "host-a", ExecutionID: "refused-branch", Owner: "codex", Start: &api.StartInput{Session: "codex session", Window: "tmux:$1:@1:%1"}})
+	grant, err := project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "refused-branch", Owner: "codex", Start: &api.StartInput{Session: "codex session", Window: "tmux:$1:@1:%1"}})
 	if err != nil {
 		t.Fatal(err)
 	}

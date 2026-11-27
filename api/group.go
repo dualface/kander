@@ -9,6 +9,10 @@ type GroupClaim struct {
 	ExecutionID        string                 `json:"execution_id"`
 	ExpectedGeneration uint64                 `json:"expected_generation"`
 	Decision           string                 `json:"decision,omitempty"`
+	// PolicyRevision and BranchMode work as in ClaimRequest, for the branch
+	// snapshot of the group that its first group claim creates.
+	PolicyRevision uint64 `json:"policy_revision,omitzero"`
+	BranchMode     string `json:"branch_mode,omitempty"`
 }
 type GroupView struct {
 	GroupID    string                       `json:"group_id"`

@@ -62,7 +62,7 @@ func TestImportMergeDoesNotRewriteExistingClaims(t *testing.T) {
 	id := workingImportTask(t, target)
 	c, _ := client.New(h.URL, "host-a")
 	remote := c.Project(initial.Project.ID)
-	if _, err := remote.Takeover(t.Context(), "", id, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-a", Owner: "codex", Decision: "user:test"}); err != nil {
+	if _, err := remote.Takeover(t.Context(), "", id, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "exec-a", Owner: "codex", Decision: "user:test"}); err != nil {
 		t.Fatal(err)
 	}
 	before := scanImportTestTree(t, project.board)

@@ -21,6 +21,9 @@ import (
 type archiveOptions struct {
 	tasks                                                     []string
 	runID, batchID, previousID, requirementsFile, advanceFile string
+	// decisions maps a role to the decision record that justifies marking it
+	// N/A while the project policy requires it (--requirement-decision).
+	decisions map[string]string
 }
 type archiveExecution struct {
 	store        reviewStore
@@ -41,6 +44,7 @@ func archiveError(detail string) error { return newGate(2, "review.archive_inval
 type archiveFlags struct {
 	tasks                                                     []string
 	runID, batchID, previousID, requirementsFile, advanceFile string
+	decisions                                                 []string
 }
 
 func (f *archiveFlags) register(c *cobra.Command) {
@@ -50,12 +54,45 @@ func (f *archiveFlags) register(c *cobra.Command) {
 	command.OnceNonEmpty(c.Flags(), &f.previousID, "previous-run-id", "")
 	command.OnceNonEmpty(c.Flags(), &f.requirementsFile, "requirements-file", "")
 	command.OnceNonEmpty(c.Flags(), &f.advanceFile, "advance-file", "")
+	c.Flags().StringArrayVar(&f.decisions, "requirement-decision", nil, "")
+}
+
+// requirementDecisions parses the --requirement-decision values ROLE=ID. A
+// role is PMQA or Security and appears once; the ID is a decision record ID.
+func requirementDecisions(values []string) (map[string]string, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+	decisions := map[string]string{}
+	for _, value := range values {
+		role, id, ok := strings.Cut(value, "=")
+		switch {
+		case !ok || id == "" || strings.TrimSpace(id) != id:
+			return nil, command.Usage("review.requirement_decision_format", command.Escape(value))
+		case role != "PMQA" && role != "Security":
+			return nil, command.Usage("review.requirement_decision_role", command.Escape(role))
+		case decisions[role] != "":
+			return nil, command.Usage("review.requirement_decision_repeated", role)
+		}
+		decisions[role] = id
+	}
+	return decisions, nil
 }
 
 // options checks the flags against each other and returns the archive options: any archive flag
 // needs --task, and a task-bound review needs a batch and gets a run ID when it names none.
 func (f archiveFlags) options(c *cobra.Command) (archiveOptions, error) {
 	options := archiveOptions{runID: f.runID, batchID: f.batchID, previousID: f.previousID, requirementsFile: f.requirementsFile, advanceFile: f.advanceFile}
+	decisions, err := requirementDecisions(f.decisions)
+	if err != nil {
+		return options, err
+	}
+	options.decisions = decisions
+	if decisions != nil && f.requirementsFile == "" {
+		// A decision justifies a requirement of a new batch, which only
+		// --requirements-file creates.
+		return options, command.Usage("review.requirement_decision_needs_requirements")
+	}
 	for _, value := range f.tasks {
 		id, err := board.NormalizeTaskID(value)
 		if err != nil {
@@ -66,7 +103,7 @@ func (f archiveFlags) options(c *cobra.Command) (archiveOptions, error) {
 		}
 	}
 	if len(options.tasks) == 0 {
-		for _, name := range []string{"run-id", "batch-id", "previous-run-id", "requirements-file", "advance-file"} {
+		for _, name := range []string{"run-id", "batch-id", "previous-run-id", "requirements-file", "advance-file", "requirement-decision"} {
 			if c.Flags().Changed(name) {
 				return options, command.UsageText(archiveError("--task required").Error())
 			}
@@ -96,6 +133,14 @@ func (f archiveFlags) options(c *cobra.Command) (archiveOptions, error) {
 
 func archiveInvocation(ctx *reviewContext, options archiveOptions, arguments []string, root string, findingsSchema int, stores ...reviewStore) (bool, error) {
 	store := selectedReviewStore(root, stores)
+	if options.decisions != nil {
+		decider, ok := store.(interface{ setRequirementDecisions(map[string]string) })
+		if !ok {
+			// Only a server checks requirements against a project policy.
+			return false, archiveError("--requirement-decision needs a project on a server")
+		}
+		decider.setRequirementDecisions(options.decisions)
+	}
 	requirements := map[string]string{}
 	if options.requirementsFile != "" {
 		if err := readArchiveJSON(options.requirementsFile, &requirements); err != nil {

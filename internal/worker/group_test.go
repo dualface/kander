@@ -28,7 +28,7 @@ func TestWorkerRenewsGroupLeaseAndReportsCoordinatorExit(t *testing.T) {
 	if task, err = project.Move(t.Context(), "", task.TaskID, api.Move{State: "todo"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	request := api.GroupClaim{ExecutionID: "coordinator-execution", Request: board.CoordinatorClaim{GroupID: group, Owner: "coordinator", Token: "public-label", Basis: "group supervision fixture", Members: []string{task.TaskID}}}
+	request := api.GroupClaim{BranchMode: "main-develop", ExecutionID: "coordinator-execution", Request: board.CoordinatorClaim{GroupID: group, Owner: "coordinator", Token: "public-label", Basis: "group supervision fixture", Members: []string{task.TaskID}}}
 	grant, err := project.ClaimGroup(t.Context(), "", group, request, nil)
 	if err != nil {
 		t.Fatal(err)

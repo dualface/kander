@@ -164,5 +164,9 @@
   "review.schema.extend-plan.add_members": "封印されていない計画に、計画のタスクグループの開始済みメンバーを加えます。タスク ID の配列です。各タスクは working または review にあり、計画の全メンバーが共有するタスクグループに属し、まだどの計画にも属さず、メンバー除外記録がなく、計画外のバッチに run がなく、計画と同じレポート言語でなければなりません。1 つでも条件を満たさないとリクエスト全体を拒否して何も書かず、エラーにタスクとその条件を示します。封印するには新しいメンバーをバッチに入れる必要があり、batch で追加します。他のすべての操作と同時には使えません。分散モードでは、すべての live メンバーが review にあり進行中のディスパッチがない場合、グループコーディネーターが確認なしで書き込みます。そうでなければ、新メンバーを含むこの操作のすべての live メンバーの保持者が kander review confirm で同じ公開内容を確認します。",
   "review.schema.abandon.run_id": "放棄する終了済み run の run ID。コピーを持たないメンバーがいて、どのプロセスも公開できず、他の run から previous_run_id として指定されていないもの。",
   "review.schema.abandon.decision": "この放棄を認めるユーザー決定への参照。空にできません。Kander は記録するだけで検証しません。",
-  "review.schema.abandon.reason": "この run を公開できない理由。空にできません。run はバッチから外れ、その指摘はバッチを拘束しなくなり、ロール要件は新しい run で満たす必要があります。"
+  "review.schema.abandon.reason": "この run を公開できない理由。空にできません。run はバッチから外れ、その指摘はバッチを拘束しなくなり、ロール要件は新しい run で満たす必要があります。",
+  "review.schema.plan.batches.item.requirement_decisions": "省略可。PMQA または Security を、バッチのメンバーカードにある決定記録（kander decision record）の ID に対応付けます。プロジェクトポリシーがバッチの規模でそのロールを必須にしていて requirements が N/A のときに必要です。ない場合、サーバーは policy_requirement_unmet でバッチを拒否します。",
+  "review.schema.plan.policy_revision": "指定しないでください。コマンドがクライアントのプロジェクトポリシーのリビジョンを送ります。検査だけに使われ、保存されません。",
+  "review.schema.extend-plan.batch.requirement_decisions": "省略可。batch と一緒に使います。プロジェクトポリシーが必須にしているロールを N/A にする根拠として、PMQA または Security をバッチのメンバーカードにある決定記録の ID に対応付けます。",
+  "review.schema.extend-plan.policy_revision": "指定しないでください。コマンドがクライアントのプロジェクトポリシーのリビジョンを送ります。検査だけに使われ、保存されません。"
 }

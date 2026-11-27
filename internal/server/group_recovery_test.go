@@ -107,7 +107,7 @@ func TestLostMemberRecoveryFencesOldGenerationWithoutStartingOrAssigning(t *test
 	if err != nil || replay.Revision != checkpoint.Revision {
 		t.Fatalf("recovery receipt: %+v %v", replay, err)
 	}
-	fresh, err := f.coordinator.Takeover(t.Context(), "fresh-agent-after-recovery", f.task.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "fresh-agent-execution", Owner: "codex", ExpectedGeneration: after.Claim.Generation, Decision: "user: start a fresh executor after audited recovery"})
+	fresh, err := f.coordinator.Takeover(t.Context(), "fresh-agent-after-recovery", f.task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "fresh-agent-execution", Owner: "codex", ExpectedGeneration: after.Claim.Generation, Decision: "user: start a fresh executor after audited recovery"})
 	if err != nil || fresh.Claim.Generation != after.Claim.Generation+1 {
 		t.Fatalf("fresh explicit takeover: %+v %v", fresh, err)
 	}

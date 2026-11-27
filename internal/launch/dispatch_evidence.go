@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/dualface/kander/v2/api"
 	"github.com/dualface/kander/v2/internal/board"
 	"github.com/dualface/kander/v2/internal/command"
 	"github.com/dualface/kander/v2/internal/config"
@@ -38,24 +39,24 @@ func verifyDispatchIntegration(ctx context.Context, g board.DispatchIntegration)
 // verifyIntegrationTarget verifies an integration into the branch a card
 // targets: its target field, or the mainline branch when target is empty. It
 // proves only the one ref the evidence names; the other side of a local and
-// origin pair may not exist, as in a local-only integration.
+// origin pair may not exist, as in a local-only integration. This path has
+// no service session, so the mainline branch is that of the checkout.
 func verifyIntegrationTarget(ctx context.Context, g board.DispatchIntegration, target string) error {
-	return checkIntegrationTarget(ctx, g, target, false)
+	return checkIntegrationTarget(ctx, g, target, nil, false)
 }
 
 // The candidate contains the observed tip before publication. Afterwards,
 // the observed tip must contain the candidate. The review mapping is shared.
-func checkIntegrationTarget(ctx context.Context, g board.DispatchIntegration, target string, beforePublication bool) error {
+// snapshot is the branch snapshot of the card or its group; with one the
+// mainline branch is that of the snapshot, not of the checkout.
+func checkIntegrationTarget(ctx context.Context, g board.DispatchIntegration, target string, snapshot *api.BranchSnapshot, beforePublication bool) error {
 	if !filepath.IsAbs(g.CWD) {
 		return launchError("board.dispatch_evidence_invalid", "integration CWD or target ref")
 	}
-	// The mainline branch follows the git.branch_mode in force for the checkout
-	// that holds the integration, not for the directory this process runs in.
-	cfg, err := config.LoadFor(g.CWD)
+	branch, err := integrationMainline(g.CWD, snapshot)
 	if err != nil {
 		return err
 	}
-	branch := config.MainlineBranch(cfg)
 	if target != "" {
 		// `main` only advances from `develop` in main-develop mode, so a card may
 		// not name it as a target there.
@@ -135,7 +136,9 @@ func checkIntegrationTarget(ctx context.Context, g board.DispatchIntegration, ta
 
 // verifyPortableWrapUpTarget binds a distributed receipt to a declared card
 // target. For older cards the receipt itself supplies the target as before.
-func verifyPortableWrapUpTarget(cwd, target, ref string) error {
+// snapshot is the branch snapshot of the card or its group, as in
+// checkIntegrationTarget.
+func verifyPortableWrapUpTarget(cwd, target, ref string, snapshot *api.BranchSnapshot) error {
 	if target == "" {
 		return nil
 	}
@@ -143,15 +146,36 @@ func verifyPortableWrapUpTarget(cwd, target, ref string) error {
 		return launchError("board.dispatch_evidence_invalid", "integration binding")
 	}
 	if target == "main" {
-		cfg, err := config.LoadFor(cwd)
+		mainline, err := integrationMainline(cwd, snapshot)
 		if err != nil {
 			return err
 		}
-		if config.MainlineBranch(cfg) == "develop" {
+		if mainline == "develop" {
 			return launchError("board.dispatch_evidence_invalid", "integration CWD or target ref")
 		}
 	}
 	return nil
+}
+
+// portableTargetNeedsMainline reports whether verifyPortableWrapUpTarget
+// reads the mainline branch for target: only main needs it, to refuse main as
+// the target of a main-develop card or group. Callers look the branch
+// snapshot up only then.
+func portableTargetNeedsMainline(target string) bool { return target == "main" }
+
+// integrationMainline is the mainline branch an integration is checked
+// against: that of the branch snapshot of the card or its group, or without
+// one the git.branch_mode in force for the checkout that holds the
+// integration, not for the directory this process runs in.
+func integrationMainline(cwd string, snapshot *api.BranchSnapshot) (string, error) {
+	if snapshot != nil {
+		return config.MainlineBranchFor(snapshot.BranchMode), nil
+	}
+	cfg, err := config.LoadFor(cwd)
+	if err != nil {
+		return "", err
+	}
+	return config.MainlineBranch(cfg), nil
 }
 
 type WrapUpRequest struct {

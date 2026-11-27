@@ -110,7 +110,7 @@ func TestExecutionBranchOfASuccessorGenerationPushesBesideThePredecessor(t *test
 	if _, err := f.a.Project.Execution(t.Context(), "release-source", task.TaskID, api.ExecutionUpdate{Action: api.ExecutionRelease, ExpectedRevision: state.Task.Revision, ObservationTicket: state.ObservationTicket, Decision: "source holder releases for explicit takeover", Presence: &api.AgentObservation{Status: "stopped"}}, own); err != nil {
 		t.Fatal(err)
 	}
-	successor, err := f.b.Project.Takeover(t.Context(), "takeover-second-generation", task.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "task-successor", Owner: "codex", Decision: "explicit takeover to publish a second generation", ExpectedGeneration: f.credential.Generation})
+	successor, err := f.b.Project.Takeover(t.Context(), "takeover-second-generation", task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "task-successor", Owner: "codex", Decision: "explicit takeover to publish a second generation", ExpectedGeneration: f.credential.Generation})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -113,7 +113,7 @@ func todoTask(t *testing.T, p *client.Project, slug string, group ...string) api
 }
 
 func claim(t *testing.T, p *client.Project, id, client string) (api.ClaimGrant, error) {
-	return p.Claim(t.Context(), "", id, api.ClaimRequest{ClientID: client, ExecutionID: "exec-" + client, Owner: "claude"})
+	return p.Claim(t.Context(), "", id, api.ClaimRequest{BranchMode: "main-develop", ClientID: client, ExecutionID: "exec-" + client, Owner: "claude"})
 }
 
 func expectCode(t *testing.T, err error, code string) {
@@ -209,7 +209,7 @@ func TestExpiredLeaseNeedsExplicitTakeoverAndFencesTheOldExecution(t *testing.T)
 		t.Fatal(err)
 	}
 
-	takeover := api.ClaimRequest{ClientID: "host-b", ExecutionID: "exec-b2", Owner: "codex", Decision: "user:takeover", ExpectedGeneration: 1}
+	takeover := api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "exec-b2", Owner: "codex", Decision: "user:takeover", ExpectedGeneration: 1}
 	_, err = b.Takeover(t.Context(), "", task.TaskID, takeover)
 	expectCode(t, err, api.CodeLeaseActive)
 
@@ -297,11 +297,11 @@ func TestIdempotentRetriesReturnTheFirstResult(t *testing.T) {
 	}
 
 	task := todoTask(t, a, "grant")
-	g1, err := a.Claim(ctx, "key-claim", task.TaskID, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-1", Owner: "claude"})
+	g1, err := a.Claim(ctx, "key-claim", task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "exec-1", Owner: "claude"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	g2, err := a.Claim(ctx, "key-claim", task.TaskID, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-1", Owner: "claude"})
+	g2, err := a.Claim(ctx, "key-claim", task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "exec-1", Owner: "claude"})
 	if err != nil || g2.Token != g1.Token || g2.Claim.Generation != g1.Claim.Generation {
 		t.Fatalf("a replayed claim must return the same grant: %+v %v", g2.Claim, err)
 	}
@@ -359,10 +359,11 @@ func TestRestartKeepsStateAndRefusesASecondInstance(t *testing.T) {
 }
 
 // A newer and an older peer protocol are refused before any domain operation:
-// protocol 2 clients still interpret assignee as the executing agent.
+// protocol 2 clients still interpret assignee as the executing agent, and
+// protocol 3 clients send no policy revision with claims and new batches.
 func TestProtocolMismatchIsRefused(t *testing.T) {
 	f := newFixture(t)
-	for _, version := range []string{"99", "2", "1"} {
+	for _, version := range []string{"99", "3", "2", "1"} {
 		req, _ := http.NewRequest(http.MethodGet, f.http.URL+"/api/v1/projects?name=demo", nil)
 		req.Header.Set(api.HeaderProtocol, version)
 		resp, err := http.DefaultClient.Do(req)
@@ -411,7 +412,7 @@ func TestDocumentDigestMismatchPublishesNothing(t *testing.T) {
 
 func startClaim(t *testing.T, p *client.Project, id string) (api.ClaimGrant, client.Claim) {
 	t.Helper()
-	g, err := p.Claim(t.Context(), "", id, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-start", Owner: "claude", Start: &api.StartInput{Session: "claude pending", Window: ""}})
+	g, err := p.Claim(t.Context(), "", id, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "exec-start", Owner: "claude", Start: &api.StartInput{Session: "claude pending", Window: ""}})
 	if err != nil {
 		t.Fatal(err)
 	}

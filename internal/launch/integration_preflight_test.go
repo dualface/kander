@@ -153,7 +153,7 @@ func preflightTask(t *testing.T, session *remote.Session) api.Task {
 	if _, err := project.Move(t.Context(), "", task.TaskID, api.Move{State: "todo"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	grant, err := project.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{ClientID: session.Client.ClientID(), ExecutionID: "preflight-fixture", Owner: "codex"})
+	grant, err := project.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{BranchMode: "main-develop", PolicyRevision: session.PolicyRevision(), ClientID: session.Client.ClientID(), ExecutionID: "preflight-fixture", Owner: "codex"})
 	if err != nil {
 		t.Fatal(err)
 	}

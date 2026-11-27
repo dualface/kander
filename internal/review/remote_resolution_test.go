@@ -73,7 +73,7 @@ func TestRemoteHistoricalResolutionVerifiesGitAndBindsOriginals(t *testing.T) {
 	if err != nil || string(sourceReport) != string(originalReport) {
 		t.Fatalf("migration changed local backup: %v", err)
 	}
-	grant, err := project.Takeover(t.Context(), "historical-takeover", w.id, api.ClaimRequest{ClientID: "fixture-host", ExecutionID: "historical-executor", Owner: "codex", Decision: "explicit recovery of historical storage"})
+	grant, err := project.Takeover(t.Context(), "historical-takeover", w.id, api.ClaimRequest{BranchMode: "main-develop", ClientID: "fixture-host", ExecutionID: "historical-executor", Owner: "codex", Decision: "explicit recovery of historical storage"})
 	if err != nil {
 		t.Fatal(err)
 	}

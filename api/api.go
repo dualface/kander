@@ -22,9 +22,13 @@ import (
 // refused with CodeProtocolIncompatible before any domain operation runs.
 // Protocol 3 moves the executing agent to "owner"; "assignee" now names the
 // person assigned to the task. Older peers would misread the same key.
+// Protocol 4 adds the policy revision to claims, group claims, and requests
+// that create review batches, which the server checks against the project
+// policy. A protocol 3 client sends no revision and would pass that check, so
+// it is refused at the handshake.
 const (
-	ProtocolVersion    = 3
-	MinProtocolVersion = 3
+	ProtocolVersion    = 4
+	MinProtocolVersion = 4
 )
 
 // Header names. The claim token is a bearer secret for one execution; it is
@@ -151,6 +155,10 @@ type ClaimView struct {
 	Status      string            `json:"status"`
 	ExpiresAt   time.Time         `json:"expires_at"`
 	RenewedAt   time.Time         `json:"renewed_at"`
+	// BranchSnapshot is the branch model of the card: its own snapshot, or
+	// for a task group member the snapshot of its group. Absent when neither
+	// has one, a card or group claimed before snapshots existed among them.
+	BranchSnapshot *BranchSnapshot `json:"branch_snapshot,omitempty"`
 }
 
 // Claim status values. A claim is active while its lease is unexpired and
@@ -318,6 +326,14 @@ type ClaimRequest struct {
 	// window, and resolved pins in the same transaction, and the execution
 	// stays unconfirmed until POST .../execution confirms or rolls it back.
 	Start *StartInput `json:"start,omitempty"`
+	// PolicyRevision is the project policy revision the client works with,
+	// and BranchMode the git.branch_mode in effect for it. A claim that
+	// creates the branch snapshot of the card is refused with
+	// CodePolicyRevisionStale when the revision is not current; BranchMode
+	// becomes the snapshot while the project has no policy. Neither is part
+	// of the idempotency digest of the claim.
+	PolicyRevision uint64 `json:"policy_revision,omitzero"`
+	BranchMode     string `json:"branch_mode,omitempty"`
 }
 
 // StartInput is the launcher metadata of a start claim.

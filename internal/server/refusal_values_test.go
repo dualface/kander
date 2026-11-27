@@ -110,7 +110,7 @@ func TestBoardRefusalFamiliesKeepTheirAPICodes(t *testing.T) {
 		f := newFixture(t)
 		a := f.project("host-a")
 		task := todoTask(t, a, "refusal-values-dispatch")
-		grant, err := a.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{ClientID: "host-a", ExecutionID: "dispatch-execution", Owner: "codex", Start: &api.StartInput{Session: "codex dispatch-session", Window: "tmux:$1:@1:%1"}})
+		grant, err := a.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "dispatch-execution", Owner: "codex", Start: &api.StartInput{Session: "codex dispatch-session", Window: "tmux:$1:@1:%1"}})
 		if err != nil {
 			t.Fatal(err)
 		}

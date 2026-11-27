@@ -89,6 +89,10 @@ func (s *Server) reviewRuntimeRoutes(mux *routeTable) {
 			return outcome{err: apiError(api.CodeInvalidRequest, "invalid private review writer binding")}
 		}
 		request.Input.CWD = "project:" + p.info.ID
+		// The policy revision is checked, never part of the run identity: a
+		// retry of the same run after a policy change still matches it.
+		revision := request.PolicyRevision
+		request.PolicyRevision = 0
 		// A prepared identity is never a fresh launch on retry, including when its
 		// initial joint-publication receipt still contains Fresh=true.
 		if err := p.lockBoard(); err != nil {
@@ -132,7 +136,20 @@ func (s *Server) reviewRuntimeRoutes(mux *routeTable) {
 			}
 			return request.Input.TaskIDs, nil
 		}
-		return p.reviewWrite(r.Header.Get(api.HeaderIdempotencyKey), "review-prepare", request, scope, holderOf(r), func(extension board.TransactionExtension) (any, error) {
+		// Only a run that creates its batch is checked against the policy.
+		var attest board.BatchAttestations
+		check := func() error {
+			if _, exists, err := board.LookupReviewRun(p.board, request.Input.RunID); err != nil || exists {
+				return err
+			}
+			if exists, err := p.reviewBatchExists(request.Input.BatchID); err != nil || exists {
+				return err
+			}
+			var err error
+			attest, err = p.checkNewReviewBatches(revision, []newReviewBatch{{id: request.Input.BatchID, taskIDs: request.Input.TaskIDs, requirements: request.Requirements, decisions: request.RequirementDecisions}})
+			return err
+		}
+		return p.reviewWriteChecked(r.Header.Get(api.HeaderIdempotencyKey), "review-prepare", request, scope, holderOf(r), check, func(extension board.TransactionExtension) (any, error) {
 			writer := reviewWriter{PrepareDigest: requestDigest("review-prepare", request), RunID: request.Input.RunID, ClientID: client, Hash: request.WriterHash, Generations: map[string]uint64{}}
 			bind := board.TransactionExtension{Before: func(tx *board.Transaction) error {
 				var old reviewWriter
@@ -166,7 +183,7 @@ func (s *Server) reviewRuntimeRoutes(mux *routeTable) {
 				}
 				return stageJSON(tx, writerName(writer.RunID), writer)
 			}}
-			run, fresh, err := board.PrepareReviewRunWithTransaction(p.board, request.Input, request.Requirements, request.Advance, request.Originals, request.Version, extension, bind)
+			run, fresh, err := board.PrepareReviewRunWithTransaction(p.board, request.Input, request.Requirements, attest, request.Advance, request.Originals, request.Version, extension, bind)
 			return board.ReviewPreparation{Run: run, Fresh: fresh}, err
 		})
 	})

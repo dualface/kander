@@ -120,7 +120,7 @@ func retainWrapUp(t *testing.T, slug string) *retainedWrapUp {
 		t.Fatalf("accepted round: %+v %v", r.round, err)
 	}
 	f.clock.advance(91 * time.Second)
-	r.newGrant, err = r.b.Takeover(t.Context(), "", r.task, api.ClaimRequest{ClientID: "host-b", ExecutionID: "wrap-up-successor", Owner: "codex", Decision: "explicit takeover fixture", ExpectedGeneration: first.Claim.Generation, Dispatch: &board.DispatchTakeover{Authorization: r.round.Authorization, Revision: r.round.Revision, Mode: "retain"}})
+	r.newGrant, err = r.b.Takeover(t.Context(), "", r.task, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "wrap-up-successor", Owner: "codex", Decision: "explicit takeover fixture", ExpectedGeneration: first.Claim.Generation, Dispatch: &board.DispatchTakeover{Authorization: r.round.Authorization, Revision: r.round.Revision, Mode: "retain"}})
 	if err != nil {
 		t.Fatal(err)
 	}

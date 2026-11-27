@@ -85,10 +85,15 @@ func runRemoteDisposition(cfg *config.Config, args []string) int {
 			}
 		}
 		if err == nil {
+			// The policy revision goes only on the wire (see sendWithPolicy).
+			p.PolicyRevision = 0
 			proof, authorityErr := session.ReviewAuthority(ctx, "review-plan", p, p.TaskIDs)
 			err = authorityErr
 			if err == nil {
-				out, err = session.Project.ReviewPlan(ctx, client.NewKey(), p, proof)
+				out, err = sendWithPolicy(ctx, session, func(revision uint64, key string) (json.RawMessage, error) {
+					p.PolicyRevision = revision
+					return session.Project.ReviewPlan(ctx, key, p, proof)
+				})
 			}
 		}
 		typed = &map[string]string{}
@@ -250,6 +255,8 @@ func remoteEvidenceAction(ctx context.Context, session *remote.Session, cwd, act
 				return nil, err
 			}
 		}
+		// The policy revision goes only on the wire (see sendWithPolicy).
+		request.PolicyRevision = 0
 		payload = request
 	case "advance":
 		var request board.ReviewBatchAdvance
@@ -326,7 +333,29 @@ func remoteEvidenceAction(ctx context.Context, session *remote.Session, cwd, act
 	if err != nil {
 		return nil, err
 	}
+	if extension, ok := payload.(board.ReviewPlanExtension); ok {
+		return sendWithPolicy(ctx, session, func(revision uint64, key string) (json.RawMessage, error) {
+			extension.PolicyRevision = revision
+			return session.Project.ReviewAction(ctx, key, action, extension, proof)
+		})
+	}
 	return session.Project.ReviewAction(ctx, client.NewKey(), action, payload, proof)
+}
+
+// sendWithPolicy sends a review request that may create a batch with the
+// policy revision of the session, through one idempotency key. The holders
+// confirmed the request without the revision, which is not part of its
+// identity; it goes only on the wire. A stale revision is refreshed and the
+// request sent once more.
+func sendWithPolicy(ctx context.Context, session *remote.Session, send func(revision uint64, key string) (json.RawMessage, error)) (json.RawMessage, error) {
+	key := client.NewKey()
+	var out json.RawMessage
+	err := session.WithCurrentPolicy(ctx, func(revision uint64, _ string) error {
+		var sendErr error
+		out, sendErr = send(revision, key)
+		return sendErr
+	}, nil)
+	return out, err
 }
 
 // aggregateResult is the aggregate view with its view_hash. The digest of the view is the one

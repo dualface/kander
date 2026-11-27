@@ -52,6 +52,8 @@ var codeStatus = map[string]int{
 	api.CodeGCRunning:              http.StatusConflict,
 	api.CodeImportCanceled:         http.StatusServiceUnavailable,
 	api.CodePolicyRevisionConflict: http.StatusConflict,
+	api.CodePolicyRevisionStale:    http.StatusConflict,
+	api.CodePolicyRequirementUnmet: http.StatusBadRequest,
 	api.CodeInternal:               http.StatusInternalServerError,
 }
 

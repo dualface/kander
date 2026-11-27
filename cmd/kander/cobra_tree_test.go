@@ -151,7 +151,7 @@ var sampleValues = map[string]string{
 	"language": "en", "launcher": "herdr", "limit": "5", "listen": "127.0.0.1:7878", "log-keep": "64MiB", "message": "hello",
 	"message-file": "message.md", "older-than": "7d", "operation-id": "operation-1", "owner": "codex", "pane": "pane-1", "previous-run-id": "run-0",
 	"project": "demo", "reason": "because", "refresh": "2", "git-remote": "https://example.com/r.git", "renew": "10s",
-	"repo": "github.com/owner/repo", "requirements-file": "requirements.json", "result": "completed", "run-id": "run-1",
+	"repo": "github.com/owner/repo", "requirement-decision": "PMQA=decision-1", "requirements-file": "requirements.json", "result": "completed", "run-id": "run-1",
 	"search": "query", "server": "http://127.0.0.1:7878", "source": "HEAD", "state": "open", "submitter": "bob", "task": sampleTask,
 	"timeout": "5", "ttl": "60s", "type": "feature", "watch": sampleTask,
 }
@@ -201,6 +201,8 @@ var companionFlags = map[string][]string{
 	"dispatch-id":     {"--execution-epoch", "2"},
 	"execution-epoch": {"--dispatch-id", "d1"},
 	"file":            {"--action", "apply"},
+	// A requirement decision justifies a requirement of a new batch.
+	"requirement-decision": {"--requirements-file", "requirements.json"},
 }
 
 func sampleArguments(t *testing.T, leaf leafCommand) []string {

@@ -52,7 +52,7 @@ func setupPaneAdoption(t *testing.T, launcher, sessionValue string, worktree boo
 		}
 	}
 	window := launcher + ":$42:@9:%9"
-	grant, err := service.Project.Claim(t.Context(), client.NewKey(), task.TaskID, api.ClaimRequest{
+	grant, err := service.Project.Claim(t.Context(), client.NewKey(), task.TaskID, api.ClaimRequest{BranchMode: "main-develop", PolicyRevision: service.PolicyRevision(),
 		ClientID: service.Client.ClientID(), ExecutionID: "pane-adoption", Owner: agent,
 		Start: &api.StartInput{Session: sessionValue, Window: window},
 	})

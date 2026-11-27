@@ -34,5 +34,12 @@
   "policy.set_unset": "プロジェクトにはまだプロジェクトポリシーがありません。先に kander policy init を実行してください。",
   "policy.written": "プロジェクトポリシー revision {{.V0}}（epoch {{.V1}}）を保存しました。",
   "remote.error_policy_revision_conflict": "読み込んだ後にプロジェクトポリシーが変更されました。もう一度読み込んでください",
-  "config.save_layered_config": "この設定にはプロジェクトのオーバーレイまたはプロジェクトポリシーの値が含まれるため、config.json に保存できません。スコープファイルのみを読み込んだ設定（LoadScope）か Update で変更してください。"
+  "config.save_layered_config": "この設定にはプロジェクトのオーバーレイまたはプロジェクトポリシーの値が含まれるため、config.json に保存できません。スコープファイルのみを読み込んだ設定（LoadScope）か Update で変更してください。",
+  "remote.error_policy_revision_stale": "このクライアントが読み込んだ後にプロジェクトポリシーが変更されました",
+  "remote.error_policy_requirement_unmet": "レビュー要件がプロジェクトポリシーを満たしていません",
+  "remote.policy_still_stale": "再試行中にプロジェクトポリシーが再び変更されました。サーバーはリビジョン {{.V0}}、このクライアントが読み込んだのはリビジョン {{.V1}} です。kander policy show で確認してから、コマンドをもう一度実行してください。",
+  "review.requirement_decision_format": "--requirement-decision の形式は ROLE=DECISION-ID です。{{.V0}} は使えません",
+  "review.requirement_decision_role": "--requirement-decision のロールは PMQA または Security です。{{.V0}} は使えません",
+  "review.requirement_decision_repeated": "--requirement-decision でロール {{.V0}} が複数回指定されています",
+  "review.requirement_decision_needs_requirements": "--requirement-decision は新しいバッチの要件に使うもので、--requirements-file が必要です"
 }

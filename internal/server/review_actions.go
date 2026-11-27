@@ -60,15 +60,29 @@ func (s *Server) reviewActionRoutes(mux *routeTable) {
 			if err := decode(r, &request); err != nil {
 				return outcome{err: err}
 			}
-			return p.reviewWrite(key, "review-extend-plan", request, func() ([]string, error) {
+			// The policy revision is checked, never part of the request identity.
+			revision := request.PolicyRevision
+			request.PolicyRevision = 0
+			var attest board.BatchAttestations
+			check := func() error {
+				if request.Batch == nil {
+					return nil
+				}
+				created, err := p.planNewBatches([]board.ReviewPlanBatch{*request.Batch})
+				if err == nil {
+					attest, err = p.checkNewReviewBatches(revision, created)
+				}
+				return err
+			}
+			return p.reviewWriteChecked(key, "review-extend-plan", request, func() ([]string, error) {
 				plan, err := board.ReadReviewPlan(p.board, request.PlanID)
 				if err != nil {
 					return nil, err
 				}
 				// add_members brings its new members into the authority and lock set.
 				return board.ReviewPlanExtensionTasks(plan, request)
-			}, h, func(extension board.TransactionExtension) (any, error) {
-				return map[string]string{"plan_id": request.PlanID}, board.ExtendReviewPlanWithTransaction(p.board, request, extension)
+			}, h, check, func(extension board.TransactionExtension) (any, error) {
+				return map[string]string{"plan_id": request.PlanID}, board.ExtendReviewPlanWithTransaction(p.board, request, attest, extension)
 			})
 		case "advance":
 			var request board.ReviewBatchAdvance

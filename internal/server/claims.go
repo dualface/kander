@@ -33,6 +33,10 @@ type claimRecord struct {
 	LaunchRecordID   string `json:"launch_record_id,omitempty"`
 	LaunchRevision   uint64 `json:"launch_revision,omitzero"`
 	ExecutorEvidence bool   `json:"executor_evidence,omitzero"`
+	// BranchSnapshot is the branch model the first claim of the card, or the
+	// first group claim of the group, fixed. Every later record of the same
+	// card or group carries it on; a record that never had one never gets one.
+	BranchSnapshot *api.BranchSnapshot `json:"branch_snapshot,omitempty"`
 }
 
 const claimPending = "pending"
@@ -88,6 +92,7 @@ func (r claimRecord) storedView() api.ClaimView {
 	return api.ClaimView{
 		Observation: r.Observation, ClientID: r.ClientID, ExecutionID: r.ExecutionID, Owner: r.Owner,
 		Generation: r.Generation, Status: r.Status, ExpiresAt: r.ExpiresAt, RenewedAt: r.RenewedAt,
+		BranchSnapshot: r.BranchSnapshot,
 	}
 }
 

@@ -449,7 +449,7 @@ func TestIntegrationActorLeaseLossRefinesTheKernel(t *testing.T) {
 		_, err := r.a.RenewIntegration(ctx, grant.Integration.ID, proof)
 		return err
 	})
-	if _, err := r.b.Takeover(ctx, "", r.member.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "actor-successor", Owner: "codex", Decision: "user:takeover", ExpectedGeneration: r.task.Claim.Generation}); err != nil {
+	if _, err := r.b.Takeover(ctx, "", r.member.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "actor-successor", Owner: "codex", Decision: "user:takeover", ExpectedGeneration: r.task.Claim.Generation}); err != nil {
 		t.Fatal(err)
 	}
 	lost := func(b serverintegration.State) lease {

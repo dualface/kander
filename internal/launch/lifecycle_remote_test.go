@@ -87,7 +87,7 @@ func remoteLifecycleTodo(t *testing.T, session *remote.Session, slug string) api
 
 func TestRemoteAdoptionProvesLocalProcessWithoutReadingBoard(t *testing.T) {
 	cfg, session, card, forbidden, _ := remoteLifecycleFixture(t, "adopt-local-process")
-	grant, err := session.Project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{ClientID: session.Client.ClientID(), ExecutionID: "adopt-process", Owner: "codex", Start: &api.StartInput{Session: "codex local-process", Window: "foreground"}})
+	grant, err := session.Project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{BranchMode: "main-develop", PolicyRevision: session.PolicyRevision(), ClientID: session.Client.ClientID(), ExecutionID: "adopt-process", Owner: "codex", Start: &api.StartInput{Session: "codex local-process", Window: "foreground"}})
 	if err != nil {
 		t.Fatal(err)
 	}

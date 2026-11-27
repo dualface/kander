@@ -35,7 +35,7 @@ func integrationTaskPlan(t *testing.T, f *fixture, p *client.Project, host, slug
 	if err != nil {
 		t.Fatal(err)
 	}
-	input := api.ClaimRequest{ClientID: host, ExecutionID: "exec-" + host, Owner: "claude"}
+	input := api.ClaimRequest{BranchMode: "main-develop", ClientID: host, ExecutionID: "exec-" + host, Owner: "claude"}
 	if len(launch) != 0 {
 		input.Start = &launch[0]
 	}

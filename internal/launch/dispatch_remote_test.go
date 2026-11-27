@@ -57,7 +57,7 @@ func TestRemoteDispatchCLIUsesHolderAuthorityAndProposesForForeignHolder(t *test
 	if _, err = project.Move(t.Context(), "", card.TaskID, api.Move{State: "todo"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	grant, err := project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{ClientID: session.Client.ClientID(), ExecutionID: "dispatch-holder", Owner: "claude", Start: &api.StartInput{Session: "claude fixture", Window: "tmux:$1:@1:%1"}})
+	grant, err := project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: session.Client.ClientID(), ExecutionID: "dispatch-holder", Owner: "claude", Start: &api.StartInput{Session: "claude fixture", Window: "tmux:$1:@1:%1"}})
 	if err != nil {
 		t.Fatal(err)
 	}

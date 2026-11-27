@@ -90,7 +90,7 @@ func TestTakenOverAnswerOutlivesTheSuccessor(t *testing.T) {
 	a, b := f.project("host-a"), f.project("host-b")
 	grant, own := lapsedTask(t, f, a, "taken-over")
 	id := grant.Task.TaskID
-	next, err := b.Takeover(t.Context(), "", id, api.ClaimRequest{ClientID: "host-b", ExecutionID: "successor", Owner: "codex", Decision: "user:takeover", ExpectedGeneration: grant.Claim.Generation})
+	next, err := b.Takeover(t.Context(), "", id, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "successor", Owner: "codex", Decision: "user:takeover", ExpectedGeneration: grant.Claim.Generation})
 	if err != nil || next.Claim.Generation != grant.Claim.Generation+1 {
 		t.Fatalf("takeover of a lapsed lease: %+v %v", next.Claim, err)
 	}
@@ -125,7 +125,7 @@ func TestStartupExtendsTaskAndGroupLeases(t *testing.T) {
 	f = start(t, dir, clock)
 	a, b := f.project("host-a"), f.project("host-b")
 
-	_, err = b.Takeover(t.Context(), "", task.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "early", Owner: "codex", Decision: "user:takeover", ExpectedGeneration: grant.Claim.Generation})
+	_, err = b.Takeover(t.Context(), "", task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "early", Owner: "codex", Decision: "user:takeover", ExpectedGeneration: grant.Claim.Generation})
 	expectCode(t, err, api.CodeLeaseActive)
 	take := request
 	take.ExecutionID, take.ExpectedGeneration, take.Decision = "early-coordinator", coordinator.Claim.Generation, "user:takeover"

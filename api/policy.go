@@ -46,3 +46,34 @@ func (p ProjectPolicy) MarshalJSON() ([]byte, error) {
 		UpdatedBy string `json:"updated_by"`
 	}{plain(p), p.UpdatedBy})
 }
+
+// CodePolicyRevisionStale refuses a claim, a group claim, or a request that
+// creates a review batch when the policy revision it carries is not the
+// current one of a project whose policy is set. Nothing was written, not even
+// an idempotency receipt: the client reads the policy again and resends the
+// same key with the new revision.
+const CodePolicyRevisionStale = "policy_revision_stale"
+
+// CodePolicyRequirementUnmet refuses a new review batch that marks a role the
+// project policy requires as N/A without a decision record of a batch member
+// that justifies it. Nothing was written.
+const CodePolicyRequirementUnmet = "policy_requirement_unmet"
+
+// Scopes of a branch snapshot.
+const (
+	BranchSnapshotTask  = "task"
+	BranchSnapshotGroup = "group"
+)
+
+// BranchSnapshot is the branch model the server fixed for a card at its first
+// claim, or for a task group at its first group claim: the git.branch_mode of
+// the project policy and its revision, or, while the project had no policy,
+// the branch mode the claiming client reported with revision 0. Later claims
+// of the same card or group keep it, so a change of the policy never moves
+// the mainline branch of work in progress. Scope says whether it belongs to
+// the card itself (task) or to its task group (group).
+type BranchSnapshot struct {
+	BranchMode     string `json:"branch_mode"`
+	PolicyRevision uint64 `json:"policy_revision"`
+	Scope          string `json:"scope"`
+}

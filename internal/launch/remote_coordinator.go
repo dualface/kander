@@ -50,7 +50,7 @@ func runRemoteCoordinator(parent context.Context, cfg *config.Config, args []str
 		if view.Checkpoint == nil {
 			return fail(errors.New(config.Text("remote.coordinator_checkpoint_missing")))
 		}
-		if code := command.Object(view.Checkpoint); code != 0 {
+		if code := command.Object(coordinatorShowResult{CoordinatorCheckpoint: *view.Checkpoint, BranchSnapshot: groupSnapshot(view)}); code != 0 {
 			return code
 		}
 		return 0
@@ -127,4 +127,19 @@ func runRemoteCoordinator(parent context.Context, cfg *config.Config, args []str
 		return code
 	}
 	return 0
+}
+
+// coordinatorShowResult is what kander coordinator show prints: the
+// checkpoint, and the branch snapshot of the group when its group lease has
+// one. The snapshot names the mainline branch the group delivers to.
+type coordinatorShowResult struct {
+	board.CoordinatorCheckpoint
+	BranchSnapshot *api.BranchSnapshot `json:"branch_snapshot,omitempty"`
+}
+
+func groupSnapshot(view api.GroupView) *api.BranchSnapshot {
+	if view.Claim == nil {
+		return nil
+	}
+	return view.Claim.BranchSnapshot
 }

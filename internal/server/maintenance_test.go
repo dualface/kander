@@ -189,7 +189,7 @@ func TestOfflineMaintenanceConvertsImportedFileCardsWithoutChangingOriginals(t *
 	if _, err := project.PutDocument(t.Context(), "after-maintenance", fixture.idle, api.Document{Path: "progress.md", Text: "New REST progress", ExpectedRevision: after.Revision}, nil); err != nil {
 		t.Fatal(err)
 	}
-	grant, err := project.Takeover(t.Context(), "first-current-claim", fixture.working, api.ClaimRequest{ClientID: "new-host", ExecutionID: "explicit-after-maintenance", Owner: "codex", Decision: "user: take over the migrated legacy executor"})
+	grant, err := project.Takeover(t.Context(), "first-current-claim", fixture.working, api.ClaimRequest{BranchMode: "main-develop", ClientID: "new-host", ExecutionID: "explicit-after-maintenance", Owner: "codex", Decision: "user: take over the migrated legacy executor"})
 	if err != nil || grant.Claim.Generation != 1 {
 		t.Fatalf("migration granted ownership or prevented explicit takeover: %+v %v", grant, err)
 	}

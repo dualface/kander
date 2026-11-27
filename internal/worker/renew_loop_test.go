@@ -304,7 +304,7 @@ func TestRenewalConcurrencyIsLimited(t *testing.T) {
 // takeOver lets host-b take the task over from the stale host-a execution.
 func (h *harness) takeOver(c remote.Credential) {
 	h.t.Helper()
-	if _, err := h.project("host-b").Takeover(h.t.Context(), "", c.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "exec-b-" + c.TaskID, Owner: "codex", Decision: "user", ExpectedGeneration: c.Generation}); err != nil {
+	if _, err := h.project("host-b").Takeover(h.t.Context(), "", c.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "exec-b-" + c.TaskID, Owner: "codex", Decision: "user", ExpectedGeneration: c.Generation}); err != nil {
 		h.t.Fatal(err)
 	}
 }

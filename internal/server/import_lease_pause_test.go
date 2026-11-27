@@ -112,7 +112,7 @@ func (l *heldLeases) assertPaused(t *testing.T, held time.Duration) {
 		t.Fatalf("integration lease after import expires %v, want %v", got, want)
 	}
 
-	_, err := l.r.b.Takeover(ctx, "", l.r.member.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "rival", Owner: "codex", Decision: "user:takeover", ExpectedGeneration: claim.Generation})
+	_, err := l.r.b.Takeover(ctx, "", l.r.member.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "rival", Owner: "codex", Decision: "user:takeover", ExpectedGeneration: claim.Generation})
 	expectCode(t, err, api.CodeLeaseActive)
 	rival := l.groupInput
 	rival.ExecutionID, rival.ExpectedGeneration, rival.Decision = "rival-coordinator", group.Generation, "user:takeover"
@@ -194,7 +194,7 @@ func TestImportKeepsLapsedLeasesLapsed(t *testing.T) {
 	if err != nil || shown.Claim == nil || shown.Claim.Status != api.ClaimLapsed || !shown.Claim.ExpiresAt.Equal(grant.Claim.ExpiresAt) {
 		t.Fatalf("lapsed claim after import: %+v %v", shown.Claim, err)
 	}
-	if _, err := b.Takeover(t.Context(), "", task.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "successor", Owner: "codex", Decision: "user:takeover", ExpectedGeneration: grant.Claim.Generation}); err != nil {
+	if _, err := b.Takeover(t.Context(), "", task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "successor", Owner: "codex", Decision: "user:takeover", ExpectedGeneration: grant.Claim.Generation}); err != nil {
 		t.Fatalf("takeover of a lease that lapsed before the import: %v", err)
 	}
 }

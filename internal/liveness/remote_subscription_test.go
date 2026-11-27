@@ -125,7 +125,7 @@ func TestRemoteSubscriptionUsesGenerationBoundAgentObservation(t *testing.T) {
 	if _, err := executor.Move(t.Context(), "", task.TaskID, api.Move{State: "todo"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	grant, err := executor.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{ClientID: "executor-host", ExecutionID: "remote-agent-execution", Owner: "codex", Start: &api.StartInput{Session: "codex remote-session", Window: "tmux:$999:@999:%999"}})
+	grant, err := executor.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "executor-host", ExecutionID: "remote-agent-execution", Owner: "codex", Start: &api.StartInput{Session: "codex remote-session", Window: "tmux:$999:@999:%999"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestRemoteSubscriptionWakesForCoordinatorAuthorityChanges(t *testing.T) {
 		}
 	})
 	nextRuntimeEvent(t, events, func(event groupEvent) bool { return event.Event == "snapshot" })
-	grant, err := executor.ClaimGroup(t.Context(), "", group, api.GroupClaim{ExecutionID: "watched-coordinator", Request: board.CoordinatorClaim{GroupID: group, Owner: "coordinator", Token: "public-label", Basis: "confirmed subscription fixture", Members: []string{task.TaskID}}}, nil)
+	grant, err := executor.ClaimGroup(t.Context(), "", group, api.GroupClaim{BranchMode: "main-develop", ExecutionID: "watched-coordinator", Request: board.CoordinatorClaim{GroupID: group, Owner: "coordinator", Token: "public-label", Basis: "confirmed subscription fixture", Members: []string{task.TaskID}}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

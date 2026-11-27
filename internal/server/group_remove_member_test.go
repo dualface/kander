@@ -28,7 +28,7 @@ func newRemovalFixture(t *testing.T) *removalFixture {
 	for _, slug := range []string{"removal-one", "removal-two", "removal-three"} {
 		ids = append(ids, todoTask(t, a, slug, group).TaskID)
 	}
-	grant, err := a.ClaimGroup(t.Context(), "", group, api.GroupClaim{ExecutionID: "removal-coordinator", Request: board.CoordinatorClaim{GroupID: group, Owner: "codex", Token: "public-session", Basis: "confirmed group fixture", Members: ids}}, nil)
+	grant, err := a.ClaimGroup(t.Context(), "", group, api.GroupClaim{BranchMode: "main-develop", ExecutionID: "removal-coordinator", Request: board.CoordinatorClaim{GroupID: group, Owner: "codex", Token: "public-session", Basis: "confirmed group fixture", Members: ids}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestRemoveMemberRouteNeedsTheGroupLease(t *testing.T) {
 		g.fixture.clock.advance(91 * time.Second)
 		b := g.fixture.project("host-b")
 		c := g.grant.Checkpoint
-		claim := api.GroupClaim{ExecutionID: "successor-coordinator", ExpectedGeneration: g.grant.Claim.Generation, Decision: "explicit coordinator handoff after lease loss", Request: board.CoordinatorClaim{GroupID: c.GroupID, ExpectedRevision: c.Revision, ExpectedEpoch: c.Authority.Epoch, Owner: "codex", Token: "successor-session", Basis: "confirmed group fixture", Members: g.members}}
+		claim := api.GroupClaim{BranchMode: "main-develop", ExecutionID: "successor-coordinator", ExpectedGeneration: g.grant.Claim.Generation, Decision: "explicit coordinator handoff after lease loss", Request: board.CoordinatorClaim{GroupID: c.GroupID, ExpectedRevision: c.Revision, ExpectedEpoch: c.Authority.Epoch, Owner: "codex", Token: "successor-session", Basis: "confirmed group fixture", Members: g.members}}
 		if _, err := b.ClaimGroup(t.Context(), "takeover", c.GroupID, claim, nil); err != nil {
 			t.Fatal(err)
 		}

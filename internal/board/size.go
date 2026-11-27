@@ -99,3 +99,7 @@ func addSize(text, size string) string {
 	}
 	return line + text
 }
+
+// TaskSize is the size of a card: its SIZE line, or for a card without one
+// small for the file form and large for the directory form.
+func TaskSize(e Entry, text string) (string, error) { return taskSize(e, text) }

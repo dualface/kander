@@ -62,6 +62,11 @@ type Session struct {
 	Info            api.Project
 	Home            string
 	WorkerStarter   func(string) error
+	// config is the configuration Open applied the project policy to. A
+	// refresh after a stale policy revision applies the new policy to it, so
+	// the rest of the command works with the server's values. nil for a
+	// session built without a configuration.
+	config *config.Config
 }
 
 // Home returns the private client directory of this user.
@@ -236,7 +241,7 @@ func OpenWith(ctx context.Context, cfg *config.Config, dir string, options OpenO
 		return nil, err
 	}
 	applySessionPolicy(cfg, info, cacheErr, options.QuietPolicy)
-	return &Session{afterQuestion: prompted, operationBudget: operationBudget, ServerURL: config.ServerURL(cfg), Client: c, Project: c.Project(info.ID), Info: info, Home: home}, nil
+	return &Session{afterQuestion: prompted, operationBudget: operationBudget, ServerURL: config.ServerURL(cfg), Client: c, Project: c.Project(info.ID), Info: info, Home: home, config: cfg}, nil
 }
 
 // Credential is one execution's claim on this host. The worker renews it

@@ -135,7 +135,7 @@ func newReconcileFixture(t *testing.T) *reconcileFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	grant, err := p.Claim(ctx, "", f.member, api.ClaimRequest{ClientID: f.session.Client.ClientID(), ExecutionID: "reconcile-member", Owner: "codex"})
+	grant, err := p.Claim(ctx, "", f.member, api.ClaimRequest{BranchMode: "main-develop", ClientID: f.session.Client.ClientID(), ExecutionID: "reconcile-member", Owner: "codex"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -60,7 +60,7 @@ func TestRemoteNotifyCommandQueuesWithoutLocalBoardOrTerminal(t *testing.T) {
 	if _, err := project.Move(t.Context(), "", card.TaskID, api.Move{State: "todo"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{ClientID: "holder", ExecutionID: "notify-holder", Owner: "claude"}); err != nil {
+	if _, err := project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "holder", ExecutionID: "notify-holder", Owner: "claude"}); err != nil {
 		t.Fatal(err)
 	}
 	if code := commandtest.Run(NewCommand(), "--message", "queued remotely", card.TaskID); code != 0 {

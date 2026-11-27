@@ -164,7 +164,7 @@ func (f *integrationFixture) claimedTask() api.Task {
 	if err != nil {
 		t.Fatal(err)
 	}
-	grant, err := s.Project.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{ClientID: "host-a", ExecutionID: "task-integration-owner", Owner: "codex"})
+	grant, err := s.Project.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "task-integration-owner", Owner: "codex"})
 	if err != nil {
 		t.Fatal(err)
 	}

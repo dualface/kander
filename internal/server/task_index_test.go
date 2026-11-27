@@ -140,7 +140,7 @@ func TestTaskIndexStartupRepairsDerivedRowsAndFiles(t *testing.T) {
 			s, h := openTest(t, dir, clock.now)
 			t.Cleanup(func() { h.Close(); _ = s.Close() })
 			p, id := prepareTodo(t, h.URL)
-			grant, err := p.Claim(t.Context(), "", id, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-a", Owner: "codex"})
+			grant, err := p.Claim(t.Context(), "", id, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "exec-a", Owner: "codex"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -217,7 +217,7 @@ func TestTaskIndexClaimOnlyWritesAndClock(t *testing.T) {
 	s, h := openTest(t, t.TempDir(), clock.now)
 	t.Cleanup(func() { h.Close(); _ = s.Close() })
 	p, id := prepareTodo(t, h.URL)
-	grant, err := p.Claim(t.Context(), "", id, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-a", Owner: "codex"})
+	grant, err := p.Claim(t.Context(), "", id, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "exec-a", Owner: "codex"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -48,7 +48,16 @@ func (s *Session) AcquireCoordinator(ctx context.Context, request board.Coordina
 	if view.Claim != nil {
 		input.ExpectedGeneration = view.Claim.Generation
 	}
-	grant, err := s.Project.ClaimGroup(ctx, client.NewKey(), request.GroupID, input, proof)
+	// The first group claim of a group fixes its branch snapshot from the
+	// policy; a stale revision is refreshed and the same key sent once more.
+	key := client.NewKey()
+	var grant api.GroupGrant
+	err = s.WithCurrentPolicy(ctx, func(revision uint64, branchMode string) error {
+		input.PolicyRevision, input.BranchMode = revision, branchMode
+		var sendErr error
+		grant, sendErr = s.Project.ClaimGroup(ctx, key, request.GroupID, input, proof)
+		return sendErr
+	}, nil)
 	if err != nil {
 		return grant, heldClaimError(err, proof, request.GroupID, execution)
 	}

@@ -157,7 +157,7 @@ func remoteReviewHarness(t *testing.T, intercept func(http.ResponseWriter, *http
 	if _, err := session.Project.Move(t.Context(), "", task.TaskID, api.Move{State: "todo"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	grant, err := session.Project.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{ClientID: session.Client.ClientID(), ExecutionID: "review-execution", Owner: "codex"})
+	grant, err := session.Project.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: session.Client.ClientID(), ExecutionID: "review-execution", Owner: "codex"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -21,7 +21,17 @@ func verifyRemoteCoordinatorGitFacts(ctx context.Context, s *remote.Session, cwd
 		_, err = s.FetchDelivery(ctx, cwd, d.TaskID, d.Commit)
 		return err
 	}
-	if err := verifyPortableWrapUpTarget(cwd, facts.IntegrationTarget, facts.Integration.TargetRef); err != nil {
+	var snapshot *api.BranchSnapshot
+	if portableTargetNeedsMainline(facts.IntegrationTarget) {
+		task, err := s.Project.Show(ctx, facts.Integration.TaskID)
+		if err != nil {
+			return err
+		}
+		if snapshot, err = branchSnapshotOf(ctx, s, task); err != nil {
+			return err
+		}
+	}
+	if err := verifyPortableWrapUpTarget(cwd, facts.IntegrationTarget, facts.Integration.TargetRef, snapshot); err != nil {
 		return err
 	}
 	witness, err := s.VerifyWrapUpIntegrationWitness(ctx, cwd, facts.Integration)

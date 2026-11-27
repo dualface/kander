@@ -12,7 +12,7 @@ func TestLiveHolderCanRestartOnlyItsFreshlyStoppedExecutor(t *testing.T) {
 	f := newFixture(t)
 	a, b := f.project("host-a"), f.project("host-b")
 	card := todoTask(t, a, "owned-restart")
-	grant, err := a.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{ClientID: "host-a", ExecutionID: "first-executor", Owner: "claude", Start: &api.StartInput{Session: "claude original", Window: "tmux:$1:@1:%1"}})
+	grant, err := a.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "first-executor", Owner: "claude", Start: &api.StartInput{Session: "claude original", Window: "tmux:$1:@1:%1"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +27,7 @@ func TestLiveHolderCanRestartOnlyItsFreshlyStoppedExecutor(t *testing.T) {
 	if err != nil || state.Task.Claim.Status != api.ClaimActive {
 		t.Fatalf("presence ended the task lease: %+v %v", state, err)
 	}
-	input := api.ClaimRequest{ClientID: "host-a", ExecutionID: "second-executor", Owner: "claude", Decision: "holder explicitly restarts the stopped executor", ExpectedGeneration: grant.Claim.Generation, ExpectedRevision: state.Task.Revision, ObservationTicket: state.ObservationTicket, PreviousPresence: &api.AgentObservation{Status: "stopped"}, Start: &api.StartInput{Session: "claude continued", Window: "tmux:$2:@2:%2"}}
+	input := api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "second-executor", Owner: "claude", Decision: "holder explicitly restarts the stopped executor", ExpectedGeneration: grant.Claim.Generation, ExpectedRevision: state.Task.Revision, ObservationTicket: state.ObservationTicket, PreviousPresence: &api.AgentObservation{Status: "stopped"}, Start: &api.StartInput{Session: "claude continued", Window: "tmux:$2:@2:%2"}}
 	_, err = b.Handoff(t.Context(), "foreign-restart", card.TaskID, input, proof)
 	expectCode(t, err, api.CodeHeldByOther)
 	alive := input

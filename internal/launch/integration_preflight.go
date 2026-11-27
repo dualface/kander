@@ -46,7 +46,11 @@ func runIntegrationPreflight(ctx context.Context, cfg *config.Config, path strin
 	g.ReviewBase, g.ReviewTarget = span.Ancestor, span.Descendant
 	gitCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	if err := checkIntegrationTarget(gitCtx, g, target, true); err != nil {
+	snapshot, err := branchSnapshotOf(ctx, session, card)
+	if err != nil {
+		return fail(err)
+	}
+	if err := checkIntegrationTarget(gitCtx, g, target, snapshot, true); err != nil {
 		return fail(err)
 	}
 	result := map[string]string{

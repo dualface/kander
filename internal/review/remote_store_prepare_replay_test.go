@@ -124,7 +124,7 @@ func TestPrepareAfterUpgradeReusesJointPublication(t *testing.T) {
 				if task, err = s.Project.Move(t.Context(), "", task.TaskID, api.Move{State: "todo"}, nil); err != nil {
 					t.Fatal(err)
 				}
-				grant, err := s.Project.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{ClientID: c.ClientID(), ExecutionID: "execution-" + task.TaskID, Owner: "codex"})
+				grant, err := s.Project.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: c.ClientID(), ExecutionID: "execution-" + task.TaskID, Owner: "codex"})
 				if err != nil {
 					t.Fatal(err)
 				}

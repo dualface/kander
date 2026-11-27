@@ -17,7 +17,7 @@ func groupRequest(t *testing.T, p *client.Project) api.GroupClaim {
 	group := "20261112-coordinator-group"
 	one := todoTask(t, p, "coordinator-one", group)
 	two := todoTask(t, p, "coordinator-two", group)
-	return api.GroupClaim{ExecutionID: "first-coordinator", Request: board.CoordinatorClaim{GroupID: group, Owner: "codex", Token: "public-session", Basis: "confirmed group fixture", Members: []string{one.TaskID, two.TaskID}}}
+	return api.GroupClaim{BranchMode: "main-develop", ExecutionID: "first-coordinator", Request: board.CoordinatorClaim{GroupID: group, Owner: "codex", Token: "public-session", Basis: "confirmed group fixture", Members: []string{one.TaskID, two.TaskID}}}
 }
 func TestCoordinatorLeaseHasOneWinnerAndItsPublicTokenGrantsNoAuthority(t *testing.T) {
 	f := newFixture(t)
@@ -153,7 +153,7 @@ func TestCoordinatorRequiresVerdictsForTheExactCurrentGitFacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := input.Request.Members[0]
-	executor, err := project.Claim(t.Context(), "", id, api.ClaimRequest{ClientID: "host-a", ExecutionID: "member-execution", Owner: "codex", Start: &api.StartInput{Session: "codex member-session", Window: "tmux:$1:@1:%1"}})
+	executor, err := project.Claim(t.Context(), "", id, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "member-execution", Owner: "codex", Start: &api.StartInput{Session: "codex member-session", Window: "tmux:$1:@1:%1"}})
 	if err != nil {
 		t.Fatal(err)
 	}

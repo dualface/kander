@@ -184,7 +184,7 @@ func (h *harness) claimedWith(slug, execution string, start *api.StartInput) (*c
 	if _, err = p.Move(ctx, "", task.TaskID, api.Move{State: "todo"}, nil); err != nil {
 		h.t.Fatal(err)
 	}
-	input := api.ClaimRequest{ClientID: "host-a", ExecutionID: execution, Owner: "claude", Start: start}
+	input := api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: execution, Owner: "claude", Start: start}
 	g, err := p.Claim(ctx, "", task.TaskID, input)
 	if err != nil {
 		h.t.Fatal(err)
@@ -236,7 +236,7 @@ func TestWorkerStopsTheAgentWhenTakenOver(t *testing.T) {
 	_, c := h.claimed("lost")
 	h.advance(100 * time.Second)
 	b := h.project("host-b")
-	if _, err := b.Takeover(t.Context(), "", c.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "exec-b", Owner: "codex", Decision: "user", ExpectedGeneration: 1}); err != nil {
+	if _, err := b.Takeover(t.Context(), "", c.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "exec-b", Owner: "codex", Decision: "user", ExpectedGeneration: 1}); err != nil {
 		t.Fatal(err)
 	}
 	if live, _ := h.pass(t.Context()); live != 0 {

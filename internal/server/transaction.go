@@ -55,7 +55,7 @@ func (p *project) taskFromTransaction(tx *board.Transaction, id string, claim *c
 		}
 	}
 	if claim != nil {
-		task.Claim = claim.view(p.server.now())
+		task.Claim = p.claimView(*claim, task.Text)
 	}
 	return task, nil
 }
@@ -101,7 +101,7 @@ func (p *project) taskTransaction(key, operation string, request any, id string,
 			}
 			var body any = task
 			if grant {
-				body = api.ClaimGrant{Task: task, Claim: *claim.view(p.server.now()), RenewInterval: api.DurationOf(p.server.renew), TTL: api.DurationOf(p.server.ttl)}
+				body = api.ClaimGrant{Task: task, Claim: *p.claimView(*claim, task.Text), RenewInterval: api.DurationOf(p.server.renew), TTL: api.DurationOf(p.server.ttl)}
 			}
 			data, err := json.Marshal(body)
 			if err != nil {

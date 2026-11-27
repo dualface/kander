@@ -57,7 +57,7 @@ func (h *harness) groupClaimedFor(group, execution string) (remote.Credential, a
 	if _, err = project.Move(t.Context(), "", task.TaskID, api.Move{State: "todo"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	request := api.GroupClaim{ExecutionID: execution, Request: board.CoordinatorClaim{GroupID: group, Owner: "coordinator", Token: "public-label", Basis: "partition fixture", Members: []string{task.TaskID}}}
+	request := api.GroupClaim{BranchMode: "main-develop", ExecutionID: execution, Request: board.CoordinatorClaim{GroupID: group, Owner: "coordinator", Token: "public-label", Basis: "partition fixture", Members: []string{task.TaskID}}}
 	grant, err := project.ClaimGroup(t.Context(), "", group, request, nil)
 	if err != nil {
 		t.Fatal(err)

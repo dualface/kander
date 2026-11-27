@@ -2,7 +2,7 @@ package board
 
 // ExtendReviewPlan uses the standalone board transaction.
 func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
-	return ExtendReviewPlanWithTransaction(root, x)
+	return ExtendReviewPlanWithTransaction(root, x, nil)
 }
 
 // AdvanceReviewBatch uses the standalone board transaction.
@@ -47,7 +47,7 @@ type ReviewPreparation struct {
 }
 
 func PrepareReviewRun(root string, input ReviewInput, requirements map[string]string, advance *ReviewAdvance, originals map[string][]byte, version string) (ReviewRun, bool, error) {
-	return PrepareReviewRunWithTransaction(root, input, requirements, advance, originals, version)
+	return PrepareReviewRunWithTransaction(root, input, requirements, nil, advance, originals, version)
 }
 func UpdateReviewRun(root string, run ReviewRun) error {
 	return UpdateReviewRunWithTransaction(root, run)

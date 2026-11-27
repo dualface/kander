@@ -190,7 +190,7 @@ func (p *project) show(id string) (api.Task, error) {
 		return api.Task{}, err
 	}
 	if found && r.Status != claimPending {
-		t.Claim = r.view(p.server.now())
+		t.Claim = p.claimView(r, s.Text)
 	}
 	return t, nil
 }
@@ -452,7 +452,7 @@ func (p *project) grant(r claimRecord) (api.ClaimGrant, error) {
 		return api.ClaimGrant{}, err
 	}
 	return api.ClaimGrant{
-		Claim: *r.view(p.server.now()), Token: p.server.token(p.info.ID, r.TaskID, r.ExecutionID, r.Generation), Task: t,
+		Claim: *p.claimView(r, t.Text), Token: p.server.token(p.info.ID, r.TaskID, r.ExecutionID, r.Generation), Task: t,
 		RenewInterval: api.DurationOf(p.server.renew), TTL: api.DurationOf(p.server.ttl),
 	}, nil
 }
@@ -490,10 +490,15 @@ func (p *project) claim(key, id string, req api.ClaimRequest) outcome {
 	if err := validClaimRequest(req); err != nil {
 		return outcome{err: err}
 	}
+	// The policy context is checked, never part of the claim identity: a
+	// resend of the same key after a policy refresh is the same claim.
+	revision, branchMode := req.PolicyRevision, req.BranchMode
+	req.PolicyRevision, req.BranchMode = 0, ""
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
 	defer p.unlockBoard()
+	check := func() error { return p.checkSnapshotClaim(p.taskClaimCreatesSnapshot(id), revision, branchMode) }
 	run := func() outcome {
 		view, err := board.LoadBoard(p.board)
 		if err != nil {
@@ -521,7 +526,19 @@ func (p *project) claim(key, id string, req api.ClaimRequest) outcome {
 
 		r := claimRecord{TaskID: entry.TaskID, ClientID: req.ClientID, ExecutionID: req.ExecutionID, Owner: req.Owner, Generation: 1, Status: claimPending}
 		if found {
-			r.Generation, r.Handoffs = previous.Generation+1, previous.Handoffs
+			r.Generation, r.Handoffs, r.BranchSnapshot = previous.Generation+1, previous.Handoffs, previous.BranchSnapshot
+		} else {
+			// The first claim of a card outside a task group fixes its branch
+			// model; a member delivers under the snapshot of its group.
+			text, err := view.Document(entry.TaskID)
+			if err != nil {
+				return outcome{err: err}
+			}
+			if board.TaskGroupFrom(text) == "" {
+				if r.BranchSnapshot, err = p.newBranchSnapshot(api.BranchSnapshotTask, branchMode); err != nil {
+					return outcome{err: err}
+				}
+			}
 		}
 		r.TokenHash = tokenHash(p.server.token(p.info.ID, r.TaskID, r.ExecutionID, r.Generation))
 		if req.Start != nil {
@@ -569,7 +586,7 @@ func (p *project) claim(key, id string, req api.ClaimRequest) outcome {
 		}
 		return p.activate(r), true
 	}
-	return p.withToken(p.idempotent(key, "claim:"+id, req, run, applied))
+	return p.withToken(p.idempotentChecked(key, "claim:"+id, req, check, run, applied))
 }
 
 func (p *project) activate(r claimRecord) outcome {
@@ -630,6 +647,12 @@ func (p *project) takeover(key, id string, req api.ClaimRequest, h holder) outco
 	if strings.TrimSpace(req.Decision) == "" {
 		return outcome{err: apiError(api.CodeInvalidRequest, "a takeover needs a decision reference")}
 	}
+	// A takeover keeps the branch snapshot the card has and creates none, so
+	// it depends on no policy: the policy context is only validated.
+	if err := validReportedBranchMode(req.BranchMode); err != nil {
+		return outcome{err: err}
+	}
+	req.PolicyRevision, req.BranchMode = 0, ""
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
@@ -702,6 +725,7 @@ func (p *project) takeover(key, id string, req api.ClaimRequest, h holder) outco
 		r := claimRecord{
 			TaskID: t.TaskID, ClientID: req.ClientID, ExecutionID: req.ExecutionID, Owner: req.Owner,
 			Generation: previous.Generation + 1, Status: api.ClaimActive, RenewedAt: now, ExpiresAt: now.Add(p.server.ttl),
+			BranchSnapshot: previous.BranchSnapshot,
 			Handoffs: append(previous.Handoffs, api.Handoff{
 				At: now, FromGeneration: previous.Generation, ToGeneration: previous.Generation + 1,
 				FromClient: previous.ClientID, ToClient: req.ClientID, Owner: req.Owner, Decision: req.Decision,

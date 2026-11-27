@@ -15,7 +15,7 @@ import (
 
 func TestRemoteNotifyFreezesProposalAndHolderPreparesItAtomically(t *testing.T) {
 	_, session, card, forbidden, _ := remoteLifecycleFixture(t, "remote-notification")
-	grant, err := session.Project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{ClientID: session.Client.ClientID(), ExecutionID: "notification-holder", Owner: "claude", Start: &api.StartInput{Session: "claude notification", Window: "tmux:$1:@1:%1"}})
+	grant, err := session.Project.Claim(t.Context(), "", card.TaskID, api.ClaimRequest{BranchMode: "main-develop", PolicyRevision: session.PolicyRevision(), ClientID: session.Client.ClientID(), ExecutionID: "notification-holder", Owner: "claude", Start: &api.StartInput{Session: "claude notification", Window: "tmux:$1:@1:%1"}})
 	if err != nil {
 		t.Fatal(err)
 	}

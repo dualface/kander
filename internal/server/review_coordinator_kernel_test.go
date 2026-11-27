@@ -70,7 +70,7 @@ func TestCoordinatorReviewWriteLeavesTheLeaseAndTheClaimsToTheirKernels(t *testi
 	// claim kernel refuses that event, the lease kernel still accepts the
 	// coordinator's require, and the entrance refuses the write.
 	w.f.clock.advance(91 * time.Second)
-	if _, err := w.f.project("host-c").Takeover(t.Context(), "", w.tasks[0], api.ClaimRequest{ClientID: "host-c", ExecutionID: "successor", Owner: "codex", Decision: "explicit takeover fixture", ExpectedGeneration: w.grants[0].Claim.Generation}); err != nil {
+	if _, err := w.f.project("host-c").Takeover(t.Context(), "", w.tasks[0], api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-c", ExecutionID: "successor", Owner: "codex", Decision: "explicit takeover fixture", ExpectedGeneration: w.grants[0].Claim.Generation}); err != nil {
 		t.Fatal(err)
 	}
 	now, _ := members[0].state(nil)

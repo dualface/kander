@@ -56,7 +56,7 @@ func TestSingleEventExitsAfterCoordinatorChange(t *testing.T) {
 	const group = "20261121-single-coordinator-group"
 	task := subscriptionRemoteCard(t, executor, "single-coordinator", group)
 	events, err := runSingleRemote(t, service, subscribeOptions{Watch: []string{group}, Refresh: 0.01, Heartbeat: 3600}, func() {
-		_, claimErr := executor.ClaimGroup(t.Context(), "", group, api.GroupClaim{ExecutionID: "single-coordinator-run", Request: board.CoordinatorClaim{GroupID: group, Owner: "coordinator", Token: "public-label", Basis: "confirmed subscription fixture", Members: []string{task.TaskID}}}, nil)
+		_, claimErr := executor.ClaimGroup(t.Context(), "", group, api.GroupClaim{BranchMode: "main-develop", ExecutionID: "single-coordinator-run", Request: board.CoordinatorClaim{GroupID: group, Owner: "coordinator", Token: "public-label", Basis: "confirmed subscription fixture", Members: []string{task.TaskID}}}, nil)
 		if claimErr != nil {
 			t.Error(claimErr)
 		}
@@ -74,7 +74,7 @@ func TestSingleEventExitsAfterClaimChange(t *testing.T) {
 	if _, err := executor.Move(t.Context(), "", task.TaskID, api.Move{State: "todo"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	grant, err := executor.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{ClientID: "executor-host", ExecutionID: "single-claim-run", Owner: "codex", Start: &api.StartInput{Session: "codex single-session", Window: "tmux:$999:@999:%999"}})
+	grant, err := executor.Claim(t.Context(), "", task.TaskID, api.ClaimRequest{BranchMode: "main-develop", ClientID: "executor-host", ExecutionID: "single-claim-run", Owner: "codex", Start: &api.StartInput{Session: "codex single-session", Window: "tmux:$999:@999:%999"}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -60,7 +60,7 @@ func TestHistoricalNonCanonicalPlanCWDStillCloses(t *testing.T) {
 	root := tempBoard(t)
 	id := gateCard(t, root, "plan-cwd")
 	p := ReviewPlan{Schema: 1, Sealed: true, PlanID: "plan-" + id, Author: "coordinator", Basis: "historical slash spelling", CWD: "c:/x/wt/", ReportLanguage: "en", TaskIDs: []string{id}, Batches: []ReviewPlanBatch{{BatchID: "batch", TaskIDs: []string{id}, Base: strings.Repeat("a", 40), TargetCommit: strings.Repeat("b", 40), Requirements: archiveRequirements()}}}
-	if err := createReviewPlan(root, p, false); err != nil {
+	if err := createReviewPlan(root, p, false, nil); err != nil {
 		t.Fatal(err)
 	}
 	input := archiveInput([]string{id}, "pmqa", "PMQA")

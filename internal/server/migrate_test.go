@@ -99,7 +99,7 @@ func TestImportFillsAnEmptyProjectAndKeepsTheSource(t *testing.T) {
 	}
 	_, err = p.Move(t.Context(), "", busy, api.Move{State: "done", Result: "completed"}, nil)
 	expectServerCode(t, err, api.CodeLeaseInvalid)
-	g, err := p.Takeover(t.Context(), "", busy, api.ClaimRequest{ClientID: "host-b", ExecutionID: "exec-b", Owner: "codex", Decision: "user:migration"})
+	g, err := p.Takeover(t.Context(), "", busy, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "exec-b", Owner: "codex", Decision: "user:migration"})
 	if err != nil || g.Claim.Generation != 1 {
 		t.Fatalf("an imported working card is taken over from generation 0: %+v %v", g.Claim, err)
 	}

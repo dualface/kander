@@ -94,12 +94,12 @@ func TestClaimEntrancesRefineTheKernel(t *testing.T) {
 
 	var grant api.ClaimGrant
 	c.refines(id, serverclaim.Claim{Fresh: true}, true, func() (err error) {
-		grant, err = p.Claim(ctx, "", id, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-1", Owner: "claude"})
+		grant, err = p.Claim(ctx, "", id, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "exec-1", Owner: "claude"})
 		return err
 	})
 	own := client.Claim{Token: grant.Token, Generation: 1}
 	c.refines(id, serverclaim.Claim{Fresh: true}, false, func() error {
-		_, err := p.Claim(ctx, "", id, api.ClaimRequest{ClientID: "host-b", ExecutionID: "exec-b", Owner: "codex"})
+		_, err := p.Claim(ctx, "", id, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "exec-b", Owner: "codex"})
 		return err
 	})
 	forged := client.Claim{Token: "forged", Generation: 1}
@@ -113,7 +113,7 @@ func TestClaimEntrancesRefineTheKernel(t *testing.T) {
 		_, err := p.PutDocument(ctx, "", id, api.Document{Path: "report.md", Text: "x", ExpectedRevision: grant.Task.Revision}, &own)
 		return err
 	})
-	takeover := api.ClaimRequest{ClientID: "host-b", ExecutionID: "exec-2", Owner: "codex", Decision: "user:takeover", ExpectedGeneration: 1}
+	takeover := api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "exec-2", Owner: "codex", Decision: "user:takeover", ExpectedGeneration: 1}
 	c.refines(id, serverclaim.Takeover{Expected: 1, Fresh: true, G: 2, Tg: 2}, false, func() error {
 		_, err := p.Takeover(ctx, "", id, takeover)
 		return err
@@ -173,7 +173,7 @@ func TestAdoptionRefinesTheKernel(t *testing.T) {
 	p, id := prepareTodo(t, h.URL)
 	c := claimProbe{t: t, s: s, p: p}
 	ctx := t.Context()
-	g, err := p.Claim(ctx, "", id, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-start", Owner: "claude", Start: &api.StartInput{Session: "claude pending"}})
+	g, err := p.Claim(ctx, "", id, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "exec-start", Owner: "claude", Start: &api.StartInput{Session: "claude pending"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestLargeGenerationKeepsDecisions(t *testing.T) {
 			return err
 		})
 		at.Add(int64(2 * time.Hour))
-		takeover := api.ClaimRequest{ClientID: "host-b", ExecutionID: "exec-next", Owner: "codex", Decision: "user:takeover", ExpectedGeneration: gen}
+		takeover := api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-b", ExecutionID: "exec-next", Owner: "codex", Decision: "user:takeover", ExpectedGeneration: gen}
 		var next api.ClaimGrant
 		c.refines(id, serverclaim.Takeover{Expected: 1, Fresh: true, G: 2, Tg: 2}, true, func() (err error) {
 			next, err = p.Takeover(t.Context(), "", id, takeover)
@@ -255,7 +255,7 @@ func TestReleaseRollbackAndTerminationRefineTheKernel(t *testing.T) {
 	p, id := prepareTodo(t, h.URL)
 	c := claimProbe{t: t, s: s, p: p}
 	ctx := t.Context()
-	g, err := p.Claim(ctx, "", id, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-start", Owner: "claude", Start: &api.StartInput{Session: "claude pending"}})
+	g, err := p.Claim(ctx, "", id, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "exec-start", Owner: "claude", Start: &api.StartInput{Session: "claude pending"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +271,7 @@ func TestReleaseRollbackAndTerminationRefineTheKernel(t *testing.T) {
 
 	var second api.ClaimGrant
 	c.refines(id, serverclaim.Claim{Fresh: true}, true, func() (err error) {
-		second, err = p.Claim(ctx, "", id, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-again", Owner: "claude"})
+		second, err = p.Claim(ctx, "", id, api.ClaimRequest{BranchMode: "main-develop", ClientID: "host-a", ExecutionID: "exec-again", Owner: "claude"})
 		return err
 	})
 	proof := client.Claim{Token: second.Token, Generation: 2}

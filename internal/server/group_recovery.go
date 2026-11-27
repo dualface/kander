@@ -164,7 +164,7 @@ func (p *project) recoverLostMember(ctx context.Context, key string, input api.G
 			return nil
 		}
 		now := p.server.now()
-		next := claimRecord{TaskID: snapshot.Entry.TaskID, ClientID: h.clientID, ExecutionID: input.Lost.ExecutionID, Owner: cmp.Or(previous.Owner, board.MetadataFrom(snapshot.Text, board.FieldOwner), "recovery"), Generation: previous.Generation + 1, Status: api.ClaimReleased, RenewedAt: now, ExpiresAt: now, Handoffs: slices.Clone(previous.Handoffs)}
+		next := claimRecord{TaskID: snapshot.Entry.TaskID, ClientID: h.clientID, ExecutionID: input.Lost.ExecutionID, Owner: cmp.Or(previous.Owner, board.MetadataFrom(snapshot.Text, board.FieldOwner), "recovery"), Generation: previous.Generation + 1, Status: api.ClaimReleased, RenewedAt: now, ExpiresAt: now, Handoffs: slices.Clone(previous.Handoffs), BranchSnapshot: previous.BranchSnapshot}
 		next.Handoffs = append(next.Handoffs, api.Handoff{At: now, FromGeneration: previous.Generation, ToGeneration: next.Generation, FromClient: previous.ClientID, ToClient: h.clientID, Owner: next.Owner, Decision: input.Request.Decision})
 		next.TokenHash = tokenHash(p.server.token(p.info.ID, next.TaskID, next.ExecutionID, next.Generation))
 		extension := board.TransactionExtension{Groups: []string{serviceGroup}, Published: p.indexPublication, Before: validate, After: func(tx *board.Transaction) error {

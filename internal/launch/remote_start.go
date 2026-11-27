@@ -124,18 +124,35 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 	// resolved before the claim so a refusal leaves the card in todo with no
 	// generation, baseline, worktree or task branch. A takeover keeps the base
 	// its restart chose.
-	startBase := ""
-	if !input.Takeover && session.Info.Remote != "" {
-		branch, err := startBranch(cfg, original)
-		if err != nil {
-			return result, err
+	startBase, branch := "", ""
+	// resolveStartBase resolves the start branch and its base. It runs again
+	// when a stale policy revision refreshed the policy before the claim, so
+	// the base follows the branch model the claim's snapshot will record.
+	resolveStartBase := func() error {
+		if input.Takeover || session.Info.Remote == "" {
+			return nil
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		startBase, err = session.ResolveStartBase(ctx, cwd, branch)
+		ctx, cancel := call()
+		snapshot, err := branchSnapshotOf(ctx, session, task)
 		cancel()
 		if err != nil {
-			return result, err
+			return err
 		}
+		next, err := startBranch(cfg, original, snapshot)
+		if err != nil || next == branch {
+			return err
+		}
+		ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		base, err := session.ResolveStartBase(ctx, cwd, next)
+		if err != nil {
+			return err
+		}
+		startBase, branch = base, next
+		return nil
+	}
+	if err := resolveStartBase(); err != nil {
+		return result, err
 	}
 	var restart remoteRestart
 	if input.Takeover {
@@ -301,7 +318,7 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 		}
 		restart.Request.ObservationTicket, restart.Request.PreviousPresence = state.ObservationTicket, &presence
 	}
-	request := api.ClaimRequest{ClientID: session.Client.ClientID(), ExecutionID: execution, Owner: agentName, ExpectedRevision: task.Revision, Start: &api.StartInput{Session: initialSession, Window: window, ExecResolved: choice.record}}
+	request := api.ClaimRequest{ClientID: session.Client.ClientID(), ExecutionID: execution, Owner: agentName, ExpectedRevision: task.Revision, Start: &api.StartInput{Session: initialSession, Window: window, ExecResolved: choice.record}, PolicyRevision: session.PolicyRevision(), BranchMode: session.BranchMode()}
 	var grant api.ClaimGrant
 	if input.Takeover {
 		request.Decision, request.Dispatch, request.ExpectedGeneration = restart.Request.Decision, restart.Request.Dispatch, restart.Request.ExpectedGeneration
@@ -320,7 +337,7 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 			cancel()
 			return result, err
 		}
-		grant, err = session.Project.Claim(ctx, journal.Value.ClaimKey, task.TaskID, request)
+		grant, err = claimJournaled(ctx, session, journal, resolveStartBase)
 	}
 	cancel()
 	if err != nil {
