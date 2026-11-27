@@ -208,6 +208,16 @@ func TestFailedSlowAndOtherRequestsKeepTheirLevel(t *testing.T) {
 		}
 	}
 
+	// The observation ticket of an integration is not a polling request.
+	f.log.reset()
+	ticket := f.path("/integrations/" + api.IntegrationID("refs/heads/main") + "/observation")
+	if code := f.call(t, http.MethodGet, ticket, "", nil, nil); code != http.StatusOK {
+		t.Fatalf("an integration observation ticket = %d", code)
+	}
+	if got := f.log.requests(t); got["GET "+ticket] != "INFO" {
+		t.Fatalf("a successful integration observation must keep INFO: %v", got)
+	}
+
 	// Other requests are logged as before, however quick.
 	ctx := t.Context()
 	card, err := f.p.Show(ctx, f.task)
@@ -255,13 +265,39 @@ func TestPollingRoutesAreRegistered(t *testing.T) {
 	}
 }
 
+// The wait an event poll asks for, at most 60 seconds, is taken off its
+// duration before the threshold applies; nothing else is.
 func TestEventWaitIsNotSlowness(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/projects/p/events?wait=25", nil)
-	r.Pattern = projectEvents
-	if got := requestLevel(r, http.StatusOK, 25*time.Second+500*time.Millisecond); got != slog.LevelDebug {
-		t.Fatalf("a 25s poll that took 25.5s: %v", got)
+	events := func(query string) *http.Request {
+		r := httptest.NewRequest(http.MethodGet, "/api/v1/projects/p/events"+query, nil)
+		r.Pattern = projectEvents
+		return r
 	}
-	if got := requestLevel(r, http.StatusOK, 26*time.Second); got != slog.LevelInfo {
-		t.Fatalf("a 25s poll that took 26s: %v", got)
+	renew := httptest.NewRequest(http.MethodPost, "/api/v1/projects/p/tasks/t/renew", nil)
+	renew.Pattern = "POST /api/v1/projects/{project}/tasks/{task}/renew"
+	for _, c := range []struct {
+		name    string
+		r       *http.Request
+		status  int
+		elapsed time.Duration
+		want    slog.Level
+	}{
+		{"wait=25 took 25.5s", events("?wait=25"), http.StatusOK, 25*time.Second + 500*time.Millisecond, slog.LevelDebug},
+		{"wait=25 with a cursor took 25.5s", events("?after=42&wait=25"), http.StatusOK, 25*time.Second + 500*time.Millisecond, slog.LevelDebug},
+		{"wait=25 took 26s", events("?wait=25"), http.StatusOK, 26 * time.Second, slog.LevelInfo},
+		{"wait=1 took 2.5s", events("?wait=1"), http.StatusOK, 2500 * time.Millisecond, slog.LevelInfo},
+		{"wait=1 took 1.999s", events("?wait=1"), http.StatusOK, 1999 * time.Millisecond, slog.LevelDebug},
+		{"no wait took 999ms", events(""), http.StatusOK, 999 * time.Millisecond, slog.LevelDebug},
+		{"no wait took 1s", events(""), http.StatusOK, time.Second, slog.LevelInfo},
+		{"wait=120 counts as 60s, took 60.5s", events("?wait=120"), http.StatusOK, 60*time.Second + 500*time.Millisecond, slog.LevelDebug},
+		{"wait=120 counts as 60s, took 61s", events("?wait=120"), http.StatusOK, 61 * time.Second, slog.LevelInfo},
+		{"wait=25 failed quickly", events("?wait=25"), http.StatusServiceUnavailable, 10 * time.Millisecond, slog.LevelInfo},
+		{"wait=25 refused at 25.5s", events("?wait=25"), http.StatusBadRequest, 25*time.Second + 500*time.Millisecond, slog.LevelInfo},
+		{"a renewal has no wait to take off", renew, http.StatusOK, time.Second, slog.LevelInfo},
+		{"a renewal took 999ms", renew, http.StatusOK, 999 * time.Millisecond, slog.LevelDebug},
+	} {
+		if got := requestLevel(c.r, c.status, c.elapsed); got != c.want {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
 	}
 }

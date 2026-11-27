@@ -346,19 +346,19 @@ func (s *Server) domainWithBodyLimit(bodyLimit int64, fn func(*http.Request) out
 }
 
 // pollingRoutes are the routes clients call on a timer: the worker's renewals,
-// observations and request lists, the subscribers' and the TUI's event polls,
-// snapshots and task lists, and the wait of an integration.
+// observations and request lists, and the subscribers' and the TUI's event
+// polls, snapshots and task lists. The observation ticket of an integration is
+// not one: a client takes it when it prepares or submits an integration step.
 var pollingRoutes = map[string]bool{
 	projectEvents: true,
 	taskListRoute: true,
-	"POST /api/v1/projects/{project}/snapshot":                              true,
-	"POST /api/v1/projects/{project}/tasks/{task}/renew":                    true,
-	"POST /api/v1/projects/{project}/tasks/{task}/observation":              true,
-	"GET /api/v1/projects/{project}/tasks/{task}/requests":                  true,
-	"POST /api/v1/projects/{project}/groups/{group}/renew":                  true,
-	"POST /api/v1/projects/{project}/groups/{group}/observation":            true,
-	"POST /api/v1/projects/{project}/integrations/{integration}/renew":      true,
-	"GET /api/v1/projects/{project}/integrations/{integration}/observation": true,
+	"POST /api/v1/projects/{project}/snapshot":                         true,
+	"POST /api/v1/projects/{project}/tasks/{task}/renew":               true,
+	"POST /api/v1/projects/{project}/tasks/{task}/observation":         true,
+	"GET /api/v1/projects/{project}/tasks/{task}/requests":             true,
+	"POST /api/v1/projects/{project}/groups/{group}/renew":             true,
+	"POST /api/v1/projects/{project}/groups/{group}/observation":       true,
+	"POST /api/v1/projects/{project}/integrations/{integration}/renew": true,
 }
 
 // slowRequest is the duration from which a polling request is logged like any
@@ -367,7 +367,7 @@ var slowRequest = time.Second
 
 // requestLevel is the level of the request log line: DEBUG for a polling
 // request that succeeded in less than slowRequest, INFO otherwise. The time an
-// event poll asked to wait is not slowness and does not count.
+// event poll asked to wait, at most maxWait, is not slowness and does not count.
 func requestLevel(r *http.Request, status int, elapsed time.Duration) slog.Level {
 	if !pollingRoutes[r.Pattern] || status >= http.StatusBadRequest {
 		return slog.LevelInfo
