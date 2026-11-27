@@ -372,6 +372,37 @@ func TestCompactionReportsABusySettledSuccessorAsALock(t *testing.T) {
 	}
 }
 
+// With NoWait a held board lock ends the call at once with board.lock_busy and
+// changes nothing; without it the call waits for the lock.
+func TestCompactionWithNoWaitSkipsABusyBoard(t *testing.T) {
+	root, _, run := compactionBoard(t, "compact-board-busy")
+	f, err := kfs.OpenLockFile(root, control(root, "locks", "board.lock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lock, err := kfs.LockExclusive(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := boardFiles(t, root)
+	start := time.Now()
+	report, err := CompactReviewRuns(context.Background(), root, CompactionOptions{OlderThan: 7 * 24 * time.Hour, Now: time.Now().Add(8 * 24 * time.Hour), NoWait: true, KanderVersion: "test"})
+	var busy *Error
+	if !errors.As(err, &busy) || busy.Code != "board.lock_busy" || len(report.Runs) != 0 || time.Since(start) > 5*time.Second {
+		t.Fatalf("a held board lock: %+v %v", report, err)
+	}
+	if !maps.Equal(before, boardFiles(t, root)) {
+		t.Fatal("a busy board must not change")
+	}
+	if err := errors.Join(lock.Unlock(), f.Close()); err != nil {
+		t.Fatal(err)
+	}
+	report, err = CompactReviewRuns(context.Background(), root, CompactionOptions{OlderThan: 7 * 24 * time.Hour, Now: time.Now().Add(8 * 24 * time.Hour), NoWait: true, KanderVersion: "test"})
+	if err != nil || len(report.Runs) != 1 || report.Runs[0].RunID != run.RunID {
+		t.Fatalf("a free board: %+v %v", report, err)
+	}
+}
+
 func TestCompactionResumesAfterEachInterruptedStep(t *testing.T) {
 	for _, step := range []string{"receipts", "copies", "control"} {
 		t.Run(step, func(t *testing.T) {

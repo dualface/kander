@@ -59,6 +59,9 @@ type CompactionOptions struct {
 	DryRun bool
 	// KanderVersion is recorded in each receipt.
 	KanderVersion string
+	// NoWait takes the exclusive board lock of each round without waiting:
+	// a held lock ends the call with board.lock_busy instead.
+	NoWait bool
 }
 
 // CompactedRun is one run compaction removed files from, or would remove
@@ -172,7 +175,12 @@ type compactionState struct {
 func compactionRound(ctx context.Context, root string, options CompactionOptions, state *compactionState, report *CompactionReport) (taken int, err error) {
 	// A caller that gives up while a board writer holds the lock must not
 	// compact once the lock frees up.
-	locks, err := acquireContext(ctx, root, LockScope{ExclusiveBoard: true})
+	var locks lockSet
+	if options.NoWait {
+		locks, err = tryExclusiveBoard(root)
+	} else {
+		locks, err = acquireContext(ctx, root, LockScope{ExclusiveBoard: true})
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -403,6 +411,27 @@ func (s *runLockSet) close() error {
 	}
 	s.taken = nil
 	return err
+}
+
+// tryExclusiveBoard takes the exclusive board lock that acquireContext waits
+// for, or fails at once with board.lock_busy.
+func tryExclusiveBoard(root string) (lockSet, error) {
+	if err := ensureControl(root); err != nil {
+		return nil, err
+	}
+	path := control(root, "locks", "board.lock")
+	f, err := fs.OpenLockFile(root, path)
+	if err != nil {
+		return nil, err
+	}
+	lock, ok, err := fs.TryLockExclusive(f)
+	if err == nil && !ok {
+		err = kanbanError("board.lock_busy", path)
+	}
+	if err != nil {
+		return nil, errors.Join(err, f.Close())
+	}
+	return lockSet{{f, lock}}, nil
 }
 
 // tryLockReviewRun takes the lock LockReviewRun waits for, or fails at once
