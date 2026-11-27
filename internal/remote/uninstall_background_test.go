@@ -189,3 +189,51 @@ func TestUninstallWithTheRealInspectionLeavesTheOverlay(t *testing.T) {
 	}
 	check("confirmed")
 }
+
+// A local server bound only in the project overlay (kander init --server writes the URL there)
+// is found and can be stopped, and reading the overlay changes neither it nor the configuration
+// directory.
+func TestInspectUninstallBackgroundFindsTheOverlayServer(t *testing.T) {
+	served := filepath.Join(t.TempDir(), "served")
+	server := infoServer(t, served)
+	key, _ := json.Marshal(map[string]string{"token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"})
+	if err := os.MkdirAll(served, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(served, api.AdminTokenFile), key, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	closed := httptest.NewServer(http.NotFoundHandler())
+	scopeURL := closed.URL
+	closed.Close()
+	uninstallEnvironment(t, scopeURL)
+	configDir := filepath.Dir(os.Getenv(config.EnvConfig))
+	repo := filepath.Join(t.TempDir(), "repo")
+	if out, err := exec.Command("git", "init", "-q", repo).CombinedOutput(); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	overlay := filepath.Join(repo, ".kander-config.json")
+	overlayText := `{"server":{"url":"` + server.URL + `"}}` + "\n"
+	if err := os.WriteFile(overlay, []byte(overlayText), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(repo)
+	before, err := os.ReadDir(configDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	found := InspectUninstallBackground(t.Context())
+	if found.Err != nil || len(found.Processes) != 1 {
+		t.Fatalf("found=%+v", found)
+	}
+	if p := found.Processes[0]; p.Kind != install.UninstallServer || p.Where != server.URL || p.PID != 4242 || p.Stop == nil {
+		t.Fatalf("overlay server=%+v", p)
+	}
+	if data, err := os.ReadFile(overlay); err != nil || string(data) != overlayText {
+		t.Fatalf("the overlay changed: %q %v", data, err)
+	}
+	if after, err := os.ReadDir(configDir); err != nil || len(after) != len(before) {
+		t.Fatalf("the configuration directory changed: %v -> %v (%v)", before, after, err)
+	}
+}

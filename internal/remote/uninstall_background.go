@@ -58,14 +58,10 @@ func InspectUninstallBackground(ctx context.Context) install.UninstallBackground
 }
 
 // localServers returns the loopback servers this host runs: the one at the URL of the scope
-// configuration and the one the default data directory recorded, each once.
+// configuration, the one the project overlay of the working directory binds (kander init
+// --server writes it there), and the one the default data directory recorded, each once.
 func localServers(ctx context.Context, dataDir string) ([]install.UninstallProcess, error) {
-	targets := []string{config.DefaultServerURL}
-	// The scope file only: reading the effective configuration also reads the project overlay
-	// of the working directory, which removes an empty overlay, and the plan must change nothing.
-	if cfg, err := config.LoadScope(true); err == nil {
-		targets[0] = config.ServerURL(cfg)
-	}
+	targets := configuredServerURLs()
 	if dataDir != "" {
 		if recorded, err := servicectl.RecordedURL(dataDir); err == nil && recorded != "" {
 			targets = append(targets, recorded)
@@ -106,6 +102,30 @@ func localServers(ctx context.Context, dataDir string) ([]install.UninstallProce
 		servers = append(servers, server)
 	}
 	return servers, failed
+}
+
+// configuredServerURLs returns the server URL of the scope configuration and, when a project
+// overlay of the working directory sets another, that one too. It reads the overlay without the
+// cleanup a normal configuration read applies: config.Load removes an empty overlay, and the plan
+// must change nothing. An overlay that cannot be read or merged adds no URL.
+func configuredServerURLs() []string {
+	scope, err := config.LoadScope(true)
+	if err != nil {
+		return []string{config.DefaultServerURL}
+	}
+	urls := []string{config.ServerURL(scope)}
+	path, err := config.OverlayPath("")
+	if err != nil || path == "" {
+		return urls
+	}
+	overlay, err := config.ReadOverlayFile(path)
+	if err != nil || len(overlay) == 0 {
+		return urls
+	}
+	if effective, err := config.MergeScopeAndOverlay(scope, overlay); err == nil {
+		urls = append(urls, config.ServerURL(effective))
+	}
+	return urls
 }
 
 // localWorker returns the worker that holds worker.lock of home. running is false when none does.
