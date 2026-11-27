@@ -43,10 +43,6 @@
   "exit_command": "/exit",
   "rename_command": "/rename {name}",
   "rename_delivery": {
-    "ready": {
-      "match": "regex:(?m)^❯[ \\t\\x{00a0}]*$",
-      "timeout_ms": 15000
-    },
     "complete": "Session renamed to: {name}",
     "blocked": [
       {

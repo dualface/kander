@@ -235,9 +235,17 @@ func TestConfirmAuthorizationAndAttribution(t *testing.T) {
 	if got, ok := board.LastConfirmer(confirmed.Text); !ok || got != "Alice from host" {
 		t.Fatalf("stored actor = %q, want the host actor", got)
 	}
+	// The attributed actor is part of the receipt scope: another actor's
+	// request with the same key runs as its own and never replays Alice's
+	// confirmation, while Alice's retry does.
 	actor.Store("Different host actor")
 	_, err = p.Confirm(t.Context(), key, card.TaskID, claim)
-	expectCode(t, err, api.CodeIdempotencyMismatch)
+	expectCode(t, err, api.CodeRevisionConflict)
+	actor.Store("Alice from host")
+	replayed, err := p.Confirm(t.Context(), key, card.TaskID, claim)
+	if err != nil || replayed.OperationID != confirmed.OperationID || replayed.Revision != confirmed.Revision {
+		t.Fatalf("Alice's retry = %+v %v, want her confirmation", replayed, err)
+	}
 }
 
 func TestRequestCardNeedsFreshConfirmationAndProtectsTheHistory(t *testing.T) {

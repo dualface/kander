@@ -37,9 +37,12 @@ const (
 	KindFile      Kind = "file"
 	KindDirectory Kind = "directory"
 	KindOther     Kind = "other"
+	// KindLink is a symlink (POSIX) or any reparse point (Windows: symlinks, junctions and the like).
+	// Only ListDirectoryWithLinks reports it; ListDirectory refuses such a member instead.
+	KindLink Kind = "link"
 )
 
-// DirEntry is a direct member returned by ListDirectory. Callers must still open the leaf object through this package's primitives.
+// DirEntry is a direct member returned by ListDirectory or ListDirectoryWithLinks. Callers must still open the leaf object through this package's primitives.
 type DirEntry struct {
 	Name string
 	Kind Kind
@@ -170,6 +173,6 @@ const (
 	kindFile
 	kindDirectory
 	// kindAnyWithReparse accepts a reparse-point leaf opened without following it.
-	// Only removal uses it; every other open keeps rejecting reparse points.
+	// Only removal and the attribute probe of ListDirectoryWithLinks use it; every other open keeps rejecting reparse points.
 	kindAnyWithReparse
 )

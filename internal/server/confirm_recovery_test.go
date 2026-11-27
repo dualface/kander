@@ -64,7 +64,7 @@ func TestRequestMoveDoesNotReplayAnIndependentConfirmation(t *testing.T) {
 	const key = "interrupted-request-move"
 	op := "move:" + card.TaskID
 	move := api.Move{State: "todo", ExpectedRevision: &card.Revision}
-	if err := writeJSON(proj.root, receiptPath(key), receipt{
+	if err := writeJSON(proj.root, scopedReceiptPath(op, key, ""), receipt{
 		Schema: receiptSchema, Key: key, Operation: op, Digest: requestDigest(op, move), Status: receiptPending,
 	}); err != nil {
 		t.Fatal(err)
@@ -93,7 +93,7 @@ func TestConfirmPublishesOnceWhenReceiptReadFails(t *testing.T) {
 	}
 	cursor := proj.events.cursor()
 	const key = "confirm-with-uncertain-response"
-	rel := receiptPath(key)
+	rel := scopedReceiptPath(confirmOperation+card.TaskID, key, "")
 	var injected bool
 	proj.receiptReadFault = func(path string) error {
 		if path == rel && !injected {

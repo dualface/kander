@@ -64,6 +64,7 @@
   "launch.pane_prompt_rejected": "投递提示词被拒绝（{{.V0}}）。请手动跑一次该 CLI 回答对话框后重试 `kander start`。Pane 输出：\n{{.V1}}",
   "launch.pane_ready_timeout": "等待 agent TUI 就绪超时。Pane 输出：\n{{.V0}}",
   "launch.rename_no_pane": "未改名：启动器不能向窗格输入。",
+  "launch.rename_no_status": "终端不上报 agent 状态，未给 agent 会话改名。",
   "launch.rename_not_ready": "未改名：Agent 窗格被阻塞或未就绪。",
   "launch.rename_unconfirmed": "未能确认 Agent 会话已改名。",
   "launch.herdr_agent_prompt_failed": "herdr agent prompt 失败：{{.V0}}",

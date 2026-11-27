@@ -91,16 +91,38 @@ func TestRenameCommandUsesScopeAndProjectOverlays(t *testing.T) {
 	}
 }
 
-func TestRenameCommandAndReadinessInheritFromDialect(t *testing.T) {
+func TestRenameCommandAndDialogsInheritFromDialect(t *testing.T) {
 	cfg := &Config{Agents: map[string]AgentDefinition{"wrapped": {Dialect: "claude"}}}
 	def := AgentFor(cfg, "wrapped")
-	if def.RenameCommand == nil || *def.RenameCommand != "/rename {name}" || def.RenameDelivery == nil || def.RenameDelivery.Ready == nil {
+	if def.RenameCommand == nil || *def.RenameCommand != "/rename {name}" || def.RenameDelivery == nil ||
+		len(def.RenameDelivery.Blocked) == 0 || def.RenameDelivery.Complete == "" {
 		t.Fatalf("incomplete inherited rename configuration: %+v", def)
 	}
-	*def.RenameCommand, def.RenameDelivery.Ready.Match = "modified", "modified"
+	*def.RenameCommand, def.RenameDelivery.Blocked[0].Match = "modified", "modified"
 	got := AgentFor(cfg, "wrapped")
-	if *got.RenameCommand == "modified" || got.RenameDelivery.Ready.Match == "modified" {
+	if *got.RenameCommand == "modified" || got.RenameDelivery.Blocked[0].Match == "modified" {
 		t.Fatal("resolved definition modified embedded defaults")
+	}
+}
+
+// Readiness for a rename comes from the agent state a terminal reports, so the
+// built-in definitions carry no composer text rule, while a user definition
+// that still has one keeps loading.
+func TestRenameReadyRuleIsOnlyAccepted(t *testing.T) {
+	for _, name := range []string{"claude", "codex", "cursor"} {
+		def, ok := embeddedByName(name)
+		if !ok || def.RenameCommand == "" || def.RenameDelivery == nil {
+			t.Fatalf("%s: built-in rename configuration missing", name)
+		}
+		if def.RenameDelivery.Ready != nil {
+			t.Errorf("%s: built-in rename_delivery.ready = %+v", name, *def.RenameDelivery.Ready)
+		}
+	}
+	_, err := Validate(minimalPayload(map[string]any{"agents": map[string]any{"claude": map[string]any{
+		"rename_delivery": map[string]any{"ready": map[string]any{"match": "regex:^> $", "timeout_ms": 5000}},
+	}}}))
+	if err != nil {
+		t.Fatalf("user rename_delivery.ready refused: %v", err)
 	}
 }
 

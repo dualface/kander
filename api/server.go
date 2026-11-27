@@ -137,6 +137,12 @@ type ServerGCProject struct {
 	Errors     []string           `json:"errors,omitempty"`
 }
 
+// HasWork reports whether the project part of a plan compacts a run, deletes
+// a receipt, or ends a member of an interrupted receipt gc.
+func (p ServerGCProject) HasWork() bool {
+	return p.Compaction.Runs > 0 || p.Receipts.Files > 0 || p.Receipts.Settled > 0
+}
+
 // ServerGCCompaction counts the review runs compacted (or, in a dry run, to
 // compact) and the files and bytes their compaction removes.
 type ServerGCCompaction struct {
@@ -147,11 +153,16 @@ type ServerGCCompaction struct {
 }
 
 // ServerGCReceipts counts the idempotency receipts deleted (or, in a dry run,
-// to delete) and their bytes.
+// to delete) and their bytes. Settled counts the members of the receipt gc
+// intent an interrupted gc recorded that this gc ended without deleting a
+// file (already gone, replaced, damaged, or no longer due), or in a dry run
+// would end; ending them removes the intent record, so a plan with only such
+// members still has work.
 type ServerGCReceipts struct {
-	Files int            `json:"files"`
-	Bytes int64          `json:"bytes"`
-	Kept  []ServerGCKept `json:"kept,omitempty"`
+	Files   int            `json:"files"`
+	Bytes   int64          `json:"bytes"`
+	Settled int            `json:"settled,omitempty"`
+	Kept    []ServerGCKept `json:"kept,omitempty"`
 }
 
 // ServerGCKept is a candidate a gc kept, with the reason.

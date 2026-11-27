@@ -169,23 +169,40 @@ func TestTmuxContainerProbe(t *testing.T) {
 
 func TestTmuxProbePropagatesCallerTimeout(t *testing.T) {
 	resetLang(t)
-	want := 37 * time.Millisecond
+	// The budget is well above what a loaded runner needs for the probe and
+	// below probe.DefaultCommandTimeout, so a deadline taken from the default
+	// budget instead of the caller's would land after callerDeadline. The
+	// assertions compare absolute deadlines, so they hold however long the
+	// probe takes to reach the connection.
+	want := 5 * time.Second
+	backend := tmuxBackend(t, Tmux, os.Getenv)
+	before := time.Now()
+	ctx, cancel := probe.TimeoutContext(want)
+	defer cancel()
+	callerDeadline, ok := ctx.Deadline()
+	if !ok {
+		t.Fatal("caller context has no deadline")
+	}
+	calls := 0
 	conn := fakeConn(func(ctx context.Context, program string, args []string) (probe.Result, error) {
+		calls++
 		deadline, ok := ctx.Deadline()
 		if !ok {
 			t.Fatal("missing deadline")
 		}
-		timeout := time.Until(deadline)
-		if timeout <= 0 || timeout > want {
-			t.Fatalf("timeout=%s want (0,%s]", timeout, want)
+		if deadline.After(callerDeadline) || !deadline.After(before) {
+			t.Fatalf("deadline=%s callerDeadline=%s before=%s", deadline, callerDeadline, before)
 		}
 		if args[0] == "display-message" {
 			return probe.Result{Stdout: "codex\t0\t0\n"}, nil
 		}
 		return probe.Result{Stdout: "session\n"}, nil
 	})
-	if _, err := paneFactsWithin(t, conn, "%9", want); err != nil {
+	if _, err := backend.PaneFacts(ctx, conn, "%9"); err != nil {
 		t.Fatal(err)
+	}
+	if calls == 0 {
+		t.Fatal("the probe never reached the connection")
 	}
 }
 

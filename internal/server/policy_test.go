@@ -575,7 +575,7 @@ func TestPolicyRefusedValuesLeaveNoReceipt(t *testing.T) {
 	bad := json.RawMessage(strings.Replace(string(policyValues("main-only")), `"ask"`, `"later"`, 1))
 	_, err := f.put("k-fix", 0, bad)
 	requireAPICode(t, err, api.CodeInvalidRequest, 400)
-	receipt := filepath.Join(f.root(), receiptPath("k-fix"))
+	receipt := filepath.Join(f.root(), scopedReceiptPath(policyOperation, "k-fix", ""))
 	if _, statErr := os.Stat(receipt); !os.IsNotExist(statErr) {
 		t.Fatalf("a refused request left a receipt: %v", statErr)
 	}
@@ -589,9 +589,12 @@ func TestPolicyRefusedValuesLeaveNoReceipt(t *testing.T) {
 	}
 }
 
-// A retry replays the first result even when the Attribution hook answers another, invalid name
-// now; a new request with that name is refused before any receipt exists.
-func TestPolicyRetryReplaysWhenTheAttributionChanges(t *testing.T) {
+// The caller the Attribution hook reports is part of the receipt scope. A
+// retry by the same caller replays the first result. Once the hook reports
+// another caller, the same key is a new request in that caller's scope: an
+// invalid name is refused before any receipt exists there, and the first
+// caller's receipt still replays.
+func TestPolicyRetryReplaysWithinTheAttributedCallerScope(t *testing.T) {
 	var name atomic.Value
 	name.Store("Dev One")
 	f := newPolicyFixture(t, Hooks{Attribution: func(context.Context) (string, bool) { return name.Load().(string), true }})
@@ -599,14 +602,20 @@ func TestPolicyRetryReplaysWhenTheAttributionChanges(t *testing.T) {
 	if err != nil || first.UpdatedBy != "Dev One" {
 		t.Fatalf("first %+v %v", first, err)
 	}
-	name.Store(strings.Repeat("x", 300))
 	retry, err := f.put("k-one", 0, policyValues("main-only"))
 	if err != nil || retry.Epoch != first.Epoch || retry.Revision != 1 || retry.UpdatedBy != "Dev One" {
 		t.Fatalf("retry %+v %v", retry, err)
 	}
-	_, err = f.put("k-two", 1, policyValues("main-develop"))
+	long := strings.Repeat("x", 300)
+	name.Store(long)
+	_, err = f.put("k-one", 0, policyValues("main-only"))
 	requireAPICode(t, err, api.CodeInvalidRequest, 400)
-	if _, statErr := os.Stat(filepath.Join(f.root(), receiptPath("k-two"))); !os.IsNotExist(statErr) {
+	if _, statErr := os.Stat(filepath.Join(f.root(), receiptScope{key: "k-one", caller: long}.receipt(policyOperation).rel())); !os.IsNotExist(statErr) {
 		t.Fatalf("the refused request left a receipt: %v", statErr)
+	}
+	name.Store("Dev One")
+	again, err := f.put("k-one", 0, policyValues("main-only"))
+	if err != nil || again.Epoch != first.Epoch || again.Revision != 1 || again.UpdatedBy != "Dev One" {
+		t.Fatalf("the first caller's retry %+v %v", again, err)
 	}
 }

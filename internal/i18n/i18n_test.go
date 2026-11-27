@@ -132,9 +132,8 @@ func TestReviewEvidenceCatalogKeys(t *testing.T) {
 		if _, ok := messages["review.evidence_metadata_unavailable"]; ok {
 			t.Errorf("%s retains the removed diff metadata message", lang)
 		}
-		const id = "review.git_inspection_unavailable"
-		if got := arguments(messages[id]); !reflect.DeepEqual(got, map[string]bool{"0": true}) {
-			t.Errorf("%s %s arguments = %v, want V0", lang, id, got)
+		if _, ok := messages["review.git_inspection_unavailable"]; ok {
+			t.Errorf("%s retains the removed reviewer refusal message", lang)
 		}
 	}
 }

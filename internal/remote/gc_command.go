@@ -62,7 +62,7 @@ func (r GCReport) Empty() bool {
 			return false
 		}
 		for _, p := range s.Projects {
-			if p.Compaction.Runs > 0 || p.Receipts.Files > 0 {
+			if p.HasWork() {
 				return false
 			}
 		}
@@ -276,9 +276,9 @@ func (g *clientGC) callServer(ctx context.Context, report *GCReport, dryRun bool
 }
 
 // selectProjects adds, with --all-projects, every client project directory of
-// this host whose project the bound server confirms. The directory's own
-// records name its project ID, and a read of that project, which the server's
-// access control governs, confirms it. A directory whose records name no
+// this host whose project the bound server confirms. The directory's identity
+// marker and its own records name its project ID, and a read of that project,
+// which the server's access control governs, confirms it. A directory whose records name no
 // project matches a project of the administration's server gc plan, when
 // there is one, whose ID gives the directory's namespace. A directory whose records name a
 // project of another server, or a project the bound server does not have, is
@@ -423,6 +423,9 @@ func printServerPart(w io.Writer, s GCServer) {
 		fmt.Fprintln(w, config.Text("gc.project_line", p.Name, p.Compaction.Runs, p.Compaction.Files, command.FormatBytes(p.Compaction.Bytes), p.Receipts.Files, command.FormatBytes(p.Receipts.Bytes)))
 		for _, kept := range p.Compaction.Kept {
 			fmt.Fprintln(w, config.Text("gc.kept_run", kept.ID, oneLine(kept.Reason)))
+		}
+		if p.Receipts.Settled > 0 {
+			fmt.Fprintln(w, config.Text("gc.receipts_settled", p.Receipts.Settled))
 		}
 		for _, kept := range p.Receipts.Kept {
 			fmt.Fprintln(w, config.Text("gc.kept_receipt", kept.ID, oneLine(kept.Reason)))

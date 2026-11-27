@@ -20,7 +20,8 @@ import (
 
 // gcRepository caches what the worktree category learns about one main
 // repository during a pass: the remote integration targets it resolved and
-// whether a worktree was removed from it (so it is pruned once).
+// whether a worktree was removed from it since its last prune (so the pass
+// ends with one prune).
 type gcRepository struct {
 	targets map[string]gcTarget
 	pruned  bool

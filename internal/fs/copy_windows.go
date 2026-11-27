@@ -36,6 +36,19 @@ func CopyRegularFile(dst io.Writer, root, path string, limit int64) (int64, erro
 // CreatePrivateRegularFile opens a new writable file with a protected DACL,
 // through a pinned parent. The caller owns the returned file.
 func CreatePrivateRegularFile(root, path string) (*os.File, error) {
+	return createRegularFile(root, path, kindFile)
+}
+
+// CreateInheritedRegularFile is CreatePrivateRegularFile for a file that
+// inherits the ACL of its directory, like DirectoryWriter.CreateInherited.
+// The caller owns the returned file.
+func CreateInheritedRegularFile(root, path string) (*os.File, error) {
+	return createRegularFile(root, path, kindAny)
+}
+
+// createRegularFile creates a new file through a pinned parent; privateCreate
+// is kindFile for a protected DACL and kindAny for the inherited ACL.
+func createRegularFile(root, path string, privateCreate objectKind) (*os.File, error) {
 	rootAbs, candidate, parts, err := relativeParts(root, path)
 	if err != nil {
 		return nil, err
@@ -49,7 +62,7 @@ func CreatePrivateRegularFile(root, path string) (*os.File, error) {
 	}
 	defer cleanup()
 	handle, err := openRelative(parent, filepath.Base(candidate), candidate, windows.GENERIC_WRITE|windows.FILE_READ_ATTRIBUTES,
-		true, kindFile, false, false, kindFile)
+		true, kindFile, false, false, privateCreate)
 	if isExistWin(err) || isExist(err) {
 		return nil, existError("create", candidate, "protected file already exists")
 	}

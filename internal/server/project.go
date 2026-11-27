@@ -230,7 +230,7 @@ func (p *project) changed(id string, generation uint64) {
 	}
 }
 
-func (p *project) newTask(key string, req api.NewTask, submitter string) outcome {
+func (p *project) newTask(scope receiptScope, req api.NewTask, submitter string) outcome {
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
@@ -243,7 +243,7 @@ func (p *project) newTask(key string, req api.NewTask, submitter string) outcome
 				return apiError(api.CodeInternal, "creation did not stage its initial snapshot")
 			}
 			created = api.Task{ObservedAt: p.server.now(), TaskID: snapshot.Entry.TaskID, State: snapshot.Entry.State, Revision: snapshot.Revision, OperationID: snapshot.OperationID, Text: snapshot.Text}
-			return p.stageOperationReceiptStatus(tx, key, "new", req, http.StatusCreated, created)
+			return p.stageOperationReceiptStatus(tx, scope, "new", req, http.StatusCreated, created)
 		}}
 		_, err := board.NewTaskWithTransaction(p.board, board.NewTaskInput{
 			Kind: req.Type, Slug: req.Slug, Title: req.Title, Language: req.Language, Large: req.Large, Submitter: submitter, Description: req.Description,
@@ -260,10 +260,10 @@ func (p *project) newTask(key string, req api.NewTask, submitter string) outcome
 	// Recovery restores a committed creation receipt before the service is
 	// ready. A pending current-schema intent has not committed a creation;
 	// mutable titles, dates and card states are never operation identities.
-	return p.idempotent(key, "new", req, run, func() (outcome, bool) { return outcome{}, false })
+	return p.idempotent(scope, "new", req, run, func() (outcome, bool) { return outcome{}, false })
 }
 
-func (p *project) putDocument(key, id string, doc api.Document, h holder) outcome {
+func (p *project) putDocument(scope receiptScope, id string, doc api.Document, h holder) outcome {
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
@@ -286,7 +286,7 @@ func (p *project) putDocument(key, id string, doc api.Document, h holder) outcom
 		}
 		err = board.UpdateDocument(p.board, s.Entry.TaskID, board.UpdateOptions{
 			Document: doc.Path, Text: doc.Text, ExpectedRevision: doc.ExpectedRevision, ContractDecision: doc.ContractDecision, Authorization: doc.Authorization,
-			Transaction: p.taskTransaction(key, "put:"+id+":"+doc.Path, doc, id, p.mutationGuard(id, h, false), nil, false),
+			Transaction: p.taskTransaction(scope, "put:"+id+":"+doc.Path, doc, id, p.mutationGuard(id, h, false), nil, false),
 		})
 		if err != nil {
 			return outcome{err: err}
@@ -306,10 +306,10 @@ func (p *project) putDocument(key, id string, doc api.Document, h holder) outcom
 		t, err := p.show(id)
 		return outcome{status: http.StatusOK, body: t}, err == nil
 	}
-	return p.idempotent(key, "put:"+id+":"+doc.Path, doc, run, applied)
+	return p.idempotent(scope, "put:"+id+":"+doc.Path, doc, run, applied)
 }
 
-func (p *project) move(key, id string, req api.Move, h holder) outcome {
+func (p *project) move(scope receiptScope, id string, req api.Move, h holder) outcome {
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
@@ -398,7 +398,7 @@ func (p *project) move(key, id string, req api.Move, h holder) outcome {
 		}
 		replayed := false
 		_, err = board.MoveWithOptions(entry, p.board, req.State, board.MoveOptions{
-			Transaction: p.taskTransaction(key, "move:"+id, req, id, validate, nextClaim, false, func(tx *board.Transaction, task *api.Task) error {
+			Transaction: p.taskTransaction(scope, "move:"+id, req, id, validate, nextClaim, false, func(tx *board.Transaction, task *api.Task) error {
 				task.MoveReceipt = &api.MoveReceipt{Replayed: replayed}
 				if req.Authorization.DispatchID != "" {
 					d, err := tx.StagedDispatch(id, req.Authorization.DispatchID)
@@ -442,7 +442,7 @@ func (p *project) move(key, id string, req api.Move, h holder) outcome {
 		}
 		return outcome{status: http.StatusOK, body: t}, true
 	}
-	return p.idempotent(key, "move:"+id, req, run, applied)
+	return p.idempotent(scope, "move:"+id, req, run, applied)
 }
 
 // grant renders a claim answer; the token is derived, never stored.
@@ -486,7 +486,7 @@ func validClaimRequest(req api.ClaimRequest) error {
 }
 
 // claim atomically moves a todo task into working and grants a new lease.
-func (p *project) claim(key, id string, req api.ClaimRequest) outcome {
+func (p *project) claim(scope receiptScope, id string, req api.ClaimRequest) outcome {
 	if err := validClaimRequest(req); err != nil {
 		return outcome{err: err}
 	}
@@ -548,7 +548,7 @@ func (p *project) claim(key, id string, req api.ClaimRequest) outcome {
 		}
 		now := p.server.now()
 		r.Status, r.RenewedAt, r.ExpiresAt = api.ClaimActive, now, now.Add(p.server.ttl)
-		extension := p.taskTransaction(key, "claim:"+id, req, r.TaskID, func(tx *board.Transaction) error {
+		extension := p.taskTransaction(scope, "claim:"+id, req, r.TaskID, func(tx *board.Transaction) error {
 			snapshot, err := tx.Snapshot(r.TaskID)
 			if err == nil && req.ExpectedRevision != 0 && req.ExpectedRevision != snapshot.Revision {
 				return apiError(api.CodeRevisionConflict, "start input names an earlier card version")
@@ -586,7 +586,7 @@ func (p *project) claim(key, id string, req api.ClaimRequest) outcome {
 		}
 		return p.activate(r), true
 	}
-	return p.withToken(p.idempotentChecked(key, "claim:"+id, req, check, run, applied))
+	return p.withToken(p.idempotentChecked(scope, "claim:"+id, req, check, run, applied))
 }
 
 func (p *project) activate(r claimRecord) outcome {
@@ -640,7 +640,7 @@ func (p *project) renew(id string, h holder) (api.Renewal, error) {
 // Only an expired lease, or a claimed card without any claim record (a
 // migrated board), can be taken over. A live lease is never preempted: its
 // own holder may restart a freshly confirmed stopped executor on the same host.
-func (p *project) takeover(key, id string, req api.ClaimRequest, h holder) outcome {
+func (p *project) takeover(scope receiptScope, id string, req api.ClaimRequest, h holder) outcome {
 	if err := validClaimRequest(req); err != nil {
 		return outcome{err: err}
 	}
@@ -749,7 +749,7 @@ func (p *project) takeover(key, id string, req api.ClaimRequest, h holder) outco
 		if req.Start != nil {
 			in.Session, in.Window, in.ExecResolved = req.Start.Session, req.Start.Window, req.Start.ExecResolved
 		}
-		if _, err := board.BeginTakeoverWithTransaction(p.board, snapshot.Entry, in, p.taskTransaction(key, "takeover:"+id, req, r.TaskID, func(tx *board.Transaction) error {
+		if _, err := board.BeginTakeoverWithTransaction(p.board, snapshot.Entry, in, p.taskTransaction(scope, "takeover:"+id, req, r.TaskID, func(tx *board.Transaction) error {
 			_, err := tx.Expect(r.TaskID, snapshot.Entry.State, snapshot.Revision)
 			if err != nil {
 				return err
@@ -788,5 +788,5 @@ func (p *project) takeover(key, id string, req api.ClaimRequest, h holder) outco
 		g.Token = ""
 		return outcome{status: http.StatusOK, body: g}, true
 	}
-	return p.withToken(p.idempotent(key, "takeover:"+id, req, run, applied))
+	return p.withToken(p.idempotent(scope, "takeover:"+id, req, run, applied))
 }

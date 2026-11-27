@@ -84,6 +84,9 @@ func readPruneReceipt(root, id string) (pruneReceipt, error) {
 // prunePlan is the complete deletion set computed from one board snapshot.
 type prunePlan struct {
 	runs, batches, plans, taskPlans, recoveries, exclusions, starts, dispatches, groups map[string]bool
+	// readRuns holds every run planning could read, kept or not; only those
+	// keep their batch, plan and predecessors when they are kept.
+	readRuns map[string]bool
 	// receipts maps a card to the evidence removed for it in this round.
 	receipts map[string]*pruneReceipt
 	// copies lists card-side review directories and copyFiles the plan copies;
@@ -119,18 +122,29 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 	if err = requireNoPendingOperations(root, warnings); err != nil {
 		return report, err
 	}
-	if err = settleCompactionBackups(root); err != nil {
-		return report, err
-	}
-	plan, err := planPrune(root, &report, nil)
+	// stuck holds every run this round keeps for a receipt or backup it could
+	// not settle. Planning keeps those runs and what they read, so only they
+	// stay behind while unrelated batches are still removed.
+	stuck, failures, err := settleCompactionBackups(root)
 	if err != nil {
 		return report, err
 	}
-	defer func() { err = errors.Join(err, plan.runLocks.close()) }()
-	if err = writePruneReceipts(root, plan); err != nil {
-		return report, err
+	plan, err := planPrune(root, &report, stuck)
+	if err != nil {
+		return report, errors.Join(append(failures, err)...)
 	}
-	var failures []error
+	defer func() { err = errors.Join(err, plan.runLocks.close()) }()
+	// Keeping a run keeps its batch, plan and predecessors only when planning
+	// could read it. A run kept for its backup that planning could not read
+	// may still exist, so this round removes nothing.
+	for _, id := range sortedKeys(stuck) {
+		if !plan.readRuns[id] {
+			return report, errors.Join(append(failures, reviewError(id+": unreadable run of an unsettled compaction backup"))...)
+		}
+	}
+	if err = writePruneReceipts(root, plan); err != nil {
+		return report, errors.Join(append(failures, err)...)
+	}
 	remove := func(path string, tree bool) {
 		files, bytes, e := removePath(root, path, tree)
 		report.Files += files
@@ -153,7 +167,7 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 		bytes int64
 	}
 	removedReceipts := map[string]removedReceipt{}
-	stuck := map[string]bool{}
+	settled := len(stuck)
 	for _, id := range sortedKeys(plan.runs) {
 		path := compactionReceiptPath(root, id)
 		data, exists, e := readReceiptFile(root, path)
@@ -179,7 +193,9 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 			return report, errors.Join(append(failures, e)...)
 		}
 	}
-	if len(stuck) > 0 {
+	// Plan again only when this loop kept another run; the same stuck set
+	// still holds the runs the backups kept.
+	if len(stuck) > settled {
 		if err = plan.runLocks.close(); err != nil {
 			return report, errors.Join(append(failures, err)...)
 		}
@@ -273,44 +289,82 @@ var pruneInterrupt func(step string) error
 
 // settleCompactionBackups finishes what an interrupted round left in
 // compaction-backups/: a run that still exists gets its receipt back, and the
-// backup of a run that is gone is removed.
-func settleCompactionBackups(root string) error {
+// backup of a run that is gone is removed. One backup that cannot be settled
+// never stops the others: its error goes into failures and, unless its run is
+// known to be gone, its run goes into stuck so the round keeps it. The listing
+// does not follow links and reports each member's kind, so a symlink or
+// reparse point in place of a backup is one more member that is not a regular
+// file: like those, it is never opened or removed. Only a directory that
+// cannot be listed fails the round, since then no run is known to be safe.
+func settleCompactionBackups(root string) (stuck map[string]bool, failures []error, err error) {
+	stuck = map[string]bool{}
 	dir := control(root, "groups", pruneControlGroup, "compaction-backups")
-	entries, err := fs.ListDirectory(root, dir)
+	entries, err := fs.ListDirectoryWithLinks(root, dir)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil
+		return stuck, nil, nil
 	}
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	for _, entry := range entries {
 		id, ok := strings.CutSuffix(entry.Name, ".json")
-		if entry.Kind != fs.KindFile || !ok || !ValidReviewID(id) {
+		if !ok || !ValidReviewID(id) {
+			// A link names no run to keep, but it is still reported: an
+			// unexpected link here is never silently accepted.
+			if entry.Kind == fs.KindLink {
+				failures = append(failures, reviewError(filepath.Join(dir, entry.Name)+": not a regular file"))
+			}
 			continue
 		}
-		backup := compactionBackupPath(root, id)
-		exists, err := fs.RegularFileExists(root, control(root, "groups", reviewControlGroup, "runs", id, "run.json"))
-		if err != nil {
-			return err
-		}
-		if exists {
-			data, ok, err := readReceiptFile(root, backup)
-			if err != nil || !ok {
-				return err
+		gone, e := settleCompactionBackup(root, id, entry.Kind)
+		if e != nil {
+			if !gone {
+				stuck[id] = true
 			}
-			if _, present, err := readReceiptFile(root, compactionReceiptPath(root, id)); err != nil {
-				return err
-			} else if !present {
-				if err = fs.WriteTextAtomic(root, compactionReceiptPath(root, id), string(data), false); err != nil {
-					return err
-				}
-			}
-		}
-		if _, err = fs.RemoveRegularFileIfExists(root, backup); err != nil {
-			return err
+			failures = append(failures, e)
 		}
 	}
-	return nil
+	return stuck, failures, nil
+}
+
+// settleCompactionBackup settles the backup of one run and reports whether
+// that run is known to be gone, so a failure need not keep it.
+func settleCompactionBackup(root, id string, kind fs.Kind) (gone bool, err error) {
+	backup := compactionBackupPath(root, id)
+	exists, err := fs.RegularFileExists(root, control(root, "groups", reviewControlGroup, "runs", id, "run.json"))
+	if err != nil {
+		return false, err
+	}
+	if kind != fs.KindFile {
+		// Such an entry is never removed, so its run is gone only when the run
+		// directory is: a run directory that lost its run.json may still be
+		// restored, and keeping the run keeps everything it reads.
+		notFile := reviewError(backup + ": not a regular file")
+		if exists {
+			return false, notFile
+		}
+		present, err := fs.DirectoryExists(root, control(root, "groups", reviewControlGroup, "runs", id))
+		if err != nil {
+			return false, errors.Join(notFile, err)
+		}
+		return !present, notFile
+	}
+	if exists {
+		data, ok, err := readReceiptFile(root, backup)
+		if err != nil || !ok {
+			// A backup that is gone already needs nothing more.
+			return false, err
+		}
+		if _, present, err := readReceiptFile(root, compactionReceiptPath(root, id)); err != nil {
+			return false, err
+		} else if !present {
+			if err = fs.WriteTextAtomic(root, compactionReceiptPath(root, id), string(data), false); err != nil {
+				return false, err
+			}
+		}
+	}
+	_, err = fs.RemoveRegularFileIfExists(root, backup)
+	return !exists, err
 }
 
 // RequireNoPendingOperations fails with board.transaction_pending while an
@@ -433,7 +487,9 @@ func planPrune(root string, report *PruneReport, keep map[string]bool) (*prunePl
 		_, hasPlan := plans[v.PlanID]
 		plan.batches[id] = allSettled(v.TaskIDs) && (!hasPlan || plan.plans[v.PlanID])
 	}
+	plan.readRuns = map[string]bool{}
 	for id, v := range runs {
+		plan.readRuns[id] = true
 		_, hasBatch := batches[v.BatchID]
 		// Unfinished runs of final cards can never complete, so they go too,
 		// unless a review gate still holds the run's execution lock.

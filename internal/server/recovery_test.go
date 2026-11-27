@@ -65,7 +65,7 @@ func TestClaimInterruptedAfterTheMoveRecovers(t *testing.T) {
 	if err := proj.writeClaim(r); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeJSON(proj.root, receiptPath("key-crash"), receipt{Key: "key-crash", Operation: "claim:" + id, Digest: requestDigest("claim:"+id, claimIdentity(req)), Status: receiptPending}); err != nil {
+	if err := writeJSON(proj.root, scopedReceiptPath("claim:"+id, "key-crash", ""), receipt{Key: "key-crash", Operation: "claim:" + id, Digest: requestDigest("claim:"+id, claimIdentity(req)), Status: receiptPending}); err != nil {
 		t.Fatal(err)
 	}
 	view, _ := board.LoadBoard(proj.board)
@@ -130,7 +130,7 @@ func TestMoveRetryAfterLostAnswer(t *testing.T) {
 	shown, _ := p.Show(t.Context(), id)
 	rev := shown.Revision
 	req := api.Move{State: "backlog", ExpectedRevision: &rev}
-	if err := writeJSON(proj.root, receiptPath("key-move"), receipt{Key: "key-move", Operation: "move:" + id, Digest: requestDigest("move:"+id, req), Status: receiptPending}); err != nil {
+	if err := writeJSON(proj.root, scopedReceiptPath("move:"+id, "key-move", ""), receipt{Key: "key-move", Operation: "move:" + id, Digest: requestDigest("move:"+id, req), Status: receiptPending}); err != nil {
 		t.Fatal(err)
 	}
 	view, _ := board.LoadBoard(proj.board)
@@ -185,7 +185,7 @@ func TestClaimAndTakeoverPersistInTheCardJournal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertTransaction := func(key string) {
+	assertTransaction := func(key, operation string) {
 		t.Helper()
 		execution, _, err := board.CurrentExecution(proj.board, id)
 		if err != nil {
@@ -203,19 +203,19 @@ func TestClaimAndTakeoverPersistInTheCardJournal(t *testing.T) {
 		claim, receipt := false, false
 		for _, change := range record.Files {
 			claim = claim || filepath.Base(change.Path) == id+".json" && strings.Contains(change.Path, "claims")
-			receipt = receipt || filepath.Base(change.Path) == filepath.Base(receiptPath(key)) && strings.Contains(change.Path, "receipts")
+			receipt = receipt || filepath.Base(change.Path) == filepath.Base(scopedReceiptPath(operation, key, "")) && strings.Contains(change.Path, "receipts")
 		}
 		if !claim || !receipt {
 			t.Fatalf("card transaction omitted claim or receipt: %+v", record.Files)
 		}
 	}
-	assertTransaction("atomic-claim")
+	assertTransaction("atomic-claim", "claim:"+id)
 	at = at.Add(2 * time.Minute)
 	request.ExecutionID, request.ExpectedGeneration, request.Decision = "exec-b", grant.Claim.Generation, "user takeover"
 	if _, err := p.Takeover(t.Context(), "atomic-takeover", id, request); err != nil {
 		t.Fatal(err)
 	}
-	assertTransaction("atomic-takeover")
+	assertTransaction("atomic-takeover", "takeover:"+id)
 }
 
 func TestReleasedExecutionCannotModifyUnclaimedCard(t *testing.T) {

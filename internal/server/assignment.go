@@ -8,7 +8,7 @@ import (
 	"github.com/dualface/kander/v2/internal/config"
 )
 
-func (p *project) assign(key, id string, req api.Assign) outcome {
+func (p *project) assign(scope receiptScope, id string, req api.Assign) outcome {
 	taskID, err := board.NormalizeTaskID(id)
 	if err != nil {
 		return outcome{err: err}
@@ -25,7 +25,7 @@ func (p *project) assign(key, id string, req api.Assign) outcome {
 	operation := "assign:" + id
 	run := func() outcome {
 		var updated api.Task
-		extension := p.taskTransaction(key, operation, req, id, nil, nil, false, func(_ *board.Transaction, task *api.Task) error {
+		extension := p.taskTransaction(scope, operation, req, id, nil, nil, false, func(_ *board.Transaction, task *api.Task) error {
 			updated = *task
 			return nil
 		})
@@ -41,5 +41,5 @@ func (p *project) assign(key, id string, req api.Assign) outcome {
 	}
 	// The receipt is staged with the card, so a pending intent has no write
 	// to infer from a later revision or assignee.
-	return p.idempotent(key, operation, req, run, func() (outcome, bool) { return outcome{}, false })
+	return p.idempotent(scope, operation, req, run, func() (outcome, bool) { return outcome{}, false })
 }

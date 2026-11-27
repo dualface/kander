@@ -55,13 +55,12 @@
     ]
   },
   "review": {
-    "git_inspection": false,
     "last_message_report": true,
     "cwd": "root",
     "home_env": "KIMI_CODE_HOME",
     "home_policy": "optional",
     "output_name": "output.jsonl",
-    "inspection": "Use only Read, Grep, and Glob to inspect code; never modify files or run commands.",
+    "inspection": "Use Read, Grep, Glob, and Bash commands that do not write, including read-only Git in the review worktree; never create, modify, or delete any file.",
     "spawns_helpers": true,
     "snapshot_spec": true,
     "stdin": "none",
@@ -69,7 +68,7 @@
       {
         "name": "kimi-reviewer",
         "path": "kimi-reviewer.md",
-        "template": "---\nname: kander-reviewer\ndescription: Read-only review agent for Kander reviews.\ntools: [Read, Grep, Glob]\ndisallowedTools: [Bash, Write, Edit, MultiEdit, Agent, AgentSwarm, Skill, TaskStop, WaitFor, CronCreate, CronDelete, TowerInit, TowerStatus, TowerSend, TowerReview, TowerTeardown, WebSearch, FetchURL, AskUserQuestion, NotifyUser, EnterPlanMode, ExitPlanMode, CreateGoal, GetGoal, SetGoalBudget, UpdateGoal, TodoList]\n---\n\nYou are the {role} review agent for Kander. You inspect a worktree and report findings; you never change it.\n\nHard rules:\n- Read-only: you may only read files. Never create, modify, delete, move, or rename any file or directory anywhere. Never run commands or spawn subagents.\n- {inspection}\n- The instruction names a UTF-8 bootstrap file inside a private review runtime; that directory is readable through --add-dir. Read the bootstrap and the review-contract.md it names completely before reviewing, and follow the contract exactly: scope, evidence, finding bar, and the output contract that makes your final message the complete report, preferably with one kander-findings fence; complete readable reports can be interpreted by the receiver.\n"
+        "template": "---\nname: kander-reviewer\ndescription: Read-only review agent for Kander reviews.\ntools: [Read, Grep, Glob, Bash]\ndisallowedTools: [Write, Edit, MultiEdit, Agent, AgentSwarm, Skill, TaskStop, WaitFor, CronCreate, CronDelete, TowerInit, TowerStatus, TowerSend, TowerReview, TowerTeardown, WebSearch, FetchURL, AskUserQuestion, NotifyUser, EnterPlanMode, ExitPlanMode, CreateGoal, GetGoal, SetGoalBudget, UpdateGoal, TodoList]\n---\n\nYou are the {role} review agent for Kander. You inspect a worktree and report findings; you never change it.\n\nHard rules:\n- Read-only: read files and run only commands that do not write, such as read-only Git. Never create, modify, delete, move, or rename any file or directory anywhere. Never spawn subagents.\n- {inspection}\n- The instruction names a UTF-8 bootstrap file inside a private review runtime; that directory is readable through --add-dir. Read the bootstrap and the review-contract.md it names completely before reviewing, and follow the contract exactly: scope, evidence, finding bar, and the output contract that makes your final message the complete report, preferably with one kander-findings fence; complete readable reports can be interpreted by the receiver.\n"
       }
     ],
     "output": {

@@ -59,21 +59,21 @@ func (p *project) requests(id string) ([]api.CollabRequest, error) {
 
 // requestWrite shares generation validation, the request state and the exact
 // operation receipt in one redo. It never advances the card's content version.
-func (p *project) requestWrite(key, operation, id string, payload any, produce func(*board.Transaction) (api.CollabRequest, error), status int) outcome {
-	return p.requestWriteScoped(key, operation, id, payload, nil, produce, status)
+func (p *project) requestWrite(scope receiptScope, operation, id string, payload any, produce func(*board.Transaction) (api.CollabRequest, error), status int) outcome {
+	return p.requestWriteScoped(scope, operation, id, payload, nil, produce, status)
 }
 
 // requestWriteScoped is requestWrite for a producer that reads more of the board
 // than the request and its card. extend adds the groups and cards it needs; it
 // runs only when the operation is not a replay of a stored receipt.
-func (p *project) requestWriteScoped(key, operation, id string, payload any, extend func(board.LockScope) board.LockScope, produce func(*board.Transaction) (api.CollabRequest, error), status int) outcome {
-	return p.idempotent(key, operation, payload, func() outcome {
+func (p *project) requestWriteScoped(scope receiptScope, operation, id string, payload any, extend func(board.LockScope) board.LockScope, produce func(*board.Transaction) (api.CollabRequest, error), status int) outcome {
+	return p.idempotent(scope, operation, payload, func() outcome {
 		var request api.CollabRequest
-		scope := board.LockScope{Groups: []string{serviceGroup}, Tasks: []string{id}}
+		lock := board.LockScope{Groups: []string{serviceGroup}, Tasks: []string{id}}
 		if extend != nil {
-			scope = extend(scope)
+			lock = extend(lock)
 		}
-		err := p.boardTransaction(scope, func(tx *board.Transaction) error {
+		err := p.boardTransaction(lock, func(tx *board.Transaction) error {
 			var err error
 			request, err = produce(tx)
 			if err != nil {
@@ -82,11 +82,7 @@ func (p *project) requestWriteScoped(key, operation, id string, payload any, ext
 			if err := stageJSON(tx, requestName(id, request.ID), request); err != nil {
 				return err
 			}
-			data, err := json.Marshal(request)
-			if err != nil {
-				return err
-			}
-			return stageJSON(tx, filepath.Join("receipts", filepath.Base(receiptPath(key))), receipt{Key: key, Operation: operation, Digest: requestDigest(operation, payload), Status: receiptDone, HTTP: status, Body: data, CreatedAt: p.server.now()})
+			return p.stageOperationReceiptStatus(tx, scope, operation, payload, status, request)
 		})
 		if err != nil {
 			return outcome{err: err}
@@ -117,7 +113,7 @@ func checkRequestShape(input api.NewCollabRequest) error {
 	return nil
 }
 
-func (p *project) createRequest(key, id string, input api.NewCollabRequest) outcome {
+func (p *project) createRequest(scope receiptScope, id string, input api.NewCollabRequest) outcome {
 	if err := checkRequestShape(input); err != nil {
 		return outcome{err: err}
 	}
@@ -132,7 +128,7 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 		return outcome{err: err}
 	}
 	defer p.unlockBoard()
-	return p.requestWriteScoped(key, "request:"+id, normalized, input, p.proposalScope(input), func(tx *board.Transaction) (api.CollabRequest, error) {
+	return p.requestWriteScoped(scope, "request:"+id, normalized, input, p.proposalScope(input), func(tx *board.Transaction) (api.CollabRequest, error) {
 		var request api.CollabRequest
 		task, err := tx.Snapshot(normalized)
 		if err != nil {
@@ -167,6 +163,17 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 				return request, apiError(api.CodeClaimRequired, "task has no holder to answer a request")
 			}
 			return request, apiError(api.CodeLeaseInvalid, "request target generation is not the claim's")
+		}
+		// The request ID derives from the key alone. A creation in another
+		// receipt scope with the same key reaches this point without a receipt
+		// and must never replace, nor be answered with, the request another
+		// scope created, also when it repeats the dispatch of that request.
+		newID := requestID(scope.key)
+		if taken, err := p.requestIDTaken(newID); err != nil || taken {
+			if err == nil {
+				err = apiError(api.CodeIdempotencyMismatch, "idempotency key already created another request")
+			}
+			return request, err
 		}
 		if input.Dispatch != nil {
 			previous, err := p.readRequests(normalized)
@@ -203,8 +210,31 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 			copy.CreatedAt, copy.ConfirmBy = now, now.Add(input.AcceptWithin.Std())
 			dispatch = &copy
 		}
-		return api.CollabRequest{AcceptWithin: input.AcceptWithin, Dispatch: dispatch, CardRevision: input.CardRevision, Revision: 1, ID: requestID(key), TaskID: normalized, Kind: input.Kind, Message: input.Message, FromClient: input.FromClient, TargetGeneration: input.TargetGeneration, Status: api.RequestOpen, CreatedAt: now, UpdatedAt: now}, nil
+		return api.CollabRequest{AcceptWithin: input.AcceptWithin, Dispatch: dispatch, CardRevision: input.CardRevision, Revision: 1, ID: newID, TaskID: normalized, Kind: input.Kind, Message: input.Message, FromClient: input.FromClient, TargetGeneration: input.TargetGeneration, Status: api.RequestOpen, CreatedAt: now, UpdatedAt: now}, nil
 	}, http.StatusCreated)
+}
+
+// requestIDTaken reports whether a request of any task already has id. Every
+// request write holds the service group, which the caller holds too.
+func (p *project) requestIDTaken(id string) (bool, error) {
+	dir := filepath.Join(p.root, servicePath("requests"))
+	exists, err := fs.DirectoryExists(p.root, dir)
+	if err != nil || !exists {
+		return false, err
+	}
+	entries, err := fs.ListDirectory(p.root, dir)
+	if err != nil {
+		return false, err
+	}
+	for _, entry := range entries {
+		if entry.Kind != fs.KindDirectory {
+			continue
+		}
+		if taken, err := fs.RegularFileExists(p.root, filepath.Join(p.root, requestDir(entry.Name), id+".json")); err != nil || taken {
+			return taken, err
+		}
+	}
+	return false, nil
 }
 
 // proposalScope widens the write scope of a new fix proposal to what the check
@@ -222,7 +252,7 @@ func (p *project) proposalScope(input api.NewCollabRequest) func(board.LockScope
 		return base
 	}
 }
-func (p *project) answerRequest(key, id, requestID string, answer api.CollabAnswer, h holder) outcome {
+func (p *project) answerRequest(scope receiptScope, id, requestID string, answer api.CollabAnswer, h holder) outcome {
 	if !slices.Contains([]string{api.RequestAccepted, api.RequestDone, api.RequestRejected}, answer.Status) || !api.ValidIdentity(requestID) {
 		return outcome{err: apiError(api.CodeInvalidRequest, "invalid request answer")}
 	}
@@ -234,7 +264,7 @@ func (p *project) answerRequest(key, id, requestID string, answer api.CollabAnsw
 		return outcome{err: err}
 	}
 	defer p.unlockBoard()
-	return p.requestWrite(key, "answer:"+id+":"+requestID, normalized, answer, func(tx *board.Transaction) (api.CollabRequest, error) {
+	return p.requestWrite(scope, "answer:"+id+":"+requestID, normalized, answer, func(tx *board.Transaction) (api.CollabRequest, error) {
 		var request api.CollabRequest
 		claim, err := p.requireHolder(normalized, h)
 		if err != nil {

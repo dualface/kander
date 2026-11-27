@@ -221,7 +221,7 @@ func TestGCCommandAllProjectsMatchesDirectoriesByTheirRecords(t *testing.T) {
 	cl.Retries = 0
 	// Bind the fixture to this server before anything is created below its
 	// namespace.
-	if err := os.Remove(f.root); err != nil {
+	if err := os.RemoveAll(f.root); err != nil {
 		t.Fatal(err)
 	}
 	f.s.ServerURL, f.s.Client = server.URL, cl
@@ -388,7 +388,7 @@ func TestGCCommandAllProjectsMatchesRequestCallsAndThePlan(t *testing.T) {
 		t.Fatal(err)
 	}
 	cl.Retries = 0
-	if err := os.Remove(f.root); err != nil {
+	if err := os.RemoveAll(f.root); err != nil {
 		t.Fatal(err)
 	}
 	f.s.ServerURL, f.s.Client = server.URL, cl
@@ -426,5 +426,14 @@ func TestGCCommandTextPlanShowsTheBytesOfEveryCategory(t *testing.T) {
 	suffix := line[strings.Index(line, "X")+1:]
 	if code != 0 || !strings.Contains(out, prefix) || !strings.Contains(out, suffix) || strings.Contains(out, "{{") {
 		t.Fatalf("the line must carry every byte count:\n%s", out)
+	}
+}
+
+// A server plan that only ends members of an interrupted receipt gc still has
+// work: running it removes the intent record.
+func TestGCReportWithOnlySettledReceiptsIsNotEmpty(t *testing.T) {
+	report := GCReport{Server: GCServer{Report: &api.ServerGCReport{DryRun: true, Projects: []api.ServerGCProject{{Name: "demo", Receipts: api.ServerGCReceipts{Settled: 1}}}}}}
+	if report.Empty() {
+		t.Fatal("a plan with a settled receipt intent member must not be empty")
 	}
 }

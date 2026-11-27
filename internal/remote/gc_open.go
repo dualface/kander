@@ -81,10 +81,11 @@ func existingClientID(home string) (string, error) {
 }
 
 // directoryProjects lists the project IDs of serverURL that the records of
-// one client project directory name: the execution credentials and retained
-// executions below the namespace, its request-call records, and the task
-// branches of its worktree intents. Only an ID whose namespace is the directory's own counts. foreign
-// says a record names the directory's project on another server.
+// one client project directory name: its identity marker, the execution
+// credentials and retained executions below the namespace, its request-call
+// records, and the task branches of its worktree intents. Only an ID whose
+// namespace is the directory's own counts. foreign says a record names the
+// directory's project on another server.
 func directoryProjects(home, serverURL, namespace string) (projects []string, foreign bool, err error) {
 	found := map[string]bool{}
 	note := func(server, project string) {
@@ -96,6 +97,13 @@ func directoryProjects(home, serverURL, namespace string) (projects []string, fo
 		} else {
 			foreign = true
 		}
+	}
+	identity, marked, err := readProjectIdentity(home, filepath.Join(home, "projects", namespace))
+	if err != nil {
+		return nil, false, err
+	}
+	if marked {
+		note(identity.ServerURL, identity.ProjectID)
 	}
 	for _, dir := range []string{filepath.Join(home, "executions", namespace), filepath.Join(home, "retained-executions", namespace)} {
 		err := eachRecord(home, dir, func(data []byte) {

@@ -36,8 +36,9 @@ func noCompaction(context.Context, string, board.CompactionOptions) (board.Compa
 	return board.CompactionReport{}, nil
 }
 
-// receiptFile is the path of a receipt key below a project directory.
-func receiptFile(root, key string) string { return filepath.Join(root, receiptPath(key)) }
+// receiptFile is the path of the legacy receipt of key below a project
+// directory; gc treats every receipt file alike.
+func receiptFile(root, key string) string { return filepath.Join(root, legacyReceiptPath(key)) }
 
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
@@ -55,7 +56,7 @@ func TestOfflineGCKeepsReceiptsWhileABoardTransactionWaitsForRecovery(t *testing
 	pending := receipt{Schema: receiptSchema, Key: key, Operation: "observation:20261101-a-task", Digest: "d", Status: receiptPending, CreatedAt: old}
 	done := pending
 	done.Status, done.HTTP, done.Body = receiptDone, http.StatusOK, json.RawMessage(`{}`)
-	if err := writeJSON(root, receiptPath(key), done); err != nil {
+	if err := writeJSON(root, legacyReceiptPath(key), done); err != nil {
 		t.Fatal(err)
 	}
 	before, _ := json.MarshalIndent(pending, "", "  ")
@@ -288,8 +289,8 @@ func TestServerGCKeepsUnreadableReceiptsAndGoesOn(t *testing.T) {
 }
 
 // A batch an interrupted gc recorded is finished first, with its recorded
-// retention: a member still as recorded goes, one already gone counts, and one
-// whose content changed is decided anew.
+// retention: a member still as recorded goes, one already gone and one whose
+// content changed end without a removal, and the changed file is decided anew.
 func TestServerGCFinishesTheReceiptBatchAnInterruptedGCRecorded(t *testing.T) {
 	f := newGCFixture(t)
 	f.project("demo")
@@ -317,7 +318,7 @@ func TestServerGCFinishesTheReceiptBatchAnInterruptedGCRecorded(t *testing.T) {
 	}
 	request := api.ServerGCRequest{DryRun: true, OlderThan: "1h", LogKeep: 1 << 20}
 	plan, err := f.gc(request)
-	if err != nil || plan.Projects[0].Receipts.Files != 2 || !fileExists(receiptIntentPath(p.root)) {
+	if got := plan.Projects[0].Receipts; err != nil || got.Files != 1 || got.Settled != 2 || !fileExists(receiptIntentPath(p.root)) {
 		t.Fatalf("plan: %+v %v", plan.Projects[0], err)
 	}
 	request.DryRun = false
@@ -325,8 +326,8 @@ func TestServerGCFinishesTheReceiptBatchAnInterruptedGCRecorded(t *testing.T) {
 	if err != nil || report.Incomplete() {
 		t.Fatal(err, report)
 	}
-	if got := report.Projects[0].Receipts; got.Files != 2 || got.Bytes != same.Bytes+gone.Bytes {
-		t.Fatalf("receipts = %+v, want the recorded member and the one already gone", got)
+	if got := report.Projects[0].Receipts; got.Files != 1 || got.Bytes != same.Bytes || got.Settled != 2 {
+		t.Fatalf("receipts = %+v, want the recorded member removed and the gone and replaced ones settled", got)
 	}
 	if fileExists(receiptFile(p.root, "same")) || !fileExists(receiptFile(p.root, "replaced")) || fileExists(receiptIntentPath(p.root)) {
 		t.Fatal("the recorded batch must end, and only with members still as recorded")
@@ -534,7 +535,7 @@ func TestOfflineGCSkipsAProjectWhoseImportWaitsForRecovery(t *testing.T) {
 	p, _ := importProject(t, s, target)
 	// A due receipt the board held before the import started.
 	key := "old-liveness"
-	if err := writeJSON(p.root, receiptPath(key), receipt{Key: key, Operation: "observation:20261101-a-task", Digest: "d", Status: receiptDone, CreatedAt: time.Now().UTC().Add(-48 * time.Hour)}); err != nil {
+	if err := writeJSON(p.root, legacyReceiptPath(key), receipt{Key: key, Operation: "observation:20261101-a-task", Digest: "d", Status: receiptDone, CreatedAt: time.Now().UTC().Add(-48 * time.Hour)}); err != nil {
 		t.Fatal(err)
 	}
 	s.importFault = func(step string) error {
@@ -612,7 +613,8 @@ func TestServerGCSkipsABusyBoardWithoutWaiting(t *testing.T) {
 
 // A member that cannot be removed now stays recorded with its own retention,
 // so a later gc with another retention still ends it; a set whose removals all
-// happened is a plan item, so the command runs and removes its record.
+// happened is a plan item (settled members), so the command runs and removes
+// its record.
 func TestServerGCKeepsUnresolvedIntentMembersAndEndsEmptySets(t *testing.T) {
 	f := newGCFixture(t)
 	f.project("demo")
@@ -651,8 +653,8 @@ func TestServerGCKeepsUnresolvedIntentMembersAndEndsEmptySets(t *testing.T) {
 		t.Fatalf("the next gc must end the member: %+v %v", report, err)
 	}
 
-	// A set whose removals all happened: the plan counts them, so the
-	// command runs and removes the record.
+	// A set whose removals all happened: the plan counts its members as
+	// settled, so the command runs and removes the record.
 	intent = receiptIntent{Schema: 1, Receipts: []receiptIntentMember{{Name: live, SHA256: contentHash(data), Bytes: int64(len(data)), OlderThan: "1h"}}}
 	if err := writeReceiptIntent(p.root, intent); err != nil {
 		t.Fatal(err)

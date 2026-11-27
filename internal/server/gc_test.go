@@ -21,6 +21,7 @@ import (
 	"github.com/dualface/kander/v2/api"
 	"github.com/dualface/kander/v2/internal/board"
 	"github.com/dualface/kander/v2/internal/client"
+	"github.com/dualface/kander/v2/internal/servicectl"
 )
 
 // gcClock is a test clock the server consults for receipts and the gc.
@@ -134,12 +135,20 @@ func notServerError(t *testing.T, label string, err error) {
 	}
 }
 
+// dataFiles snapshots the contents of every file below dir, except the data
+// directory lock. A running server holds a byte-range lock on that file, and on
+// Windows a read through another handle fails with a lock violation; the lock
+// file holds no data, so leaving it out loses nothing.
 func dataFiles(t *testing.T, dir string) map[string]string {
 	t.Helper()
+	lock := filepath.Join(dir, servicectl.DataLockName)
 	out := map[string]string{}
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
+		}
+		if path == lock {
+			return nil
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -308,15 +317,16 @@ func TestReceiptBindings(t *testing.T) {
 	}
 }
 
-// writeReceipt stores a receipt the way the server does.
+// writeReceipt stores a receipt at the legacy path of its key; gc treats
+// every receipt file alike.
 func writeReceipt(t *testing.T, s *Server, name string, r receipt) string {
 	t.Helper()
 	info, _ := s.projectByName(name)
 	p, _ := s.project(info.ID)
-	if err := writeJSON(p.root, receiptPath(r.Key), r); err != nil {
+	if err := writeJSON(p.root, legacyReceiptPath(r.Key), r); err != nil {
 		t.Fatal(err)
 	}
-	return filepath.Base(receiptPath(r.Key))
+	return filepath.Base(legacyReceiptPath(r.Key))
 }
 
 func TestServerGCExpiresReceipts(t *testing.T) {
@@ -486,8 +496,6 @@ func TestOfflineGCHoldsTheDataDirectoryLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	after := dataFiles(t, dir)
-	delete(after, filepath.Join(dir, "server.lock"))
-	delete(before, filepath.Join(dir, "server.lock"))
 	if !mapsEqual(before, after) {
 		t.Fatal("an offline dry run must not change any data file")
 	}

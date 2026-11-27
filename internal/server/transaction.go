@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"net/http"
 	"path/filepath"
 
 	"github.com/dualface/kander/v2/api"
@@ -62,7 +61,7 @@ func (p *project) taskFromTransaction(tx *board.Transaction, id string, claim *c
 
 // taskTransaction publishes a receipt and an optional claim in the card's
 // transaction. A crash at any publication step rolls all of them forward.
-func (p *project) taskTransaction(key, operation string, request any, id string, validate func(*board.Transaction) error, claim *claimRecord, grant bool, decorate ...func(*board.Transaction, *api.Task) error) board.TransactionExtension {
+func (p *project) taskTransaction(scope receiptScope, operation string, request any, id string, validate func(*board.Transaction) error, claim *claimRecord, grant bool, decorate ...func(*board.Transaction, *api.Task) error) board.TransactionExtension {
 	return board.TransactionExtension{
 		Groups: []string{serviceGroup}, Before: validate, Published: p.indexPublication,
 		After: func(tx *board.Transaction) error {
@@ -103,12 +102,7 @@ func (p *project) taskTransaction(key, operation string, request any, id string,
 			if grant {
 				body = api.ClaimGrant{Task: task, Claim: *p.claimView(*claim, task.Text), RenewInterval: api.DurationOf(p.server.renew), TTL: api.DurationOf(p.server.ttl)}
 			}
-			data, err := json.Marshal(body)
-			if err != nil {
-				return err
-			}
-			r := receipt{Key: key, Operation: operation, Digest: requestDigest(operation, request), Status: receiptDone, HTTP: http.StatusOK, Body: data, CreatedAt: p.server.now()}
-			return stageJSON(tx, filepath.Join("receipts", filepath.Base(receiptPath(key))), r)
+			return p.stageOperationReceipt(tx, scope, operation, request, body)
 		},
 	}
 }

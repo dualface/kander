@@ -45,7 +45,7 @@ func TestPendingClaimReceiptAcceptsAResendWithANewerPolicyRevision(t *testing.T)
 	key := "crashed-claim"
 	request := api.ClaimRequest{ClientID: "policy-client", ExecutionID: "exec-crashed", Owner: "claude"}
 	operation := "claim:" + id
-	at := keyReceipt(key)
+	at := receiptScope{key: key}.receipt(operation)
 	pending := receipt{Schema: receiptSchema, Key: key, Operation: operation, Digest: requestDigest(operation, request), Status: receiptPending, CreatedAt: time.Now().UTC()}
 	if err := writeJSON(p.root, at.rel(), pending); err != nil {
 		t.Fatal(err)
@@ -53,7 +53,7 @@ func TestPendingClaimReceiptAcceptsAResendWithANewerPolicyRevision(t *testing.T)
 
 	stale := request
 	stale.PolicyRevision, stale.BranchMode = 1, "main-develop"
-	out := p.claim(key, id, stale)
+	out := p.claim(receiptScope{key: key}, id, stale)
 	requireAPICode(t, out.err, api.CodePolicyRevisionStale, http.StatusConflict)
 	var still receipt
 	if found, err := readJSON(p.root, at.rel(), &still); err != nil || !found || still.Status != receiptPending {
@@ -62,7 +62,7 @@ func TestPendingClaimReceiptAcceptsAResendWithANewerPolicyRevision(t *testing.T)
 
 	current := request
 	current.PolicyRevision, current.BranchMode = 2, "main-develop"
-	out = p.claim(key, id, current)
+	out = p.claim(receiptScope{key: key}, id, current)
 	if out.err != nil || out.status != http.StatusOK {
 		t.Fatalf("resend with the current revision: %d %v", out.status, out.err)
 	}
@@ -95,7 +95,7 @@ func TestClaimsOfCardsAndGroupsClaimedBeforeSnapshotsCreateNone(t *testing.T) {
 	if err := p.checkSnapshotClaim(p.taskClaimCreatesSnapshot(id), 1, "main-develop"); err != nil {
 		t.Fatalf("an old card is checked: %v", err)
 	}
-	out := p.claim("legacy-claim", id, api.ClaimRequest{ClientID: "policy-client", ExecutionID: "exec-new", Owner: "claude", PolicyRevision: 1, BranchMode: "main-develop"})
+	out := p.claim(receiptScope{key: "legacy-claim"}, id, api.ClaimRequest{ClientID: "policy-client", ExecutionID: "exec-new", Owner: "claude", PolicyRevision: 1, BranchMode: "main-develop"})
 	if out.err != nil {
 		t.Fatalf("claim of an old card with an old revision: %v", out.err)
 	}

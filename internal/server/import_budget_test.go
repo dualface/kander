@@ -212,10 +212,14 @@ func TestLoopbackImportEndsAsImportCanceledWhenTheClientLeaves(t *testing.T) {
 
 // shutDownWhileCopying starts the server shutdown at the first copied file
 // and gives the cancellation time to reach the import.
-func shutDownWhileCopying(s *Server) {
+func shutDownWhileCopying(s *Server) { shutDownAt(s, "copying") }
+
+// shutDownAt starts the server shutdown at the first import checkpoint step
+// and gives the cancellation time to reach the import.
+func shutDownAt(s *Server, at string) {
 	fired := false
 	s.importFault = func(step string) error {
-		if step == "copying" && !fired {
+		if step == at && !fired {
 			fired = true
 			s.shutdownCancel()
 			time.Sleep(200 * time.Millisecond)

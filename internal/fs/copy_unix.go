@@ -50,3 +50,22 @@ func CreatePrivateRegularFile(root, path string) (*os.File, error) {
 	}
 	return os.NewFile(uintptr(fd), parent.path), nil
 }
+
+// CreateInheritedRegularFile is CreatePrivateRegularFile for a file that
+// takes the inherited permissions of DirectoryWriter.CreateInherited: mode
+// 0666 less the umask. The caller owns the returned file.
+func CreateInheritedRegularFile(root, path string) (*os.File, error) {
+	parent, err := openPosixParent(root, path)
+	if err != nil {
+		return nil, err
+	}
+	defer parent.close()
+	fd, err := openat(parent.parentFD, parent.name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL, 0o666)
+	if err == unix.EEXIST {
+		return nil, existError("create", parent.path, "protected file already exists")
+	}
+	if err != nil {
+		return nil, mapOpenErr("create", parent.path, err)
+	}
+	return os.NewFile(uintptr(fd), parent.path), nil
+}

@@ -15,7 +15,7 @@ func TestFinishPreservesTheResponseCommittedByTheDomainTransaction(t *testing.T)
 	pending := receipt{Key: "operation", Operation: "producer", Digest: "request-digest", Status: receiptPending}
 	committed := pending
 	committed.Status, committed.HTTP, committed.Body = receiptDone, http.StatusOK, json.RawMessage(`{"revision":12,"observed_at":"committed-time"}`)
-	path := receiptPath(pending.Key)
+	path := scopedReceiptPath(pending.Operation, pending.Key, "")
 	if err := writeJSON(p.root, path, committed); err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestFinishPreservesTheResponseCommittedByTheDomainTransaction(t *testing.T)
 func TestPendingBoardRecoveryDoesNotPoisonTheOperationReceipt(t *testing.T) {
 	p := &project{root: t.TempDir()}
 	original := receipt{Schema: receiptSchema, Key: "pending-operation", Operation: "new", Digest: "original-digest", Status: receiptPending}
-	path := receiptPath(original.Key)
+	path := scopedReceiptPath(original.Operation, original.Key, "")
 	if err := writeJSON(p.root, path, original); err != nil {
 		t.Fatal(err)
 	}

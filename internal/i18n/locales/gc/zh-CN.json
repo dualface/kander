@@ -10,6 +10,7 @@
   "gc.project_line": "项目 {{.V0}}：review run 压缩 {{.V1}} 个 run、{{.V2}} 个文件、{{.V3}}；幂等回执 {{.V4}} 个文件、{{.V5}}",
   "gc.kept_run": "  保留 review run {{.V0}}：{{.V1}}",
   "gc.kept_receipt": "  保留幂等回执 {{.V0}}：{{.V1}}",
+  "gc.receipts_settled": "  幂等回执 gc 意图：{{.V0}} 个已记录成员收尾但未删除文件（文件已不存在、已被替换、已损坏或已不再到期）",
   "gc.warning": "  警告：{{.V0}}",
   "gc.error": "  错误：{{.V0}}",
   "gc.log_line": "{{.V0}}：大小 {{.V1}}，移入 server.log.1.gz {{.V2}}",
@@ -21,6 +22,7 @@
   "gc.running": "服务端已有一个 gc 在运行；请等它结束后运行 kander server gc --dry-run 查看剩余部分",
   "gc.timeout": "gc 调用超时，服务端可能仍在执行。请稍后运行 kander server gc --dry-run 查看剩余部分。",
   "gc.no_server": "数据目录 {{.V0}} 被另一个 kander 进程锁定，但 {{.V1}} 和服务端记录的地址上都没有服务该目录的服务端应答。请等待另一个离线命令结束，或把 server.url 设为服务端的监听地址。",
+  "gc.discover_timeout": "数据目录 {{.V0}} 被另一个 kander 进程锁定，但在发现期限结束前，{{.V1}} 和服务端记录的地址都没有在单次探测时限内应答。请检查那里的服务端是否响应，或把 server.url 设为服务端的监听地址。",
   "gc.local_only": "kander server gc 只能在本机执行：{{.V0}} 上的服务端不是回环地址，而本地数据目录已被锁定。",
   "gc.data_mismatch": "{{.V0}} 上的服务端使用的数据目录是 {{.V1}}，不是 {{.V2}}。",
   "gc.unsupported": "{{.V0}} 上的服务端不支持 server gc；请用当前版本的 kander 重启它。",
@@ -67,5 +69,8 @@
   "gc.client_kept_tracking": "  保留跟踪 ref {{.V0}}：{{.V1}}",
   "gc.client_unverified": "未能确认所属项目的 client 项目目录（未修改）：",
   "gc.client_no_identity": "{{.V0}} 中有该项目的数据，但本机没有 client 身份（client-id），无法区分本机的认领与凭据，因此不清理",
-  "gc.client_lazy_fetch_deferred": "此 Git 无法禁止在该部分克隆中按需拉取缺失对象（需要 Git 2.45 或更高版本），dry run 不对其做探测；执行时在 fetch 后判定"
+  "gc.client_lazy_fetch_deferred": "此 Git 无法禁止在该部分克隆中按需拉取缺失对象（需要 Git 2.45 或更高版本），dry run 不对其做探测；执行时在 fetch 后判定",
+  "gc.client_still_registered": "worktree 目录 {{.V0}} 已不存在，但 Git 仍登记该 worktree；分支、intent 与删除记录保留到下一轮",
+  "gc.client_registration_unknown": "worktree 目录 {{.V0}} 已不存在，但无法确认 Git 是否仍登记该 worktree；分支、intent 与删除记录保留到下一轮：{{.V1}}",
+  "gc.client_identity_mismatch": "身份标记 {{.V0}} 指明的不是本项目；人工核对前不清理该目录下的任何内容"
 }

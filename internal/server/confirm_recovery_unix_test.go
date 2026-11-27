@@ -42,7 +42,7 @@ func TestConfirmDoesNotReplayReceiptBeforeBoardCommit(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(todo, 0o700) })
 	first := post(s)
 	var saved receipt
-	found, err := readJSON(proj.root, receiptPath(key), &saved)
+	found, err := readJSON(proj.root, scopedReceiptPath(confirmOperation+card.TaskID, key, ""), &saved)
 	if err != nil || !found || saved.Status != receiptDone || saved.HTTP != http.StatusOK {
 		t.Fatalf("failure did not reach the staged-success boundary: status=%q, HTTP=%d, found=%t, err=%v", saved.Status, saved.HTTP, found, err)
 	}

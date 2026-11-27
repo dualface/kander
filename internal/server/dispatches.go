@@ -10,13 +10,13 @@ import (
 	"github.com/dualface/kander/v2/internal/board"
 )
 
-func (p *project) dispatchWrite(key, action, task string, input api.DispatchCommand, h holder) outcome {
+func (p *project) dispatchWrite(scope receiptScope, action, task string, input api.DispatchCommand, h holder) outcome {
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
 	defer p.unlockBoard()
 	operation := "dispatch:" + task + ":" + action
-	return p.idempotent(key, operation, input, func() outcome {
+	return p.idempotent(scope, operation, input, func() outcome {
 		if _, err := p.requireHolder(task, h); err != nil {
 			return outcome{err: err}
 		}
@@ -70,7 +70,7 @@ func (p *project) dispatchWrite(key, action, task string, input api.DispatchComm
 			if err := p.stagePreparedProposal(tx, proposal); err != nil {
 				return err
 			}
-			return p.stageOperationReceipt(tx, key, operation, input, dispatch)
+			return p.stageOperationReceipt(tx, scope, operation, input, dispatch)
 		}}
 		var value board.Dispatch
 		var err error
@@ -153,7 +153,7 @@ func (s *Server) dispatchRoutes(mux *routeTable) {
 		if err := decode(r, &input); err != nil {
 			return outcome{err: err}
 		}
-		return p.dispatchWrite(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("action"), task, input, holderOf(r))
+		return p.dispatchWrite(scopeOf(r), r.PathValue("action"), task, input, holderOf(r))
 	})
 	s.projectRoute(mux, "GET "+base+"/review-range", func(p *project, r *http.Request) outcome {
 		value, err := board.DispatchReviewRange(p.board, r.PathValue("task"))

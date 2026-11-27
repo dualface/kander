@@ -64,6 +64,7 @@
   "launch.pane_prompt_rejected": "Prompt delivery was rejected ({{.V0}}). Run that CLI once in a terminal to answer the dialog, then retry `kander start`. Pane output:\n{{.V1}}",
   "launch.pane_ready_timeout": "Timed out waiting for the agent TUI. Pane output:\n{{.V0}}",
   "launch.rename_no_pane": "Agent session was not renamed because the launcher cannot type into a pane.",
+  "launch.rename_no_status": "Agent session was not renamed because the terminal does not report the agent's state.",
   "launch.rename_not_ready": "Agent session was not renamed because its pane was blocked or did not become ready.",
   "launch.rename_unconfirmed": "Could not confirm that the agent session was renamed.",
   "launch.herdr_agent_prompt_failed": "herdr agent prompt failed: {{.V0}}",

@@ -137,6 +137,8 @@ jobs:
           cat "$RUNNER_TEMP/windows-packages.txt"
       # Four packages at a time: the runner has four vCPUs, and runs 44453011243
       # and 44453016220 took 250 and 255 s here against 374 and 364 s with -p 1.
+      # TestUploadOfMoreFilesThanTheOldDefaultLimit runs in the next step; keep
+      # the -skip here and the -run there on the same test name.
       - name: Complete Windows service tests
         if: matrix.suite == 'services'
         env:
@@ -147,7 +149,19 @@ jobs:
         run: |
           $packages = @(Get-Content -LiteralPath "$env:RUNNER_TEMP\windows-packages.txt" | Where-Object { $_ -ne '' })
           if ($packages.Count -eq 0) { Write-Error "no Windows service packages are listed"; exit 1 }
-          go test -v -p 4 -count=1 -timeout 20m $packages
+          go test -v -p 4 -count=1 -timeout 20m -skip '^TestUploadOfMoreFilesThanTheOldDefaultLimit$' $packages
+      # TestUploadOfMoreFilesThanTheOldDefaultLimit creates 100,001 files and took
+      # 414 to 557 s here, about half of the internal/server time; with it the
+      # package reached the 20-minute go test timeout (run 45986080768). It runs
+      # alone in this step, under a timeout of its own. The -run name must match
+      # the -skip name of the previous step.
+      - name: Windows large upload test
+        if: ${{ !cancelled() && matrix.suite == 'services' }}
+        env:
+          TMPDIR: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+          TEMP: ${{ runner.temp }}
+        run: go test -v -p 1 -count=1 -timeout 20m -run '^TestUploadOfMoreFilesThanTheOldDefaultLimit$' ./internal/server
       # Windows-specific tests of internal/remote, named TestWindows*, such as the
       # TestWindowsCredentialSharing tests planned by
       # 20261119-windows-credential-read-sharing-v2-task. With no match go test

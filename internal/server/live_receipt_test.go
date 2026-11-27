@@ -417,7 +417,7 @@ func TestLivenessSlotWaitsForThePreparedTransactionThatStagesIt(t *testing.T) {
 func (f *liveFixture) legacyReceipt(t *testing.T, operation, key string) {
 	t.Helper()
 	slot := f.slotOf(t, operation)
-	if err := os.Rename(slot, filepath.Join(f.proj.root, keyReceipt(key).rel())); err != nil {
+	if err := os.Rename(slot, filepath.Join(f.proj.root, legacyReceiptPath(key))); err != nil {
 		t.Fatal(err)
 	}
 }

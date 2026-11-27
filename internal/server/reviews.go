@@ -3,7 +3,6 @@ package server
 import (
 	"encoding/json"
 	"net/http"
-	"path/filepath"
 	"slices"
 
 	"github.com/dualface/kander/v2/api"
@@ -39,14 +38,14 @@ func (p *project) requireHolders(tasks []string, h holder) error {
 	return nil
 }
 
-func (p *project) reviewWrite(key, operation string, request any, tasks func() ([]string, error), h holder, apply func(board.TransactionExtension) (any, error)) outcome {
-	return p.reviewWriteChecked(key, operation, request, tasks, h, nil, apply)
+func (p *project) reviewWrite(scope receiptScope, operation string, request any, tasks func() ([]string, error), h holder, apply func(board.TransactionExtension) (any, error)) outcome {
+	return p.reviewWriteChecked(scope, operation, request, tasks, h, nil, apply)
 }
 
 // reviewWriteChecked is reviewWrite with a check that runs under the project
 // lock before the write would run (see idempotentChecked): a refusal writes
 // nothing, not even a receipt.
-func (p *project) reviewWriteChecked(key, operation string, request any, tasks func() ([]string, error), h holder, check func() error, apply func(board.TransactionExtension) (any, error)) outcome {
+func (p *project) reviewWriteChecked(scope receiptScope, operation string, request any, tasks func() ([]string, error), h holder, check func() error, apply func(board.TransactionExtension) (any, error)) outcome {
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
@@ -178,8 +177,7 @@ func (p *project) reviewWriteChecked(key, operation string, request any, tasks f
 					return err
 				}
 			}
-			receipt := receipt{Key: key, Operation: operation, Digest: requestDigest(operation, request), Status: receiptDone, HTTP: http.StatusOK, Body: raw, CreatedAt: p.server.now()}
-			return stageJSON(tx, filepath.Join("receipts", filepath.Base(receiptPath(key))), receipt)
+			return p.stageOperationReceipt(tx, scope, operation, request, json.RawMessage(raw))
 		}
 		body, err := apply(extension)
 		if err != nil {
@@ -200,7 +198,7 @@ func (p *project) reviewWriteChecked(key, operation string, request any, tasks f
 	// Review publications are content-addressed by the board (plan and batch
 	// IDs, view hashes); a replay of an applied one is refused by the board as
 	// a duplicate, so the receipt is the only replay path.
-	return p.idempotentChecked(key, operation, request, check, run, func() (outcome, bool) { return outcome{}, false })
+	return p.idempotentChecked(scope, operation, request, check, run, func() (outcome, bool) { return outcome{}, false })
 }
 
 func (p *project) batchTasks(id string) func() ([]string, error) {
@@ -229,7 +227,7 @@ func (s *Server) reviewRoutes(mux *routeTable) {
 			}
 			return err
 		}
-		return p.reviewWriteChecked(r.Header.Get(api.HeaderIdempotencyKey), "review-plan", plan,
+		return p.reviewWriteChecked(scopeOf(r), "review-plan", plan,
 			func() ([]string, error) { return plan.TaskIDs, nil }, holderOf(r), check,
 			func(extension board.TransactionExtension) (any, error) {
 				return map[string]string{"plan_id": plan.PlanID}, board.CreateReviewPlanWithTransaction(p.board, plan, attest, extension)
@@ -237,7 +235,7 @@ func (s *Server) reviewRoutes(mux *routeTable) {
 	})
 	s.projectRoute(mux, "POST "+base+"/batches/{batch}/aggregate", func(p *project, r *http.Request) outcome {
 		id := r.PathValue("batch")
-		return p.reviewWrite(r.Header.Get(api.HeaderIdempotencyKey), "review-aggregate:"+id, id, p.batchTasks(id), holderOf(r),
+		return p.reviewWrite(scopeOf(r), "review-aggregate:"+id, id, p.batchTasks(id), holderOf(r),
 			func(extension board.TransactionExtension) (any, error) {
 				return board.PublishReviewDispositionWithTransaction(p.board, id, extension)
 			})
@@ -252,7 +250,7 @@ func (s *Server) reviewRoutes(mux *routeTable) {
 			return outcome{err: err}
 		}
 		req.Evidence.CWD = "project:" + p.info.ID
-		return p.reviewWrite(r.Header.Get(api.HeaderIdempotencyKey), "review-close:"+req.Request.BatchID, req, p.batchTasks(req.Request.BatchID), holderOf(r),
+		return p.reviewWrite(scopeOf(r), "review-close:"+req.Request.BatchID, req, p.batchTasks(req.Request.BatchID), holderOf(r),
 			func(extension board.TransactionExtension) (any, error) {
 				return board.CloseReviewBatchWithTransaction(p.board, req.Request, req.Evidence, extension)
 			})

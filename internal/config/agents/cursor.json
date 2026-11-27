@@ -37,10 +37,6 @@
   "exit_command": "/quit",
   "rename_command": "/rename {name}",
   "rename_delivery": {
-    "ready": {
-      "match": "regex:(?m)^\\s*→ (?:Plan, search, build anything|Add a follow-up)\\s*$",
-      "timeout_ms": 15000
-    },
     "complete": "Renamed chat to {name}"
   },
   "program_status": {"reports": false},
