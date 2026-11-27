@@ -57,6 +57,8 @@ Like `Authorize`, this hook runs outside the board lock and can read `TaskAccess
 2. Hook returns `(value, true)`. Use that value even if the client reports something else.
 3. Hook returns `(_, false)`. Refuse the attributed operation with HTTP 403 and code `attribution_required`. Never fall back to the client value.
 
+The reported caller is also part of the receipt scope of the idempotent writes, whether or not the operation records it: two callers that send the same `Idempotency-Key` never replay or refuse each other's answers, and a caller's retry of the same key and request gets its own first answer. Two kinds of receipt are not scoped by the caller: the liveness slots of task and group observations, which are kept per presented claim token, and a receipt a server before the receipt scopes wrote, which still answers a retry of the same operation and request whoever sends it. This needs the hook to report the same value for the same account on every request; a value that carries a session or request identity makes every retry a new request. See [Idempotency](distributed-server.md#idempotency).
+
 Task creation and issue import use this attribution to populate the immutable `SUBMITTER` header. The two decision write routes use the same attribution for `recorded_by` and also reject a blank attribution. The host can authorize human and Leader writes separately. See [Task decision records](decision-records.md). Task assignment is separate from attribution. `Authorize` receives its task scope and `AuthorizeAssignment` can check the proposed assignee.
 
 ### Confirmation authorization

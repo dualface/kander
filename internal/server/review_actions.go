@@ -41,7 +41,7 @@ func (s *Server) reviewActionRoutes(mux *routeTable) {
 		return result(http.StatusOK, state, err)
 	})
 	s.projectRoute(mux, "POST "+base+"/actions/{action}", func(p *project, r *http.Request) outcome {
-		key, action, h := r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("action"), holderOf(r)
+		scope, action, h := scopeOf(r), r.PathValue("action"), holderOf(r)
 		switch action {
 		case "resolution-facts":
 			var request board.ReviewPlanExtension
@@ -54,13 +54,13 @@ func (s *Server) reviewActionRoutes(mux *routeTable) {
 			if err := decode(r, &request); err != nil {
 				return outcome{err: err}
 			}
-			return p.resolveReview(key, request, h)
+			return p.resolveReview(scope, request, h)
 		case "extend-plan":
 			var request board.ReviewPlanExtension
 			if err := decode(r, &request); err != nil {
 				return outcome{err: err}
 			}
-			return p.reviewWrite(key, "review-extend-plan", request, func() ([]string, error) {
+			return p.reviewWrite(scope, "review-extend-plan", request, func() ([]string, error) {
 				plan, err := board.ReadReviewPlan(p.board, request.PlanID)
 				if err != nil {
 					return nil, err
@@ -75,7 +75,7 @@ func (s *Server) reviewActionRoutes(mux *routeTable) {
 			if err := decode(r, &request); err != nil {
 				return outcome{err: err}
 			}
-			return p.reviewWrite(key, "review-advance", request, func() ([]string, error) {
+			return p.reviewWrite(scope, "review-advance", request, func() ([]string, error) {
 				batch, err := board.ReadReviewBatch(p.board, request.BatchID)
 				if err != nil {
 					return nil, err
@@ -93,7 +93,7 @@ func (s *Server) reviewActionRoutes(mux *routeTable) {
 			if err := decode(r, &request); err != nil {
 				return outcome{err: err}
 			}
-			return p.reviewWrite(key, "review-assign", request, p.runTasks(request.RunID), h, func(extension board.TransactionExtension) (any, error) {
+			return p.reviewWrite(scope, "review-assign", request, p.runTasks(request.RunID), h, func(extension board.TransactionExtension) (any, error) {
 				return map[string]string{"run_id": request.RunID}, board.AssignReviewFindingsWithTransaction(p.board, request, extension)
 			})
 		case "disposition":
@@ -102,7 +102,7 @@ func (s *Server) reviewActionRoutes(mux *routeTable) {
 				return outcome{err: err}
 			}
 			// An author owns only the assigned card, not every card in a joint run.
-			return p.reviewWrite(key, "review-disposition", request, func() ([]string, error) { return []string{request.Disposition.TaskID}, nil }, h, func(extension board.TransactionExtension) (any, error) {
+			return p.reviewWrite(scope, "review-disposition", request, func() ([]string, error) { return []string{request.Disposition.TaskID}, nil }, h, func(extension board.TransactionExtension) (any, error) {
 				return map[string]string{"record_id": request.Disposition.RecordID}, board.SubmitReviewDispositionWithTransaction(p.board, request.Disposition, request.ExpectedRevision, extension)
 			})
 		case "interpret":
@@ -110,7 +110,7 @@ func (s *Server) reviewActionRoutes(mux *routeTable) {
 			if err := decode(r, &request); err != nil {
 				return outcome{err: err}
 			}
-			return p.reviewWrite(key, "review-interpret", request, p.runTasks(request.RunID), h, func(extension board.TransactionExtension) (any, error) {
+			return p.reviewWrite(scope, "review-interpret", request, p.runTasks(request.RunID), h, func(extension board.TransactionExtension) (any, error) {
 				return map[string]string{"run_id": request.RunID}, board.InterpretReviewWithTransaction(p.board, request, extension)
 			})
 		case "abandon":
@@ -121,7 +121,7 @@ func (s *Server) reviewActionRoutes(mux *routeTable) {
 			// No writer credential: the abandon is for a run whose writer can no longer
 			// publish it, so it is authorized like any review write: by the holders of the
 			// members, or by the group coordinator under its write authority.
-			return p.reviewWrite(key, "review-abandon", request, p.runTasks(request.RunID), h, func(extension board.TransactionExtension) (any, error) {
+			return p.reviewWrite(scope, "review-abandon", request, p.runTasks(request.RunID), h, func(extension board.TransactionExtension) (any, error) {
 				return map[string]string{"run_id": request.RunID}, board.AbandonReviewRunWithTransaction(p.board, request, extension)
 			})
 		case "map-legacy":
@@ -129,7 +129,7 @@ func (s *Server) reviewActionRoutes(mux *routeTable) {
 			if err := decode(r, &request); err != nil {
 				return outcome{err: err}
 			}
-			return p.reviewWrite(key, "review-map-legacy", request, p.runTasks(request.RunID), h, func(extension board.TransactionExtension) (any, error) {
+			return p.reviewWrite(scope, "review-map-legacy", request, p.runTasks(request.RunID), h, func(extension board.TransactionExtension) (any, error) {
 				return map[string]string{"run_id": request.RunID}, board.MapLegacyReviewWithTransaction(p.board, request, extension)
 			})
 		default:

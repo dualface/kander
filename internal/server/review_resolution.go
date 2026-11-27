@@ -33,8 +33,8 @@ func (p *project) resolutionFacts(input board.ReviewPlanExtension) outcome {
 	return result(http.StatusOK, facts, err)
 }
 
-func (p *project) resolveReview(key string, input api.ReviewResolution, h holder) outcome {
-	return p.reviewWrite(key, "review-resolve-batch", input, func() ([]string, error) { return p.resolutionTasks(input.Extension) }, h, func(extension board.TransactionExtension) (any, error) {
+func (p *project) resolveReview(scope receiptScope, input api.ReviewResolution, h holder) outcome {
+	return p.reviewWrite(scope, "review-resolve-batch", input, func() ([]string, error) { return p.resolutionTasks(input.Extension) }, h, func(extension board.TransactionExtension) (any, error) {
 		ids, err := p.resolutionTasks(input.Extension)
 		if err != nil {
 			return nil, err

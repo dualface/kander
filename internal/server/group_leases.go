@@ -44,7 +44,7 @@ func (p *project) groupView(ctx context.Context, group string) (api.GroupView, e
 	}
 	return value, err
 }
-func (p *project) claimGroup(ctx context.Context, key, group, client string, input api.GroupClaim, h holder) outcome {
+func (p *project) claimGroup(ctx context.Context, scope receiptScope, group, client string, input api.GroupClaim, h holder) outcome {
 	if !api.ValidIdentity(input.ExecutionID) || !api.ValidIdentity(client) || input.Request.GroupID != group {
 		return outcome{err: apiError(api.CodeInvalidRequest, "invalid coordinator execution identity")}
 	}
@@ -53,7 +53,7 @@ func (p *project) claimGroup(ctx context.Context, key, group, client string, inp
 	}
 	defer p.unlockBoard()
 	operation := "group-claim:" + group
-	out := p.idempotent(key, operation, input, func() outcome {
+	out := p.idempotent(scope, operation, input, func() outcome {
 		previous, found, err := p.readGroupClaim(group)
 		if err != nil {
 			return outcome{err: err}
@@ -100,7 +100,7 @@ func (p *project) claimGroup(ctx context.Context, key, group, client string, inp
 			if err := stageJSON(tx, groupClaimName(group), claim); err != nil {
 				return err
 			}
-			return p.stageOperationReceipt(tx, key, operation, input, api.GroupGrant{GroupID: group, Checkpoint: checkpoint, Claim: *p.groupClaimView(claim), RenewInterval: api.DurationOf(p.server.renew), TTL: api.DurationOf(p.server.ttl)})
+			return p.stageOperationReceipt(tx, scope, operation, input, api.GroupGrant{GroupID: group, Checkpoint: checkpoint, Claim: *p.groupClaimView(claim), RenewInterval: api.DurationOf(p.server.renew), TTL: api.DurationOf(p.server.ttl)})
 		}}
 		checkpoint, err := board.ClaimCoordinatorWithTransaction(ctx, p.board, request, extension)
 		if err != nil {

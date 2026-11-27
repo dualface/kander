@@ -36,8 +36,9 @@ func noCompaction(context.Context, string, board.CompactionOptions) (board.Compa
 	return board.CompactionReport{}, nil
 }
 
-// receiptFile is the path of a receipt key below a project directory.
-func receiptFile(root, key string) string { return filepath.Join(root, receiptPath(key)) }
+// receiptFile is the path of the legacy receipt of key below a project
+// directory; gc treats every receipt file alike.
+func receiptFile(root, key string) string { return filepath.Join(root, legacyReceiptPath(key)) }
 
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
@@ -55,7 +56,7 @@ func TestOfflineGCKeepsReceiptsWhileABoardTransactionWaitsForRecovery(t *testing
 	pending := receipt{Schema: receiptSchema, Key: key, Operation: "observation:20261101-a-task", Digest: "d", Status: receiptPending, CreatedAt: old}
 	done := pending
 	done.Status, done.HTTP, done.Body = receiptDone, http.StatusOK, json.RawMessage(`{}`)
-	if err := writeJSON(root, receiptPath(key), done); err != nil {
+	if err := writeJSON(root, legacyReceiptPath(key), done); err != nil {
 		t.Fatal(err)
 	}
 	before, _ := json.MarshalIndent(pending, "", "  ")
@@ -534,7 +535,7 @@ func TestOfflineGCSkipsAProjectWhoseImportWaitsForRecovery(t *testing.T) {
 	p, _ := importProject(t, s, target)
 	// A due receipt the board held before the import started.
 	key := "old-liveness"
-	if err := writeJSON(p.root, receiptPath(key), receipt{Key: key, Operation: "observation:20261101-a-task", Digest: "d", Status: receiptDone, CreatedAt: time.Now().UTC().Add(-48 * time.Hour)}); err != nil {
+	if err := writeJSON(p.root, legacyReceiptPath(key), receipt{Key: key, Operation: "observation:20261101-a-task", Digest: "d", Status: receiptDone, CreatedAt: time.Now().UTC().Add(-48 * time.Hour)}); err != nil {
 		t.Fatal(err)
 	}
 	s.importFault = func(step string) error {

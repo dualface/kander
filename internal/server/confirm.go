@@ -35,10 +35,10 @@ func confirmRequest(p *project, r *http.Request) outcome {
 		}
 		return outcome{err: apiError(api.CodeInvalidRequest, config.Text("board.confirmer_required"))}
 	}
-	return p.confirm(r.Header.Get(api.HeaderIdempotencyKey), id, req, actor)
+	return p.confirm(scopeOf(r), id, req, actor)
 }
 
-func (p *project) confirm(key, id string, req api.Confirm, actor string) outcome {
+func (p *project) confirm(scope receiptScope, id string, req api.Confirm, actor string) outcome {
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
@@ -51,7 +51,7 @@ func (p *project) confirm(key, id string, req api.Confirm, actor string) outcome
 	}{req, actor}
 	run := func() outcome {
 		var task api.Task
-		extension := p.taskTransaction(key, operation, request, id, nil, nil, false, func(_ *board.Transaction, staged *api.Task) error {
+		extension := p.taskTransaction(scope, operation, request, id, nil, nil, false, func(_ *board.Transaction, staged *api.Task) error {
 			task = *staged
 			return nil
 		})
@@ -70,7 +70,7 @@ func (p *project) confirm(key, id string, req api.Confirm, actor string) outcome
 		return result(http.StatusOK, task, err)
 	}
 	// A successful board transaction already contains the exact completed receipt.
-	return p.idempotent(key, operation, request, run, func() (outcome, bool) { return outcome{}, false })
+	return p.idempotent(scope, operation, request, run, func() (outcome, bool) { return outcome{}, false })
 }
 
 func (p *project) requirePublishedConfirmation(id string, body json.RawMessage) error {

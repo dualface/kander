@@ -308,15 +308,16 @@ func TestReceiptBindings(t *testing.T) {
 	}
 }
 
-// writeReceipt stores a receipt the way the server does.
+// writeReceipt stores a receipt at the legacy path of its key; gc treats
+// every receipt file alike.
 func writeReceipt(t *testing.T, s *Server, name string, r receipt) string {
 	t.Helper()
 	info, _ := s.projectByName(name)
 	p, _ := s.project(info.ID)
-	if err := writeJSON(p.root, receiptPath(r.Key), r); err != nil {
+	if err := writeJSON(p.root, legacyReceiptPath(r.Key), r); err != nil {
 		t.Fatal(err)
 	}
-	return filepath.Base(receiptPath(r.Key))
+	return filepath.Base(legacyReceiptPath(r.Key))
 }
 
 func TestServerGCExpiresReceipts(t *testing.T) {

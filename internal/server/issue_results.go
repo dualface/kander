@@ -82,13 +82,13 @@ func (p *project) issueResultView(ctx context.Context, query api.IssueResultQuer
 	}
 	return issueResultState(value, work)
 }
-func (p *project) saveIssueResult(ctx context.Context, key string, input api.IssueResultWrite) outcome {
+func (p *project) saveIssueResult(ctx context.Context, scope receiptScope, input api.IssueResultWrite) outcome {
 	if err := p.lockBoard(); err != nil {
 		return outcome{err: err}
 	}
 	defer p.unlockBoard()
 	operation := "issue-result-save:" + input.Query.SourceKey
-	return p.idempotent(key, operation, input, func() outcome {
+	return p.idempotent(scope, operation, input, func() outcome {
 		repository, number, work, err := p.issueResultInputs(input.Query)
 		if err != nil {
 			return outcome{err: err}
@@ -174,7 +174,7 @@ func (p *project) saveIssueResult(ctx context.Context, key string, input api.Iss
 			if err := stageJSON(tx, issueResultName(input.Query.SourceKey), next); err != nil {
 				return err
 			}
-			return p.stageOperationReceipt(tx, key, operation, input, resultState)
+			return p.stageOperationReceipt(tx, scope, operation, input, resultState)
 		}, board.TransactionExtension{After: guard})
 		if err == nil {
 			for _, id := range ids {
@@ -199,6 +199,6 @@ func (s *Server) issueResultRoutes(mux *routeTable) {
 		if err := decode(r, &input); err != nil {
 			return outcome{err: err}
 		}
-		return p.saveIssueResult(r.Context(), r.Header.Get(api.HeaderIdempotencyKey), input)
+		return p.saveIssueResult(r.Context(), scopeOf(r), input)
 	})
 }
