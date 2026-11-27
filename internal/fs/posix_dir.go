@@ -119,6 +119,17 @@ func RemoveEmptyDirectoryIfExists(root, path string) (bool, error) {
 
 // ListDirectory enumerates direct members through a pinned directory descriptor and rejects symlinks.
 func ListDirectory(root, path string) ([]DirEntry, error) {
+	return listDirectory(root, path, false)
+}
+
+// ListDirectoryWithLinks enumerates direct members like ListDirectory but reports a symlink member as KindLink
+// instead of failing the whole listing. It never follows or opens a link; the directory itself is still opened
+// without following links.
+func ListDirectoryWithLinks(root, path string) ([]DirEntry, error) {
+	return listDirectory(root, path, true)
+}
+
+func listDirectory(root, path string, reportLinks bool) ([]DirEntry, error) {
 	dir, err := openPosixDirectory(root, path)
 	if err != nil {
 		return nil, err
@@ -152,15 +163,17 @@ func ListDirectory(root, path string) ([]DirEntry, error) {
 			}
 			return nil, mapOpenErr("lstat", child, err)
 		}
-		if st.Mode&unix.S_IFMT == unix.S_IFLNK {
-			return nil, failClosed("readdir", child, "symlink is not allowed")
-		}
 		kind := KindOther
 		switch st.Mode & unix.S_IFMT {
 		case unix.S_IFREG:
 			kind = KindFile
 		case unix.S_IFDIR:
 			kind = KindDirectory
+		case unix.S_IFLNK:
+			if !reportLinks {
+				return nil, failClosed("readdir", child, "symlink is not allowed")
+			}
+			kind = KindLink
 		}
 		entries = append(entries, DirEntry{Name: name, Kind: kind})
 	}
