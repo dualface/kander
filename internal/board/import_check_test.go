@@ -161,7 +161,7 @@ func TestDefaultMissingSizeInsertsOneLineIntoDirectoryCardsOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []SizeDefault{{TaskID: ids[0], Document: "backlog/" + ids[0] + "/spec.md"}}; !reflect.DeepEqual(changed, want) {
+	if want := []SizeDefault{{TaskID: ids[0], Document: "backlog/" + ids[0] + "/spec.md", Original: original[ids[0]]}}; !reflect.DeepEqual(changed, want) {
 		t.Fatalf("changed %+v, want %+v", changed, want)
 	}
 	got, _ := os.ReadFile(spec(ids[0]))

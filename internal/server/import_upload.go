@@ -23,6 +23,10 @@ import (
 const (
 	maxImportUploads = 2
 	uploadPrefix     = "upload."
+	// uploadBoardDir is the directory below the upload staging that receives
+	// the board tree. The import renames it into the import staging, so the
+	// renamed directory is never the root the staging cleanup pins.
+	uploadBoardDir = "board"
 )
 
 func (s *Server) importUploadRoute(r *http.Request) outcome {
@@ -125,7 +129,12 @@ func (s *Server) handleImportUpload(w http.ResponseWriter, r *http.Request, name
 		}
 	})
 	defer cleanStage()
-	if err := receiveUpload(ctx, r.Body, stage.Path, m, receive, limits.idle); err != nil {
+	tree := filepath.Join(stage.Path, uploadBoardDir)
+	if err := fs.CreatePrivateDirectory(stage.Path, tree); err != nil {
+		s.log.Error("create board upload staging", "error", err)
+		return reject(errors.New("cannot create board upload staging"))
+	}
+	if err := receiveUpload(ctx, r.Body, tree, m, receive, limits.idle); err != nil {
 		return reject(err)
 	}
 	// The request is completely consumed before starting a response. This
@@ -135,12 +144,17 @@ func (s *Server) handleImportUpload(w http.ResponseWriter, r *http.Request, name
 	if err := checkImportRecordLayout(uploadPaths(m)); err != nil {
 		return reject(err)
 	}
-	if err := board.CheckRecoveredImportJournal(stage.Path); err != nil {
+	if err := board.CheckRecoveredImportJournal(tree); err != nil {
 		return reject(importRejected("uploaded board has invalid or unrecovered transaction history"))
+	}
+	src, err := manifestTreeScan(m)
+	if err != nil {
+		return reject(err)
 	}
 	// The archive is complete and owned by the server. Its import follows
 	// the rules of a local import: it is not bound by the receive deadline
-	// and stops only when the client goes away or the server shuts down.
+	// and stops only when the client goes away or the server shuts down
+	// before the received tree is moved into the import staging.
 	importCtx, finish := context.WithCancel(r.Context())
 	stopImportShutdown := context.AfterFunc(s.shutdown, finish)
 	defer func() {
@@ -151,7 +165,7 @@ func (s *Server) handleImportUpload(w http.ResponseWriter, r *http.Request, name
 		progress := newImportEmitter(report)
 		defer progress.stop()
 		progress.phase(api.ImportPhaseLock)
-		value, err := s.importPreparedSource(importCtx, m.ImportRequest, stage.Path, m.From, m.Snapshot, progress)
+		value, err := s.importPreparedSource(importCtx, m.ImportRequest, tree, m.From, &src, progress)
 		if err != nil {
 			// Log the original error first: the client conversion below
 			// drops the text of an unclassified failure.
@@ -160,7 +174,7 @@ func (s *Server) handleImportUpload(w http.ResponseWriter, r *http.Request, name
 		cleanStage()
 		value.Project.BoardPath = ""
 		if err != nil {
-			err = safeUploadImportError(err, s.data, stage.Path, m.From)
+			err = safeUploadImportError(err, s.data, tree, m.From)
 		}
 		return value, err
 	}
@@ -196,7 +210,8 @@ func uploadPaths(m api.ImportUploadManifest) []string {
 	return paths
 }
 
-// receiveUpload writes the file bodies into staging. While they arrive, a
+// receiveUpload writes the file bodies into staging, the directory the
+// import later moves into the import staging. While they arrive, a
 // stall longer than idle ends the request; after the last one, the client
 // scans its source again before the marker, so only the absolute deadline
 // applies to the marker and the end of the request.
@@ -245,8 +260,12 @@ func receiveUpload(ctx context.Context, body io.Reader, staging string, m api.Im
 	return nil
 }
 
+// receiveUploadFile creates each file once, with the inherited permissions
+// that copyImport gives a staged file: the file is published as it was
+// received. The private directories it is created in keep it private
+// until then.
 func receiveUploadFile(root string, body io.Reader, file api.ImportUploadFile, buf []byte) error {
-	f, err := fs.CreatePrivateRegularFile(root, filepath.Join(root, filepath.FromSlash(file.Path)))
+	f, err := fs.CreateInheritedRegularFile(root, filepath.Join(root, filepath.FromSlash(file.Path)))
 	if err != nil {
 		if errors.Is(err, os.ErrExist) {
 			return invalidUpload()
@@ -296,13 +315,19 @@ func (e *uploadReceiveError) As(target any) bool {
 	return false
 }
 
-func safeUploadImportError(err error, data, staging, source string) error {
+// safeUploadImportError hides the server paths of an import of the tree
+// received below the upload staging: received names the source, and the
+// staging and its project directory name the destination project.
+func safeUploadImportError(err error, data, received, source string) error {
 	e := *asAPIError(err)
+	stage := filepath.Dir(received)
+	project := filepath.Dir(stage)
 	// A target or registry diagnostic may contain a server-side path.
 	// Replace both raw and quoted spellings before returning anything.
 	e.Message = strings.NewReplacer(
-		quotedPath(staging), quotedPath(source), staging, source,
-		quotedPath(filepath.Dir(staging)), "<destination project>", filepath.Dir(staging), "<destination project>",
+		quotedPath(received), quotedPath(source), received, source,
+		quotedPath(stage), "<destination project>", stage, "<destination project>",
+		quotedPath(project), "<destination project>", project, "<destination project>",
 		quotedPath(data), "<server data>", data, "<server data>",
 	).Replace(e.Message)
 	return &e

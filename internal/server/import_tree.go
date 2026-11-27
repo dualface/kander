@@ -10,6 +10,7 @@ import (
 	"math"
 	"path/filepath"
 	"slices"
+	"sync/atomic"
 
 	"github.com/dualface/kander/v2/internal/fs"
 )
@@ -34,9 +35,16 @@ func scanTree(root string, count func(done, total int, bytes int64)) (treeScan, 
 	return scanImportTree(context.Background(), root, count, false)
 }
 
+// importScanObserver is a test hook: when set, it receives the root of every
+// tree scan, which scanTree and snapshotTree also run through scanImportTree.
+var importScanObserver atomic.Pointer[func(root string)]
+
 // scanImportTree is scanTree that observes ctx. With uploadPaths set, every
 // path must also be valid in an upload archive.
 func scanImportTree(ctx context.Context, root string, count func(done, total int, bytes int64), uploadPaths bool) (treeScan, error) {
+	if observe := importScanObserver.Load(); observe != nil {
+		(*observe)(root)
+	}
 	var files, dirs []string
 	var walk func(rel string) error
 	walk = func(rel string) error {

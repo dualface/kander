@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -87,7 +88,8 @@ func TestLargeUploadStagingIsRemovedAtEveryEnd(t *testing.T) {
 	t.Run("import canceled", func(t *testing.T) {
 		data := t.TempDir()
 		s, url, logs, _ := openLogged(t, data)
-		shutDownWhileCopying(s)
+		// An upload is moved, not copied: the move is its cancellation boundary.
+		shutDownAt(s, "received")
 		_, err := uploadTestBoard(t, url, api.ImportRequest{Project: "demo", From: source})
 		wantImportCanceled(t, err, importCancelShutdown)
 		assertUploadClean(t, data, "demo")
@@ -241,18 +243,18 @@ func TestUploadImportOutlastsTheReceiveDeadline(t *testing.T) {
 	limits := defaultUploadLimits()
 	limits.deadline = func(int64) time.Duration { return 300 * time.Millisecond }
 	url, _ := limitedUploads(t, s, limits)
-	fired := false
+	var fired atomic.Bool
 	s.importFault = func(step string) error {
-		if step == "copying" && !fired {
-			fired = true
+		// The last step of an upload import that observes cancellation.
+		if step == "received" && !fired.Swap(true) {
 			time.Sleep(time.Second)
 		}
 		return nil
 	}
 	peer, _ := client.New(url, "uploader")
 	archive := io.NopCloser(bytes.NewReader(uploadArchiveBytes(t, v1Board(t))))
-	if result, err := peer.UploadImport(t.Context(), "demo", archive, nil, func(api.ImportProgress) {}); err != nil || result.Tasks != 2 {
-		t.Fatalf("upload: %+v %v", result, err)
+	if result, err := peer.UploadImport(t.Context(), "demo", archive, nil, func(api.ImportProgress) {}); err != nil || result.Tasks != 2 || !fired.Load() {
+		t.Fatalf("upload: %+v %v (fired %v)", result, err, fired.Load())
 	}
 }
 

@@ -112,13 +112,16 @@ func (s *Server) importV1Board(ctx context.Context, req api.ImportRequest, repor
 	if err := s.importCheckpoint("recovered"); err != nil {
 		return api.ImportResult{}, err
 	}
-	return s.importPreparedSource(ctx, req, source, source, "", progress)
+	return s.importPreparedSource(ctx, req, source, source, nil, progress)
 }
 
 // importPreparedSource runs the same merge and publication for a recovered
 // local source or a fully verified, server-owned upload. An uploaded snapshot
 // is never recovered on this host and no network request can supply its path.
-func (s *Server) importPreparedSource(ctx context.Context, req api.ImportRequest, source, displaySource, expected string, progress *importEmitter) (result api.ImportResult, err error) {
+// upload is the scan of an upload taken from its manifest, nil for a local
+// source: the upload is not read again, and its received tree is moved into
+// the import staging instead of copied (moveUploadedImport).
+func (s *Server) importPreparedSource(ctx context.Context, req api.ImportRequest, source, displaySource string, upload *treeScan, progress *importEmitter) (result api.ImportResult, err error) {
 	if err := ctx.Err(); err != nil {
 		return result, s.classifyImportCancel(err, ctx, nil)
 	}
@@ -148,15 +151,19 @@ func (s *Server) importPreparedSource(ctx context.Context, req api.ImportRequest
 		return result, err
 	}
 	var pending importPublication
-	uploaded := expected != ""
+	uploaded := upload != nil
 	prepare := func() error {
-		progress.phase(api.ImportPhaseScan)
-		src, err := scanImportTree(ctx, source, progress.counter(api.ImportPhaseScan, 0), false)
-		if err != nil {
-			return err
-		}
-		if uploaded && src.digest != expected {
-			return invalidUpload()
+		var src treeScan
+		if uploaded {
+			src = *upload
+			progress.phaseCounts(api.ImportPhaseScan, len(src.files), len(src.files), src.bytes, src.bytes)
+		} else {
+			progress.phase(api.ImportPhaseScan)
+			scanned, err := scanImportTree(ctx, source, progress.counter(api.ImportPhaseScan, 0), false)
+			if err != nil {
+				return err
+			}
+			src = scanned
 		}
 		previous, err := p.readImportRecord(src.digest)
 		if err != nil {
@@ -226,25 +233,49 @@ func importWarnings(findings []board.ImportFinding) []api.ImportWarning {
 // tree except for the spec.md of the defaulted cards, which must be the source
 // text with the one inserted SIZE line.
 func verifyDefaultedTree(source string, src, staged treeScan, defaults []board.SizeDefault) error {
-	differs := importRejected("staged board differs from the source beyond the default SIZE lines; nothing was published")
+	return verifyDefaultedFiles(src, staged, defaults, func(d board.SizeDefault) ([]byte, error) {
+		return fs.ReadRegularFile(source, filepath.Join(source, filepath.FromSlash(d.Document)))
+	})
+}
+
+// verifyMovedDefaultedTree is verifyDefaultedTree for an upload moved into
+// the staging: the source text of a defaulted spec.md is the one
+// DefaultMissingSize read from the staging, which must still be the received
+// file the manifest describes.
+func verifyMovedDefaultedTree(src, staged treeScan, defaults []board.SizeDefault) error {
+	return verifyDefaultedFiles(src, staged, defaults, func(d board.SizeDefault) ([]byte, error) {
+		if sha256.Sum256([]byte(d.Original)) != src.sums[d.Document] {
+			return nil, defaultedTreeDiffers()
+		}
+		return []byte(d.Original), nil
+	})
+}
+
+func defaultedTreeDiffers() error {
+	return importRejected("staged board differs from the source beyond the default SIZE lines; nothing was published")
+}
+
+// verifyDefaultedFiles compares the defaulted spec.md files with the text
+// original returns for each.
+func verifyDefaultedFiles(src, staged treeScan, defaults []board.SizeDefault, original func(board.SizeDefault) ([]byte, error)) error {
 	if !slices.Equal(src.files, staged.files) {
-		return differs
+		return defaultedTreeDiffers()
 	}
-	defaulted := map[string]struct{}{}
+	defaulted := map[string]board.SizeDefault{}
 	for _, d := range defaults {
-		defaulted[d.Document] = struct{}{}
+		defaulted[d.Document] = d
 	}
 	for _, rel := range src.files {
 		want := src.sums[rel]
-		if _, ok := defaulted[rel]; ok {
-			data, err := fs.ReadRegularFile(source, filepath.Join(source, filepath.FromSlash(rel)))
+		if d, ok := defaulted[rel]; ok {
+			data, err := original(d)
 			if err != nil {
 				return err
 			}
 			want = sha256.Sum256([]byte(board.DefaultedSizeText(string(data))))
 		}
 		if staged.sums[rel] != want {
-			return differs
+			return defaultedTreeDiffers()
 		}
 	}
 	return nil
