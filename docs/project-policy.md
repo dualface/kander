@@ -131,6 +131,25 @@ On `policy_revision_stale` the client reads the policy again with the policy ref
 
 Claims, group claims, and batch-creating review requests carry the policy revision, so the protocol moved from 3 to 4 (`api.ProtocolVersion` and `api.MinProtocolVersion`). A protocol 3 client would send no revision and bypass the checks, and the server decodes requests strictly, so neither side accepts the other: see [Distributed server](distributed-server.md#protocol) for the rollout order and why a server cannot go back to protocol 3.
 
-## Later work
+## Propagation
 
-Long-running processes (TUI, worker, `kander subscribe`) do not yet refresh the policy on change; that is a separate task card of the same group.
+The server never pushes the policy. It only says that the policy changed, with the policy version and nothing else, and every client reads the policy itself through the policy refresh function. The version is an invalidation hint: a forged or repeated hint costs at most one extra read, and correctness rests on the enforcement above and the revision on every write. The signals:
+
+- **Change event.** Every successful `PUT .../policy` appends one `project_policy_changed` event with the new revision to the project event log after `policy.json` was replaced. A refused write appends none, and neither does a retry answered from its receipt or from the audit log. A failed append rotates the event log, so every subscriber reads `reset`.
+- **Event page.** Every `GET .../events` page carries `policy_epoch` and `policy_revision`, the policy version when it was answered (absent while the project has none). It is read after the events of the page, so it is never older than one of them. A client that continues from the cursor of a later board snapshot can skip a change event, but a later page still shows the new version.
+- **Lease renewal.** The answers of task, group, and integration lease renewals carry `policy_epoch` and `policy_revision` too.
+
+The clients:
+
+| Client | Reads the policy when | Longest delay |
+| --- | --- | --- |
+| Short-lived command | `remote.Open` registers the project | none: every command starts with the current policy |
+| TUI | an event page names a newer version or a change event above the known revision, or reads `reset` | one event long poll (25 s) |
+| `kander subscribe` | the same, before it writes `policy-change` | one event poll (the `--refresh` interval, at most 60 s) |
+| Background worker | a confirmed renewal names a version newer than the policy cache of its client home | one renewal interval (15 s by default) |
+
+The policy cache of an executing host therefore holds the new version after one renewal interval, or after the next command that opens the project, whichever comes first. An executing agent reads `kander config --json` again at every round, so the rule modules and review stages apply from its next round; a card or group already claimed keeps its [branch snapshot](#branch-snapshot).
+
+- **TUI.** See [TUI board refresh](tui-board-refresh.md#project-policy-refresh). Options shows the five policy values of the server, with `(project policy rN)` after each title, on both tabs. Saving them sends one `PUT` with the revision the panel loaded, or the revision of the last refresh before the first policy edit; a later refresh never moves it. The host values of the same save go to the files as before, and the policy values never do. `policy_revision_conflict` shows a notice, reads the policy again, and shows the server values without overwriting them. A refresh while policy edits are unsaved keeps the edits and shows that the policy changed on the server. While the project has no policy, Options edits the files as before and points at `kander policy init` beside each policy value.
+- **`kander subscribe`.** It reads the policy (which updates the cache) and then writes one `policy-change` line with the common fields and `policy_revision` when the version changed. It is a wake-up event. A reset reads the policy too. When the read fails, a change event still writes `policy-change` with the announced revision, and a remark goes to standard error. See `rules/snippets/commands/subscribe.md`.
+- **Worker.** The renewal loop records the version of each confirmed renewal; the work loop compares it with the policy cache and reads the policy of each project at most once per renewal, so a slow read never delays a renewal. A failed read is a `worker.log` warning and is tried again when the next renewal still names a newer version; leases, work, and credentials do not depend on it.
