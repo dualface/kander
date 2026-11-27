@@ -99,7 +99,7 @@ func TestTrimLogKeepsTheTailAndArchivesTheHead(t *testing.T) {
 	if got := gunzip(t, filepath.Join(dir, LogArchiveName)); !bytes.Equal(got, data[:cut]) {
 		t.Fatal("server.log.1.gz must hold exactly the head and replace the older generation")
 	}
-	for _, name := range []string{logArchiveTemp, logArchiveOld, logTailName, logTailTemp} {
+	for _, name := range []string{logArchiveTemp, logTailName, logTailTemp} {
 		if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
 			t.Fatalf("%s left behind: %v", name, err)
 		}
@@ -136,7 +136,8 @@ func TestTrimLogDryRunChangesNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := TrimLog(dir, 1024, true)
-	if err != nil || result.Bytes != expectedCut(data, 1024) {
+	joined := append(append([]byte{}, data...), "saved tail\n"...)
+	if err != nil || result.Bytes != expectedCut(joined, 1024) || result.Recovered != int64(len("saved tail\n")) {
 		t.Fatalf("dry run = %+v, %v", result, err)
 	}
 	if kept, _ := os.ReadFile(filepath.Join(dir, LogName)); !bytes.Equal(kept, data) {
@@ -214,9 +215,9 @@ func TestTrimLogRecoversAnInterruptedTail(t *testing.T) {
 	}
 }
 
-// An archive replacement that stops after the previous archive went aside,
-// or whose final rename fails, never loses the previous generation.
-func TestTrimLogKeepsThePreviousArchiveUntilTheNewOneIsInPlace(t *testing.T) {
+// The archive is replaced in one step: until the new one is complete and in
+// place, server.log.1.gz is the previous generation, readable as it was.
+func TestTrimLogReplacesTheArchiveAtomically(t *testing.T) {
 	data := logData(4000)
 	dir := logDir(t, data)
 	older := []byte("older generation")
@@ -225,7 +226,10 @@ func TestTrimLogKeepsThePreviousArchiveUntilTheNewOneIsInPlace(t *testing.T) {
 	}
 	stop := errors.New("interrupted")
 	logTrimStep = func(s string) error {
-		if s == "archive-aside" {
+		if s == "archive-written" {
+			if current, err := os.ReadFile(filepath.Join(dir, LogArchiveName)); err != nil || !bytes.Equal(current, older) {
+				t.Errorf("while the new archive is written the previous one must stay readable: %v", err)
+			}
 			return stop
 		}
 		return nil
@@ -235,42 +239,51 @@ func TestTrimLogKeepsThePreviousArchiveUntilTheNewOneIsInPlace(t *testing.T) {
 	if !errors.Is(err, stop) {
 		t.Fatalf("interrupt: %v", err)
 	}
-	if aside, err := os.ReadFile(filepath.Join(dir, logArchiveOld)); err != nil || !bytes.Equal(aside, older) {
-		t.Fatalf("the previous archive must wait aside: %v", err)
+	if current, err := os.ReadFile(filepath.Join(dir, LogArchiveName)); err != nil || !bytes.Equal(current, older) {
+		t.Fatalf("an interrupted replacement must leave the previous archive: %v", err)
 	}
 	if kept, _ := os.ReadFile(filepath.Join(dir, LogName)); !bytes.Equal(kept, data) {
 		t.Fatal("the log must not change before the archive is in place")
 	}
-	if _, err := TrimLog(dir, 1<<30, false); err != nil {
+	cut := expectedCut(data, 4096)
+	if _, err := TrimLog(dir, 4096, false); err != nil {
 		t.Fatal(err)
 	}
-	if back, err := os.ReadFile(filepath.Join(dir, LogArchiveName)); err != nil || !bytes.Equal(back, older) {
-		t.Fatalf("the next trim must put the previous archive back: %v", err)
+	if got := gunzip(t, filepath.Join(dir, LogArchiveName)); !bytes.Equal(got, data[:cut]) {
+		t.Fatal("the next trim must publish the new archive")
 	}
-	if _, err := os.Stat(filepath.Join(dir, logArchiveOld)); !os.IsNotExist(err) {
-		t.Fatalf("nothing may stay aside after recovery: %v", err)
-	}
+}
 
-	// The final rename fails: the temporary archive disappears after the
-	// previous one went aside, so the rename cannot complete.
-	logTrimStep = func(s string) error {
-		if s == "archive-aside" {
-			if err := os.Remove(filepath.Join(dir, logArchiveTemp)); err != nil {
-				return err
-			}
-		}
-		return nil
+// A plan counts a saved tail as appended to the log: when neither part alone
+// is larger than the limit but both together are, the plan shows the trim the
+// run then does.
+func TestTrimLogPlansOnTheLogWithItsSavedTail(t *testing.T) {
+	data := logData(4000)
+	dir := logDir(t, data)
+	half := int64(len(data) / 2)
+	for half > 0 && data[half-1] != '\n' {
+		half--
 	}
-	_, err = TrimLog(dir, 4096, false)
-	logTrimStep = nil
-	if err == nil {
-		t.Fatal("a failed archive rename must fail the trim")
+	if err := os.WriteFile(filepath.Join(dir, LogName), data[:half], 0o600); err != nil {
+		t.Fatal(err)
 	}
-	if back, err := os.ReadFile(filepath.Join(dir, LogArchiveName)); err != nil || !bytes.Equal(back, older) {
-		t.Fatalf("a failed rename must put the previous archive back: %v", err)
+	if err := os.WriteFile(filepath.Join(dir, logTailName), data[half:], 0o600); err != nil {
+		t.Fatal(err)
 	}
-	if kept, _ := os.ReadFile(filepath.Join(dir, LogName)); !bytes.Equal(kept, data) {
-		t.Fatal("a failed archive must leave the log alone")
+	keep := max(half, int64(len(data))-half) + 10
+	if keep >= int64(len(data)) {
+		t.Fatal("the test needs a limit below the joined size")
+	}
+	plan, err := TrimLog(dir, keep, true)
+	if err != nil || plan.Size != int64(len(data)) || plan.Recovered != int64(len(data))-half || plan.Bytes != expectedCut(data, keep) {
+		t.Fatalf("plan = %+v, %v; want size %d and bytes %d", plan, err, len(data), expectedCut(data, keep))
+	}
+	result, err := TrimLog(dir, keep, false)
+	if err != nil || result.Bytes != plan.Bytes || result.Size != plan.Size || result.Recovered != plan.Recovered {
+		t.Fatalf("run = %+v, %v; plan %+v", result, err, plan)
+	}
+	if kept, _ := os.ReadFile(filepath.Join(dir, LogName)); !bytes.Equal(kept, data[plan.Bytes:]) {
+		t.Fatal("the run must keep the planned tail")
 	}
 }
 
@@ -359,7 +372,7 @@ func TestTrimLogSerializesOverlappingTrims(t *testing.T) {
 	mu.Unlock()
 	close(release)
 	a, b := <-results, <-results
-	if !slices.Equal(during, []string{"archive", "tail"}) {
+	if !slices.Equal(during, []string{"archive-written", "archive", "tail"}) {
 		t.Fatalf("the second trim took a step while the first was inside its steps: %v", during)
 	}
 	cut := expectedCut(data, 4096)

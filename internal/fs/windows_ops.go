@@ -706,6 +706,72 @@ func CreateDirectoryWithTextFile(root, directory, filename, text string) error {
 	return nil
 }
 
+// ReplaceRegularFile renames the regular file source over target in one
+// atomic step under a protected root. Target may be missing; when it exists it
+// must be a regular file, never a link or a directory. Readers see either the
+// old or the new content at target, never neither.
+func ReplaceRegularFile(root, source, target string) error {
+	rootAbs, sourceAbs, sourceParts, err := relativeParts(root, source)
+	if err != nil {
+		return err
+	}
+	_, targetAbs, targetParts, err := relativeParts(root, target)
+	if err != nil {
+		return err
+	}
+	if len(sourceParts) == 0 || len(targetParts) == 0 {
+		return failClosed("replace", sourceAbs, "cannot replace the protected root")
+	}
+	_, srcParent, srcCleanup, err := openChain(rootAbs, filepath.Dir(sourceAbs), windows.FILE_READ_ATTRIBUTES, kindDirectory)
+	if err != nil {
+		return err
+	}
+	defer srcCleanup()
+	sourceHandle, err := tryOpenLeaf(srcParent, filepath.Base(sourceAbs), sourceAbs, windows.DELETE|windows.FILE_READ_ATTRIBUTES, kindFile, true, false)
+	if err != nil {
+		return err
+	}
+	if sourceHandle == 0 {
+		return notExistError("replace", sourceAbs, "protected path does not exist")
+	}
+	defer closeHandle(sourceHandle)
+	id, err := handleIdentity(sourceHandle, sourceAbs)
+	if err != nil {
+		return err
+	}
+	_, dstParent, dstCleanup, err := openChain(rootAbs, filepath.Dir(targetAbs), windows.FILE_TRAVERSE|windows.FILE_READ_ATTRIBUTES, kindDirectory)
+	if err != nil {
+		return err
+	}
+	defer dstCleanup()
+	existing, err := tryOpenLeaf(dstParent, filepath.Base(targetAbs), targetAbs, windows.FILE_READ_ATTRIBUTES, kindFile, true, true)
+	if err != nil {
+		return err
+	}
+	if existing != 0 {
+		closeHandle(existing)
+	}
+	if err := renameHandle(sourceHandle, dstParent, targetAbs, true); err != nil {
+		return err
+	}
+	moved, err := tryOpenLeaf(dstParent, filepath.Base(targetAbs), targetAbs, windows.FILE_READ_ATTRIBUTES, kindFile, true, true)
+	if err != nil {
+		return err
+	}
+	if moved == 0 {
+		return failClosed("replace", targetAbs, "replaced path is missing after move")
+	}
+	got, err := handleIdentity(moved, targetAbs)
+	closeHandle(moved)
+	if err != nil {
+		return err
+	}
+	if !id.equal(got) {
+		return failClosed("replace", targetAbs, "replaced path identity changed after move")
+	}
+	return nil
+}
+
 func Rename(root, source, target string) error {
 	rootAbs, sourceAbs, sourceParts, err := relativeParts(root, source)
 	if err != nil {

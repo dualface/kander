@@ -268,6 +268,52 @@ func CreateDirectoryWithTextFile(root, directory, filename, text string) error {
 	return nil
 }
 
+// ReplaceRegularFile renames the regular file source over target in one
+// atomic step under a protected root. Target may be missing; when it exists it
+// must be a regular file, never a link or a directory. Readers see either the
+// old or the new content at target, never neither.
+func ReplaceRegularFile(root, source, target string) error {
+	rootAbs, sourceAbs, sourceParts, err := relativeParts(root, source)
+	if err != nil {
+		return err
+	}
+	_, targetAbs, targetParts, err := relativeParts(root, target)
+	if err != nil {
+		return err
+	}
+	if len(sourceParts) < 2 || len(targetParts) < 2 {
+		return failClosed("replace", sourceAbs, "protected replacement must stay below state directories")
+	}
+	srcParent, err := openPosixParent(rootAbs, sourceAbs)
+	if err != nil {
+		return err
+	}
+	defer srcParent.close()
+	dstParent, err := openPosixParent(rootAbs, targetAbs)
+	if err != nil {
+		return err
+	}
+	defer dstParent.close()
+	var st unix.Stat_t
+	if err := unix.Fstatat(srcParent.parentFD, srcParent.name, &st, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+		return mapOpenErr("lstat", sourceAbs, err)
+	}
+	if st.Mode&unix.S_IFMT != unix.S_IFREG {
+		return failClosed("replace", sourceAbs, "replacement source is not a regular file")
+	}
+	if err := unix.Fstatat(dstParent.parentFD, dstParent.name, &st, unix.AT_SYMLINK_NOFOLLOW); err == nil {
+		if st.Mode&unix.S_IFMT != unix.S_IFREG {
+			return failClosed("replace", targetAbs, "replacement target is not a regular file")
+		}
+	} else if err != unix.ENOENT {
+		return mapOpenErr("lstat", targetAbs, err)
+	}
+	if err := unix.Renameat(srcParent.parentFD, srcParent.name, dstParent.parentFD, dstParent.name); err != nil {
+		return mapOpenErr("rename", targetAbs, err)
+	}
+	return nil
+}
+
 // Rename renames atomically under a protected root; the target must not exist. POSIX requires the entry to live under a state directory.
 func Rename(root, source, target string) error {
 	rootAbs, sourceAbs, sourceParts, err := relativeParts(root, source)
