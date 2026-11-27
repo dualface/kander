@@ -20,6 +20,8 @@ const herdrWindow = "herdr:w1:t9:w1:p9"
 
 // outsideProjects moves the process into a directory that belongs to no
 // project, as the worker's directory does, with the user environment kept out.
+// It runs before setupBoard, whose configuration save loads the terminal
+// definitions.
 func outsideProjects(t *testing.T) {
 	t.Helper()
 	isolateUserEnvironment(t)
@@ -82,8 +84,8 @@ func bareSessionAddress(dir string) worker.AgentAddress {
 }
 
 func TestResolveRequestExplainsABareSessionWithTheProjectOverlay(t *testing.T) {
-	root, fakeBin := setupBoard(t)
 	outsideProjects(t)
+	root, fakeBin := setupBoard(t)
 	calls := recordTerminalCalls(t, root, fakeBin)
 	_, err := resolveRequest(bareSessionAddress(noneSessionProject(t)))
 	requireReason(t, err, "notify.request_session_mode_none")
@@ -95,8 +97,8 @@ func TestResolveRequestExplainsABareSessionWithTheProjectOverlay(t *testing.T) {
 // A recorded directory that no longer exists never selects the overlay of a
 // directory above it.
 func TestResolveRequestIgnoresTheOverlayAboveAMissingDirectory(t *testing.T) {
-	_, _ = setupBoard(t)
 	outsideProjects(t)
+	_, _ = setupBoard(t)
 	missing := filepath.Join(noneSessionProject(t), "removed", "checkout")
 	_, err := resolveRequest(bareSessionAddress(missing))
 	requireReason(t, err, "notify.request_session_without_id")
@@ -105,8 +107,8 @@ func TestResolveRequestIgnoresTheOverlayAboveAMissingDirectory(t *testing.T) {
 // An invalid overlay fails the read of the definition: the scope configuration,
 // which records no session ID for codex here, is not read instead.
 func TestResolveRequestRefusesAnInvalidProjectOverlay(t *testing.T) {
-	_, _ = setupBoard(t)
 	outsideProjects(t)
+	_, _ = setupBoard(t)
 	cfg := config.DefaultConfig()
 	cfg.WelcomeComplete = true
 	cfg.Agents = map[string]config.AgentDefinition{"codex": {Session: &config.AgentSessionDefinition{Mode: "none"}}}
@@ -118,8 +120,8 @@ func TestResolveRequestRefusesAnInvalidProjectOverlay(t *testing.T) {
 }
 
 func TestResolveRequestKeepsTheOverlayOfEachProject(t *testing.T) {
-	_, _ = setupBoard(t)
 	outsideProjects(t)
+	_, _ = setupBoard(t)
 	none, plain := noneSessionProject(t), codexProject(t, map[string]any{"process_name": "codex"})
 	for range 2 {
 		_, err := resolveRequest(bareSessionAddress(none))
@@ -134,8 +136,8 @@ func TestResolveRequestKeepsTheOverlayOfEachProject(t *testing.T) {
 // runs it under the session marker of the card.
 func processNameProject(t *testing.T) string {
 	t.Helper()
-	_, _ = setupBoard(t)
 	outsideProjects(t)
+	_, _ = setupBoard(t)
 	t.Setenv("KANBAN_TMUX_CURRENT_COMMAND", "codex-project")
 	t.Setenv("KANBAN_TMUX_PANE_SESSION", "id-1")
 	return codexProject(t, map[string]any{"process_name": "codex-project"})

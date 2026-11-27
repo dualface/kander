@@ -48,12 +48,16 @@ func requireExecutionDir(t *testing.T, got, checkout string) {
 	}
 }
 
-// isolateExecutionDirTest keeps the user's Git configuration out of the
-// fixture repositories and reads the terminal definitions again after the
-// fixture moved HOME, and again for the next test.
+// isolateExecutionDirTest keeps the user's home, Git configuration and
+// terminal definitions out of the test before any fixture runs. The terminal
+// definitions are read again after the fixture moves HOME, and again for the
+// next test.
 func isolateExecutionDirTest(t *testing.T) {
 	t.Helper()
 	isolateTestGit(t)
+	t.Setenv("HOME", t.TempDir())
+	t.Chdir(t.TempDir())
+	terminal.ReloadDefinitions()
 	t.Cleanup(terminal.ReloadDefinitions)
 }
 

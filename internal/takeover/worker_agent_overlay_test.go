@@ -37,9 +37,9 @@ func isolateUserEnvironment(t *testing.T) {
 // names an exit command that the scope configuration does not have.
 func stopAddress(t *testing.T) (worker.AgentAddress, string) {
 	t.Helper()
-	root, _ := setupBoard(t)
 	isolateUserEnvironment(t)
 	t.Chdir(t.TempDir())
+	root, _ := setupBoard(t)
 	project := t.TempDir()
 	if out, err := exec.Command("git", "init", "-q", project).CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v %s", err, out)

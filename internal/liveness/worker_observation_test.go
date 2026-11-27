@@ -18,9 +18,8 @@ import (
 // pane p1 runs that process under the session marker id-1.
 func processNameProject(t *testing.T) string {
 	t.Helper()
-	useFakeBackends(t, &fakeAgentBackend{name: "proc", process: true, facts: map[string]terminal.PaneFacts{
-		"p1": {Command: "codex-project", Dead: "0", InMode: "0", SessionMarker: "id-1"},
-	}})
+	// The user environment is kept out before useFakeBackends saves the scope
+	// configuration, whose launcher check loads the terminal definitions.
 	global := filepath.Join(t.TempDir(), "gitconfig")
 	if err := os.WriteFile(global, nil, 0o600); err != nil {
 		t.Fatal(err)
@@ -28,6 +27,11 @@ func processNameProject(t *testing.T) string {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("GIT_CONFIG_GLOBAL", global)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	terminal.ReloadDefinitions()
+	t.Cleanup(terminal.ReloadDefinitions)
+	useFakeBackends(t, &fakeAgentBackend{name: "proc", process: true, facts: map[string]terminal.PaneFacts{
+		"p1": {Command: "codex-project", Dead: "0", InMode: "0", SessionMarker: "id-1"},
+	}})
 	project := t.TempDir()
 	if out, err := exec.Command("git", "init", "-q", project).CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v %s", err, out)
