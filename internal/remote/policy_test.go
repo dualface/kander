@@ -2,14 +2,18 @@ package remote
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -71,18 +75,30 @@ func TestRefreshPolicyWritesOnlyNewerVersions(t *testing.T) {
 	values := json.RawMessage(`{"git":{"branch_mode":"main-only"},"review_stages":{"PMQA":"auto","Security":"auto"},"rules":{},"agent_language":"en","issue":{"result_on_done":"auto"}}`)
 	for _, step := range []struct {
 		policy api.ProjectPolicy
-		stored bool
+		cached string
 	}{
-		{api.ProjectPolicy{Epoch: "e1", Revision: 2, Values: values}, true},
-		{api.ProjectPolicy{Epoch: "e1", Revision: 1, Values: values}, false},
-		{api.ProjectPolicy{Epoch: "e1", Revision: 3, Values: values}, true},
-		{api.ProjectPolicy{Epoch: "e2", Revision: 1, Values: values}, true},
+		{api.ProjectPolicy{Epoch: "e1", Revision: 2, Values: values}, "e1/2"},
+		{api.ProjectPolicy{Epoch: "e1", Revision: 1, Values: values}, "e1/2"},
+		{api.ProjectPolicy{Epoch: "e1", Revision: 3, Values: values}, "e1/3"},
+		{api.ProjectPolicy{Epoch: "e2", Revision: 1, Values: values}, "e2/1"},
 	} {
-		stored, err := RefreshPolicy(home, "http://127.0.0.1:1", "p-1", ObservePolicy(home, "http://127.0.0.1:1", "p-1"), step.policy)
-		if err != nil || stored != step.stored {
-			t.Fatalf("%+v: stored=%v err=%v", step.policy, stored, err)
+		cacheErr, err := RefreshPolicy(t.Context(), home, "http://127.0.0.1:1", "p-1", func() (*api.ProjectPolicy, error) { return &step.policy, nil })
+		if err != nil || cacheErr != nil {
+			t.Fatalf("%+v: %v %v", step.policy, cacheErr, err)
+		}
+		if got := cachedVersion(home, "http://127.0.0.1:1", "p-1"); got != step.cached {
+			t.Fatalf("after %+v the cache holds %s, want %s", step.policy, got, step.cached)
 		}
 	}
+}
+
+func cachedVersion(home, url, id string) string {
+	cache := config.ReadPolicyCache(home, url, id)
+	switch cache.Status {
+	case config.PolicyCacheSet, config.PolicyCacheUnset:
+		return cache.Snapshot.Epoch + "/" + strconv.FormatUint(cache.Snapshot.Revision, 10)
+	}
+	return "none"
 }
 
 // fakePolicyServer answers the project and policy routes from memory, for the forms that need a
@@ -356,7 +372,7 @@ func TestServerWithoutPoliciesIsUnsetForLaterReadsOfTheCommand(t *testing.T) {
 	client := newPolicyClient(t, url, func(cfg *config.Config) { cfg.AgentLanguage = "en" })
 	values := strings.Replace(newerPolicyValues, `"agent_language":"en"`, `"agent_language":"ja"`, 1)
 	id := api.ProjectID("golf")
-	if _, err := config.StorePolicy(client.home, url, id, config.ObservePolicyCache(client.home, url, id), config.PolicySnapshot{Epoch: "e1", Revision: 2, Values: json.RawMessage(values)}); err != nil {
+	if _, err := config.StorePolicy(client.home, url, id, config.PolicySnapshot{Epoch: "e1", Revision: 2, Values: json.RawMessage(values)}); err != nil {
 		t.Fatal(err)
 	}
 	if cfg, err := config.Load(false); err != nil || cfg.AgentLanguage != "ja" {
@@ -380,5 +396,122 @@ func TestServerWithoutPoliciesIsUnsetForLaterReadsOfTheCommand(t *testing.T) {
 	}
 	if code, _, errOut := runCommand(NewPolicyCommand, "show", "--json"); code != 1 || !strings.Contains(errOut, CodePolicyUnsupported) {
 		t.Fatalf("policy show: code=%d err=%q", code, errOut)
+	}
+}
+
+// policyStateServer stands in for the server: the policy it answers when a request reaches it.
+type policyStateServer struct {
+	mu     sync.Mutex
+	policy api.ProjectPolicy
+}
+
+func (s *policyStateServer) set(p api.ProjectPolicy) { s.mu.Lock(); s.policy = p; s.mu.Unlock() }
+func (s *policyStateServer) get() api.ProjectPolicy {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.policy
+}
+
+// slowRefresh starts a refresh whose request reads the server state at once and whose answer
+// arrives only when release closes. started closes when the request reached the server.
+func slowRefresh(t *testing.T, home string, server *policyStateServer, started, release chan struct{}) <-chan error {
+	done := make(chan error, 1)
+	go func() {
+		cacheErr, err := RefreshPolicy(context.Background(), home, "http://127.0.0.1:1", "p-1", func() (*api.ProjectPolicy, error) {
+			answer := server.get()
+			close(started)
+			<-release
+			return &answer, nil
+		})
+		done <- errors.Join(cacheErr, err)
+	}()
+	return done
+}
+
+// Refreshes of one cache key run one at a time, so a request that the server answered before an
+// initialization can never be stored after the answer of a later request: whichever refresh takes
+// the lock first, the cache ends at the initialized policy.
+func TestRefreshPolicyOrdersConcurrentRefreshesOfOneProject(t *testing.T) {
+	values := json.RawMessage(`{"git":{"branch_mode":"main-only"},"review_stages":{"PMQA":"auto","Security":"auto"},"rules":{},"agent_language":"en","issue":{"result_on_done":"auto"}}`)
+	initialized := api.ProjectPolicy{Epoch: "e1", Revision: 1, Values: values}
+	for _, firstIsOlder := range []bool{true, false} {
+		t.Run(map[bool]string{true: "the older answer is stored first", false: "the newer answer is stored first"}[firstIsOlder], func(t *testing.T) {
+			home := t.TempDir()
+			server := &policyStateServer{}
+			if !firstIsOlder {
+				server.set(initialized)
+			}
+			firstStarted, releaseFirst := make(chan struct{}), make(chan struct{})
+			first := slowRefresh(t, home, server, firstStarted, releaseFirst)
+			<-firstStarted
+			if firstIsOlder {
+				// The project is initialized after the first request was answered.
+				server.set(initialized)
+			}
+			secondStarted, releaseSecond := make(chan struct{}), make(chan struct{})
+			close(releaseSecond)
+			second := slowRefresh(t, home, server, secondStarted, releaseSecond)
+			select {
+			case <-secondStarted:
+				t.Fatal("a second request of the same project ran while the first refresh held the cache")
+			case <-time.After(200 * time.Millisecond):
+			}
+			close(releaseFirst)
+			for _, done := range []<-chan error{first, second} {
+				if err := <-done; err != nil {
+					t.Fatal(err)
+				}
+			}
+			if got := cachedVersion(home, "http://127.0.0.1:1", "p-1"); got != "e1/1" {
+				t.Fatalf("the cache holds %s, want the initialized e1/1", got)
+			}
+		})
+	}
+}
+
+// A project removed and imported again starts unset and then takes a new epoch: both answers
+// replace the cache.
+func TestRefreshPolicyFollowsAReimport(t *testing.T) {
+	home := t.TempDir()
+	values := json.RawMessage(`{"git":{"branch_mode":"main-only"},"review_stages":{"PMQA":"auto","Security":"auto"},"rules":{},"agent_language":"en","issue":{"result_on_done":"auto"}}`)
+	for _, step := range []struct {
+		policy api.ProjectPolicy
+		cached string
+	}{
+		{api.ProjectPolicy{Epoch: "e1", Revision: 3, Values: values}, "e1/3"},
+		{api.ProjectPolicy{}, "/0"},
+		{api.ProjectPolicy{Epoch: "e2", Revision: 1, Values: values}, "e2/1"},
+	} {
+		if cacheErr, err := RefreshPolicy(t.Context(), home, "http://127.0.0.1:1", "p-1", func() (*api.ProjectPolicy, error) { return &step.policy, nil }); err != nil || cacheErr != nil {
+			t.Fatal(cacheErr, err)
+		}
+		if got := cachedVersion(home, "http://127.0.0.1:1", "p-1"); got != step.cached {
+			t.Fatalf("after %+v the cache holds %s, want %s", step.policy, got, step.cached)
+		}
+	}
+}
+
+// When another process keeps the cache lock past the wait, the request still runs and its answer
+// applies to the command, but nothing is stored.
+func TestRefreshPolicyWithoutTheLockStoresNothing(t *testing.T) {
+	home := t.TempDir()
+	previous := policyLockWait
+	policyLockWait = 100 * time.Millisecond
+	t.Cleanup(func() { policyLockWait = previous })
+	held, err := config.BeginPolicyRefresh(t.Context(), home, "http://127.0.0.1:1", "p-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.End()
+	fetched := false
+	cacheErr, err := RefreshPolicy(t.Context(), home, "http://127.0.0.1:1", "p-1", func() (*api.ProjectPolicy, error) {
+		fetched = true
+		return &api.ProjectPolicy{}, nil
+	})
+	if err != nil || cacheErr == nil || !fetched {
+		t.Fatalf("fetched=%v cacheErr=%v err=%v", fetched, cacheErr, err)
+	}
+	if got := cachedVersion(home, "http://127.0.0.1:1", "p-1"); got != "none" {
+		t.Fatalf("the cache holds %s without the lock", got)
 	}
 }

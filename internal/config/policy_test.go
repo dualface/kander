@@ -183,8 +183,7 @@ func isolatePolicyClient(t *testing.T, scope map[string]any) (home, scopePath st
 
 func storePolicy(t *testing.T, home string, snapshot PolicySnapshot) bool {
 	t.Helper()
-	observed := ObservePolicyCache(home, "http://example.test:7878", ProjectIDForName("golf"))
-	stored, err := StorePolicy(home, "http://example.test:7878", ProjectIDForName("golf"), observed, snapshot)
+	stored, err := StorePolicy(home, "http://example.test:7878", ProjectIDForName("golf"), snapshot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -397,7 +396,7 @@ func TestPolicyCacheIsPrivateAtomicAndRefusesLinks(t *testing.T) {
 	if got := ReadPolicyCache(home, "http://example.test:7878", ProjectIDForName("golf")); got.Status != PolicyCacheInvalid {
 		t.Fatalf("a symlinked cache read as %v", got.Status)
 	}
-	if _, err := StorePolicy(home, "http://example.test:7878", ProjectIDForName("golf"), ObservePolicyCache(home, "http://example.test:7878", ProjectIDForName("golf")), policySnapshot(t, "e1", 2, validPolicyDocument())); err == nil {
+	if _, err := StorePolicy(home, "http://example.test:7878", ProjectIDForName("golf"), policySnapshot(t, "e1", 2, validPolicyDocument())); err == nil {
 		if info, lerr := os.Lstat(path); lerr == nil && info.Mode()&os.ModeSymlink != 0 {
 			t.Fatal("the store wrote through the symlink")
 		}
@@ -549,58 +548,5 @@ func TestValidatePolicyValuesNamesUnknownStageKeysOfAMixedSection(t *testing.T) 
 	problems := policyProblems(t, err)
 	if !slices.Equal(problems.Unknown, []string{"review_stages.future", "review_stages.large.future"}) || len(problems.Invalid) == 0 {
 		t.Fatalf("problems %+v", problems)
-	}
-}
-
-// An answer that was in flight while another process stored a policy never replaces it with an
-// unset record or another epoch; a same-epoch answer with a larger revision still does.
-func TestStorePolicyRefusesAStaleAnswerOfAConcurrentRefresh(t *testing.T) {
-	home, _ := isolatePolicyClient(t, nil)
-	const url = "http://example.test:7878"
-	id := ProjectIDForName("golf")
-	read := func() PolicyCache { return ReadPolicyCache(home, url, id) }
-	store := func(observed PolicyObservation, snapshot PolicySnapshot) bool {
-		t.Helper()
-		stored, err := StorePolicy(home, url, id, observed, snapshot)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return stored
-	}
-
-	// A asks before the first initialization, B after it; B's answer is stored first.
-	observedByA := ObservePolicyCache(home, url, id)
-	if !store(ObservePolicyCache(home, url, id), policySnapshot(t, "e1", 1, validPolicyDocument())) {
-		t.Fatal("B's answer was not stored")
-	}
-	if store(observedByA, PolicySnapshot{}) {
-		t.Fatal("A's older unset answer replaced the initialized policy")
-	}
-	if got := read(); got.Status != PolicyCacheSet || got.Snapshot.Revision != 1 {
-		t.Fatalf("cache %+v", got)
-	}
-
-	// An answer of another epoch that was in flight while a newer revision was stored loses too,
-	// while a same-epoch answer with a larger revision still wins.
-	observedByA = ObservePolicyCache(home, url, id)
-	if !store(ObservePolicyCache(home, url, id), policySnapshot(t, "e1", 2, validPolicyDocument())) {
-		t.Fatal("revision 2 was not stored")
-	}
-	if store(observedByA, policySnapshot(t, "e0", 7, validPolicyDocument())) {
-		t.Fatal("a stale answer of another epoch replaced the cache")
-	}
-	if !store(observedByA, policySnapshot(t, "e1", 3, validPolicyDocument())) {
-		t.Fatal("a same-epoch answer with a larger revision was refused")
-	}
-
-	// Nothing stored in between: a real unset transition and a new epoch apply.
-	if !store(ObservePolicyCache(home, url, id), PolicySnapshot{}) {
-		t.Fatal("a real unset transition was refused")
-	}
-	if !store(ObservePolicyCache(home, url, id), policySnapshot(t, "e2", 1, validPolicyDocument())) {
-		t.Fatal("the policy of a new epoch was refused")
-	}
-	if got := read(); got.Status != PolicyCacheSet || got.Snapshot.Epoch != "e2" {
-		t.Fatalf("cache %+v", got)
 	}
 }

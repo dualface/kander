@@ -73,7 +73,7 @@ func noticeCodes(notices []command.Notice) string {
 
 func TestConfigJSONShowsTheCachedProjectPolicy(t *testing.T) {
 	home := boundPolicyConfig(t, "golf")
-	if _, err := config.StorePolicy(home, "http://127.0.0.1:7878", config.ProjectIDForName("golf"), config.PolicyObservation{}, config.PolicySnapshot{
+	if _, err := config.StorePolicy(home, "http://127.0.0.1:7878", config.ProjectIDForName("golf"), config.PolicySnapshot{
 		Epoch: "e1", Revision: 4, Values: json.RawMessage(cachedPolicyValues), UpdatedAt: time.Now(), UpdatedBy: "dev",
 	}); err != nil {
 		t.Fatal(err)
@@ -135,7 +135,7 @@ func TestConfigJSONUnboundHasNoPolicyNotice(t *testing.T) {
 // report line.
 func TestDoctorJSONReportsPolicyOverridesAsNotices(t *testing.T) {
 	home := boundPolicyConfig(t, "golf")
-	if _, err := config.StorePolicy(home, "http://127.0.0.1:7878", config.ProjectIDForName("golf"), config.PolicyObservation{}, config.PolicySnapshot{
+	if _, err := config.StorePolicy(home, "http://127.0.0.1:7878", config.ProjectIDForName("golf"), config.PolicySnapshot{
 		Epoch: "e1", Revision: 2, Values: json.RawMessage(cachedPolicyValues),
 	}); err != nil {
 		t.Fatal(err)
@@ -181,7 +181,7 @@ func TestConfigJSONReportsUnsetAndInvalidCachesWithoutARequest(t *testing.T) {
 		notice string
 	}{
 		{"unset", func(home string) error {
-			_, err := config.StorePolicy(home, hs.URL, config.ProjectIDForName("golf"), config.PolicyObservation{}, config.PolicySnapshot{})
+			_, err := config.StorePolicy(home, hs.URL, config.ProjectIDForName("golf"), config.PolicySnapshot{})
 			return err
 		}, config.NoticePolicyUnset},
 		{"invalid", func(home string) error {

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -162,72 +163,78 @@ func decodePolicyCache(data []byte, serverURL, projectID string) (policyCacheRec
 	return record, nil
 }
 
-// PolicyObservation is what the cache of one project held when a refresh sent its request: the
-// digest of the cache file, or "" when there was none. StorePolicy compares it with the cache it
-// finds when the answer arrives.
-type PolicyObservation struct {
-	digest string
+// PolicyRefresh holds the lock of the policy cache of one project from before a request to the
+// server until its answer is stored, so the refreshes of one cache key run one at a time: a
+// request starts only after every earlier refresh stored its answer, and its answer, read from a
+// later state of the server, is the newest this key has seen. That orders answers of different
+// epochs and unset answers, which the policy version alone cannot.
+type PolicyRefresh struct {
+	home, serverURL, projectID string
+	file                       *fs.AppendFile
+	lock                       *fs.ExclusiveLock
 }
 
-// ObservePolicyCache records the state of the cache of one project before a refresh asks the
-// server. A refresh observes first and stores the answer with the observation.
-func ObservePolicyCache(home, serverURL, projectID string) PolicyObservation {
-	path := PolicyCachePath(home, serverURL, projectID)
-	data, found, err := readPolicyCacheFile(home, path)
-	if err != nil {
-		return PolicyObservation{digest: "unreadable"}
-	}
-	if !found {
-		return PolicyObservation{}
-	}
-	sum := sha256.Sum256(data)
-	return PolicyObservation{digest: hex.EncodeToString(sum[:])}
-}
-
-// StorePolicy is the cache half of the policy refresh. Under the lock of the cache file it
-// writes snapshot only when its policy version is newer than the cached one: another epoch, or
-// the same epoch with a larger revision. A cache that cannot be read counts as no cache. A
-// snapshot of revision 0 replaces a cached policy with the unset record, so the values of a
-// project that was removed and imported again are not kept.
-//
-// The version alone cannot order answers of different epochs or an unset answer, so observed
-// decides those: when the cache changed after the refresh observed it, another process stored
-// an answer while this request was in flight, and only a same-epoch answer with a larger
-// revision may still replace it. An older answer of a concurrent process therefore never
-// replaces a newer cache. It reports whether it wrote.
-func StorePolicy(home, serverURL, projectID string, observed PolicyObservation, snapshot PolicySnapshot) (bool, error) {
+// BeginPolicyRefresh takes the lock of the policy cache of one project, waiting until ctx ends.
+// The caller sends its request, stores the answer with Store, and calls End.
+func BeginPolicyRefresh(ctx context.Context, home, serverURL, projectID string) (*PolicyRefresh, error) {
 	path := PolicyCachePath(home, serverURL, projectID)
 	if err := ensurePrivateDir(home, filepath.Dir(path)); err != nil {
+		return nil, err
+	}
+	file, err := fs.OpenAppendFile(home, path+".lock")
+	if err != nil {
+		return nil, err
+	}
+	lock, err := fs.LockExclusiveContext(ctx, file.File)
+	if err != nil {
+		file.Close()
+		return nil, err
+	}
+	return &PolicyRefresh{home: home, serverURL: serverURL, projectID: projectID, file: file, lock: lock}, nil
+}
+
+// Store writes the answer of the request sent under this refresh. A cache that cannot be read
+// counts as no cache; an answer with the cached policy version changes nothing. A snapshot of
+// revision 0 replaces a cached policy with the unset record, so the values of a project that was
+// removed and imported again are not kept. It reports whether it wrote.
+func (r *PolicyRefresh) Store(snapshot PolicySnapshot) (bool, error) {
+	current := ReadPolicyCache(r.home, r.serverURL, r.projectID)
+	if current.Status == PolicyCacheSet || current.Status == PolicyCacheUnset {
+		if !policyVersionNewer(snapshot, current.Snapshot) {
+			return false, nil
+		}
+	}
+	record := policyCacheRecord{Schema: policyCacheSchema, Origin: PolicyOrigin(r.serverURL), ProjectID: r.projectID, PolicySnapshot: snapshot, StoredAt: time.Now().UTC()}
+	if record.Revision == 0 {
+		record.PolicySnapshot = PolicySnapshot{}
+	}
+	data, err := json.MarshalIndent(record, "", "  ")
+	if err != nil {
 		return false, err
 	}
-	var stored bool
-	err := withPrivateLock(home, path+".lock", func() error {
-		current := ReadPolicyCache(home, serverURL, projectID)
-		if current.Status == PolicyCacheSet || current.Status == PolicyCacheUnset {
-			if !policyVersionNewer(snapshot, current.Snapshot) {
-				return nil
-			}
-			changed := ObservePolicyCache(home, serverURL, projectID) != observed
-			sameEpochNewer := snapshot.Revision > 0 && snapshot.Epoch == current.Snapshot.Epoch
-			if changed && !sameEpochNewer {
-				return nil
-			}
-		}
-		record := policyCacheRecord{Schema: policyCacheSchema, Origin: PolicyOrigin(serverURL), ProjectID: projectID, PolicySnapshot: snapshot, StoredAt: time.Now().UTC()}
-		if record.Revision == 0 {
-			record.PolicySnapshot = PolicySnapshot{}
-		}
-		data, err := json.MarshalIndent(record, "", "  ")
-		if err != nil {
-			return err
-		}
-		if err := fs.WriteTextAtomic(home, path, string(data)+"\n", true); err != nil {
-			return err
-		}
-		stored = true
-		return nil
-	})
-	return stored, err
+	if err := fs.WriteTextAtomic(r.home, PolicyCachePath(r.home, r.serverURL, r.projectID), string(data)+"\n", true); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// End releases the lock of the refresh.
+func (r *PolicyRefresh) End() {
+	_ = r.lock.Unlock()
+	_ = r.file.Close()
+}
+
+// StorePolicy stores a snapshot that no request of this process produced under the lock, such as
+// a test fixture: it takes the lock, writes the snapshot when its policy version is newer than
+// the cached one (another epoch, or the same epoch with a larger revision), and releases it.
+// Answers of the server go through BeginPolicyRefresh instead.
+func StorePolicy(home, serverURL, projectID string, snapshot PolicySnapshot) (bool, error) {
+	refresh, err := BeginPolicyRefresh(context.Background(), home, serverURL, projectID)
+	if err != nil {
+		return false, err
+	}
+	defer refresh.End()
+	return refresh.Store(snapshot)
 }
 
 func policyVersionNewer(next, base PolicySnapshot) bool {
@@ -243,22 +250,6 @@ func ensurePrivateDir(home, dir string) error {
 		return err
 	}
 	return fs.EnsurePrivateDirectory(home, dir, true)
-}
-
-// withPrivateLock runs fn while it holds an exclusive lock on the private file
-// lockPath below home.
-func withPrivateLock(home, lockPath string, fn func() error) error {
-	file, err := fs.OpenAppendFile(home, lockPath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	lock, err := fs.LockExclusive(file.File)
-	if err != nil {
-		return err
-	}
-	defer lock.Unlock()
-	return fn()
 }
 
 // Sources of the project policy values of a loaded configuration.
