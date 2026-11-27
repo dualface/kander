@@ -57,33 +57,52 @@ func uploadServer(t *testing.T) (s *Server, url string, logs *syncBuffer, reques
 	}, done
 }
 
-func TestUploadRejectsAFileChangedAfterItWasReceived(t *testing.T) {
-	s, h := openTest(t, t.TempDir(), nil)
-	defer s.Close()
-	defer h.Close()
-	source := v1Board(t)
-	spec := idleCardDir(t, source) + "/spec.md"
+// changeReceived rewrites rel of the received tree at the "received"
+// checkpoint with other bytes of the same length.
+func changeReceived(s *Server, rel string) {
 	s.importFault = func(step string) error {
 		if step != "received" {
 			return nil
 		}
-		matches, _ := filepath.Glob(filepath.Join(projectRoot(s.data, "demo"), uploadPrefix+"*", uploadBoardDir, filepath.FromSlash(spec)))
+		matches, _ := filepath.Glob(filepath.Join(projectRoot(s.data, "demo"), uploadPrefix+"*", uploadBoardDir, filepath.FromSlash(rel)))
 		if len(matches) != 1 {
-			return errors.New("no received spec")
+			return errors.New("no received " + rel)
 		}
 		data, err := os.ReadFile(matches[0])
 		if err != nil {
 			return err
 		}
-		// The same length with other bytes: only the content digest differs.
-		return os.WriteFile(matches[0], bytes.ReplaceAll(data, []byte("Idle"), []byte("Edit")), 0o600)
+		changed := bytes.Clone(data)
+		changed[len(changed)-1] ^= 1
+		return os.WriteFile(matches[0], changed, 0o600)
 	}
-	_, err := uploadTestBoard(t, h.URL, api.ImportRequest{Project: "demo", From: source})
-	if !api.IsCode(err, api.CodeBoardRejected) {
-		t.Fatalf("a changed received file: %v", err)
+}
+
+func TestUploadRejectsAFileChangedAfterItWasReceived(t *testing.T) {
+	source, remnants, _ := remnantBoard(t)
+	var leftover string // The remnant whose bytes equal its target's.
+	for rel := range remnants {
+		if strings.HasPrefix(rel, ".kander/") {
+			leftover = rel
+		}
 	}
-	assertNothingPublished(t, s, "demo")
-	assertUploadSettled(t, s)
+	for name, rel := range map[string]string{
+		"a file the import keeps": idleCardDir(t, source) + "/spec.md",
+		"a leftover it removes":   leftover,
+	} {
+		t.Run(name, func(t *testing.T) {
+			s, h := openTest(t, t.TempDir(), nil)
+			defer s.Close()
+			defer h.Close()
+			changeReceived(s, rel)
+			_, err := uploadTestBoard(t, h.URL, api.ImportRequest{Project: "demo", From: source})
+			if !api.IsCode(err, api.CodeBoardRejected) {
+				t.Fatalf("a changed received file: %v", err)
+			}
+			assertNothingPublished(t, s, "demo")
+			assertUploadSettled(t, s)
+		})
+	}
 }
 
 func TestUploadFailuresAroundTheMoveLeaveNoStaging(t *testing.T) {
@@ -316,5 +335,58 @@ func TestUploadOfARecordedSnapshotMovesNothing(t *testing.T) {
 	if after := scanImportTestTree(t, p.board); after.digest != before.digest {
 		t.Fatal("a repeated upload changed the board")
 	}
+	assertUploadSettled(t, s)
+}
+
+func TestUploadCanceledWhileWaitingForTheProjectLockIsCanceled(t *testing.T) {
+	s, url, logs, requestContext, handled := uploadServer(t)
+	source := v1Board(t)
+	if _, err := uploadImport(t.Context(), url, api.ImportRequest{Project: "demo", From: source}, importRun{}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, handled, "the first upload")
+	p, err := s.project(mustProject(t, s, "demo"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The same snapshot again, while another import holds the project lock:
+	// the client leaves before the lock is free.
+	if err := p.lockBoard(); err != nil {
+		t.Fatal(err)
+	}
+	locked := true
+	defer func() {
+		if locked {
+			p.unlockBoard()
+		}
+	}()
+	var archive bytes.Buffer
+	if err := writeBoardUpload(t.Context(), &archive, api.ImportRequest{Project: "demo", From: source}, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	peer, _ := client.New(url, "uploader")
+	answered := make(chan error, 1)
+	go func() {
+		_, err := peer.UploadImport(ctx, "demo", io.NopCloser(&archive), nil, func(p api.ImportProgress) {
+			if p.Phase == api.ImportPhaseLock {
+				cancel()
+			}
+		})
+		answered <- err
+	}()
+	if err := waitFor(t, answered, "the canceled upload"); err == nil {
+		t.Fatal("a canceled upload answered")
+	}
+	select {
+	case <-requestContext().Done():
+	case <-time.After(10 * time.Second):
+		t.Fatal("the server never saw the disconnect")
+	}
+	locked = false
+	p.unlockBoard()
+	waitFor(t, handled, "the handler of the canceled upload")
+	logs.waitContains(t, `"msg":"board import canceled","project_name":"demo","reason":"`+importCancelCaller+`"`)
 	assertUploadSettled(t, s)
 }

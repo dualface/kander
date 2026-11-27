@@ -155,6 +155,12 @@ func (s *Server) importPreparedSource(ctx context.Context, req api.ImportRequest
 	prepare := func() error {
 		var src treeScan
 		if uploaded {
+			// A local source is scanned under ctx. An upload has no scan, so
+			// a cancellation that arrived while it waited for the project
+			// lock is observed here, before a recorded snapshot answers.
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			src = *upload
 			progress.phaseCounts(api.ImportPhaseScan, len(src.files), len(src.files), src.bytes, src.bytes)
 		} else {

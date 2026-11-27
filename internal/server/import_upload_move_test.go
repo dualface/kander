@@ -40,7 +40,16 @@ func (r *receivedTree) record(t *testing.T, data, project string) {
 		if err != nil || entry.IsDir() {
 			return err
 		}
-		info, err := os.Lstat(path)
+		// On Windows an os.Lstat result reads the file ID from its path only
+		// when os.SameFile asks, after the move; a handle reads it now.
+		f, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		info, err := f.Stat()
+		if closeErr := f.Close(); err == nil {
+			err = closeErr
+		}
 		if err != nil {
 			return err
 		}

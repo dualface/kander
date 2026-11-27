@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
+	"math"
 	"os"
 	"path"
 	"path/filepath"
@@ -77,6 +79,10 @@ func (p *project) moveUploadedImport(ctx context.Context, received, staging stri
 // cards and of records left behind), then every received directory the copy
 // would not create, deepest first. A merge removes before it copies: an
 // existing card has the same paths on both boards.
+//
+// Verify digests only the files that stay, so each removed file is compared
+// with the manifest before it goes: the plan, a remnant warning among them,
+// was made from those digests.
 func pruneMovedImport(staging string, plan importStage) error {
 	kept := make(map[string]bool, len(plan.sourceFiles))
 	for _, rel := range plan.sourceFiles {
@@ -86,7 +92,16 @@ func pruneMovedImport(staging string, plan importStage) error {
 		if kept[rel] {
 			continue
 		}
-		if _, err := fs.RemoveRegularFileIfExists(staging, filepath.Join(staging, filepath.FromSlash(rel))); err != nil {
+		path := filepath.Join(staging, filepath.FromSlash(rel))
+		hash := sha256.New()
+		_, err := fs.CopyRegularFile(hash, staging, path, math.MaxInt64)
+		if errors.Is(err, os.ErrNotExist) || err == nil && [sha256.Size]byte(hash.Sum(nil)) != plan.source.sums[rel] {
+			return importRejected("staged board differs from the source; nothing was published")
+		}
+		if err != nil {
+			return err
+		}
+		if _, err := fs.RemoveRegularFileIfExists(staging, path); err != nil {
 			return err
 		}
 	}
