@@ -39,19 +39,15 @@ func TestRemoteNativeResumeRenamesExactlyOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	command := "/rename {name}"
-	cfg.Agents["claude"] = config.AgentDefinition{
-		RenameCommand: &command,
-		RenameDelivery: &config.RenameDelivery{
-			Ready: &config.PromptReady{Match: "RENAME_READY", TimeoutMS: 1000},
-		},
-	}
-	t.Setenv("KANBAN_TMUX_PANE_OUTPUT", "RENAME_READY")
+	cfg.Agents["claude"] = config.AgentDefinition{RenameCommand: &command, RenameDelivery: &config.RenameDelivery{}}
+	t.Setenv("KANBAN_TMUX_PANE_OUTPUT", "agent screen")
+	launcher := registerStatusLauncher(t, "status-native-resume", "claude")
 	root, err := session.LocalDataRoot()
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("KANBAN_LAUNCH_CWD", filepath.Join(root, "worktrees", card.TaskID, "g1"))
-	if _, err := StartRemote("claude", "tmux", card.TaskID); err != nil {
+	if _, err := StartRemote("claude", launcher, card.TaskID); err != nil {
 		t.Fatal(err)
 	}
 	prior := markRemoteExecutorStopped(t, session, card.TaskID)
@@ -62,7 +58,7 @@ func TestRemoteNativeResumeRenamesExactlyOnce(t *testing.T) {
 		t.Fatalf("start delivered %q, want one %q", before, want)
 	}
 	t.Setenv("KANBAN_LAUNCH_CWD", filepath.Join(root, "worktrees", card.TaskID, "g2"))
-	if code := RunResumeRemote([]string{card.TaskID, "--message", "Continue this session"}); code != 0 {
+	if code := RunResumeRemote([]string{card.TaskID, "--message", "Continue this session", "--launcher", launcher}); code != 0 {
 		t.Fatalf("resume exit %d", code)
 	}
 	after := mustRead(t, log)

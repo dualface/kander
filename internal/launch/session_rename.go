@@ -19,20 +19,34 @@ type sessionRename struct {
 	config.RenameDelivery
 }
 
-func resolveSessionRename(agent config.AgentDefinition, prompt config.PromptDelivery) sessionRename {
+// resolveSessionRename returns the rename policy of an agent. Without a
+// rename_delivery object the startup dialogs of baseline pane delivery still
+// apply. A ready rule, of either object, plays no part in readiness: see
+// renameObservable.
+func resolveSessionRename(agent config.AgentDefinition, blocked []config.PromptBlocked) sessionRename {
 	if agent.RenameCommand == nil || *agent.RenameCommand == "" {
 		return sessionRename{}
 	}
-	policy := config.RenameDelivery{Ready: prompt.Ready, Blocked: prompt.Blocked}
+	policy := config.RenameDelivery{Blocked: blocked}
 	if agent.RenameDelivery != nil {
 		policy = *agent.RenameDelivery
 	}
 	return sessionRename{command: *agent.RenameCommand, RenameDelivery: policy}
 }
 
+// renameObservable reports whether the terminal tells when the agent can take
+// input: a program status report or the agent state of a recognized agent.
+// The composer text is no evidence, because an agent fills an empty composer
+// with placeholder suggestions that change from session to session. Without
+// such a terminal the session is not renamed and the prompt stays in argv.
+func (plan LaunchPlan) renameObservable() bool {
+	caps := plan.capabilities()
+	return caps.Container && (caps.ProgramStatus || caps.AgentIdentity)
+}
+
 func (plan LaunchPlan) renameMovesPrompt() bool {
 	return plan.rename.command != "" && !plan.rename.AfterArgv &&
-		plan.PromptDelivery.Mode != "pane" && plan.capabilities().Container
+		plan.PromptDelivery.Mode != "pane" && plan.renameObservable()
 }
 
 func (plan LaunchPlan) usesPanePrompt() bool {
@@ -62,7 +76,6 @@ func sessionName(label string) string {
 type renameProbe struct {
 	plan     LaunchPlan
 	outcome  LaunchOutcome
-	ready    func(string) bool
 	blocked  []blockedRule
 	complete *regexp.Regexp
 }
@@ -70,12 +83,6 @@ type renameProbe struct {
 func newRenameProbe(plan LaunchPlan, outcome LaunchOutcome, name string) (renameProbe, error) {
 	p := renameProbe{plan: plan, outcome: outcome}
 	var err error
-	if plan.rename.Ready != nil {
-		p.ready, err = compileDeliveryMatch(plan.rename.Ready.Match)
-		if err != nil {
-			return p, err
-		}
-	}
 	p.blocked, err = compileBlockedRules(plan.rename.Blocked)
 	if err != nil {
 		return p, err
@@ -92,6 +99,10 @@ func newRenameProbe(plan LaunchPlan, outcome LaunchOutcome, name string) (rename
 }
 
 func renameAgentSession(plan LaunchPlan, outcome LaunchOutcome, label string) error {
+	if !plan.renameObservable() {
+		plan.warn(t("launch.rename_no_status"))
+		return nil
+	}
 	name := sessionName(label)
 	probe, err := newRenameProbe(plan, outcome, name)
 	var before string
@@ -133,13 +144,7 @@ func renameAgentSession(plan LaunchPlan, outcome LaunchOutcome, label string) er
 }
 
 func (p renameProbe) waitReady(waitBlocked bool, clean func(string) bool) (string, error) {
-	timeout := terminal.DefaultReadyTimeout
-	if ready := p.plan.rename.Ready; ready != nil {
-		timeout = time.Duration(ready.TimeoutMS) * time.Millisecond
-	} else if !p.plan.capabilities().ProgramStatus {
-		return "", launchError("launch.pane_ready_timeout", "")
-	}
-	timeout = p.plan.launchTimeout(timeout)
+	timeout := p.plan.launchTimeout(terminal.DefaultReadyTimeout)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	deadline := nowFn().Add(timeout)
@@ -360,17 +365,21 @@ func (p renameProbe) observe(ctx context.Context) (view string, ready bool, bloc
 			return output, false, rule.reason, true
 		}
 	}
-	if p.ready != nil && !p.ready(output) {
-		return output, false, "", true
+	facts, err := backend.PaneFacts(ctx, conn, p.outcome.Pane)
+	ready = err == nil && !facts.Gone && p.plan.reportsRenamedAgent(facts) &&
+		(facts.AgentStatus == "idle" || facts.AgentStatus == "done")
+	return output, ready, "", true
+}
+
+// reportsRenamedAgent reports whether the pane names the agent of this
+// launch: by the OSC 7501 app on a program status terminal, otherwise by the
+// agent name the terminal recognized, which for a custom agent name is its
+// dialect.
+func (plan LaunchPlan) reportsRenamedAgent(facts terminal.PaneFacts) bool {
+	if plan.capabilities().ProgramStatus {
+		return plan.programStatusApp != "" && facts.AgentApp == plan.programStatusApp
 	}
-	if backend.Capabilities().ProgramStatus {
-		facts, err := backend.PaneFacts(ctx, conn, p.outcome.Pane)
-		ready = err == nil && !facts.Gone && p.plan.programStatusApp != "" &&
-			facts.AgentApp == p.plan.programStatusApp &&
-			(facts.AgentStatus == "idle" || facts.AgentStatus == "done")
-		return output, ready, "", true
-	}
-	return output, p.ready != nil, "", true
+	return facts.Agent != "" && (facts.Agent == plan.agent || facts.Agent == plan.agentDialect)
 }
 
 func pauseRename(ctx context.Context, deadline time.Time) bool {

@@ -79,14 +79,18 @@ letters (L*), combining marks (M*) and decimal digits (Nd), plus `-`, `_` and
 Everything else becomes `-`. Repeated hyphens collapse and leading and trailing
 hyphens are removed. This does not change the terminal label itself.
 
-`rename_delivery` can describe the interactive composer separately from
-`prompt_delivery`. It uses the same `ready` and `blocked` structures and
-supports literal matches or the `regex:` prefix. Omitting the object inherits
-the dialect's object, or reuses the baseline pane delivery rules if the
-dialect has none. Its optional `complete` screen match can also contain
-`{name}` (escaped as literal text inside a regular expression). Without a
-completion match, Kander looks for the ready composer again after a short
-pause without a new rename draft. Screen matches see the original backend
+`rename_delivery` describes the screens around the rename command separately
+from `prompt_delivery`. Its `blocked` entries use the structure of
+`prompt_delivery` and support literal matches or the `regex:` prefix.
+Omitting the object inherits the dialect's object, or reuses the baseline
+`blocked` rules if the dialect has none. Readiness never comes from the
+screen: it is the idle or done state the terminal reports for the agent (see
+[launch and delivery](launch-and-delivery.md#interactive-session-naming)). A
+`ready` object is still accepted and validated so older definitions load, but
+neither its `match` nor its `timeout_ms` is used. The optional `complete`
+screen match can contain `{name}` (escaped as literal text inside a regular
+expression). Without a completion match, Kander checks again after a short
+pause that the agent is ready and no new rename draft is on the screen. Screen matches see the original backend
 output, including terminal line endings. After successful delivery, Kander can
 exclude one command echo next to a fresh acknowledgement from the draft
 check. An acknowledgement that stays in place cannot hide an adjacent draft.
@@ -101,9 +105,9 @@ draft.
 initial prompt argument. Use it only for a client verified to handle the
 rename command locally without interfering with that first prompt.
 Keep the default when the client must be renamed while idle, before it
-receives its first prompt. Match the available composer in `ready.match`
-for launchers without OSC 7501 status. Supply `blocked` matches for startup
-dialogs that may appear.
+receives its first prompt. On a launcher that reports no agent state the
+session is not renamed and the prompt stays in argv. Supply `blocked`
+matches for startup dialogs that may appear.
 
 These are trusted CLI declarations. Verify the command and readiness against
 the actual CLI version before enabling renaming for an agent. In particular,

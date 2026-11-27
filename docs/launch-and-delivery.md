@@ -65,23 +65,32 @@ and uses the backend's pane text operation, not a shell command or a startup
 `--name` argument. The [agent definition](custom-agents.md#interactive-session-names)
 describes the filter and matching rules.
 
-For an agent that must be idle for renaming, a container launch leaves the
-initial prompt out of argv and waits for the interactive composer. A matching
-startup dialog takes precedence over readiness, even on a program-status
-launcher. Kander types nothing while the dialog remains. If it clears and the
-composer becomes ready, Kander sends the rename command, checks for the
-configured acknowledgement or the ready composer with no pending rename
-draft, then sends the prompt. If the startup budget expires, Kander types
-nothing and fails with `launch.pane_ready_blocked` for a detected dialog or
-`launch.pane_ready_timeout` otherwise. These failures use the pane-prompt
-rollback path and do not publish `WINDOW` before the prompt.
+Renaming needs a terminal that reports when the agent can take input: a
+program-status launcher (herdr-core), where the pane reports the app the agent
+declares, or an agent-identity launcher (herdr, luvus), where the terminal
+recognizes the agent by its name or by the name of its dialect. The agent is
+ready when that pane reports the agent idle or done. The composer text is
+never read for readiness: agents fill an empty composer with placeholder
+suggestions that change from session to session. On a container launcher
+that reports neither (tmux, tmux-session, dsh), Kander keeps the prompt in
+argv, types nothing, and warns once with `launch.rename_no_status`.
+
+For an agent that must be idle for renaming, a launch on such a terminal
+leaves the initial prompt out of argv and waits for the ready state. A
+matching startup dialog takes precedence over readiness. Kander types nothing
+while the dialog remains. If it clears and the agent is ready, Kander sends
+the rename command, checks for the configured acknowledgement or a ready
+agent with no pending rename draft on the screen, then sends the prompt. The
+wait lasts 15 seconds, or 120 seconds with `extended_launch_timeouts`. If it
+expires, Kander types nothing and fails with `launch.pane_ready_blocked` for a
+detected dialog or `launch.pane_ready_timeout` otherwise. These failures use
+the pane-prompt rollback path and do not publish `WINDOW` before the prompt.
 
 A definition with `rename_delivery.after_argv` keeps the prompt in argv. It
 uses the same readiness observations but skips renaming with one warning if
 the pane is blocked or does not become ready. Otherwise it sends the rename
-command without resending the prompt. Program-status launchers require a
-matching app and idle or done status in either policy, as well as any
-configured screen match. A working status alone is not input readiness.
+command without resending the prompt. A working status alone is not input
+readiness in either policy.
 
 An unsuccessful rename or a missing acknowledgement after three seconds
 warns and leaves an already delivered argv prompt alone. For a pending pane

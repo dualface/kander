@@ -25,10 +25,13 @@ func (c *embeddedRenameCommand) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// RenameDelivery describes when an interactive client can accept its rename
+// RenameDelivery describes the screens around an interactive client's rename
 // command. It is separate from baseline prompt delivery so that disabling
 // rename restores the original launch policy without changing any arguments.
 type RenameDelivery struct {
+	// Ready is still validated so older definitions keep loading, but no
+	// launch reads it: readiness for a rename comes from the agent state the
+	// terminal reports, never from composer text.
 	Ready     *PromptReady    `json:"ready,omitempty"`
 	Blocked   []PromptBlocked `json:"blocked,omitempty"`
 	Complete  string          `json:"complete,omitempty"`

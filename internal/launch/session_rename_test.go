@@ -31,6 +31,7 @@ type renameTestBackend struct {
 	terminal.Backend
 	name          string
 	programStatus bool
+	agentIdentity bool
 	screens       []string
 	reads         int
 	facts         terminal.PaneFacts
@@ -48,7 +49,7 @@ func (b *renameTestBackend) ParseAddress(string) (terminal.Address, bool) {
 	return terminal.Address{}, false
 }
 func (b *renameTestBackend) Capabilities() terminal.Capabilities {
-	return terminal.Capabilities{Container: true, ProgramStatus: b.programStatus}
+	return terminal.Capabilities{Container: true, ProgramStatus: b.programStatus, AgentIdentity: b.agentIdentity}
 }
 func (b *renameTestBackend) CreateContainer(terminal.Conn, terminal.Target, string, string) (terminal.Address, error) {
 	return terminal.Address{Container: "window", Pane: "pane"}, nil
@@ -78,12 +79,21 @@ func (b *renameTestBackend) DeliverText(_ context.Context, _ terminal.Conn, _ st
 	return nil
 }
 
+// Terminals of TestRenameLaunchDelivery: the default reports program status,
+// identityTerminal reports a recognized agent, and plainTerminal reports
+// neither.
+const (
+	identityTerminal = "identity"
+	plainTerminal    = "plain"
+)
+
 func TestRenameLaunchDelivery(t *testing.T) {
 	resetLang(t)
 	const label = "kb-中文 @/Name_3.0"
 	const rename = "/rename kb-中文-Name_3.0"
 	const acknowledgement = "renamed kb-中文-Name_3.0"
 	const prompt = "task instruction"
+	const suggestion = "❯\u00a0Try \"fix lint errors\""
 	const history = "❯ " + rename + "\n" + acknowledgement + "\nready"
 	const beforeFixedScroll = "first\nsecond\nthird\nretained heading\nretained body\n" + history
 	const beforeFixedScrollWithDrop = acknowledgement + "\nsecond\nthird\nretained heading\nretained body\n" + history
@@ -93,10 +103,11 @@ func TestRenameLaunchDelivery(t *testing.T) {
 		command       string
 		mode          string
 		afterArgv     bool
-		status        bool
+		terminal      string
+		paneAgent     string
+		dialect       string
 		busy          bool
 		noComplete    bool
-		readyMatch    string
 		completeMatch string
 		screens       []string
 		sendErr       error
@@ -108,7 +119,14 @@ func TestRenameLaunchDelivery(t *testing.T) {
 		{name: "no-rename-argv", mode: "argv"},
 		{name: "no-rename-pane", mode: "pane", screens: []string{"ready"}, wantSends: []string{prompt}},
 		{name: "ready", command: "/rename {name}", screens: []string{"ready", "ready\n❯ " + rename + "\n" + acknowledgement}, wantSends: []string{rename, prompt}},
-		{name: "ready-rule-keeps-trailing-newline", command: "/rename {name}", readyMatch: `regex:(?m)^ready\r?\n\z`, screens: []string{"ready\n", acknowledgement + "\nready\n"}, wantSends: []string{rename, prompt}},
+		{name: "composer-suggestion-is-not-a-draft", command: "/rename {name}", screens: []string{suggestion, suggestion + "\n" + acknowledgement}, wantSends: []string{rename, prompt}},
+		{name: "working-status-timeout", command: "/rename {name}", busy: true, screens: []string{suggestion}, wantCode: "launch.pane_ready_timeout"},
+		{name: "recognized-agent", command: "/rename {name}", terminal: identityTerminal, screens: []string{suggestion, suggestion + "\n" + acknowledgement}, wantSends: []string{rename, prompt}},
+		{name: "recognized-dialect", command: "/rename {name}", terminal: identityTerminal, paneAgent: "builtin", dialect: "builtin", screens: []string{suggestion, suggestion + "\n" + acknowledgement}, wantSends: []string{rename, prompt}},
+		{name: "recognized-other-agent-timeout", command: "/rename {name}", terminal: identityTerminal, paneAgent: "other", screens: []string{suggestion}, wantCode: "launch.pane_ready_timeout"},
+		{name: "recognized-agent-working-timeout", command: "/rename {name}", terminal: identityTerminal, busy: true, screens: []string{suggestion}, wantCode: "launch.pane_ready_timeout"},
+		{name: "no-agent-status-keeps-argv", command: "/rename {name}", terminal: plainTerminal, screens: []string{suggestion}, wantWarning: "launch.rename_no_status"},
+		{name: "no-agent-status-pane-prompt", command: "/rename {name}", mode: "pane", terminal: plainTerminal, screens: []string{"ready"}, wantSends: []string{prompt}, wantWarning: "launch.rename_no_status"},
 		{name: "completion-rule-with-leading-line-break", command: "/rename {name}", completeMatch: `regex:(?:^|\r?\n)renamed {name}(?:\r?\n|$)`, screens: []string{"ready", "❯ " + rename + "\r\n" + acknowledgement + "\r\nready"}, wantSends: []string{rename, prompt}},
 		{name: "unchanged-help-is-not-a-draft", command: "/rename {name}", noComplete: true, screens: []string{"Help: /rename <title>\nready", "Help: /rename <title>\nready\nstatus updated"}, wantSends: []string{rename, prompt}},
 		{name: "same-name-new-acknowledgement", command: "/rename {name}", screens: []string{"❯ " + rename + "\n" + acknowledgement + "\nready", "❯ " + rename + "\n" + acknowledgement + "\n❯ " + rename + "\n" + acknowledgement + "\nready"}, wantSends: []string{rename, prompt}},
@@ -121,9 +139,8 @@ func TestRenameLaunchDelivery(t *testing.T) {
 		{name: "same-name-stale-acknowledgement-with-draft", command: "/rename {name}", screens: []string{acknowledgement + "\nready", acknowledgement + "\nready\n❯ " + rename}, wantSends: []string{rename}, wantCode: "launch.pane_ready_timeout", wantWarning: "launch.rename_unconfirmed"},
 		{name: "scrolled-echo-is-not-proof-of-a-clean-composer", command: "/rename {name}", screens: []string{"❯ " + rename + "\n" + acknowledgement + "\nready", acknowledgement + "\nready\n❯ " + rename}, wantSends: []string{rename}, wantCode: "launch.pane_ready_timeout", wantWarning: "launch.rename_unconfirmed"},
 		{name: "fresh-acknowledgement-with-another-draft", command: "/rename {name}", screens: []string{"ready", "❯ " + rename + "\n" + acknowledgement + "\nready\n❯ " + rename}, wantSends: []string{rename}, wantCode: "launch.pane_ready_timeout", wantWarning: "launch.rename_unconfirmed"},
-		{name: "dialog-clears-even-with-status", command: "/rename {name}", status: true, screens: []string{"ready\ntrust", "ready\ntrust", "ready", "ready\nrenamed kb-中文-Name_3.0"}, wantSends: []string{rename, prompt}, firstReadAt: 3},
-		{name: "dialog-timeout", command: "/rename {name}", screens: []string{"ready\ntrust"}, wantCode: "launch.pane_ready_blocked"},
-		{name: "unknown-readiness-timeout", command: "/rename {name}", screens: []string{"starting"}, wantCode: "launch.pane_ready_timeout"},
+		{name: "dialog-clears", command: "/rename {name}", screens: []string{"ready\ntrust", "ready\ntrust", "ready", "ready\nrenamed kb-中文-Name_3.0"}, wantSends: []string{rename, prompt}, firstReadAt: 3},
+		{name: "dialog-timeout-while-idle", command: "/rename {name}", screens: []string{"ready\ntrust"}, wantCode: "launch.pane_ready_blocked"},
 		{name: "send-failure", command: "/rename {name}", screens: []string{"ready"}, sendErr: errors.New("send failed"), wantSends: []string{rename, prompt}, wantWarning: "launch.rename_unconfirmed"},
 		{name: "enter-failure-leaves-a-draft", command: "/rename {name}", screens: []string{"ready", "ready\n/rename kb-中文"}, sendErr: errors.New("Enter failed after typing"), wantSends: []string{rename}, wantCode: "launch.pane_ready_timeout", wantWarning: "launch.rename_unconfirmed"},
 		{name: "enter-failure-leaves-draft-above-unchanged-acknowledgement", command: "/rename {name}", screens: []string{"ready\n❯ \n" + acknowledgement, "ready\n❯ " + rename + "\n" + acknowledgement}, sendErr: errors.New("Enter failed after typing"), wantSends: []string{rename}, wantCode: "launch.pane_ready_timeout", wantWarning: "launch.rename_unconfirmed"},
@@ -134,25 +151,25 @@ func TestRenameLaunchDelivery(t *testing.T) {
 		{name: "completion-timeout-leaves-a-draft", command: "/rename {name}", screens: []string{"ready", "ready\n" + rename}, wantSends: []string{rename}, wantCode: "launch.pane_ready_timeout", wantWarning: "launch.rename_unconfirmed"},
 		{name: "after-argv", command: "/rename {name}", afterArgv: true, screens: []string{"ready", "ready\nrenamed kb-中文-Name_3.0"}, wantSends: []string{rename}},
 		{name: "after-argv-dialog", command: "/rename {name}", afterArgv: true, screens: []string{"ready\ntrust", "ready"}, wantWarning: "launch.rename_not_ready"},
-		{name: "after-argv-not-ready", command: "/rename {name}", afterArgv: true, screens: []string{"starting"}, wantWarning: "launch.rename_not_ready"},
-		{name: "after-argv-working-status-is-not-ready", command: "/rename {name}", afterArgv: true, status: true, busy: true, screens: []string{"ready"}, wantWarning: "launch.rename_not_ready"},
+		{name: "after-argv-working-status-is-not-ready", command: "/rename {name}", afterArgv: true, busy: true, screens: []string{"ready"}, wantWarning: "launch.rename_not_ready"},
+		{name: "after-argv-no-agent-status", command: "/rename {name}", afterArgv: true, terminal: plainTerminal, screens: []string{"ready"}, wantWarning: "launch.rename_no_status"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			freezeClock(t)
 			dir := t.TempDir()
+			paneAgent := tc.paneAgent
+			if paneAgent == "" {
+				paneAgent = "sample"
+			}
 			b := &renameTestBackend{
 				name: "rename-" + terminal.ProjectKey(dir), screens: tc.screens,
-				programStatus: tc.status, sendErr: tc.sendErr,
-				facts: terminal.PaneFacts{AgentApp: "sample", AgentStatus: "idle"},
+				programStatus: tc.terminal == "", agentIdentity: tc.terminal != plainTerminal, sendErr: tc.sendErr,
+				facts: terminal.PaneFacts{Agent: paneAgent, AgentApp: "sample", AgentStatus: "idle"},
 			}
 			if tc.busy {
 				b.facts.AgentStatus = "working"
 			}
 			terminal.Register(b)
-			ready := &config.PromptReady{Match: "ready", TimeoutMS: 500}
-			if tc.readyMatch != "" {
-				ready.Match = tc.readyMatch
-			}
 			complete := "renamed {name}"
 			if tc.completeMatch != "" {
 				complete = tc.completeMatch
@@ -160,18 +177,22 @@ func TestRenameLaunchDelivery(t *testing.T) {
 			if tc.noComplete {
 				complete = ""
 			}
+			agent := "sample"
+			if tc.dialect != "" {
+				agent = "wrapped"
+			}
 			var warnings []string
 			plan := LaunchPlan{
-				Launcher: b.Name(), programStatusApp: "sample",
-				PromptDelivery: config.PromptDelivery{Mode: tc.mode, Ready: ready},
+				Launcher: b.Name(), agent: agent, agentDialect: tc.dialect, programStatusApp: "sample",
+				PromptDelivery: config.PromptDelivery{Mode: tc.mode, Ready: &config.PromptReady{Match: "ready", TimeoutMS: 500}},
 				rename: sessionRename{command: tc.command, RenameDelivery: config.RenameDelivery{
-					Ready: ready, Blocked: []config.PromptBlocked{{Match: "trust", Reason: "confirm trust"}},
+					Blocked:  []config.PromptBlocked{{Match: "trust", Reason: "confirm trust"}},
 					Complete: complete, AfterArgv: tc.afterArgv,
 				}},
 				warning: func(message string) { warnings = append(warnings, message) },
 			}
 			argv := attachPrompt(&plan, []string{"agent"}, prompt)
-			wantArgvPrompt := tc.mode != "pane" && (tc.command == "" || tc.afterArgv)
+			wantArgvPrompt := tc.mode != "pane" && (tc.command == "" || tc.afterArgv || tc.terminal == plainTerminal)
 			if slices.Contains(argv, prompt) != wantArgvPrompt {
 				t.Fatalf("argv = %q, want task prompt in argv: %t", argv, wantArgvPrompt)
 			}

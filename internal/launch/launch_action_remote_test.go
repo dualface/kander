@@ -115,25 +115,28 @@ func TestRemoteOrchestratorUncertainLaunchIsNeverRepeated(t *testing.T) {
 	}
 }
 
-func renameRetryAgent(t *testing.T, cfg *config.Config) {
+// renameRetryAgent renames claude sessions on a terminal that reports the
+// agent idle, and shows a startup dialog until the test clears the screen. It
+// returns the launcher to start on.
+func renameRetryAgent(t *testing.T, cfg *config.Config) string {
 	t.Helper()
 	freezeClock(t)
 	command := "/rename {name}"
 	cfg.Agents["claude"] = config.AgentDefinition{
 		RenameCommand: &command,
 		RenameDelivery: &config.RenameDelivery{
-			Ready:   &config.PromptReady{Match: "READY", TimeoutMS: 200},
 			Blocked: []config.PromptBlocked{{Match: "TRUST_DIALOG", Reason: "test trust dialog"}},
 		},
 	}
 	t.Setenv("KANBAN_TMUX_PANE_OUTPUT", "TRUST_DIALOG")
+	return registerStatusLauncher(t, "status-rename-retry", "claude")
 }
 
 func TestRemoteOrchestratorCanRetryAClosedPaneThatNeverReceivedThePrompt(t *testing.T) {
 	skipOnWindows(t)
 	cfg, service, card, _, fakeRoot := remoteLifecycleFixture(t, "orchestrate-rename-retry")
-	renameRetryAgent(t, cfg)
-	request := OrchestrateRequest{References: []string{card.TaskID}, Handover: "Continue the plan.", Agent: "claude", Launcher: "tmux"}
+	launcher := renameRetryAgent(t, cfg)
+	request := OrchestrateRequest{References: []string{card.TaskID}, Handover: "Continue the plan.", Agent: "claude", Launcher: launcher}
 	if _, err := StartOrchestrator(request); err == nil || err.Error() != config.Text("launch.pane_ready_blocked", "test trust dialog", "TRUST_DIALOG") {
 		t.Fatalf("launch with startup dialog: %v", err)
 	}
@@ -156,9 +159,9 @@ func TestRemoteOrchestratorCanRetryAClosedPaneThatNeverReceivedThePrompt(t *test
 func TestIssueResultCanRetryAClosedPaneThatNeverReceivedThePrompt(t *testing.T) {
 	skipOnWindows(t)
 	cfg, service, card, _, fakeRoot := remoteLifecycleFixture(t, "issue-result-rename-retry")
-	renameRetryAgent(t, cfg)
+	launcher := renameRetryAgent(t, cfg)
 	request := triageRequest(t, fakeRoot)
-	request.CardID, request.ResultSync, request.Agent, request.Launcher = card.TaskID, true, "claude", "tmux"
+	request.CardID, request.ResultSync, request.Agent, request.Launcher = card.TaskID, true, "claude", launcher
 	request.CardSnapshot = &board.TaskSummary{TaskID: card.TaskID, State: "done", Document: card.Text}
 	t.Setenv("KANBAN_LAUNCH_CWD", filepath.Dir(fakeRoot))
 	logical := "test-issued-result-launch"

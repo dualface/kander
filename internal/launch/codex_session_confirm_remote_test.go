@@ -2,6 +2,7 @@ package launch
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -61,6 +62,35 @@ func registerCapsLauncher(t *testing.T, name string, caps terminal.Capabilities)
 	if backend, _ := terminal.Lookup(name); backend.Capabilities() != caps {
 		t.Fatalf("launcher %s is registered with other capabilities", name)
 	}
+	return name
+}
+
+// statusCapsBackend is a capsBackend whose terminal recognizes the agent of
+// every live pane and reports it idle, the state a session rename waits for on
+// an agent identity terminal.
+type statusCapsBackend struct {
+	capsBackend
+	agent string
+}
+
+func (b statusCapsBackend) PaneFacts(ctx context.Context, conn terminal.Conn, pane string) (terminal.PaneFacts, error) {
+	facts, err := b.capsBackend.PaneFacts(ctx, conn, pane)
+	if err != nil || facts.Gone {
+		return facts, err
+	}
+	facts.Agent, facts.AgentStatus = b.agent, "idle"
+	return facts, nil
+}
+
+// registerStatusLauncher registers name over the fake tmux as an agent
+// identity terminal that reports agent idle in every live pane.
+func registerStatusLauncher(t *testing.T, name, agent string) string {
+	t.Helper()
+	tmux, ok := terminal.Lookup("tmux")
+	if !ok {
+		t.Fatal("tmux backend is not registered")
+	}
+	terminal.Register(statusCapsBackend{capsBackend{Backend: tmux, name: name, caps: herdrCaps}, agent})
 	return name
 }
 

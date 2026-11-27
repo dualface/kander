@@ -70,6 +70,11 @@ type LaunchPlan struct {
 	// extendedTimeouts carries extended_launch_timeouts into the launch-time
 	// waits; see launchTimeout.
 	extendedTimeouts bool
+
+	// agentDialect is the built-in agent the definition of agent derives
+	// from. An agent identity terminal names a pane by the agent it
+	// recognizes, which is the dialect for a custom agent name.
+	agentDialect string
 }
 
 // backend returns the terminal backend of the resolved launcher. An unknown

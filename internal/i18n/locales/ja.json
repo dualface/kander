@@ -64,6 +64,7 @@
   "launch.pane_prompt_rejected": "プロンプト配信が拒否されました（{{.V0}}）。端末でその CLI を一度手動実行してダイアログに答えてから `kander start` を再試行してください。Pane 出力:\n{{.V1}}",
   "launch.pane_ready_timeout": "agent TUI の準備待ちがタイムアウトしました。Pane 出力:\n{{.V0}}",
   "launch.rename_no_pane": "ランチャーがペインに入力できないため、エージェントのセッション名は変更されませんでした。",
+  "launch.rename_no_status": "ターミナルが agent の状態を報告しないため、agent セッション名を変更しませんでした。",
   "launch.rename_not_ready": "ペインがブロックされているか準備ができていないため、エージェントのセッション名は変更されませんでした。",
   "launch.rename_unconfirmed": "エージェントのセッション名が変更されたことを確認できませんでした。",
   "launch.herdr_agent_prompt_failed": "herdr agent prompt に失敗しました: {{.V0}}",
