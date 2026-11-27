@@ -57,7 +57,7 @@ func (r GCReport) Incomplete() bool {
 // Empty reports a plan with nothing to remove.
 func (r GCReport) Empty() bool {
 	if s := r.Server.Report; s != nil {
-		if s.Log != nil && s.Log.Bytes > 0 {
+		if s.Log != nil && (s.Log.Bytes > 0 || s.Log.Recovered > 0) {
 			return false
 		}
 		for _, p := range s.Projects {
@@ -84,8 +84,8 @@ func (r GCReport) status() int {
 // serverGC calls the gc of the local server.
 type serverGC func(context.Context, api.ServerGCRequest) (api.ServerGCReport, error)
 
-// The prompt streams, the terminal test, the clock and the local server
-// lookup of `kander gc`; tests replace them.
+// The prompt streams, the terminal test, the clock, the interrupt and the
+// local server lookup of `kander gc`; tests replace them.
 var (
 	gcPromptIn  io.Reader = os.Stdin
 	gcPromptOut io.Writer = os.Stderr
@@ -93,6 +93,10 @@ var (
 		return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stderr.Fd()))
 	}
 	gcNow = time.Now
+	// gcInterrupt is the context an interrupt cancels.
+	gcInterrupt = func() (context.Context, context.CancelFunc) {
+		return signal.NotifyContext(context.Background(), os.Interrupt)
+	}
 	// gcOpen opens the bound project's session.
 	gcOpen = func() (*Session, *config.Config, error) {
 		ctx, cancel := commandContext()
@@ -173,7 +177,7 @@ func runClientGC(o clientGCFlags, probe ExecutorProbe, stdout io.Writer) int {
 	if err != nil {
 		return command.Fail(err)
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := gcInterrupt()
 	defer stop()
 	g := &clientGC{flags: o, sessions: []*Session{s}, request: api.ServerGCRequest{OlderThan: olderThan.String(), LogKeep: command.DefaultLogKeep}}
 	g.checkout, _ = os.Getwd()
@@ -185,16 +189,20 @@ func runClientGC(o clientGCFlags, probe ExecutorProbe, stdout io.Writer) int {
 	if o.dryRun {
 		return gcClientOutput(stdout, plan)
 	}
-	if !o.yes {
+	// Text output shows the plan before anything changes, with --yes too;
+	// JSON output stays one object, the result.
+	if !command.JSON() {
 		printClientGC(stdout, plan)
 		if plan.Empty() {
 			return plan.status()
 		}
-		confirmed, err := askClientGC()
+	}
+	if !o.yes {
+		confirmed, err := askClientGC(ctx)
 		if err != nil {
 			return command.Fail(err)
 		}
-		if !confirmed {
+		if !confirmed || ctx.Err() != nil {
 			fmt.Fprintln(os.Stderr, config.Text("gc.cancelled"))
 			return 1
 		}
@@ -390,6 +398,13 @@ func printServerPart(w io.Writer, s GCServer) {
 	}
 	if s.Report.Log != nil {
 		fmt.Fprintln(w, config.Text("gc.log_line", s.Report.Log.Path, command.FormatBytes(s.Report.Log.Size), command.FormatBytes(s.Report.Log.Bytes)))
+		if s.Report.Log.Recovered > 0 {
+			key := "gc.log_recovered"
+			if s.Report.DryRun {
+				key = "gc.log_recover"
+			}
+			fmt.Fprintln(w, config.Text(key, command.FormatBytes(s.Report.Log.Recovered)))
+		}
 		if s.Report.Log.Kept != "" {
 			fmt.Fprintln(w, config.Text("gc.kept_log", oneLine(s.Report.Log.Kept)))
 		}
@@ -402,16 +417,33 @@ func printServerPart(w io.Writer, s GCServer) {
 // oneLine keeps a reason on one visible line.
 func oneLine(text string) string { return command.Escape(strings.TrimSpace(text)) }
 
-// askClientGC asks y/N on stderr; anything but y or yes, including EOF, is no.
-func askClientGC() (bool, error) {
+// askClientGC asks y/N on stderr; anything but y or yes, including EOF, is
+// no. An interrupt while it waits is no as well: the read is left behind and
+// the command exits without removing anything.
+func askClientGC(ctx context.Context) (bool, error) {
 	fmt.Fprint(gcPromptOut, config.Text("gc.question"))
-	line, err := bufio.NewReader(gcPromptIn).ReadString('\n')
-	if err != nil && strings.TrimSpace(line) == "" {
-		if errors.Is(err, io.EOF) {
+	type answer struct {
+		line string
+		err  error
+	}
+	read, in := make(chan answer, 1), gcPromptIn
+	go func() {
+		line, err := bufio.NewReader(in).ReadString('\n')
+		read <- answer{line, err}
+	}()
+	var a answer
+	select {
+	case <-ctx.Done():
+		fmt.Fprintln(gcPromptOut)
+		return false, nil
+	case a = <-read:
+	}
+	if a.err != nil && strings.TrimSpace(a.line) == "" {
+		if errors.Is(a.err, io.EOF) {
 			return false, nil
 		}
-		return false, err
+		return false, a.err
 	}
-	answer := strings.ToLower(strings.TrimSpace(line))
-	return answer == "y" || answer == "yes", nil
+	reply := strings.ToLower(strings.TrimSpace(a.line))
+	return reply == "y" || reply == "yes", nil
 }

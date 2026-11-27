@@ -4,15 +4,18 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dualface/kander/v2/api"
 	"github.com/dualface/kander/v2/internal/client"
+	"github.com/dualface/kander/v2/internal/command"
 	"github.com/dualface/kander/v2/internal/command/commandtest"
 	"github.com/dualface/kander/v2/internal/config"
 )
@@ -27,6 +30,10 @@ type gcCommand struct {
 	opened  bool
 	calls   []api.ServerGCRequest
 	prompt  bytes.Buffer
+	// promptIn and promptOut, when set, replace the answer and the prompt
+	// buffer; promptIn alone makes a terminal.
+	promptIn  io.Reader
+	promptOut io.Writer
 }
 
 func (c *gcCommand) run(t *testing.T, args ...string) (int, string, string) {
@@ -41,8 +48,14 @@ func (c *gcCommand) run(t *testing.T, args ...string) (int, string, string) {
 		cfg.Git.BranchMode = config.GitBranchModeMainOnly
 		return c.f.s, cfg, nil
 	}
-	gcTerminal = func() bool { return c.answer != "" }
+	gcTerminal = func() bool { return c.answer != "" || c.promptIn != nil }
 	gcPromptIn, gcPromptOut = strings.NewReader(c.answer), &c.prompt
+	if c.promptIn != nil {
+		gcPromptIn = c.promptIn
+	}
+	if c.promptOut != nil {
+		gcPromptOut = c.promptOut
+	}
 	resolveServerGC = func(context.Context, string) (serverGC, string, error) {
 		if c.server == nil {
 			return nil, c.skipped, nil
@@ -245,3 +258,70 @@ func TestGCCommandExitsOneAfterHandlingTheRest(t *testing.T) {
 		t.Fatalf("a kept candidate exits 1 after the others were removed: %d %s", code, out)
 	}
 }
+
+// With --yes the text output shows the plan before the result.
+func TestGCCommandPrintsThePlanBeforeAYesRun(t *testing.T) {
+	f, w := removable(t)
+	c := &gcCommand{f: f, skipped: "remote"}
+	code, out, errOut := c.run(t, "--yes")
+	plan, result := strings.Index(out, config.Text("gc.plan_header")), strings.Index(out, config.Text("gc.result_header"))
+	if code != 0 || plan < 0 || result < plan || f.registered(w.Path) {
+		t.Fatalf("exit %d\n%s\n%s", code, out, errOut)
+	}
+}
+
+// The tail an interrupted server.log trim saved is a plan item of its own:
+// the command asks for it and runs the server gc, also when nothing else is
+// due.
+func TestGCCommandOffersTheRecoveryOfASavedServerLogTail(t *testing.T) {
+	f := newGCFixture(t)
+	c := &gcCommand{f: f, answer: "y\n"}
+	c.server = func(_ context.Context, req api.ServerGCRequest) (api.ServerGCReport, error) {
+		return api.ServerGCReport{DryRun: req.DryRun, Projects: []api.ServerGCProject{{Name: "demo"}}, Log: &api.ServerGCLog{Path: "server.log", Recovered: 2048}}, nil
+	}
+	code, out, errOut := c.run(t)
+	if code != 0 || len(c.calls) != 2 || c.calls[1].DryRun || !strings.Contains(c.prompt.String(), config.Text("gc.question")) {
+		t.Fatalf("a pending recovery must be confirmed and run: exit %d, calls %+v\n%s\n%s", code, c.calls, out, errOut)
+	}
+	if !strings.Contains(out, config.Text("gc.log_recover", command.FormatBytes(2048))) || !strings.Contains(out, config.Text("gc.log_recovered", command.FormatBytes(2048))) {
+		t.Fatalf("the plan and the result name the recovered tail:\n%s", out)
+	}
+}
+
+// An interrupt while the prompt waits ends the command: nothing is removed.
+func TestGCCommandStopsAtAnInterruptDuringThePrompt(t *testing.T) {
+	f, w := removable(t)
+	in, writer := io.Pipe()
+	t.Cleanup(func() { writer.Close() })
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	previous := gcInterrupt
+	t.Cleanup(func() { gcInterrupt = previous })
+	gcInterrupt = func() (context.Context, context.CancelFunc) { return ctx, cancel }
+	c := &gcCommand{f: f, skipped: "remote", promptIn: in, promptOut: writerFunc(func(p []byte) (int, error) {
+		if bytes.Contains(p, []byte(config.Text("gc.question"))) {
+			cancel()
+		}
+		return len(p), nil
+	})}
+	finished := make(chan int, 1)
+	go func() {
+		code, _, _ := c.run(t)
+		finished <- code
+	}()
+	select {
+	case code := <-finished:
+		if code != 1 {
+			t.Fatalf("an interrupted prompt: exit %d, want 1", code)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the command kept waiting for an answer after the interrupt")
+	}
+	if !f.registered(w.Path) {
+		t.Fatal("an interrupted prompt must not remove the worktree")
+	}
+}
+
+type writerFunc func([]byte) (int, error)
+
+func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
