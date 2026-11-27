@@ -291,24 +291,20 @@ var pruneInterrupt func(step string) error
 // compaction-backups/: a run that still exists gets its receipt back, and the
 // backup of a run that is gone is removed. One backup that cannot be settled
 // never stops the others: its error goes into failures and, unless its run is
-// known to be gone, its run goes into stuck so the round keeps it. A backup
-// that is not a regular file is never opened or removed. Only a directory
-// that cannot be listed fails the round, since then no run is known to be safe.
+// known to be gone, its run goes into stuck so the round keeps it. The listing
+// does not follow links and reports each member's kind, so a symlink or
+// reparse point in place of a backup is one more member that is not a regular
+// file: like those, it is never opened or removed. Only a directory that
+// cannot be listed fails the round, since then no run is known to be safe.
 func settleCompactionBackups(root string) (stuck map[string]bool, failures []error, err error) {
 	stuck = map[string]bool{}
 	dir := control(root, "groups", pruneControlGroup, "compaction-backups")
-	entries, err := fs.ListDirectory(root, dir)
+	entries, err := fs.ListDirectoryWithLinks(root, dir)
 	if errors.Is(err, os.ErrNotExist) {
 		return stuck, nil, nil
 	}
 	if err != nil {
-		// One unsafe entry, such as a symlink, fails the listing of a
-		// directory that opens. The backup of every run that still exists is
-		// then settled by path, and the listing error is reported.
-		if open, e := fs.DirectoryExists(root, dir); !errors.Is(err, fs.ErrUnsafe) || e != nil || !open {
-			return nil, nil, err
-		}
-		return settleBackupsOfRuns(root, err)
+		return nil, nil, err
 	}
 	for _, entry := range entries {
 		id, ok := strings.CutSuffix(entry.Name, ".json")
@@ -320,33 +316,6 @@ func settleCompactionBackups(root string) (stuck map[string]bool, failures []err
 			if !gone {
 				stuck[id] = true
 			}
-			failures = append(failures, e)
-		}
-	}
-	return stuck, failures, nil
-}
-
-// settleBackupsOfRuns settles, by path, the backup of every run in runs/,
-// after listing compaction-backups/ failed with listErr. A backup that is not
-// a regular file fails its no-follow, non-blocking probe and keeps its run.
-// The backups of runs that are gone wait for a listing that works.
-func settleBackupsOfRuns(root string, listErr error) (stuck map[string]bool, failures []error, err error) {
-	runs, err := fs.ListDirectory(root, control(root, "groups", reviewControlGroup, "runs"))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, nil, errors.Join(listErr, err)
-	}
-	stuck, failures = map[string]bool{}, []error{listErr}
-	for _, entry := range runs {
-		id := entry.Name
-		if entry.Kind != fs.KindDirectory || !ValidReviewID(id) {
-			continue
-		}
-		present, e := fs.RegularFileExists(root, compactionBackupPath(root, id))
-		if e == nil && present {
-			_, e = settleCompactionBackup(root, id, fs.KindFile)
-		}
-		if e != nil {
-			stuck[id] = true
 			failures = append(failures, e)
 		}
 	}
