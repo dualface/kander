@@ -67,6 +67,9 @@ func TestRemoteImportCommandUsesOnlyTheBoundServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("KANDER_CONFIG", configPath)
+	prevTarget := importTarget
+	importTarget = configuredImportTarget
+	t.Cleanup(func() { importTarget = prevTarget })
 	xdg := t.TempDir()
 	t.Setenv("XDG_DATA_HOME", xdg)
 	prev := importOpen

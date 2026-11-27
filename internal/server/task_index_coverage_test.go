@@ -8,6 +8,8 @@ import (
 	"slices"
 	"sync"
 	"testing"
+
+	"github.com/dualface/kander/v2/internal/config"
 )
 
 func indexWriteActions() map[string][]string {
@@ -45,7 +47,14 @@ func skipIndexDifferentialFixture(t *testing.T, reason string) {
 	t.Skip(reason)
 }
 
+// configuredImportTarget is the production importTarget, which reads the
+// configuration and the project overlay.
+var configuredImportTarget func() (string, error)
+
 func TestMain(m *testing.M) {
+	// Never reach the server a developer's config or project overlay names.
+	configuredImportTarget = importTarget
+	importTarget = func() (string, error) { return config.DefaultServerURL, nil }
 	code := m.Run()
 	// Use -run for partial runs. -skip does not turn off coverage checking.
 	if code == 0 && flag.Lookup("test.run").Value.String() == "" && flag.Lookup("test.list").Value.String() == "" {
