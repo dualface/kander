@@ -169,17 +169,42 @@ func (r *gcRun) lazyFetchRisk(ctx context.Context, repo string, cache *gcReposit
 	return cache.lazyRisk
 }
 
-// partialClone reports whether a `git config --list` output names a promisor
-// remote or a partial clone filter.
+// partialClone reports whether a `git config --list` output names a partial
+// clone filter or a promisor remote. A promisor value counts unless Git reads
+// it as false, so a value Git would not accept counts as a risk too.
 func partialClone(listed string) bool {
 	for line := range strings.Lines(listed) {
-		key, value, _ := strings.Cut(strings.TrimSpace(line), "=")
+		key, value, set := strings.Cut(strings.TrimSpace(line), "=")
 		key = strings.ToLower(key)
-		if key == "extensions.partialclone" && value != "" || strings.HasPrefix(key, "remote.") && strings.HasSuffix(key, ".promisor") && strings.EqualFold(value, "true") {
+		if key == "extensions.partialclone" && value != "" || strings.HasPrefix(key, "remote.") && strings.HasSuffix(key, ".promisor") && !gitFalse(value, set) {
 			return true
 		}
 	}
 	return false
+}
+
+// gitFalse reports whether Git reads a boolean configuration value as false:
+// "false", "no" or "off" in any case, the empty value, or an integer that is
+// zero, in the decimal, octal or hexadecimal form with the optional sign and
+// k, m or g unit Git accepts. A key without "=" (set false) has no value,
+// which Git reads as true.
+func gitFalse(value string, set bool) bool {
+	if !set {
+		return false
+	}
+	switch strings.ToLower(value) {
+	case "", "false", "no", "off":
+		return true
+	}
+	digits := strings.TrimLeft(value, " \t\n\v\f\r")
+	digits = strings.TrimPrefix(strings.TrimPrefix(digits, "+"), "-")
+	if len(digits) > 0 && strings.ContainsRune("kKmMgG", rune(digits[len(digits)-1])) {
+		digits = digits[:len(digits)-1]
+	}
+	if hex, ok := strings.CutPrefix(strings.ToLower(digits), "0x"); ok {
+		digits = hex
+	}
+	return digits != "" && strings.Trim(digits, "0") == ""
 }
 
 // git runs one Git command of the pass; a dry run never fetches lazily.
