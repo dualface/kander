@@ -41,6 +41,7 @@ func TestPartialCloneReadsPromisorAsAGitBoolean(t *testing.T) {
 		{"remote.origin.promisor=maybe", true},
 		{"extensions.partialclone=origin", true},
 		{"extensions.partialclone=", false},
+		{"extensions.partialclone= ", false},
 		{"remote.origin.url=/tmp/origin.git", false},
 	} {
 		key, value, set := strings.Cut(tc.line, "=")

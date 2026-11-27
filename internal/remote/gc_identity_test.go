@@ -336,9 +336,10 @@ func TestGCAllProjectsConfirmsTheMarkerWithTheServer(t *testing.T) {
 	}
 }
 
-// An existing marker that names another project is left as it is, and the
-// run removes nothing below its directory, so the record that still names the
-// project keeps the directory matchable.
+// An existing marker that names another project is left as it is, and
+// neither the plan nor the run counts or removes anything below its
+// directory, so the record that still names the project keeps the directory
+// matchable.
 func TestGCAllProjectsKeepsTheRecordsBehindAForeignMarker(t *testing.T) {
 	f := newGCFixture(t)
 	peer := api.Project{ID: api.ProjectID("peer"), Name: "peer"}
@@ -350,6 +351,12 @@ func TestGCAllProjectsKeepsTheRecordsBehindAForeignMarker(t *testing.T) {
 	record := f.requestCall(dir, peer.ID)
 	marker := filepath.Join(dir, projectIdentityName)
 	before, _ := os.ReadFile(marker)
+	files := snapshot(t, dir)
+	code, plan := f.allProjects(&gcCommand{f: f}, "--dry-run")
+	i := slices.IndexFunc(plan.Projects, func(p GCProject) bool { return p.ID == peer.ID })
+	if code != 1 || i < 0 || len(plan.Projects[i].Errors) != 1 || !strings.Contains(plan.Projects[i].Errors[0], marker) || plan.Projects[i].Journal.Count != 0 || !sameSnapshot(files, snapshot(t, dir)) {
+		t.Fatalf("the plan reports the marker and plans nothing below it: exit %d: %+v", code, plan)
+	}
 	for round := 1; round <= 2; round++ {
 		code, report := f.allProjects(&gcCommand{f: f}, "--yes")
 		i := slices.IndexFunc(report.Projects, func(p GCProject) bool { return p.ID == peer.ID })

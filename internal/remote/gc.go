@@ -180,7 +180,7 @@ func partialClone(listed string) bool {
 	for entry := range strings.SplitSeq(listed, "\x00") {
 		key, value, set := strings.Cut(entry, "\n")
 		key = strings.ToLower(strings.TrimSpace(key))
-		if key == "extensions.partialclone" && value != "" || strings.HasPrefix(key, "remote.") && strings.HasSuffix(key, ".promisor") && !gitFalse(value, set) {
+		if key == "extensions.partialclone" && strings.TrimSpace(value) != "" || strings.HasPrefix(key, "remote.") && strings.HasSuffix(key, ".promisor") && !gitFalse(value, set) {
 			return true
 		}
 	}
@@ -273,24 +273,29 @@ func (s *Session) CollectGarbage(ctx context.Context, opts GCOptions) GCProject 
 // records that named its project for `kander gc --all-projects` may be the
 // ones this run removes. When the marker cannot be written, or an existing one
 // does not name this project, nothing below the directory is removed and the
-// marker is left as it is. Every session the gc runs for names a project the
-// bound server confirmed.
+// marker is left as it is; a dry run checks an existing marker the same way,
+// so the plan matches the run. Every session the gc runs for names a project
+// the bound server confirmed.
 func (r *gcRun) collectLocal(ctx context.Context) {
-	if !r.opts.DryRun {
-		if err := r.ensureIdentity(); err != nil {
-			r.fail(err)
-			return
-		}
+	if err := r.checkIdentity(); err != nil {
+		r.fail(err)
+		return
 	}
 	r.collectWorktrees(ctx)
 	r.collectReviewRuntime(ctx)
 	r.collectJournal()
 }
 
-// ensureIdentity writes the identity marker of the project's client directory
-// unless one exists, and checks that the marker there names this project.
-func (r *gcRun) ensureIdentity() error {
-	if err := writeProjectIdentity(r.s.Home, r.root, r.s.ServerURL, r.s.Info.ID); err != nil {
+// checkIdentity checks that the identity marker of the project's client
+// directory names this project. A run first writes a missing marker; a dry run
+// writes nothing and passes a missing marker, which the run will write.
+func (r *gcRun) checkIdentity() error {
+	path := filepath.Join(r.root, projectIdentityName)
+	if !r.opts.DryRun {
+		if err := writeProjectIdentity(r.s.Home, r.root, r.s.ServerURL, r.s.Info.ID); err != nil {
+			return err
+		}
+	} else if found, err := fs.RegularFileExists(r.s.Home, path); err != nil || !found {
 		return err
 	}
 	identity, valid, err := readProjectIdentity(r.s.Home, r.root)
@@ -298,7 +303,7 @@ func (r *gcRun) ensureIdentity() error {
 		return err
 	}
 	if !valid || identity.ServerURL != r.s.ServerURL || identity.ProjectID != r.s.Info.ID {
-		return errors.New(config.Text("gc.client_identity_mismatch", filepath.Join(r.root, projectIdentityName)))
+		return errors.New(config.Text("gc.client_identity_mismatch", path))
 	}
 	return nil
 }
