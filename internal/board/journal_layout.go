@@ -25,9 +25,14 @@ func (f journalFile) path(root string) string {
 // journalFiles checks names and object types without opening record contents.
 // The caller holds journal.lock until every returned path has been consumed.
 func journalFiles(root string) ([]journalFile, error) {
+	return journalFilesIn(root, "", "pending", "committed")
+}
+
+// journalFilesIn is journalFiles for the named partitions only.
+func journalFilesIn(root string, partitions ...string) ([]journalFile, error) {
 	var files []journalFile
 	seen := map[string]bool{}
-	for _, partition := range []string{"", "pending", "committed"} {
+	for _, partition := range partitions {
 		entries, err := fs.ListDirectory(root, control(root, "operations", partition))
 		if err != nil {
 			return nil, err
@@ -89,6 +94,24 @@ func RequirePublishedOperation(root, id string) error {
 		}
 		return err
 	})
+}
+
+// readUncommittedRecords reads the records of the legacy and pending
+// partitions without listing the committed one.
+func readUncommittedRecords(root string) ([]OperationRecord, error) {
+	files, err := journalFilesIn(root, "", "pending")
+	if err != nil {
+		return nil, err
+	}
+	records := make([]OperationRecord, 0, len(files))
+	for _, file := range files {
+		r, err := readJournalRecord(root, file)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, r)
+	}
+	return records, nil
 }
 
 func readPendingRecords(root string, warnings ...*WarningLog) ([]OperationRecord, error) {

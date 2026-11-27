@@ -47,7 +47,19 @@ func pending(root string, ids []string) error {
 // RequireNoPendingFor fails with board.transaction_pending while an operation
 // record of the board at root that names one of ids, as a card or a group, is
 // prepared but not applied: the check a transaction of that scope makes first.
-func RequireNoPendingFor(root string, ids ...string) error { return pendingContext(nil, root, ids) }
+// It reads only the records that are not committed and never lists the
+// committed partition, which a transaction's own check still validates.
+func RequireNoPendingFor(root string, ids ...string) error {
+	var records []OperationRecord
+	err := withJournalLock(root, true, func() (err error) {
+		records, err = readUncommittedRecords(root)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	return preparedFor(records, ids)
+}
 
 func pendingContext(ctx context.Context, root string, ids []string, warnings ...*WarningLog) error {
 	var records []OperationRecord
@@ -68,6 +80,12 @@ func pendingContext(ctx context.Context, root string, ids []string, warnings ...
 	if err != nil {
 		return err
 	}
+	return preparedFor(records, ids)
+}
+
+// preparedFor fails with board.transaction_pending when a prepared record
+// names one of ids.
+func preparedFor(records []OperationRecord, ids []string) error {
 	for _, r := range records {
 		if r.Phase == "prepared" {
 			for _, id := range ids {
