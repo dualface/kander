@@ -441,32 +441,47 @@ func TestGCCommandOnlyReadsWhilePlanning(t *testing.T) {
 	}
 }
 
-// A failed `git worktree remove` whose worktree directory is gone counts as
-// removed: the branch, the intent and the record go in the same run. A Git
-// wrapper runs the real removal and then reports an error, the way a removal
-// that finished before its process was reaped does.
+// A failed `git worktree remove` whose worktree directory is gone and whose
+// registration Git dropped finishes the removal: the branch, the intent and
+// the record go in the same run, and the Git error is reported. A Git wrapper
+// runs the real removal and then reports an error, the way a removal that
+// finished before its process was reaped does.
 func TestGCFinishesARemovalWhoseGitErrorLeftNoDirectory(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("the Git wrapper is a POSIX shell script")
-	}
 	f := newGCFixture(t)
 	f.card(gcTask, "done")
 	w := f.worktree(gcTask, 1)
+	wrapGit(t, `"$real" "$@"
+code=$?
+case "$*" in *"worktree remove"*) echo "`+gcRemoveFailure+`" >&2; exit 1;; esac
+exit $code
+`)
+	result := f.run(false)
+	if result.Worktrees.Count != 1 || !result.Incomplete() || len(result.Errors) != 1 || !strings.Contains(result.Errors[0], gcRemoveFailure) {
+		t.Fatalf("the removal counts and its Git error is reported: %+v", result)
+	}
+	if f.registered(w.Path) || f.branchExists(w.Branch) || exists(t, filepath.Join(f.root, "worktree-intents", gcTask, "g1.json")) || exists(t, filepath.Join(f.root, "gc-removals", gcTask, "g1.json")) {
+		t.Fatalf("worktree, branch, intent and record must go: %+v", result)
+	}
+}
+
+// gcRemoveFailure is the stderr line the Git wrappers print for a failed
+// removal.
+const gcRemoveFailure = "fatal: simulated worktree removal failure"
+
+// wrapGit puts a POSIX shell script named git first on PATH for the rest of
+// the test. The script body sees the real Git as $real.
+func wrapGit(t *testing.T, body string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("the Git wrapper is a POSIX shell script")
+	}
 	real, err := exec.LookPath("git")
 	if err != nil {
 		t.Fatal(err)
 	}
 	bin := t.TempDir()
-	script := "#!/bin/sh\n\"" + real + "\" \"$@\"\ncode=$?\ncase \"$*\" in *\"worktree remove\"*) exit 1;; esac\nexit $code\n"
-	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0o700); err != nil {
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte("#!/bin/sh\nreal='"+real+"'\n"+body), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	result := f.run(false)
-	if result.Worktrees.Count != 1 || result.Incomplete() {
-		t.Fatalf("the removal must count: %+v", result)
-	}
-	if f.registered(w.Path) || f.branchExists(w.Branch) || exists(t, filepath.Join(f.root, "worktree-intents", gcTask, "g1.json")) || exists(t, filepath.Join(f.root, "gc-removals", gcTask, "g1.json")) {
-		t.Fatalf("worktree, branch, intent and record must go: %+v", result)
-	}
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/dualface/kander/v2/api"
 	"github.com/dualface/kander/v2/internal/config"
@@ -32,10 +33,12 @@ func (r *gcRun) removalPath(task string, generation uint64) string {
 
 // removeWorktree records the removal, removes the registered worktree, then
 // finishes the removal: the task branch, the intent record and the removal
-// record. A Git error with the worktree directory gone counts as removed; with
-// the directory still there it drops the record again, keeps the branch and
-// the intent, and returns false; when the directory cannot be checked the
-// record stays for the next run.
+// record. A Git error is always reported. With the worktree directory still
+// there it drops the record again, keeps the branch and the intent, and
+// returns false; when the directory cannot be checked the record stays for the
+// next run. With the directory gone the removal finishes only once Git no
+// longer registers the worktree; otherwise the record, the branch and the
+// intent stay for the next run.
 func (r *gcRun) removeWorktree(ctx context.Context, w gcWorktree, repo string, repos map[string]*gcRepository) bool {
 	tip, err := r.git(ctx, repo, "rev-parse", "--verify", "refs/heads/"+w.intent.Branch+"^{commit}")
 	if err != nil {
@@ -56,25 +59,76 @@ func (r *gcRun) removeWorktree(ctx context.Context, w gcWorktree, repo string, r
 	repos[repo].pruned = true
 	if _, err := r.git(ctx, repo, "worktree", "remove", w.intent.Path); err != nil {
 		// A Git error does not prove the worktree is still there: the removal
-		// may have finished before the process was reaped. Look again under the
-		// same lock; when that cannot settle it, the record stays and the next
-		// run looks under the generation's lock.
+		// may have finished before the process was reaped, or stopped after
+		// the directory went but before Git dropped its registration. Look
+		// again under the same lock; when that cannot settle it, the record
+		// stays and the next run looks under the generation's lock.
 		exists, statErr := fs.DirectoryExists(r.s.Home, w.intent.Path)
 		switch {
-		case statErr == nil && !exists:
-		case statErr == nil:
+		case statErr != nil:
+			r.report.Worktrees.keep(w.id, errors.Join(err, statErr).Error())
+			return false
+		case exists:
 			r.report.Worktrees.keep(w.id, err.Error())
 			if _, rmErr := fs.RemoveRegularFileIfExists(r.s.Home, path); rmErr != nil {
 				r.fail(rmErr)
 			}
 			return false
-		default:
-			r.report.Worktrees.keep(w.id, errors.Join(err, statErr).Error())
+		}
+		// The directory is gone, so no kept entry carries the Git error.
+		r.fail(err)
+		if reason := r.unregister(ctx, repo, w.intent.Path); reason != "" {
+			r.report.Worktrees.keep(w.id, reason)
 			return false
 		}
 	}
 	r.finishRemoval(ctx, w.task, record, path)
 	return true
+}
+
+// unregister makes sure Git no longer registers the worktree at path, whose
+// directory is gone, and returns the reason when it cannot: the branch, the
+// intent and the removal record must stay while Git still names the worktree.
+// A real run prunes the repository's registry once and looks again. A dry run
+// changes nothing: it counts a registration Git marks prunable as one the run
+// clears.
+func (r *gcRun) unregister(ctx context.Context, repo, path string) string {
+	registered, prunable, err := r.worktreeRegistration(ctx, repo, path)
+	var pruneErr error
+	if err == nil && registered && !r.opts.DryRun {
+		_, pruneErr = r.git(ctx, repo, "worktree", "prune")
+		registered, _, err = r.worktreeRegistration(ctx, repo, path)
+	}
+	switch {
+	case err != nil:
+		return config.Text("gc.client_registration_unknown", path, errors.Join(pruneErr, err).Error())
+	case registered && (!r.opts.DryRun || !prunable):
+		return errors.Join(errors.New(config.Text("gc.client_still_registered", path)), pruneErr).Error()
+	}
+	return ""
+}
+
+// worktreeRegistration reports whether Git lists path as a worktree of repo
+// and whether it marks that entry prunable. Paths compare after
+// filepath.Clean, like the registration check that admitted the worktree; a
+// removed path cannot be resolved through symbolic links.
+func (r *gcRun) worktreeRegistration(ctx context.Context, repo, path string) (registered, prunable bool, err error) {
+	listing, err := r.git(ctx, repo, "worktree", "list", "--porcelain", "-z")
+	if err != nil {
+		return false, false, err
+	}
+	for line := range strings.SplitSeq(listing, "\x00") {
+		switch {
+		case strings.HasPrefix(line, "worktree "):
+			if registered {
+				return true, prunable, nil
+			}
+			registered = filepath.Clean(strings.TrimPrefix(line, "worktree ")) == filepath.Clean(path)
+		case registered && (line == "prunable" || strings.HasPrefix(line, "prunable ")):
+			prunable = true
+		}
+	}
+	return registered, prunable, nil
 }
 
 // finishRemoval deletes the task branch while it still has the recorded tip,
@@ -115,7 +169,9 @@ func (r *gcRun) finishRemoval(ctx context.Context, task string, record gcRemoval
 
 // resumeRemovals finishes the removals an interrupted run recorded. A record
 // whose worktree directory still exists was interrupted before the worktree
-// went; it is dropped and the worktree is judged again like any other.
+// went; it is dropped and the worktree is judged again like any other. One
+// whose directory is gone finishes only once Git no longer registers the
+// worktree; until then it stays with the branch and the intent.
 func (r *gcRun) resumeRemovals(ctx context.Context, repos map[string]*gcRepository) {
 	dir := filepath.Join(r.root, "gc-removals")
 	for _, task := range r.listTaskDirectories(dir) {
@@ -180,6 +236,10 @@ func (r *gcRun) resumeRemoval(ctx context.Context, task string, generation uint6
 	}
 	if _, err := r.git(ctx, record.Repository, "rev-parse", "--git-common-dir"); err != nil {
 		r.report.Branches.keep(record.Branch, err.Error())
+		return
+	}
+	if reason := r.unregister(ctx, record.Repository, record.Path); reason != "" {
+		r.report.Worktrees.keep(id, reason)
 		return
 	}
 	r.work = true

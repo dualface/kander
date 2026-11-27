@@ -67,5 +67,7 @@
   "gc.client_kept_tracking": "  kept tracking ref {{.V0}}: {{.V1}}",
   "gc.client_unverified": "client project directories whose project could not be confirmed (not changed):",
   "gc.client_no_identity": "{{.V0}} holds data of this project, but this host has no client identity (client-id), so its claims and credentials cannot be told apart; it is not cleaned",
-  "gc.client_lazy_fetch_deferred": "this Git cannot be kept from fetching missing objects of this partial clone (it needs Git 2.45 or later), so a dry run does not probe it; the run decides after its fetch"
+  "gc.client_lazy_fetch_deferred": "this Git cannot be kept from fetching missing objects of this partial clone (it needs Git 2.45 or later), so a dry run does not probe it; the run decides after its fetch",
+  "gc.client_still_registered": "the worktree directory {{.V0}} is gone, but Git still registers it; the branch, the intent and the removal record stay for the next run",
+  "gc.client_registration_unknown": "the worktree directory {{.V0}} is gone, but whether Git still registers it cannot be checked; the branch, the intent and the removal record stay for the next run: {{.V1}}"
 }

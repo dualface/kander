@@ -67,5 +67,7 @@
   "gc.client_kept_tracking": "  保留跟踪 ref {{.V0}}：{{.V1}}",
   "gc.client_unverified": "未能确认所属项目的 client 项目目录（未修改）：",
   "gc.client_no_identity": "{{.V0}} 中有该项目的数据，但本机没有 client 身份（client-id），无法区分本机的认领与凭据，因此不清理",
-  "gc.client_lazy_fetch_deferred": "此 Git 无法禁止在该部分克隆中按需拉取缺失对象（需要 Git 2.45 或更高版本），dry run 不对其做探测；执行时在 fetch 后判定"
+  "gc.client_lazy_fetch_deferred": "此 Git 无法禁止在该部分克隆中按需拉取缺失对象（需要 Git 2.45 或更高版本），dry run 不对其做探测；执行时在 fetch 后判定",
+  "gc.client_still_registered": "worktree 目录 {{.V0}} 已不存在，但 Git 仍登记该 worktree；分支、intent 与删除记录保留到下一轮",
+  "gc.client_registration_unknown": "worktree 目录 {{.V0}} 已不存在，但无法确认 Git 是否仍登记该 worktree；分支、intent 与删除记录保留到下一轮：{{.V1}}"
 }
