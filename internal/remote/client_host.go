@@ -5,10 +5,11 @@ import "strings"
 // clientIDRandomLength is the hex length of the random part of a client ID.
 const clientIDRandomLength = 12
 
-// ClientHost returns the host name a client ID carries, or "" when the ID
-// has none or was not made by ClientID. ClientID writes
-// "c-<12 lowercase hex>[-<host>]" once per client home, so the name is the
-// sanitized host name of that first run.
+// ClientHost returns the suffix after "c-<12 lowercase hex>-" in a client
+// ID, or "" when the ID has another shape or no suffix. ClientID writes that
+// shape once per client home with the sanitized host name of the first run
+// as the suffix. The match is structural only: it is a display hint, not a
+// proof that ClientID made the ID.
 func ClientHost(id string) string {
 	rest, ok := strings.CutPrefix(id, "c-")
 	if !ok || len(rest) < clientIDRandomLength+2 || rest[clientIDRandomLength] != '-' {

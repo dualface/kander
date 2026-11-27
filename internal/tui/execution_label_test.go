@@ -57,16 +57,24 @@ func TestCardMetaLineShowsExecutionHost(t *testing.T) {
 	}
 }
 
+// detailMetaLine renders the detail view of task and returns its metadata row.
+func detailMetaLine(t *testing.T, app *App, task Task) string {
+	t.Helper()
+	app.Detail = &task
+	rows := strings.Split(ansi.Strip(app.renderDetailView()), "\n")
+	if len(rows) <= detailMetaRow {
+		t.Fatalf("detail view has %d rows, want more than %d", len(rows), detailMetaRow)
+	}
+	return rows[detailMetaRow]
+}
+
 func TestDetailMetaShowsExecutionHost(t *testing.T) {
 	app := labelTestApp()
-	task := claimedTask("claude", api.ClaimActive, labelClientID)
-	app.Detail = &task
-	if view := ansi.Strip(app.renderDetailView()); !strings.Contains(view, "claude@center5900") {
-		t.Fatalf("detail view has no execution host:\n%s", view)
+	if line := detailMetaLine(t, app, claimedTask("claude", api.ClaimActive, labelClientID)); !strings.Contains(line, " claude@center5900") {
+		t.Fatalf("detail metadata row %q has no execution host", line)
 	}
-	released := claimedTask("claude", api.ClaimReleased, labelClientID)
-	app.Detail = &released
-	if view := ansi.Strip(app.renderDetailView()); strings.Contains(view, "@center5900") {
-		t.Fatalf("detail view shows the host of a released claim:\n%s", view)
+	line := detailMetaLine(t, app, claimedTask("claude", api.ClaimReleased, labelClientID))
+	if !strings.Contains(line, " claude") || strings.Contains(line, "@") {
+		t.Fatalf("detail metadata row of a released claim changed: %q", line)
 	}
 }
