@@ -221,7 +221,7 @@ func TestGCCommandAllProjectsMatchesDirectoriesByTheirRecords(t *testing.T) {
 	cl.Retries = 0
 	// Bind the fixture to this server before anything is created below its
 	// namespace.
-	if err := os.Remove(f.root); err != nil {
+	if err := os.RemoveAll(f.root); err != nil {
 		t.Fatal(err)
 	}
 	f.s.ServerURL, f.s.Client = server.URL, cl
@@ -388,7 +388,7 @@ func TestGCCommandAllProjectsMatchesRequestCallsAndThePlan(t *testing.T) {
 		t.Fatal(err)
 	}
 	cl.Retries = 0
-	if err := os.Remove(f.root); err != nil {
+	if err := os.RemoveAll(f.root); err != nil {
 		t.Fatal(err)
 	}
 	f.s.ServerURL, f.s.Client = server.URL, cl

@@ -194,9 +194,14 @@ func (s *Session) MoveTask(ctx context.Context, id string, request api.Move) (ap
 
 // LocalDataRoot isolates host-only issue evidence and recovery files by server
 // project. It contains no card-state directories and is never a board backend.
+// It creates the directory with its identity marker, so `kander gc
+// --all-projects` can match it whatever else it holds.
 func (s *Session) LocalDataRoot() (string, error) {
 	root := filepath.Join(s.Home, "projects", projectNamespace(s.ServerURL, s.Info.ID))
 	if err := fs.EnsurePrivateDirectory(s.Home, root, true); err != nil {
+		return "", err
+	}
+	if err := writeProjectIdentity(s.Home, root, s.ServerURL, s.Info.ID); err != nil {
 		return "", err
 	}
 	return root, nil

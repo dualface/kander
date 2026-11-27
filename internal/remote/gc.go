@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -250,19 +251,36 @@ func (s *Session) CollectGarbage(ctx context.Context, opts GCOptions) GCProject 
 	// common remote can still hold evidence refs of the project.
 	switch {
 	case exists && opts.Unidentified:
+		// The identity marker alone is no data of the project.
 		if entries, err := fs.ListDirectory(s.Home, root); err != nil {
 			r.fail(err)
-		} else if len(entries) > 0 {
+		} else if slices.ContainsFunc(entries, func(entry fs.DirEntry) bool { return entry.Kind != fs.KindFile || entry.Name != projectIdentityName }) {
 			r.fail(errors.New(config.Text("gc.client_no_identity", root)))
 		}
 	case exists:
-		r.collectWorktrees(ctx)
-		r.collectReviewRuntime(ctx)
-		r.collectJournal()
+		r.collectLocal(ctx)
 	}
 	r.collectEvidenceRefs(ctx)
 	report.work = r.work
 	return report
+}
+
+// collectLocal runs the categories of the project's client directory. A run
+// first gives a directory created before identity markers its marker: the
+// records that named its project for `kander gc --all-projects` may be the
+// ones this run removes. When the marker cannot be written nothing below the
+// directory is removed. Every session the gc runs for names a project the
+// bound server confirmed.
+func (r *gcRun) collectLocal(ctx context.Context) {
+	if !r.opts.DryRun {
+		if err := writeProjectIdentity(r.s.Home, r.root, r.s.ServerURL, r.s.Info.ID); err != nil {
+			r.fail(err)
+			return
+		}
+	}
+	r.collectWorktrees(ctx)
+	r.collectReviewRuntime(ctx)
+	r.collectJournal()
 }
 
 // terminalTask returns the list row of a card in a terminal state.
