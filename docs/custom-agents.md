@@ -6,6 +6,8 @@ Shared stdout/file/pane output parsing used by templates, review, and later term
 
 A project may also commit `.kander-config.json` at the Git main worktree root (or, outside Git, the first file of that name found walking up from the current directory). Its keys overlay the scope `config.json` at runtime, including `agents` executable paths and argv templates. That is accepted at the same trust level as checking out and running the repository. The Options Global tab, `Save`/`Update`, doctor repair, and the installer still write only the scope config file. The Options Project tab writes only this overlay file; it never writes `.kander/config.json`. Unedited keys stay inherited.
 
+The background worker (`kander worker`) runs in the client home, outside every project, and serves the executions of every project of that home. It reads the agent definitions of an execution (process name, session settings, program status, session file, and exit command) with the overlay of the directory that execution records: the main worktree of the checkout it was started from (the start directory itself outside Git), or, when an older record has none, its execution worktree. When the recorded directory is empty, or no longer exists, the worker uses the scope `config.json` and logs a warning for a missing directory; it never searches for an overlay above a missing directory. An overlay that is not valid fails those reads, as it does for a command run in the project.
+
 ## Executable Name and Process Name
 
 ```json

@@ -330,6 +330,7 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 		ServerURL: session.ServerURL, ClientID: session.Client.ClientID(), ProjectID: session.Info.ID, TaskID: grant.Task.TaskID,
 		ExecutionID: execution, Generation: grant.Claim.Generation, Token: grant.Token,
 		RenewInterval: grant.RenewInterval, TTL: grant.TTL, RenewedAt: time.Now().UTC(), Session: initialSession, Window: window,
+		ProjectDir: project,
 	}
 	if err := session.SaveCredential(credential); err != nil {
 		return result, err

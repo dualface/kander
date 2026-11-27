@@ -5,6 +5,7 @@
 package remote
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -261,6 +262,19 @@ type Credential struct {
 	// into the agent.
 	Delivered  []string `json:"delivered,omitempty"`
 	LostReason string   `json:"lost_reason,omitempty"`
+	// ProjectDir is the execution directory: remote.ProjectDir of the
+	// directory the execution was started from. The worker reads the agent
+	// definitions of the execution with the project overlay of this
+	// directory (AgentConfigDir).
+	ProjectDir string `json:"project_dir,omitempty"`
+}
+
+// AgentConfigDir is the directory whose project overlay the agent
+// definitions of this execution are read with: the execution directory, else
+// the execution worktree, else "" for the configuration of the process
+// directory.
+func (c Credential) AgentConfigDir() string {
+	return cmp.Or(c.ProjectDir, c.Worktree)
 }
 
 // Claim returns the headers form of the credential.

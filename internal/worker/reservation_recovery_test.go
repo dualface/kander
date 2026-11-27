@@ -399,9 +399,9 @@ func TestAReservedProposalThatTurnsUnusableBeforeTypingIsRejectedWithoutTyping(t
 					}
 				}
 				if phase == "resolution" {
-					h.loop.o.Resolve = func(window, session string) (*Target, error) {
+					h.loop.o.Resolve = func(address AgentAddress) (*Target, error) {
 						apply()
-						return pr.resolve(window, session)
+						return pr.resolve(address)
 					}
 				} else {
 					loss.beforeNextConfirmation(apply)

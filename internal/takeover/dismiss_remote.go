@@ -104,7 +104,7 @@ func commandRemoteDismiss(cfg *config.Config, task string, timeout float64) erro
 	if !fresh && journal.Value.Phase != "prepared" {
 		return takeoverError("remote.launch_reconciliation_required", journal.Path)
 	}
-	if err := sameWorkerPane(ctx, backend, pane, session); err != nil {
+	if err := sameWorkerPane(ctx, backend, pane, session, nil); err != nil {
 		return err
 	}
 	exitCommand, err := AgentExitCommand(agent)

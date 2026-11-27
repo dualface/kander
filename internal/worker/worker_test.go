@@ -110,7 +110,7 @@ func testRequestFiles(t *testing.T) func(string) (*kfs.TempDir, string, error) {
 
 // resolveRecording is the default target resolution of the harness: it always
 // resolves, and the prompt it returns records the lines typed.
-func (h *harness) resolveRecording(window, session string) (*Target, error) {
+func (h *harness) resolveRecording(AgentAddress) (*Target, error) {
 	return &Target{Prompt: func(text string) error {
 		h.mu.Lock()
 		defer h.mu.Unlock()

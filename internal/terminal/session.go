@@ -28,6 +28,13 @@ import (
 //     identity.
 //   - any other kind is an unsupported representation and stays undecidable.
 func MatchAgentSession(ctx context.Context, agent, kind, value, reference string) (SessionMatch, string) {
+	return MatchAgentSessionWith(ctx, nil, agent, kind, value, reference)
+}
+
+// MatchAgentSessionWith is MatchAgentSession with the session.file
+// declaration read through lookup; a nil lookup reads it like
+// MatchAgentSession.
+func MatchAgentSessionWith(ctx context.Context, lookup config.AgentLookup, agent, kind, value, reference string) (SessionMatch, string) {
 	if value == "" {
 		return SessionUncertain, config.Text("terminal.session_identity_missing")
 	}
@@ -38,7 +45,7 @@ func MatchAgentSession(ctx context.Context, agent, kind, value, reference string
 		}
 		return SessionDiffers, ""
 	case "path":
-		resolved, detail, ok := resolveSessionFile(ctx, agent, value)
+		resolved, detail, ok := resolveSessionFile(ctx, lookup, agent, value)
 		if !ok {
 			return SessionUncertain, detail
 		}
@@ -55,11 +62,11 @@ func MatchAgentSession(ctx context.Context, agent, kind, value, reference string
 // identity. The path is untrusted terminal-reported data: it is opened only
 // through the internal/fs safe boundary, read within the declared byte bound,
 // and parsed as data, never executed.
-func resolveSessionFile(ctx context.Context, agent, path string) (resolved, detail string, ok bool) {
+func resolveSessionFile(ctx context.Context, lookup config.AgentLookup, agent, path string) (resolved, detail string, ok bool) {
 	if err := ctx.Err(); err != nil {
 		return "", probe.FailureDetail(err), false
 	}
-	definition, err := config.LoadAgent(agent)
+	definition, err := lookup.Agent(agent)
 	if err != nil {
 		return "", config.Text("terminal.session_file_agent_error", err.Error()), false
 	}

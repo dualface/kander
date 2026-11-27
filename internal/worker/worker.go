@@ -53,7 +53,7 @@ type Options struct {
 	Stop func(pid int) error
 	// Resolve finds the agent recorded by the card's WINDOW and SESSION and
 	// returns the way to type a line and observe output; the default is Resolve.
-	Resolve func(window, session string) (*Target, error)
+	Resolve func(AgentAddress) (*Target, error)
 	// CreateRequestFile writes a private request file and transfers ownership
 	// of its directory to the worker. The default is CreateRequestFile.
 	CreateRequestFile func(body string) (*fs.TempDir, string, error)
@@ -94,12 +94,20 @@ type Target struct {
 	Window string
 }
 
+// AgentAddress names the agent of an execution for a terminal hook: the
+// WINDOW and SESSION values, and the directory whose project overlay the
+// agent definition is read with. An empty ConfigDir reads the configuration
+// of the worker's own directory.
+type AgentAddress struct {
+	Window, Session, ConfigDir string
+}
+
 // Resolve is the terminal side of the delivery of collaboration requests. It
 // finds the agent pane that a card's WINDOW and SESSION name and checks that the
 // pane takes a line, without typing anything: an error means nothing was typed.
 // The notify package sets it at init, so this package stays free of terminal
 // code; a binary without it keeps requests open for the holder to read.
-var Resolve func(window, session string) (*Target, error)
+var Resolve func(AgentAddress) (*Target, error)
 
 // CreateRequestFile is supplied by notify alongside Resolve.
 var CreateRequestFile func(body string) (*fs.TempDir, string, error)
@@ -307,6 +315,10 @@ type loop struct {
 	// anything and has not succeeded since (delivery_block.go).
 	blocked  map[credentialKey]blockState
 	renewing *renewals
+
+	// missingDirs holds, per credential, the recorded agent configuration
+	// directory last found missing (agent_config.go).
+	missingDirs map[credentialKey]string
 }
 
 type outage struct{ since, last time.Time }
@@ -328,6 +340,7 @@ func newLoop(o Options) *loop {
 		blocked:      map[credentialKey]blockState{},
 		deliveries:   map[credentialKey]*deliveryScope{},
 		replays:      map[credentialKey]*replayTable{},
+		missingDirs:  map[credentialKey]string{},
 	}
 }
 
@@ -467,6 +480,11 @@ func (w *loop) forgetAbsent(credentials []remote.Credential) {
 	for key := range w.disconnected {
 		if _, ok := present[key]; !ok {
 			delete(w.disconnected, key)
+		}
+	}
+	for key := range w.missingDirs {
+		if _, ok := present[key]; !ok {
+			delete(w.missingDirs, key)
 		}
 	}
 }

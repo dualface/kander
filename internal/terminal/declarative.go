@@ -612,7 +612,7 @@ func (b *DeclarativeBackend) sessionRow(e *execution, rows *Rows, identity Ident
 		if !e.holds(rows.Match) {
 			continue
 		}
-		verdict, detail := MatchAgentSession(e.ctx, identity.Agent, fields[rows.Session.Kind], fields[rows.Session.Value], identity.Reference)
+		verdict, detail := MatchAgentSessionWith(e.ctx, identity.Lookup, identity.Agent, fields[rows.Session.Kind], fields[rows.Session.Value], identity.Reference)
 		switch verdict {
 		case SessionMatches:
 			result := map[string]string{}

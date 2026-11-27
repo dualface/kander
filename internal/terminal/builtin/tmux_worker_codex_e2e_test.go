@@ -34,8 +34,8 @@ func TestTmuxWorkerSubmitsRealCodexRequests(t *testing.T) {
 				strings.Contains(text, "esc to interrupt")
 		}
 		waitPane(t, conn, backend, pane, 30*time.Second, busy)
-		resolveWhileBusy := func(window, session string) (*worker.Target, error) {
-			target, err := worker.Resolve(window, session)
+		resolveWhileBusy := func(address worker.AgentAddress) (*worker.Target, error) {
+			target, err := worker.Resolve(address)
 			if err != nil {
 				return nil, err
 			}
@@ -78,7 +78,7 @@ func routeWorkerToTestPane(t *testing.T, pane string, tmux func(...string) strin
 	return window, ref
 }
 
-func deliverRealCodexRequest(t *testing.T, window, ref, message string, resolve func(string, string) (*worker.Target, error)) {
+func deliverRealCodexRequest(t *testing.T, window, ref, message string, resolve func(worker.AgentAddress) (*worker.Target, error)) {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	svc, err := server.Open(server.Options{DataDir: t.TempDir(), Logger: logger})

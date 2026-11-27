@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/dualface/kander/v2/internal/worker"
 )
 
 // writeFakeHCPane installs an hc whose every answer is one herdr-core pane
@@ -27,11 +29,11 @@ func TestRequestTargetOfACodexSessionMatchesThePaneMarker(t *testing.T) {
 	_, fakeBin := setupBoard(t)
 	const id = "01a20fe4-5f0f-7a42-a040-cd6e31cc675c"
 	writeFakeHCPane(t, fakeBin, id)
-	prompt, err := resolveRequest("herdr-core:t8", "codex "+id)
+	prompt, err := resolveRequest(worker.AgentAddress{Window: "herdr-core:t8", Session: "codex " + id})
 	if err != nil || prompt == nil {
 		t.Fatalf("resolve codex <id>: prompt=%v err=%v", prompt != nil, err)
 	}
-	prompt, err = resolveRequest("herdr-core:t8", "codex")
+	prompt, err = resolveRequest(worker.AgentAddress{Window: "herdr-core:t8", Session: "codex"})
 	if err == nil || prompt != nil {
 		t.Fatal("a bare agent session resolved a pane that carries another session marker")
 	}

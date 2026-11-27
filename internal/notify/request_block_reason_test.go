@@ -9,6 +9,7 @@ import (
 
 	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/i18n"
+	"github.com/dualface/kander/v2/internal/worker"
 )
 
 // recordTerminalCalls replaces the fake herdr with one that only records its
@@ -46,7 +47,7 @@ func requireNoNewReason(t *testing.T, err error) {
 func TestResolveRequestExplainsABareSessionWithoutProbing(t *testing.T) {
 	root, fakeBin := setupBoard(t)
 	calls := recordTerminalCalls(t, root, fakeBin)
-	target, err := resolveRequest("herdr:w1:t9:w1:p9", "codex")
+	target, err := resolveRequest(worker.AgentAddress{Window: "herdr:w1:t9:w1:p9", Session: "codex"})
 	if target != nil || err == nil {
 		t.Fatalf("a bare SESSION must fail: %v", err)
 	}
@@ -65,7 +66,7 @@ func TestResolveRequestExplainsAnAgentThatRecordsNoSessionID(t *testing.T) {
 		t.Fatal(err)
 	}
 	calls := recordTerminalCalls(t, root, fakeBin)
-	_, err := resolveRequest("herdr:w1:t9:w1:p9", "codex")
+	_, err := resolveRequest(worker.AgentAddress{Window: "herdr:w1:t9:w1:p9", Session: "codex"})
 	if want := config.Text("notify.request_session_mode_none", "codex"); err == nil || err.Error() != want {
 		t.Fatalf("reason = %v, want %q", err, want)
 	}
@@ -75,7 +76,7 @@ func TestResolveRequestExplainsAnAgentThatRecordsNoSessionID(t *testing.T) {
 // A WINDOW that is no terminal address keeps its reason, bare SESSION or not.
 func TestResolveRequestKeepsTheReasonOfAForegroundWindow(t *testing.T) {
 	_, _ = setupBoard(t)
-	_, err := resolveRequest("foreground", "codex")
+	_, err := resolveRequest(worker.AgentAddress{Window: "foreground", Session: "codex"})
 	if want := config.Text("notify.no_direct_notification_address", "foreground"); err == nil || err.Error() != want {
 		t.Fatalf("reason = %v, want %q", err, want)
 	}
@@ -84,7 +85,7 @@ func TestResolveRequestKeepsTheReasonOfAForegroundWindow(t *testing.T) {
 func TestResolveRequestHintsAtAnUnverifiedAgentPaneSession(t *testing.T) {
 	_, _ = setupBoard(t)
 	t.Setenv("KANBAN_HERDR_SESSION_FILE", filepath.Join(t.TempDir(), "absent"))
-	_, err := resolveRequest("herdr:w1:t9:w1:p9", "claude id-1")
+	_, err := resolveRequest(worker.AgentAddress{Window: "herdr:w1:t9:w1:p9", Session: "claude id-1"})
 	probe := config.Text("notify.session_uncertain_task_pane", config.Text("terminal.session_identity_missing"))
 	if want := config.Text("notify.request_session_marker_hint", probe); err == nil || err.Error() != want {
 		t.Fatalf("reason = %v, want %q", err, want)
@@ -94,7 +95,7 @@ func TestResolveRequestHintsAtAnUnverifiedAgentPaneSession(t *testing.T) {
 func TestResolveRequestHintsAtADifferentAgentPaneSession(t *testing.T) {
 	_, _ = setupBoard(t)
 	t.Setenv("KANBAN_HERDR_SESSION", "id-2")
-	_, err := resolveRequest("herdr:w1:t9:w1:p9", "claude id-1")
+	_, err := resolveRequest(worker.AgentAddress{Window: "herdr:w1:t9:w1:p9", Session: "claude id-1"})
 	if err == nil || !strings.Contains(err.Error(), markerHint()) {
 		t.Fatalf("reason = %v, want the marker hint", err)
 	}
@@ -103,7 +104,7 @@ func TestResolveRequestHintsAtADifferentAgentPaneSession(t *testing.T) {
 func TestResolveRequestHintsAtAMissingProcessPaneMarker(t *testing.T) {
 	_, _ = setupBoard(t)
 	t.Setenv("KANBAN_TMUX_PANE_SESSION", "")
-	_, err := resolveRequest("tmux:$1:@1:%1", "claude id-1")
+	_, err := resolveRequest(worker.AgentAddress{Window: "tmux:$1:@1:%1", Session: "claude id-1"})
 	probe := config.Text("launch.tmux_pane_has_no_session_marker", "%1")
 	if want := config.Text("notify.request_session_marker_hint", probe); err == nil || err.Error() != want {
 		t.Fatalf("reason = %v, want %q", err, want)
@@ -114,7 +115,7 @@ func TestResolveRequestHintsAtADifferentProcessPaneMarker(t *testing.T) {
 	_, _ = setupBoard(t)
 	t.Setenv("KANBAN_TMUX_PANE_SESSION", "id-2")
 	t.Setenv("KANBAN_TMUX_LIST_PANES", "")
-	_, err := resolveRequest("tmux:$1:@1:%1", "claude id-1")
+	_, err := resolveRequest(worker.AgentAddress{Window: "tmux:$1:@1:%1", Session: "claude id-1"})
 	if err == nil || !strings.Contains(err.Error(), markerHint()) {
 		t.Fatalf("reason = %v, want the marker hint", err)
 	}
@@ -123,21 +124,20 @@ func TestResolveRequestHintsAtADifferentProcessPaneMarker(t *testing.T) {
 func TestResolveRequestAddsNoSessionReasonToAMissingPane(t *testing.T) {
 	_, _ = setupBoard(t)
 	t.Setenv("KANBAN_HERDR_STALE_PANE", "w1:p9")
-	_, err := resolveRequest("herdr:w1:t9:w1:p9", "claude id-1")
+	_, err := resolveRequest(worker.AgentAddress{Window: "herdr:w1:t9:w1:p9", Session: "claude id-1"})
 	requireNoNewReason(t, err)
 }
 
 func TestResolveRequestAddsNoSessionReasonToADifferentAgent(t *testing.T) {
 	_, _ = setupBoard(t)
 	t.Setenv("KANBAN_HERDR_AGENT", "pi")
-	_, err := resolveRequest("herdr:w1:t9:w1:p9", "claude id-1")
+	_, err := resolveRequest(worker.AgentAddress{Window: "herdr:w1:t9:w1:p9", Session: "claude id-1"})
 	requireNoNewReason(t, err)
 }
 
 // The worker truncates a reason above 512 bytes; the new reasons fit in every
-// language with a full-length session ID.
+// language. None of them names the session ID.
 func TestRequestBlockReasonsFitTheWorkerReasonLimit(t *testing.T) {
-	const reference = "0d6a5f3e-5b8c-4c1e-9a7d-2f4b8e1c6a90"
 	for _, lang := range []string{"en", "cn", "ja"} {
 		marker := func(detail string) string {
 			return i18n.Text(lang, "notify.request_session_marker_hint", detail)
@@ -173,7 +173,7 @@ func TestResolveRequestKeepsTheMarkerHintWholeAfterAFailedLookup(t *testing.T) {
 				t.Setenv("KANBAN_HERDR_SESSION", pane)
 				t.Setenv("KANBAN_TMUX_PANE_SESSION", pane)
 				t.Setenv("KANBAN_TMUX_LIST_PANES", "")
-				_, err := resolveRequest(window, "claude "+card)
+				_, err := resolveRequest(worker.AgentAddress{Window: window, Session: "claude " + card})
 				if err == nil {
 					t.Fatal("the resolution must fail")
 				}

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/dualface/kander/v2/internal/terminal"
+	"github.com/dualface/kander/v2/internal/worker"
 )
 
 // Resolving the target of a request delivery types nothing; the prompt it
@@ -21,7 +22,7 @@ func TestResolveRequestResolvesWithoutTypingThenPromptsTheResolvedPane(t *testin
 	t.Setenv("KANBAN_HERDR_AGENT", "pi")
 	t.Setenv("KANBAN_HERDR_SESSION_KIND", "path")
 	t.Setenv("KANBAN_HERDR_SESSION", file)
-	prompt, err := resolveRequest("herdr:w1:t9:w1:p9", "pi wanted")
+	prompt, err := resolveRequest(worker.AgentAddress{Window: "herdr:w1:t9:w1:p9", Session: "pi wanted"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +45,7 @@ func TestResolveRequestFailsBeforeAnyTextReachesAnUncertainPane(t *testing.T) {
 	t.Setenv("KANBAN_HERDR_AGENT", "pi")
 	t.Setenv("KANBAN_HERDR_SESSION_KIND", "path")
 	t.Setenv("KANBAN_HERDR_SESSION", filepath.Join(t.TempDir(), "gone.jsonl"))
-	prompt, err := resolveRequest("herdr:w1:t9:w1:p9", "pi wanted")
+	prompt, err := resolveRequest(worker.AgentAddress{Window: "herdr:w1:t9:w1:p9", Session: "pi wanted"})
 	if err == nil || prompt != nil {
 		t.Fatalf("an uncertain identity must fail the resolution: %v", err)
 	}
@@ -54,7 +55,7 @@ func TestResolveRequestFailsBeforeAnyTextReachesAnUncertainPane(t *testing.T) {
 }
 
 func TestResolveRequestRefusesACardWithoutAWindow(t *testing.T) {
-	if prompt, err := resolveRequest("", "pi wanted"); err == nil || prompt != nil {
+	if prompt, err := resolveRequest(worker.AgentAddress{Window: "", Session: "pi wanted"}); err == nil || prompt != nil {
 		t.Fatalf("no WINDOW to deliver to: %v", err)
 	}
 }

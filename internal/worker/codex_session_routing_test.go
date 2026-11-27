@@ -22,9 +22,9 @@ func TestCodexExecutionWithTheConfirmedSessionGetsRequestsDelivered(t *testing.T
 	pr, sink := h.target(nil), h.logs()
 	var resolved [][2]string
 	resolve := pr.resolve
-	h.loop.o.Resolve = func(w, s string) (*Target, error) {
-		resolved = append(resolved, [2]string{w, s})
-		return resolve(w, s)
+	h.loop.o.Resolve = func(address AgentAddress) (*Target, error) {
+		resolved = append(resolved, [2]string{address.Window, address.Session})
+		return resolve(address)
 	}
 	h.workAfter(16 * time.Second)
 	if len(resolved) == 0 || resolved[0] != [2]string{window, session} {
