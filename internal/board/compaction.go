@@ -146,7 +146,7 @@ func CompactReviewRuns(ctx context.Context, root string, options CompactionOptio
 			break
 		}
 		var done int
-		done, err = compactionRound(root, options, &state, &report)
+		done, err = compactionRound(ctx, root, options, &state, &report)
 		if err != nil || done == 0 || options.DryRun {
 			break
 		}
@@ -168,8 +168,10 @@ type compactionState struct {
 // compactionRound plans under the exclusive board lock and processes one batch
 // of candidates; a dry run probes every candidate. It returns the number of
 // runs it took.
-func compactionRound(root string, options CompactionOptions, state *compactionState, report *CompactionReport) (taken int, err error) {
-	locks, err := acquire(root, LockScope{ExclusiveBoard: true})
+func compactionRound(ctx context.Context, root string, options CompactionOptions, state *compactionState, report *CompactionReport) (taken int, err error) {
+	// A caller that gives up while a board writer holds the lock must not
+	// compact once the lock frees up.
+	locks, err := acquireContext(ctx, root, LockScope{ExclusiveBoard: true})
 	if err != nil {
 		return 0, err
 	}
@@ -225,7 +227,7 @@ func compactionRound(root string, options CompactionOptions, state *compactionSt
 		}
 		return len(batch), nil
 	}
-	return len(batch), executeCompaction(root, options, runs, state, report)
+	return len(batch), executeCompaction(ctx, root, options, runs, state, report)
 }
 
 func addCompactedRun(report *CompactionReport, r CompactedRun) {
@@ -237,9 +239,13 @@ func addCompactedRun(report *CompactionReport, r CompactedRun) {
 // executeCompaction follows PruneArchived: receipts first, then card copies,
 // then control records, so an interruption never leaves a removed file
 // without its receipt.
-func executeCompaction(root string, options CompactionOptions, runs []*compactionCandidate, state *compactionState, report *CompactionReport) error {
+func executeCompaction(ctx context.Context, root string, options CompactionOptions, runs []*compactionCandidate, state *compactionState, report *CompactionReport) error {
 	if len(runs) == 0 {
 		return nil
+	}
+	// The last point at which a cancellation leaves the board untouched.
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	interrupt := func(step string) error {
 		if compactionInterrupt == nil {
@@ -283,7 +289,9 @@ func executeCompaction(root string, options CompactionOptions, runs []*compactio
 	finish := func() {
 		for _, c := range runs {
 			id := c.run.RunID
-			if r := removed[id]; r != nil && r.Files > 0 {
+			// A run counts once it was processed, even when only an emptied
+			// directory was left from an interrupted round, as a dry run counts it.
+			if r := removed[id]; r != nil {
 				addCompactedRun(report, *r)
 			}
 			if reasons := failed[id]; len(reasons) > 0 {
@@ -419,29 +427,46 @@ func planCompaction(root string, now time.Time, olderThan time.Duration) (*compa
 	}
 	plan := &compactionPlan{candidates: map[string]*compactionCandidate{}, successors: map[string][]string{}, skipped: map[string]*SkippedRun{}}
 	warn := func(name string, e error) { plan.warnings = append(plan.warnings, name+": "+e.Error()) }
-	groupOf, groupMembers, unreadable := map[string]string{}, map[string][]string{}, map[string]bool{}
+	b.documents, b.documentErrors = map[string]string{}, map[string]error{}
 	for _, id := range sortedKeys(b.Entries) {
 		text, e := readCardText(b.Entries[id])
 		if e != nil {
 			warn(id, e)
-			unreadable[id] = true
+			b.documentErrors[id] = e
 			continue
 		}
-		if g := TaskGroupFrom(text); g != "" {
-			groupOf[id] = g
-			groupMembers[g] = append(groupMembers[g], id)
-		}
+		b.documents[id] = text
 	}
+	// The membership view keeps every scan and read problem, including a card
+	// the scan dropped for a missing spec.md, and fails closed for any group
+	// such a card may belong to.
+	membership := b.GroupMembership()
 	final := func(id string) bool {
 		e, ok := b.Entries[id]
-		return ok && !unreadable[id] && (e.State == "done" || e.State == "archived" || e.State == "trash")
+		_, unreadable := b.documentErrors[id]
+		return ok && !unreadable && (e.State == "done" || e.State == "archived" || e.State == "trash")
+	}
+	// memberGroup returns the task group of a member card, and false when the
+	// card's membership cannot be read unambiguously.
+	memberGroup := func(id string) (string, bool) {
+		text, ok := b.documents[id]
+		if !ok {
+			return "", false
+		}
+		g := TaskGroupFrom(text)
+		return g, len(fieldLines(text, FieldTaskGroup)) <= 1 && (g == "" || taskGroupRe.MatchString(g))
 	}
 	settledGroups := map[string]bool{}
 	groupSettled := func(g string) bool {
 		if settled, known := settledGroups[g]; known {
 			return settled
 		}
-		settled := compactionGroupSettled(root, g, groupMembers[g], len(unreadable) == 0, final, b.Entries, warn)
+		settled := false
+		if e := membership.ErrFor(g); e != nil {
+			warn("groups/"+g, e)
+		} else {
+			settled = compactionGroupSettled(root, g, membership.Groups[g], final, b.Entries, warn)
+		}
 		settledGroups[g] = settled
 		return settled
 	}
@@ -464,7 +489,7 @@ func planCompaction(root string, now time.Time, olderThan time.Duration) (*compa
 		if run.PreviousRunID != "" {
 			plan.successors[run.PreviousRunID] = append(plan.successors[run.PreviousRunID], id)
 		}
-		settled[id] = compactionConditions(root, run, now, olderThan, plan, final, groupOf, groupSettled, warn)
+		settled[id] = compactionConditions(root, run, now, olderThan, plan, final, memberGroup, groupSettled, warn)
 	}
 	// A run that an unsettled run names as its predecessor stays until the
 	// successor settles too, as planPrune keeps predecessor chains.
@@ -487,7 +512,7 @@ func planCompaction(root string, now time.Time, olderThan time.Duration) (*compa
 			plan.skip(id, CompactionRemoval, e.Error())
 			continue
 		}
-		targets, e := compactionTargets(root, run, b.Entries)
+		targets, e := compactionTargets(root, run, b.Entries, warn)
 		if e != nil {
 			plan.skip(id, CompactionRemoval, e.Error())
 			continue
@@ -501,7 +526,7 @@ func planCompaction(root string, now time.Time, olderThan time.Duration) (*compa
 
 // compactionConditions records every failed condition among 1-6 and reports
 // whether all of them hold.
-func compactionConditions(root string, run ReviewRun, now time.Time, olderThan time.Duration, plan *compactionPlan, final func(string) bool, groupOf map[string]string, groupSettled func(string) bool, warn func(string, error)) bool {
+func compactionConditions(root string, run ReviewRun, now time.Time, olderThan time.Duration, plan *compactionPlan, final func(string) bool, memberGroup func(string) (string, bool), groupSettled func(string) bool, warn func(string, error)) bool {
 	id := run.RunID
 	ok := true
 	fail := func(c CompactionCondition, reason string) {
@@ -537,7 +562,12 @@ func compactionConditions(root string, run ReviewRun, now time.Time, olderThan t
 		}
 	}
 	for _, task := range run.TaskIDs {
-		if g := groupOf[task]; g != "" && !groupSettled(g) {
+		g, known := memberGroup(task)
+		if !known {
+			fail(CompactionGroupSettled, "task group of member "+task+" cannot be read")
+			break
+		}
+		if g != "" && !groupSettled(g) {
 			fail(CompactionGroupSettled, "task group "+g+" is not settled")
 			break
 		}
@@ -557,10 +587,11 @@ func compactionConditions(root string, run ReviewRun, now time.Time, olderThan t
 }
 
 // compactionGroupSettled has the semantics of GroupEvidenceSettled without
-// taking any lock: every member is final and, for a group with a checkpoint,
+// taking any lock. The caller has checked that the membership of group is
+// complete. Every member is final and, for a group with a checkpoint,
 // every completed wrap-up of a done member has its Git evidence record.
-func compactionGroupSettled(root, group string, members []string, complete bool, final func(string) bool, entries map[string]Entry, warn func(string, error)) bool {
-	if !complete || !ValidTaskGroup(group) || len(members) == 0 {
+func compactionGroupSettled(root, group string, members []string, final func(string) bool, entries map[string]Entry, warn func(string, error)) bool {
+	if !ValidTaskGroup(group) || len(members) == 0 {
 		return false
 	}
 	var done []string
@@ -594,11 +625,36 @@ func compactionGroupSettled(root, group string, members []string, complete bool,
 	return true
 }
 
+// originalNames are the files FinalizeReviewRun writes to originals/;
+// cardCopyNames adds what publication and the review records write to a
+// member card's reviews/<run>/ copy.
+var (
+	originalNames = append([]string{"report.md", ReviewProcessEvidence}, compactedNames...)
+	cardCopyNames = append([]string{"manifest.json", "sidecar.json", "assignment.json", "interpretation.json", "legacy-map.json", "dispositions"}, originalNames...)
+)
+
 // compactionTargets lists the files of a settled run that compaction removes
 // and that still exist. A listed name that is not a regular file, or a tree
 // that holds anything but regular files and directories, keeps the whole run.
-func compactionTargets(root string, run ReviewRun, entries map[string]Entry) ([]compactionTarget, error) {
+func compactionTargets(root string, run ReviewRun, entries map[string]Entry, warn func(string, error)) ([]compactionTarget, error) {
 	var targets []compactionTarget
+	// unknown reports, and keeps, every entry of a protected directory that no
+	// review producer writes; compaction never removes it.
+	unknown := func(dir string, known []string) {
+		list, err := fs.ListDirectory(root, dir)
+		if errors.Is(err, os.ErrNotExist) {
+			return
+		}
+		if err != nil {
+			warn(dir, err)
+			return
+		}
+		for _, entry := range list {
+			if !slices.Contains(known, entry.Name) {
+				warn(filepath.Join(dir, entry.Name), reviewError("unknown review evidence entry; kept"))
+			}
+		}
+	}
 	file := func(location, path, name string) error {
 		f, err := fs.OpenRegularFileIfExists(root, path)
 		if err != nil || f == nil {
@@ -616,13 +672,16 @@ func compactionTargets(root string, run ReviewRun, entries map[string]Entry) ([]
 		if !ok || !e.IsDirectory() {
 			continue
 		}
+		copyDir := filepath.Join(e.Path, "reviews", run.RunID)
+		unknown(copyDir, cardCopyNames)
 		for _, name := range compactedNames {
-			if err := file(compactedCardPre+task, filepath.Join(e.Path, "reviews", run.RunID, name), name); err != nil {
+			if err := file(compactedCardPre+task, filepath.Join(copyDir, name), name); err != nil {
 				return nil, err
 			}
 		}
 	}
 	dir := control(root, "groups", reviewControlGroup, "runs", run.RunID)
+	unknown(filepath.Join(dir, "originals"), originalNames)
 	for _, name := range compactedNames {
 		if err := file(compactedOriginals, filepath.Join(dir, "originals", name), name); err != nil {
 			return nil, err

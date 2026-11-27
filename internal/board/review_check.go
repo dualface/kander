@@ -104,6 +104,12 @@ func CheckReviewEvidence(root string, ids []string) (problems []Problem, err err
 				if !containsID(run.TaskIDs, id) || pruned[runID] {
 					continue
 				}
+				// A compaction receipt binds the run even when no member holds
+				// a copy, so it is validated before any branch skips the run.
+				if _, _, e = runCompaction(root, runID, run.TaskIDs); e != nil {
+					add(id, e)
+					continue
+				}
 				if run.Phase != "finalized" || !allPublished(run) {
 					add(id, incompletePublication(run))
 					continue

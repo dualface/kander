@@ -1,10 +1,16 @@
 package board
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 // ReadReviewInput reads the frozen input even after a crash before finalization.
 func ReadReviewInput(root, id, name string) (data []byte, err error) {
-	if !ValidReviewID(id) || name != "task-context.md" && name != "review-context.md" {
+	frozen := name == "task-context.md" || name == "review-context.md"
+	// Only the frozen contexts are readable. Another stored input is named only
+	// to say that a compaction removed it.
+	if !ValidReviewID(id) || !frozen && !slices.Contains(reviewArtifactNames, name) {
 		return nil, reviewError("review input name")
 	}
 	err = WithTransaction(root, reviewScope(nil, true), func(tx *Transaction) error {
@@ -15,6 +21,18 @@ func ReadReviewInput(root, id, name string) (data []byte, err error) {
 		}
 		if !ok {
 			return reviewError("missing run")
+		}
+		if !frozen {
+			compacted, e := compactionLookup(tx.root, run)
+			if e != nil {
+				return e
+			}
+			if _, present, e := tx.ReadGroup(reviewControlGroup, "runs/"+id+"/inputs/"+name); e != nil {
+				return e
+			} else if !present && compacted(compactedInputs, name) {
+				return compactedError(id, name)
+			}
+			return reviewError("review input name")
 		}
 		data, ok, e = tx.ReadGroup(reviewControlGroup, "runs/"+id+"/inputs/"+name)
 		if e != nil {

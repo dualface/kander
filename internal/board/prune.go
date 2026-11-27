@@ -150,8 +150,14 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 	}
 	for _, id := range sortedKeys(plan.runs) {
 		// The prune receipt already covers the run, and a receipt removed first
-		// is never left behind by an interruption with no run to name it.
+		// is never left behind by an interruption with no run to name it. A
+		// receipt that cannot be removed keeps its run, so the next round,
+		// which plans from the runs that exist, removes both.
+		failed := len(failures)
 		remove(compactionReceiptPath(root, id), false)
+		if len(failures) > failed {
+			continue
+		}
 		remove(review("runs", id), true)
 	}
 	for _, id := range sortedKeys(plan.batches) {
