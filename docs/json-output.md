@@ -25,7 +25,7 @@ Every command except the bare `kander` and the internal `worker` accepts the glo
 | `check_<kind>` | 2 or 3 | An analysis of `check delivery` or `check overlap` that could not finish: `check_invalid_ref`, `check_not_ancestor`, `check_not_repository`, `check_git_unavailable`, `check_no_merge_base`, `check_output_limit`, `check_parse`, `check_internal` |
 | `review_failed` | 1, 2 | A review that failed before it published evidence; the message holds the messages of the run |
 | `launch_unresolved` | 3 | A start or a takeover that failed late with executor evidence; the message holds the next steps |
-| `rules_reference_missing` | 1 | `start`: the start base does not reference the Kander rules in the executing agent's project rules file; the message names the file, the start branch, and the commit. Run `kander init`, then commit and push |
+| `rules_reference_missing` | 1 | `start`: the start base does not reference the Kander rules in the executing agent's project rules file, or in an `AGENTS.override.md` that shadows it; the message names the file, the start branch, and the commit. Run `kander init`, then commit and push |
 | `server_not_running` | 1 | `server status` found no server |
 | `cancelled` | 130 | `server import` was interrupted |
 | `gc_timeout` | 1 | The `server gc` call timed out; the server may still run the gc |

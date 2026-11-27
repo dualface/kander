@@ -37,16 +37,44 @@ func ProjectRulesApplicable(agent, root string, switches config.InstallRules) (s
 	return rel, true
 }
 
-// ProjectReferenceInTree reports whether the agent's project rules file, read from a commit
-// tree, references the global rules entry with the same rules as ProjectReferenceStatus: a
-// symlink resolves inside the tree, and for a file in the claude-import style a whole-line `@`
-// import of another file of the tree (CLAUDE.md importing AGENTS.md) counts when that file
-// carries the reference. baseDir is the main worktree the tree belongs to.
-func ProjectReferenceInTree(agent string, paths config.InstallPaths, baseDir string, read TreeReader) (bool, error) {
+// MissingProjectReferenceInTree checks, in a commit tree, the project rules files through which
+// the agent loads the Kander rules, with the same rules as ProjectReferenceStatus, and returns
+// the first one, relative to the root, that does not reference the global rules entry; "" means
+// every file does. A symlink resolves inside the tree, and for a file in the claude-import style
+// a whole-line `@` import of another file of the tree (CLAUDE.md importing AGENTS.md) counts
+// when that file carries the reference. An AGENTS.override.md next to an AGENTS.md shadows it
+// for the agents that read it, so when the tree holds one, it must reference the entry too.
+// baseDir is the main worktree the tree belongs to.
+func MissingProjectReferenceInTree(agent string, paths config.InstallPaths, baseDir string, read TreeReader) (string, error) {
 	rel := ProjectRulesRelative(agent)
 	if rel == "" {
-		return false, nil
+		return "", nil
 	}
+	present, err := treeFileReferences(agent, rel, paths, baseDir, read)
+	if err != nil || !present {
+		return rel, err
+	}
+	if path.Base(rel) != "AGENTS.md" {
+		return "", nil
+	}
+	override := path.Join(path.Dir(rel), "AGENTS.override.md")
+	file, err := read(override)
+	if err != nil {
+		return override, err
+	}
+	if !file.Found {
+		return "", nil
+	}
+	_, text, found, err := readTreeFollowing(override, read)
+	if err != nil || !found || !referenceStyleFor(agent).Present(text, RulesEntry(paths), baseDir) {
+		return override, err
+	}
+	return "", nil
+}
+
+// treeFileReferences reports whether rel, read from the tree, references the global rules
+// entry, following an import of the claude-import style.
+func treeFileReferences(agent, rel string, paths config.InstallPaths, baseDir string, read TreeReader) (bool, error) {
 	resolved, text, found, err := readTreeFollowing(rel, read)
 	if err != nil || !found {
 		return false, err
