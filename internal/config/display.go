@@ -49,9 +49,18 @@ func LoadWithDisplay(missingOK bool) (LayeredConfig, error) {
 	if err != nil {
 		return LayeredConfig{}, err
 	}
+	// The project policy covers both: the loaded configuration and the one shown hold the
+	// same policy values, and the display carries the same policy state.
 	display, err := layers.reference(loaded)
+	loaded = layers.withPolicy(loaded)
 	if err != nil {
 		display = loaded
+	} else {
+		display = Clone(display)
+		if loaded.Policy.Applied() {
+			PolicyValuesOf(loaded).ApplyTo(display)
+		}
+		display.Policy = loaded.Policy
 	}
 	return LayeredConfig{Loaded: loaded, Display: display, Language: language}, nil
 }

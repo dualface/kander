@@ -351,7 +351,7 @@ func (s *Server) register(req api.RegisterProject) (api.Project, bool, error) {
 	}
 	if id, ok := s.byName[req.Name]; ok {
 		p := s.projects[id]
-		info := p.info
+		info := p.view()
 		s.mu.Unlock()
 		if req.Remote != "" && info.Remote != "" && info.Remote != req.Remote {
 			return api.Project{}, false, apiError(api.CodeProjectMismatch, "project "+req.Name+" is bound to another Git remote")
@@ -380,7 +380,7 @@ func (s *Server) register(req api.RegisterProject) (api.Project, bool, error) {
 		delete(s.byName, info.Name)
 		return api.Project{}, false, err
 	}
-	info = s.projects[info.ID].info
+	info = s.projects[info.ID].view()
 	s.log.Info("project registered", "project", info.ID, "name", info.Name, "board", info.BoardPath)
 	return info, true, nil
 }
@@ -398,7 +398,7 @@ func (s *Server) bindRemote(p *project, remote string) (api.Project, bool, error
 	defer s.mu.Unlock()
 	switch p.info.Remote {
 	case remote:
-		return p.info, false, nil
+		return p.view(), false, nil
 	case "":
 	default:
 		return api.Project{}, false, apiError(api.CodeProjectMismatch, "project "+p.info.Name+" is bound to another Git remote")
@@ -409,7 +409,7 @@ func (s *Server) bindRemote(p *project, remote string) (api.Project, bool, error
 		return api.Project{}, false, err
 	}
 	s.log.Info("project remote bound", "project", p.info.ID, "name", p.info.Name)
-	return p.info, false, nil
+	return p.view(), false, nil
 }
 
 // writeRegistry replaces projects.json with the registered projects. The
@@ -479,5 +479,5 @@ func (s *Server) projectByName(name string) (api.Project, error) {
 	if !ok {
 		return api.Project{}, apiError(api.CodeNotFound, "project "+name+" is not registered")
 	}
-	return s.projects[id].info, nil
+	return s.projects[id].view(), nil
 }

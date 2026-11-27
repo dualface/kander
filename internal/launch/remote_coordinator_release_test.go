@@ -62,6 +62,7 @@ func newReleaseFixture(t *testing.T) *releaseFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	initTestPolicy(t, session)
 	f := &releaseFixture{session: session, group: "20261118-release-group", requests: requests}
 	var members []string
 	for _, slug := range []string{"release-one", "release-two"} {

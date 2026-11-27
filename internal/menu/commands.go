@@ -96,16 +96,33 @@ func runConfig() int {
 	}
 	cfg, shown := layered.Loaded, layered.Display
 	notifyForwardCompat(cfg)
+	notifyPolicy(cfg)
 	if command.JSON() {
 		for _, warning := range config.AgentWarnings(shown) {
 			command.Notify("agent_warning", warning)
 		}
-		return command.Result(shown)
+		return command.Result(configResult{Config: shown, ProjectPolicy: cfg.Policy.Status()})
 	}
 	if err := printConfig(shown, layered.Language); err != nil {
 		return command.Fail(err)
 	}
 	return 0
+}
+
+// configResult is the object of kander config --json: the configuration with the project_policy
+// object beside its keys.
+type configResult struct {
+	*config.Config
+	ProjectPolicy config.PolicyStatus `json:"project_policy"`
+}
+
+// notifyPolicy reports the remarks about the project policy of the configuration: where its
+// values could not come from, the keys of the cached policy this version ignores, and each file
+// value the policy replaces. Like the other remarks they go to stderr, or into notices with --json.
+func notifyPolicy(cfg *config.Config) {
+	for _, notice := range cfg.Policy.Notices {
+		command.Notify(notice.Code, notice.Message)
+	}
 }
 
 // notifyForwardCompat reports what this version ignored in the configuration and the roles that

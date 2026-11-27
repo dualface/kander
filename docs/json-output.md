@@ -19,7 +19,7 @@ Every command except the bare `kander` and the internal `worker` accepts the glo
 | `interactive_required` | 2 | The form needs a terminal; see "Interactive forms" |
 | `not_configured` | 1 | The checkout is not bound to a service project (`kander init`) |
 | `unreachable` | 1 | The service did not answer |
-| the service code | 1 | A service rejection: `invalid_request`, `not_found`, `revision_conflict`, `held_by_other`, `lease_invalid`, `lease_active`, `taken_over`, `claim_required`, `evidence_incomplete`, `protocol_incompatible`, `idempotency_mismatch`, `project_mismatch`, `project_not_empty`, `board_rejected`, `not_ready`, `index_rebuilding`, `decision_reserved`, `gc_running`, `import_canceled`, `internal`, or the embedding codes `forbidden` and `attribution_required` |
+| the service code | 1 | A service rejection: `invalid_request`, `not_found`, `revision_conflict`, `policy_revision_conflict`, `held_by_other`, `lease_invalid`, `lease_active`, `taken_over`, `claim_required`, `evidence_incomplete`, `protocol_incompatible`, `idempotency_mismatch`, `project_mismatch`, `project_not_empty`, `board_rejected`, `not_ready`, `index_rebuilding`, `decision_reserved`, `gc_running`, `import_canceled`, `internal`, or the embedding codes `forbidden` and `attribution_required` |
 | the board code | 1 | A board rejection, for example `board.document_not_found` or `board.transaction_conflict`; the message keys of `internal/i18n` are the values |
 | `issue_<kind>` | 1 | A failure of the GitHub provider: `issue_invalid_query`, `issue_not_repository`, `issue_no_remote`, `issue_ambiguous_remotes`, `issue_cli_unavailable`, `issue_unauthenticated`, `issue_not_found`, `issue_rate_limited`, `issue_timeout`, and the other kinds of `internal/issue` with `-` written as `_` |
 | `check_<kind>` | 2 or 3 | An analysis of `check delivery` or `check overlap` that could not finish: `check_invalid_ref`, `check_not_ancestor`, `check_not_repository`, `check_git_unavailable`, `check_no_merge_base`, `check_output_limit`, `check_parse`, `check_internal` |
@@ -29,6 +29,9 @@ Every command except the bare `kander` and the internal `worker` accepts the glo
 | `cancelled` | 130 | `server import` was interrupted |
 | `gc_timeout` | 1 | The `server gc` call timed out; the server may still run the gc |
 | the service code | 2 | `server gc` refused by the service: `invalid_request`, `not_found`, `gc_running`, or the refused administration check (HTTP 403, code `invalid_request`) |
+| `policy_unsupported` | 1 | `policy`: the server keeps no project policies |
+| `policy_already_set` | 1 | `policy init`: the project already has a policy; use `policy set` |
+| `project_policy_unset` | 1 | `policy set`: the project has no policy yet; use `policy init` |
 | `failed` | 1 | A failure without a more specific class |
 
 ### Code priority
@@ -50,6 +53,13 @@ The code of a failure is the first of these that applies:
 | `agent_warning` | `config`, `check` | An agent of the configuration is unusable |
 | `config_ignored` | `config` | The configuration holds a key or a `models.*` agent entry that this version ignores; one notice per item |
 | `agent_unusable` | `config` | An `agents.<name>` entry this version cannot use, or a role that names an agent it does not know; one notice per item |
+| `project_policy_unset` | `config`, `init`, any command that opens the service | The project has no project policy; the local values apply |
+| `project_policy_cache_missing` | `config` | No project policy is cached yet |
+| `project_policy_cache_invalid` | `config`, any command that opens the service | The cached policy, or the server's, cannot be used; the local values apply |
+| `project_policy_ignored` | `config`, `policy show`, any command that opens the service | A key of the project policy that this version does not know is ignored |
+| `project_policy_override` | `config` | A configuration file value differs from the project policy, which applies |
+| `project_policy_cache_failed` | `policy`, any command that opens the service | The project policy cache could not be written |
+| `project_policy_init_failed` | `init` | The policy step of `init` failed; the binding stands |
 | `check_diagnostic` | `check` | A diagnostic line of the structural check |
 | `launch_warning` | `start`, `resume`, `orchestrate`, `issue triage` | A warning of the launch |
 | `rules_embedded_fallback` | any command that renders a rules template | The installed copy of a template is missing and the embedded one was used; run `kander doctor` |
@@ -112,6 +122,7 @@ Each command contract describes the result object of every command form in its `
 | `notify`, `request` | `rules/snippets/commands/notify.md` |
 | `orchestrate` | `rules/snippets/commands/orchestrate.md` |
 | `pick` | `rules/snippets/commands/pick.md` |
+| `policy` | `rules/snippets/commands/policy.md` |
 | `resume` | `rules/snippets/commands/resume.md` |
 | `review` | `rules/snippets/commands/review.md` |
 | `server` | `rules/snippets/commands/server.md` |

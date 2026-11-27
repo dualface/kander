@@ -115,8 +115,9 @@ func (s *Server) registerRoutes(mux *routeTable) {
 	// The project by its ID, for a client that holds the ID but not the name,
 	// such as kander gc matching a client project directory to its project.
 	s.projectRoute(mux, "GET /api/v1/projects/{project}", func(p *project, _ *http.Request) outcome {
-		return outcome{status: http.StatusOK, body: p.info}
+		return outcome{status: http.StatusOK, body: p.view()}
 	})
+	s.policyRoutes(mux)
 	const task = "/api/v1/projects/{project}/tasks/{task}"
 	s.projectRoute(mux, taskListRoute, func(p *project, r *http.Request) outcome {
 		query, err := parseTaskList(r.URL.RawQuery)

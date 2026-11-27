@@ -538,3 +538,18 @@ func (p *Project) ConfirmPublication(ctx context.Context, id string, approval ap
 	err := p.c.do(ctx, call{method: http.MethodPost, path: p.path("publications", url.PathEscape(id), "confirm"), body: approval, claim: &proof}, &out)
 	return out, err
 }
+
+// Policy reads the project policy; revision 0 when the project has none.
+func (p *Project) Policy(ctx context.Context) (api.ProjectPolicy, error) {
+	var policy api.ProjectPolicy
+	err := p.c.do(ctx, call{method: http.MethodGet, path: p.path("policy")}, &policy)
+	return policy, err
+}
+
+// PutPolicy writes the whole project policy while its revision is
+// write.ExpectedRevision. A retry with the same key returns the first answer.
+func (p *Project) PutPolicy(ctx context.Context, key string, write api.PolicyWrite) (api.ProjectPolicy, error) {
+	var policy api.ProjectPolicy
+	err := p.c.do(ctx, call{method: http.MethodPut, path: p.path("policy"), body: write, key: key}, &policy)
+	return policy, err
+}

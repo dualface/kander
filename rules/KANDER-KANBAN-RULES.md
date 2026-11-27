@@ -42,6 +42,9 @@ kander gc [--dry-run] [--yes] [--older-than D] [--all-projects] [--client-only]
 kander terminal list
 kander terminal test <name> [--keep] [--skip-focus]
 kander init [--server <URL>] [--project <name>] [project-path]
+kander policy show
+kander policy init [--yes]
+kander policy set <key> <value>
 kander list [--agent-status] [backlog|todo|working|review|done|archived|trash]
 kander show [--document <relative-path>] <task-id>
 kander new [--large] [--language <agent language>] <feature|bug|chore|research> <slug> <title...>

@@ -25,7 +25,7 @@ import (
 const sampleTask = "20261118-sample-task"
 
 // groups are the commands that only group subcommands.
-var groups = map[string]bool{"coordinator": true, "decision": true, "dispatch": true, "issue": true, "server": true, "terminal": true}
+var groups = map[string]bool{"coordinator": true, "decision": true, "dispatch": true, "issue": true, "policy": true, "server": true, "terminal": true}
 
 // leafCommand is a command that runs something, with its command path.
 type leafCommand struct {
@@ -99,6 +99,9 @@ var samplePositionals = map[string][]string{
 	"notify":                       {sampleTask},
 	"orchestrate":                  {sampleTask},
 	"pick":                         {sampleTask},
+	"policy init":                  {},
+	"policy set":                   {"git.branch_mode", "main-only"},
+	"policy show":                  {},
 	"request":                      {sampleTask, "fix", "please"},
 	"request answer":               {sampleTask, "request-1", "done", "noted"},
 	"request list":                 {sampleTask},

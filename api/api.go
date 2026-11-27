@@ -121,13 +121,17 @@ type Health struct {
 // registration with another remote is refused, so two different repositories
 // cannot share one board by accident. BoardPath is the absolute board
 // directory on the server host; it appears only in responses and is never
-// stored in the server registry.
+// stored in the server registry. Policy is the project policy; a server that
+// keeps project policies sets it in every response (revision 0 when the
+// project has none), and it is never stored in the registry either. A client
+// reads a missing Policy as a server without project policies.
 type Project struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Remote    string    `json:"remote,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	BoardPath string    `json:"board_path,omitempty"`
+	ID        string         `json:"id"`
+	Name      string         `json:"name"`
+	Remote    string         `json:"remote,omitempty"`
+	CreatedAt time.Time      `json:"created_at"`
+	BoardPath string         `json:"board_path,omitempty"`
+	Policy    *ProjectPolicy `json:"policy,omitempty"`
 }
 
 // RegisterProject is POST /api/v1/projects. Registering an existing name with

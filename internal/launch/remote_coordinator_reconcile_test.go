@@ -110,6 +110,7 @@ func newReconcileFixture(t *testing.T) *reconcileFixture {
 	if f.session, err = remote.Open(ctx, f.cfg, f.clone); err != nil {
 		t.Fatal(err)
 	}
+	initTestPolicy(t, f.session)
 	p := f.session.Project
 	var members []string
 	for _, slug := range []string{"reconcile-one", "reconcile-two"} {

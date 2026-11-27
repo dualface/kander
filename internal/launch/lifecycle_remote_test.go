@@ -57,6 +57,7 @@ func remoteLifecycleFixture(t *testing.T, slug string, origin ...string) (*confi
 	if err != nil {
 		t.Fatal(err)
 	}
+	initTestPolicy(t, session)
 	card := remoteLifecycleTodo(t, session, slug)
 	previousWorker := ensureRemoteWorker
 	ensureRemoteWorker = func(string) (string, error) { return "", nil }

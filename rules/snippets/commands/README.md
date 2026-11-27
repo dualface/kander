@@ -16,6 +16,7 @@ Global flags: `--lang`, `--json`.
 | `gc` | Reclaim | user | `snippets/commands/gc.md` |
 | `terminal` | Launchers | user | `snippets/commands/terminal.md` |
 | `init` | Initialize | user | `snippets/commands/init.md` |
+| `policy` | Project policy | user | `snippets/commands/policy.md` |
 | `list` | Cards | creator/user | `snippets/commands/list.md` |
 | `show` | Card/revision | executors | `snippets/commands/show.md` |
 | `new` | Create | creator | `snippets/commands/new.md` |
@@ -56,6 +57,9 @@ kander gc [--dry-run] [--yes] [--older-than D] [--all-projects] [--client-only]
 kander terminal list
 kander terminal test <name> [--keep] [--skip-focus]
 kander init [--server <URL>] [--project <name>] [project-path]
+kander policy show
+kander policy init [--yes]
+kander policy set <key> <value>
 kander list [--agent-status] [backlog|todo|working|review|done|archived|trash]
 kander show [--document <relative-path>] <task-id>
 kander new [--large] [--language <agent language>] <feature|bug|chore|research> <slug> <title...>

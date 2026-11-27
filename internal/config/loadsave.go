@@ -94,18 +94,30 @@ func loadScopeRawAt(path string, missingOK bool) (*Config, map[string]any, error
 }
 
 func loadEffective(cwd string, missingOK bool) (*Config, error) {
-	cfg, _, err := loadEffectiveRaw(cwd, missingOK)
-	return cfg, err
-}
-
-// loadEffectiveRaw is loadEffective that also returns the merged raw document the
-// configuration was validated from.
-func loadEffectiveRaw(cwd string, missingOK bool) (*Config, map[string]any, error) {
 	layers, err := readLayers(cwd, missingOK)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return layers.effective()
+	cfg, _, err := layers.effective()
+	if err != nil {
+		return nil, err
+	}
+	return layers.withPolicy(cfg), nil
+}
+
+// withPolicy applies the cached project policy over a configuration built from
+// these layers. The policy is the last layer and covers only its five values;
+// the result is a copy, so a cached scope configuration is never changed.
+func (l layerDocuments) withPolicy(cfg *Config) *Config {
+	out := Clone(cfg)
+	scope := policyLayer{doc: l.scope}
+	if exists, err := Exists(); err != nil || !exists {
+		// A missing scope file reads as the defaults, which are no file values.
+		scope.doc = nil
+	}
+	scope.path, _ = ConfigPath()
+	applyPolicyCache(out, []policyLayer{scope, {path: l.overlayPath, doc: l.overlay}})
+	return out
 }
 
 // layerDocuments are the raw documents of the two layers of one read: the scope file, already
@@ -298,6 +310,7 @@ func Effective(cfg *Config) (*Config, error) {
 			return nil, err
 		}
 		carryIgnored(validated, cfg)
+		validated.Policy, validated.policyLocal = cfg.Policy, cfg.policyLocal
 		cfg = validated
 	}
 	if cfg.WelcomeComplete {
@@ -305,6 +318,11 @@ func Effective(cfg *Config) (*Config, error) {
 	}
 	defaults := DefaultConfig()
 	defaults.Rules = cfg.Rules.Clone()
+	if cfg.Policy.Applied() {
+		// The project policy applies whether or not this host finished its welcome.
+		PolicyValuesOf(cfg).ApplyTo(defaults)
+		defaults.Policy, defaults.policyLocal = cfg.Policy, cfg.policyLocal
+	}
 	// Service binding is independent of completing the interface welcome.
 	defaults.Server, defaults.Project = cfg.Server, cfg.Project
 	return defaults, nil
@@ -520,6 +538,11 @@ func configEditConflicts(current, baseline, target *Config) bool {
 		// to it by another writer is not a conflicting edit. The install switches of
 		// an unusable entry are edited, so they take part in the check.
 		if name := currentValue.Type().Field(i).Name; name == "Ignored" || name == "UnusableAgents" {
+			continue
+		}
+		// The project policy state and the private load records describe a read, not a
+		// value of the file.
+		if field := currentValue.Type().Field(i); field.Name == "Policy" || !field.IsExported() {
 			continue
 		}
 		currentField := currentValue.Field(i).Interface()

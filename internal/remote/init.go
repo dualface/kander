@@ -1,6 +1,7 @@
 package remote
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -63,7 +64,7 @@ func runInit(args []string, url string, urlGiven bool, name string, nameGiven bo
 	}
 	ctx, cancel := commandContext()
 	defer cancel()
-	session, err := Open(ctx, cfg, dir)
+	session, err := OpenWith(ctx, cfg, dir, OpenOptions{QuietPolicy: true})
 	if err != nil {
 		return fail(err)
 	}
@@ -75,11 +76,35 @@ func runInit(args []string, url string, urlGiven bool, name string, nameGiven bo
 		}
 	}
 	if command.JSON() {
+		initPolicyStep(ctx, session, cfg)
 		return command.Exit(command.Result(bindResult{ProjectName: session.Info.Name, ProjectID: session.Info.ID, ServerURL: session.ServerURL, BoardPath: session.Info.BoardPath}))
 	}
 	fmt.Fprintln(stdout, config.Text("remote.project_bound", session.Info.Name, session.Info.ID, session.ServerURL))
 	if session.Info.BoardPath != "" {
 		fmt.Fprintln(stdout, config.Text("remote.project_board_path", session.Info.BoardPath))
 	}
+	initPolicyStep(ctx, session, cfg)
 	return nil
+}
+
+// initPolicyStep offers the policy initialization of kander policy init when
+// the bound project has no policy: a person at a terminal sees the values and
+// confirms; any other caller gets the project_policy_unset remark and nothing
+// is written. A failed initialization is a remark: the binding stands.
+func initPolicyStep(ctx context.Context, session *Session, cfg *config.Config) {
+	policy := session.Info.Policy
+	if policy != nil && policy.Revision > 0 {
+		return
+	}
+	if policy == nil || !policyInteractive() {
+		remark(config.NoticePolicyUnset, config.Text("policy.unset"))
+		return
+	}
+	written, err := initializePolicy(ctx, session, config.LocalPolicyValues(cfg), true)
+	switch {
+	case err != nil:
+		remark("project_policy_init_failed", config.Text("policy.init_failed", err.Error()))
+	case written != nil:
+		fmt.Fprintln(stdout, config.Text("policy.written", written.Revision, written.Epoch))
+	}
 }

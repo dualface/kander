@@ -41,6 +41,8 @@ The first version trusts its network: there is no login and no role model, one s
     control/
       events.jsonl               bounded event diagnostic log
       gc-receipts.json           receipts a gc is removing, kept while one is unresolved
+      policy.json                the project policy (absent while unset)
+      policy-audit.jsonl         one line per project policy write and void
 ```
 
 A project name is an identifier, never a path: an ASCII letter, then up to 127 ASCII letters, digits, `_` or `-` (`^[A-Za-z][A-Za-z0-9_-]{0,127}$`). Clients (configuration, `kander init --project`) and the server (registration, `import`, `maintain`) refuse any other name and state the rule; nothing is rewritten or filtered.
@@ -209,6 +211,8 @@ All routes live below `/api/v1`. Every domain request sends `Kander-Protocol: <n
 
 The request-card confirmation route is additive and does not change protocol 3. Older servers return 404 on that route. See [Request card confirmation](request-cards.md#confirmation).
 
+The project policy routes and the `policy` field of the project answers are additive and do not change protocol 3 either. A client reads a project answer without `policy` as a server without project policies. See [Project policy](project-policy.md).
+
 | Route | Purpose |
 | --- | --- |
 | `GET /health`, `GET /ready`, `GET /version` | Liveness, readiness, protocol range |
@@ -234,13 +238,14 @@ The request-card confirmation route is additive and does not change protocol 3. 
 | `POST /projects/{p}/reviews/plan`, `POST .../reviews/batches/{b}/aggregate`, `GET .../reviews/batches/{b}/view`, `POST .../reviews/close`, `GET .../reviews/progress/{t}` | Review gate evidence |
 | `GET /projects/{p}/groups/{g}`, `POST .../claim`, `/renew`, `/observation`, `/release` | Private coordinator lease and its public checkpoint |
 | `POST /projects/{p}/groups/{g}/facts`, `/reconcile`, `/recover`, `/remove-member` | Controlled coordinator producers and client Git verdicts; `remove-member` takes one unstarted member out of a checkpointed group (see [Orchestration checkpoints](coordinator-recovery.md#removing-an-unstarted-member)) |
-| `GET /projects/{p}` | The project by its ID (name, remote, board path), through the project route and its access control |
+| `GET /projects/{p}` | The project by its ID (name, remote, board path, policy), through the project route and its access control |
+| `GET`, `PUT /projects/{p}/policy` | The project policy: read it, or write all five values with a compare-and-swap on its revision (see [Project policy](project-policy.md)) |
 | `GET /projects/{p}/tasks/{t}/evidence-cleanup`, `GET /projects/{p}/groups/{g}/evidence-cleanup` | Read-only scope of the completion cleanup of Git evidence refs: whether the card or group is finished, its `done/` cards, and its integration executions |
 | `POST /projects/{p}/issues/import` | Create a card from a GitHub issue with its source attachments |
 | `POST /projects/{p}/issues/results/view`, `/save` | Completed work-set evidence and versioned result publication/decision history |
 | `GET /projects/{p}/events?cursor=&wait=` | Long-polled change log |
 
-Errors are JSON `{code, message, board_code}` with stable codes: `invalid_request`, `not_found`, `revision_conflict`, `decision_reserved`, `confirmation_required`, `held_by_other`, `taken_over`, `lease_invalid`, `lease_active`, `claim_required`, `evidence_incomplete`, `protocol_incompatible`, `idempotency_mismatch`, `project_mismatch`, `project_not_empty`, `board_rejected`, `not_ready`, `index_rebuilding`, `review_compacted`, `gc_running`, `internal`. `review_compacted` (HTTP 410) answers a read of a review original or input that a compaction removed from a settled run, and a prepare or publication of a compacted run; see [Review run compaction](review-evidence.md#review-run-compaction). `gc_running` (HTTP 409) refuses a second `POST /api/v1/server/gc` while one runs. Embedding reserves `forbidden` and `attribution_required` as HTTP 403 codes for host policy and missing attribution, respectively. `board_code` carries the board package message key of a domain rejection so the client renders the same localized text as v1.
+Errors are JSON `{code, message, board_code}` with stable codes: `invalid_request`, `not_found`, `revision_conflict`, `decision_reserved`, `confirmation_required`, `held_by_other`, `taken_over`, `lease_invalid`, `lease_active`, `claim_required`, `evidence_incomplete`, `protocol_incompatible`, `idempotency_mismatch`, `project_mismatch`, `project_not_empty`, `board_rejected`, `not_ready`, `index_rebuilding`, `review_compacted`, `gc_running`, `policy_revision_conflict`, `internal`. `review_compacted` (HTTP 410) answers a read of a review original or input that a compaction removed from a settled run, and a prepare or publication of a compacted run; see [Review run compaction](review-evidence.md#review-run-compaction). `gc_running` (HTTP 409) refuses a second `POST /api/v1/server/gc` while one runs. `policy_revision_conflict` (HTTP 409) refuses a project policy write whose expected revision is not the current one. Embedding reserves `forbidden` and `attribution_required` as HTTP 403 codes for host policy and missing attribution, respectively. `board_code` carries the board package message key of a domain rejection so the client renders the same localized text as v1.
 
 ### Idempotency
 

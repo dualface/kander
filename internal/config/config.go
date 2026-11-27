@@ -177,6 +177,12 @@ type Config struct {
 	// UnusablePolicy holds the install_rules and config_dir values of unusable
 	// built-in entries. They are scope policy and keep applying; see InstallRulesOf.
 	UnusablePolicy map[string]AgentDefinition `json:"-"`
+	// Policy says where the project policy values (git, review_stages, rules,
+	// agent_language, issue) come from; Load replaces them with the cached
+	// server policy of the bound project. It is never serialized from the struct.
+	Policy PolicyState `json:"-"`
+	// policyLocal are the file values a policy replaced; nil while none did.
+	policyLocal *PolicyValues
 }
 
 // Clone deep-copies the config so a long-lived editing session can keep its baseline.

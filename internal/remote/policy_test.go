@@ -1,0 +1,289 @@
+package remote
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/spf13/cobra"
+
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/command/commandtest"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/version"
+)
+
+// policyClient is one host: its own client home and scope configuration.
+type policyClient struct {
+	home, config string
+}
+
+func newPolicyClient(t *testing.T, serverURL string, adjust func(*config.Config)) policyClient {
+	t.Helper()
+	root := t.TempDir()
+	c := policyClient{home: filepath.Join(root, "client"), config: filepath.Join(root, "config.json")}
+	c.use(t)
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	cfg.Language = "en"
+	cfg.Server.URL = serverURL
+	cfg.Project.Name = "golf"
+	if adjust != nil {
+		adjust(cfg)
+	}
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
+func (c policyClient) use(t *testing.T) {
+	t.Setenv(EnvClientHome, c.home)
+	t.Setenv(config.EnvConfig, c.config)
+}
+
+func isolatePolicyCommands(t *testing.T) {
+	t.Helper()
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Chdir(t.TempDir())
+	oldOut, oldErr := stdout, stderr
+	oldIn, oldTerminal := policyPromptIn, policyTerminal
+	t.Cleanup(func() { stdout, stderr, policyPromptIn, policyTerminal = oldOut, oldErr, oldIn, oldTerminal })
+	policyTerminal = func() bool { return false }
+}
+
+// runCommand runs one command of this package and returns the exit code and both streams.
+func runCommand(build func() *cobra.Command, args ...string) (int, string, string) {
+	var out, errOut bytes.Buffer
+	stdout, stderr = &out, &errOut
+	code, printed, reported := commandtest.Capture(func() int { return commandtest.Run(build(), args...) })
+	return code, out.String() + printed, errOut.String() + reported
+}
+
+func TestRefreshPolicyWritesOnlyNewerVersions(t *testing.T) {
+	home := t.TempDir()
+	values := json.RawMessage(`{"git":{"branch_mode":"main-only"},"review_stages":{"PMQA":"auto","Security":"auto"},"rules":{},"agent_language":"en","issue":{"result_on_done":"auto"}}`)
+	for _, step := range []struct {
+		policy api.ProjectPolicy
+		stored bool
+	}{
+		{api.ProjectPolicy{Epoch: "e1", Revision: 2, Values: values}, true},
+		{api.ProjectPolicy{Epoch: "e1", Revision: 1, Values: values}, false},
+		{api.ProjectPolicy{Epoch: "e1", Revision: 3, Values: values}, true},
+		{api.ProjectPolicy{Epoch: "e2", Revision: 1, Values: values}, true},
+	} {
+		stored, err := RefreshPolicy(home, "http://127.0.0.1:1", "p-1", step.policy)
+		if err != nil || stored != step.stored {
+			t.Fatalf("%+v: stored=%v err=%v", step.policy, stored, err)
+		}
+	}
+}
+
+// fakePolicyServer answers the project and policy routes from memory, for the forms that need a
+// server a real one cannot be: newer, older, or racing.
+type fakePolicyServer struct {
+	mu      sync.Mutex
+	project bool // the project answer carries the policy field
+	policy  api.ProjectPolicy
+	puts    []api.PolicyWrite
+	race    func()
+}
+
+func (f *fakePolicyServer) serve(t *testing.T) string {
+	t.Helper()
+	hs := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		switch {
+		case r.URL.Path == "/api/v1/version":
+			_ = json.NewEncoder(w).Encode(api.VersionInfo{Protocol: api.ProtocolVersion, MinProtocol: api.MinProtocolVersion, ServerVersion: version.String()})
+		case r.URL.Path == "/api/v1/projects":
+			info := api.Project{ID: api.ProjectID("golf"), Name: "golf"}
+			if f.project {
+				policy := f.policy
+				info.Policy = &policy
+			}
+			_ = json.NewEncoder(w).Encode(info)
+		case strings.HasSuffix(r.URL.Path, "/policy") && r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode(f.policy)
+		case strings.HasSuffix(r.URL.Path, "/policy") && r.Method == http.MethodPut:
+			var write api.PolicyWrite
+			_ = json.NewDecoder(r.Body).Decode(&write)
+			f.puts = append(f.puts, write)
+			if f.race != nil {
+				f.race()
+				f.race = nil
+			}
+			if write.ExpectedRevision != f.policy.Revision {
+				w.WriteHeader(http.StatusConflict)
+				_ = json.NewEncoder(w).Encode(api.Error{Code: api.CodePolicyRevisionConflict, Message: "moved"})
+				return
+			}
+			epoch := f.policy.Epoch
+			if epoch == "" {
+				epoch = "e-fake"
+			}
+			f.policy = api.ProjectPolicy{Epoch: epoch, Revision: f.policy.Revision + 1, Values: write.Values, UpdatedBy: write.Submitter}
+			_ = json.NewEncoder(w).Encode(f.policy)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(hs.Close)
+	return hs.URL
+}
+
+func (f *fakePolicyServer) writes() []api.PolicyWrite {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]api.PolicyWrite(nil), f.puts...)
+}
+
+const newerPolicyValues = `{"git":{"branch_mode":"main-only","future":"x"},"review_stages":{"large":{"PMQA":"auto","Security":"auto"},"small":{"PMQA":"auto","Security":"auto"}},` +
+	`"rules":{"code":true,"collaboration":true,"git":true,"reporting":true,"review":true,"task_groups":true,"task_intake":true,"future_module":true},` +
+	`"agent_language":"en","issue":{"result_on_done":"auto"},"future_section":{"a":1}}`
+
+func TestPolicySetChangesOneValueAndKeepsUnknownKeys(t *testing.T) {
+	isolatePolicyCommands(t)
+	fake := &fakePolicyServer{project: true, policy: api.ProjectPolicy{Epoch: "e1", Revision: 4, Values: json.RawMessage(newerPolicyValues)}}
+	newPolicyClient(t, fake.serve(t), nil)
+	code, out, errOut := runCommand(NewPolicyCommand, "set", "rules.review", "false")
+	if code != 0 || !strings.Contains(out, "revision 5") {
+		t.Fatalf("set: code=%d out=%q err=%q", code, out, errOut)
+	}
+	writes := fake.writes()
+	if len(writes) != 1 || writes[0].ExpectedRevision != 4 {
+		t.Fatalf("writes %+v", writes)
+	}
+	var sent, original map[string]any
+	if err := json.Unmarshal(writes[0].Values, &sent); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(newerPolicyValues), &original); err != nil {
+		t.Fatal(err)
+	}
+	original["rules"].(map[string]any)["review"] = false
+	if a, b := mustJSON(t, sent), mustJSON(t, original); a != b {
+		t.Fatalf("written values\n%s\nwant\n%s", a, b)
+	}
+}
+
+func mustJSON(t *testing.T, v any) string {
+	t.Helper()
+	data, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func TestPolicySetRefusesOtherKeysAndValues(t *testing.T) {
+	isolatePolicyCommands(t)
+	fake := &fakePolicyServer{project: true, policy: api.ProjectPolicy{Epoch: "e1", Revision: 1, Values: json.RawMessage(newerPolicyValues)}}
+	newPolicyClient(t, fake.serve(t), nil)
+	for _, args := range [][]string{
+		{"set", "launcher", "tmux"},
+		{"set", "review_stages.large", "auto"},
+		{"set", "review_stages.medium.PMQA", "auto"},
+		{"set", "rules.future_module", "true"},
+		{"set", "rules.review", "yes"},
+		{"set", "git.branch_mode"},
+	} {
+		if code, _, errOut := runCommand(NewPolicyCommand, args...); code != 2 || errOut == "" {
+			t.Errorf("%v: code=%d err=%q", args, code, errOut)
+		}
+	}
+	if len(fake.writes()) != 0 {
+		t.Fatal("a refused set wrote")
+	}
+}
+
+func TestPolicySetReportsAConflictWithoutRetrying(t *testing.T) {
+	isolatePolicyCommands(t)
+	fake := &fakePolicyServer{project: true, policy: api.ProjectPolicy{Epoch: "e1", Revision: 1, Values: json.RawMessage(newerPolicyValues)}}
+	fake.race = func() { fake.policy.Revision = 2 }
+	newPolicyClient(t, fake.serve(t), nil)
+	code, _, errOut := runCommand(NewPolicyCommand, "set", "--json", "agent_language", "ja")
+	if code == 0 || !strings.Contains(errOut, api.CodePolicyRevisionConflict) {
+		t.Fatalf("code=%d err=%q", code, errOut)
+	}
+	if len(fake.writes()) != 1 {
+		t.Fatalf("the conflict was retried: %+v", fake.writes())
+	}
+}
+
+func TestPolicyInitNeedsYesOrATerminal(t *testing.T) {
+	isolatePolicyCommands(t)
+	fake := &fakePolicyServer{project: true}
+	newPolicyClient(t, fake.serve(t), nil)
+	for _, args := range [][]string{{"init"}, {"init", "--json"}} {
+		if code, _, errOut := runCommand(NewPolicyCommand, args...); code != 2 || !strings.Contains(errOut, "--yes") {
+			t.Fatalf("%v: code=%d err=%q", args, code, errOut)
+		}
+	}
+	policyTerminal = func() bool { return true }
+	policyPromptIn = strings.NewReader("n\n")
+	if code, _, errOut := runCommand(NewPolicyCommand, "init"); code != 1 || !strings.Contains(errOut, "git.branch_mode = main-develop") || !strings.Contains(errOut, "[y/N]") {
+		t.Fatalf("declined: code=%d err=%q", code, errOut)
+	}
+	if len(fake.writes()) != 0 {
+		t.Fatal("a declined or refused init wrote")
+	}
+	policyPromptIn = strings.NewReader("y\n")
+	if code, out, errOut := runCommand(NewPolicyCommand, "init"); code != 0 || !strings.Contains(out, "revision 1") {
+		t.Fatalf("confirmed: code=%d out=%q err=%q", code, out, errOut)
+	}
+	writes := fake.writes()
+	if len(writes) != 1 || writes[0].ExpectedRevision != 0 {
+		t.Fatalf("writes %+v", writes)
+	}
+	if _, err := config.ValidatePolicyValues(writes[0].Values); err != nil {
+		t.Fatalf("init uploaded values the server refuses: %v", err)
+	}
+	if code, _, errOut := runCommand(NewPolicyCommand, "init", "--yes"); code != 1 || !strings.Contains(errOut, "kander policy set") {
+		t.Fatalf("init of a set policy: code=%d err=%q", code, errOut)
+	}
+}
+
+func TestPolicyCommandsReportAServerWithoutPolicies(t *testing.T) {
+	isolatePolicyCommands(t)
+	fake := &fakePolicyServer{project: false}
+	newPolicyClient(t, fake.serve(t), nil)
+	var remarks bytes.Buffer
+	stderr = &remarks
+	cfg, err := config.Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(t.Context(), cfg, t.TempDir()); err != nil || !strings.Contains(remarks.String(), "kander policy init") {
+		t.Fatalf("open: err=%v remarks=%q", err, remarks.String())
+	}
+	for _, args := range [][]string{{"show", "--json"}, {"init", "--yes", "--json"}, {"set", "--json", "agent_language", "en"}} {
+		code, _, errOut := runCommand(NewPolicyCommand, args...)
+		if code != 1 || !strings.Contains(errOut, CodePolicyUnsupported) {
+			t.Fatalf("%v: code=%d err=%q", args, code, errOut)
+		}
+	}
+}
+
+func TestInitOffersThePolicyInitializationOnlyInATerminal(t *testing.T) {
+	isolatePolicyCommands(t)
+	fake := &fakePolicyServer{project: true}
+	url := fake.serve(t)
+	newPolicyClient(t, url, func(cfg *config.Config) { cfg.Server.URL, cfg.Project.Name = "", "" })
+	code, out, errOut := runCommand(NewInitCommand, "--server", url, "--project", "golf")
+	if code != 0 || !strings.Contains(out, "golf") || !strings.Contains(errOut, "kander policy init") || len(fake.writes()) != 0 {
+		t.Fatalf("non-interactive init: code=%d out=%q err=%q writes=%d", code, out, errOut, len(fake.writes()))
+	}
+	policyTerminal = func() bool { return true }
+	policyPromptIn = strings.NewReader("y\n")
+	code, out, errOut = runCommand(NewInitCommand)
+	if code != 0 || !strings.Contains(errOut, "[y/N]") || !strings.Contains(out, "revision 1") || len(fake.writes()) != 1 {
+		t.Fatalf("interactive init: code=%d out=%q err=%q writes=%d", code, out, errOut, len(fake.writes()))
+	}
+}

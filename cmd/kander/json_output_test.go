@@ -190,6 +190,19 @@ func TestJSONBoardCommands(t *testing.T) {
 	if bound["project_name"] != "command-fixture" {
 		t.Fatalf("init: %v", bound)
 	}
+	// The project policy: initialized once, after which no command carries the unset remark.
+	policy := requireResult(t, runKander(t, "policy", "init", "--yes", "--json"), "policy init", "epoch", "revision", "values")
+	if policy["revision"] != float64(1) {
+		t.Fatalf("policy init: %v", policy)
+	}
+	shownPolicy := requireResult(t, runKander(t, "policy", "show", "--json"), "policy show", "epoch", "revision", "values", "updated_at")
+	if shownPolicy["epoch"] != policy["epoch"] {
+		t.Fatalf("policy show: %v", shownPolicy)
+	}
+	configured := requireResult(t, runKander(t, "config", "--json"), "config", "project_policy")
+	if status, _ := configured["project_policy"].(map[string]any); status["source"] != "server_cache" || status["revision"] != float64(1) {
+		t.Fatalf("config project_policy: %v", configured["project_policy"])
+	}
 
 	created := requireResult(t, runKander(t, "new", "--json", "chore", "json-output", "JSON", "output"), "new", "task_id", "state", "location", "revision")
 	id := created["task_id"].(string)

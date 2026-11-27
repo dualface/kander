@@ -124,10 +124,11 @@ func TestCommandTableIsSingleSource(t *testing.T) {
 
 func TestCommandIndexWordLimits(t *testing.T) {
 	// The limits keep the index short; each new command line raises them by its own words
-	// only (kander server gc: 13; kander gc: 8, plus 9 for its table row in the README).
+	// only (kander server gc: 13; kander gc: 8, plus 9 for its table row in the README; kander
+	// policy: 11, plus 8 for its table row).
 	readme, _ := File("snippets/commands/README.md")
-	if n := len(strings.Fields(string(readme))); n > 832 {
-		t.Fatalf("README has %d words, limit 832", n)
+	if n := len(strings.Fields(string(readme))); n > 851 {
+		t.Fatalf("README has %d words, limit 851", n)
 	}
 	kanban, _ := File("KANDER-KANBAN-RULES.md")
 	text := string(kanban)
@@ -136,8 +137,8 @@ func TestCommandIndexWordLimits(t *testing.T) {
 	if start < 0 || end < 0 {
 		t.Fatal("Command Contract section not found")
 	}
-	if n := len(strings.Fields(text[start : start+1+end])); n > 623 {
-		t.Fatalf("Command Contract has %d words, limit 623", n)
+	if n := len(strings.Fields(text[start : start+1+end])); n > 631 {
+		t.Fatalf("Command Contract has %d words, limit 631", n)
 	}
 	for _, title := range []string{"**Durable Dispatch**", "**Launchers**", "**Reading the event stream**", "**Subscription Events**", "**Card Pins**", "**Check and Liveness Classification**"} {
 		if strings.Contains(text, title) {

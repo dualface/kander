@@ -50,6 +50,15 @@ type project struct {
 	indexFull       bool
 	indexWake       chan struct{} // Non-nil while a rebuild worker owns retries.
 	indexRebuilding atomic.Bool
+	// policy is the current project policy (see policy.go). Writes replace it
+	// under mu after the file is written; reads load it without a lock.
+	policy atomic.Pointer[api.ProjectPolicy]
+	// policyBroken is guarded by mu. It is set when a policy write could
+	// neither take effect nor void its audit line; policy writes then wait
+	// for the startup recovery of a restart.
+	policyBroken bool
+	// policyFaultHook interrupts a policy write at a named stage in tests.
+	policyFaultHook func(stage string)
 }
 
 func (p *project) log() *slog.Logger { return p.server.log.With("project", p.info.ID) }
@@ -73,6 +82,9 @@ func (p *project) lockBoard() error {
 // settles claims an interrupted operation left behind.
 func (p *project) open() error {
 	if err := ensureDir(p.root, "control"); err != nil {
+		return err
+	}
+	if err := p.openPolicy(); err != nil {
 		return err
 	}
 	if err := p.recoverImport(); err != nil {

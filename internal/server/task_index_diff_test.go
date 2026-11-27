@@ -176,6 +176,7 @@ func indexWriteRoutes() map[string]string {
 		"POST " + project + "/issues/results/save":                "control",
 		"POST " + project + "/snapshot":                           "read",
 		"POST " + project + "/check":                              "read",
+		"PUT " + project + "/policy":                              "control",
 	}
 }
 

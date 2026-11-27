@@ -23,6 +23,12 @@ func personField(field, value string) (string, error) {
 	return value, nil
 }
 
+// NormalizePersonField validates and trims a person name the way the person
+// fields of a card are: SUBMITTER, ASSIGNEE, and the names of decisions.
+func NormalizePersonField(field, value string) (string, error) {
+	return personField(field, value)
+}
+
 // NormalizeAssignee validates and trims the value stored in ASSIGNEE.
 func NormalizeAssignee(value string) (string, error) {
 	return personField(FieldAssignee, value)
