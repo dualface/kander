@@ -316,7 +316,8 @@ func TestUninstallRenamesABusyBinaryAside(t *testing.T) {
 	}
 	item := UninstallItem{Action: UninstallRemove, Path: f.entry}
 	var out bytes.Buffer
-	if err := removeBinary(item, &out); err != nil {
+	outcome, err := removeBinary(item, &out)
+	if err != nil {
 		t.Fatal(err)
 	}
 	aside := f.entry + ".old"
@@ -326,6 +327,9 @@ func TestUninstallRenamesABusyBinaryAside(t *testing.T) {
 	if readBytes(t, aside) != "binary" || len(started) != 1 || started[0] != aside {
 		t.Fatalf("aside=%q started=%v", readBytes(t, aside), started)
 	}
+	if outcome == nil || outcome.Action != UninstallRemove || outcome.Path != aside {
+		t.Fatalf("outcome=%+v", outcome)
+	}
 	if !strings.Contains(out.String(), config.Text("install.uninstall_binary_deferred", f.entry, aside)) {
 		t.Fatalf("output=%s", out.String())
 	}
@@ -334,11 +338,40 @@ func TestUninstallRenamesABusyBinaryAside(t *testing.T) {
 	writeIntegrateFile(t, f.entry, "binary")
 	startDeferredDelete = func(string, int) error { return errHelper }
 	out.Reset()
-	if err := removeBinary(item, &out); err != nil {
+	outcome, err = removeBinary(item, &out)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), aside) || !strings.Contains(out.String(), errHelper.Error()) {
 		t.Fatalf("leftover not reported: %s", out.String())
+	}
+	if outcome == nil || outcome.Action != UninstallKeep || outcome.Path != aside || !strings.Contains(outcome.Reason, errHelper.Error()) {
+		t.Fatalf("outcome=%+v", outcome)
+	}
+
+	// The --json result carries the leftover with its reason.
+	if err := os.Remove(aside); err != nil {
+		t.Fatal(err)
+	}
+	writeIntegrateFile(t, f.entry, "binary")
+	code, stdout, _ := commandtest.Capture(func() int { return commandtest.Run(NewUninstallCommand(), "--json", "--yes") })
+	if code != 0 {
+		t.Fatalf("code=%d\n%s", code, stdout)
+	}
+	var result struct {
+		Items []uninstallItem `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("%v\n%s", err, stdout)
+	}
+	var left *uninstallItem
+	for i, entry := range result.Items {
+		if entry.Path == aside {
+			left = &result.Items[i]
+		}
+	}
+	if left == nil || left.Action != "keep" || !strings.Contains(left.Reason, errHelper.Error()) {
+		t.Fatalf("leftover missing from the JSON result: %+v", result.Items)
 	}
 }
 

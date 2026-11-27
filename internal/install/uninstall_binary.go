@@ -108,34 +108,36 @@ func probeVersionLine(path string) (string, error) {
 
 // removeBinary deletes the global entry. Windows refuses to delete a running executable: the
 // entry is then renamed to <name>.old in its directory, and a detached helper deletes that file
-// after this process exited. When the helper cannot start, the leftover path is reported; the
-// next install deletes it.
-func removeBinary(item UninstallItem, out io.Writer) error {
+// after this process exited. The renamed file is returned as an outcome: removed by the helper,
+// or kept with the reason when the helper cannot start (the next install deletes it).
+func removeBinary(item UninstallItem, out io.Writer) (*UninstallItem, error) {
 	anchor, err := fileAnchor(item.Path)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	observeUninstallWrite(item.Path)
 	_, err = removeEntry(anchor, item.Path)
 	if err == nil {
 		fmt.Fprintln(out, config.Text("install.uninstall_removed", item.Path))
-		return nil
+		return nil, nil
 	}
 	if !asideOnBusy() || !fileIsBusy(err) {
-		return err
+		return nil, err
 	}
 	aside := item.Path + ".old"
 	observeUninstallWrite(aside)
 	_, _ = fs.RemoveNonDirectoryIfExists(anchor, aside)
 	if renameErr := fs.Rename(anchor, item.Path, aside); renameErr != nil {
-		return errors.Join(err, renameErr)
+		return nil, errors.Join(err, renameErr)
 	}
 	if err := startDeferredDelete(aside, os.Getpid()); err != nil {
-		fmt.Fprintln(out, config.Text("install.uninstall_binary_left", item.Path, aside, err))
-		return nil
+		reason := config.Text("install.uninstall_binary_left", item.Path, aside, err)
+		fmt.Fprintln(out, reason)
+		return &UninstallItem{Action: UninstallKeep, Path: aside, Reason: reason}, nil
 	}
-	fmt.Fprintln(out, config.Text("install.uninstall_binary_deferred", item.Path, aside))
-	return nil
+	reason := config.Text("install.uninstall_binary_deferred", item.Path, aside)
+	fmt.Fprintln(out, reason)
+	return &UninstallItem{Action: UninstallRemove, Path: aside, Reason: reason}, nil
 }
 
 // startDeferredDeleteHelper starts a hidden, detached PowerShell that waits for process pid to

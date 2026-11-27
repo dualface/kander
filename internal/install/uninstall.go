@@ -145,9 +145,9 @@ type uninstallItem struct {
 // uninstallJSON applies the plan without a prompt, which --yes already answered, and returns
 // what it covered. A failed step still returns the result, with exit status 1.
 func uninstallJSON(ctx context.Context, plan *UninstallPlan) int {
-	failed := ApplyUninstall(ctx, *plan, io.Discard)
+	outcomes, failed := applyUninstall(ctx, *plan, io.Discard)
 	var items []uninstallItem
-	for _, group := range [][]UninstallItem{plan.Processes, plan.Items, plan.Binary, plan.Kept} {
+	for _, group := range [][]UninstallItem{plan.Processes, plan.Items, plan.Binary, outcomes, plan.Kept} {
 		for _, item := range group {
 			entry := uninstallItem{Action: uninstallActionNames[item.Action], Path: item.Path, Reason: item.Reason}
 			if item.process != nil {
@@ -257,12 +257,19 @@ const uninstallStopBudget = 2 * time.Minute
 // is reported and the others go on; the joined failures are returned. A failed skill removal
 // keeps the binary, so a later run can finish the skill bundle.
 func ApplyUninstall(ctx context.Context, plan UninstallPlan, out io.Writer) error {
+	_, err := applyUninstall(ctx, plan, out)
+	return err
+}
+
+// applyUninstall is ApplyUninstall that also returns the outcomes the plan could not name in
+// advance: the global entry renamed aside on Windows, deleted by a helper or left behind.
+func applyUninstall(ctx context.Context, plan UninstallPlan, out io.Writer) ([]UninstallItem, error) {
 	// A user can edit a skill while the confirmation prompt is open. Recheck
 	// the whole preview before removing any of its interdependent documents.
 	for _, item := range plan.Items {
 		if item.skillDigest != "" {
 			if err := verifySkillRemoval(item); err != nil {
-				return err
+				return nil, err
 			}
 		}
 	}
@@ -271,22 +278,27 @@ func ApplyUninstall(ctx context.Context, plan UninstallPlan, out io.Writer) erro
 	cancel()
 	removedRules, _, err := applyUninstallItems(plan.Items, out)
 	if err != nil && errors.Is(err, errSkillRemoval) {
-		return errors.Join(failed, err)
+		return nil, errors.Join(failed, err)
 	}
 	failed = errors.Join(failed, err)
 	if removedRules > 0 {
 		fmt.Fprintln(out, config.Text("install.uninstall_rules_removed", removedRules, plan.Paths.RulesDir))
 	}
 	failed = errors.Join(failed, removeEmptyDirs(plan.Dirs))
+	var outcomes []UninstallItem
 	for _, item := range plan.Binary {
 		if item.Action != UninstallRemove {
 			continue
 		}
-		if err := removeBinary(item, out); err != nil {
+		outcome, err := removeBinary(item, out)
+		if err != nil {
 			failed = joinFailure(failed, item.Path, err)
 		}
+		if outcome != nil {
+			outcomes = append(outcomes, *outcome)
+		}
 	}
-	return failed
+	return outcomes, failed
 }
 
 func printUninstallPlan(out io.Writer, plan UninstallPlan) {
