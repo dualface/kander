@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix (v2, agents) — The built-in `agy` `start` and `resume` templates now pass `--dangerously-skip-permissions` before `--prompt-interactive`, applying to every agy session launched with the start/resume templates (card `start`, `resume`, takeover, `notify` process recovery, TUI Chat, `kander orchestrate`, and `kander issue triage`). Previously, tool calls outside the agy allowlist paused for manual confirmation and stalled unattended tasks; review sessions keep their `--settings` allow/deny restrictions unchanged. Users who added `--dangerously-skip-permissions` through an `agents.agy.args` override in `config.json` can remove the override after upgrading; keeping it does not duplicate the flag because an overlay replaces `start`/`resume` as a whole.
+
 - Feature (v2, Homebrew) — v2 prereleases (`v2.Y.Z-(alpha|beta|rc).N`) are now published to `dualface/homebrew-tap` as the `kander-beta` formula (`Formula/kander-beta.rb`, `conflicts_with "kander"`), alongside `Formula/kander.rb` for releases. The Release workflow and `scripts/release.sh` now sync `Formula/kander-beta.rb` for prereleases (including creating the file on its first release) without touching `Formula/kander.rb`. Homebrew-managed `kander-beta` binaries now check for newer 2.x prereleases and upgrade via `brew update` and `brew upgrade dualface/tap/kander-beta` (taking effect from the next prerelease; `v2.0.0-beta.4` users must run `brew upgrade dualface/tap/kander-beta` manually once). Doctor and `kander uninstall` infer the formula name (`kander` or `kander-beta`) from the binary's resolved Cellar path rather than the running process version.
 
 ## v2.0.0-beta.4 — 2026-11-28

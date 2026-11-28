@@ -122,7 +122,7 @@ func TestBuiltinAgentArgumentsMatchPreChangeOutput(t *testing.T) {
 						if modelID != "" {
 							want = append(want, "--model", modelID)
 						}
-						want = append(want, "--effort", effort, "--prompt-interactive")
+						want = append(want, "--effort", effort, "--dangerously-skip-permissions", "--prompt-interactive")
 					}
 					name := agent + "/" + kind
 					if resume {

@@ -59,14 +59,14 @@ func TestAgyConfigDirIsRejected(t *testing.T) {
 
 func TestAgyArgvExpansion(t *testing.T) {
 	d := AgentFor(nil, "agy")
-	if got := strings.Join(ExpandAgentArgs(d.Args.Start, "m1", "high", ""), " "); got != "--model m1 --effort high --prompt-interactive" {
+	if got := strings.Join(ExpandAgentArgs(d.Args.Start, "m1", "high", ""), " "); got != "--model m1 --effort high --dangerously-skip-permissions --prompt-interactive" {
 		t.Fatalf("start=%q", got)
 	}
-	if got := strings.Join(ExpandAgentArgs(d.Args.Resume, "m1", "high", "conv-1"), " "); got != "--conversation conv-1 --model m1 --effort high --prompt-interactive" {
+	if got := strings.Join(ExpandAgentArgs(d.Args.Resume, "m1", "high", "conv-1"), " "); got != "--conversation conv-1 --model m1 --effort high --dangerously-skip-permissions --prompt-interactive" {
 		t.Fatalf("resume=%q", got)
 	}
 	// An empty model drops its flag, so agy keeps its own default model.
-	if got := strings.Join(ExpandAgentArgs(d.Args.Start, "", "high", ""), " "); got != "--effort high --prompt-interactive" {
+	if got := strings.Join(ExpandAgentArgs(d.Args.Start, "", "high", ""), " "); got != "--effort high --dangerously-skip-permissions --prompt-interactive" {
 		t.Fatalf("start without a model=%q", got)
 	}
 }

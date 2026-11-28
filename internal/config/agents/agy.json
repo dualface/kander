@@ -3,8 +3,8 @@
   "path": "agy",
   "process_name": "agy",
   "args": {
-    "start": ["--model", "{model}", "--effort", "{effort}", "--prompt-interactive"],
-    "resume": ["--conversation", "{session}", "--model", "{model}", "--effort", "{effort}", "--prompt-interactive"],
+    "start": ["--model", "{model}", "--effort", "{effort}", "--dangerously-skip-permissions", "--prompt-interactive"],
+    "resume": ["--conversation", "{session}", "--model", "{model}", "--effort", "{effort}", "--dangerously-skip-permissions", "--prompt-interactive"],
     "review": [
       "--model", "{model}", "--effort", "{effort}",
       "--add-dir", "{runtime}", "--add-dir", "{rules_dir}",
