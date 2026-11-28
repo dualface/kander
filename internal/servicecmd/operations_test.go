@@ -22,6 +22,13 @@ import (
 	"github.com/dualface/kander/v2/internal/svcinstall"
 )
 
+// unitQuote quotes a value the way the systemd unit writes it inside double quotes: a backslash
+// and a quote are escaped, so a Windows temporary path such as D:\a\_temp appears as D:\\a\\_temp.
+// The test paths hold no % or $, the other characters the unit escapes.
+func unitQuote(value string) string {
+	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(value) + `"`
+}
+
 // workerHost is a client home with a fake systemd: starting the worker service takes
 // worker.lock and records a managed worker, as the real service would.
 type workerHost struct {
@@ -133,7 +140,7 @@ func TestInstallWorkerIsIdempotentAndRestartsOnAChange(t *testing.T) {
 		t.Fatalf("commands\n%q\nwant\n%q", got, want)
 	}
 	unit, err := os.ReadFile(filepath.Join(h.unitDir, "kander-worker.service"))
-	if err != nil || !strings.Contains(string(unit), `Environment="KANDER_CLIENT_HOME=`+h.home+`"`) || !strings.Contains(string(unit), "KillMode=process") {
+	if err != nil || !strings.Contains(string(unit), `Environment=`+unitQuote("KANDER_CLIENT_HOME="+h.home)) || !strings.Contains(string(unit), "KillMode=process") {
 		t.Fatalf("unit: %v\n%s", err, unit)
 	}
 	info, _ := os.Stat(filepath.Join(h.home, "worker.log"))
@@ -333,7 +340,7 @@ func TestInstallServerRecordsTheServerOptions(t *testing.T) {
 		t.Fatalf("args %q, want %q (%+v)", result.Args, want, result)
 	}
 	unit, _ := os.ReadFile(filepath.Join(h.unitDir, "kander-server.service"))
-	if !strings.Contains(string(unit), `"--data" "`+data+`"`) || strings.Contains(string(unit), "KillMode") {
+	if !strings.Contains(string(unit), `"--data" `+unitQuote(data)) || strings.Contains(string(unit), "KillMode") {
 		t.Fatalf("unit:\n%s", unit)
 	}
 	st := Inspect(t.Context(), []svcinstall.Kind{svcinstall.KindServer})[0]

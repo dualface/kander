@@ -17,6 +17,19 @@ import (
 	"github.com/dualface/kander/v2/internal/config"
 )
 
+// jsonText encodes value as --json writes it (no HTML escaping), so a Windows path keeps its
+// backslashes doubled in the expected text.
+func jsonText(t *testing.T, value string) string {
+	t.Helper()
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(value); err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimSuffix(buf.String(), "\n")
+}
+
 // fakeBackground is the local server and worker a test pretends to run. Stopping one records
 // its kind; a kind in fail fails.
 type fakeBackground struct {
@@ -417,7 +430,7 @@ func TestUninstallUnregistersServicesFirst(t *testing.T) {
 	if strings.Join(f.bg.stopped, ",") != "service,server,worker" {
 		t.Fatalf("order=%v", f.bg.stopped)
 	}
-	if !strings.Contains(stdout, `{"action":"unregister","path":"`+unit+`","service":"worker"}`) {
+	if !strings.Contains(stdout, `{"action":"unregister","path":`+jsonText(t, unit)+`,"service":"worker"}`) {
 		t.Fatalf("the JSON result lacks the service:\n%s", stdout)
 	}
 }
