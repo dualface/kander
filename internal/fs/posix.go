@@ -4,6 +4,7 @@ package fs
 
 import (
 	"os"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -489,6 +490,31 @@ func writeBytesAtomic(root, path string, data []byte, replace bool, createMode u
 	return nil
 }
 
+// tempSiblingName names the temporary sibling of name as
+// "." + name + "." + pid + "." + stamp + ".tmp"; internal/board recognizes an
+// interrupted write by this shape. The pid separates processes and the stamp
+// separates the writers of one process.
 func tempSiblingName(name string) string {
-	return "." + name + "." + itoa(os.Getpid()) + "." + itoa64(unixNano()) + ".tmp"
+	return "." + name + "." + itoa(os.Getpid()) + "." + itoa64(nextTempStamp()) + ".tmp"
+}
+
+// lastTempStamp is the stamp tempSiblingName handed out last in this process.
+var lastTempStamp atomic.Int64
+
+// nextTempStamp returns the clock in nanoseconds, raised above every stamp
+// this process handed out before. The clock alone is not unique: macOS counts
+// microseconds, so concurrent writers of one process read the same value, and
+// the second O_EXCL create of the shared name failed with "protected path
+// already exists" before the first writer had published the target.
+func nextTempStamp() int64 {
+	for {
+		last := lastTempStamp.Load()
+		stamp := unixNano()
+		if stamp <= last {
+			stamp = last + 1
+		}
+		if lastTempStamp.CompareAndSwap(last, stamp) {
+			return stamp
+		}
+	}
 }
