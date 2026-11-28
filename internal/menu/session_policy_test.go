@@ -162,3 +162,16 @@ func TestOptionsWithoutAPolicyKeepTheFileBehavior(t *testing.T) {
 		t.Fatalf("an unbound session labels %q", label)
 	}
 }
+
+func jsonEqual(t *testing.T, a, b any) bool {
+	t.Helper()
+	left, err := json.Marshal(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	right, err := json.Marshal(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(left) == string(right)
+}
