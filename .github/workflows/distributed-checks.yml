@@ -42,29 +42,50 @@ jobs:
           fi
       # The repository has no cgo, so vet and the build of every platform run
       # here. vet type-checks the test files too, so a test that does not
-      # compile on macOS or Windows fails in this step.
-      - name: Static analysis (linux, darwin, windows)
-        run: |
-          for goos in linux darwin windows; do
-            echo "::group::GOOS=$goos go vet ./..."
-            GOOS=$goos go vet ./...
-            echo "::endgroup::"
-          done
-      - name: Build kander (linux, darwin, windows)
-        run: |
-          for goos in linux darwin windows; do
-            GOOS=$goos go build -o "$RUNNER_TEMP/kander-$goos" ./cmd/kander
-          done
-      # The packages scripts/platform-test-packages.sh classifies as
-      # platform-neutral: their result does not depend on the platform.
-      - name: Platform-neutral tests
+      # compile on macOS or Windows fails in this step. The platform-neutral
+      # tests are the packages scripts/platform-test-packages.sh classifies as
+      # platform-neutral: their result does not depend on the platform. The four
+      # commands run at the same time, because each alone leaves cores idle
+      # (run 46132402448 took 160 s for the three vets and 113 s for the tests
+      # one after the other); each log is printed when all have ended.
+      - name: Static analysis (linux, darwin, windows) and platform-neutral tests
         run: |
           packages=()
           while IFS= read -r package; do
             if [ -n "$package" ]; then packages+=("$package"); fi
           done < <(bash scripts/platform-test-packages.sh --linux-only)
           if [ "${#packages[@]}" -eq 0 ]; then echo "no platform-neutral packages are listed" >&2; exit 1; fi
-          go test -count=1 -timeout 10m "${packages[@]}"
+          logs="$RUNNER_TEMP/basic-logs"
+          mkdir -p "$logs"
+          names=()
+          pids=()
+          for goos in linux darwin windows; do
+            GOOS=$goos go vet ./... > "$logs/vet-$goos.log" 2>&1 &
+            names+=("GOOS=$goos go vet ./...")
+            pids+=("$!")
+          done
+          go test -count=1 -timeout 10m "${packages[@]}" > "$logs/tests.log" 2>&1 &
+          names+=("go test of the platform-neutral packages")
+          pids+=("$!")
+          files=(vet-linux vet-darwin vet-windows tests)
+          failed=0
+          for i in "${!pids[@]}"; do
+            status=0
+            wait "${pids[$i]}" || status=$?
+            echo "::group::${names[$i]} (exit $status)"
+            cat "$logs/${files[$i]}.log"
+            echo "::endgroup::"
+            if [ "$status" -ne 0 ]; then
+              echo "::error::${names[$i]} failed with exit status $status"
+              failed=1
+            fi
+          done
+          exit "$failed"
+      - name: Build kander (linux, darwin, windows)
+        run: |
+          for goos in linux darwin windows; do
+            GOOS=$goos go build -o "$RUNNER_TEMP/kander-$goos" ./cmd/kander
+          done
       - name: Plugin tests
         working-directory: integrations/kander-dsh
         run: node --test "test/*.test.mjs"
