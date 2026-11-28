@@ -156,3 +156,38 @@ func TestDoctorRegistersABoundCheckoutOnlyWhenMissing(t *testing.T) {
 		t.Fatalf("registration = %+v %v", reg, ok)
 	}
 }
+
+// An Options save scans the registered projects again.
+func TestOptionsSaveScansTheHostAgain(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	installtest.IsolateAgentConfigEnv(t)
+	t.Setenv(remote.EnvClientHome, filepath.Join(t.TempDir(), "client"))
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	t.Chdir(t.TempDir())
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	repo := filepath.Join(t.TempDir(), "app")
+	if out, err := exec.Command("git", "init", "-q", repo).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	clientHome, _ := remote.Home()
+	if _, err := remote.RegisterProject(clientHome, "http://hosts:7878", "app", repo, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	session, err := NewSessionForTest(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session.SetTUIField("theme", "dark")
+	if _, err := session.Save(); err != nil {
+		t.Fatal(err)
+	}
+	record, err := remote.ReadHostRecord(clientHome)
+	if err != nil || record.Scan == nil || len(record.Scan.Projects) != 1 || record.Scan.Projects[0].Project != "app" {
+		t.Fatalf("no scan after the save: %+v %v", record.Scan, err)
+	}
+}
