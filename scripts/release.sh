@@ -45,8 +45,8 @@ usage: scripts/release.sh [options] <version>
 options:
   --skip-tag     the tag is already pushed; only wait and update the tap
   --skip-tap     tag and release only, leave the Homebrew formula alone
-  --no-test      skip the local go vet / go test gate before tagging (the gate
-                 runs in a clean HOME and XDG_CONFIG_HOME, without KANDER_CONFIG)
+  --no-test      skip the release gate check before tagging (the check needs a
+                 successful release-gate.yml run on the commit to tag)
   --dry-run      touch nothing: no tag, no push; print the formula instead
   --checksums F  read checksums from local file F instead of downloading them
                  (implies --dry-run; for checking the formula template)
@@ -120,13 +120,9 @@ repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || die "not inside a gi
 cd "$repo_root"
 
 workdir=
-gate_home=
-gate_config=
 cleanup() {
 	# An if keeps a false test from becoming the script's exit status.
 	if [ -n "$workdir" ] && [ -d "$workdir" ]; then rm -rf "$workdir"; fi
-	if [ -n "$gate_home" ] && [ -d "$gate_home" ]; then rm -rf "$gate_home"; fi
-	if [ -n "$gate_config" ] && [ -d "$gate_config" ]; then rm -rf "$gate_config"; fi
 }
 trap cleanup EXIT
 
@@ -172,24 +168,25 @@ if [ "$skip_tag" -eq 0 ] && [ "$dry_run" -eq 0 ]; then
 	fi
 
 	if [ "$skip_tests" -eq 0 ]; then
-		step "go vet ./... && go test -timeout 30m ./..."
-		command -v go >/dev/null 2>&1 || die "go not found; pass --no-test to skip the local gate"
-		# Run like the Release workflow's runner: an empty HOME and
-		# XDG_CONFIG_HOME and no KANDER_CONFIG, so a test that reads the user's
-		# configuration fails here, before the tag exists. The build cache, the
-		# module cache and the go env file keep the caller's values, otherwise
-		# the gate would rebuild and redownload everything under the empty HOME.
-		go_cache="$(go env GOCACHE)"
-		go_mod_cache="$(go env GOMODCACHE)"
-		go_env_file="$(go env GOENV)"
-		gate_home="$(mktemp -d)"
-		gate_config="$(mktemp -d)"
-		env -u KANDER_CONFIG HOME="$gate_home" XDG_CONFIG_HOME="$gate_config" \
-			GOCACHE="$go_cache" GOMODCACHE="$go_mod_cache" GOENV="$go_env_file" \
-			sh -c 'go vet ./... && go test -timeout 30m ./...' ||
-			die "the local go vet / go test gate failed; no tag was created"
+		step "release gate: a successful release-gate.yml run on $local_head"
+		# The full test suite runs in .github/workflows/release-gate.yml, on
+		# GitHub's macOS, Windows and ubuntu runners. Only a completed,
+		# successful run of that workflow on exactly this commit counts; any
+		# other run, or a failed query, refuses the tag.
+		gate_dispatch="gh workflow run release-gate.yml --repo $REPO_SLUG --ref $RELEASE_BRANCH (or: git push origin $local_head:refs/heads/release-gate/$version)"
+		# gh prints one tab-separated line per run; awk picks the first
+		# completed, successful run whose head is exactly this commit.
+		gate_runs="$(gh run list --repo "$REPO_SLUG" --workflow release-gate.yml --commit "$local_head" \
+			--limit 50 --json databaseId,headSha,status,conclusion \
+			--jq '.[] | [.databaseId, .headSha, .status, .conclusion] | @tsv')" ||
+			die "could not query the release gate runs of $local_head; no tag was created. Retry, or start the gate with: $gate_dispatch"
+		gate_run="$(printf '%s\n' "$gate_runs" | awk -F '\t' -v head="$local_head" \
+			'$2 == head && $3 == "completed" && $4 == "success" { print $1; exit }')"
+		[ -n "$gate_run" ] ||
+			die "no successful release-gate.yml run on $local_head; no tag was created. Start the gate with: $gate_dispatch, wait for it to succeed, then run this script again"
+		printf 'release gate passed: https://github.com/%s/actions/runs/%s\n' "$REPO_SLUG" "$gate_run" >&2
 	else
-		printf 'skipping local test gate (--no-test)\n' >&2
+		printf 'skipping the release gate check (--no-test)\n' >&2
 	fi
 
 	step "tagging $version at $local_head"
