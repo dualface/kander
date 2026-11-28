@@ -28,13 +28,17 @@ func TestCallsSelectEveryTestOnce(t *testing.T) {
 		Name: "windows", Parallel: 4, Timeout: "30m",
 		Filters: map[string]Filter{"board": {Skip: "^TestModel"}, "remote": {Run: "^TestWindows"}},
 		Shards: []Shard{
-			{Name: "1", Common: true, Rest: true, Entries: []Entry{{Package: "a"}, {Package: "board", Skip: []string{"TestSlow"}}}},
+			{Name: "1", Common: true, Rest: true, Entries: []Entry{{Package: "a"}, {Package: "board", Skip: []string{"TestSlow"}}, {Package: "heavy", Alone: true}}},
 			{Name: "2", Entries: []Entry{{Package: "board", Tests: []string{"TestSlow"}}}},
 		},
 	}
 	universe := []string{"a", "board", "new", "remote"}
 
-	first := callsByName(Calls(platform, &platform.Shards[0], universe))
+	calls := Calls(platform, &platform.Shards[0], universe)
+	if last := calls[len(calls)-1].Name; last != "packages" {
+		t.Errorf("last call %s, want the parallel packages call last", last)
+	}
+	first := callsByName(calls)
 	if want := []string{"-p", "4", "-count=1", "-timeout", "30m", "./a", "./new"}; !slices.Equal(first["packages"], want) {
 		t.Errorf("packages call %v, want %v", first["packages"], want)
 	}
@@ -44,8 +48,11 @@ func TestCallsSelectEveryTestOnce(t *testing.T) {
 	if want := []string{"-p", "1", "-count=1", "-timeout", "30m", "-run", "^TestWindows", "./remote"}; !slices.Equal(first["remote"], want) {
 		t.Errorf("remote call %v, want %v", first["remote"], want)
 	}
-	if len(first) != 3 {
-		t.Errorf("shard 1 calls %v, want packages, board-owner and remote", first)
+	if want := []string{"-p", "1", "-count=1", "-timeout", "30m", "./heavy"}; !slices.Equal(first["heavy"], want) {
+		t.Errorf("alone call %v, want %v", first["heavy"], want)
+	}
+	if len(first) != 4 {
+		t.Errorf("shard 1 calls %v, want packages, board-owner, heavy and remote", first)
 	}
 
 	second := Calls(platform, &platform.Shards[1], universe)

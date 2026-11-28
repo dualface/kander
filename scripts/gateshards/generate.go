@@ -27,6 +27,9 @@ type PlatformConfig struct {
 	// -p 1 instead of next to another package: tests that pass alone and fail
 	// under the load of a parallel call.
 	Alone map[string][]string
+	// AlonePackages run whole, each in a call of its own with -p 1: packages
+	// whose tests already use every core.
+	AlonePackages []string
 }
 
 // DefaultConfigs are the platforms of release-gate.yml. CommonSeconds come
@@ -38,6 +41,9 @@ var DefaultConfigs = []PlatformConfig{
 	{
 		Name: "ubuntu", OS: "ubuntu-latest", Parallel: 2, Timeout: "30m",
 		CommonSeconds: 181, NeverSplit: true,
+		// The model search runs up to 8 searches at a time; next to another
+		// package it took 650 s instead of 213 s (run 46136634393).
+		AlonePackages: []string{"internal/board"},
 	},
 	{
 		Name: "macos", OS: "macos-latest", Parallel: 2, Timeout: "30m",
@@ -252,6 +258,8 @@ func GeneratePlatform(config PlatformConfig, timings *Timings, target float64) P
 		alone := config.Alone[pkg]
 		if (timing.Seconds > target || len(alone) > 0) && config.Filters[pkg].Run == "" && !config.NeverSplit {
 			units = append(units, splitPackage(pkg, timing, target, alone)...)
+		} else if slices.Contains(config.AlonePackages, pkg) {
+			units = append(units, unit{seconds: timing.Seconds, serial: true, entry: Entry{Package: pkg, Alone: true}})
 		} else {
 			units = append(units, unit{seconds: timing.Seconds, entry: Entry{Package: pkg}})
 		}

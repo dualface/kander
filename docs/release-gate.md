@@ -25,6 +25,7 @@ An entry names a package by its repository-relative directory and selects tests 
 | `package` only | the whole package |
 | `package` and `tests` | only these top-level tests |
 | `package` and `skip` | the package without these tests: the owner of a split package |
+| `package` and `alone` | the whole package, in a call of its own |
 
 A package longer than the generator's target is split: its largest tests go into `tests` entries, and one owner entry skips exactly those tests. A test that is added to the package later is in no skip list, so the owner runs it.
 
@@ -38,8 +39,8 @@ The last rule exists for checks a `TestMain` makes over a whole-package run: `in
 
 `go run ./scripts/gateshards run -platform P -shard S -universe FILE -json-dir DIR` turns the shard into `go test` calls and runs each through `scripts/go-test-json.sh`:
 
-- The whole packages without a filter, and the rest packages, run in one call with `-p parallel`.
-- A whole package with a filter, an owner and a `tests` entry each run in a call of their own with `-p 1`, because `-run` and `-skip` apply to every package of a call. An owner call adds `-run .`.
+- A whole package with a filter or `alone`, an owner and a `tests` entry each run in a call of their own with `-p 1`, because `-run` and `-skip` apply to every package of a call. An owner call adds `-run .`. These calls run first.
+- The whole packages without a filter, and the rest packages, run last, in one call with `-p parallel`.
 - A failing call fails the shard, and the calls after it still run.
 
 Each call writes `DIR/<call>.json`; the job uploads the directory as the artifact `test-json-native-<os>-<shard>`.
@@ -58,6 +59,8 @@ go run ./scripts/gateshards generate -artifacts /tmp/gate-artifacts -source "rel
 The generator reads the `test-json-native-<os>-*` artifacts of the run, without the files of the common steps. A package that takes longer than the target (`-target`, 540 seconds by default) is split, except on ubuntu; then it packs the units into the fewest shards whose estimates stay within the target. A shard's estimate is its serial calls plus `max(longest package, sum of packages / 1.2)`; the common shard also carries the measured time of the common steps. A single test longer than the target gets a shard of its own.
 
 The factor 1.2 is measured: the tests are CPU-bound, and in the first sharded run (46136634393) one ubuntu shard ran 965 seconds of serially measured package time with `-p 4` in 833 seconds; the model search alone took 650 seconds instead of 213. Every platform therefore runs two packages at a time (`parallel` 2), which also spares the timing-sensitive tests. Timings from a sharded run already contain that contention, so a plan generated from them is more cautious than one generated from a run with `-p 1`.
+
+ubuntu runs `internal/board` alone (`AlonePackages`): its model search already runs up to 8 searches at a time, and next to another package it took 650 seconds instead of 213 (run 46136634393).
 
 Some tests pass alone and fail under the load of a parallel call. `DefaultConfigs` in `scripts/gateshards/generate.go` lists them per platform under `Alone`; the generator gives each a `tests` entry of its own, which runs with `-p 1` while no other call of the shard runs, and the owner of its package skips it. `TestWindowsReadUnderContinuousAtomicReplacement` of `internal/fs` is such a test on Windows: it passed in 15 to 17 seconds in every gate run before the shards, and with `-p 2` (run 46138371949) it made 67 of the 200 file replacements it wants in 120 seconds.
 

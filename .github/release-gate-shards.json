@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generated_from": "release-gate run 46132427480 (commit ee6171cc), estimates calibrated on run 46136634393",
+  "generated_from": "release-gate run 46132427480 (commit ee6171cc), estimates calibrated on runs 46136634393 and 46139428803",
   "platforms": [
     {
       "name": "ubuntu",
@@ -12,22 +12,22 @@
           "name": "1",
           "common": true,
           "rest": true,
-          "estimate_seconds": 493,
+          "estimate_seconds": 516,
           "entries": [
             {
               "package": "api"
             },
             {
-              "package": "cli"
-            },
-            {
               "package": "client"
             },
             {
-              "package": "internal/command"
+              "package": "cmd/kander"
             },
             {
-              "package": "internal/flow"
+              "package": "internal/cli"
+            },
+            {
+              "package": "internal/client"
             },
             {
               "package": "internal/fs"
@@ -36,19 +36,13 @@
               "package": "internal/i18n"
             },
             {
-              "package": "internal/launch"
-            },
-            {
-              "package": "internal/liveness"
-            },
-            {
-              "package": "internal/menu"
+              "package": "internal/probe"
             },
             {
               "package": "internal/process"
             },
             {
-              "package": "internal/remote"
+              "package": "internal/review"
             },
             {
               "package": "internal/server"
@@ -63,6 +57,9 @@
               "package": "internal/statemachine/coordmember"
             },
             {
+              "package": "internal/statemachine/dispatch"
+            },
+            {
               "package": "internal/statemachine/executionledger"
             },
             {
@@ -75,16 +72,22 @@
               "package": "internal/statemachine/reviewdisposition"
             },
             {
-              "package": "internal/statemachine/reviewobligation"
+              "package": "internal/statemachine/reviewplan"
             },
             {
-              "package": "internal/statemachine/serverintegration"
+              "package": "internal/statemachine/serverclaim"
             },
             {
-              "package": "internal/statemachine/serverrequest"
+              "package": "internal/statemachine/servergrouplease"
+            },
+            {
+              "package": "internal/statemachine/serverproposal"
             },
             {
               "package": "internal/statemachine/startorder"
+            },
+            {
+              "package": "internal/statemachine/vectortest"
             },
             {
               "package": "internal/statemachine/wrapupwitness"
@@ -96,10 +99,13 @@
               "package": "internal/terminal"
             },
             {
-              "package": "internal/terminalcheck"
+              "package": "internal/terminal/herdr"
             },
             {
-              "package": "internal/worker"
+              "package": "internal/terminal/terminaltest"
+            },
+            {
+              "package": "internal/tui"
             },
             {
               "package": "rules"
@@ -114,28 +120,29 @@
         },
         {
           "name": "2",
-          "estimate_seconds": 493,
+          "estimate_seconds": 516,
           "entries": [
             {
-              "package": "cmd/kander"
+              "package": "cli"
             },
             {
-              "package": "internal/board"
+              "package": "internal/board",
+              "alone": true
             },
             {
               "package": "internal/check"
             },
             {
-              "package": "internal/cli"
-            },
-            {
-              "package": "internal/client"
+              "package": "internal/command"
             },
             {
               "package": "internal/commands"
             },
             {
               "package": "internal/config"
+            },
+            {
+              "package": "internal/flow"
             },
             {
               "package": "internal/focus"
@@ -150,22 +157,25 @@
               "package": "internal/issue/ghcli"
             },
             {
+              "package": "internal/launch"
+            },
+            {
+              "package": "internal/liveness"
+            },
+            {
+              "package": "internal/menu"
+            },
+            {
               "package": "internal/notify"
             },
             {
-              "package": "internal/probe"
-            },
-            {
-              "package": "internal/review"
+              "package": "internal/remote"
             },
             {
               "package": "internal/statemachine/cardlifecycle"
             },
             {
               "package": "internal/statemachine/coordinator"
-            },
-            {
-              "package": "internal/statemachine/dispatch"
             },
             {
               "package": "internal/statemachine/example"
@@ -177,25 +187,19 @@
               "package": "internal/statemachine/reviewfindings"
             },
             {
-              "package": "internal/statemachine/reviewplan"
+              "package": "internal/statemachine/reviewobligation"
             },
             {
               "package": "internal/statemachine/reviewrun"
             },
             {
-              "package": "internal/statemachine/serverclaim"
-            },
-            {
               "package": "internal/statemachine/serverdelivery"
             },
             {
-              "package": "internal/statemachine/servergrouplease"
+              "package": "internal/statemachine/serverintegration"
             },
             {
-              "package": "internal/statemachine/serverproposal"
-            },
-            {
-              "package": "internal/statemachine/vectortest"
+              "package": "internal/statemachine/serverrequest"
             },
             {
               "package": "internal/svcinstall"
@@ -204,19 +208,16 @@
               "package": "internal/terminal/builtin"
             },
             {
-              "package": "internal/terminal/herdr"
-            },
-            {
               "package": "internal/terminal/herdrcore"
             },
             {
-              "package": "internal/terminal/terminaltest"
-            },
-            {
-              "package": "internal/tui"
+              "package": "internal/terminalcheck"
             },
             {
               "package": "internal/version"
+            },
+            {
+              "package": "internal/worker"
             }
           ]
         }

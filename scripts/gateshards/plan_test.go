@@ -69,6 +69,7 @@ func TestPlanValidateRefusesPlansThatDropTests(t *testing.T) {
 		{"a pattern instead of a test name", func(p *Platform) { p.Shards[1].Entries[0].Tests = []string{"TestY.*"} }, "not a top-level test name"},
 		{"an absolute package", func(p *Platform) { p.Shards[0].Entries[0].Package = "./a" }, "repository-relative"},
 		{"a bad shard name", func(p *Platform) { p.Shards[1].Name = "Shard 2" }, "shard name"},
+		{"an alone split entry", func(p *Platform) { p.Shards[1].Entries[0].Alone = true }, "alone is for a whole package"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			plan := validPlanWithWhole()

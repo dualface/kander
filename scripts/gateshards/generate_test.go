@@ -121,15 +121,15 @@ func TestGenerateCoversEveryPackageAndSeparatesTheCommonShard(t *testing.T) {
 	writeArtifact(t, root, "test-json-native-ubuntu-latest-all", "all.json",
 		`{"Action":"pass","Package":"example.com/m/big","Test":"TestHuge","Elapsed":400}`,
 		`{"Action":"pass","Package":"example.com/m/big","Elapsed":420}`)
-	ubuntu := PlatformConfig{Name: "ubuntu", OS: "ubuntu-latest", Parallel: 2, Timeout: "5m", NeverSplit: true}
+	ubuntu := PlatformConfig{Name: "ubuntu", OS: "ubuntu-latest", Parallel: 2, Timeout: "5m", NeverSplit: true, AlonePackages: []string{"big"}}
 	config := PlatformConfig{Name: "windows", OS: "windows-latest", Parallel: 2, Timeout: "5m",
 		Filters: map[string]Filter{"remote": {Run: "^TestWindows"}}, CommonSeconds: 50}
 	plan, err := Generate(testModule, root, "test", []PlatformConfig{ubuntu, config}, 200)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if entries := plan.Platforms[0].Shards[0].Entries; len(entries) != 1 || len(entries[0].Tests)+len(entries[0].Skip) != 0 {
-		t.Errorf("ubuntu entries %+v, want big whole: NeverSplit", entries)
+	if entries := plan.Platforms[0].Shards[0].Entries; len(entries) != 1 || len(entries[0].Tests)+len(entries[0].Skip) != 0 || !entries[0].Alone {
+		t.Errorf("ubuntu entries %+v, want big whole (NeverSplit) and alone", entries)
 	}
 	platform := plan.Platforms[1]
 	named := platform.NamedPackages()

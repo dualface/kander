@@ -20,10 +20,13 @@ type Call struct {
 // the platform tests, as repository-relative directories; the rest shard runs
 // those that no entry of the plan names.
 //
-//   - Whole packages without a filter run in one call with -p Parallel.
-//   - A whole package with a filter, an owner entry and a Tests entry each run
-//     in a call of their own, because -run and -skip apply to every package
-//     of a call.
+//   - Whole packages without a filter run in one call with -p Parallel, the
+//     last call of the shard.
+//   - A whole package with a filter or marked alone, an owner entry and a
+//     Tests entry each run in a call of their own with -p 1, because -run and
+//     -skip apply to every package of a call. These calls come first, so a
+//     load-sensitive test does not run in what the parallel call leaves
+//     behind (run 46139428803).
 //   - An owner call passes -run . : it still runs every test it does not skip,
 //     and it tells a TestMain that checks something over a whole-package run
 //     (internal/server checks that the tests compared every write route) that
@@ -60,6 +63,8 @@ func Calls(platform *Platform, shard *Shard, universe []string) []Call {
 			addFiltered(fmt.Sprintf("%s-tests-%d", slug(entry.Package), i+1), entry.Package, entry.Tests, nil)
 		case len(entry.Skip) > 0:
 			addFiltered(slug(entry.Package)+"-owner", entry.Package, nil, entry.Skip)
+		case entry.Alone:
+			addFiltered(slug(entry.Package), entry.Package, nil, nil)
 		default:
 			whole(entry.Package)
 		}
@@ -77,7 +82,7 @@ func Calls(platform *Platform, shard *Shard, universe []string) []Call {
 		for _, pkg := range plain {
 			args = append(args, "./"+pkg)
 		}
-		calls = append([]Call{{Name: "packages", Args: args}}, calls...)
+		calls = append(calls, Call{Name: "packages", Args: args})
 	}
 	return calls
 }

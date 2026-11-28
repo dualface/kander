@@ -62,10 +62,15 @@ type Shard struct {
 //   - Skip: the package without these tests; the owner of a split package.
 //     Its skip list is exactly the tests the package's Tests entries name, so
 //     a test that is added later runs in the owner.
+//
+// Alone runs a whole package in a call of its own instead of next to other
+// packages, for a package whose tests already use every core, such as the
+// model search of internal/board.
 type Entry struct {
 	Package string   `json:"package"`
 	Tests   []string `json:"tests,omitempty"`
 	Skip    []string `json:"skip,omitempty"`
+	Alone   bool     `json:"alone,omitempty"`
 }
 
 // LoadPlan reads and validates a plan file.
@@ -209,6 +214,8 @@ func (p *Platform) validate() error {
 				}
 			}
 			switch {
+			case entry.Alone && len(entry.Tests)+len(entry.Skip) > 0:
+				return fmt.Errorf("shard %s: package %s is alone and has tests or skip; alone is for a whole package", shard.Name, entry.Package)
 			case len(entry.Tests) > 0 && len(entry.Skip) > 0:
 				return fmt.Errorf("shard %s: package %s has both tests and skip", shard.Name, entry.Package)
 			case len(entry.Tests) == 0 && len(entry.Skip) == 0:
