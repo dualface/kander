@@ -185,9 +185,11 @@ func scanTargetsOnce(root string, taskIDs []string) (Board, bool) {
 		} else if len(matches) == 1 {
 			board.Entries[taskID] = matches[0]
 		} else {
+			// A missing ID is reported as a problem but not blocked: Blocked
+			// holds only damaged entries, so Locate falls through to its coded
+			// not-found error, the same as after a full scan.
 			message := t("board.task_does_not_exist", taskID)
 			board.Problems = append(board.Problems, Problem{Path: root, Message: message})
-			board.Blocked[taskID] = message
 			needsConfirmation = true
 		}
 	}
