@@ -46,3 +46,4 @@ kander order cancel so-0123456789abcdef
 
 - A missing or malformed order ID is a usage error; an unknown order fails with `not_found`.
 - `cancel` of an order in another state fails with `start_order_refused`.
+- A server without hosts and start orders fails with `start_order_unsupported`; upgrade the server.

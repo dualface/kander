@@ -2,8 +2,10 @@ package remote
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -19,6 +21,22 @@ import (
 
 // hostCommandTimeout bounds one call of kander host and kander order.
 const hostCommandTimeout = 30 * time.Second
+
+// CodeStartOrderUnsupported reports a server without the host and start order
+// routes.
+const CodeStartOrderUnsupported = "start_order_unsupported"
+
+// HostRouteError explains the error of a host or start order call. A server
+// without those routes answers a plain 404, which the client reads as
+// internal; a server with them answers an unknown order with not_found, which
+// stays as it is.
+func HostRouteError(err error) error {
+	var e *api.Error
+	if errors.As(err, &e) && e.Status == http.StatusNotFound && e.Code == api.CodeInternal {
+		return command.Coded(CodeStartOrderUnsupported, errors.New(config.Text("host.server_unsupported")))
+	}
+	return err
+}
 
 // NewHostCommand builds kander host, which lists the hosts of the configured server.
 func NewHostCommand() *cobra.Command {
@@ -76,7 +94,7 @@ func runHostList() error {
 	defer cancel()
 	list, err := c.Hosts(ctx)
 	if err != nil {
-		return fail(err)
+		return fail(HostRouteError(err))
 	}
 	if command.JSON() {
 		return command.Exit(command.Result(list))
@@ -137,7 +155,7 @@ func runOrder(id string, cancelOrder bool) error {
 		order, err = session.Project.StartOrder(ctx, id)
 	}
 	if err != nil {
-		return fail(err)
+		return fail(HostRouteError(err))
 	}
 	if command.JSON() {
 		return command.Exit(command.Result(order))

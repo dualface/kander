@@ -21,7 +21,10 @@ import (
 )
 
 // fakeMuxScript is a third-party terminal multiplexer emulated in sh. Panes
-// live as directories under $FAKEMUX_STATE; typing /exit ends the agent.
+// live as directories under $FAKEMUX_STATE; typing /exit ends the agent. With
+// $FAKEMUX_RUN set, run also starts the command in the background, as a
+// terminal server does: with the server's own environment, not the caller's,
+// and with FAKEMUX_PANE naming the pane directory.
 const fakeMuxScript = `#!/bin/sh
 state="$FAKEMUX_STATE"
 printf '%s\n' "$*" >> "$state/calls.log"
@@ -42,7 +45,8 @@ case "$1" in
         while :; do first=${command%% *}; case "$first" in *=*) command=${command#* } ;; *) break ;; esac; done ;;
     esac
     command=${command%% *}; command=${command#\'}; command=${command%\'}
-    printf '%s' "${command##*/}" > "$dir/command"; printf '%s' "$3" > "$dir/launched" ;;
+    printf '%s' "${command##*/}" > "$dir/command"; printf '%s' "$3" > "$dir/launched"
+    [ -z "$FAKEMUX_RUN" ] || env -i HOME="$HOME" PATH=/usr/bin:/bin FAKEMUX_PANE="$dir" sh -c "$3" </dev/null >"$dir/agent.out" 2>&1 & ;;
   meta-set) printf '%s' "$3" > "$(pane_dir "$2")/marker" ;;
   meta-get)
     dir=$(pane_dir "$2"); [ -d "$dir" ] || { printf 'no such pane: %s\n' "$2" >&2; exit 1; }

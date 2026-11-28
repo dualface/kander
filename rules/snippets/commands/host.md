@@ -41,3 +41,4 @@ kander host list --json
 ## Rejections
 
 - Any argument after `list`, or an unknown option, is a usage error.
+- A server without hosts and start orders fails with `start_order_unsupported`; upgrade the server.

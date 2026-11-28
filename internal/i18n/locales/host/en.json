@@ -32,7 +32,7 @@
   "host.timeout_needs_host": "--timeout applies only to kander start --host",
   "host.timeout_invalid": "--timeout must be a finite number of seconds greater than 0",
   "host.start_needs_task": "kander start --host needs a task ID",
-  "host.server_unsupported": "the server does not support starts on another host; upgrade the server",
+  "host.server_unsupported": "the server keeps no hosts or start orders; upgrade the server to use kander start --host, kander host, and kander order",
   "host.order_created": "Start order {{.V0}}: asked host {{.V1}} to start {{.V2}}; waiting.",
   "host.order_started": "Started {{.V0}} on host {{.V1}}: generation {{.V2}}, window {{.V3}}.",
   "host.order_finished": "Start order {{.V0}} ended {{.V1}}: {{.V2}} {{.V3}}",

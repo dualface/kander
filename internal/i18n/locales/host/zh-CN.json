@@ -32,7 +32,7 @@
   "host.timeout_needs_host": "--timeout 只用于 kander start --host",
   "host.timeout_invalid": "--timeout 必须是大于 0 的有限秒数",
   "host.start_needs_task": "kander start --host 需要任务 ID",
-  "host.server_unsupported": "服务端不支持指定主机启动，请升级服务端",
+  "host.server_unsupported": "服务端不保存主机与启动单；升级服务端后才能使用 kander start --host、kander host 与 kander order",
   "host.order_created": "启动单 {{.V0}}：已要求主机 {{.V1}} 启动 {{.V2}}，等待结果。",
   "host.order_started": "已在主机 {{.V1}} 启动 {{.V0}}：generation {{.V2}}，窗口 {{.V3}}。",
   "host.order_finished": "启动单 {{.V0}} 已结束，状态 {{.V1}}：{{.V2}} {{.V3}}",
