@@ -62,7 +62,7 @@ The factor 1.2 is measured: the tests are CPU-bound, and in the first sharded ru
 
 ubuntu runs `internal/board` alone (`AlonePackages`): its model search already runs up to 8 searches at a time, and next to another package it took 650 seconds instead of 213 (run 46136634393).
 
-Some tests pass alone and fail under the load of a parallel call. `DefaultConfigs` in `scripts/gateshards/generate.go` lists them per platform under `Alone`; the generator gives each a `tests` entry of its own, which runs with `-p 1` while no other call of the shard runs, and the owner of its package skips it. `TestWindowsReadUnderContinuousAtomicReplacement` of `internal/fs` is such a test on Windows: it passed in 15 to 17 seconds in every gate run before the shards, and with `-p 2` (run 46138371949) it made 67 of the 200 file replacements it wants in 120 seconds.
+A test that passes alone and fails under the load of a parallel call can be listed per platform under `Alone` in `DefaultConfigs` of `scripts/gateshards/generate.go`; the generator gives each a `tests` entry of its own, which runs with `-p 1` while no other call of the shard runs, and the owner of its package skips it. No test is listed now. Check the direction of a load effect before listing a test: `TestWindowsReadUnderContinuousAtomicReplacement` of `internal/fs` failed with `-p 2` (run 46138371949) and also alone with `-p 1` (run 46139428803), and passed only next to three other packages with `-p 4`. Its readers ran faster on an idle machine and kept the file open, so the writer could not replace it; the test now paces its readers and runs as part of its package.
 
 After a change of the shards, compare the tests of a gate run before and after:
 

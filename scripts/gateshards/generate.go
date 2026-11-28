@@ -56,9 +56,6 @@ var DefaultConfigs = []PlatformConfig{
 			"internal/board":  {Skip: "^TestModel"},
 			"internal/remote": {Run: "^TestWindows"},
 		},
-		// It passed in 15 to 17 s in every earlier gate run, and failed with
-		// -p 2 in run 46138371949: 67 of the 200 replacements it wants in 120 s.
-		Alone:         map[string][]string{"internal/fs": {"TestWindowsReadUnderContinuousAtomicReplacement"}},
 		CommonSeconds: 245,
 	},
 }

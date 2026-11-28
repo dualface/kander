@@ -412,25 +412,16 @@
           "name": "1",
           "common": true,
           "rest": true,
-          "estimate_seconds": 522,
+          "estimate_seconds": 521,
           "entries": [
+            {
+              "package": "internal/cli"
+            },
             {
               "package": "internal/client"
             },
             {
-              "package": "internal/command"
-            },
-            {
-              "package": "internal/fs",
-              "tests": [
-                "TestWindowsReadUnderContinuousAtomicReplacement"
-              ]
-            },
-            {
-              "package": "internal/fs",
-              "skip": [
-                "TestWindowsReadUnderContinuousAtomicReplacement"
-              ]
+              "package": "internal/fs"
             },
             {
               "package": "internal/issue/ghcli"
@@ -442,19 +433,16 @@
               "package": "internal/liveness"
             },
             {
-              "package": "internal/remote"
+              "package": "internal/notify"
+            },
+            {
+              "package": "internal/probe"
             },
             {
               "package": "internal/review"
             },
             {
-              "package": "internal/takeover"
-            },
-            {
               "package": "internal/terminal/terminaltest"
-            },
-            {
-              "package": "internal/terminalcheck"
             }
           ]
         },
@@ -512,19 +500,13 @@
         },
         {
           "name": "4",
-          "estimate_seconds": 522,
+          "estimate_seconds": 521,
           "entries": [
             {
               "package": "api"
             },
             {
-              "package": "cli"
-            },
-            {
-              "package": "internal/flow"
-            },
-            {
-              "package": "internal/focus"
+              "package": "internal/command"
             },
             {
               "package": "internal/server",
@@ -534,20 +516,20 @@
               ]
             },
             {
-              "package": "internal/servicectl"
+              "package": "internal/takeover"
             },
             {
               "package": "internal/terminal/herdrcore"
+            },
+            {
+              "package": "scripts"
             }
           ]
         },
         {
           "name": "5",
-          "estimate_seconds": 522,
+          "estimate_seconds": 521,
           "entries": [
-            {
-              "package": "client"
-            },
             {
               "package": "internal/board",
               "tests": [
@@ -574,6 +556,12 @@
               ]
             },
             {
+              "package": "internal/commands"
+            },
+            {
+              "package": "internal/flow"
+            },
+            {
               "package": "internal/install"
             },
             {
@@ -583,10 +571,7 @@
               "package": "internal/menu"
             },
             {
-              "package": "internal/notify"
-            },
-            {
-              "package": "internal/probe"
+              "package": "internal/process"
             },
             {
               "package": "internal/server",
@@ -602,10 +587,13 @@
               ]
             },
             {
+              "package": "internal/servicectl"
+            },
+            {
               "package": "internal/terminal/herdr"
             },
             {
-              "package": "scripts"
+              "package": "internal/terminalcheck"
             },
             {
               "package": "server"
@@ -614,8 +602,14 @@
         },
         {
           "name": "6",
-          "estimate_seconds": 522,
+          "estimate_seconds": 521,
           "entries": [
+            {
+              "package": "cli"
+            },
+            {
+              "package": "client"
+            },
             {
               "package": "cmd/kander"
             },
@@ -623,16 +617,13 @@
               "package": "internal/check"
             },
             {
-              "package": "internal/cli"
-            },
-            {
-              "package": "internal/commands"
-            },
-            {
               "package": "internal/config"
             },
             {
-              "package": "internal/process"
+              "package": "internal/focus"
+            },
+            {
+              "package": "internal/remote"
             },
             {
               "package": "internal/servicecmd"
