@@ -16,32 +16,33 @@ import (
 	"testing"
 )
 
-// windowsPackagesOtherSteps are the packages a Windows step other than the
-// services step runs: the board step and the remote step of
-// distributed-checks.yml. The services list leaves them out by exact match.
-var windowsPackagesOtherSteps = []string{"internal/board", "internal/remote"}
+// platformPackagesOtherSteps are the packages a macOS or Windows step other than
+// the service step runs: the board step and the remote step of release-gate.yml.
+// The operating-system list leaves them out by exact match.
+var platformPackagesOtherSteps = []string{"internal/board", "internal/remote"}
 
-// windowsPackagesImportsRefused are the imports a Linux-only package never has.
-var windowsPackagesImportsRefused = []string{"os/exec", "syscall", "net", "net/http/httptest"}
+// platformPackagesImportsRefused are the imports a platform-neutral package never
+// has.
+var platformPackagesImportsRefused = []string{"os/exec", "syscall", "net", "net/http/httptest"}
 
-// windowsPackagesSkip skips on Windows, where the Windows CI step that runs
-// windows-test-packages.sh exposes any failure of the script itself, and where
+// platformPackagesSkip skips on Windows, where the release-gate.yml step that runs
+// platform-test-packages.sh exposes any failure of the script itself, and where
 // bash is not guaranteed to be the one the script needs. It also skips when a
 // tool the script needs is missing.
-func windowsPackagesSkip(t *testing.T) {
+func platformPackagesSkip(t *testing.T) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
-		t.Skip("windows-test-packages.sh runs in its own Windows CI step, which fails on a script error; not run here")
+		t.Skip("platform-test-packages.sh runs in its own release-gate.yml step on Windows, which fails on a script error; not run here")
 	}
 	for _, tool := range []string{"bash", "go"} {
 		if _, err := exec.LookPath(tool); err != nil {
-			t.Skipf("windows-test-packages.sh needs %s, which is not on PATH", tool)
+			t.Skipf("platform-test-packages.sh needs %s, which is not on PATH", tool)
 		}
 	}
 }
 
-// windowsPackagesRoot returns the repository root; go test runs in scripts/.
-func windowsPackagesRoot(t *testing.T) string {
+// platformPackagesRoot returns the repository root; go test runs in scripts/.
+func platformPackagesRoot(t *testing.T) string {
 	t.Helper()
 	root, err := filepath.Abs("..")
 	if err != nil {
@@ -50,12 +51,12 @@ func windowsPackagesRoot(t *testing.T) string {
 	return root
 }
 
-// windowsPackagesRun runs the real script from the repository root with extra
+// platformPackagesRun runs the real script from the repository root with extra
 // environment entries and returns stdout lines, the exit code and stderr.
-func windowsPackagesRun(t *testing.T, env []string, args ...string) ([]string, int, string) {
+func platformPackagesRun(t *testing.T, env []string, args ...string) ([]string, int, string) {
 	t.Helper()
-	root := windowsPackagesRoot(t)
-	cmd := exec.Command("bash", append([]string{filepath.Join(root, "scripts", "windows-test-packages.sh")}, args...)...)
+	root := platformPackagesRoot(t)
+	cmd := exec.Command("bash", append([]string{filepath.Join(root, "scripts", "platform-test-packages.sh")}, args...)...)
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(), env...)
 	var stdout, stderr bytes.Buffer
@@ -66,30 +67,30 @@ func windowsPackagesRun(t *testing.T, env []string, args ...string) ([]string, i
 	if err != nil {
 		var exitErr *exec.ExitError
 		if !errors.As(err, &exitErr) {
-			t.Fatalf("run windows-test-packages.sh: %v", err)
+			t.Fatalf("run platform-test-packages.sh: %v", err)
 		}
 		code = exitErr.ExitCode()
 	}
 	return strings.Fields(stdout.String()), code, stderr.String()
 }
 
-// windowsPackagesGOOS are the platforms whose package lists the script must
-// cover: a package whose files all carry a Windows constraint is invisible to
-// go list on Linux.
-var windowsPackagesGOOS = []string{"linux", "windows"}
+// platformPackagesGOOS are the platforms whose package lists the script must
+// cover: a package whose files all carry a darwin or Windows constraint is
+// invisible to go list on Linux.
+var platformPackagesGOOS = []string{"linux", "darwin", "windows"}
 
-// windowsPackagesMust runs the script for one GOOS and requires exit code 0.
-func windowsPackagesMust(t *testing.T, goos string, args ...string) []string {
+// platformPackagesMust runs the script for one GOOS and requires exit code 0.
+func platformPackagesMust(t *testing.T, goos string, args ...string) []string {
 	t.Helper()
-	out, code, stderr := windowsPackagesRun(t, []string{"GOOS=" + goos}, args...)
+	out, code, stderr := platformPackagesRun(t, []string{"GOOS=" + goos}, args...)
 	if code != 0 {
-		t.Fatalf("GOOS=%s windows-test-packages.sh %v exited %d: %s", goos, args, code, stderr)
+		t.Fatalf("GOOS=%s platform-test-packages.sh %v exited %d: %s", goos, args, code, stderr)
 	}
 	return out
 }
 
-// windowsPackagesGo runs go in dir with extra environment entries.
-func windowsPackagesGo(t *testing.T, dir string, env []string, args ...string) string {
+// platformPackagesGo runs go in dir with extra environment entries.
+func platformPackagesGo(t *testing.T, dir string, env []string, args ...string) string {
 	t.Helper()
 	cmd := exec.Command("go", args...)
 	cmd.Dir = dir
@@ -103,17 +104,17 @@ func windowsPackagesGo(t *testing.T, dir string, env []string, args ...string) s
 	return string(out)
 }
 
-// windowsPackagesRel turns an import path into a repository-relative directory.
-func windowsPackagesRel(module, importPath string) string {
+// platformPackagesRel turns an import path into a repository-relative directory.
+func platformPackagesRel(module, importPath string) string {
 	return strings.TrimPrefix(importPath, module+"/")
 }
 
-// windowsPackagesNameSuffix matches a file name that carries a GOOS or GOARCH
+// platformPackagesNameSuffix matches a file name that carries a GOOS or GOARCH
 // suffix, or _unix, in any of the forms the go command honors.
-func windowsPackagesNameSuffix(t *testing.T, root string) *regexp.Regexp {
+func platformPackagesNameSuffix(t *testing.T, root string) *regexp.Regexp {
 	t.Helper()
 	seen := map[string]bool{"unix": true}
-	for line := range strings.Lines(windowsPackagesGo(t, root, nil, "tool", "dist", "list")) {
+	for line := range strings.Lines(platformPackagesGo(t, root, nil, "tool", "dist", "list")) {
 		goos, goarch, ok := strings.Cut(strings.TrimSpace(line), "/")
 		if !ok {
 			t.Fatalf("unexpected go tool dist list line %q", line)
@@ -130,19 +131,19 @@ func windowsPackagesNameSuffix(t *testing.T, root string) *regexp.Regexp {
 	return regexp.MustCompile(`_(` + alt + `)(_(` + alt + `))?(_test)?\.go$`)
 }
 
-// TestWindowsPackagesLinuxOnlyMeetTheRule checks every Linux-only package
+// TestPlatformPackagesLinuxOnlyMeetTheRule checks every platform-neutral package
 // against the classification rule written at the top of the script.
-func TestWindowsPackagesLinuxOnlyMeetTheRule(t *testing.T) {
-	windowsPackagesSkip(t)
-	root := windowsPackagesRoot(t)
-	module := strings.TrimSpace(windowsPackagesGo(t, root, nil, "list", "-m"))
-	suffix := windowsPackagesNameSuffix(t, root)
-	// The union over both platforms: a package only Windows sees is listed too.
+func TestPlatformPackagesLinuxOnlyMeetTheRule(t *testing.T) {
+	platformPackagesSkip(t)
+	root := platformPackagesRoot(t)
+	module := strings.TrimSpace(platformPackagesGo(t, root, nil, "list", "-m"))
+	suffix := platformPackagesNameSuffix(t, root)
+	// The union over all platforms: a package only one platform sees is listed too.
 	listed := map[string]bool{}
 	var linuxOnly []string
-	for _, goos := range windowsPackagesGOOS {
-		for _, importPath := range windowsPackagesMust(t, goos, "--linux-only") {
-			rel := windowsPackagesRel(module, importPath)
+	for _, goos := range platformPackagesGOOS {
+		for _, importPath := range platformPackagesMust(t, goos, "--linux-only") {
+			rel := platformPackagesRel(module, importPath)
 			if !listed[rel] {
 				listed[rel] = true
 				linuxOnly = append(linuxOnly, importPath)
@@ -150,7 +151,7 @@ func TestWindowsPackagesLinuxOnlyMeetTheRule(t *testing.T) {
 		}
 	}
 	for _, importPath := range linuxOnly {
-		rel := windowsPackagesRel(module, importPath)
+		rel := platformPackagesRel(module, importPath)
 		t.Run(rel, func(t *testing.T) {
 			dir := filepath.Join(root, filepath.FromSlash(rel))
 			files, err := filepath.Glob(filepath.Join(dir, "*.go"))
@@ -183,45 +184,48 @@ func TestWindowsPackagesLinuxOnlyMeetTheRule(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if slices.Contains(windowsPackagesImportsRefused, path) || strings.HasPrefix(path, "golang.org/x/sys") {
+					if slices.Contains(platformPackagesImportsRefused, path) || strings.HasPrefix(path, "golang.org/x/sys") {
 						t.Errorf("%s/%s: imports %s", rel, name, path)
 					}
 				}
 			}
-			// The Windows import graph is the one that matters for this rule.
-			deps := windowsPackagesGo(t, root, []string{"GOOS=windows"},
-				"list", "-test", "-deps", "-f", "{{if not .Standard}}{{.ImportPath}}{{end}}", "./"+rel)
-			for dep := range strings.FieldsSeq(deps) {
-				if dep != module && !strings.HasPrefix(dep, module+"/") {
-					continue
-				}
-				depRel := windowsPackagesRel(module, dep)
-				depRel, _, _ = strings.Cut(depRel, " [")
-				depRel = strings.TrimSuffix(strings.TrimSuffix(depRel, ".test"), "_test")
-				if !listed[depRel] {
-					t.Errorf("%s: its test build depends on %s, which is not Linux-only", rel, depRel)
+			// The macOS and Windows import graphs are the ones that matter for this
+			// rule; the Linux one is checked too, because the daily job runs there.
+			for _, goos := range platformPackagesGOOS {
+				deps := platformPackagesGo(t, root, []string{"GOOS=" + goos},
+					"list", "-test", "-deps", "-f", "{{if not .Standard}}{{.ImportPath}}{{end}}", "./"+rel)
+				for dep := range strings.FieldsSeq(deps) {
+					if dep != module && !strings.HasPrefix(dep, module+"/") {
+						continue
+					}
+					depRel := platformPackagesRel(module, dep)
+					depRel, _, _ = strings.Cut(depRel, " [")
+					depRel = strings.TrimSuffix(strings.TrimSuffix(depRel, ".test"), "_test")
+					if !listed[depRel] {
+						t.Errorf("%s: its GOOS=%s test build depends on %s, which is not platform-neutral", rel, goos, depRel)
+					}
 				}
 			}
 		})
 	}
 }
 
-// TestWindowsPackagesPartition checks, for the package list of each platform,
-// that the Linux-only list, the services list and the packages of the other
-// Windows steps are disjoint and together cover go list ./....
-func TestWindowsPackagesPartition(t *testing.T) {
-	windowsPackagesSkip(t)
-	root := windowsPackagesRoot(t)
-	module := strings.TrimSpace(windowsPackagesGo(t, root, nil, "list", "-m"))
+// TestPlatformPackagesPartition checks, for the package list of each platform,
+// that the platform-neutral list, the operating-system list and the packages of
+// the other macOS and Windows steps are disjoint and together cover go list ./....
+func TestPlatformPackagesPartition(t *testing.T) {
+	platformPackagesSkip(t)
+	root := platformPackagesRoot(t)
+	module := strings.TrimSpace(platformPackagesGo(t, root, nil, "list", "-m"))
 	var others []string
-	for _, rel := range windowsPackagesOtherSteps {
+	for _, rel := range platformPackagesOtherSteps {
 		others = append(others, module+"/"+rel)
 	}
-	for _, goos := range windowsPackagesGOOS {
+	for _, goos := range platformPackagesGOOS {
 		t.Run(goos, func(t *testing.T) {
-			all := strings.Fields(windowsPackagesGo(t, root, []string{"GOOS=" + goos}, "list", "./..."))
-			linuxOnly := windowsPackagesMust(t, goos, "--linux-only")
-			services := windowsPackagesMust(t, goos)
+			all := strings.Fields(platformPackagesGo(t, root, []string{"GOOS=" + goos}, "list", "./..."))
+			linuxOnly := platformPackagesMust(t, goos, "--linux-only")
+			services := platformPackagesMust(t, goos)
 			owner := map[string]string{}
 			for group, packages := range map[string][]string{"linux-only": linuxOnly, "services": services, "other steps": others} {
 				for _, importPath := range packages {
@@ -247,6 +251,8 @@ func TestWindowsPackagesPartition(t *testing.T) {
 			}{
 				{module + "/internal/statemachine/dispatch", "linux-only"},
 				{module + "/internal/version", "linux-only"},
+				{module + "/internal/i18n", "linux-only"},
+				{module + "/internal/remote", "other steps"},
 				{module + "/internal/board/boardtest", "services"},
 				{module + "/internal/board", "other steps"},
 			} {
@@ -258,10 +264,10 @@ func TestWindowsPackagesPartition(t *testing.T) {
 	}
 }
 
-// TestWindowsPackagesFailLoudly checks that a failing go list and a bad
+// TestPlatformPackagesFailLoudly checks that a failing go list and a bad
 // argument end the script with a non-zero status instead of a short list.
-func TestWindowsPackagesFailLoudly(t *testing.T) {
-	windowsPackagesSkip(t)
+func TestPlatformPackagesFailLoudly(t *testing.T) {
+	platformPackagesSkip(t)
 	fakeBin := t.TempDir()
 	fake := "#!/bin/sh\necho 'fake go: refusing' >&2\nexit 1\n"
 	if err := os.WriteFile(filepath.Join(fakeBin, "go"), []byte(fake), 0o755); err != nil {
@@ -269,15 +275,15 @@ func TestWindowsPackagesFailLoudly(t *testing.T) {
 	}
 	path := "PATH=" + fakeBin + string(os.PathListSeparator) + os.Getenv("PATH")
 	for _, args := range [][]string{nil, {"--linux-only"}} {
-		out, code, _ := windowsPackagesRun(t, []string{path}, args...)
+		out, code, _ := platformPackagesRun(t, []string{path}, args...)
 		if code == 0 || len(out) != 0 {
 			t.Errorf("args %v with a failing go: exit %d, stdout %v, want a non-zero exit and no output", args, code, out)
 		}
 	}
-	if _, code, _ := windowsPackagesRun(t, nil, "--bogus"); code != 2 {
+	if _, code, _ := platformPackagesRun(t, nil, "--bogus"); code != 2 {
 		t.Errorf("an unknown argument exited %d, want 2", code)
 	}
-	if _, code, _ := windowsPackagesRun(t, nil, "--linux-only", "extra"); code != 2 {
+	if _, code, _ := platformPackagesRun(t, nil, "--linux-only", "extra"); code != 2 {
 		t.Errorf("an extra argument exited %d, want 2", code)
 	}
 }
