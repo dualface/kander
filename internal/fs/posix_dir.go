@@ -12,7 +12,10 @@ import (
 
 func itoa(v int) string     { return strconv.Itoa(v) }
 func itoa64(v int64) string { return strconv.FormatInt(v, 10) }
-func unixNano() int64       { return time.Now().UnixNano() }
+
+// unixNano is the clock of the temporary sibling names. Tests replace it to
+// reproduce two writers that read the same clock value.
+var unixNano = func() int64 { return time.Now().UnixNano() }
 
 func walkEnsure(path string, mkdirMode uint32) (string, error) {
 	candidate, err := absolutePath(path)
