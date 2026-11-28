@@ -15,6 +15,8 @@ import (
 // Launcher names and tool constants of the embedded definitions, for the
 // product UI (install hints and launcher choices).
 const (
+	// Orca is the launcher provided by the embedded Orca CLI definition.
+	Orca = "orca"
 	// Herdr is the launcher provided by the embedded herdr definition.
 	Herdr = "herdr"
 	// HerdrExecutable is the herdr command resolved on PATH.

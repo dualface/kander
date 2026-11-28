@@ -18,6 +18,7 @@ import (
 	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/probe"
 	"github.com/dualface/kander/v2/internal/terminal"
+	"github.com/dualface/kander/v2/internal/terminal/builtin"
 )
 
 // Options controls only destructive cleanup and optional focus. Each command
@@ -272,7 +273,17 @@ func (c *checker) autoDetect(_ bool) (string, error) {
 	return "", nil
 }
 func (c *checker) prepare(_ bool) (string, error) {
-	request := terminal.PrepareRequest{Project: c.cwd, Command: "sh", Windows: runtime.GOOS == "windows", LookPath: exec.LookPath, Getenv: os.Getenv, TTY: func() bool { return true }}
+	project := c.cwd
+	if c.backend.Name() == builtin.Orca {
+		// Orca creates a terminal in a registered workspace, then runs the
+		// test command in the checker's private temporary directory.
+		var err error
+		project, err = os.Getwd()
+		if err != nil {
+			return "", err
+		}
+	}
+	request := terminal.PrepareRequest{Project: project, Command: "sh", Windows: runtime.GOOS == "windows", LookPath: exec.LookPath, Getenv: os.Getenv, TTY: func() bool { return true }}
 	var err error
 	if backend, ok := c.backend.(*terminal.DeclarativeBackend); ok {
 		c.target, err = backend.PrepareWithRunner(request, c.trace)

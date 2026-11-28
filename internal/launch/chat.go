@@ -38,7 +38,7 @@ func PreviewChat() (ChatPreview, error) {
 	if err != nil {
 		return ChatPreview{}, err
 	}
-	settings, launcher, err := chatDefaults(cfg)
+	settings, launcher, err := chatDefaults(cfg, "")
 	if err != nil {
 		return ChatPreview{}, err
 	}
@@ -62,7 +62,7 @@ func StartChat(request ChatRequest) (result ChatResult, err error) {
 	if err != nil {
 		return result, err
 	}
-	settings, launcher, err := chatDefaults(cfg)
+	settings, launcher, err := chatDefaults(cfg, parentDir(request.Root))
 	if err != nil {
 		return result, err
 	}
@@ -135,13 +135,13 @@ func StartChat(request ChatRequest) (result ChatResult, err error) {
 // The session has no card, so it uses ChatSettingsFor, and it must start in a
 // terminal container: a launcher that occupies the caller's terminal would take
 // the board's terminal away and leave nothing to focus.
-func chatDefaults(cfg *config.Config) (config.ChatSettings, string, error) {
+func chatDefaults(cfg *config.Config, project string) (config.ChatSettings, string, error) {
 	// The Chat Agent is its own role: an unusable large-scale agent must not block it.
 	settings := config.ChatSettingsFor(cfg)
 	if !config.HasAgent(cfg, settings.Agent) {
 		return config.ChatSettings{}, "", unavailableAgentError(cfg, settings.Agent)
 	}
-	launcher, err := sessionLauncher(cfg, "")
+	launcher, err := sessionLauncher(cfg, "", project)
 	if err != nil {
 		return config.ChatSettings{}, "", err
 	}

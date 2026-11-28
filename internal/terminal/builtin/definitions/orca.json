@@ -1,0 +1,640 @@
+{
+  "schema_version": 1,
+  "name": "orca",
+  "binary": "orca",
+  "version_args": [
+    "--version"
+  ],
+  "capabilities": {
+    "container": true,
+    "focus": true,
+    "pane_metadata": true
+  },
+  "address": [
+    {
+      "name": "pane",
+      "pattern": "term_[A-Za-z0-9_-]+"
+    }
+  ],
+  "errors": {
+    "gone": [
+      "stdout_json:error.code=terminal_handle_stale"
+    ],
+    "meta_missing": [
+      "stdout_json:error.code=terminal_handle_stale"
+    ]
+  },
+  "launchers": {
+    "orca": {
+      "requires": {
+        "platform": "posix",
+        "binary": true,
+        "inside_session": false
+      }
+    }
+  },
+  "ops": {
+    "create_container": {
+      "steps": [
+        {
+          "argv": [
+            "terminal",
+            "create",
+            "--environment",
+            "local",
+            "--worktree",
+            "path:{project}",
+            "--title",
+            "{title}",
+            "--keep-open",
+            "--json"
+          ],
+          "timeout": "10s",
+          "output": {
+            "source": "stdout",
+            "parse": "raw",
+            "success": [
+              {
+                "json_field": "ok",
+                "equals": true
+              }
+            ]
+          },
+          "store": "created",
+          "fields": {
+            "handle": "json_regex:result.terminal.handle:^\"(term_[A-Za-z0-9_-]+)\"$"
+          },
+          "expect": "!field_missing:step.created.handle",
+          "messages": {
+            "exit": {
+              "id": "terminal.text",
+              "args": [
+                {
+                  "or": [
+                    "{error}",
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "result": {
+        "pane": "{step.created.handle}",
+        "container": "{step.created.handle}"
+      }
+    },
+    "wait_ready": {
+      "steps": [
+        {
+          "argv": [
+            "terminal",
+            "read",
+            "--environment",
+            "local",
+            "--terminal",
+            "{pane}",
+            "--limit",
+            "200",
+            "--json"
+          ],
+          "timeout": "10s",
+          "output": {
+            "source": "stdout",
+            "parse": "json_lines:result.terminal.tail",
+            "success": [
+              {
+                "json_field": "ok",
+                "equals": true
+              }
+            ]
+          },
+          "poll": {
+            "interval": "200ms",
+            "timeout": "{timeout_ms}",
+            "until": "nonempty"
+          },
+          "messages": {
+            "exit": {
+              "id": "terminal.text",
+              "args": [
+                {
+                  "or": [
+                    "{error}",
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "run_command": {
+      "steps": [
+        {
+          "argv": [
+            "terminal",
+            "send",
+            "--environment",
+            "local",
+            "--terminal",
+            "{pane}",
+            "--text",
+            "cd -- {cwd_quoted} && exec {command}",
+            "--enter",
+            "--json"
+          ],
+          "timeout": "10s",
+          "output": {
+            "source": "stdout",
+            "parse": "raw",
+            "success": [
+              {
+                "json_field": "ok",
+                "equals": true
+              },
+              {
+                "json_field": "result.send.accepted",
+                "equals": true
+              }
+            ]
+          },
+          "messages": {
+            "exit": {
+              "id": "terminal.text",
+              "args": [
+                {
+                  "or": [
+                    "{error}",
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "set_session_marker": {
+      "steps": [
+        {
+          "argv": [
+            "terminal",
+            "set-pane-title",
+            "--environment",
+            "local",
+            "--terminal",
+            "{pane}",
+            "--title",
+            "{value}",
+            "--json"
+          ],
+          "timeout": "10s",
+          "output": {
+            "source": "stdout",
+            "parse": "raw",
+            "success": [
+              {
+                "json_field": "ok",
+                "equals": true
+              }
+            ]
+          },
+          "messages": {
+            "exit": {
+              "id": "terminal.text",
+              "args": [
+                {
+                  "or": [
+                    "{error}",
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "pane_facts": {
+      "steps": [
+        {
+          "argv": [
+            "terminal",
+            "show",
+            "--environment",
+            "local",
+            "--terminal",
+            "{pane}",
+            "--json"
+          ],
+          "timeout": "10s",
+          "output": {
+            "source": "stdout",
+            "parse": "raw",
+            "success": [
+              {
+                "json_field": "ok",
+                "equals": true
+              }
+            ]
+          },
+          "store": "shown",
+          "fields": {
+            "handle": "json_field:result.terminal.handle",
+            "marker": "json_field:result.terminal.paneTitle",
+            "connected": "json_regex:result.terminal.connected:^(true|false)$",
+            "orphaned": "json_regex:result.terminal.orphaned:^(true|false)$"
+          },
+          "expect": "field:step.shown.handle={pane}",
+          "messages": {
+            "exit": {
+              "id": "terminal.text",
+              "args": [
+                {
+                  "or": [
+                    "{error}",
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          },
+          "gone_when": [
+            [
+              "field:step.shown.connected=false",
+              "field:step.shown.orphaned=true"
+            ]
+          ]
+        }
+      ],
+      "result": {
+        "session_marker": "{step.shown.marker}",
+        "container": "{pane}"
+      }
+    },
+    "read_output": {
+      "steps": [
+        {
+          "argv": [
+            "terminal",
+            "read",
+            "--environment",
+            "local",
+            "--terminal",
+            "{pane}",
+            "--limit",
+            "200",
+            "--json"
+          ],
+          "timeout": "10s",
+          "output": {
+            "source": "stdout",
+            "parse": "json_lines:result.terminal.tail",
+            "success": [
+              {
+                "json_field": "ok",
+                "equals": true
+              }
+            ]
+          },
+          "store": "read",
+          "messages": {
+            "exit": {
+              "id": "terminal.text",
+              "args": [
+                {
+                  "or": [
+                    "{error}",
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "result": {
+        "text": "{step.read.text}"
+      }
+    },
+    "deliver_text": {
+      "steps": [
+        {
+          "argv": [
+            "terminal",
+            "send",
+            "--environment",
+            "local",
+            "--terminal",
+            "{pane}",
+            "--text",
+            "{text}",
+            "--enter",
+            "--json"
+          ],
+          "timeout": "10s",
+          "output": {
+            "source": "stdout",
+            "parse": "raw",
+            "success": [
+              {
+                "json_field": "ok",
+                "equals": true
+              },
+              {
+                "json_field": "result.send.accepted",
+                "equals": true
+              }
+            ]
+          },
+          "messages": {
+            "exit": {
+              "id": "terminal.text",
+              "args": [
+                {
+                  "or": [
+                    "{error}",
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "topology": {
+      "steps": [
+        {
+          "argv": [
+            "terminal",
+            "list",
+            "--environment",
+            "local",
+            "--limit",
+            "10000",
+            "--json"
+          ],
+          "timeout": "10s",
+          "output": {
+            "source": "stdout",
+            "parse": "raw",
+            "success": [
+              {
+                "json_field": "ok",
+                "equals": true
+              }
+            ]
+          },
+          "store": "listed",
+          "fields": {
+            "truncated": "json_regex:result.truncated:^(true|false)$"
+          },
+          "expect": "field:step.listed.truncated=false",
+          "messages": {
+            "exit": {
+              "id": "terminal.text",
+              "args": [
+                {
+                  "or": [
+                    "{error}",
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "rows": {
+        "split": "json_array:result.terminals",
+        "fields": {
+          "pane": "json_field:handle"
+        },
+        "match": "field:row.pane={pane}",
+        "result": {
+          "pane": "{row.pane}"
+        },
+        "from": "listed"
+      },
+      "result": {
+        "container": "{container}"
+      }
+    },
+    "container_exists": {
+      "steps": [
+        {
+          "argv": [
+            "terminal",
+            "show",
+            "--environment",
+            "local",
+            "--terminal",
+            "{pane}",
+            "--json"
+          ],
+          "timeout": "10s",
+          "output": {
+            "source": "stdout",
+            "parse": "raw",
+            "success": [
+              {
+                "json_field": "ok",
+                "equals": true
+              }
+            ]
+          },
+          "store": "shown",
+          "fields": {
+            "handle": "json_field:result.terminal.handle",
+            "connected": "json_regex:result.terminal.connected:^(true|false)$",
+            "orphaned": "json_regex:result.terminal.orphaned:^(true|false)$"
+          },
+          "expect": "field:step.shown.handle={pane}",
+          "messages": {
+            "exit": {
+              "id": "terminal.text",
+              "args": [
+                {
+                  "or": [
+                    "{error}",
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          },
+          "gone_when": [
+            [
+              "field:step.shown.connected=false",
+              "field:step.shown.orphaned=true"
+            ]
+          ]
+        }
+      ]
+    },
+    "reverse_lookup": {
+      "steps": [
+        {
+          "argv": [
+            "terminal",
+            "list",
+            "--environment",
+            "local",
+            "--limit",
+            "10000",
+            "--json"
+          ],
+          "timeout": "10s",
+          "output": {
+            "source": "stdout",
+            "parse": "raw",
+            "success": [
+              {
+                "json_field": "ok",
+                "equals": true
+              }
+            ]
+          },
+          "store": "listed",
+          "fields": {
+            "truncated": "json_regex:result.truncated:^(true|false)$"
+          },
+          "expect": "field:step.listed.truncated=false",
+          "messages": {
+            "exit": {
+              "id": "terminal.text",
+              "args": [
+                {
+                  "or": [
+                    "{error}",
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "rows": {
+        "split": "json_array:result.terminals",
+        "fields": {
+          "pane": "json_field:handle",
+          "marker": "json_field:paneTitle",
+          "connected": "json_regex:connected:^(true|false)$"
+        },
+        "match": [
+          [
+            "!field_missing:reference",
+            "!field_missing:row.pane",
+            "field:row.connected=true",
+            "field:row.marker={reference}"
+          ]
+        ],
+        "result": {
+          "pane": "{row.pane}",
+          "container": "{row.pane}"
+        },
+        "from": "listed"
+      }
+    },
+    "focus": {
+      "steps": [
+        {
+          "argv": [
+            "terminal",
+            "switch",
+            "--environment",
+            "local",
+            "--terminal",
+            "{pane}",
+            "--json"
+          ],
+          "timeout": "10s",
+          "output": {
+            "source": "stdout",
+            "parse": "raw",
+            "success": [
+              {
+                "json_field": "ok",
+                "equals": true
+              },
+              {
+                "json_field": "result.navigated",
+                "equals": true
+              }
+            ]
+          },
+          "messages": {
+            "exit": {
+              "id": "terminal.text",
+              "args": [
+                {
+                  "or": [
+                    "{error}",
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "close_container": {
+      "steps": [
+        {
+          "argv": [
+            "terminal",
+            "close",
+            "--environment",
+            "local",
+            "--terminal",
+            "{pane}",
+            "--json"
+          ],
+          "timeout": "10s",
+          "output": {
+            "source": "stdout",
+            "parse": "raw",
+            "success": [
+              {
+                "json_field": "ok",
+                "equals": true
+              }
+            ]
+          },
+          "on_error": "meta_missing",
+          "messages": {
+            "exit": {
+              "id": "terminal.text",
+              "args": [
+                {
+                  "or": [
+                    "{error}",
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

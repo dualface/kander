@@ -309,6 +309,21 @@ func TestNDJSONSuccessIgnoresSelect(t *testing.T) {
 	}
 }
 
+func TestTerminalJSONLines(t *testing.T) {
+	spec := OutputSpec{Source: SourceStdout, Parse: "json_lines:result.terminal.tail"}
+	got, err := ParseTerminalOutput(spec, `{"result":{"terminal":{"tail":["first","", "last"]}}}`)
+	if err != nil || got != "first\n\nlast" {
+		t.Fatalf("output = %q, error = %v", got, err)
+	}
+	got, err = ParseTerminalOutput(spec, `{"result":{"terminal":{"tail":[]}}}`)
+	if err != nil || got != "" {
+		t.Fatalf("empty output = %q, error = %v", got, err)
+	}
+	if _, err := ParseTerminalOutput(spec, `{"result":{"terminal":{"tail":["first",null]}}}`); err == nil {
+		t.Fatal("accepted a non-string terminal output row")
+	}
+}
+
 func TestJSONSuccessFailsWhenDocumentIsNotJSON(t *testing.T) {
 	spec := mustSpec(t, `{
 		"source":"file",

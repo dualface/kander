@@ -91,7 +91,7 @@ func refuseConfiguredLauncher(cfg *config.Config, requested string) error {
 	if !config.ValidLauncherName(launcher) {
 		return nil
 	}
-	resolved, err := resolveStartLauncher(launcher)
+	resolved, err := resolveStartLauncher(launcher, "")
 	if err != nil {
 		return nil
 	}

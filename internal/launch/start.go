@@ -222,7 +222,7 @@ func PreviewStart(root, taskID string) (preview StartPreview, err error) {
 		return StartPreview{}, err
 	}
 	agent := choice.Agent
-	launcher, err := resolveStartLauncher(cfg.Launcher)
+	launcher, err := resolveStartLauncher(cfg.Launcher, parentDir(root))
 	if err != nil {
 		return StartPreview{}, err
 	}

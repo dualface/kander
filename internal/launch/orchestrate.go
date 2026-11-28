@@ -138,7 +138,7 @@ func startOrchestrator(request OrchestrateRequest, cfg *config.Config, loaded bo
 	}
 	// Orchestration may span several cards and review batches, so the session
 	// uses the large-tier agent even for one card unless the caller overrides it.
-	agent, launcher, err := sessionDefaults(cfg, "large", request.Agent, request.Launcher)
+	agent, launcher, err := sessionDefaults(cfg, "large", request.Agent, request.Launcher, parentDir(request.Root))
 	if err != nil {
 		return result, err
 	}

@@ -186,3 +186,11 @@ The embedded [`herdr-core.json`](../internal/terminal/builtin/definitions/herdr-
 ## 10. The Built-In dsh Launcher
 
 The embedded [`dsh.json`](../internal/terminal/builtin/definitions/dsh.json) provides the `dsh` launcher: the executing agent runs as a child of a DeepSeek Harness (dsh) host process, in a terminal that the `kander-dsh` plugin ([`integrations/kander-dsh/`](../integrations/kander-dsh/)) opens. It is POSIX-only and never chosen by `auto`, because it depends on a running dsh host that no environment variable reveals; select it with `launcher: dsh` or `kander start --launcher dsh`. Every operation is one `curl --unix-socket` call on the plugin socket `$DSH_HOME/kander/mux.sock` (`~/.dsh/kander/mux.sock` without `DSH_HOME`). `create_container` first checks the socket protocol version, so `start` and `resume` fail before any pane exists when the plugin and Kander disagree, and the error names the side to upgrade. `WINDOW` is `dsh:<container>:<pane>`. Architecture, protocol, installation and limits are in [dsh launcher](dsh-launcher.md).
+
+## 11. The Built-In Orca Launcher
+
+Set `"launcher": "orca"` in Kander's configuration on macOS or Linux. Orca Desktop must be running, `orca` must be on PATH, and the Kander project directory must be registered as a local Orca workspace. The launcher targets that workspace by path and creates a terminal tab there. The agent command runs from Kander's requested startup directory. With `"launcher": "auto"`, Kander selects Orca when it runs inside an Orca terminal and the project resolves to a registered local workspace. Existing auto-detected launchers keep priority, including when they run inside Orca.
+
+Kander records the Orca terminal handle as `orca:term_...` in `WINDOW`. It stores the Kander session reference as the Orca pane title for reverse lookup, so changing the pane title removes that lookup marker. Tab titles are independent. Kander can read terminal output, focus the tab and close the individual terminal. Agent activity and foreground-process status are unavailable through this backend.
+
+Run `kander terminal test orca --skip-focus` from the root of a registered local Orca workspace to exercise the backend without switching tabs. The check creates and closes a separate test terminal.
