@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Feature (v2, Homebrew) — v2 prereleases (`v2.Y.Z-(alpha|beta|rc).N`) are now published to `dualface/homebrew-tap` as the `kander-beta` formula (`Formula/kander-beta.rb`, `conflicts_with "kander"`), alongside `Formula/kander.rb` for releases. The Release workflow and `scripts/release.sh` now sync `Formula/kander-beta.rb` for prereleases (including creating the file on its first release) without touching `Formula/kander.rb`. Homebrew-managed `kander-beta` binaries now check for newer 2.x prereleases and upgrade via `brew update` and `brew upgrade dualface/tap/kander-beta` (taking effect from the next prerelease; `v2.0.0-beta.4` users must run `brew upgrade dualface/tap/kander-beta` manually once). Doctor and `kander uninstall` infer the formula name (`kander` or `kander-beta`) from the binary's resolved Cellar path rather than the running process version.
+
 ## v2.0.0-beta.4 — 2026-11-28
 
 - Fix (v2, files) — Concurrent first calls of one process that write the same protected file no longer fail with `protected path already exists`. The temporary sibling of an atomic write was named after the process ID and the clock, and macOS counts microseconds, so two writers of one process could pick the same name and the second `O_EXCL` create failed before the first writer had published the file; the concurrent first `LocalDataRoot` calls of a command hit it when they wrote the `project.json` identity marker. The clock part of the name is now raised above every value the process used before, so the name keeps its shape and the writers of one process never share it. This applies to every atomic write on Linux and macOS; the identity marker is still written once and an existing one is never rewritten.
