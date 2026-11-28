@@ -108,11 +108,12 @@ func TestWindowsReadSurvivesAtomicReplacementBetweenProbeAndReopen(t *testing.T)
 //
 // A read holds the file open without FILE_SHARE_DELETE, so a replacement succeeds only at a moment when no reader
 // has it open. Each reader therefore pauses after a read for readers-1 times the length of that read: a reader holds
-// the file at most 1/readers of the time, and on average at most one reader holds it at once, however fast the
-// machine runs the readers. Without the pause the readers kept the file open almost all the time when the test had
-// the CPUs to itself (about 10,000 reads per second, 54 to 67 of the 200 replacements in two minutes, gate runs
-// 46138371949 and 46139428803), and passed only when other test processes slowed them down (3,200 to 4,800 reads per
-// second next to three other packages with -p 4, runs 46132427480, 46135953607 and 46136634393).
+// the file at most 1/readers of the time, and on average at most one reader holds it at once. Free moments then
+// depend much less on how fast the machine runs the readers. Without the pause the readers made about 10,000 reads per
+// second when the test had the CPUs to itself, and the writer made 54 to 67 of its 200 replacements in two minutes
+// (gate runs 46138371949 and 46139428803); the test passed only when other test processes slowed the readers to
+// 3,200 to 4,800 reads per second (-p 4, runs 46132427480, 46135953607 and 46136634393). That load is the cause is
+// inferred from these runs; whether the pause removes the failure is for the next Windows gate run to confirm.
 func TestWindowsReadUnderContinuousAtomicReplacement(t *testing.T) {
 	const (
 		replacements = 200
