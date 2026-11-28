@@ -19,17 +19,17 @@ func TestUnavailableAgentsFailOnUse(t *testing.T) {
 		err.Error() != config.UnavailableAgentError(cfg, "newagent").Error() {
 		t.Fatalf("an unknown agent reference: %v", err)
 	}
-	if _, _, err := sessionDefaults(cfg, "large", "", ""); err == nil || !strings.Contains(err.Error(), "newagent") {
+	if _, _, err := sessionDefaults(cfg, "large", "", "", ""); err == nil || !strings.Contains(err.Error(), "newagent") {
 		t.Fatalf("start defaults for an unknown agent: %v", err)
 	}
-	if _, _, err := chatDefaults(cfg); err == nil || !strings.Contains(err.Error(), "newagent") {
+	if _, _, err := chatDefaults(cfg, ""); err == nil || !strings.Contains(err.Error(), "newagent") {
 		t.Fatalf("chat with an unknown Chat Agent: %v", err)
 	}
 	_, err := requireAgentProgram("futureagent", cfg)
 	if err == nil || !strings.Contains(err.Error(), "futureagent") || !strings.Contains(err.Error(), "future") {
 		t.Fatalf("an unusable agent must be reported with its reason: %v", err)
 	}
-	if _, _, err := sessionDefaults(cfg, "small", "futureagent", ""); err == nil || !strings.Contains(err.Error(), "futureagent") {
+	if _, _, err := sessionDefaults(cfg, "small", "futureagent", "", ""); err == nil || !strings.Contains(err.Error(), "futureagent") {
 		t.Fatalf("an explicit unusable agent: %v", err)
 	}
 }
@@ -40,12 +40,12 @@ func TestChatAndStartPreflightJudgeTheirOwnAgent(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.KanbanAgents["large"] = "newagent"
 	cfg.ChatAgent = "codex"
-	if _, _, err := chatDefaults(cfg); err != nil && strings.Contains(err.Error(), "newagent") {
+	if _, _, err := chatDefaults(cfg, ""); err != nil && strings.Contains(err.Error(), "newagent") {
 		t.Fatalf("an unknown large-scale agent blocked the Chat Agent: %v", err)
 	}
 	cfg.KanbanAgents["large"] = "codex"
 	cfg.ChatAgent = "newagent"
-	if _, _, err := chatDefaults(cfg); err == nil || !strings.Contains(err.Error(), "newagent") {
+	if _, _, err := chatDefaults(cfg, ""); err == nil || !strings.Contains(err.Error(), "newagent") {
 		t.Fatalf("an unknown Chat Agent must be refused: %v", err)
 	}
 	if err := programStatusPreflight(cfg, "foreground", "newagent"); err == nil || !strings.Contains(err.Error(), "newagent") {

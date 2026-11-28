@@ -1,6 +1,8 @@
 package launch
 
 import (
+	"context"
+	"encoding/json"
 	"maps"
 	"os"
 	"regexp"
@@ -8,17 +10,23 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/dualface/kander/v2/internal/probe"
+
 	"github.com/dualface/kander/v2/internal/process"
+	"github.com/dualface/kander/v2/internal/remote"
 	"github.com/dualface/kander/v2/internal/terminal"
 	"github.com/dualface/kander/v2/internal/terminal/builtin"
 )
 
-func resolveStartLauncher(launcher string) (string, error) {
+func resolveStartLauncher(launcher, project string) (string, error) {
 	if launcher != terminal.Auto {
 		return launcher, nil
 	}
 	if backend, ok := terminal.ResolveAuto(runtimeWindows(), os.Getenv); ok {
 		return backend.Name(), nil
+	}
+	if orcaAutoProject(project) {
+		return builtin.Orca, nil
 	}
 	if runtimeWindows() {
 		// A user definition may keep herdr-core POSIX-only; auto skipped it, so
@@ -35,6 +43,55 @@ func resolveStartLauncher(launcher string) (string, error) {
 	)
 }
 
+// orcaAutoProject checks the workspace before selecting Orca. Other terminal
+// launchers are resolved first because a nested multiplexer keeps Orca's env.
+func orcaAutoProject(project string) bool {
+	if runtimeWindows() || strings.TrimSpace(os.Getenv("ORCA_TERMINAL_HANDLE")) == "" {
+		return false
+	}
+	backend, ok := terminal.Lookup(builtin.Orca)
+	if !ok || !terminal.SupportsPlatform(backend, false) {
+		return false
+	}
+	program, err := lookPath(backend.Executable())
+	if err != nil {
+		return false
+	}
+	if project == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return false
+		}
+		project = remote.ProjectDir(cwd)
+	}
+	ctx, cancel := probe.WithDefaultTimeout(context.Background())
+	defer cancel()
+	return registeredOrcaWorkspace(ctx, terminal.ProbeRunner, program, project)
+}
+
+func registeredOrcaWorkspace(ctx context.Context, run terminal.Runner, program, project string) bool {
+	result, err := run(ctx, program, []string{"worktree", "show", "--environment", "local", "--worktree", "path:" + project, "--json"})
+	if err != nil || result.Code != 0 || result.Overflow {
+		return false
+	}
+	var response struct {
+		OK     bool
+		Result struct {
+			Worktree struct {
+				Address struct {
+					Environment string
+					Worktree    string
+				}
+			}
+		}
+	}
+	if json.Unmarshal([]byte(result.Stdout), &response) != nil || !response.OK {
+		return false
+	}
+	address := response.Result.Worktree.Address
+	return address.Environment == "local" && address.Worktree != ""
+}
+
 func prepareLaunch(launcher, project, command string) (LaunchPlan, error) {
 	if runtimeWindows() && terminal.HasCapability(launcher, func(c terminal.Capabilities) bool { return c.POSIXOnly }) {
 		if launcher == builtin.HerdrCore {
@@ -45,7 +102,7 @@ func prepareLaunch(launcher, project, command string) (LaunchPlan, error) {
 			"launch.windows_does_not_support_the_launcher_use_console_or", launcher,
 		)
 	}
-	resolved, err := resolveStartLauncher(launcher)
+	resolved, err := resolveStartLauncher(launcher, project)
 	if err != nil {
 		return LaunchPlan{}, err
 	}

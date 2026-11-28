@@ -10,7 +10,7 @@ import (
 	"unicode"
 )
 
-// Output source, format, and the three parse primitives.
+// Output source, format, and parse primitives.
 const (
 	SourceStdout = "stdout"
 	SourceStderr = "stderr"
@@ -22,6 +22,7 @@ const (
 	ParseRaw = "raw"
 
 	parsePrefixJSONField = "json_field:"
+	parsePrefixJSONLines = "json_lines:"
 	parsePrefixRegex     = "regex:"
 )
 
@@ -47,7 +48,7 @@ func specErrorf(field, value, format string, args ...any) *SpecError {
 }
 
 // OutputSpec is the declarative output parser shared by review templates and terminal definitions.
-// format / select / join describe stream shape; they are not a fourth parse primitive.
+// format / select / join describe stream shape; they do not select an extraction rule.
 type OutputSpec struct {
 	Source  string          `json:"source"`
 	Format  string          `json:"format,omitempty"`
@@ -169,6 +170,12 @@ func validateParse(parse, format string) error {
 			return specErrorf("parse", parse, "%s", err.Error())
 		}
 		return nil
+	case strings.HasPrefix(parse, parsePrefixJSONLines):
+		path := strings.TrimPrefix(parse, parsePrefixJSONLines)
+		if err := validateDottedPath(path); err != nil {
+			return specErrorf("parse", parse, "%s", err.Error())
+		}
+		return nil
 	case strings.HasPrefix(parse, parsePrefixRegex):
 		pattern := strings.TrimPrefix(parse, parsePrefixRegex)
 		re, err := regexp.Compile(pattern)
@@ -180,7 +187,7 @@ func validateParse(parse, format string) error {
 		}
 		return nil
 	default:
-		return specErrorf("parse", parse, "must be raw, json_field:<dotted.path>, or regex:<pattern>")
+		return specErrorf("parse", parse, "must be raw, json_field:<dotted.path>, json_lines:<dotted.path>, or regex:<pattern>")
 	}
 }
 
@@ -458,6 +465,25 @@ func extractText(parse, raw string, doc any, decodeErr error) (string, error) {
 			return "", specErrorf("parse", parse, "json field is not a string")
 		}
 		return text, nil
+	case strings.HasPrefix(parse, parsePrefixJSONLines):
+		if decodeErr != nil {
+			return "", decodeErr
+		}
+		path := strings.TrimPrefix(parse, parsePrefixJSONLines)
+		value, _ := walkPath(doc, path)
+		rows, ok := value.([]any)
+		if !ok {
+			return "", specErrorf("parse", parse, "json field is not an array")
+		}
+		lines := make([]string, len(rows))
+		for i, row := range rows {
+			line, ok := row.(string)
+			if !ok {
+				return "", specErrorf("parse", parse, "json array contains a non-string value")
+			}
+			lines[i] = line
+		}
+		return strings.Join(lines, "\n"), nil
 	case strings.HasPrefix(parse, parsePrefixRegex):
 		re := regexp.MustCompile(strings.TrimPrefix(parse, parsePrefixRegex))
 		match := re.FindStringSubmatch(raw)

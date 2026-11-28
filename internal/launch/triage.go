@@ -31,7 +31,7 @@ func PreviewTriage(agentOverride, launcherOverride string) (TriagePreview, error
 	if err != nil {
 		return TriagePreview{}, err
 	}
-	agent, launcher, err := sessionDefaults(cfg, "small", agentOverride, launcherOverride)
+	agent, launcher, err := sessionDefaults(cfg, "small", agentOverride, launcherOverride, "")
 	if err != nil {
 		return TriagePreview{}, err
 	}
@@ -68,13 +68,13 @@ func StartTriage(request issue.TriageLaunch) (result issue.TriageOutcome, err er
 	if err != nil {
 		return result, err
 	}
-	agent, launcher, err := sessionDefaults(cfg, "small", request.Agent, request.Launcher)
-	if err != nil {
-		return result, err
-	}
 	projectDir := request.ProjectDir
 	if projectDir == "" {
 		projectDir = parentDir(request.Root)
+	}
+	agent, launcher, err := sessionDefaults(cfg, "small", request.Agent, request.Launcher, projectDir)
+	if err != nil {
+		return result, err
 	}
 	plan, err := prepareLaunch(launcher, projectDir, "triage")
 	if err != nil {
@@ -196,7 +196,7 @@ func StartTriage(request issue.TriageLaunch) (result issue.TriageOutcome, err er
 // sessionDefaults resolves the agent and launcher of a session that owns no
 // card. Overrides win over the configuration; the caller names the agent tier:
 // a takeover uses small because no card exists yet.
-func sessionDefaults(cfg *config.Config, scale, agentOverride, launcherOverride string) (string, string, error) {
+func sessionDefaults(cfg *config.Config, scale, agentOverride, launcherOverride, project string) (string, string, error) {
 	agent := strings.TrimSpace(agentOverride)
 	if agent == "" {
 		var err error
@@ -208,7 +208,7 @@ func sessionDefaults(cfg *config.Config, scale, agentOverride, launcherOverride 
 	if !config.HasAgent(cfg, agent) {
 		return "", "", unavailableAgentError(cfg, agent)
 	}
-	resolved, err := sessionLauncher(cfg, launcherOverride)
+	resolved, err := sessionLauncher(cfg, launcherOverride, project)
 	if err != nil {
 		return "", "", err
 	}
@@ -217,7 +217,7 @@ func sessionDefaults(cfg *config.Config, scale, agentOverride, launcherOverride 
 
 // sessionLauncher resolves the launcher of a session that owns no card; an
 // override wins over the configuration.
-func sessionLauncher(cfg *config.Config, launcherOverride string) (string, error) {
+func sessionLauncher(cfg *config.Config, launcherOverride, project string) (string, error) {
 	launcher := strings.TrimSpace(launcherOverride)
 	if launcher == "" {
 		launcher = cfg.Launcher
@@ -225,7 +225,7 @@ func sessionLauncher(cfg *config.Config, launcherOverride string) (string, error
 	if !config.ValidLauncherName(launcher) {
 		return "", launchError("launch.unknown_launcher", launcher)
 	}
-	return resolveStartLauncher(launcher)
+	return resolveStartLauncher(launcher, project)
 }
 
 // validateTriageEvidence refuses to start a session whose prompt would point at

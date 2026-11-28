@@ -11,7 +11,6 @@ import (
 	"github.com/dualface/kander/v2/internal/command"
 	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/terminal"
-	_ "github.com/dualface/kander/v2/internal/terminal/builtin"
 )
 
 // NewCommand builds kander terminal, whose list and test subcommands never require or create

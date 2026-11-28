@@ -685,7 +685,7 @@ func PreviewRemoteStart(ctx context.Context, session *remote.Session, taskID str
 	if err != nil {
 		return StartPreview{}, err
 	}
-	launcher, err := resolveStartLauncher(cfg.Launcher)
+	launcher, err := resolveStartLauncher(cfg.Launcher, "")
 	if err != nil {
 		return StartPreview{}, err
 	}

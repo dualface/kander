@@ -1,8 +1,6 @@
 package launch
 
 import (
-	"os"
-
 	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/terminal"
 )
@@ -22,11 +20,11 @@ func programStatusPreflight(cfg *config.Config, launcher, agent string) error {
 		launcher = cfg.Launcher
 	}
 	if launcher == terminal.Auto {
-		backend, ok := terminal.ResolveAuto(runtimeWindows(), os.Getenv)
-		if !ok {
+		resolved, err := resolveStartLauncher(launcher, "")
+		if err != nil {
 			return nil
 		}
-		launcher = backend.Name()
+		launcher = resolved
 	}
 	plan := LaunchPlan{Launcher: launcher, agent: agent}
 	return rejectUnreportedAgent(&plan, config.AgentFor(cfg, agent))
