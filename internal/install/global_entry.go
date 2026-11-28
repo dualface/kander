@@ -39,3 +39,34 @@ func GlobalEntry() (string, error) {
 	}
 	return "", errors.Join(ErrNoGlobalEntry, errors.New(config.Text("service.no_global_entry", direct)))
 }
+
+// RunningFromGlobalEntry reports whether the running binary is the global entry: both resolve
+// to the same file, so a Homebrew bin link to the running Cellar binary counts. A Microsoft
+// Store install always counts: its package executable is the only entry it has.
+func RunningFromGlobalEntry() (bool, error) {
+	if Packaged() {
+		return true, nil
+	}
+	running, err := lookupExecutable()
+	if err != nil {
+		return false, err
+	}
+	entry, err := GlobalEntry()
+	if errors.Is(err, ErrNoGlobalEntry) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return sameResolvedFile(running, entry), nil
+}
+
+// sameResolvedFile reports whether two paths name the same file after following links.
+func sameResolvedFile(left, right string) bool {
+	a, err := os.Stat(left)
+	if err != nil {
+		return false
+	}
+	b, err := os.Stat(right)
+	return err == nil && os.SameFile(a, b)
+}

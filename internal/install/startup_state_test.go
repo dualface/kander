@@ -6,39 +6,29 @@ import (
 	"testing"
 
 	"github.com/dualface/kander/v2/internal/config"
-	"github.com/dualface/kander/v2/internal/version"
 )
 
-func TestStartupVersionRoundTrip(t *testing.T) {
-	paths := config.InstallPaths{RulesDir: filepath.Join(t.TempDir(), "rules")}
-	if got := StartupVersion(paths); got != "" {
-		t.Fatalf("StartupVersion on missing state = %q, want \"\"", got)
+// RemoveStartupState removes only the startup version file of earlier releases; a missing file is
+// not an error.
+func TestRemoveStartupState(t *testing.T) {
+	paths := config.InstallPaths{RulesDir: t.TempDir()}
+	state := filepath.Join(paths.RulesDir, startupStateFileName)
+	other := filepath.Join(paths.RulesDir, "KANDER-AGENTS.md")
+	for _, path := range []string{state, other} {
+		if err := os.WriteFile(path, []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
-	old := version.Version
-	version.Version = "1.2.3"
-	t.Cleanup(func() { version.Version = old })
-	if err := RecordStartupVersion(paths); err != nil {
-		t.Fatalf("RecordStartupVersion: %v", err)
-	}
-	if got := StartupVersion(paths); got != "1.2.3" {
-		t.Fatalf("StartupVersion = %q, want 1.2.3", got)
-	}
-	version.Version = "1.3.0"
-	if err := RecordStartupVersion(paths); err != nil {
-		t.Fatalf("RecordStartupVersion again: %v", err)
-	}
-	if got := StartupVersion(paths); got != "1.3.0" {
-		t.Fatalf("StartupVersion after rewrite = %q, want 1.3.0", got)
-	}
-}
-
-func TestStartupVersionCorruptState(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, startupStateFileName), []byte("{bad"), 0o644); err != nil {
+	if err := RemoveStartupState(paths); err != nil {
 		t.Fatal(err)
 	}
-	paths := config.InstallPaths{RulesDir: dir}
-	if got := StartupVersion(paths); got != "" {
-		t.Fatalf("StartupVersion on corrupt state = %q, want \"\"", got)
+	if _, err := os.Lstat(state); !os.IsNotExist(err) {
+		t.Fatalf("startup file stays: %v", err)
+	}
+	if _, err := os.Stat(other); err != nil {
+		t.Fatalf("another file was removed: %v", err)
+	}
+	if err := RemoveStartupState(paths); err != nil {
+		t.Fatalf("missing file: %v", err)
 	}
 }

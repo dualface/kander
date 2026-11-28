@@ -26,7 +26,11 @@ const hostRecordSchema = 1
 
 // HostRecord is the content of host.json.
 type HostRecord struct {
-	Schema   int                   `json:"schema"`
+	Schema int `json:"schema"`
+	// Version is the kander version that last completed a version refresh on
+	// this host: the rules, the skill and extension, the global doctor repair,
+	// and the scan of this record were written by that version.
+	Version  string                `json:"version,omitempty"`
 	Projects []ProjectRegistration `json:"projects"`
 	Scan     *HostScan             `json:"scan,omitempty"`
 	// extra keeps the top-level keys of a newer writer.
@@ -127,7 +131,7 @@ func (r *HostRecord) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &all); err != nil {
 		return err
 	}
-	for _, key := range []string{"schema", "projects", "scan"} {
+	for _, key := range []string{"schema", "version", "projects", "scan"} {
 		delete(all, key)
 	}
 	*r = HostRecord(p)
@@ -240,6 +244,38 @@ func StoreHostScan(home string, scan HostScan) error {
 		r.Scan = &scan
 		return nil
 	})
+}
+
+// RecordHostVersion records the version that completed a version refresh.
+func RecordHostVersion(home, version string) error {
+	return UpdateHostRecord(home, func(r *HostRecord) error {
+		r.Version = version
+		return nil
+	})
+}
+
+// versionRefreshLockName serializes the version refresh between kander processes.
+const versionRefreshLockName = "version-refresh.lock"
+
+// TryVersionRefreshLock takes the version refresh lock of home without waiting.
+// taken is false when another process holds it; release is then nil.
+func TryVersionRefreshLock(home string) (release func(), taken bool, err error) {
+	if err := ensureHome(home); err != nil {
+		return nil, false, err
+	}
+	file, err := fs.OpenLockFile(home, filepath.Join(home, versionRefreshLockName))
+	if err != nil {
+		return nil, false, err
+	}
+	lock, taken, err := fs.TryLockExclusive(file)
+	if err != nil || !taken {
+		_ = file.Close()
+		return nil, false, err
+	}
+	return func() {
+		_ = lock.Unlock()
+		_ = file.Close()
+	}, true, nil
 }
 
 // HostName is the name this host reports to its servers: host.name of the scope

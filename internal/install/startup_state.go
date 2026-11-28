@@ -1,55 +1,25 @@
 package install
 
 import (
-	"encoding/json"
 	"path/filepath"
 
 	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/fs"
-	"github.com/dualface/kander/v2/internal/version"
 )
 
-// startupStateFileName records per scope which binary version already passed the startup
-// doctor gate, so bare kander reruns doctor once per new version instead of every launch.
+// startupStateFileName is the file in which earlier releases recorded the binary version that
+// passed the startup doctor gate of bare kander. host.json records the version now; the version
+// refresh removes this file, and uninstall removes a leftover one.
 const startupStateFileName = "kander-startup-state.json"
 
-// startupState persists the last binary version that ran the startup doctor gate.
-type startupState struct {
-	Version string `json:"version"`
-}
-
-// StartupVersion returns the binary version stamped by the last startup doctor gate,
-// or "" when this scope never stamped one.
-func StartupVersion(paths config.InstallPaths) string {
-	path := filepath.Join(paths.RulesDir, startupStateFileName)
-	anchor, err := fileAnchor(path)
-	if err != nil {
-		return ""
-	}
-	data, ok, err := fs.ReadRegularFileIfExists(anchor, path)
-	if err != nil || !ok {
-		return ""
-	}
-	var state startupState
-	if err := json.Unmarshal(data, &state); err != nil {
-		return ""
-	}
-	return state.Version
-}
-
-// RecordStartupVersion stamps the running binary's version after the startup doctor gate ran.
-func RecordStartupVersion(paths config.InstallPaths) error {
-	payload, err := json.Marshal(startupState{Version: version.String()})
-	if err != nil {
-		return err
-	}
-	if err := fs.EnsureInheritedDirectoryPath(paths.RulesDir); err != nil {
-		return err
-	}
+// RemoveStartupState removes the startup version file earlier releases wrote into the rules
+// directory. A missing file is not an error.
+func RemoveStartupState(paths config.InstallPaths) error {
 	path := filepath.Join(paths.RulesDir, startupStateFileName)
 	anchor, err := fileAnchor(path)
 	if err != nil {
 		return err
 	}
-	return fs.WriteBytesAtomicInherited(anchor, path, append(payload, '\n'), true)
+	_, err = fs.RemoveNonDirectoryIfExists(anchor, path)
+	return err
 }

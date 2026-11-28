@@ -1,0 +1,8 @@
+{
+  "versionrefresh.done": "kander {{.V0}}: version refresh done in {{.V1}} (rules, kander-leader skill, agent extensions, global doctor repair, host scan, global injection cleanup).",
+  "versionrefresh.failed": "kander {{.V0}}: version refresh incomplete after {{.V1}}; the next kander command tries again: {{.V2}}",
+  "versionrefresh.pending": "Pending, run kander doctor: {{.V0}}",
+  "versionrefresh.not_global_entry": "kander {{.V0}}: {{.V1}} is not the global entry, and this host records version {{.V2}}; no version refresh ran.",
+  "versionrefresh.none_recorded": "none",
+  "versionrefresh.scan_needs_doctor": "host.json has no recorded PATH yet, so the host scan was skipped"
+}

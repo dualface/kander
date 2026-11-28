@@ -45,7 +45,7 @@ func TestHostRecordRegistersAndKeepsWhatItDoesNotKnow(t *testing.T) {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatal(err)
 	}
-	raw["version"] = map[string]any{"binary": "2.1.0"}
+	raw["future"] = map[string]any{"binary": "2.1.0"}
 	edited, _ := json.Marshal(raw)
 	if err := os.WriteFile(path, edited, 0o600); err != nil {
 		t.Fatal(err)

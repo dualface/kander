@@ -1,0 +1,8 @@
+{
+  "versionrefresh.done": "kander {{.V0}}：版本刷新完成，用时 {{.V1}}（规则、kander-leader skill、Agent 扩展、doctor 全局修复、本机扫描、全局注入清理）。",
+  "versionrefresh.failed": "kander {{.V0}}：版本刷新未完成，用时 {{.V1}}；下一条 kander 命令会重试：{{.V2}}",
+  "versionrefresh.pending": "待处理，请运行 kander doctor：{{.V0}}",
+  "versionrefresh.not_global_entry": "kander {{.V0}}：{{.V1}} 不是全局入口，本机记录的版本是 {{.V2}}；没有执行版本刷新。",
+  "versionrefresh.none_recorded": "无",
+  "versionrefresh.scan_needs_doctor": "host.json 还没有记录 PATH，跳过了本机扫描"
+}

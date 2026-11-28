@@ -15,8 +15,10 @@ import (
 func TestInstallWizardListsFilesAndCancelWritesNothing(t *testing.T) {
 	bin := buildKander(t)
 	home, env := isolatedHome(t)
-	if err := os.RemoveAll(filepath.Join(home, ".agents")); err != nil {
-		t.Fatal(err)
+	for _, dir := range []string{".agents", ".local"} {
+		if err := os.RemoveAll(filepath.Join(home, dir)); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o755); err != nil {
 		t.Fatal(err)

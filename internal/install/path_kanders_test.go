@@ -122,3 +122,22 @@ func TestRemoveKanderBinary(t *testing.T) {
 		t.Fatal("removing a missing file must report an error")
 	}
 }
+
+// PathKanderExecutables searches the PATH it is given, not the process PATH, and executes no
+// candidate.
+func TestPathKanderExecutablesSearchesTheGivenPathWithoutProbing(t *testing.T) {
+	old := pathKanderVersion
+	pathKanderVersion = func(string) string { t.Fatal("a candidate was executed"); return "" }
+	t.Cleanup(func() { pathKanderVersion = old })
+	if runtime.GOOS == "windows" {
+		t.Setenv("PATHEXT", ".EXE")
+	}
+	first, second := t.TempDir(), t.TempDir()
+	writeFakeKander(t, first)
+	writeFakeKander(t, second)
+	t.Setenv("PATH", t.TempDir())
+	binaries := PathKanderExecutables(first + string(os.PathListSeparator) + second)
+	if len(binaries) != 2 || binaries[0].Version != "" || binaries[1].Version != "" {
+		t.Fatalf("binaries = %+v", binaries)
+	}
+}

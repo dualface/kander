@@ -66,8 +66,37 @@ type ProcessInvocation struct {
 // ResolveAgentProgram resolves built-in and configured executable names per platform.
 // name may be a PATH name (with or without extension) or an explicit path.
 func ResolveAgentProgram(name string) *AgentProgram {
+	return resolveAgentProgram(name, os.Getenv("PATH"), exec.LookPath)
+}
+
+// ResolveAgentProgramIn is ResolveAgentProgram with pathList searched instead of the PATH of
+// this process: what a recorded PATH resolves to.
+func ResolveAgentProgramIn(name, pathList string) *AgentProgram {
+	return resolveAgentProgram(name, pathList, func(name string) (string, error) {
+		return LookPathIn(pathList, name)
+	})
+}
+
+// LookPathIn is exec.LookPath with pathList searched instead of the PATH of this process. A name
+// that holds a separator is checked as it is; empty and relative directories are skipped.
+func LookPathIn(pathList, name string) (string, error) {
+	if strings.ContainsAny(name, `/\`) {
+		return exec.LookPath(name)
+	}
+	for _, dir := range filepath.SplitList(pathList) {
+		if dir == "" || !filepath.IsAbs(dir) {
+			continue
+		}
+		if found, err := exec.LookPath(filepath.Join(dir, name)); err == nil {
+			return found, nil
+		}
+	}
+	return "", &exec.Error{Name: name, Err: exec.ErrNotFound}
+}
+
+func resolveAgentProgram(name, pathList string, lookPath func(string) (string, error)) *AgentProgram {
 	if !isWindows() {
-		found, err := exec.LookPath(name)
+		found, err := lookPath(name)
 		if err != nil {
 			return nil
 		}
@@ -91,7 +120,7 @@ func ResolveAgentProgram(name string) *AgentProgram {
 		if suffix != ".exe" && suffix != ".cmd" && suffix != ".bat" {
 			return nil
 		}
-		for _, candidate := range windowsPathCandidates(name, suffix) {
+		for _, candidate := range windowsPathCandidates(name, suffix, pathList) {
 			if usableFile(candidate, suffix == ".exe") {
 				return &AgentProgram{Path: candidate, Batch: suffix != ".exe"}
 			}
@@ -99,13 +128,13 @@ func ResolveAgentProgram(name string) *AgentProgram {
 		return nil
 	}
 
-	for _, candidate := range windowsPathCandidates(name, ".exe") {
+	for _, candidate := range windowsPathCandidates(name, ".exe", pathList) {
 		if usableFile(candidate, true) {
 			return &AgentProgram{Path: candidate}
 		}
 	}
 	for _, suffix := range []string{".cmd", ".bat"} {
-		for _, candidate := range windowsPathCandidates(name, suffix) {
+		for _, candidate := range windowsPathCandidates(name, suffix, pathList) {
 			if usableFile(candidate, false) {
 				return &AgentProgram{Path: candidate, Batch: true}
 			}
@@ -139,7 +168,7 @@ func usableFile(path string, nonempty bool) bool {
 	return true
 }
 
-func windowsPathCandidates(name, suffix string) []string {
+func windowsPathCandidates(name, suffix, pathList string) []string {
 	filename := name
 	if !strings.HasSuffix(strings.ToLower(name), suffix) {
 		filename = name + suffix
@@ -149,7 +178,7 @@ func windowsPathCandidates(name, suffix string) []string {
 		separator = ";"
 	}
 	var out []string
-	for _, raw := range strings.Split(os.Getenv("PATH"), separator) {
+	for _, raw := range strings.Split(pathList, separator) {
 		directory := strings.Trim(strings.TrimSpace(raw), `"`)
 		if directory == "" {
 			continue

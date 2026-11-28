@@ -63,7 +63,7 @@ func TestScanHostRecordsAgentsLaunchersAndPath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scan, problems, err := scanHost(clientHome, time.Now())
+	scan, problems, err := scanHost(clientHome, time.Now(), processScanEnvironment())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestScanHostRecordsAgentsLaunchersAndPath(t *testing.T) {
 // A host without registrations writes no host.json.
 func TestScanHostWithoutProjectsWritesNothing(t *testing.T) {
 	clientHome := t.TempDir()
-	scan, problems, err := scanHost(clientHome, time.Now())
+	scan, problems, err := scanHost(clientHome, time.Now(), processScanEnvironment())
 	if err != nil || len(scan.Projects) != 0 || len(problems) != 0 {
 		t.Fatalf("scan = %+v %v %v", scan, problems, err)
 	}

@@ -234,15 +234,16 @@ func isolatedHome(t *testing.T) (home string, env []string) {
 	for _, name := range installtest.AgentConfigEnvNames() {
 		env = append(env, name+"=")
 	}
-	// Pre-stamp the startup-doctor gate so config-backed launches reach the board
-	// directly; a missing config still triggers doctor plus the Enter wait.
-	rulesDir := filepath.Join(home, ".agents", "kander")
-	if err := os.MkdirAll(rulesDir, 0o755); err != nil {
+	// Record the running version in host.json so config-backed launches reach the
+	// board directly, without a version refresh; a missing config still triggers
+	// doctor plus the Enter wait.
+	clientHome := filepath.Join(home, ".local", "share", "kander", "client")
+	if err := os.MkdirAll(clientHome, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(
-		filepath.Join(rulesDir, "kander-startup-state.json"),
-		[]byte(`{"version":"dev"}`), 0o644,
+		filepath.Join(clientHome, "host.json"),
+		[]byte(`{"schema":1,"version":"dev","projects":[]}`), 0o600,
 	); err != nil {
 		t.Fatal(err)
 	}
