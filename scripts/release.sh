@@ -4,19 +4,21 @@
 #   scripts/release.sh v2.0.0
 #   scripts/release.sh v2.0.0-beta.1
 #
-# This branch only releases 2.x. A release (v2.Y.Z) is cut from main; a
-# prerelease (v2.Y.Z-alpha|beta|rc.N) is cut from v2 and never touches the
-# Homebrew tap, which carries releases only.
+# This branch only releases 2.x. A release (v2.Y.Z) is cut from main and
+# updates Formula/kander.rb; a prerelease (v2.Y.Z-alpha|beta|rc.N) is cut
+# from v2 and updates Formula/kander-beta.rb.
 #
 # Pushing the tag is what triggers .github/workflows/release.yml; this script
-# then waits for the workflow's assets and rewrites Formula/kander.rb in
+# then waits for the workflow's assets and rewrites the matching formula in
 # dualface/homebrew-tap from the published checksums.
 #
 # The workflow now runs the tap half itself (`--skip-tag --no-test`) when the
-# HOMEBREW_TAP_TOKEN secret is set, so a normal release only needs the tag. Run this
-# script by hand to cut a tag locally, or to repair a formula that drifted:
+# HOMEBREW_TAP_TOKEN secret is set, so a normal release or prerelease only
+# needs the tag (`--skip-tap`). Run this script by hand to cut a tag locally,
+# or to repair a formula that drifted:
 #
 #   scripts/release.sh --skip-tag v2.0.0
+#   scripts/release.sh --skip-tag v2.0.0-beta.1
 
 set -euo pipefail
 
@@ -39,8 +41,8 @@ usage() {
 	cat >&2 <<EOF
 usage: scripts/release.sh [options] <version>
 
-  <version>      release tag v2.Y.Z (from main) or v2.Y.Z-alpha|beta|rc.N
-                 (from v2, never updates the Homebrew tap)
+  <version>      release tag v2.Y.Z (from main, updates Formula/kander.rb)
+                 or v2.Y.Z-alpha|beta|rc.N (from v2, updates Formula/kander-beta.rb)
 
 options:
   --skip-tag     the tag is already pushed; only wait and update the tap
@@ -98,15 +100,20 @@ if ! [[ "$version" =~ ^v2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.(0
 fi
 bare_version="${version#v}"
 
-# A prerelease is cut from the v2 branch and never reaches the Homebrew tap.
+# A prerelease is cut from the v2 branch and updates Formula/kander-beta.rb;
+# a release is cut from main and updates Formula/kander.rb.
 prerelease=0
+formula_name=kander
+formula_class=Kander
 case "$version" in
 *-*)
 	prerelease=1
 	RELEASE_BRANCH="$PRERELEASE_BRANCH"
-	skip_tap=1
+	formula_name=kander-beta
+	formula_class=KanderBeta
 	;;
 esac
+formula_file="Formula/${formula_name}.rb"
 
 for tool in git awk; do
 	command -v "$tool" >/dev/null 2>&1 || die "missing required tool: $tool"
@@ -217,11 +224,7 @@ done
 fi
 
 if [ "$skip_tap" -eq 1 ]; then
-	if [ "$prerelease" -eq 1 ]; then
-		printf '\nskipping the Homebrew tap update: prereleases never reach the tap\n' >&2
-	else
-		printf '\nskipping the Homebrew tap update (--skip-tap)\n' >&2
-	fi
+	printf '\nskipping the Homebrew tap update (--skip-tap)\n' >&2
 	printf 'release %s is done: https://github.com/%s/releases/tag/%s\n' "$version" "$REPO_SLUG" "$version" >&2
 	exit 0
 fi
@@ -268,18 +271,25 @@ if [ "$dry_run" -eq 1 ]; then
 else
 	step "updating $TAP_SLUG"
 	git clone --quiet --depth 1 "https://github.com/${TAP_SLUG}.git" "$workdir/tap"
+	mkdir -p "$workdir/tap/Formula"
 fi
 
 asset_url() {
 	printf 'https://github.com/%s/releases/download/%s/kander-%s.tar.gz' "$REPO_SLUG" "$version" "$1"
 }
 
-cat >"$workdir/tap/Formula/kander.rb" <<EOF
-class Kander < Formula
+{
+	cat <<EOF
+class ${formula_class} < Formula
   desc "Kanban orchestration for multiple AI agents"
   homepage "https://github.com/${REPO_SLUG}"
   version "${bare_version}"
   license "MIT"
+EOF
+	if [ "$prerelease" -eq 1 ]; then
+		printf '  conflicts_with "kander", because: "both install a kander executable"\n'
+	fi
+	cat <<EOF
 
   on_macos do
     on_arm do
@@ -312,16 +322,19 @@ class Kander < Formula
   end
 end
 EOF
+} >"$workdir/tap/${formula_file}"
 
 if [ "$dry_run" -eq 1 ]; then
-	step "formula that would be written to $TAP_SLUG"
-	cat "$workdir/tap/Formula/kander.rb"
+	step "formula ${formula_file} that would be written to $TAP_SLUG"
+	cat "$workdir/tap/${formula_file}"
 	exit 0
-elif git -C "$workdir/tap" diff --quiet -- Formula/kander.rb; then
+fi
+
+git -C "$workdir/tap" add -- "${formula_file}"
+if git -C "$workdir/tap" diff --cached --quiet -- "${formula_file}"; then
 	printf 'formula already matches %s; nothing to push\n' "$version" >&2
 else
-	git -C "$workdir/tap" add Formula/kander.rb
-	git -C "$workdir/tap" commit --quiet -m "kander ${bare_version}"
+	git -C "$workdir/tap" commit --quiet -m "${formula_name} ${bare_version}"
 	git -C "$workdir/tap" push --quiet origin HEAD:main
 	printf 'pushed formula for %s to %s\n' "$bare_version" "$TAP_SLUG" >&2
 fi
@@ -329,6 +342,6 @@ fi
 step "done"
 cat >&2 <<EOF
 release:  https://github.com/${REPO_SLUG}/releases/tag/${version}
-formula:  https://github.com/${TAP_SLUG}/blob/main/Formula/kander.rb
-verify:   brew update && brew install ${TAP_SLUG%/*}/tap/kander
+formula:  https://github.com/${TAP_SLUG}/blob/main/${formula_file}
+verify:   brew update && brew install ${TAP_SLUG%/*}/tap/${formula_name}
 EOF

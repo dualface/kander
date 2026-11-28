@@ -85,14 +85,14 @@ jobs:
             dist/*.tar.gz
             dist/checksums.txt
 
-      # Rewrites Formula/kander.rb in dualface/homebrew-tap from the checksums
-      # just published. Needs HOMEBREW_TAP_TOKEN: a PAT with contents:write on the tap
-      # repo (GITHUB_TOKEN cannot push to another repository). Without the
+      # Rewrites Formula/kander.rb (releases) or Formula/kander-beta.rb
+      # (prereleases) in dualface/homebrew-tap from the checksums just
+      # published. Needs HOMEBREW_TAP_TOKEN: a PAT with contents:write on the
+      # tap repo (GITHUB_TOKEN cannot push to another repository). Without the
       # secret the release still succeeds and the formula must be synced by
       # hand with: scripts/release.sh --skip-tag <tag>
-      # Prereleases never reach the stable Homebrew formula.
       - name: Sync Homebrew tap
-        if: env.HOMEBREW_TAP_TOKEN != '' && !contains(github.ref_name, '-')
+        if: env.HOMEBREW_TAP_TOKEN != ''
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
