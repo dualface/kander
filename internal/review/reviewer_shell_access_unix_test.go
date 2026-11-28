@@ -12,9 +12,15 @@ import (
 // new run with any of them reaches the reviewer instead of being refused.
 func TestReviewLaunchesShellReviewers(t *testing.T) {
 	h, _, task, requirements := remoteReviewHarness(t, nil)
+	// The review home of a definition that names one would otherwise resolve to
+	// the real user home; grok requires it to exist, so isolate it per run.
+	homeEnv := map[string]string{"grok": "GROK_HOME", "kimi": "KIMI_CODE_HOME"}
 	for _, agent := range []string{"agy", "grok", "kimi", "opencode"} {
 		t.Run(agent, func(t *testing.T) {
 			t.Setenv(strings.ToUpper(agent)+"_REVIEW_BIN", h.fake)
+			if name, ok := homeEnv[agent]; ok {
+				t.Setenv(name, t.TempDir())
+			}
 			positional := []string{h.repo, h.base, h.head, "PMQA", "Inspect only the review range"}
 			for _, bound := range []bool{false, true} {
 				if err := os.Remove(h.argvLog); err != nil && !os.IsNotExist(err) {
