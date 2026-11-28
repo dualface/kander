@@ -46,7 +46,12 @@ case "$1" in
     esac
     command=${command%% *}; command=${command#\'}; command=${command%\'}
     printf '%s' "${command##*/}" > "$dir/command"; printf '%s' "$3" > "$dir/launched"
-    [ -z "$FAKEMUX_RUN" ] || env -i HOME="$HOME" PATH=/usr/bin:/bin FAKEMUX_PANE="$dir" sh -c "$3" </dev/null >"$dir/agent.out" 2>&1 & ;;
+    # Only a simple command goes to the background: bash (the sh of macOS)
+    # runs a backgrounded list in a subshell that keeps the caller's output
+    # pipes open while the agent runs, and the caller waits for their end.
+    if [ -n "$FAKEMUX_RUN" ]; then
+      env -i HOME="$HOME" PATH=/usr/bin:/bin FAKEMUX_PANE="$dir" sh -c "$3" </dev/null >"$dir/agent.out" 2>&1 &
+    fi ;;
   meta-set) printf '%s' "$3" > "$(pane_dir "$2")/marker" ;;
   meta-get)
     dir=$(pane_dir "$2"); [ -d "$dir" ] || { printf 'no such pane: %s\n' "$2" >&2; exit 1; }
