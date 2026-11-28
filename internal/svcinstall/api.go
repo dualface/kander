@@ -117,7 +117,9 @@ type Prepared struct {
 	Location string
 	// Found reports an installed managed definition; Changed that it differs from the rendered one.
 	Found, Changed bool
-	data           []byte
+	// Previous is the Spec the installed managed definition records.
+	Previous Spec
+	data     []byte
 }
 
 // Prepare renders the definition of s and compares it with the installed one. A definition
@@ -134,10 +136,11 @@ func Prepare(ctx context.Context, s Spec) (Prepared, error) {
 	}
 	prepared := Prepared{Kind: s.Kind, Location: p.location(s.Kind), Found: found, Changed: true, data: data}
 	if found {
-		if m, ok := decodeMarker(installed); !ok || m.Kind != s.Kind {
+		m, ok := decodeMarker(installed)
+		if !ok || m.Kind != s.Kind {
 			return Prepared{}, &ForeignError{Location: prepared.Location}
 		}
-		prepared.Changed = !p.same(installed, data)
+		prepared.Previous, prepared.Changed = m.Spec, !p.same(installed, data)
 	}
 	return prepared, nil
 }

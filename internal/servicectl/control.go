@@ -304,6 +304,9 @@ func Import(ctx context.Context, target, dataDir string, req api.ImportRequest, 
 
 // sameDirectory compares two data directory paths, also when one of them
 // reaches the directory through a different spelling.
+// SameDirectory reports whether a and b name the same directory.
+func SameDirectory(a, b string) bool { return sameDirectory(a, b) }
+
 func sameDirectory(a, b string) bool {
 	if filepath.Clean(a) == filepath.Clean(b) {
 		return true

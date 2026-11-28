@@ -105,9 +105,10 @@ func ensureLog(s svcinstall.Spec) error {
 	return log.Close()
 }
 
-// Install registers the service of kind and makes sure it runs. A detached process of the same
-// kind is stopped first; a managed one is left alone when the definition did not change and
-// restarted when it did.
+// Install registers the service of kind and makes sure it runs the new definition. A detached
+// process in the place of the new definition is stopped first. The process of the service is
+// found at the place of the new definition and at the place of the definition it replaces: it
+// is left alone when the definition did not change and restarted when it did.
 func Install(ctx context.Context, kind svcinstall.Kind, server ServerOptions) (InstallResult, error) {
 	if err := svcinstall.Available(ctx); err != nil {
 		return InstallResult{}, err
@@ -125,15 +126,28 @@ func Install(ctx context.Context, kind svcinstall.Kind, server ServerOptions) (I
 	if err := ensureLog(s); err != nil {
 		return result, err
 	}
-	running, managed, pid, err := runningProcess(ctx, s)
+	places, err := installPlaces(s, prepared)
 	if err != nil {
 		return result, err
 	}
-	if running && !managed {
-		if err := stopDirect(ctx, s); err != nil {
+	var service *process
+	for _, place := range places {
+		p, found, err := place.find(ctx)
+		if err != nil {
 			return result, err
 		}
-		result.Stopped = processText(kind, pid)
+		switch {
+		case !found:
+		case p.managed:
+			if service == nil {
+				service = &p
+			}
+		case place.claimed:
+			if err := place.stop(ctx); err != nil {
+				return result, err
+			}
+			result.Stopped = processText(kind, p.pid)
+		}
 	}
 	if prepared.Changed {
 		if err := prepared.Write(ctx); err != nil {
@@ -141,10 +155,11 @@ func Install(ctx context.Context, kind svcinstall.Kind, server ServerOptions) (I
 		}
 	}
 	switch {
-	case running && managed && prepared.Changed:
+	case prepared.Changed && (prepared.Found || service != nil):
+		// The service may still run the definition it replaces; a start would leave it so.
 		result.Restarted = true
-		err = restart(ctx, s)
-	case running && managed:
+		err = restart(ctx, kind, service)
+	case service != nil:
 		// The service runs this definition already.
 	default:
 		err = svcinstall.Start(ctx, kind)
@@ -168,75 +183,153 @@ func Install(ctx context.Context, kind svcinstall.Kind, server ServerOptions) (I
 	return result, nil
 }
 
+// place is where a server or worker runs: the client home whose worker.lock its worker holds,
+// or the address its server answers at. A server found at target must serve dataDir when it is
+// set. claimed marks a place the new definition needs, where a detached process is stopped.
+type place struct {
+	kind            svcinstall.Kind
+	home            string
+	target, dataDir string
+	claimed         bool
+}
+
+// process is a running server or worker; managed reports one a service manager started.
+type process struct {
+	at      place
+	managed bool
+	pid     int
+}
+
+// placeOf is where the process of the definition s runs.
+func placeOf(s svcinstall.Spec) (place, error) {
+	if s.Kind == svcinstall.KindWorker {
+		home, err := svcinstall.SpecHome(s)
+		return place{kind: s.Kind, home: home}, err
+	}
+	target, err := servicectl.ProbeURL(servicectl.ServiceListen(s))
+	return place{kind: s.Kind, target: target}, err
+}
+
+func (p place) same(o place) bool {
+	return p.kind == o.kind && p.home == o.home && p.target == o.target
+}
+
+// installPlaces lists where an install looks for a running process: the place of the new
+// definition; for a server, also the address the server of its data directory recorded, which
+// differs when that server listens elsewhere; and the place of the managed definition it
+// replaces, where only the process of the service counts.
+func installPlaces(s svcinstall.Spec, prepared svcinstall.Prepared) ([]place, error) {
+	own, err := placeOf(s)
+	if err != nil {
+		return nil, err
+	}
+	own.claimed = true
+	places := []place{own}
+	add := func(p place) {
+		for _, known := range places {
+			if known.same(p) {
+				return
+			}
+		}
+		places = append(places, p)
+	}
+	if s.Kind == svcinstall.KindServer {
+		dir := servicectl.ServiceDataDir(s)
+		recorded, err := servicectl.RecordedURL(dir)
+		if err != nil {
+			return nil, err
+		}
+		if recorded != "" {
+			add(place{kind: s.Kind, target: recorded, dataDir: dir, claimed: true})
+		}
+	}
+	if prepared.Found {
+		previous, err := placeOf(prepared.Previous)
+		if err != nil {
+			return nil, err
+		}
+		add(previous)
+	}
+	return places, nil
+}
+
 // runningProcess finds the process of kind for the definition s: the worker that holds the lock
 // of its client home, or the server that answers at its listen address. managed reports one a
 // service manager started.
 func runningProcess(ctx context.Context, s svcinstall.Spec) (running, managed bool, pid int, err error) {
-	if s.Kind == svcinstall.KindWorker {
-		home, err := svcinstall.SpecHome(s)
-		if err != nil {
-			return false, false, 0, err
-		}
-		status, err := remote.InspectWorker(home)
-		if err != nil || status.Run != remote.WorkerRunning {
-			return false, false, 0, err
-		}
-		recorded := status.RecordState == remote.WorkerRecordRecorded
-		return true, recorded && status.Record.Managed, status.Record.PID, nil
-	}
-	target, err := servicectl.ProbeURL(servicectl.ServiceListen(s))
+	at, err := placeOf(s)
 	if err != nil {
 		return false, false, 0, err
+	}
+	p, running, err := at.find(ctx)
+	return running, p.managed, p.pid, err
+}
+
+// find reports the process at p.
+func (p place) find(ctx context.Context) (process, bool, error) {
+	if p.kind == svcinstall.KindWorker {
+		status, err := remote.InspectWorker(p.home)
+		if err != nil || status.Run != remote.WorkerRunning {
+			return process{}, false, err
+		}
+		recorded := status.RecordState == remote.WorkerRecordRecorded
+		return process{at: p, managed: recorded && status.Record.Managed, pid: status.Record.PID}, true, nil
 	}
 	probe, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	info, err := servicectl.Info(probe, target)
+	info, err := servicectl.Info(probe, p.target)
 	if client.IsUnreachable(err) {
-		return false, false, 0, nil
+		return process{}, false, nil
 	}
 	if err != nil {
-		return false, false, 0, err
+		return process{}, false, err
+	}
+	if p.dataDir != "" && !servicectl.SameDirectory(info.DataDir, p.dataDir) {
+		return process{}, false, nil
 	}
 	record, found, err := servicectl.ReadListenRecord(info.DataDir)
 	if err != nil {
-		return true, false, info.PID, err
+		return process{at: p, pid: info.PID}, true, err
 	}
-	return true, found && record.Managed && record.PID == info.PID, info.PID, nil
+	return process{at: p, managed: found && record.Managed && record.PID == info.PID, pid: info.PID}, true, nil
 }
 
-// stopDirect stops the process of kind through the Kander protocol, whoever started it: the
-// stop request of a worker, the authenticated stop of a server.
-func stopDirect(ctx context.Context, s svcinstall.Spec) error {
-	if s.Kind == svcinstall.KindWorker {
-		home, err := svcinstall.SpecHome(s)
-		if err != nil {
-			return err
-		}
-		_, err = remote.StopWorker(ctx, home, workerStopPoll, workerStopTimeout)
+// stop stops the process at p through the Kander protocol, whoever started it: the stop request
+// of a worker, the authenticated stop of a server.
+func (p place) stop(ctx context.Context) error {
+	if p.kind == svcinstall.KindWorker {
+		_, err := remote.StopWorker(ctx, p.home, workerStopPoll, workerStopTimeout)
 		if errors.Is(err, remote.ErrWorkerStopTimeout) {
-			return errors.New(config.Text("install.uninstall_worker_timeout", workerStopTimeout, filepath.Join(home, remote.WorkerLockName)))
+			return errors.New(config.Text("install.uninstall_worker_timeout", workerStopTimeout, filepath.Join(p.home, remote.WorkerLockName)))
 		}
 		return err
 	}
-	target, err := servicectl.ProbeURL(servicectl.ServiceListen(s))
-	if err != nil {
-		return err
-	}
-	_, err = servicectl.Controller{Unmanaged: true}.Stop(ctx, target)
+	_, err := servicectl.Controller{Unmanaged: true}.Stop(ctx, p.target)
 	return err
 }
 
-// restart restarts the service; on Windows the process stops through the Kander protocol and
-// the task starts again.
-func restart(ctx context.Context, s svcinstall.Spec) error {
-	err := svcinstall.Restart(ctx, s.Kind)
+// stopDirect stops the process of the definition s through the Kander protocol.
+func stopDirect(ctx context.Context, s svcinstall.Spec) error {
+	at, err := placeOf(s)
+	if err != nil {
+		return err
+	}
+	return at.stop(ctx)
+}
+
+// restart restarts the service. On Windows the process of the service, when one runs, stops
+// through the Kander protocol and the task starts again.
+func restart(ctx context.Context, kind svcinstall.Kind, service *process) error {
+	err := svcinstall.Restart(ctx, kind)
 	if !errors.Is(err, svcinstall.ErrProtocolStop) {
 		return err
 	}
-	if err := stopDirect(ctx, s); err != nil {
-		return err
+	if service != nil {
+		if err := service.at.stop(ctx); err != nil {
+			return err
+		}
 	}
-	return svcinstall.Start(ctx, s.Kind)
+	return svcinstall.Start(ctx, kind)
 }
 
 // awaitReady waits until the worker holds its lock or the server answers as ready.
