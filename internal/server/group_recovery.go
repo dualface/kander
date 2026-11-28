@@ -167,6 +167,10 @@ func (p *project) recoverLostMember(ctx context.Context, scope receiptScope, inp
 		next := claimRecord{TaskID: snapshot.Entry.TaskID, ClientID: h.clientID, ExecutionID: input.Lost.ExecutionID, Owner: cmp.Or(previous.Owner, board.MetadataFrom(snapshot.Text, board.FieldOwner), "recovery"), Generation: previous.Generation + 1, Status: api.ClaimReleased, RenewedAt: now, ExpiresAt: now, Handoffs: slices.Clone(previous.Handoffs), BranchSnapshot: previous.BranchSnapshot}
 		next.Handoffs = append(next.Handoffs, api.Handoff{At: now, FromGeneration: previous.Generation, ToGeneration: next.Generation, FromClient: previous.ClientID, ToClient: h.clientID, Owner: next.Owner, Decision: input.Request.Decision})
 		next.TokenHash = tokenHash(p.server.token(p.info.ID, next.TaskID, next.ExecutionID, next.Generation))
+		orders, err := p.supersedeOrders(previous, "a coordinator recovery")
+		if err != nil {
+			return outcome{err: err}
+		}
 		extension := board.TransactionExtension{Groups: []string{serviceGroup}, Published: p.indexPublication, Before: validate, After: func(tx *board.Transaction) error {
 			if err := validate(tx); err != nil {
 				return err
@@ -189,10 +193,14 @@ func (p *project) recoverLostMember(ctx context.Context, scope receiptScope, inp
 			if err := p.stageSupersedeRequests(tx, next.TaskID, next.Generation); err != nil {
 				return err
 			}
+			if err := orders.stage(tx); err != nil {
+				return err
+			}
 			return p.stageOperationReceipt(tx, scope, operation, input, checkpoint)
 		}}
 		checkpoint, err := board.RecoverCoordinatorWithTransaction(ctx, p.board, input.Request, input.ObservedRevision, extension)
 		if err == nil {
+			p.orderPublished(orders)
 			_ = p.events.append(api.Event{Kind: api.EventClaimChanged, TaskID: next.TaskID, Generation: next.Generation})
 			_ = p.events.append(api.Event{Kind: api.EventGroupChanged, GroupID: input.Request.GroupID})
 			p.changed(next.TaskID, next.Generation)

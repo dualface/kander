@@ -334,6 +334,10 @@ type ClaimRequest struct {
 	// of the idempotency digest of the claim.
 	PolicyRevision uint64 `json:"policy_revision,omitzero"`
 	BranchMode     string `json:"branch_mode,omitempty"`
+	// StartOrderID names the start order this claim runs for. The server takes
+	// the claim only while that order is accepted, targets the claiming client,
+	// and names the task; the claim then binds the order to its generation.
+	StartOrderID string `json:"start_order_id,omitempty"`
 }
 
 // StartInput is the launcher metadata of a start claim.
@@ -498,6 +502,9 @@ const (
 	// policy; Revision is the new policy revision. Like every event it is only
 	// a hint: a client reads the policy itself.
 	EventProjectPolicyChanged = "project_policy_changed"
+	// EventStartOrderChanged follows every state change of a start order;
+	// OrderID and State identify it.
+	EventStartOrderChanged = "start_order_changed"
 )
 
 // Event is one change notification. Events carry identities, not bodies; a
@@ -511,6 +518,7 @@ type Event struct {
 	Revision   uint64    `json:"revision,omitzero"`
 	Generation uint64    `json:"generation,omitzero"`
 	RequestID  string    `json:"request_id,omitempty"`
+	OrderID    string    `json:"order_id,omitempty"`
 	At         time.Time `json:"at"`
 }
 

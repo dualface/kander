@@ -387,3 +387,6 @@ func (s *Server) BoardRoot(id string) (string, error) {
 func OpenDispatchRefusal(task, text string, read func(task, id string) (board.Dispatch, error)) error {
 	return openDispatch(task, text, read)
 }
+
+// SweepStartOrders runs one start order sweep at the server clock.
+func (s *Server) SweepStartOrders() { s.sweepStartOrders() }

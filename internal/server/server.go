@@ -98,6 +98,10 @@ type Server struct {
 	// gcReported is a test hook: when set, the gc goroutine calls it after
 	// it hands the report to the waiting request and before it exits.
 	gcReported func()
+	// hosts holds the hosts that sent heartbeats (hosts.go); sweepWorkers
+	// lets Close wait for the start order sweeps (start_orders.go).
+	hosts        hostBook
+	sweepWorkers sync.WaitGroup
 
 	mu       sync.Mutex
 	projects map[string]*project
@@ -195,6 +199,8 @@ func Open(o Options) (*Server, error) {
 		s.log.Info("offline maintenance complete", "project_name", s.maintenance.Project, "changed_tasks", s.maintenanceChanged)
 	} else {
 		s.ready.Store(true)
+		s.sweepWorkers.Add(1)
+		go s.runStartOrderSweeps()
 		for _, info := range s.projectInfos() {
 			s.log.Info("project", "name", info.Name, "id", info.ID, "board", info.BoardPath)
 		}
@@ -223,6 +229,7 @@ func (s *Server) close() error {
 	s.uploadWorkers.Wait()
 	// A gc stops at its next batch once shutdown is cancelled above.
 	s.gcWorkers.Wait()
+	s.sweepWorkers.Wait()
 	var err error
 	for _, p := range projects {
 		p.mu.Lock()
@@ -276,6 +283,9 @@ func (s *Server) load() error {
 	}
 	if s.secret, err = hex.DecodeString(secret.Secret); err != nil || len(s.secret) < 32 {
 		return errors.New("server secret is damaged")
+	}
+	if err := s.loadHosts(); err != nil {
+		return err
 	}
 	projects, err := readRegistry(s.data)
 	if err != nil {

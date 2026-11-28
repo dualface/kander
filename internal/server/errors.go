@@ -54,6 +54,17 @@ var codeStatus = map[string]int{
 	api.CodePolicyRevisionConflict: http.StatusConflict,
 	api.CodePolicyRevisionStale:    http.StatusConflict,
 	api.CodePolicyRequirementUnmet: http.StatusBadRequest,
+	api.CodeHostNameConflict:        http.StatusConflict,
+	api.CodeRemoteRequired:          http.StatusUnprocessableEntity,
+	api.CodeTaskNotTodo:             http.StatusConflict,
+	api.CodeHostUnknown:             http.StatusNotFound,
+	api.CodeHostOffline:             http.StatusConflict,
+	api.CodeHostUnsupported:         http.StatusUnprocessableEntity,
+	api.CodeHostProjectMissing:      http.StatusUnprocessableEntity,
+	api.CodeHostAgentUnavailable:    http.StatusUnprocessableEntity,
+	api.CodeHostLauncherUnavailable: http.StatusUnprocessableEntity,
+	api.CodeStartOrderOpen:          http.StatusConflict,
+	api.CodeStartOrderRefused:       http.StatusConflict,
 	api.CodeInternal:               http.StatusInternalServerError,
 }
 
