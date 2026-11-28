@@ -2,6 +2,7 @@ package menu
 
 import (
 	"context"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -33,6 +34,9 @@ type scanEnvironment struct {
 	lookPath    func(name string) (string, error)
 	agentEnv    func(name string) string
 	launcherEnv func(name string) string
+	// recordedEnv is the config_home.env snapshot a scan writes back unchanged; nil means the
+	// scan records the values agentEnv has for every agent definition.
+	recordedEnv map[string]string
 }
 
 // processScanEnvironment is the environment of this process: what kander doctor scans with.
@@ -47,10 +51,12 @@ func processScanEnvironment() scanEnvironment {
 }
 
 // recordedScanEnvironment is the environment the last scan of record recorded: its PATH and
-// the config_home.env values it found. The version refresh scans with it, because the process
-// that triggers the refresh may be a sandboxed agent or a start the worker spawned, whose PATH
-// and variables are narrower than the ones kander doctor ran with. A launcher variable is read
-// from this process: no background launcher requires one. ok is false without a recorded PATH.
+// its config_home.env snapshot. The version refresh scans with it, because the process that
+// triggers the refresh may be a sandboxed agent or a start the worker spawned, whose PATH and
+// variables are narrower than the ones kander doctor ran with, and writes both back unchanged.
+// A record written before the snapshot existed falls back to the values of its agent entries. A
+// launcher variable is read from this process: no background launcher requires one. ok is false
+// without a recorded PATH.
 func recordedScanEnvironment(record remote.HostRecord) (scanEnvironment, bool) {
 	if record.Scan == nil || record.Scan.Path == "" {
 		return scanEnvironment{}, false
@@ -59,17 +65,17 @@ func recordedScanEnvironment(record remote.HostRecord) (scanEnvironment, bool) {
 	values := map[string]string{}
 	for _, project := range record.Scan.Projects {
 		for _, agent := range project.Agents {
-			for name, value := range agent.Env {
-				values[name] = value
-			}
+			maps.Copy(values, agent.Env)
 		}
 	}
+	maps.Copy(values, record.Scan.Env)
 	return scanEnvironment{
 		path:        path,
 		resolve:     func(name string) *process.AgentProgram { return process.ResolveAgentProgramIn(name, path) },
 		lookPath:    func(name string) (string, error) { return process.LookPathIn(path, name) },
 		agentEnv:    func(name string) string { return values[name] },
 		launcherEnv: os.Getenv,
+		recordedEnv: values,
 	}, true
 }
 
@@ -77,7 +83,7 @@ func recordedScanEnvironment(record remote.HostRecord) (scanEnvironment, bool) {
 // and stores the result there: per project, the agents of its effective
 // configuration whose executable resolves (with the values of their
 // config_home.env variables), the launchers a process without a terminal can
-// start, the PATH the scan searched, and the time.
+// start, the PATH the scan searched, the config_home.env snapshot, and the time.
 func scanHost(home string, now time.Time, env scanEnvironment) (remote.HostScan, []projectScanProblem, error) {
 	record, err := remote.ReadHostRecord(home)
 	if err != nil {
@@ -88,7 +94,10 @@ func scanHost(home string, now time.Time, env scanEnvironment) (remote.HostScan,
 		// A host without a registered project has nothing to scan.
 		return scan, nil, nil
 	}
-	scan = remote.HostScan{ScannedAt: now.UTC(), Path: env.path, Projects: []remote.ProjectScan{}}
+	scan = remote.HostScan{ScannedAt: now.UTC(), Path: env.path, Env: maps.Clone(env.recordedEnv), Projects: []remote.ProjectScan{}}
+	if env.recordedEnv == nil {
+		scan.Env = map[string]string{}
+	}
 	launchers := terminal.BackgroundLaunchers(runtime.GOOS == "windows", env.launcherEnv, env.lookPath)
 	if launchers == nil {
 		launchers = []string{}
@@ -105,11 +114,30 @@ func scanHost(home string, now time.Time, env scanEnvironment) (remote.HostScan,
 		}
 		entry.Agents = scanAgents(cfg, env)
 		scan.Projects = append(scan.Projects, entry)
+		if env.recordedEnv == nil {
+			recordConfigEnv(cfg, env.agentEnv, scan.Env)
+		}
 	}
 	if err := remote.StoreHostScan(home, scan); err != nil {
 		return remote.HostScan{}, nil, err
 	}
 	return scan, problems, nil
+}
+
+// recordConfigEnv adds to into the config_home.env values getenv has for every agent of cfg,
+// whether its executable resolves or not.
+func recordConfigEnv(cfg *config.Config, getenv func(string) string, into map[string]string) {
+	for _, name := range config.AgentNames(cfg) {
+		spec, ok := config.RulesSpec(name)
+		if !ok {
+			continue
+		}
+		for _, variable := range spec.ConfigEnv {
+			if value := getenv(variable.Name); value != "" {
+				into[variable.Name] = value
+			}
+		}
+	}
 }
 
 // scanAgents resolves the executable of every agent of cfg. An agent records

@@ -3,6 +3,7 @@
 package menu
 
 import (
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -38,6 +39,7 @@ func TestScanHostRecordsAgentsLaunchersAndPath(t *testing.T) {
 	t.Setenv("PATH", path)
 	t.Setenv("CLAUDE_CONFIG_DIR", "/accounts/two")
 	t.Setenv("CODEX_HOME", "")
+	t.Setenv("GROK_HOME", "/accounts/grok")
 	t.Setenv("SSH_AUTH_SOCK", "/tmp/agent.sock")
 	cfg := config.DefaultConfig()
 	cfg.WelcomeComplete = true
@@ -93,8 +95,13 @@ func TestScanHostRecordsAgentsLaunchersAndPath(t *testing.T) {
 			t.Fatalf("launcher %s needs a terminal but was recorded: %v", name, app.Launchers)
 		}
 	}
+	// The snapshot records the set values of every agent definition, also of grok, which does
+	// not resolve, and nothing else of the environment.
+	if want := map[string]string{"CLAUDE_CONFIG_DIR": "/accounts/two", "GROK_HOME": "/accounts/grok"}; !maps.Equal(scan.Env, want) {
+		t.Fatalf("env snapshot = %v, want %v", scan.Env, want)
+	}
 	record, err := remote.ReadHostRecord(clientHome)
-	if err != nil || record.Scan == nil || record.Scan.Path != path {
+	if err != nil || record.Scan == nil || record.Scan.Path != path || !maps.Equal(record.Scan.Env, scan.Env) {
 		t.Fatalf("scan not stored: %+v %v", record.Scan, err)
 	}
 }
