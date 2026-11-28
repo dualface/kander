@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.0.0-beta.4 — 2026-11-28
 
 - Fix (v2, files) — Concurrent first calls of one process that write the same protected file no longer fail with `protected path already exists`. The temporary sibling of an atomic write was named after the process ID and the clock, and macOS counts microseconds, so two writers of one process could pick the same name and the second `O_EXCL` create failed before the first writer had published the file; the concurrent first `LocalDataRoot` calls of a command hit it when they wrote the `project.json` identity marker. The clock part of the name is now raised above every value the process used before, so the name keeps its shape and the writers of one process never share it. This applies to every atomic write on Linux and macOS; the identity marker is still written once and an existing one is never rewritten.
 
