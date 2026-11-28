@@ -250,3 +250,39 @@ func TestInstallMovesTheWorkerServiceToAnotherClientHome(t *testing.T) {
 		t.Fatalf("commands %q", got)
 	}
 }
+
+// Another HTTP application at the address of a stopped service, which answers 404, is not a
+// Kander server: the install moves the service to its new address all the same.
+func TestInstallMovesAStoppedServiceAwayFromAnAddressAnotherApplicationTook(t *testing.T) {
+	h := newServerHost(t, "linux")
+	first, second := freeListen(t), freeListen(t)
+	if _, err := h.install(t, first); err != nil {
+		t.Fatal(err)
+	}
+	h.mu.Lock()
+	h.active.hs.Close()
+	h.active.stopped.Store(true)
+	h.mu.Unlock()
+	l, err := net.Listen("tcp", first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := httptest.NewUnstartedServer(http.NotFoundHandler())
+	other.Listener.Close()
+	other.Listener = l
+	other.Start()
+	t.Cleanup(other.Close)
+	h.commands()
+	result, err := h.install(t, second)
+	if err != nil || !result.Changed || !result.Restarted || result.Stopped != "" {
+		t.Fatalf("install at a new address: %+v %v", result, err)
+	}
+	if got := h.commands(); !slices.Contains(got, "systemctl --user restart kander-server.service") || !answers(t, second) {
+		t.Fatalf("commands %q, new address answers %v", got, answers(t, second))
+	}
+	if resp, err := http.Get("http://" + first + "/api/v1/server"); err != nil || resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("the other application changed: %v %v", resp, err)
+	} else {
+		resp.Body.Close()
+	}
+}

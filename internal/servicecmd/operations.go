@@ -186,11 +186,13 @@ func Install(ctx context.Context, kind svcinstall.Kind, server ServerOptions) (I
 // place is where a server or worker runs: the client home whose worker.lock its worker holds,
 // or the address its server answers at. A server found at target must serve dataDir when it is
 // set. claimed marks a place the new definition needs, where a detached process is stopped.
+// discovered marks a place only looked at to find an old process (a recorded or replaced
+// address): an answer there that is not a Kander server is no process and no error.
 type place struct {
-	kind            svcinstall.Kind
-	home            string
-	target, dataDir string
-	claimed         bool
+	kind                svcinstall.Kind
+	home                string
+	target, dataDir     string
+	claimed, discovered bool
 }
 
 // process is a running server or worker; managed reports one a service manager started.
@@ -240,7 +242,7 @@ func installPlaces(s svcinstall.Spec, prepared svcinstall.Prepared) ([]place, er
 			return nil, err
 		}
 		if recorded != "" {
-			add(place{kind: s.Kind, target: recorded, dataDir: dir, claimed: true})
+			add(place{kind: s.Kind, target: recorded, dataDir: dir, claimed: true, discovered: true})
 		}
 	}
 	if prepared.Found {
@@ -248,6 +250,7 @@ func installPlaces(s svcinstall.Spec, prepared svcinstall.Prepared) ([]place, er
 		if err != nil {
 			return nil, err
 		}
+		previous.discovered = true
 		add(previous)
 	}
 	return places, nil
@@ -278,7 +281,7 @@ func (p place) find(ctx context.Context) (process, bool, error) {
 	probe, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	info, err := servicectl.Info(probe, p.target)
-	if client.IsUnreachable(err) {
+	if client.IsUnreachable(err) || (err != nil && p.discovered) {
 		return process{}, false, nil
 	}
 	if err != nil {
