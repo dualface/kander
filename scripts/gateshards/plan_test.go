@@ -34,10 +34,18 @@ func validPlan() *Plan {
 	}}}
 }
 
+// validPlanWithWhole is validPlan plus a platform that runs b whole.
+func validPlanWithWhole() *Plan {
+	plan := validPlan()
+	plan.Platforms = append(plan.Platforms, Platform{Name: "macos", OS: "macos-latest", Parallel: 1, Timeout: "30m",
+		Shards: []Shard{{Name: "1", Common: true, Rest: true, Entries: []Entry{{Package: "b"}}}}})
+	return plan
+}
+
 // TestPlanValidateRefusesPlansThatDropTests checks the rules that keep every
 // test in the gate.
 func TestPlanValidateRefusesPlansThatDropTests(t *testing.T) {
-	if err := validPlan().Validate(); err != nil {
+	if err := validPlanWithWhole().Validate(); err != nil {
 		t.Fatalf("the valid plan: %v", err)
 	}
 	for _, tc := range []struct {
@@ -63,13 +71,26 @@ func TestPlanValidateRefusesPlansThatDropTests(t *testing.T) {
 		{"a bad shard name", func(p *Platform) { p.Shards[1].Name = "Shard 2" }, "shard name"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			plan := validPlan()
+			plan := validPlanWithWhole()
 			tc.change(&plan.Platforms[0])
 			err := plan.Validate()
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("Validate() = %v, want an error with %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// TestPlanValidateKeepsASplitPackageWholeOnAnotherPlatform keeps the
+// whole-package checks of a TestMain running somewhere.
+func TestPlanValidateKeepsASplitPackageWholeOnAnotherPlatform(t *testing.T) {
+	plan := validPlan()
+	err := plan.Validate()
+	if err == nil || !strings.Contains(err.Error(), "package b is split on ubuntu and whole on no platform") {
+		t.Fatalf("Validate() = %v, want the split package refused", err)
+	}
+	if err := validPlanWithWhole().Validate(); err != nil {
+		t.Errorf("Validate() with b whole on macos = %v, want nil", err)
 	}
 }
 

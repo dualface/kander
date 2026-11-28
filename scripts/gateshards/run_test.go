@@ -38,7 +38,7 @@ func TestCallsSelectEveryTestOnce(t *testing.T) {
 	if want := []string{"-p", "4", "-count=1", "-timeout", "30m", "./a", "./new"}; !slices.Equal(first["packages"], want) {
 		t.Errorf("packages call %v, want %v", first["packages"], want)
 	}
-	if want := []string{"-p", "1", "-count=1", "-timeout", "30m", "-skip", "^TestModel|^(TestSlow)$", "./board"}; !slices.Equal(first["board-owner"], want) {
+	if want := []string{"-p", "1", "-count=1", "-timeout", "30m", "-run", ".", "-skip", "^TestModel|^(TestSlow)$", "./board"}; !slices.Equal(first["board-owner"], want) {
 		t.Errorf("owner call %v, want %v", first["board-owner"], want)
 	}
 	if want := []string{"-p", "1", "-count=1", "-timeout", "30m", "-run", "^TestWindows", "./remote"}; !slices.Equal(first["remote"], want) {

@@ -30,14 +30,16 @@ A package longer than the generator's target is split: its largest tests go into
 
 One shard per platform is `common`: it also runs the build, `go vet ./...`, the Import step, the concurrent lock regressions and, on Windows, the `windows_extra_packages` of a dispatch. The same shard is `rest`: it runs every package of the universe that no entry of the plan names, so a new package is tested without a new plan.
 
-`go run ./scripts/gateshards matrix` checks the plan and prints the matrix; the gate's `plan` job runs it, so a plan that breaks a rule fails the gate before any test starts. The rules: one common and one rest shard per platform; a package is listed whole once, or split with exactly one owner whose skip list equals the union of its disjoint `tests` entries; a package with a `-run` filter is never split. `TestCommittedPlanIsValid` checks the committed plan too.
+`go run ./scripts/gateshards matrix` checks the plan and prints the matrix; the gate's `plan` job runs it, so a plan that breaks a rule fails the gate before any test starts. The rules: one common and one rest shard per platform; a package is listed whole once, or split with exactly one owner whose skip list equals the union of its disjoint `tests` entries; a package with a `-run` filter is never split; a package split on one platform is whole on another. `TestCommittedPlanIsValid` checks the committed plan too.
+
+The last rule exists for checks a `TestMain` makes over a whole-package run: `internal/server` fails when its tests together did not compare every write route, unless `-run` is set. An owner call passes `-run .`, so a split package skips that check; ubuntu never splits a package, so the check runs there in every gate.
 
 ## Running a shard
 
 `go run ./scripts/gateshards run -platform P -shard S -universe FILE -json-dir DIR` turns the shard into `go test` calls and runs each through `scripts/go-test-json.sh`:
 
 - The whole packages without a filter, and the rest packages, run in one call with `-p parallel`.
-- A whole package with a filter, an owner and a `tests` entry each run in a call of their own with `-p 1`, because `-run` and `-skip` apply to every package of a call.
+- A whole package with a filter, an owner and a `tests` entry each run in a call of their own with `-p 1`, because `-run` and `-skip` apply to every package of a call. An owner call adds `-run .`.
 - A failing call fails the shard, and the calls after it still run.
 
 Each call writes `DIR/<call>.json`; the job uploads the directory as the artifact `test-json-native-<os>-<shard>`.
@@ -53,7 +55,9 @@ gh run download <gate run ID> --repo dualface/kander -D /tmp/gate-artifacts
 go run ./scripts/gateshards generate -artifacts /tmp/gate-artifacts -source "release-gate run <ID>"
 ```
 
-The generator reads the `test-json-native-<os>-*` artifacts of the run, without the files of the common steps. A package that takes longer than the target (`-target`, 540 seconds by default) is split; then it packs the units into the fewest shards whose estimates stay within the target. A shard's estimate is its serial calls plus `max(longest package, sum of packages / (parallel × 0.75))`; the common shard also carries the measured time of the common steps. A single test longer than the target gets a shard of its own.
+The generator reads the `test-json-native-<os>-*` artifacts of the run, without the files of the common steps. A package that takes longer than the target (`-target`, 540 seconds by default) is split, except on ubuntu; then it packs the units into the fewest shards whose estimates stay within the target. A shard's estimate is its serial calls plus `max(longest package, sum of packages / 1.2)`; the common shard also carries the measured time of the common steps. A single test longer than the target gets a shard of its own.
+
+The factor 1.2 is measured: the tests are CPU-bound, and in the first sharded run (46136634393) one ubuntu shard ran 965 seconds of serially measured package time with `-p 4` in 833 seconds; the model search alone took 650 seconds instead of 213. Every platform therefore runs two packages at a time (`parallel` 2), which also spares the timing-sensitive tests. Timings from a sharded run already contain that contention, so a plan generated from them is more cautious than one generated from a run with `-p 1`.
 
 After a change of the shards, compare the tests of a gate run before and after:
 

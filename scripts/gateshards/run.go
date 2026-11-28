@@ -24,14 +24,23 @@ type Call struct {
 //   - A whole package with a filter, an owner entry and a Tests entry each run
 //     in a call of their own, because -run and -skip apply to every package
 //     of a call.
+//   - An owner call passes -run . : it still runs every test it does not skip,
+//     and it tells a TestMain that checks something over a whole-package run
+//     (internal/server checks that the tests compared every write route) that
+//     this run is partial. Plan.Validate keeps every split package whole on
+//     another platform, where that check runs.
 func Calls(platform *Platform, shard *Shard, universe []string) []Call {
 	var plain []string
 	var calls []Call
 	addFiltered := func(name, pkg string, run, skip []string) {
 		filter := platform.Filters[pkg]
 		args := []string{"-p", "1", "-count=1", "-timeout", platform.Timeout}
-		if pattern := joinPatterns(filter.Run, exactTests(run)); pattern != "" {
-			args = append(args, "-run", pattern)
+		runPattern := joinPatterns(filter.Run, exactTests(run))
+		if runPattern == "" && len(skip) > 0 {
+			runPattern = "."
+		}
+		if runPattern != "" {
+			args = append(args, "-run", runPattern)
 		}
 		if pattern := joinPatterns(filter.Skip, exactTests(skip)); pattern != "" {
 			args = append(args, "-skip", pattern)

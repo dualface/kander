@@ -118,9 +118,10 @@ func (p *Platform) NamedPackages() map[string]bool {
 }
 
 // Validate checks the rules that keep the plan from dropping a test:
-// one common and one rest shard per platform, and for every package either
+// one common and one rest shard per platform; for every package either
 // exactly one whole entry, or exactly one owner whose skip list equals the
-// union of the package's disjoint Tests entries.
+// union of the package's disjoint Tests entries; and a package split on one
+// platform is whole on another.
 func (p *Plan) Validate() error {
 	if p.Schema != 1 {
 		return fmt.Errorf("schema %d, want 1", p.Schema)
@@ -129,7 +130,18 @@ func (p *Plan) Validate() error {
 		return fmt.Errorf("no platforms")
 	}
 	seenPlatform := map[string]bool{}
+	wholeSomewhere := map[string]bool{}
+	splitOn := map[string]string{}
 	for _, platform := range p.Platforms {
+		for _, shard := range platform.Shards {
+			for _, entry := range shard.Entries {
+				if len(entry.Tests)+len(entry.Skip) == 0 {
+					wholeSomewhere[entry.Package] = true
+				} else {
+					splitOn[entry.Package] = platform.Name
+				}
+			}
+		}
 		if platform.Name == "" || platform.OS == "" {
 			return fmt.Errorf("a platform without name or os")
 		}
@@ -139,6 +151,13 @@ func (p *Plan) Validate() error {
 		seenPlatform[platform.Name] = true
 		if err := platform.validate(); err != nil {
 			return fmt.Errorf("platform %s: %w", platform.Name, err)
+		}
+	}
+	// A split package runs without the whole-package checks of its TestMain
+	// (see Calls); another platform runs it whole so that they still run.
+	for pkg, platform := range splitOn {
+		if !wholeSomewhere[pkg] {
+			return fmt.Errorf("package %s is split on %s and whole on no platform, so no run checks it as a whole", pkg, platform)
 		}
 	}
 	return nil

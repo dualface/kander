@@ -20,25 +20,28 @@ type PlatformConfig struct {
 	Filters  map[string]Filter
 	// CommonSeconds is the time the common steps add to the common shard.
 	CommonSeconds float64
+	// NeverSplit keeps every package whole, so that the whole-package checks
+	// of a TestMain run on this platform (Plan.Validate).
+	NeverSplit bool
 }
 
 // DefaultConfigs are the platforms of release-gate.yml. CommonSeconds come
 // from the step times of run 46132427480: build, vet, Import and concurrent
-// locks.
+// locks. Two packages at a time: more gains little on CPU-bound tests (see
+// parallelSpeedup) and slows the timing-sensitive tests, such as the host
+// start tests of cmd/kander on the 3-vCPU macOS runners.
 var DefaultConfigs = []PlatformConfig{
 	{
-		Name: "ubuntu", OS: "ubuntu-latest", Parallel: 4, Timeout: "30m",
-		CommonSeconds: 181,
+		Name: "ubuntu", OS: "ubuntu-latest", Parallel: 2, Timeout: "30m",
+		CommonSeconds: 181, NeverSplit: true,
 	},
 	{
-		// macOS runners have 3 vCPUs; two packages at a time leaves room for
-		// the timing-sensitive host start tests of cmd/kander.
 		Name: "macos", OS: "macos-latest", Parallel: 2, Timeout: "30m",
 		Filters:       map[string]Filter{"internal/board": {Skip: "^TestModelCompositeStates$"}},
 		CommonSeconds: 261,
 	},
 	{
-		Name: "windows", OS: "windows-latest", Parallel: 4, Timeout: "30m",
+		Name: "windows", OS: "windows-latest", Parallel: 2, Timeout: "30m",
 		Filters: map[string]Filter{
 			"internal/board":  {Skip: "^TestModel"},
 			"internal/remote": {Run: "^TestWindows"},
@@ -134,11 +137,14 @@ type shardLoad struct {
 	commonExtra float64
 }
 
-// parallelEfficiency discounts -p: packages that run together slow each other
-// down.
-const parallelEfficiency = 0.75
+// parallelSpeedup is how much faster whole packages finish together than one
+// after the other. The tests are CPU-bound: in the first sharded gate run
+// (46136634393) the ubuntu shard ran 965 s of serially measured package time
+// with -p 4 in 833 s, a speedup of about 1.2, and the model search alone took
+// 650 s instead of 213 s.
+const parallelSpeedup = 1.2
 
-func (s *shardLoad) estimate(parallel int, extra unit) float64 {
+func (s *shardLoad) estimate(extra unit) float64 {
 	serial, wholeSum, wholeMax := s.serial, s.wholeSum, s.wholeMax
 	if extra.seconds > 0 {
 		if extra.serial {
@@ -148,7 +154,7 @@ func (s *shardLoad) estimate(parallel int, extra unit) float64 {
 			wholeMax = math.Max(wholeMax, extra.seconds)
 		}
 	}
-	return s.commonExtra + serial + math.Max(wholeMax, wholeSum/(float64(parallel)*parallelEfficiency))
+	return s.commonExtra + serial + math.Max(wholeMax, wholeSum/parallelSpeedup)
 }
 
 func (s *shardLoad) add(u unit) {
@@ -228,7 +234,7 @@ func GeneratePlatform(config PlatformConfig, timings *Timings, target float64) P
 	slices.Sort(pkgs)
 	for _, pkg := range pkgs {
 		timing := timings.Packages[pkg]
-		if timing.Seconds > target && config.Filters[pkg].Run == "" {
+		if timing.Seconds > target && config.Filters[pkg].Run == "" && !config.NeverSplit {
 			units = append(units, splitPackage(pkg, timing, target)...)
 		} else {
 			units = append(units, unit{seconds: timing.Seconds, entry: Entry{Package: pkg}})
@@ -248,7 +254,7 @@ func GeneratePlatform(config PlatformConfig, timings *Timings, target float64) P
 		loads = pack(units, count, config)
 		fits := true
 		for _, load := range loads {
-			if load.estimate(config.Parallel, unit{}) > target && len(load.units) > 1 {
+			if load.estimate(unit{}) > target && len(load.units) > 1 {
 				fits = false
 			}
 		}
@@ -258,7 +264,7 @@ func GeneratePlatform(config PlatformConfig, timings *Timings, target float64) P
 	}
 	platform := Platform{Name: config.Name, OS: config.OS, Parallel: config.Parallel, Timeout: config.Timeout, Filters: config.Filters}
 	for i, load := range loads {
-		shard := Shard{Name: fmt.Sprintf("%d", i+1), EstimateSeconds: int(math.Round(load.estimate(config.Parallel, unit{})))}
+		shard := Shard{Name: fmt.Sprintf("%d", i+1), EstimateSeconds: int(math.Round(load.estimate(unit{})))}
 		if i == 0 {
 			shard.Common, shard.Rest = true, true
 		}
@@ -282,7 +288,7 @@ func pack(units []unit, count int, config PlatformConfig) []*shardLoad {
 	for _, u := range units {
 		best := 0
 		for i := range loads {
-			if loads[i].estimate(config.Parallel, u) < loads[best].estimate(config.Parallel, u) {
+			if loads[i].estimate(u) < loads[best].estimate(u) {
 				best = i
 			}
 		}

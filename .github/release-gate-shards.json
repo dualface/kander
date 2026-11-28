@@ -1,18 +1,18 @@
 {
   "schema": 1,
-  "generated_from": "release-gate run 46132427480 (commit ee6171cc)",
+  "generated_from": "release-gate run 46132427480 (commit ee6171cc), estimates calibrated on run 46136634393",
   "platforms": [
     {
       "name": "ubuntu",
       "os": "ubuntu-latest",
-      "parallel": 4,
+      "parallel": 2,
       "timeout": "30m",
       "shards": [
         {
           "name": "1",
           "common": true,
           "rest": true,
-          "estimate_seconds": 503,
+          "estimate_seconds": 493,
           "entries": [
             {
               "package": "api"
@@ -23,6 +23,99 @@
             {
               "package": "client"
             },
+            {
+              "package": "internal/command"
+            },
+            {
+              "package": "internal/flow"
+            },
+            {
+              "package": "internal/fs"
+            },
+            {
+              "package": "internal/i18n"
+            },
+            {
+              "package": "internal/launch"
+            },
+            {
+              "package": "internal/liveness"
+            },
+            {
+              "package": "internal/menu"
+            },
+            {
+              "package": "internal/process"
+            },
+            {
+              "package": "internal/remote"
+            },
+            {
+              "package": "internal/server"
+            },
+            {
+              "package": "internal/servicecmd"
+            },
+            {
+              "package": "internal/servicectl"
+            },
+            {
+              "package": "internal/statemachine/coordmember"
+            },
+            {
+              "package": "internal/statemachine/executionledger"
+            },
+            {
+              "package": "internal/statemachine/issueresult"
+            },
+            {
+              "package": "internal/statemachine/issueresultsave"
+            },
+            {
+              "package": "internal/statemachine/reviewdisposition"
+            },
+            {
+              "package": "internal/statemachine/reviewobligation"
+            },
+            {
+              "package": "internal/statemachine/serverintegration"
+            },
+            {
+              "package": "internal/statemachine/serverrequest"
+            },
+            {
+              "package": "internal/statemachine/startorder"
+            },
+            {
+              "package": "internal/statemachine/wrapupwitness"
+            },
+            {
+              "package": "internal/takeover"
+            },
+            {
+              "package": "internal/terminal"
+            },
+            {
+              "package": "internal/terminalcheck"
+            },
+            {
+              "package": "internal/worker"
+            },
+            {
+              "package": "rules"
+            },
+            {
+              "package": "scripts"
+            },
+            {
+              "package": "server"
+            }
+          ]
+        },
+        {
+          "name": "2",
+          "estimate_seconds": 493,
+          "entries": [
             {
               "package": "cmd/kander"
             },
@@ -39,25 +132,13 @@
               "package": "internal/client"
             },
             {
-              "package": "internal/command"
-            },
-            {
               "package": "internal/commands"
             },
             {
               "package": "internal/config"
             },
             {
-              "package": "internal/flow"
-            },
-            {
               "package": "internal/focus"
-            },
-            {
-              "package": "internal/fs"
-            },
-            {
-              "package": "internal/i18n"
             },
             {
               "package": "internal/install"
@@ -69,37 +150,13 @@
               "package": "internal/issue/ghcli"
             },
             {
-              "package": "internal/launch"
-            },
-            {
-              "package": "internal/liveness"
-            },
-            {
-              "package": "internal/menu"
-            },
-            {
               "package": "internal/notify"
             },
             {
               "package": "internal/probe"
             },
             {
-              "package": "internal/process"
-            },
-            {
-              "package": "internal/remote"
-            },
-            {
               "package": "internal/review"
-            },
-            {
-              "package": "internal/server"
-            },
-            {
-              "package": "internal/servicecmd"
-            },
-            {
-              "package": "internal/servicectl"
             },
             {
               "package": "internal/statemachine/cardlifecycle"
@@ -108,34 +165,16 @@
               "package": "internal/statemachine/coordinator"
             },
             {
-              "package": "internal/statemachine/coordmember"
-            },
-            {
               "package": "internal/statemachine/dispatch"
             },
             {
               "package": "internal/statemachine/example"
             },
             {
-              "package": "internal/statemachine/executionledger"
-            },
-            {
-              "package": "internal/statemachine/issueresult"
-            },
-            {
               "package": "internal/statemachine/issueresultdecision"
             },
             {
-              "package": "internal/statemachine/issueresultsave"
-            },
-            {
-              "package": "internal/statemachine/reviewdisposition"
-            },
-            {
               "package": "internal/statemachine/reviewfindings"
-            },
-            {
-              "package": "internal/statemachine/reviewobligation"
             },
             {
               "package": "internal/statemachine/reviewplan"
@@ -153,31 +192,13 @@
               "package": "internal/statemachine/servergrouplease"
             },
             {
-              "package": "internal/statemachine/serverintegration"
-            },
-            {
               "package": "internal/statemachine/serverproposal"
-            },
-            {
-              "package": "internal/statemachine/serverrequest"
-            },
-            {
-              "package": "internal/statemachine/startorder"
             },
             {
               "package": "internal/statemachine/vectortest"
             },
             {
-              "package": "internal/statemachine/wrapupwitness"
-            },
-            {
               "package": "internal/svcinstall"
-            },
-            {
-              "package": "internal/takeover"
-            },
-            {
-              "package": "internal/terminal"
             },
             {
               "package": "internal/terminal/builtin"
@@ -192,25 +213,10 @@
               "package": "internal/terminal/terminaltest"
             },
             {
-              "package": "internal/terminalcheck"
-            },
-            {
               "package": "internal/tui"
             },
             {
               "package": "internal/version"
-            },
-            {
-              "package": "internal/worker"
-            },
-            {
-              "package": "rules"
-            },
-            {
-              "package": "scripts"
-            },
-            {
-              "package": "server"
             }
           ]
         }
@@ -231,25 +237,34 @@
           "name": "1",
           "common": true,
           "rest": true,
-          "estimate_seconds": 444,
+          "estimate_seconds": 519,
           "entries": [
             {
-              "package": "internal/client"
+              "package": "cli"
+            },
+            {
+              "package": "internal/check"
+            },
+            {
+              "package": "internal/cli"
+            },
+            {
+              "package": "internal/command"
             },
             {
               "package": "internal/flow"
             },
             {
-              "package": "internal/focus"
+              "package": "internal/fs"
+            },
+            {
+              "package": "internal/install"
             },
             {
               "package": "internal/issue"
             },
             {
-              "package": "internal/notify"
-            },
-            {
-              "package": "internal/probe"
+              "package": "internal/liveness"
             },
             {
               "package": "internal/server",
@@ -261,10 +276,10 @@
               "package": "internal/servicectl"
             },
             {
-              "package": "internal/terminal/herdr"
+              "package": "internal/terminal"
             },
             {
-              "package": "internal/terminal/herdrcore"
+              "package": "internal/tui"
             }
           ]
         },
@@ -282,31 +297,28 @@
         },
         {
           "name": "3",
-          "estimate_seconds": 444,
+          "estimate_seconds": 519,
           "entries": [
-            {
-              "package": "api"
-            },
-            {
-              "package": "cli"
-            },
             {
               "package": "client"
             },
             {
-              "package": "internal/fs"
+              "package": "internal/focus"
             },
             {
-              "package": "internal/install"
+              "package": "internal/issue/ghcli"
             },
             {
               "package": "internal/launch"
             },
             {
-              "package": "internal/liveness"
+              "package": "internal/menu"
             },
             {
-              "package": "internal/menu"
+              "package": "internal/notify"
+            },
+            {
+              "package": "internal/probe"
             },
             {
               "package": "internal/remote"
@@ -315,32 +327,32 @@
               "package": "internal/servicecmd"
             },
             {
-              "package": "internal/svcinstall"
+              "package": "internal/takeover"
             },
             {
-              "package": "internal/terminal"
+              "package": "internal/terminal/herdr"
             },
             {
-              "package": "internal/terminal/builtin"
+              "package": "internal/terminal/herdrcore"
             },
             {
               "package": "internal/terminalcheck"
             },
             {
-              "package": "internal/tui"
-            },
-            {
               "package": "internal/worker"
             },
             {
-              "package": "rules"
+              "package": "scripts"
             }
           ]
         },
         {
           "name": "4",
-          "estimate_seconds": 444,
+          "estimate_seconds": 519,
           "entries": [
+            {
+              "package": "api"
+            },
             {
               "package": "cmd/kander"
             },
@@ -348,13 +360,7 @@
               "package": "internal/board"
             },
             {
-              "package": "internal/check"
-            },
-            {
-              "package": "internal/cli"
-            },
-            {
-              "package": "internal/command"
+              "package": "internal/client"
             },
             {
               "package": "internal/commands"
@@ -363,22 +369,22 @@
               "package": "internal/config"
             },
             {
-              "package": "internal/issue/ghcli"
-            },
-            {
               "package": "internal/process"
             },
             {
               "package": "internal/review"
             },
             {
-              "package": "internal/takeover"
+              "package": "internal/svcinstall"
+            },
+            {
+              "package": "internal/terminal/builtin"
             },
             {
               "package": "internal/terminal/terminaltest"
             },
             {
-              "package": "scripts"
+              "package": "rules"
             },
             {
               "package": "server"
@@ -390,7 +396,7 @@
     {
       "name": "windows",
       "os": "windows-latest",
-      "parallel": 4,
+      "parallel": 2,
       "timeout": "30m",
       "filters": {
         "internal/board": {
@@ -405,20 +411,37 @@
           "name": "1",
           "common": true,
           "rest": true,
-          "estimate_seconds": 384,
+          "estimate_seconds": 521,
           "entries": [
             {
-              "package": "internal/server",
-              "tests": [
-                "TestBareMoveKeepsItsBehaviorWithoutAPreparableProposal",
-                "TestCoordinatorReviewRefusesMembersThatDoNotQualify",
-                "TestCoordinatorReviewRefusesMixedOrMalformedProofs",
-                "TestCoordinatorReviewRefusesMixedProofsWhenRecoveringAPreparedRun",
-                "TestCoordinatorReviewRefusesWithoutAuthority",
-                "TestCoordinatorReviewWritesEveryOperation",
-                "TestIntegrationContainmentKindsNeedExactEdges",
-                "TestLivenessObservationsKeepOneReceiptPerExecution"
-              ]
+              "package": "internal/cli"
+            },
+            {
+              "package": "internal/client"
+            },
+            {
+              "package": "internal/fs"
+            },
+            {
+              "package": "internal/issue/ghcli"
+            },
+            {
+              "package": "internal/launch"
+            },
+            {
+              "package": "internal/liveness"
+            },
+            {
+              "package": "internal/notify"
+            },
+            {
+              "package": "internal/probe"
+            },
+            {
+              "package": "internal/review"
+            },
+            {
+              "package": "internal/terminal/terminaltest"
             }
           ]
         },
@@ -476,24 +499,36 @@
         },
         {
           "name": "4",
-          "estimate_seconds": 520,
+          "estimate_seconds": 521,
           "entries": [
+            {
+              "package": "api"
+            },
+            {
+              "package": "internal/command"
+            },
             {
               "package": "internal/server",
               "tests": [
                 "TestLargeUploadStagingIsRemovedAtEveryEnd",
                 "TestUploadOfMoreFilesThanTheOldDefaultLimit"
               ]
+            },
+            {
+              "package": "internal/takeover"
+            },
+            {
+              "package": "internal/terminal/herdrcore"
+            },
+            {
+              "package": "scripts"
             }
           ]
         },
         {
           "name": "5",
-          "estimate_seconds": 324,
+          "estimate_seconds": 521,
           "entries": [
-            {
-              "package": "client"
-            },
             {
               "package": "internal/board",
               "tests": [
@@ -520,82 +555,10 @@
               ]
             },
             {
-              "package": "internal/check"
-            },
-            {
-              "package": "internal/client"
-            },
-            {
-              "package": "internal/command"
-            },
-            {
-              "package": "internal/flow"
-            },
-            {
-              "package": "internal/fs"
-            },
-            {
-              "package": "internal/issue/ghcli"
-            },
-            {
-              "package": "internal/menu"
-            },
-            {
-              "package": "internal/notify"
-            },
-            {
-              "package": "internal/probe"
-            },
-            {
-              "package": "internal/servicecmd"
-            },
-            {
-              "package": "internal/svcinstall"
-            },
-            {
-              "package": "internal/takeover"
-            },
-            {
-              "package": "internal/terminal"
-            },
-            {
-              "package": "internal/terminal/builtin"
-            },
-            {
-              "package": "internal/terminal/herdr"
-            },
-            {
-              "package": "rules"
-            },
-            {
-              "package": "scripts"
-            }
-          ]
-        },
-        {
-          "name": "6",
-          "estimate_seconds": 324,
-          "entries": [
-            {
-              "package": "api"
-            },
-            {
-              "package": "cli"
-            },
-            {
-              "package": "cmd/kander"
-            },
-            {
-              "package": "internal/cli"
-            },
-            {
               "package": "internal/commands"
             },
             {
-              "package": "internal/config"
-            },
-            {
-              "package": "internal/focus"
+              "package": "internal/flow"
             },
             {
               "package": "internal/install"
@@ -604,31 +567,74 @@
               "package": "internal/issue"
             },
             {
-              "package": "internal/launch"
-            },
-            {
-              "package": "internal/liveness"
+              "package": "internal/menu"
             },
             {
               "package": "internal/process"
             },
             {
-              "package": "internal/remote"
-            },
-            {
-              "package": "internal/review"
+              "package": "internal/server",
+              "tests": [
+                "TestBareMoveKeepsItsBehaviorWithoutAPreparableProposal",
+                "TestCoordinatorReviewRefusesMembersThatDoNotQualify",
+                "TestCoordinatorReviewRefusesMixedOrMalformedProofs",
+                "TestCoordinatorReviewRefusesMixedProofsWhenRecoveringAPreparedRun",
+                "TestCoordinatorReviewRefusesWithoutAuthority",
+                "TestCoordinatorReviewWritesEveryOperation",
+                "TestIntegrationContainmentKindsNeedExactEdges",
+                "TestLivenessObservationsKeepOneReceiptPerExecution"
+              ]
             },
             {
               "package": "internal/servicectl"
             },
             {
-              "package": "internal/terminal/herdrcore"
-            },
-            {
-              "package": "internal/terminal/terminaltest"
+              "package": "internal/terminal/herdr"
             },
             {
               "package": "internal/terminalcheck"
+            },
+            {
+              "package": "server"
+            }
+          ]
+        },
+        {
+          "name": "6",
+          "estimate_seconds": 521,
+          "entries": [
+            {
+              "package": "cli"
+            },
+            {
+              "package": "client"
+            },
+            {
+              "package": "cmd/kander"
+            },
+            {
+              "package": "internal/check"
+            },
+            {
+              "package": "internal/config"
+            },
+            {
+              "package": "internal/focus"
+            },
+            {
+              "package": "internal/remote"
+            },
+            {
+              "package": "internal/servicecmd"
+            },
+            {
+              "package": "internal/svcinstall"
+            },
+            {
+              "package": "internal/terminal"
+            },
+            {
+              "package": "internal/terminal/builtin"
             },
             {
               "package": "internal/tui"
@@ -637,7 +643,7 @@
               "package": "internal/worker"
             },
             {
-              "package": "server"
+              "package": "rules"
             }
           ]
         }
