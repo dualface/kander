@@ -111,3 +111,45 @@ jobs:
     uses: ./.github/workflows/msix.yml
     with:
       tag: ${{ github.ref_name }}
+
+  # Tells dualface/kander-commercial about the published v2 tag with a
+  # repository_dispatch event, so its CI builds, tests, and packages the commit
+  # the tag points at. Runs after every successful release job, prereleases
+  # included. The release is already published here, so a missing secret skips
+  # the call with a notice and a failed call only warns; neither fails the
+  # release. Needs KANDER_COMMERCIAL_DISPATCH_TOKEN: a fine-grained PAT with
+  # Contents read/write on dualface/kander-commercial only (GITHUB_TOKEN cannot
+  # dispatch to another repository). No checkout and no GITHUB_TOKEN
+  # permissions: the step reads only the two env values below. The receiver
+  # contract (event type, payload) lives in kander-commercial; see AGENTS.md
+  # "Releases".
+  notify-commercial:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions: {}
+    env:
+      GH_TOKEN: ${{ secrets.KANDER_COMMERCIAL_DISPATCH_TOKEN }}
+      # On a tag push github.sha is the commit the tag points at, also for an
+      # annotated tag; the release job's checkout fetches this same commit.
+      RELEASE_SHA: ${{ github.sha }}
+    steps:
+      - name: Notify kander-commercial
+        run: |
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "::notice::KANDER_COMMERCIAL_DISPATCH_TOKEN is not set; kander-commercial is not notified for this release."
+            exit 0
+          fi
+          # The receiver rejects anything but 40 lowercase hex characters.
+          if ! [[ "${RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::warning::The release commit is not a 40-character lowercase hex SHA; kander-commercial is not notified for this release."
+            exit 0
+          fi
+          status=0
+          gh api --method POST repos/dualface/kander-commercial/dispatches \
+            -f event_type=kander-released \
+            -f "client_payload[sha]=${RELEASE_SHA}" || status=$?
+          if [ "${status}" -ne 0 ]; then
+            echo "::warning::Notifying kander-commercial failed (gh exit ${status}, see the error above). Check whether KANDER_COMMERCIAL_DISPATCH_TOKEN has expired or lacks Contents read/write on dualface/kander-commercial, then rerun its CI by hand (workflow_dispatch)."
+            exit 0
+          fi
+          echo "Notified kander-commercial: kander-released ${RELEASE_SHA}"
