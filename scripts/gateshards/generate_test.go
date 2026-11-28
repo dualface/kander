@@ -55,7 +55,7 @@ func TestReadTimingsAddsUpPackagesAndTopLevelTests(t *testing.T) {
 // the target is cut into Tests entries and one owner that skips exactly them.
 func TestSplitPackageOwnerSkipsExactlyTheListedTests(t *testing.T) {
 	timing := &PackageTiming{Seconds: 100, Tests: map[string]float64{"TestBig": 60, "TestMid": 25, "TestA": 5, "TestB": 5, "TestC": 5}}
-	units := splitPackage("p", timing, 30)
+	units := splitPackage("p", timing, 30, nil)
 	var listed, skipped []string
 	owners := 0
 	for _, u := range units {
@@ -82,9 +82,22 @@ func TestSplitPackageOwnerSkipsExactlyTheListedTests(t *testing.T) {
 
 // TestSplitPackageKeepsASmallPackageWhole checks the package under the target.
 func TestSplitPackageKeepsASmallPackageWhole(t *testing.T) {
-	units := splitPackage("p", &PackageTiming{Seconds: 20, Tests: map[string]float64{"TestA": 20}}, 30)
+	units := splitPackage("p", &PackageTiming{Seconds: 20, Tests: map[string]float64{"TestA": 20}}, 30, nil)
 	if len(units) != 1 || units[0].serial || len(units[0].entry.Tests)+len(units[0].entry.Skip) != 0 {
 		t.Errorf("units %+v, want the whole package", units)
+	}
+}
+
+// TestSplitPackageRunsAnAloneTestInACallOfItsOwn checks that an alone test of
+// a small package gets its own Tests entry and the owner skips it.
+func TestSplitPackageRunsAnAloneTestInACallOfItsOwn(t *testing.T) {
+	timing := &PackageTiming{Seconds: 20, Tests: map[string]float64{"TestLoad": 15, "TestA": 5}}
+	units := splitPackage("p", timing, 30, []string{"TestLoad"})
+	if len(units) != 2 || !slices.Equal(units[0].entry.Tests, []string{"TestLoad"}) || !slices.Equal(units[1].entry.Skip, []string{"TestLoad"}) {
+		t.Fatalf("units %+v, want TestLoad alone and an owner that skips it", units)
+	}
+	if !units[0].serial || units[0].seconds != 15 || units[1].seconds != 5 {
+		t.Errorf("units %+v, want serial calls of 15 s and 5 s", units)
 	}
 }
 

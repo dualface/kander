@@ -23,6 +23,10 @@ type PlatformConfig struct {
 	// NeverSplit keeps every package whole, so that the whole-package checks
 	// of a TestMain run on this platform (Plan.Validate).
 	NeverSplit bool
+	// Alone names tests, by package, that run in a call of their own with
+	// -p 1 instead of next to another package: tests that pass alone and fail
+	// under the load of a parallel call.
+	Alone map[string][]string
 }
 
 // DefaultConfigs are the platforms of release-gate.yml. CommonSeconds come
@@ -46,6 +50,9 @@ var DefaultConfigs = []PlatformConfig{
 			"internal/board":  {Skip: "^TestModel"},
 			"internal/remote": {Run: "^TestWindows"},
 		},
+		// It passed in 15 to 17 s in every earlier gate run, and failed with
+		// -p 2 in run 46138371949: 67 of the 200 replacements it wants in 120 s.
+		Alone:         map[string][]string{"internal/fs": {"TestWindowsReadUnderContinuousAtomicReplacement"}},
 		CommonSeconds: 245,
 	},
 }
@@ -167,9 +174,10 @@ func (s *shardLoad) add(u unit) {
 	}
 }
 
-// splitPackage cuts a package that takes longer than target into Tests
-// entries of its largest tests and one owner entry that skips them.
-func splitPackage(pkg string, timing *PackageTiming, target float64) []unit {
+// splitPackage cuts a package into a Tests entry for each alone test, Tests
+// entries of its largest tests while the rest takes longer than target, and
+// one owner entry that skips all of them.
+func splitPackage(pkg string, timing *PackageTiming, target float64, alone []string) []unit {
 	type test struct {
 		name    string
 		seconds float64
@@ -189,6 +197,14 @@ func splitPackage(pkg string, timing *PackageTiming, target float64) []unit {
 	})
 	rest := timing.Seconds
 	var units []unit
+	var skipped []string
+	for _, name := range alone {
+		seconds := timing.Tests[name]
+		units = append(units, unit{seconds: seconds, serial: true, entry: Entry{Package: pkg, Tests: []string{name}}})
+		skipped = append(skipped, name)
+		rest -= seconds
+	}
+	tests = slices.DeleteFunc(tests, func(t test) bool { return slices.Contains(alone, t.name) })
 	var chunk []string
 	chunkSeconds := 0.0
 	flush := func() {
@@ -198,7 +214,6 @@ func splitPackage(pkg string, timing *PackageTiming, target float64) []unit {
 			chunk, chunkSeconds = nil, 0
 		}
 	}
-	var skipped []string
 	for _, t := range tests {
 		if rest <= target {
 			break
@@ -234,8 +249,9 @@ func GeneratePlatform(config PlatformConfig, timings *Timings, target float64) P
 	slices.Sort(pkgs)
 	for _, pkg := range pkgs {
 		timing := timings.Packages[pkg]
-		if timing.Seconds > target && config.Filters[pkg].Run == "" && !config.NeverSplit {
-			units = append(units, splitPackage(pkg, timing, target)...)
+		alone := config.Alone[pkg]
+		if (timing.Seconds > target || len(alone) > 0) && config.Filters[pkg].Run == "" && !config.NeverSplit {
+			units = append(units, splitPackage(pkg, timing, target, alone)...)
 		} else {
 			units = append(units, unit{seconds: timing.Seconds, entry: Entry{Package: pkg}})
 		}

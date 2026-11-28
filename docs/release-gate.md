@@ -59,6 +59,8 @@ The generator reads the `test-json-native-<os>-*` artifacts of the run, without 
 
 The factor 1.2 is measured: the tests are CPU-bound, and in the first sharded run (46136634393) one ubuntu shard ran 965 seconds of serially measured package time with `-p 4` in 833 seconds; the model search alone took 650 seconds instead of 213. Every platform therefore runs two packages at a time (`parallel` 2), which also spares the timing-sensitive tests. Timings from a sharded run already contain that contention, so a plan generated from them is more cautious than one generated from a run with `-p 1`.
 
+Some tests pass alone and fail under the load of a parallel call. `DefaultConfigs` in `scripts/gateshards/generate.go` lists them per platform under `Alone`; the generator gives each a `tests` entry of its own, which runs with `-p 1` while no other call of the shard runs, and the owner of its package skips it. `TestWindowsReadUnderContinuousAtomicReplacement` of `internal/fs` is such a test on Windows: it passed in 15 to 17 seconds in every gate run before the shards, and with `-p 2` (run 46138371949) it made 67 of the 200 file replacements it wants in 120 seconds.
+
 After a change of the shards, compare the tests of a gate run before and after:
 
 ```sh
