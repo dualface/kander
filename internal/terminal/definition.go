@@ -97,6 +97,11 @@ type LauncherDefinition struct {
 	// AutoPriority > 0 lets auto resolution select this launcher; higher wins.
 	AutoPriority int      `json:"auto_priority,omitempty"`
 	Requires     Requires `json:"requires"`
+	// Background declares that a process without a terminal or a session of
+	// this terminal, such as the resident worker, can create the launcher's
+	// container. kander doctor records only such launchers for the starts other
+	// hosts direct at this host.
+	Background bool `json:"background,omitempty"`
 	// StartedLines render the launch report after the head line.
 	StartedLines []MessageLine `json:"started_lines,omitempty"`
 	// Ops replace whole operations of the definition for this launcher.

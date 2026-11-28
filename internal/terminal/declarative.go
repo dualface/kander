@@ -272,6 +272,26 @@ func (b *DeclarativeBackend) Prepare(request PrepareRequest) (Target, error) {
 	return b.PrepareWithRunner(request, SpawnRunner)
 }
 
+// backgroundReady reports whether a process without a terminal can start the
+// launcher here; see BackgroundLaunchers.
+func (b *DeclarativeBackend) backgroundReady(windows bool, getenv func(string) string, lookPath func(string) (string, error)) bool {
+	requires := b.spec.Requires
+	if !b.spec.Background || !b.Capabilities().Container || !b.supportsPlatform(windows) {
+		return false
+	}
+	for _, requirement := range requires.Env {
+		if !requirement.AutoOnly && !requirement.satisfied(getenv) {
+			return false
+		}
+	}
+	if requires.Binary {
+		if _, err := lookPath(b.def.Binary); err != nil {
+			return false
+		}
+	}
+	return true
+}
+
 func (b *DeclarativeBackend) supportsPlatform(windows bool) bool {
 	switch b.spec.Requires.Platform {
 	case "posix":

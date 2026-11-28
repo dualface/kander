@@ -667,6 +667,7 @@ func (s *Session) SaveAllDirty() (string, error) {
 		last = path
 	}
 	if last != "" {
+		RefreshHostScan()
 		return last, nil
 	}
 	return s.Save()

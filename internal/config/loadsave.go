@@ -318,8 +318,8 @@ func Effective(cfg *Config) (*Config, error) {
 		PolicyValuesOf(cfg).ApplyTo(defaults)
 		defaults.Policy, defaults.policyLocal, defaults.layered = cfg.Policy, cfg.policyLocal, cfg.layered
 	}
-	// Service binding is independent of completing the interface welcome.
-	defaults.Server, defaults.Project = cfg.Server, cfg.Project
+	// Service binding and the host name are independent of completing the interface welcome.
+	defaults.Server, defaults.Project, defaults.Host = cfg.Server, cfg.Project, cfg.Host
 	return defaults, nil
 }
 

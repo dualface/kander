@@ -113,6 +113,7 @@ func scanIgnored(root map[string]any, defs map[string]AgentDefinition, unusable 
 	scanStructSection(root["git"], reflect.TypeOf(Git{}), add, "git")
 	scanStructSection(root["server"], reflect.TypeOf(Server{}), add, "server")
 	scanStructSection(root["project"], reflect.TypeOf(Project{}), add, "project")
+	scanStructSection(root["host"], reflect.TypeOf(Host{}), add, "host")
 	scanReviewSection(root["reviewers"], add, "reviewers")
 	scanReviewSection(root["review_stages"], add, "review_stages")
 	scanModels(root["models"], probe, names, add)

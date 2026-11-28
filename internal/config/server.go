@@ -71,3 +71,33 @@ func validateProject(raw any) (Project, error) {
 	}
 	return p, nil
 }
+
+// Host names this host to the servers it talks to. Only the scope
+// configuration sets it; see ScopeHostName.
+type Host struct {
+	Name string `json:"name,omitempty"`
+}
+
+// hostNamePattern copies api.HostNamePattern; an api test pins the two together.
+const hostNamePattern = `^[A-Za-z0-9][A-Za-z0-9-]{0,62}$`
+
+var hostNameRe = regexp.MustCompile(hostNamePattern)
+
+// ValidHostName reports whether name satisfies the host name rule.
+func ValidHostName(name string) bool { return hostNameRe.MatchString(name) }
+
+func validateHost(raw any) (Host, error) {
+	obj, ok := asObject(raw)
+	if !ok {
+		return Host{}, configErrorf("config.host_must_be_a_json_object")
+	}
+	var h Host
+	if value, exists := obj["name"]; exists {
+		text, ok := value.(string)
+		if !ok || !ValidHostName(text) {
+			return Host{}, configErrorf("config.host_name_invalid")
+		}
+		h.Name = text
+	}
+	return h, nil
+}

@@ -121,6 +121,7 @@ func TestRepairDropsOnlyTheInvalidBindingValue(t *testing.T) {
 var omittedSectionSamples = map[string]any{
 	"server":  map[string]any{"url": bindingURL},
 	"project": map[string]any{"name": bindingProject},
+	"host":    map[string]any{"name": "build-host"},
 }
 
 // TestRepairKeepsEveryOmittableSection guards the encoded-defaults recovery of

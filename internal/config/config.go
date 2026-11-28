@@ -146,6 +146,7 @@ type Config struct {
 	Issue           Issue                        `json:"issue"`
 	Server          Server                       `json:"server,omitzero"`
 	Project         Project                      `json:"project,omitzero"`
+	Host            Host                         `json:"host,omitzero"`
 	Git             Git                          `json:"git"`
 	Language        string                       `json:"language"`
 	AgentLanguage   string                       `json:"agent_language"`
@@ -853,6 +854,12 @@ func validateWithLaunchers(raw any, launchers func() []string) (*Config, error) 
 			return nil, err
 		}
 	}
+	var host Host
+	if _, exists := obj["host"]; exists {
+		if host, err = validateHost(obj["host"]); err != nil {
+			return nil, err
+		}
+	}
 	git := DefaultGit()
 	if _, exists := obj["git"]; exists {
 		git, err = validateGit(obj["git"])
@@ -892,6 +899,7 @@ func validateWithLaunchers(raw any, launchers func() []string) (*Config, error) 
 		Issue:           issue,
 		Server:          server,
 		Project:         project,
+		Host:            host,
 		Git:             git,
 		Language:        language,
 		AgentLanguage:   agentLanguage,
