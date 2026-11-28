@@ -27,7 +27,7 @@
   "install.uninstall_lease_agent": "  プロジェクト {{.V0}}、タスク {{.V1}}、generation {{.V2}}（{{.V3}}）、Agent PID {{.V4}}",
   "install.uninstall_lease_impact": "アンインストール中はこれらのリースが更新されず、これらの Agent が実行する kander コマンドは失敗します。Kander を再インストールして worker が起動すると、引き継がれていないリースは再び更新されます。",
   "install.uninstall_binary_msix": "Microsoft Store からインストールされています。Windows の設定 > アプリ で Kander をアンインストールしてください",
-  "install.uninstall_binary_brew": "Homebrew でインストールされています。brew uninstall kander を実行してください",
+  "install.uninstall_binary_brew": "Homebrew でインストールされています。brew uninstall {{.V0}} を実行してください",
   "install.uninstall_binary_symlink": "シンボリックリンクまたは reparse point のため、たどりません",
   "install.uninstall_binary_not_kander": "kander バイナリではありません（kander version の出力: {{.V0}}）",
   "install.uninstall_binary_deferred": "{{.V0}} は実行中です。{{.V1}} に名前を変更し、このコマンドの終了後に補助プロセスが削除します",

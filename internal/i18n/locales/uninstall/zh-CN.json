@@ -27,7 +27,7 @@
   "install.uninstall_lease_agent": "  项目 {{.V0}}，任务 {{.V1}}，generation {{.V2}}（{{.V3}}），Agent PID {{.V4}}",
   "install.uninstall_lease_impact": "卸载期间这些租约不续期，这些 Agent 运行 kander 命令会失败。重新安装 Kander 并启动 worker 后，未被接手的租约可以继续续租。",
   "install.uninstall_binary_msix": "从 Microsoft Store 安装；请在 Windows 设置 > 应用 中卸载 Kander",
-  "install.uninstall_binary_brew": "由 Homebrew 安装；请运行 brew uninstall kander",
+  "install.uninstall_binary_brew": "由 Homebrew 安装；请运行 brew uninstall {{.V0}}",
   "install.uninstall_binary_symlink": "是符号链接或 reparse point，不跟随",
   "install.uninstall_binary_not_kander": "不是 kander 二进制（kander version 输出：{{.V0}}）",
   "install.uninstall_binary_deferred": "{{.V0}} 正在运行；已改名为 {{.V1}}，辅助进程会在本命令退出后删除它",

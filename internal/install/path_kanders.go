@@ -85,10 +85,36 @@ func pathKanderBinaries(pathList string, probe bool) []PathKanderBinary {
 	return binaries
 }
 
+const (
+	// BrewFormulaStable is the Homebrew formula name for stable releases.
+	BrewFormulaStable = "kander"
+	// BrewFormulaBeta is the Homebrew formula name for v2 prereleases.
+	BrewFormulaBeta = "kander-beta"
+)
+
 // isBrewManaged reports whether the resolved binary lives in a Homebrew Cellar,
 // which covers cellar symlinks and direct cellar paths on macOS and Linux.
 func isBrewManaged(resolved string) bool {
 	return strings.Contains(filepath.ToSlash(resolved), "/Cellar/")
+}
+
+// BrewFormulaName returns the Homebrew formula name inferred from a resolved
+// binary path inside a Cellar: "kander-beta" for .../Cellar/kander-beta/...,
+// "kander" for .../Cellar/kander/... or any other Cellar name or path.
+func BrewFormulaName(resolved string) string {
+	slash := filepath.ToSlash(resolved)
+	if idx := strings.LastIndex(slash, "/Cellar/"); idx >= 0 {
+		rest := slash[idx+len("/Cellar/"):]
+		if name, _, ok := strings.Cut(rest, "/"); ok {
+			if name == BrewFormulaBeta {
+				return BrewFormulaBeta
+			}
+			if name == BrewFormulaStable {
+				return BrewFormulaStable
+			}
+		}
+	}
+	return BrewFormulaStable
 }
 
 // probeKanderVersion runs `kander version` with a short deadline and returns the

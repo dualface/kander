@@ -57,9 +57,30 @@ type UpdateResult struct {
 	Diagnostic string
 }
 
-// brewFormula pins the upgrade target to this tap so a conflicting
+// brewTapPrefix pins the upgrade target to this tap so a conflicting
 // short-name formula can never be selected instead.
-const brewFormula = "dualface/tap/kander"
+const brewTapPrefix = "dualface/tap/"
+
+func brewFormulaTarget(formula string) string {
+	if formula == "" {
+		formula = BrewFormulaStable
+	}
+	return brewTapPrefix + formula
+}
+
+// brewFormulaMatchesChannel reports whether the Homebrew formula publishes
+// updates for channel: kander publishes 2.x releases and kander-beta publishes
+// 2.x prereleases.
+func brewFormulaMatchesChannel(formula string, channel updateChannel) bool {
+	switch channel {
+	case channelRelease:
+		return formula == BrewFormulaStable
+	case channelPrerelease:
+		return formula == BrewFormulaBeta
+	default:
+		return false
+	}
+}
 
 var (
 	updateCheckHTTPClient    = newUpdateHTTPClient(5 * time.Second)
@@ -108,8 +129,9 @@ func updateAssetName(goos, goarch string) (string, bool) {
 // CheckUpdate returns the newest GitHub release in the running binary's
 // channel (see channelOf). No update is (nil, nil). A binary outside every
 // channel never sends a request. A Microsoft Store install never checks: the
-// Store delivers its updates. A Homebrew install on the prerelease channel
-// never checks either, because the tap publishes only releases.
+// Store delivers its updates. A Homebrew install checks only when its Cellar
+// formula publishes that channel (kander for releases, kander-beta for
+// prereleases).
 func CheckUpdate(ctx context.Context) (*UpdateInfo, error) {
 	if Packaged() {
 		return nil, nil
@@ -128,7 +150,7 @@ func CheckUpdate(ctx context.Context) (*UpdateInfo, error) {
 		return nil, err
 	}
 	brew := isBrewManaged(resolved)
-	if brew && channel == channelPrerelease {
+	if brew && !brewFormulaMatchesChannel(BrewFormulaName(resolved), channel) {
 		return nil, nil
 	}
 	checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -210,28 +232,30 @@ func ApplyUpdate(ctx context.Context, info UpdateInfo) (UpdateResult, error) {
 		return UpdateResult{}, err
 	}
 	info.Brew = isBrewManaged(resolved)
-	if info.Brew && channel == channelPrerelease {
-		return UpdateResult{}, errors.New("Homebrew publishes no prereleases; reinstall from the GitHub release to update a prerelease")
-	}
 	if info.Brew {
-		return applyBrewUpdate(ctx, info)
+		formula := BrewFormulaName(resolved)
+		if !brewFormulaMatchesChannel(formula, channel) {
+			return UpdateResult{}, fmt.Errorf("Homebrew formula %s does not publish this release channel", formula)
+		}
+		return applyBrewUpdate(ctx, info, formula)
 	}
 	return applyDirectUpdate(ctx, info, resolved)
 }
 
-func applyBrewUpdate(ctx context.Context, info UpdateInfo) (UpdateResult, error) {
+func applyBrewUpdate(ctx context.Context, info UpdateInfo, formula string) (UpdateResult, error) {
 	brew, err := updateLookPath("brew")
 	if err != nil {
 		return UpdateResult{}, errors.New("Homebrew executable not found")
 	}
+	target := brewFormulaTarget(formula)
 	var output limitedBuffer
 	// A stale local tap makes `brew upgrade` succeed without installing
 	// anything, so refresh the tap metadata before upgrading.
 	if err := runBrew(ctx, brew, &output, "update"); err != nil {
 		return UpdateResult{Diagnostic: output.String()}, fmt.Errorf("brew update: %w", err)
 	}
-	if err := runBrew(ctx, brew, &output, "upgrade", brewFormula); err != nil {
-		return UpdateResult{Diagnostic: output.String()}, fmt.Errorf("brew upgrade %s: %w", brewFormula, err)
+	if err := runBrew(ctx, brew, &output, "upgrade", target); err != nil {
+		return UpdateResult{Diagnostic: output.String()}, fmt.Errorf("brew upgrade %s: %w", target, err)
 	}
 	installed, err := updateLookPath(binaryName())
 	if err != nil {

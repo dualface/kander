@@ -15,6 +15,7 @@ import (
 
 	"github.com/dualface/kander/v2/internal/command/commandtest"
 	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/version"
 )
 
 // jsonText encodes value as --json writes it (no HTML escaping), so a Windows path keeps its
@@ -273,7 +274,7 @@ func TestUninstallBinaryOwnership(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		return
 	}
-	// A Homebrew entry is a link into a Cellar; it stays and the plan names brew uninstall.
+	// A Homebrew entry is a link into a Cellar; it stays and the plan names brew uninstall with its formula.
 	cellar := filepath.Join(f.home, "homebrew", "Cellar", "kander", "2.0.0", "bin", "kander")
 	writeIntegrateFile(t, cellar, "binary")
 	if err := os.Remove(f.entry); err != nil {
@@ -282,9 +283,57 @@ func TestUninstallBinaryOwnership(t *testing.T) {
 	if err := os.Symlink(cellar, f.entry); err != nil {
 		t.Fatal(err)
 	}
-	if item := reasons()[f.entry]; item.Action != UninstallSkip || item.Reason != config.Text("install.uninstall_binary_brew") {
+	if item := reasons()[f.entry]; item.Action != UninstallSkip || item.Reason != config.Text("install.uninstall_binary_brew", BrewFormulaStable) {
 		t.Fatalf("Homebrew link: %+v", item)
 	}
+	// A kander-beta Cellar link names kander-beta.
+	betaCellar := filepath.Join(f.home, "homebrew", "Cellar", "kander-beta", "2.0.0-beta.5", "bin", "kander")
+	writeIntegrateFile(t, betaCellar, "binary")
+	if err := os.Remove(f.entry); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(betaCellar, f.entry); err != nil {
+		t.Fatal(err)
+	}
+	if item := reasons()[f.entry]; item.Action != UninstallSkip || item.Reason != config.Text("install.uninstall_binary_brew", BrewFormulaBeta) {
+		t.Fatalf("Homebrew beta link: %+v", item)
+	}
+	// When a Homebrew 1.x kander on PATH coexists with a running direct v2 prerelease,
+	// the formula comes from the Cellar path (kander), not from the running version.
+	oldVersion, oldExe := version.Version, uninstallExecutable
+	t.Cleanup(func() { version.Version, uninstallExecutable = oldVersion, oldExe })
+	version.Version = "2.0.0-beta.5"
+	directBin := filepath.Join(f.home, "direct", "kander")
+	writeIntegrateFile(t, directBin, "binary")
+	uninstallExecutable = func() (string, error) { return directBin, nil }
+	brewStableCellar := filepath.Join(f.home, "homebrew", "Cellar", "kander", "1.6.3", "bin", "kander")
+	writeIntegrateFile(t, brewStableCellar, "binary")
+	if err := os.Chmod(brewStableCellar, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	brewBinDir := filepath.Join(f.home, "homebrew", "bin")
+	if err := os.MkdirAll(brewBinDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	brewLink := filepath.Join(brewBinDir, "kander")
+	if err := os.Symlink(brewStableCellar, brewLink); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", brewBinDir)
+	uninstallBrewEntry = brewEntry
+	if err := os.Remove(f.entry); err != nil {
+		t.Fatal(err)
+	}
+	writeIntegrateFile(t, f.entry, "binary")
+	f.version = "kander 2.0.0-beta.5"
+	got := reasons()
+	if item := got[brewLink]; item.Action != UninstallSkip || item.Reason != config.Text("install.uninstall_binary_brew", BrewFormulaStable) {
+		t.Fatalf("coexisting brew 1.x kander with running v2 beta: %+v", item)
+	}
+	if item := got[f.entry]; item.Action != UninstallRemove {
+		t.Fatalf("direct global entry: %+v", item)
+	}
+	uninstallBrewEntry = func() string { return "" }
 	// Any other link is never followed.
 	other := filepath.Join(f.home, "elsewhere", "kander")
 	writeIntegrateFile(t, other, "binary")

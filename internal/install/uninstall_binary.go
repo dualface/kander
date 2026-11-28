@@ -52,6 +52,14 @@ func planBinaryRemoval(paths config.InstallPaths) []UninstallItem {
 		items = append(items, UninstallItem{Action: UninstallKeep, Path: entry, Reason: reason})
 	}
 	brew := uninstallBrewEntry()
+	var brewResolved string
+	if brew != "" {
+		if resolved, err := filepath.EvalSymlinks(brew); err == nil {
+			brewResolved = resolved
+		} else {
+			brewResolved = brew
+		}
+	}
 	info, err := os.Lstat(entry)
 	switch {
 	case os.IsNotExist(err):
@@ -60,6 +68,7 @@ func planBinaryRemoval(paths config.InstallPaths) []UninstallItem {
 	case info.Mode()&os.ModeSymlink != 0:
 		if resolved, err := filepath.EvalSymlinks(entry); err == nil && isBrewManaged(resolved) {
 			brew = entry
+			brewResolved = resolved
 			break
 		}
 		keep(config.Text("install.uninstall_binary_symlink"))
@@ -74,7 +83,7 @@ func planBinaryRemoval(paths config.InstallPaths) []UninstallItem {
 		items = append(items, UninstallItem{Action: UninstallRemove, Path: entry})
 	}
 	if brew != "" {
-		items = append(items, UninstallItem{Action: UninstallSkip, Path: brew, Reason: config.Text("install.uninstall_binary_brew")})
+		items = append(items, UninstallItem{Action: UninstallSkip, Path: brew, Reason: config.Text("install.uninstall_binary_brew", BrewFormulaName(brewResolved))})
 	}
 	return items
 }

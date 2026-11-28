@@ -1,6 +1,6 @@
 {
   "menu.brew_kander_is_not_the_latest_upgrade_via_brew": "Homebrew kander at {{.V0}} is not the latest ({{.V1}}); upgrade it via brew.",
-  "menu.brew_managed_executables_left_alone_uninstall_via_brew": "Homebrew-managed executables were left alone; remove them with brew uninstall.",
+  "menu.brew_managed_executables_left_alone_uninstall_via_brew": "Homebrew-managed executables were left alone; remove them with brew uninstall {{.V0}}.",
   "menu.brew_upgrade_completed": "brew upgrade completed.",
   "menu.brew_upgrade_failed_continuing": "brew upgrade failed; continuing: {{.V0}}",
   "menu.configured_agent_for_is_unavailable_choose_a_replacement": "Configured Agent {{.V0}} for {{.V1}} is unavailable; choose a replacement.",
@@ -14,7 +14,7 @@
   "menu.multiple_kander_run_kander_doctor_in_a_terminal": "Run `kander doctor` in a terminal to choose which executable to keep.",
   "menu.no_usable_agent_replacement_for_keeping": "No usable Agent can replace {{.V1}} for {{.V0}}; keeping the configured value.",
   "menu.running_kander_is_older_than_path_binary_doctor_stopped": "The running kander {{.V0}} is older than {{.V1}} ({{.V2}}); doctor stopped before any check or repair, because repairing with an older binary would downgrade the newer on-disk rules and config. Run doctor with the newer kander.",
-  "menu.upgrade_kander_via_brew": "Upgrade kander via brew",
+  "menu.upgrade_kander_via_brew": "Upgrade {{.V0}} via brew",
   "tui.doctor_report_above_press_enter_to_open_the_board": "Doctor report above. Press Enter to open the board.",
   "menu.agent_extension_installed": "{{.V0}} rules extension is installed: {{.V1}}",
   "menu.agent_extension_missing": "{{.V0}} rules extension is missing: {{.V1}}",

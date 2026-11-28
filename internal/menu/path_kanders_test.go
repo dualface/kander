@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/dualface/kander/v2/internal/install"
+	"github.com/dualface/kander/v2/internal/version"
 )
 
 func stubKanderInventory(t *testing.T, binaries []install.PathKanderBinary) {
@@ -51,11 +52,11 @@ func stubRemoval(t *testing.T, removed *[]string, fail map[string]error) {
 	t.Cleanup(func() { removeKanderBinary = old })
 }
 
-func stubBrewUpgrade(t *testing.T, ran *bool, err error) {
+func stubBrewUpgrade(t *testing.T, upgraded *[]string, err error) {
 	t.Helper()
 	old := runBrewUpgrade
-	runBrewUpgrade = func() error {
-		*ran = true
+	runBrewUpgrade = func(formula string) error {
+		*upgraded = append(*upgraded, formula)
 		return err
 	}
 	t.Cleanup(func() { runBrewUpgrade = old })
@@ -102,54 +103,111 @@ func TestReportPathKandersListsAndHintsNonInteractive(t *testing.T) {
 }
 
 func TestReportPathKandersOffersBrewUpgrade(t *testing.T) {
-	binaries := []install.PathKanderBinary{
-		{Path: "/opt/homebrew/bin/kander", Version: "0.9.0", Brew: true},
-		{Path: "/usr/local/bin/kander", Version: "1.0.0"},
-	}
-	stubKanderInventory(t, binaries)
-	var brewRan bool
-	stubBrewUpgrade(t, &brewRan, nil)
-	stubAskChoice(t, []string{"upgrade", ""})
-	var removed []string
-	stubRemoval(t, &removed, nil)
-	CaptureReport(func() { reportPathKanders(true, binaries) })
-	if !brewRan {
-		t.Fatal("outdated brew install must offer `brew upgrade kander`")
-	}
+	t.Run("kander formula", func(t *testing.T) {
+		binaries := []install.PathKanderBinary{
+			{Path: "/opt/homebrew/bin/kander", Resolved: "/opt/homebrew/Cellar/kander/0.9.0/bin/kander", Version: "0.9.0", Brew: true},
+			{Path: "/usr/local/bin/kander", Resolved: "/usr/local/bin/kander", Version: "1.0.0"},
+		}
+		stubKanderInventory(t, binaries)
+		var upgraded []string
+		stubBrewUpgrade(t, &upgraded, nil)
+		stubAskChoice(t, []string{"upgrade", ""})
+		var removed []string
+		stubRemoval(t, &removed, nil)
+		lines := CaptureReport(func() { reportPathKanders(true, binaries) })
+		if !reflect.DeepEqual(upgraded, []string{install.BrewFormulaStable}) {
+			t.Fatalf("upgraded=%v, want [kander]", upgraded)
+		}
+		if !strings.Contains(reportText(lines), "brew upgrade kander") {
+			t.Fatalf("missing brew upgrade kander hint:\n%s", reportText(lines))
+		}
+	})
+
+	t.Run("kander-beta formula", func(t *testing.T) {
+		binaries := []install.PathKanderBinary{
+			{Path: "/opt/homebrew/bin/kander", Resolved: "/opt/homebrew/Cellar/kander-beta/2.0.0-beta.4/bin/kander", Version: "2.0.0-beta.4", Brew: true},
+			{Path: "/usr/local/bin/kander", Resolved: "/usr/local/bin/kander", Version: "2.0.0-beta.5"},
+		}
+		stubKanderInventory(t, binaries)
+		var upgraded []string
+		stubBrewUpgrade(t, &upgraded, nil)
+		stubAskChoice(t, []string{"upgrade", "/usr/local/bin/kander"})
+		var removed []string
+		stubRemoval(t, &removed, nil)
+		lines := CaptureReport(func() { reportPathKanders(true, binaries) })
+		if !reflect.DeepEqual(upgraded, []string{install.BrewFormulaBeta}) {
+			t.Fatalf("upgraded=%v, want [kander-beta]", upgraded)
+		}
+		text := reportText(lines)
+		for _, want := range []string{"brew upgrade kander-beta", "brew uninstall kander-beta"} {
+			if !strings.Contains(text, want) {
+				t.Fatalf("report lacks %q:\n%s", want, text)
+			}
+		}
+	})
+
+	t.Run("brew 1.x kander coexisting with running direct v2 prerelease still uses kander", func(t *testing.T) {
+		oldVersion := version.Version
+		version.Version = "2.0.0-beta.5"
+		t.Cleanup(func() { version.Version = oldVersion })
+		binaries := []install.PathKanderBinary{
+			{Path: "/opt/homebrew/bin/kander", Resolved: "/opt/homebrew/Cellar/kander/1.6.3/bin/kander", Version: "1.6.3", Brew: true},
+			{Path: "/usr/local/bin/kander", Resolved: "/usr/local/bin/kander", Version: "2.0.0-beta.5"},
+		}
+		stubKanderInventory(t, binaries)
+		var upgraded []string
+		stubBrewUpgrade(t, &upgraded, nil)
+		stubAskChoice(t, []string{"upgrade", "/usr/local/bin/kander"})
+		var removed []string
+		stubRemoval(t, &removed, nil)
+		lines := CaptureReport(func() { reportPathKanders(true, binaries) })
+		if !reflect.DeepEqual(upgraded, []string{install.BrewFormulaStable}) {
+			t.Fatalf("upgraded=%v, want [kander]", upgraded)
+		}
+		text := reportText(lines)
+		if strings.Contains(text, "kander-beta") {
+			t.Fatalf("unexpected kander-beta mention for Cellar/kander:\n%s", text)
+		}
+		for _, want := range []string{"brew upgrade kander", "brew uninstall kander"} {
+			if !strings.Contains(text, want) {
+				t.Fatalf("report lacks %q:\n%s", want, text)
+			}
+		}
+	})
 }
 
 func TestReportPathKandersSkipsBrewUpgrade(t *testing.T) {
 	binaries := []install.PathKanderBinary{
-		{Path: "/opt/homebrew/bin/kander", Version: "0.9.0", Brew: true},
+		{Path: "/opt/homebrew/bin/kander", Resolved: "/opt/homebrew/Cellar/kander/0.9.0/bin/kander", Version: "0.9.0", Brew: true},
 		{Path: "/usr/local/bin/kander", Version: "1.0.0"},
 	}
 	stubKanderInventory(t, binaries)
-	var brewRan bool
-	stubBrewUpgrade(t, &brewRan, nil)
+	var upgraded []string
+	stubBrewUpgrade(t, &upgraded, nil)
 	stubAskChoice(t, []string{"skip", ""})
 	var removed []string
 	stubRemoval(t, &removed, nil)
 	CaptureReport(func() { reportPathKanders(true, binaries) })
-	if brewRan {
-		t.Fatal("skip answer must not run brew upgrade")
+	if len(upgraded) != 0 {
+		t.Fatalf("skip answer must not run brew upgrade: %v", upgraded)
 	}
 }
 
 func TestReportPathKandersBrewFailureWarns(t *testing.T) {
 	binaries := []install.PathKanderBinary{
-		{Path: "/opt/homebrew/bin/kander", Version: "0.9.0", Brew: true},
+		{Path: "/opt/homebrew/bin/kander", Resolved: "/opt/homebrew/Cellar/kander/0.9.0/bin/kander", Version: "0.9.0", Brew: true},
 		{Path: "/usr/local/bin/kander", Version: "1.0.0"},
 	}
 	stubKanderInventory(t, binaries)
-	var brewRan bool
-	stubBrewUpgrade(t, &brewRan, errors.New("brew missing"))
+	var upgraded []string
+	stubBrewUpgrade(t, &upgraded, errors.New("brew missing"))
 	stubAskChoice(t, []string{"upgrade", ""})
 	var removed []string
 	stubRemoval(t, &removed, nil)
 	var healthy bool
 	lines := CaptureReport(func() { healthy = reportPathKanders(true, binaries) })
-	if healthy || !brewRan {
-		t.Fatalf("failed brew upgrade: healthy=%v ran=%v", healthy, brewRan)
+	if healthy || len(upgraded) != 1 {
+		t.Fatalf("failed brew upgrade: healthy=%v upgraded=%v", healthy, upgraded)
 	}
 	if !strings.Contains(reportText(lines), "brew upgrade failed") {
 		t.Fatalf("missing failure warning:\n%s", reportText(lines))
@@ -160,11 +218,11 @@ func TestReportPathKandersKeepOneRemovesOthers(t *testing.T) {
 	inventory := []install.PathKanderBinary{
 		{Path: "/usr/local/bin/kander", Version: "1.0.0"},
 		{Path: "/home/u/bin/kander", Version: "0.9.0"},
-		{Path: "/opt/homebrew/bin/kander", Version: "1.0.0", Brew: true},
+		{Path: "/opt/homebrew/bin/kander", Resolved: "/opt/homebrew/Cellar/kander/1.0.0/bin/kander", Version: "1.0.0", Brew: true},
 	}
 	stubKanderInventoryPtr(t, &inventory)
-	var brewRan bool
-	stubBrewUpgrade(t, &brewRan, nil)
+	var upgraded []string
+	stubBrewUpgrade(t, &upgraded, nil)
 	stubAskChoice(t, []string{"/home/u/bin/kander"})
 	var removed []string
 	stubRemoval(t, &removed, nil)
@@ -175,11 +233,11 @@ func TestReportPathKandersKeepOneRemovesOthers(t *testing.T) {
 	if !reflect.DeepEqual(removed, want) {
 		t.Fatalf("removed %v, want %v", removed, want)
 	}
-	if brewRan {
-		t.Fatal("brew at latest must not trigger upgrade")
+	if len(upgraded) != 0 {
+		t.Fatalf("brew at latest must not trigger upgrade: %v", upgraded)
 	}
-	if !strings.Contains(reportText(lines), "brew") {
-		t.Fatalf("kept-nonbrew choice must hint brew-managed files stay:\n%s", reportText(lines))
+	if !strings.Contains(reportText(lines), "brew uninstall kander") {
+		t.Fatalf("kept-nonbrew choice must hint brew uninstall kander:\n%s", reportText(lines))
 	}
 	if healthy {
 		t.Fatal("stale inventory still holding duplicates must report unhealthy")
@@ -226,7 +284,7 @@ func TestReportPathKandersReprobesAfterBrewUpgrade(t *testing.T) {
 	stubKanderInventoryPtr(t, &inventory)
 	var brewRan bool
 	old := runBrewUpgrade
-	runBrewUpgrade = func() error {
+	runBrewUpgrade = func(string) error {
 		brewRan = true
 		inventory = after
 		return nil

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/install"
@@ -19,9 +20,9 @@ var (
 	askKanderChoice    = askChoice
 )
 
-// execBrewUpgrade runs `brew upgrade kander` attached to the terminal.
-func execBrewUpgrade() error {
-	cmd := exec.Command("brew", "upgrade", "kander")
+// execBrewUpgrade runs `brew upgrade <formula>` attached to the terminal.
+func execBrewUpgrade(formula string) error {
+	cmd := exec.Command("brew", "upgrade", formula)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return cmd.Run()
 }
@@ -104,7 +105,7 @@ func reportOutdatedRunningKander(binaries []install.PathKanderBinary) bool {
 
 // reportPathKanders lists every distinct kander executable reachable through PATH.
 // With several installs it flags outdated Homebrew copies and, when interactive,
-// offers to run `brew upgrade kander` and to keep one executable while removing
+// offers to run `brew upgrade <formula>` and to keep one executable while removing
 // the other non-Homebrew files. Non-interactive callers get the passive listing.
 // The caller supplies the inventory already probed for the version guard so the
 // PATH binaries are not version-probed twice per run.
@@ -114,7 +115,8 @@ func reportPathKanders(interactive bool, binaries []install.PathKanderBinary) bo
 	}
 	hint(config.Text("menu.found_kander_executables_on_path", fmt.Sprint(len(binaries))))
 	latest := latestKander(binaries)
-	brewOutdated := false
+	var outdatedBrewFormulas []string
+	seenOutdatedFormula := map[string]bool{}
 	nonBrewCount := 0
 	for i, bin := range binaries {
 		versionText := bin.Version
@@ -132,32 +134,42 @@ func reportPathKanders(interactive bool, binaries []install.PathKanderBinary) bo
 		}
 		hint(line)
 		if bin.Brew && i != latest && version.Compare(bin.Version, binaries[latest].Version) < 0 {
-			brewOutdated = true
+			formula := install.BrewFormulaName(bin.Resolved)
+			if !seenOutdatedFormula[formula] {
+				seenOutdatedFormula[formula] = true
+				outdatedBrewFormulas = append(outdatedBrewFormulas, formula)
+			}
 			warning(config.Text(
 				"menu.brew_kander_is_not_the_latest_upgrade_via_brew", bin.Path, binaries[latest].Version,
 			))
 		}
 	}
-	if brewOutdated && interactive {
-		hint("brew upgrade kander")
-		selected, err := askKanderChoice(config.Text("menu.upgrade_kander_via_brew"), []choice{
-			{Value: "upgrade", Label: config.Text("menu.upgrade_kander_via_brew")},
-			{Value: "skip", Label: config.Text("menu.skip_and_continue_checking")},
-		}, "skip")
-		if err == nil && selected == "upgrade" {
-			hint(config.Text("menu.about_to_run") + "brew upgrade kander")
-			if err := runBrewUpgrade(); err != nil {
-				warning(config.Text("menu.brew_upgrade_failed_continuing", err.Error()))
-			} else {
-				success(config.Text("menu.brew_upgrade_completed"))
-				// The inventory printed above is stale now; the keep-one question
-				// must offer the post-upgrade binaries, not the pre-upgrade ones.
-				binaries = pathKanderBinaries()
-				nonBrewCount = 0
-				for _, bin := range binaries {
-					if !bin.Brew {
-						nonBrewCount++
-					}
+	if len(outdatedBrewFormulas) > 0 && interactive {
+		upgraded := false
+		for _, formula := range outdatedBrewFormulas {
+			hint("brew upgrade " + formula)
+			selected, err := askKanderChoice(config.Text("menu.upgrade_kander_via_brew", formula), []choice{
+				{Value: "upgrade", Label: config.Text("menu.upgrade_kander_via_brew", formula)},
+				{Value: "skip", Label: config.Text("menu.skip_and_continue_checking")},
+			}, "skip")
+			if err == nil && selected == "upgrade" {
+				hint(config.Text("menu.about_to_run") + "brew upgrade " + formula)
+				if err := runBrewUpgrade(formula); err != nil {
+					warning(config.Text("menu.brew_upgrade_failed_continuing", err.Error()))
+				} else {
+					success(config.Text("menu.brew_upgrade_completed"))
+					upgraded = true
+				}
+			}
+		}
+		if upgraded {
+			// The inventory printed above is stale now; the keep-one question
+			// must offer the post-upgrade binaries, not the pre-upgrade ones.
+			binaries = pathKanderBinaries()
+			nonBrewCount = 0
+			for _, bin := range binaries {
+				if !bin.Brew {
+					nonBrewCount++
 				}
 			}
 		}
@@ -182,13 +194,18 @@ func reportPathKanders(interactive bool, binaries []install.PathKanderBinary) bo
 	if err != nil || keep == "" {
 		return false
 	}
-	brewSkipped := false
+	var skippedBrewFormulas []string
+	seenSkippedFormula := map[string]bool{}
 	for _, bin := range binaries {
 		if bin.Path == keep {
 			continue
 		}
 		if bin.Brew {
-			brewSkipped = true
+			formula := install.BrewFormulaName(bin.Resolved)
+			if !seenSkippedFormula[formula] {
+				seenSkippedFormula[formula] = true
+				skippedBrewFormulas = append(skippedBrewFormulas, formula)
+			}
 			continue
 		}
 		if err := removeKanderBinary(bin.Path); err != nil {
@@ -197,8 +214,8 @@ func reportPathKanders(interactive bool, binaries []install.PathKanderBinary) bo
 			success(config.Text("menu.kander_executable_removed", bin.Path))
 		}
 	}
-	if brewSkipped {
-		hint(config.Text("menu.brew_managed_executables_left_alone_uninstall_via_brew"))
+	if len(skippedBrewFormulas) > 0 {
+		hint(config.Text("menu.brew_managed_executables_left_alone_uninstall_via_brew", strings.Join(skippedBrewFormulas, " ")))
 	}
 	// Report the post-cleanup inventory so a successful keep-one reads healthy.
 	return len(pathKanderBinaries()) <= 1

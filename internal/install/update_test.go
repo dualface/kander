@@ -137,7 +137,10 @@ func releaseList(entries ...string) string {
 }
 
 const directExecutable = "/usr/local/bin/kander"
-const brewExecutable = "/opt/homebrew/Cellar/kander/2.0.0-beta.1/bin/kander"
+const brewStableExecutable = "/opt/homebrew/Cellar/kander/2.0.0/bin/kander"
+const brewStablePrereleaseExecutable = "/opt/homebrew/Cellar/kander/2.0.0-beta.1/bin/kander"
+const brewBetaExecutable = "/opt/homebrew/Cellar/kander-beta/2.0.0-beta.1/bin/kander"
+const brewBetaReleaseExecutable = "/opt/homebrew/Cellar/kander-beta/2.0.0/bin/kander"
 
 type channelCase struct {
 	name, current string
@@ -207,22 +210,43 @@ func TestCheckUpdateSkipsVersionsOutsideChannels(t *testing.T) {
 	}
 }
 
-func TestCheckUpdateSkipsHomebrewPrerelease(t *testing.T) {
-	calls := stubBrew(t, "", "", nil)
-	requests := stubUpdateCheck(t, "2.0.0-beta.1", brewExecutable, releaseList("v2.0.0-beta.2 pre"))
-	if info, err := CheckUpdate(t.Context()); err != nil || info != nil || *requests != 0 || len(*calls) != 0 {
-		t.Fatalf("info=%+v err=%v requests=%d brew=%v", info, err, *requests, *calls)
+func TestCheckUpdateHomebrewPrerelease(t *testing.T) {
+	if _, ok := updateAssetName(runtime.GOOS, runtime.GOARCH); !ok {
+		t.Skipf("no release asset for %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
+	t.Run("kander-beta formula checks prerelease channel", func(t *testing.T) {
+		calls := stubBrew(t, "", "", nil)
+		requests := stubUpdateCheck(t, "2.0.0-beta.1", brewBetaExecutable, releaseList("v2.0.0-beta.2 pre", "v2.0.0"))
+		info, err := CheckUpdate(t.Context())
+		if err != nil || info == nil || info.Version != "2.0.0-beta.2" || !info.Brew || *requests != 1 || len(*calls) != 0 {
+			t.Fatalf("info=%+v err=%v requests=%d brew=%v", info, err, *requests, *calls)
+		}
+	})
+	t.Run("kander formula still skips prerelease channel", func(t *testing.T) {
+		calls := stubBrew(t, "", "", nil)
+		requests := stubUpdateCheck(t, "2.0.0-beta.1", brewStablePrereleaseExecutable, releaseList("v2.0.0-beta.2 pre"))
+		if info, err := CheckUpdate(t.Context()); err != nil || info != nil || *requests != 0 || len(*calls) != 0 {
+			t.Fatalf("info=%+v err=%v requests=%d brew=%v", info, err, *requests, *calls)
+		}
+	})
 }
 
 func TestCheckUpdateReportsHomebrewRelease(t *testing.T) {
 	if _, ok := updateAssetName(runtime.GOOS, runtime.GOARCH); !ok {
 		t.Skipf("no release asset for %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
-	stubUpdateCheck(t, "2.0.0", "/opt/homebrew/Cellar/kander/2.0.0/bin/kander", releaseList("v2.0.1"))
-	if info, err := CheckUpdate(t.Context()); err != nil || info == nil || info.Version != "2.0.1" || !info.Brew {
-		t.Fatalf("info=%+v err=%v", info, err)
-	}
+	t.Run("kander formula checks release channel", func(t *testing.T) {
+		stubUpdateCheck(t, "2.0.0", brewStableExecutable, releaseList("v2.0.1"))
+		if info, err := CheckUpdate(t.Context()); err != nil || info == nil || info.Version != "2.0.1" || !info.Brew {
+			t.Fatalf("info=%+v err=%v", info, err)
+		}
+	})
+	t.Run("kander-beta formula skips release channel", func(t *testing.T) {
+		requests := stubUpdateCheck(t, "2.0.0", brewBetaReleaseExecutable, releaseList("v2.0.1"))
+		if info, err := CheckUpdate(t.Context()); err != nil || info != nil || *requests != 0 {
+			t.Fatalf("info=%+v err=%v requests=%d", info, err, *requests)
+		}
+	})
 }
 
 func TestCheckUpdateRejectsBadReleaseList(t *testing.T) {
@@ -278,7 +302,8 @@ func TestApplyUpdateRefusesOtherChannels(t *testing.T) {
 		{"dev", "2.0.1", directExecutable, "release channel"},
 		{"2.0.0", "2.0.0", directExecutable, "not newer"},
 		{"2.0.0-beta.2", "2.0.0-beta.1", directExecutable, "not newer"},
-		{"2.0.0-beta.1", "2.0.0-beta.2", brewExecutable, "Homebrew"},
+		{"2.0.0-beta.1", "2.0.0-beta.2", brewStablePrereleaseExecutable, "Homebrew"},
+		{"2.0.0", "2.0.1", brewBetaReleaseExecutable, "Homebrew"},
 	} {
 		calls := stubBrew(t, "", tc.target, nil)
 		stubUpdateCheck(t, tc.current, tc.executable, "[]")
@@ -315,35 +340,87 @@ func stubBrew(t *testing.T, failOn string, installedVersion string, probeErr err
 	return &calls
 }
 
+func TestApplyUpdateHomebrewByFormula(t *testing.T) {
+	asset, ok := updateAssetName(runtime.GOOS, runtime.GOARCH)
+	if !ok {
+		t.Skipf("no release asset for %s/%s", runtime.GOOS, runtime.GOARCH)
+	}
+	for _, tc := range []struct {
+		name       string
+		current    string
+		target     string
+		executable string
+		wantTarget string
+	}{
+		{"kander stable", "2.0.0", "2.0.1", brewStableExecutable, "dualface/tap/kander"},
+		{"kander-beta prerelease", "2.0.0-beta.1", "2.0.0-beta.2", brewBetaExecutable, "dualface/tap/kander-beta"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := stubBrew(t, "", tc.target, nil)
+			stubUpdateCheck(t, tc.current, tc.executable, "[]")
+			result, err := ApplyUpdate(t.Context(), UpdateInfo{Current: tc.current, Version: tc.target, AssetName: asset})
+			if err != nil {
+				t.Fatalf("ApplyUpdate: %v", err)
+			}
+			want := [][]string{
+				{"/fake/bin/brew", "update"},
+				{"/fake/bin/brew", "upgrade", tc.wantTarget},
+			}
+			if len(*calls) != len(want) {
+				t.Fatalf("calls=%v want %v", *calls, want)
+			}
+			for i := range want {
+				if strings.Join((*calls)[i], " ") != strings.Join(want[i], " ") {
+					t.Fatalf("calls=%v want %v", *calls, want)
+				}
+			}
+			if result.Version != tc.target {
+				t.Fatalf("result=%+v", result)
+			}
+		})
+	}
+}
+
 func TestApplyBrewUpdateRefreshesTapThenUpgradesFormula(t *testing.T) {
-	calls := stubBrew(t, "", "0.7.12", nil)
-	result, err := applyBrewUpdate(t.Context(), UpdateInfo{Version: "0.7.12"})
-	if err != nil {
-		t.Fatalf("applyBrewUpdate: %v", err)
-	}
-	want := [][]string{
-		{"/fake/bin/brew", "update"},
-		{"/fake/bin/brew", "upgrade", "dualface/tap/kander"},
-	}
-	if len(*calls) != len(want) {
-		t.Fatalf("calls=%v want %v", *calls, want)
-	}
-	for i := range want {
-		if strings.Join((*calls)[i], " ") != strings.Join(want[i], " ") {
-			t.Fatalf("calls=%v want %v", *calls, want)
-		}
-	}
-	if result.Path != "/fake/bin/kander" && result.Path != "/fake/bin/kander.exe" {
-		t.Fatalf("result.Path=%q", result.Path)
-	}
-	if result.Version != "0.7.12" || !strings.Contains(result.Diagnostic, "brew update") {
-		t.Fatalf("result=%+v", result)
+	for _, tc := range []struct {
+		formula    string
+		version    string
+		wantTarget string
+	}{
+		{BrewFormulaStable, "2.0.1", "dualface/tap/kander"},
+		{BrewFormulaBeta, "2.0.0-beta.5", "dualface/tap/kander-beta"},
+	} {
+		t.Run(tc.formula, func(t *testing.T) {
+			calls := stubBrew(t, "", tc.version, nil)
+			result, err := applyBrewUpdate(t.Context(), UpdateInfo{Version: tc.version}, tc.formula)
+			if err != nil {
+				t.Fatalf("applyBrewUpdate: %v", err)
+			}
+			want := [][]string{
+				{"/fake/bin/brew", "update"},
+				{"/fake/bin/brew", "upgrade", tc.wantTarget},
+			}
+			if len(*calls) != len(want) {
+				t.Fatalf("calls=%v want %v", *calls, want)
+			}
+			for i := range want {
+				if strings.Join((*calls)[i], " ") != strings.Join(want[i], " ") {
+					t.Fatalf("calls=%v want %v", *calls, want)
+				}
+			}
+			if result.Path != "/fake/bin/kander" && result.Path != "/fake/bin/kander.exe" {
+				t.Fatalf("result.Path=%q", result.Path)
+			}
+			if result.Version != tc.version || !strings.Contains(result.Diagnostic, "brew update") {
+				t.Fatalf("result=%+v", result)
+			}
+		})
 	}
 }
 
 func TestApplyBrewUpdateStopsWhenRefreshFails(t *testing.T) {
 	calls := stubBrew(t, "update", "0.7.12", nil)
-	_, err := applyBrewUpdate(t.Context(), UpdateInfo{Version: "0.7.12"})
+	_, err := applyBrewUpdate(t.Context(), UpdateInfo{Version: "0.7.12"}, BrewFormulaStable)
 	if err == nil || !strings.Contains(err.Error(), "brew update") {
 		t.Fatalf("err=%v", err)
 	}
@@ -353,19 +430,29 @@ func TestApplyBrewUpdateStopsWhenRefreshFails(t *testing.T) {
 }
 
 func TestApplyBrewUpdateReportsUpgradeFailure(t *testing.T) {
-	calls := stubBrew(t, "upgrade", "0.7.12", nil)
-	result, err := applyBrewUpdate(t.Context(), UpdateInfo{Version: "0.7.12"})
-	if err == nil || !strings.Contains(err.Error(), "brew upgrade dualface/tap/kander") {
-		t.Fatalf("err=%v", err)
-	}
-	if len(*calls) != 2 || !strings.Contains(result.Diagnostic, "brew upgrade") {
-		t.Fatalf("calls=%v diagnostic=%q", *calls, result.Diagnostic)
+	for _, tc := range []struct {
+		formula    string
+		wantTarget string
+	}{
+		{BrewFormulaStable, "dualface/tap/kander"},
+		{BrewFormulaBeta, "dualface/tap/kander-beta"},
+	} {
+		t.Run(tc.formula, func(t *testing.T) {
+			calls := stubBrew(t, "upgrade", "0.7.12", nil)
+			result, err := applyBrewUpdate(t.Context(), UpdateInfo{Version: "0.7.12"}, tc.formula)
+			if err == nil || !strings.Contains(err.Error(), "brew upgrade "+tc.wantTarget) {
+				t.Fatalf("err=%v", err)
+			}
+			if len(*calls) != 2 || !strings.Contains(result.Diagnostic, "brew upgrade") {
+				t.Fatalf("calls=%v diagnostic=%q", *calls, result.Diagnostic)
+			}
+		})
 	}
 }
 
 func TestApplyBrewUpdateRejectsStaleInstalledVersion(t *testing.T) {
 	stubBrew(t, "", "0.7.11", nil)
-	_, err := applyBrewUpdate(t.Context(), UpdateInfo{Version: "0.7.12"})
+	_, err := applyBrewUpdate(t.Context(), UpdateInfo{Version: "0.7.12"}, BrewFormulaStable)
 	if err == nil || !strings.Contains(err.Error(), "0.7.11") || !strings.Contains(err.Error(), "0.7.12") {
 		t.Fatalf("err=%v", err)
 	}
@@ -373,7 +460,7 @@ func TestApplyBrewUpdateRejectsStaleInstalledVersion(t *testing.T) {
 
 func TestApplyBrewUpdateReportsProbeFailure(t *testing.T) {
 	stubBrew(t, "", "", errors.New("probe failed"))
-	_, err := applyBrewUpdate(t.Context(), UpdateInfo{Version: "0.7.12"})
+	_, err := applyBrewUpdate(t.Context(), UpdateInfo{Version: "0.7.12"}, BrewFormulaStable)
 	if err == nil || !strings.Contains(err.Error(), "probe failed") {
 		t.Fatalf("err=%v", err)
 	}

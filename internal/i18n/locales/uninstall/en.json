@@ -27,7 +27,7 @@
   "install.uninstall_lease_agent": "  project {{.V0}}, task {{.V1}}, generation {{.V2}} ({{.V3}}), agent PID {{.V4}}",
   "install.uninstall_lease_impact": "These leases are not renewed while Kander is uninstalled, and the kander commands their agents run fail. After you install Kander again and a worker starts, the leases nobody took over renew again.",
   "install.uninstall_binary_msix": "installed from the Microsoft Store; uninstall Kander in Windows Settings > Apps",
-  "install.uninstall_binary_brew": "installed by Homebrew; run brew uninstall kander",
+  "install.uninstall_binary_brew": "installed by Homebrew; run brew uninstall {{.V0}}",
   "install.uninstall_binary_symlink": "a symlink or reparse point, never followed",
   "install.uninstall_binary_not_kander": "not a kander binary (kander version printed: {{.V0}})",
   "install.uninstall_binary_deferred": "{{.V0}} is running; renamed to {{.V1}}, which a helper deletes after this command exits",

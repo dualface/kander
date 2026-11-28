@@ -1,6 +1,6 @@
 {
   "menu.brew_kander_is_not_the_latest_upgrade_via_brew": "Homebrew 安装的 {{.V0}} 不是最新版（最新为 {{.V1}}），请通过 brew 升级。",
-  "menu.brew_managed_executables_left_alone_uninstall_via_brew": "Homebrew 管理的可执行文件未动；需要移除请使用 brew uninstall。",
+  "menu.brew_managed_executables_left_alone_uninstall_via_brew": "Homebrew 管理的可执行文件未动；需要移除请使用 brew uninstall {{.V0}}。",
   "menu.brew_upgrade_completed": "brew 升级完成。",
   "menu.brew_upgrade_failed_continuing": "brew 升级失败，继续检查：{{.V0}}",
   "menu.configured_agent_for_is_unavailable_choose_a_replacement": "{{.V1}} 配置的 Agent {{.V0}} 不可用；请选择替代。",
@@ -14,7 +14,7 @@
   "menu.multiple_kander_run_kander_doctor_in_a_terminal": "在终端中运行 `kander doctor` 可选择保留哪个可执行文件。",
   "menu.no_usable_agent_replacement_for_keeping": "没有可用 Agent 替代 {{.V0}} 配置的 {{.V1}}；保留原值。",
   "menu.running_kander_is_older_than_path_binary_doctor_stopped": "正在运行的 kander {{.V0}} 旧于 {{.V1}}（{{.V2}}）；doctor 已停止，未执行任何检查或修复，因为用旧版本修复会把磁盘上更新的规则和配置降级。请用更新的 kander 运行 doctor。",
-  "menu.upgrade_kander_via_brew": "通过 brew 升级 kander",
+  "menu.upgrade_kander_via_brew": "通过 brew 升级 {{.V0}}",
   "tui.doctor_report_above_press_enter_to_open_the_board": "上方为检查结果，按 Enter 打开看板。",
   "menu.agent_extension_installed": "{{.V0}} 规则扩展已安装: {{.V1}}",
   "menu.agent_extension_missing": "{{.V0}} 规则扩展缺失: {{.V1}}",

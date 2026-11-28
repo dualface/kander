@@ -141,3 +141,23 @@ func TestPathKanderExecutablesSearchesTheGivenPathWithoutProbing(t *testing.T) {
 		t.Fatalf("binaries = %+v", binaries)
 	}
 }
+
+func TestBrewFormulaName(t *testing.T) {
+	for _, tc := range []struct {
+		resolved string
+		want     string
+	}{
+		{"/opt/homebrew/Cellar/kander-beta/2.0.0-beta.4/bin/kander", BrewFormulaBeta},
+		{"/home/linuxbrew/.linuxbrew/Cellar/kander-beta/2.0.0-beta.5/bin/kander", BrewFormulaBeta},
+		{"/opt/homebrew/Cellar/kander/1.6.3/bin/kander", BrewFormulaStable},
+		{"/usr/local/Cellar/kander/2.0.0/bin/kander", BrewFormulaStable},
+		{"/opt/homebrew/Cellar/kander-custom/2.0.0/bin/kander", BrewFormulaStable},
+		{"/opt/homebrew/Cellar/kander-beta", BrewFormulaStable},
+		{"/usr/local/bin/kander", BrewFormulaStable},
+		{"", BrewFormulaStable},
+	} {
+		if got := BrewFormulaName(tc.resolved); got != tc.want {
+			t.Errorf("BrewFormulaName(%q) = %q, want %q", tc.resolved, got, tc.want)
+		}
+	}
+}
