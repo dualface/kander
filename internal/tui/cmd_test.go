@@ -429,6 +429,7 @@ func TestStartupVersionGateRunsDoctorAfterRefresh(t *testing.T) {
 		{"failed", menu.VersionRefresh{Status: menu.VersionRefreshFailed, Elapsed: time.Second, Failures: []string{"x"}}, true},
 		{"current", menu.VersionRefresh{Status: menu.VersionRefreshCurrent}, false},
 		{"busy", menu.VersionRefresh{Status: menu.VersionRefreshBusy}, false},
+		{"check failed", menu.VersionRefresh{Status: menu.VersionRefreshCheckFailed, Failures: []string{"x"}}, false},
 		{"not the global entry", menu.VersionRefresh{Status: menu.VersionRefreshNotGlobalEntry, Running: "dev"}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

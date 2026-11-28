@@ -335,7 +335,8 @@ func TestVersionRefreshOutsideTheGlobalEntryOnlyReports(t *testing.T) {
 		}
 	}
 	runningFromGlobalEntry = func() (bool, error) { return false, errors.New("unreadable") }
-	if got := RefreshForVersion(); got.Status != VersionRefreshFailed || got.Ran() {
+	got = RefreshForVersion()
+	if got.Status != VersionRefreshCheckFailed || got.Ran() || refreshNoticeCodes(got)[0] != NoticeVersionRefreshFailed {
 		t.Fatalf("refresh with an unreadable entry = %+v", got)
 	}
 }

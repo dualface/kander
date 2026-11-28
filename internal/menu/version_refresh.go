@@ -34,9 +34,12 @@ const (
 	VersionRefreshBusy
 	// VersionRefreshDone means every step succeeded and host.json records the running version.
 	VersionRefreshDone
-	// VersionRefreshFailed means a step or the version check failed; nothing was recorded, so
-	// the next command tries again.
+	// VersionRefreshFailed means a step failed; nothing was recorded, so the next command tries
+	// again.
 	VersionRefreshFailed
+	// VersionRefreshCheckFailed means the check before the steps failed (host.json, the global
+	// entry, or the lock could not be read); no step ran.
+	VersionRefreshCheckFailed
 )
 
 // VersionRefresh is the outcome of one RefreshForVersion call.
@@ -64,7 +67,7 @@ type VersionRefreshNotice struct {
 
 // Ran reports whether the steps ran, to the end or to a failure.
 func (r VersionRefresh) Ran() bool {
-	return r.Status == VersionRefreshDone || r.Status == VersionRefreshFailed && r.Elapsed > 0
+	return r.Status == VersionRefreshDone || r.Status == VersionRefreshFailed
 }
 
 // Notice codes of the version refresh.
@@ -90,7 +93,7 @@ func (r VersionRefresh) Notices() []VersionRefreshNotice {
 	case VersionRefreshDone:
 		out = append(out, VersionRefreshNotice{Code: NoticeVersionRefreshed,
 			Text: r.withPending(config.Text("versionrefresh.done", r.Running, elapsed))})
-	case VersionRefreshFailed:
+	case VersionRefreshFailed, VersionRefreshCheckFailed:
 		out = append(out, VersionRefreshNotice{Code: NoticeVersionRefreshFailed,
 			Text: r.withPending(config.Text("versionrefresh.failed", r.Running, elapsed, oneLine(r.Failures)))})
 	}
@@ -168,7 +171,7 @@ func RefreshForVersion() VersionRefresh {
 	}
 	start := time.Now()
 	out.runSteps(home, record)
-	out.Elapsed = max(time.Since(start), time.Nanosecond)
+	out.Elapsed = time.Since(start)
 	if len(out.Failures) > 0 {
 		out.Status = VersionRefreshFailed
 	} else {
@@ -178,7 +181,7 @@ func RefreshForVersion() VersionRefresh {
 }
 
 func (r VersionRefresh) failBefore(err error) VersionRefresh {
-	r.Status = VersionRefreshFailed
+	r.Status = VersionRefreshCheckFailed
 	r.Failures = append(r.Failures, err.Error())
 	return r
 }
