@@ -721,7 +721,7 @@ func (s *Session) finish() error {
 func (s *Session) Save() (path string, err error) {
 	defer func() {
 		if err == nil {
-			RefreshHostScan()
+			refreshHostScan()
 		}
 	}()
 	if s.EditingOverlay() {

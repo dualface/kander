@@ -36,9 +36,6 @@ func takeStartOrder() string {
 	return order
 }
 
-// errHostStartUnsupported reports a server without start orders.
-var errHostStartUnsupported = errors.New("start orders are not supported by the server")
-
 // runHostStart is kander start --host: it starts the task on this host when the
 // name is this host's, and otherwise asks the server for a start order and
 // waits until it is final or the timeout passed.

@@ -3,6 +3,7 @@ package remote
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -141,12 +142,12 @@ func runOrder(id string, cancelOrder bool) error {
 	if command.JSON() {
 		return command.Exit(command.Result(order))
 	}
-	PrintStartOrder(stdout, order)
+	printStartOrder(stdout, order)
 	return nil
 }
 
-// PrintStartOrder writes the text form of a start order.
-func PrintStartOrder(w interface{ Write([]byte) (int, error) }, o api.StartOrder) {
+// printStartOrder writes the text form of a start order.
+func printStartOrder(w io.Writer, o api.StartOrder) {
 	fmt.Fprintln(w, config.Text("host.order_line", o.ID, o.State, o.TaskID, o.TargetHost))
 	if o.Agent != "" || o.Launcher != "" {
 		fmt.Fprintln(w, config.Text("host.order_choice", hostNames(nonEmpty(o.Agent)), hostNames(nonEmpty(o.Launcher))))

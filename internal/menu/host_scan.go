@@ -92,10 +92,10 @@ func scanAgents(cfg *config.Config) []remote.AgentScan {
 	return agents
 }
 
-// RefreshHostScan scans this host again after a configuration change, when it
+// refreshHostScan scans this host again after a configuration change, when it
 // has a project registered. A failure only skips the refresh: the next
 // kander doctor scans again.
-func RefreshHostScan() {
+func refreshHostScan() {
 	home, err := remote.Home()
 	if err != nil {
 		return
