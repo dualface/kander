@@ -24,8 +24,8 @@ const confirmPattern = "POST /api/v1/projects/{project}/tasks/{task}/confirm"
 
 func TestConfirmRouteInventory(t *testing.T) {
 	routes := publicserver.Routes()
-	if len(routes) != 84 {
-		t.Fatalf("routes = %d, want 84 (79 at the delivery base plus confirm, server gc, the project read and the policy read and write)", len(routes))
+	if len(routes) != 91 {
+		t.Fatalf("routes = %d, want 91 (79 at the delivery base plus confirm, server gc, the project read, the policy read and write, the host list and heartbeat, and the five start order routes)", len(routes))
 	}
 	for _, route := range routes {
 		if route.Pattern == confirmPattern && route.Authorized {
