@@ -53,12 +53,12 @@ func TestEmbeddedCLIAddsCommandAndRoutesNativeCallsThroughTransport(t *testing.T
 	transport := &recordingTransport{handler: s.Handler()}
 	t.Cleanup(func() { client.SetDefaultTransport(nil) })
 	var ran bool
-	extra := &cobra.Command{Use: "host", Run: func(*cobra.Command, []string) { ran = true }}
+	extra := &cobra.Command{Use: "embedder", Run: func(*cobra.Command, []string) { ran = true }}
 	root, err := cli.NewRoot(cli.Options{Transport: transport, Commands: []*cobra.Command{extra}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if code := cli.Execute(root, []string{"my-kander", "host"}); code != 0 || !ran {
+	if code := cli.Execute(root, []string{"my-kander", "embedder"}); code != 0 || !ran {
 		t.Fatalf("added command ran = %t, exit = %d", ran, code)
 	}
 
@@ -86,7 +86,7 @@ func TestNewRootReportsCommandConflicts(t *testing.T) {
 		{"server", "", "server"},
 		{"help", "", "help"},
 		{"ls", "", "ls"},
-		{"host", "start", "start"},
+		{"embedder", "start", "start"},
 		{"host-extra", "", "host-extra"},
 	} {
 		t.Run(tc.conflict, func(t *testing.T) {

@@ -37,6 +37,9 @@ type claimRecord struct {
 	// first group claim of the group, fixed. Every later record of the same
 	// card or group carries it on; a record that never had one never gets one.
 	BranchSnapshot *api.BranchSnapshot `json:"branch_snapshot,omitempty"`
+	// StartOrderID is the start order this generation's claim ran for; its
+	// confirmation, rollback, or end decides the order (start_orders.go).
+	StartOrderID string `json:"start_order_id,omitempty"`
 }
 
 const claimPending = "pending"

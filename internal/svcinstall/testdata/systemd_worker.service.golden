@@ -1,0 +1,21 @@
+# kander-service: {"schema":1,"kind":"worker","executable":"/home/alice/.local/bin/kander","args":["worker"],"client_home":"/srv/kander client","work_dir":"/srv/kander client","log":"/srv/kander client/worker.log"}
+# Managed by Kander: written by "kander service install worker". Kander rewrites
+# or removes this file, so do not edit it; "kander service uninstall worker" removes it.
+[Unit]
+Description=Kander worker
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart="/home/alice/.local/bin/kander" "worker"
+WorkingDirectory=/srv/kander client
+Environment="KANDER_MANAGED=1"
+Environment="KANDER_CLIENT_HOME=/srv/kander client"
+Restart=always
+RestartSec=5
+KillMode=process
+StandardOutput=append:/srv/kander client/worker.log
+StandardError=append:/srv/kander client/worker.log
+
+[Install]
+WantedBy=default.target

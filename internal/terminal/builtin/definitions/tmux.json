@@ -55,6 +55,7 @@
       }
     },
     "tmux-session": {
+      "background": true,
       "requires": {
         "platform": "posix",
         "binary": true,

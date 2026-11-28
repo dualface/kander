@@ -55,6 +55,7 @@ A capability flag requires its operation (`focus`, `set_session_marker` for `pan
 "launchers": {
   "<launcher>": {
     "auto_priority": <int, optional>,
+    "background": <bool, optional>,
     "requires": {
       "platform": "posix" | "windows" | "any",
       "binary": <bool>,
@@ -71,6 +72,7 @@ A capability flag requires its operation (`focus`, `set_session_marker` for `pan
 
 - `requires` is checked by `Prepare` before any container exists, in the order platform, the variables marked `before_binary`, binary on `PATH`, the remaining variables (each group in declaration order); a failure names what is missing. A variable with `trim` is compared without surrounding whitespace, and `{env.<VAR>}` expands to that trimmed value. A variable's own `message` replaces `messages.env` for it. The messages replace the generic diagnostics and may use `launcher`, `binary`, `platform` and `name` (the missing variable). `inside_session` is not a `Prepare` check.
 - A variable with `auto_only` takes part in auto detection only; `Prepare` does not require it, so an explicitly chosen launcher also works outside the terminal's own session. It excludes `skip_auto` and `before_binary`.
+- `background: true` declares that a process without a terminal or a session of this terminal, such as the resident worker, can create the launcher's containers. `kander doctor` records such a container launcher for starts other hosts direct at this host when its platform matches, its required binary is on `PATH`, and its required variables (except `auto_only` ones) are set; the built-in `tmux-session` declares it, and a launcher that needs the user's terminal (`tmux`, `herdr`, `herdr-core`, `luvus`, `dsh`) or the current terminal (`foreground`, `console`) does not.
 - `auto` selects only launchers with `auto_priority > 0` and `inside_session: true` whose environment requirements hold, ignoring variables marked `skip_auto` (which `Prepare` still requires and reports), highest priority first, after the Go backends. The host policy stays in `internal/terminal`: `auto` resolves only among container launchers and never falls back to `foreground` or `console`, whose own preconditions (three TTY streams, native Windows) are Go code.
 - `started_lines` render the launch report; the placeholders are `head`, `session`, `session_exists`, `workspace`, `project`, `container`, `pane` and `env.<VAR>`.
 - `ops` replaces whole operations for this launcher; `tmux` and `tmux-session` share one definition this way.

@@ -2,7 +2,11 @@ package liveness
 
 import (
 	"context"
+	"io"
+	"log/slog"
 	"net/http"
+	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -12,6 +16,7 @@ import (
 	"github.com/dualface/kander/v2/internal/board"
 	"github.com/dualface/kander/v2/internal/client"
 	"github.com/dualface/kander/v2/internal/remote"
+	"github.com/dualface/kander/v2/internal/server"
 )
 
 // runSingleRemote runs a subscription through the service without Follow. It
@@ -123,5 +128,45 @@ func TestSingleEventExitsAfterSnapshotReset(t *testing.T) {
 	requireEventNames(t, events, err, "snapshot", "snapshot-reset")
 	if !events[1].ReconciliationRequired {
 		t.Fatalf("snapshot-reset does not require reconciliation: %+v", events[1])
+	}
+}
+
+// A start order of a monitored card wakes the subscription with its order.
+func TestSingleEventExitsAfterStartOrderChange(t *testing.T) {
+	srv, err := server.Open(server.Options{DataDir: filepath.Join(t.TempDir(), "service"), Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	httpServer := httptest.NewServer(srv.Handler())
+	t.Cleanup(func() { httpServer.Close(); _ = srv.Close() })
+	observer, err := client.New(httpServer.URL, "c-00000000000a-hosta")
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := observer.Register(t.Context(), "orders", "https://example.invalid/orders.git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	host, _ := client.New(httpServer.URL, "c-00000000000b-hostb")
+	if _, err := host.Heartbeat(t.Context(), api.HostHeartbeat{ClientID: "c-00000000000b-hostb", Name: "hostb", WorkerID: "w-1", Version: "test", Accepting: true, OrderProtocol: api.StartOrderProtocol, Projects: []api.HostProject{{Project: "orders", Agents: []string{"claude"}, Launchers: []string{"tmux-session"}}}}, 0); err != nil {
+		t.Fatal(err)
+	}
+	project := observer.Project(info.ID)
+	task := subscriptionRemoteCard(t, project, "ordered", "")
+	if _, err := project.Move(t.Context(), "", task.TaskID, api.Move{State: "todo"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	service := &remote.Session{ServerURL: httpServer.URL, Client: observer, Project: project, Info: info, Home: t.TempDir()}
+	var order api.StartOrder
+	events, err := runSingleRemote(t, service, subscribeOptions{Watch: []string{task.TaskID}, Refresh: 0.01, Heartbeat: 3600}, func() {
+		var createErr error
+		if order, createErr = project.CreateStartOrder(t.Context(), "", api.NewStartOrder{TaskID: task.TaskID, Host: "hostb"}); createErr != nil {
+			t.Error(createErr)
+		}
+	})
+	requireEventNames(t, events, err, "snapshot", "start-order-change")
+	got := events[1].StartOrders
+	if len(got) != 1 || got[0].OrderID != order.ID || got[0].State != api.StartOrderPending || got[0].TaskID != task.TaskID {
+		t.Fatalf("start-order-change = %+v, want order %s", got, order.ID)
 	}
 }

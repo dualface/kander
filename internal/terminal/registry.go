@@ -153,3 +153,20 @@ func FindBackend(match func(Capabilities) bool) (Backend, bool) {
 func AddressFreeBackend() (Backend, bool) {
 	return FindBackend(func(c Capabilities) bool { return c.AgentIdentity && !c.ProgramStatus })
 }
+
+// BackgroundLaunchers lists, in name order, the launchers a process without a
+// terminal can start an agent with on this platform: a container launcher whose
+// definition declares background, whose platform matches, whose required binary
+// lookPath finds, and whose required variables getenv holds.
+func BackgroundLaunchers(windows bool, getenv func(string) string, lookPath func(string) (string, error)) []string {
+	var names []string
+	for _, backend := range Backends() {
+		declarative, ok := backend.(*DeclarativeBackend)
+		if !ok || !declarative.backgroundReady(windows, getenv, lookPath) {
+			continue
+		}
+		names = append(names, backend.Name())
+	}
+	sort.Strings(names)
+	return names
+}

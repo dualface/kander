@@ -567,6 +567,24 @@ The shell is `internal/server/integration_kernel.go` (the projection, the maps, 
 
 The theorems whose statements carried the lease clock in the holder are restated without it (`ServerGroupLease.holder_unique`, `claim_reuse_keeps`, `claim_same_exec_refused`; `ServerIntegration.owner_unique`); the claim invariant gains `activeHeld` (an active record, valid or lapsed, belongs to a claimed card), and the integration invariant's `notLost` also excludes `lapsed`.
 
+## Start Orders
+
+`startorder` (`formal/KanderFormal/Machines/StartOrder.lean`) decides the transitions of one start order of `internal/server/start_orders.go` ([Hosts and start orders](distributed-server.md#hosts-and-start-orders)). Its state is the status (`none`, `pending`, `accepted`, `started`, `failed`, `cancelled`, `expired`) and the bound generation, 0 while unbound. The shell projects every generation an event compares as the delivery kernel does: 0 stays 0, the generation of the operation maps to 1, any other to 2, with `maxGen` 2. The facts the shell judges are boolean arguments: `target` (the acting client is the order's target), `task` (the claim names the order's task), `due` (the acceptance window passed on the server clock), and `lost` (the target sent no heartbeat within the online window).
+
+| Event | Guard | Effect |
+| --- | --- | --- |
+| `create` | none | pending |
+| `accept(target)` | pending, target | accepted |
+| `claim(target, task, gen)` | accepted, unbound, target, task, gen ≠ 0 | binds gen |
+| `confirm(gen)`, `rollback(gen)`, `supersede(gen)` | accepted, bound to gen | started; failed; failed |
+| `fail(target)` | accepted, unbound, target | failed |
+| `cancel` | pending, or accepted and unbound | cancelled |
+| `expire(due)` | pending, due | expired |
+| `hostLost(lost)` | accepted, unbound, lost | failed |
+| `preempt` | pending or accepted, unbound | failed |
+
+The theorems: a started, failed, cancelled, or expired order refuses every event (`terminal_stable`); a claim binds only an accepted, unbound order of its target and task (`claim_spec`, `claim_refused`), and a bound order keeps its generation through every step (`bind_once`); a step reaches `started` only as the confirmation of the bound generation, which is not zero (`started_only_confirm`); every open order has an event that makes it final (`pending_expires`, `unbound_host_lost`, `bound_ends`, and for reachable states `reachable_open_exit`); and the invariant (`reachable_inv`) keeps a pending, cancelled, or expired order unbound and a started one bound. The shell writes the order the kernel answers, stores the reason of a final state, and maps a refusal to `start_order_refused`; the claim, confirmation, rollback, takeover, release, termination, and recovery transactions stage the change in the same board transaction.
+
 ## v2 State Machine Inventory
 
 M1 to M14 are the machines of `20261103-state-machine-simplification-audit-task`. Group A is `20261114-formal-kernel-foundation-group`; group B is `20261116-formal-dispatch-group`; group C is `20261116-formal-review-evidence-group`; group D is `20261117-formal-server-group` (D1, `20261117-formal-server-group-lease-task`, is the first card; D2, `20261117-formal-server-requests-task`, the second; D3, `20261117-formal-issue-results-task`, the third); D4, `20261117-formal-server-integration-task`, is the only member of the successor group `20261117-formal-server-integration-group`, which waits for the integration containment change.
@@ -592,3 +610,4 @@ M1 to M14 are the machines of `20261103-state-machine-simplification-audit-task`
 | v2 server integration operation (`internal/server/integration*.go`) | Group integration | Proved and generated: `serverintegration` (D4, `20261117-formal-server-integration-task`) |
 | v2 server issue results (`internal/server/issue_results.go`, `internal/issue/result_*.go`) | Issue result records, close decisions, and the central resource | Proved and generated: `issueresult`, `issueresultdecision`, `issueresultsave` (D3, `20261117-formal-issue-results-task`) |
 | v2 server deliveries and dispatch requests (`internal/server/deliveries.go`, `dispatch_request.go`, `requests.go`) | Delivery records and requested dispatches | Proved and generated: `serverrequest`, `serverdelivery` (D2, `20261117-formal-server-requests-task`) |
+| v2 server start orders (`internal/server/start_orders.go`) | Starts one host directs at another | Proved and generated: `startorder` (`20261127-directed-host-start-v2-task`) |

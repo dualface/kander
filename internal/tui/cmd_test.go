@@ -7,23 +7,28 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dualface/kander/v2/internal/board"
 	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/install"
+	"github.com/dualface/kander/v2/internal/menu"
 )
 
-// stampStartupVersion records the running version so Run skips the startup
-// doctor gate entirely, matching the pre-gate behavior these tests assert.
+// stubVersionRefresh makes the version refresh of Run report outcome, so a test decides whether
+// the startup doctor gate opens.
+func stubVersionRefresh(t *testing.T, outcome menu.VersionRefresh) {
+	t.Helper()
+	old := refreshForVersion
+	refreshForVersion = func() menu.VersionRefresh { return outcome }
+	t.Cleanup(func() { refreshForVersion = old })
+}
+
+// stampStartupVersion makes the version refresh find the running version recorded, so Run skips
+// the startup doctor gate entirely, matching the pre-gate behavior these tests assert.
 func stampStartupVersion(t *testing.T) {
 	t.Helper()
-	paths, err := config.CurrentInstallPaths()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := install.RecordStartupVersion(paths); err != nil {
-		t.Fatal(err)
-	}
+	stubVersionRefresh(t, menu.VersionRefresh{Status: menu.VersionRefreshCurrent})
 }
 
 // stubDoctorAck replaces the Enter wait so a TTY-backed test run never blocks
@@ -412,50 +417,32 @@ func startupGateTestEnv(t *testing.T) (doctorRan, ackRan *bool) {
 	return doctorRan, ackRan
 }
 
-// A stale version stamp reruns doctor plus the acknowledgement once and re-stamps.
-func TestStartupVersionGateStaleStampRunsDoctor(t *testing.T) {
-	doctorRan, ackRan := startupGateTestEnv(t)
-	paths, err := config.CurrentInstallPaths()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(paths.RulesDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(
-		filepath.Join(paths.RulesDir, "kander-startup-state.json"),
-		[]byte(`{"version":"0.0.0"}`), 0o644,
-	); err != nil {
-		t.Fatal(err)
-	}
-	bindStartupService(t)
-	if code := Run(); code != 0 {
-		t.Fatalf("Run exit=%d", code)
-	}
-	if !*doctorRan || !*ackRan {
-		t.Fatalf("stale stamp must run doctor and wait for ack: doctor=%v ack=%v", *doctorRan, *ackRan)
-	}
-	if got := install.StartupVersion(paths); got != "dev" {
-		t.Fatalf("stamp = %q, want dev", got)
-	}
-}
-
-// A current version stamp skips doctor and the acknowledgement entirely.
-func TestStartupVersionGateCurrentStampSkipsDoctor(t *testing.T) {
-	doctorRan, ackRan := startupGateTestEnv(t)
-	paths, err := config.CurrentInstallPaths()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := install.RecordStartupVersion(paths); err != nil {
-		t.Fatal(err)
-	}
-	bindStartupService(t)
-	if code := Run(); code != 0 {
-		t.Fatalf("Run exit=%d", code)
-	}
-	if *doctorRan || *ackRan {
-		t.Fatalf("current stamp must skip doctor and ack: doctor=%v ack=%v", *doctorRan, *ackRan)
+// A version refresh that ran, to the end or to a failure, shows the doctor report and waits
+// for the acknowledgement; one that did not run opens the board directly.
+func TestStartupVersionGateRunsDoctorAfterRefresh(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		outcome menu.VersionRefresh
+		doctor  bool
+	}{
+		{"done", menu.VersionRefresh{Status: menu.VersionRefreshDone, Elapsed: time.Second}, true},
+		{"failed", menu.VersionRefresh{Status: menu.VersionRefreshFailed, Elapsed: time.Second, Failures: []string{"x"}}, true},
+		{"current", menu.VersionRefresh{Status: menu.VersionRefreshCurrent}, false},
+		{"busy", menu.VersionRefresh{Status: menu.VersionRefreshBusy}, false},
+		{"check failed", menu.VersionRefresh{Status: menu.VersionRefreshCheckFailed, Failures: []string{"x"}}, false},
+		{"not the global entry", menu.VersionRefresh{Status: menu.VersionRefreshNotGlobalEntry, Running: "dev"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doctorRan, ackRan := startupGateTestEnv(t)
+			stubVersionRefresh(t, tc.outcome)
+			bindStartupService(t)
+			if code := Run(); code != 0 {
+				t.Fatalf("Run exit=%d", code)
+			}
+			if *doctorRan != tc.doctor || *ackRan != tc.doctor {
+				t.Fatalf("doctor=%v ack=%v, want both %v", *doctorRan, *ackRan, tc.doctor)
+			}
+		})
 	}
 }
 

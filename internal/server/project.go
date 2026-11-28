@@ -62,6 +62,9 @@ type project struct {
 	// policyAppendFault fails an audit append after its line was written, as a
 	// failed sync would, in tests.
 	policyAppendFault func() error
+	// openOrders caches the start orders that are not finished, by ID; it is
+	// guarded by mu and rebuilt from the stored orders when nil (start_orders.go).
+	openOrders map[string]api.StartOrder
 }
 
 func (p *project) log() *slog.Logger { return p.server.log.With("project", p.info.ID) }
@@ -344,7 +347,12 @@ func (p *project) move(scope receiptScope, id string, req api.Move, h holder) ou
 			claim, claimed = r, found
 		}
 		var nextClaim *claimRecord
+		var orders orderChanges
 		if claimed && !claimedState(req.State) {
+			// The order of a start that never confirmed ends with its claim.
+			if orders, err = p.supersedeOrders(claim, "a move to "+req.State); err != nil {
+				return outcome{err: err}
+			}
 			claim.Status = api.ClaimReleased
 			nextClaim = &claim
 		}
@@ -413,13 +421,14 @@ func (p *project) move(scope receiptScope, id string, req api.Move, h holder) ou
 					}
 				}
 				return nil
-			}),
+			}, orderDecorator(orders)),
 			Replayed: &replayed, ServiceCompletion: true,
 			Result: req.Result, Reason: req.Reason, Decision: req.Decision, DuplicateOf: req.DuplicateOf, ExpectedRevision: req.ExpectedRevision, Authorization: req.Authorization, DeliveryCommit: businessCommit, Disposition: req.Disposition,
 		})
 		if err != nil {
 			return outcome{err: err}
 		}
+		p.orderPublished(orders)
 		if claimed && !claimedState(req.State) {
 			_ = p.events.append(api.Event{Kind: api.EventClaimChanged, TaskID: entry.TaskID, Generation: claim.Generation})
 		}
@@ -546,6 +555,13 @@ func (p *project) claim(scope receiptScope, id string, req api.ClaimRequest) out
 				return outcome{err: err}
 			}
 		}
+		// The start order the claim names binds this generation, and every
+		// other open order of the card ends: the card is taken.
+		orders, err := p.claimOrders(entry.TaskID, req, r.Generation)
+		if err != nil {
+			return outcome{err: err}
+		}
+		r.StartOrderID = req.StartOrderID
 		now := p.server.now()
 		r.Status, r.RenewedAt, r.ExpiresAt = api.ClaimActive, now, now.Add(p.server.ttl)
 		extension := p.taskTransaction(scope, "claim:"+id, req, r.TaskID, func(tx *board.Transaction) error {
@@ -557,7 +573,7 @@ func (p *project) claim(scope receiptScope, id string, req api.ClaimRequest) out
 				return apiError(api.CodeRevisionConflict, "task is no longer todo")
 			}
 			return err
-		}, &r, true)
+		}, &r, true, orderDecorator(orders))
 
 		var moved board.Entry
 		if req.Start != nil {
@@ -571,6 +587,7 @@ func (p *project) claim(scope receiptScope, id string, req api.ClaimRequest) out
 		if err != nil {
 			return outcome{err: err}
 		}
+		p.orderPublished(orders)
 		_ = p.events.append(api.Event{Kind: api.EventClaimChanged, TaskID: r.TaskID, Generation: r.Generation})
 		p.changed(r.TaskID, r.Generation)
 		return p.activate(r)
@@ -646,6 +663,9 @@ func (p *project) takeover(scope receiptScope, id string, req api.ClaimRequest, 
 	}
 	if strings.TrimSpace(req.Decision) == "" {
 		return outcome{err: apiError(api.CodeInvalidRequest, "a takeover needs a decision reference")}
+	}
+	if req.StartOrderID != "" {
+		return outcome{err: apiError(api.CodeInvalidRequest, "a takeover never runs for a start order")}
 	}
 	// A takeover keeps the branch snapshot the card has and creates none, so
 	// it depends on no policy: the policy context is only validated.
@@ -745,6 +765,10 @@ func (p *project) takeover(scope receiptScope, id string, req api.ClaimRequest, 
 		if board.MetadataFrom(snapshot.Text, "DISPATCH_ID") != "" && req.Dispatch == nil {
 			return outcome{err: apiError(api.CodeEvidenceIncomplete, "takeover of a bound task needs the exact inspected dispatch context")}
 		}
+		orders, err := p.supersedeOrders(previous, "a takeover")
+		if err != nil {
+			return outcome{err: err}
+		}
 		in := board.TakeoverInput{Owner: req.Owner, Decision: req.Decision, Dispatch: req.Dispatch}
 		if req.Start != nil {
 			in.Session, in.Window, in.ExecResolved = req.Start.Session, req.Start.Window, req.Start.ExecResolved
@@ -763,9 +787,10 @@ func (p *project) takeover(scope receiptScope, id string, req api.ClaimRequest, 
 				}
 			}
 			return nil
-		}, &r, true), board.TransactionExtension{Before: func(tx *board.Transaction) error { return p.stageSupersedeRequests(tx, r.TaskID, r.Generation) }}); err != nil {
+		}, &r, true, orderDecorator(orders)), board.TransactionExtension{Before: func(tx *board.Transaction) error { return p.stageSupersedeRequests(tx, r.TaskID, r.Generation) }}); err != nil {
 			return outcome{err: err}
 		}
+		p.orderPublished(orders)
 		p.starts[r.TaskID] = startCursor{entry: snapshot.Entry, generation: r.Generation}
 		p.log().Info("claim taken over", "task", r.TaskID, "from_generation", previous.Generation, "generation", r.Generation, "client", r.ClientID)
 		_ = p.events.append(api.Event{Kind: api.EventClaimChanged, TaskID: r.TaskID, Generation: r.Generation})

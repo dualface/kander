@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -75,19 +76,51 @@ func runInit(args []string, url string, urlGiven bool, name string, nameGiven bo
 			return fail(err)
 		}
 	}
+	registration, err := registerCheckout(session, dir)
+	if err != nil {
+		return fail(err)
+	}
 	if command.JSON() {
 		rules := writeProjectReferences(dir)
 		rules.report()
 		initPolicyStep(ctx, session, cfg)
-		return command.Exit(command.Result(bindResult{ProjectName: session.Info.Name, ProjectID: session.Info.ID, ServerURL: session.ServerURL, BoardPath: session.Info.BoardPath, RulesFiles: rules.Written}))
+		return command.Exit(command.Result(bindResult{ProjectName: session.Info.Name, ProjectID: session.Info.ID, ServerURL: session.ServerURL, BoardPath: session.Info.BoardPath, RulesFiles: rules.Written, Registration: &registration}))
 	}
 	fmt.Fprintln(stdout, config.Text("remote.project_bound", session.Info.Name, session.Info.ID, session.ServerURL))
 	if session.Info.BoardPath != "" {
 		fmt.Fprintln(stdout, config.Text("remote.project_board_path", session.Info.BoardPath))
 	}
+	registration.report()
 	writeProjectReferences(dir).report()
 	initPolicyStep(ctx, session, cfg)
 	return nil
+}
+
+// registerCheckout records the main worktree of the checkout at dir as the
+// directory of the bound project in host.json, replacing a registration of
+// another directory. A directory outside a Git checkout is not registered.
+func registerCheckout(session *Session, dir string) (registrationResult, error) {
+	root, ok := RegistrationRoot(dir)
+	if !ok {
+		return registrationResult{Skipped: config.Text("host.registration_not_git", dir)}, nil
+	}
+	previous, err := RegisterProject(session.Home, session.ServerURL, session.Info.Name, root, time.Now())
+	if err != nil {
+		return registrationResult{}, err
+	}
+	return registrationResult{Root: root, Replaced: previous}, nil
+}
+
+// report prints the registration of kander init.
+func (r registrationResult) report() {
+	switch {
+	case r.Skipped != "":
+		remark("host_registration_skipped", r.Skipped)
+	case r.Replaced != "":
+		fmt.Fprintln(stdout, config.Text("host.registration_replaced", r.Root, r.Replaced))
+	default:
+		fmt.Fprintln(stdout, config.Text("host.registration_written", r.Root))
+	}
 }
 
 // initPolicyStep offers the policy initialization of kander policy init when

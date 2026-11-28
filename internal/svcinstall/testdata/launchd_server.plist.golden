@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- kander-service: {"schema":1,"kind":"server","executable":"/opt/homebrew/bin/kander","args":["server","start","\u002d\u002dforeground","\u002d\u002ddata","/Users/alice/.local/share/kander\u002dserver","\u002d\u002dlisten","127.0.0.1:7878","\u002d\u002dttl","1m30s","\u002d\u002drenew","30s"],"work_dir":"/Users/alice/.local/share/kander\u002dserver","log":"/Users/alice/.local/share/kander\u002dserver/server.log"} -->
+<!-- Managed by Kander: written by kander service install server; do not edit. -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>io.github.dualface.kander.server</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/opt/homebrew/bin/kander</string>
+		<string>server</string>
+		<string>start</string>
+		<string>--foreground</string>
+		<string>--data</string>
+		<string>/Users/alice/.local/share/kander-server</string>
+		<string>--listen</string>
+		<string>127.0.0.1:7878</string>
+		<string>--ttl</string>
+		<string>1m30s</string>
+		<string>--renew</string>
+		<string>30s</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>KANDER_MANAGED</key>
+		<string>1</string>
+	</dict>
+	<key>WorkingDirectory</key>
+	<string>/Users/alice/.local/share/kander-server</string>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>AbandonProcessGroup</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>/Users/alice/.local/share/kander-server/server.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/alice/.local/share/kander-server/server.log</string>
+</dict>
+</plist>

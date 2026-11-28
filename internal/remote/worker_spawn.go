@@ -9,6 +9,7 @@ import (
 
 	"github.com/dualface/kander/v2/internal/fs"
 	"github.com/dualface/kander/v2/internal/process"
+	"github.com/dualface/kander/v2/internal/svcinstall"
 	"github.com/dualface/kander/v2/internal/version"
 )
 
@@ -66,14 +67,17 @@ func workerCommand(home, executable string) *exec.Cmd {
 }
 
 // StartWorker starts `<executable> worker` detached for home. The worker is
-// independent of this process; a second worker exits on the lock.
-func StartWorker(home, executable string) (*WorkerProcess, error) {
+// independent of this process; a second worker exits on the lock. extraEnv
+// ("NAME=value") is added to its environment: the handover of a managed worker
+// on Windows passes KANDER_MANAGED=1 to its successor this way.
+func StartWorker(home, executable string, extraEnv ...string) (*WorkerProcess, error) {
 	log, err := fs.OpenAppendFile(home, filepath.Join(home, "worker.log"))
 	if err != nil {
 		return nil, err
 	}
 	defer log.Close()
 	cmd := workerCommand(home, executable)
+	cmd.Env = append(cmd.Env, extraEnv...)
 	cmd.Stdout, cmd.Stderr = log.File, log.File
 	process.Detach(cmd)
 	if err := cmd.Start(); err != nil {
@@ -87,9 +91,27 @@ func StartWorker(home, executable string) (*WorkerProcess, error) {
 	return p, nil
 }
 
+// startWorkerFor starts the worker of home, which no process runs: through the
+// worker service when one is installed for home, otherwise detached with start.
+func startWorkerFor(home string, start func(home, executable string) error) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if _, ok, err := svcinstall.ManagedForHome(ctx, svcinstall.KindWorker, home); err != nil {
+		return err
+	} else if ok {
+		return svcinstall.Start(ctx, svcinstall.KindWorker)
+	}
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	return start(home, self)
+}
+
 // EnsureWorker starts the background worker of home unless one runs. The
 // worker is a detached `kander worker` process, independent of the TUI and
-// of the command that started it; a second worker exits on the lock.
+// of the command that started it, or the worker service when one is
+// installed for home; a second worker exits on the lock.
 func EnsureWorker(home string) error {
 	_, err := EnsureWorkerChecked(home)
 	return err
@@ -113,11 +135,7 @@ func ensureWorker(home string, start func(home, executable string) error) (strin
 		return "", err
 	}
 	if !held {
-		self, err := os.Executable()
-		if err != nil {
-			return "", err
-		}
-		return "", start(home, self)
+		return "", startWorkerFor(home, start)
 	}
 	status := heldWorkerStatus(home)
 	switch status.Finding(version.String()) {

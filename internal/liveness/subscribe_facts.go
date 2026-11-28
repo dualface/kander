@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"slices"
 	"sort"
 	"time"
 
@@ -35,8 +36,11 @@ type subscriptionFacts struct {
 }
 
 type subscription struct {
-	service              *remote.Session
-	cursor               string
+	service *remote.Session
+	cursor  string
+	// pageCursor is the cursor of the last event page; the next poll starts
+	// there, so no event between a page and the next snapshot is skipped.
+	pageCursor           string
 	opts                 subscribeOptions
 	id                   string
 	seq                  uint64
@@ -264,6 +268,24 @@ func (s *subscription) emit(w io.Writer, event string, facts subscriptionFacts, 
 	payload.Removed = removed
 	if event == "heartbeat" {
 		payload.Liveness = s.probes.liveness(facts, s.heartbeat)
+	}
+	if err := emitEvent(w, payload); err != nil {
+		return err
+	}
+	s.last = facts
+	return nil
+}
+
+// emitStartOrders writes a start-order-change event: the start orders of
+// monitored cards that changed since the previous refresh, with the cards in
+// updated.
+func (s *subscription) emitStartOrders(w io.Writer, facts subscriptionFacts, orders []startOrderJSON) error {
+	payload := s.payload("start-order-change", facts)
+	payload.StartOrders = orders
+	for _, o := range orders {
+		if !slices.Contains(payload.Updated, o.TaskID) {
+			payload.Updated = append(payload.Updated, o.TaskID)
+		}
 	}
 	if err := emitEvent(w, payload); err != nil {
 		return err

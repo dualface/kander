@@ -177,6 +177,10 @@ func indexWriteRoutes() map[string]string {
 		"POST " + project + "/snapshot":                           "read",
 		"POST " + project + "/check":                              "read",
 		"PUT " + project + "/policy":                              "control",
+		"POST " + project + "/start-orders":                       "control",
+		"POST " + project + "/start-orders/{order}/accept":        "control",
+		"POST " + project + "/start-orders/{order}/fail":          "control",
+		"POST " + project + "/start-orders/{order}/cancel":        "control",
 	}
 }
 

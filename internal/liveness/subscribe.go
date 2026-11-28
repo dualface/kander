@@ -9,6 +9,7 @@ import (
 	"maps"
 	"math"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -88,6 +89,15 @@ type groupEvent struct {
 	// PolicyRevision is the project policy revision of a policy-change event;
 	// every other event omits it.
 	PolicyRevision *uint64 `json:"policy_revision,omitempty"`
+	// StartOrders lists the start order changes of a start-order-change event.
+	StartOrders []startOrderJSON `json:"start_orders,omitempty"`
+}
+
+// startOrderJSON is one change of a start order of a monitored card.
+type startOrderJSON struct {
+	OrderID string `json:"order_id"`
+	TaskID  string `json:"task_id"`
+	State   string `json:"state"`
 }
 
 var nowFn = time.Now
@@ -250,6 +260,7 @@ func subscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 		probeCompleted := false
 		reset := false
 		readPolicy, announced := false, uint64(0)
+		var orders []startOrderJSON
 		timerWait := wait
 		if service != nil {
 			timerWait = 0
@@ -271,13 +282,27 @@ func subscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 			probeCompleted = true
 		case <-timer.C:
 			if service != nil {
-				page, err := service.Project.Events(output.ctx, session.cursor, min(wait, time.Minute))
+				// The polls chain on the cursor of the previous page, not on the
+				// snapshot's: an event between a page and the snapshot read after it
+				// is then still read, which the start orders need, since no snapshot
+				// holds them.
+				cursor := session.pageCursor
+				if cursor == "" {
+					cursor = session.cursor
+				}
+				page, err := service.Project.Events(output.ctx, cursor, min(wait, time.Minute))
 				if err != nil {
 					return session.unavailable(w, snapshot, err)
 				}
+				session.pageCursor = page.Cursor
 				if page.Reset {
 					session.reconciliation = true
 					reset = true
+				}
+				for _, e := range page.Events {
+					if e.Kind == api.EventStartOrderChanged {
+						orders = append(orders, startOrderJSON{OrderID: e.OrderID, TaskID: e.TaskID, State: e.State})
+					}
 				}
 				// A reset may hide a policy change, so it reads the policy too.
 				announced, readPolicy = session.policyAnnounced(page)
@@ -354,6 +379,12 @@ func subscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 		}
 		if !maps.Equal(snapshot.blocked, current.blocked) {
 			if err := session.emit(w, "member-blocked", current, nil, nil, nil); err != nil {
+				return err
+			}
+			woke = true
+		}
+		if monitoredOrders := ordersOf(orders, current.monitored); len(monitoredOrders) > 0 {
+			if err := session.emitStartOrders(w, current, monitoredOrders); err != nil {
 				return err
 			}
 			woke = true
@@ -447,4 +478,15 @@ func runSubscribe(opts subscribeOptions) int {
 		return fail(err)
 	}
 	return 0
+}
+
+// ordersOf keeps the start order changes of the monitored cards.
+func ordersOf(orders []startOrderJSON, monitored []string) []startOrderJSON {
+	var out []startOrderJSON
+	for _, o := range orders {
+		if slices.Contains(monitored, o.TaskID) {
+			out = append(out, o)
+		}
+	}
+	return out
 }

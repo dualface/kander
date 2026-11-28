@@ -82,6 +82,11 @@ type ProjectService interface {
 	ReviewBatchView(context.Context, string) (json.RawMessage, error)
 	ReviewClose(context.Context, string, any, *client.Claim) (json.RawMessage, error)
 	ReviewProgress(context.Context, string) (json.RawMessage, error)
+	CreateStartOrder(context.Context, string, api.NewStartOrder) (api.StartOrder, error)
+	StartOrder(context.Context, string) (api.StartOrder, error)
+	AcceptStartOrder(context.Context, string, string) (api.StartOrder, error)
+	FailStartOrder(context.Context, string, string, api.StartOrderFailure) (api.StartOrder, error)
+	CancelStartOrder(context.Context, string, string) (api.StartOrder, error)
 }
 
 var _ ProjectService = (*client.Project)(nil)

@@ -18,7 +18,6 @@ import (
 	"github.com/dualface/kander/v2/internal/launch"
 	"github.com/dualface/kander/v2/internal/menu"
 	"github.com/dualface/kander/v2/internal/remote"
-	"github.com/dualface/kander/v2/internal/version"
 )
 
 func init() {
@@ -67,6 +66,9 @@ var checkStartupCopy = install.CheckStartupCopy
 var runStartupDoctor = firstLaunchDoctor
 var confirmDoctorContinue = waitDoctorAck
 
+// refreshForVersion runs the version refresh before the board opens; tests replace it.
+var refreshForVersion = menu.RefreshForVersion
+
 var (
 	doctorAckIn  io.Reader = os.Stdin
 	doctorAckOut io.Writer = os.Stderr
@@ -91,20 +93,19 @@ func Run() int {
 			return code
 		}
 	}
-	installPaths, installPathsErr := config.CurrentInstallPaths()
-	versionStale := installPathsErr == nil && install.StartupVersion(installPaths) != version.String()
-	if !configExists || versionStale {
+	// The version refresh the subcommands run happens here, after the copy question, so a copy
+	// the user accepted refreshes from the global entry it relaunched.
+	refresh := refreshForVersion()
+	for _, notice := range refresh.Notices() {
+		fmt.Fprintln(os.Stderr, notice.Text)
+	}
+	if !configExists || refresh.Ran() {
 		// The first launch probes the environment with doctor and produces a usable
 		// config; a failed health check does not stop the user from fixing the
-		// options. A binary version this scope has not seen reruns doctor once and
-		// holds the report until the user acknowledges it, then stamps the version.
+		// options. After a version refresh doctor reports the result, and the report
+		// stays until the user acknowledges it.
 		runStartupDoctor(postInstall)
 		confirmDoctorContinue()
-		if installPathsErr == nil {
-			if err := install.RecordStartupVersion(installPaths); err != nil {
-				fmt.Fprintf(os.Stderr, "kander: %s\n", err)
-			}
-		}
 	}
 	config.BindEffectiveLanguage()
 	ctx := tuiPageContext()

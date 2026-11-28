@@ -178,7 +178,21 @@ func (p *project) execution(scope receiptScope, id string, u api.ExecutionUpdate
 				return err
 			}
 		}
-		extension := p.taskTransaction(scope, "execution:"+id, u, id, validate, &nextClaim, false)
+		// A confirmation starts the start order of the generation, a rollback
+		// fails it, and a release supersedes it.
+		var orders orderChanges
+		switch u.Action {
+		case api.ExecutionConfirm:
+			orders, err = p.confirmOrders(claim)
+		case api.ExecutionRollback:
+			orders, err = p.rollbackOrders(claim)
+		case api.ExecutionRelease:
+			orders, err = p.supersedeOrders(claim, "a release")
+		}
+		if err != nil {
+			return outcome{err: err}
+		}
+		extension := p.taskTransaction(scope, "execution:"+id, u, id, validate, &nextClaim, false, orderDecorator(orders))
 		switch u.Action {
 		case api.ExecutionRelease:
 			if u.ExpectedRevision == 0 || strings.TrimSpace(u.Decision) == "" || u.Presence == nil || u.Presence.Status != "stopped" {
@@ -245,6 +259,7 @@ func (p *project) execution(scope receiptScope, id string, u api.ExecutionUpdate
 		if err != nil {
 			return outcome{err: err}
 		}
+		p.orderPublished(orders)
 		p.changed(id, claim.Generation)
 		t, err := p.show(id)
 		if err != nil {

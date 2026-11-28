@@ -1,0 +1,8 @@
+{
+  "versionrefresh.done": "kander {{.V0}}: バージョン更新が {{.V1}} で完了しました（ルール、kander-leader skill、エージェント拡張、doctor のグローバル修復、ホストスキャン、グローバル注入のクリーンアップ）。",
+  "versionrefresh.failed": "kander {{.V0}}: バージョン更新は {{.V1}} 後に完了しませんでした。次の kander コマンドで再試行します: {{.V2}}",
+  "versionrefresh.pending": "保留中、kander doctor を実行してください: {{.V0}}",
+  "versionrefresh.not_global_entry": "kander {{.V0}}: {{.V1}} はグローバルエントリではなく、このホストが記録しているバージョンは {{.V2}} です。バージョン更新は実行していません。",
+  "versionrefresh.none_recorded": "なし",
+  "versionrefresh.scan_needs_doctor": "host.json に PATH がまだ記録されていないため、ホストスキャンをスキップしました"
+}

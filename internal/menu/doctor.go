@@ -105,6 +105,12 @@ func printDoctorWithBinaries(tools TerminalTools, repair bool, interactive bool,
 	if !reportBackgroundWorker() {
 		healthy = false
 	}
+	if !reportServices() {
+		healthy = false
+	}
+	if !reportHost() {
+		healthy = false
+	}
 	agentConfig, agentConfigErr := config.Load(false)
 	if agentConfigErr != nil && !repair {
 		warning(agentConfigErr.Error())

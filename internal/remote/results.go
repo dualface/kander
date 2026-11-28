@@ -64,6 +64,17 @@ type bindResult struct {
 	// RulesFiles lists the project rules files kander init wrote the project reference into;
 	// they take effect for task worktrees and other hosts once committed and pushed.
 	RulesFiles []string `json:"rules_files,omitempty"`
+	// Registration is the project registration of this host in host.json.
+	Registration *registrationResult `json:"host_registration,omitempty"`
+}
+
+// registrationResult reports the project registration kander init wrote:
+// the registered main worktree and the directory it replaced, or why it
+// registered nothing.
+type registrationResult struct {
+	Root     string `json:"root,omitempty"`
+	Replaced string `json:"replaced,omitempty"`
+	Skipped  string `json:"skipped,omitempty"`
 }
 
 // guardResult is the result object of kander guard-write.

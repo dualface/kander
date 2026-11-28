@@ -1,0 +1,19 @@
+# kander-service: {"schema":1,"kind":"server","executable":"/home/alice/.local/bin/kander","args":["server","start","\u002d\u002dforeground","\u002d\u002ddata","/home/alice/.local/share/kander\u002dserver","\u002d\u002dlisten","127.0.0.1:7878","\u002d\u002dttl","1m30s","\u002d\u002drenew","30s"],"work_dir":"/home/alice/.local/share/kander\u002dserver","log":"/home/alice/.local/share/kander\u002dserver/server.log"}
+# Managed by Kander: written by "kander service install server". Kander rewrites
+# or removes this file, so do not edit it; "kander service uninstall server" removes it.
+[Unit]
+Description=Kander server
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart="/home/alice/.local/bin/kander" "server" "start" "--foreground" "--data" "/home/alice/.local/share/kander-server" "--listen" "127.0.0.1:7878" "--ttl" "1m30s" "--renew" "30s"
+WorkingDirectory=/home/alice/.local/share/kander-server
+Environment="KANDER_MANAGED=1"
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/alice/.local/share/kander-server/server.log
+StandardError=append:/home/alice/.local/share/kander-server/server.log
+
+[Install]
+WantedBy=default.target

@@ -85,6 +85,8 @@ Backends declare supported features via `terminal.Capabilities`:
 
 ---
 
+A launcher is usable from the background when a process without a terminal can create its containers: its definition declares `background` ([Terminal definitions](terminal-definitions.md)), it is a container launcher, and its platform, binary, and required variables hold (`terminal.BackgroundLaunchers`). Only such launchers are scanned for starts other hosts direct at a host ([Hosts and start orders](distributed-server.md#hosts-and-start-orders)); the built-in one is `tmux-session`.
+
 ## 5. Operations Reference
 
 Every operation receives a `terminal.Conn` containing the resolved binary path and execution runner:

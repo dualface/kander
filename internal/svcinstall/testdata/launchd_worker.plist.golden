@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- kander-service: {"schema":1,"kind":"worker","executable":"/opt/homebrew/bin/kander","args":["worker"],"client_home":"/Users/alice/kander\u002dclient","work_dir":"/Users/alice/kander\u002dclient","log":"/Users/alice/kander\u002dclient/worker.log"} -->
+<!-- Managed by Kander: written by kander service install worker; do not edit. -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>io.github.dualface.kander.worker</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/opt/homebrew/bin/kander</string>
+		<string>worker</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>KANDER_MANAGED</key>
+		<string>1</string>
+		<key>KANDER_CLIENT_HOME</key>
+		<string>/Users/alice/kander-client</string>
+	</dict>
+	<key>WorkingDirectory</key>
+	<string>/Users/alice/kander-client</string>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>AbandonProcessGroup</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>/Users/alice/kander-client/worker.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/alice/kander-client/worker.log</string>
+</dict>
+</plist>

@@ -351,4 +351,5 @@ func (p *project) importPublished() {
 		p.log().Error("event stream reset failed after a board import", "error", err)
 	}
 	clear(p.starts)
+	p.openOrders = nil
 }

@@ -257,6 +257,8 @@ func (s *Server) registerRoutes(mux *routeTable) {
 	s.issueRoutes(mux)
 	s.issueResultRoutes(mux)
 	s.publicationRoutes(mux)
+	s.hostRoutes(mux)
+	s.startOrderRoutes(mux)
 }
 
 func result(status int, body any, err error) outcome {
@@ -365,6 +367,7 @@ var pollingRoutes = map[string]bool{
 	"POST /api/v1/projects/{project}/groups/{group}/renew":             true,
 	"POST /api/v1/projects/{project}/groups/{group}/observation":       true,
 	"POST /api/v1/projects/{project}/integrations/{integration}/renew": true,
+	"POST " + api.HostHeartbeatRoute:                                   true,
 }
 
 // slowRequest is the duration from which a polling request is logged like any
@@ -378,7 +381,7 @@ func requestLevel(r *http.Request, status int, elapsed time.Duration) slog.Level
 	if !pollingRoutes[r.Pattern] || status >= http.StatusBadRequest {
 		return slog.LevelInfo
 	}
-	if r.Pattern == projectEvents {
+	if r.Pattern == projectEvents || r.Pattern == "POST "+api.HostHeartbeatRoute {
 		// The route refused a malformed wait, so the status is already 400.
 		wait, _ := eventWait(r)
 		elapsed -= wait

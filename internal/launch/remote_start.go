@@ -311,7 +311,7 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 	}
 	execution := journal.Value.ExecutionID
 	result.executionID = execution
-	inv = withExecutionIdentity(plan, inv, execution)
+	inv = withInvocationEnvironment(plan, inv, agentStartEnvironment(execution, input.StartOrder, agentName))
 
 	ctx, cancel = call()
 	if restart.Continuation != nil {
@@ -337,7 +337,7 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 		}
 		restart.Request.ObservationTicket, restart.Request.PreviousPresence = state.ObservationTicket, &presence
 	}
-	request := api.ClaimRequest{ClientID: session.Client.ClientID(), ExecutionID: execution, Owner: agentName, ExpectedRevision: task.Revision, Start: &api.StartInput{Session: initialSession, Window: window, ExecResolved: choice.record}, PolicyRevision: session.PolicyRevision(), BranchMode: session.BranchMode()}
+	request := api.ClaimRequest{ClientID: session.Client.ClientID(), ExecutionID: execution, Owner: agentName, ExpectedRevision: task.Revision, Start: &api.StartInput{Session: initialSession, Window: window, ExecResolved: choice.record}, PolicyRevision: session.PolicyRevision(), BranchMode: session.BranchMode(), StartOrderID: input.StartOrder}
 	var grant api.ClaimGrant
 	if input.Takeover {
 		request.Decision, request.Dispatch, request.ExpectedGeneration = restart.Request.Decision, restart.Request.Dispatch, restart.Request.ExpectedGeneration
@@ -413,7 +413,7 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 		if workspaceErr == nil {
 			plan.warning = func(message string) { result.Warnings = append(result.Warnings, message) }
 			inv, workspaceErr = launchInvocation(plan, *program, attachPrompt(&plan, args, prompt))
-			inv = withExecutionIdentity(plan, inv, execution)
+			inv = withInvocationEnvironment(plan, inv, agentStartEnvironment(execution, input.StartOrder, agentName))
 		}
 		if workspaceErr == nil {
 			workspaceErr = executionUpdate(api.ExecutionUpdate{Action: api.ExecutionWorkspace, Branch: workspace.Branch, ExpectedRevision: grant.Task.Revision})
@@ -617,6 +617,29 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 // assigns the variable first.
 func withExecutionIdentity(plan LaunchPlan, inv process.ProcessInvocation, execution string) process.ProcessInvocation {
 	return withInvocationEnvironment(plan, inv, map[string]string{remote.EnvExecutionID: execution, remote.EnvCoordinatorExecutionID: ""})
+}
+
+// agentStartEnvironment is the environment a start passes to its agent: the
+// execution identity and, for the start of a start order, the PATH and the set
+// config_home.env variables of the agent that the worker gave this start from
+// its host scan. A terminal container that already runs starts a new pane
+// with its own environment, so the pane command has to carry them.
+func agentStartEnvironment(execution, order, agent string) map[string]string {
+	values := map[string]string{remote.EnvExecutionID: execution, remote.EnvCoordinatorExecutionID: ""}
+	if order == "" {
+		return values
+	}
+	if path := os.Getenv("PATH"); path != "" {
+		values["PATH"] = path
+	}
+	if spec, ok := config.RulesSpec(agent); ok {
+		for _, variable := range spec.ConfigEnv {
+			if value := os.Getenv(variable.Name); value != "" {
+				values[variable.Name] = value
+			}
+		}
+	}
+	return values
 }
 func withInvocationEnvironment(plan LaunchPlan, inv process.ProcessInvocation, values map[string]string) process.ProcessInvocation {
 	inv.Env = maps.Clone(inv.Env)

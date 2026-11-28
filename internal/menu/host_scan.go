@@ -1,0 +1,314 @@
+package menu
+
+import (
+	"context"
+	"maps"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/client"
+	"github.com/dualface/kander/v2/internal/config"
+	"github.com/dualface/kander/v2/internal/process"
+	"github.com/dualface/kander/v2/internal/remote"
+	"github.com/dualface/kander/v2/internal/terminal"
+)
+
+// projectScanProblem is a registered project the scan could not read the
+// configuration of; its scan lists nothing.
+type projectScanProblem struct {
+	Project, Root, Error string
+}
+
+// scanEnvironment is where a scan resolves executables and reads variables: the PATH it
+// searches and records, the config_home.env values it records for an agent, and the variables a
+// launcher requires.
+type scanEnvironment struct {
+	path        string
+	resolve     func(name string) *process.AgentProgram
+	lookPath    func(name string) (string, error)
+	agentEnv    func(name string) string
+	launcherEnv func(name string) string
+	// recordedEnv is the config_home.env snapshot a scan writes back unchanged; nil means the
+	// scan records the values agentEnv has for every agent definition.
+	recordedEnv map[string]string
+}
+
+// processScanEnvironment is the environment of this process: what kander doctor scans with.
+func processScanEnvironment() scanEnvironment {
+	return scanEnvironment{
+		path:        os.Getenv("PATH"),
+		resolve:     process.ResolveAgentProgram,
+		lookPath:    exec.LookPath,
+		agentEnv:    os.Getenv,
+		launcherEnv: os.Getenv,
+	}
+}
+
+// recordedScanEnvironment is the environment the last scan of record recorded: its PATH and
+// its config_home.env snapshot. The version refresh scans with it, because the process that
+// triggers the refresh may be a sandboxed agent or a start the worker spawned, whose PATH and
+// variables are narrower than the ones kander doctor ran with, and writes both back unchanged.
+// A record written before the snapshot existed falls back to the values of its agent entries. A
+// launcher variable is read from this process: no background launcher requires one. ok is false
+// without a recorded PATH.
+func recordedScanEnvironment(record remote.HostRecord) (scanEnvironment, bool) {
+	if record.Scan == nil || record.Scan.Path == "" {
+		return scanEnvironment{}, false
+	}
+	path := record.Scan.Path
+	values := map[string]string{}
+	for _, project := range record.Scan.Projects {
+		for _, agent := range project.Agents {
+			maps.Copy(values, agent.Env)
+		}
+	}
+	maps.Copy(values, record.Scan.Env)
+	return scanEnvironment{
+		path:        path,
+		resolve:     func(name string) *process.AgentProgram { return process.ResolveAgentProgramIn(name, path) },
+		lookPath:    func(name string) (string, error) { return process.LookPathIn(path, name) },
+		agentEnv:    func(name string) string { return values[name] },
+		launcherEnv: os.Getenv,
+		recordedEnv: values,
+	}, true
+}
+
+// scanHost scans this host for every project registered in host.json of home
+// and stores the result there: per project, the agents of its effective
+// configuration whose executable resolves (with the values of their
+// config_home.env variables), the launchers a process without a terminal can
+// start, the PATH the scan searched, the config_home.env snapshot, and the time.
+func scanHost(home string, now time.Time, env scanEnvironment) (remote.HostScan, []projectScanProblem, error) {
+	record, err := remote.ReadHostRecord(home)
+	if err != nil {
+		return remote.HostScan{}, nil, err
+	}
+	scan := remote.HostScan{ScannedAt: now.UTC(), Projects: []remote.ProjectScan{}}
+	if len(record.Projects) == 0 {
+		// A host without a registered project has nothing to scan.
+		return scan, nil, nil
+	}
+	scan = remote.HostScan{ScannedAt: now.UTC(), Path: env.path, Env: maps.Clone(env.recordedEnv), Projects: []remote.ProjectScan{}}
+	if env.recordedEnv == nil {
+		scan.Env = map[string]string{}
+	}
+	launchers := terminal.BackgroundLaunchers(runtime.GOOS == "windows", env.launcherEnv, env.lookPath)
+	if launchers == nil {
+		launchers = []string{}
+	}
+	var problems []projectScanProblem
+	for _, reg := range record.Projects {
+		entry := remote.ProjectScan{ServerURL: reg.ServerURL, Project: reg.Project, Agents: []remote.AgentScan{}, Launchers: launchers}
+		cfg, err := config.LoadFor(reg.Root)
+		if err != nil {
+			problems = append(problems, projectScanProblem{Project: reg.Project, Root: reg.Root, Error: err.Error()})
+			entry.Launchers = []string{}
+			scan.Projects = append(scan.Projects, entry)
+			continue
+		}
+		entry.Agents = scanAgents(cfg, env)
+		scan.Projects = append(scan.Projects, entry)
+		if env.recordedEnv == nil {
+			recordConfigEnv(cfg, env.agentEnv, scan.Env)
+		}
+	}
+	if err := remote.StoreHostScan(home, scan); err != nil {
+		return remote.HostScan{}, nil, err
+	}
+	return scan, problems, nil
+}
+
+// recordConfigEnv adds to into the config_home.env values getenv has for every agent of cfg,
+// whether its executable resolves or not.
+func recordConfigEnv(cfg *config.Config, getenv func(string) string, into map[string]string) {
+	for _, name := range config.AgentNames(cfg) {
+		spec, ok := config.RulesSpec(name)
+		if !ok {
+			continue
+		}
+		for _, variable := range spec.ConfigEnv {
+			if value := getenv(variable.Name); value != "" {
+				into[variable.Name] = value
+			}
+		}
+	}
+}
+
+// scanAgents resolves the executable of every agent of cfg. An agent records
+// only the config_home.env variables of its definition that are set.
+func scanAgents(cfg *config.Config, env scanEnvironment) []remote.AgentScan {
+	agents := []remote.AgentScan{}
+	for _, name := range config.AgentNames(cfg) {
+		program := env.resolve(config.AgentPath(cfg, name))
+		if program == nil {
+			continue
+		}
+		path, err := filepath.Abs(program.Path)
+		if err != nil {
+			continue
+		}
+		agent := remote.AgentScan{Name: name, Path: path}
+		if spec, ok := config.RulesSpec(name); ok {
+			for _, variable := range spec.ConfigEnv {
+				if value := env.agentEnv(variable.Name); value != "" {
+					if agent.Env == nil {
+						agent.Env = map[string]string{}
+					}
+					agent.Env[variable.Name] = value
+				}
+			}
+		}
+		agents = append(agents, agent)
+	}
+	return agents
+}
+
+// refreshHostScan scans this host again after a configuration change, when it
+// has a project registered. A failure only skips the refresh: the next
+// kander doctor scans again.
+func refreshHostScan() {
+	home, err := remote.Home()
+	if err != nil {
+		return
+	}
+	record, err := remote.ReadHostRecord(home)
+	if err != nil || len(record.Projects) == 0 {
+		return
+	}
+	_, _, _ = scanHost(home, time.Now(), processScanEnvironment())
+}
+
+// reportHost registers the bound checkout of the current directory when it
+// has no registration yet, scans this host, and reports the host conflicts the
+// servers of the registered projects see. It is unhealthy when the scan or a
+// registration failed, or a server reports a conflict of this host.
+func reportHost() bool {
+	home, err := remote.Home()
+	if err != nil {
+		warning(err.Error())
+		return false
+	}
+	healthy := true
+	hint(config.Text("host.doctor_heading"))
+	if cfg, err := config.Load(false); err == nil && cfg.Project.Name != "" {
+		healthy = registerBoundCheckout(home, cfg) && healthy
+	}
+	scan, problems, err := scanHost(home, time.Now(), processScanEnvironment())
+	if err != nil {
+		warning(config.Text("host.scan_failed", err.Error()))
+		return false
+	}
+	if len(scan.Projects) == 0 {
+		hint(config.Text("host.scan_no_projects"))
+		return healthy
+	}
+	for _, problem := range problems {
+		healthy = false
+		warning(config.Text("host.scan_project_failed", problem.Project, problem.Root, problem.Error))
+	}
+	for _, p := range scan.Projects {
+		names := make([]string, 0, len(p.Agents))
+		for _, agent := range p.Agents {
+			names = append(names, agent.Name)
+		}
+		success(config.Text("host.scan_project", p.Project, p.ServerURL, listText(names), listText(p.Launchers)))
+	}
+	record, err := remote.ReadHostRecord(home)
+	if err != nil {
+		warning(err.Error())
+		return false
+	}
+	return reportHostConflicts(home, record) && healthy
+}
+
+func listText(names []string) string {
+	if len(names) == 0 {
+		return config.Text("host.none")
+	}
+	return strings.Join(names, ", ")
+}
+
+// registerBoundCheckout adds the registration of the bound checkout of the
+// current directory. An existing registration is never replaced: when it names
+// another directory, both are reported.
+func registerBoundCheckout(home string, cfg *config.Config) bool {
+	cwd, err := os.Getwd()
+	if err != nil {
+		warning(err.Error())
+		return false
+	}
+	root, ok := remote.RegistrationRoot(cwd)
+	if !ok {
+		return true
+	}
+	registered, added, err := remote.RegisterProjectIfMissing(home, config.ServerURL(cfg), cfg.Project.Name, root, time.Now())
+	switch {
+	case err != nil:
+		warning(config.Text("host.registration_failed", err.Error()))
+		return false
+	case added:
+		success(config.Text("host.registration_added", cfg.Project.Name, root))
+	case registered != root:
+		warning(config.Text("host.registration_elsewhere", cfg.Project.Name, registered, root))
+	default:
+		success(config.Text("host.registration_present", cfg.Project.Name, root))
+	}
+	return true
+}
+
+// reportHostConflicts asks each server of the registered projects for its
+// hosts: another client ID with the name of this host, or two workers of this
+// client ID, is a conflict. A server that does not answer is reported and does
+// not count as a conflict.
+func reportHostConflicts(home string, record remote.HostRecord) bool {
+	id, err := remote.ClientID(home)
+	if err != nil {
+		warning(err.Error())
+		return false
+	}
+	name, err := remote.HostName(home)
+	if err != nil {
+		warning(err.Error())
+		return false
+	}
+	healthy := true
+	for _, url := range record.ServerURLs() {
+		c, err := client.New(url, id)
+		if err != nil {
+			warning(err.Error())
+			healthy = false
+			continue
+		}
+		c.Retries = 0
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		list, err := c.Hosts(ctx)
+		cancel()
+		if err != nil {
+			hint(config.Text("host.hosts_unavailable", url, err.Error()))
+			continue
+		}
+		self := slices.IndexFunc(list.Hosts, func(h api.Host) bool { return h.ClientID == id })
+		for _, h := range list.Hosts {
+			if h.Name == name && h.ClientID != id {
+				healthy = false
+				warning(config.Text("host.name_conflict", url, name, h.ClientID))
+			}
+		}
+		switch {
+		case self < 0:
+			hint(config.Text("host.not_reported", url, name))
+		case list.Hosts[self].Conflict == api.ConflictClientID:
+			healthy = false
+			warning(config.Text("host.client_id_conflict", url, id))
+		default:
+			success(config.Text("host.reported", url, name))
+		}
+	}
+	return healthy
+}

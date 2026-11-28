@@ -24,8 +24,8 @@ import (
 
 const sampleTask = "20261118-sample-task"
 
-// groups are the commands that only group subcommands.
-var groups = map[string]bool{"coordinator": true, "decision": true, "dispatch": true, "issue": true, "policy": true, "server": true, "terminal": true}
+// groups are the paths of the commands that only group subcommands.
+var groups = map[string]bool{"coordinator": true, "decision": true, "dispatch": true, "host": true, "issue": true, "order": true, "policy": true, "server": true, "service": true, "service install": true, "service uninstall": true, "terminal": true}
 
 // leafCommand is a command that runs something, with its command path.
 type leafCommand struct {
@@ -45,8 +45,9 @@ func commandLeaves(root *cobra.Command) []leafCommand {
 			}
 			// A command that takes its command line verbatim (the Windows job bootstrap of review)
 			// has no flags to parse.
-			if child.Runnable() && !groups[child.Name()] && !child.DisableFlagParsing {
-				leaves = append(leaves, leafCommand{child, strings.TrimPrefix(child.CommandPath(), "kander ")})
+			path := strings.TrimPrefix(child.CommandPath(), "kander ")
+			if child.Runnable() && !groups[path] && !child.DisableFlagParsing {
+				leaves = append(leaves, leafCommand{child, path})
 			}
 			walk(child)
 		}
@@ -99,6 +100,9 @@ var samplePositionals = map[string][]string{
 	"notify":                       {sampleTask},
 	"orchestrate":                  {sampleTask},
 	"pick":                         {sampleTask},
+	"host list":                    {},
+	"order cancel":                 {"so-0123456789abcdef"},
+	"order show":                   {"so-0123456789abcdef"},
 	"policy init":                  {},
 	"policy set":                   {"git.branch_mode", "main-only"},
 	"policy show":                  {},
@@ -129,8 +133,13 @@ var samplePositionals = map[string][]string{
 	"server start":                 {},
 	"server status":                {},
 	"server stop":                  {},
+	"service install server":       {},
+	"service install worker":       {},
+	"service status":               {},
+	"service uninstall server":     {},
+	"service uninstall worker":     {},
 	"show":                         {sampleTask},
-	"start":                        {},
+	"start":                        {sampleTask},
 	"subscribe":                    {"20261118-sample-group", sampleTask},
 	"terminal list":                {},
 	"terminal test":                {"herdr"},
@@ -147,7 +156,7 @@ var sampleValues = map[string]string{
 	"card": sampleTask, "commit": "HEAD", "contract-decision-file": "decision.md", "cursor": "opaque", "data": "/tmp/data", "decision": "ref-1",
 	"delivery-commit": "abc123", "description-file": "description.md", "disposition": "reviews/a.json", "dispatch-id": "dispatch-1", "document": "plan.md",
 	"duplicate-of": sampleTask, "evidence-file": "evidence.json", "execution-epoch": "2", "expect-revision": "3",
-	"file": "input.md", "from": "/tmp/board", "group": "20261125-example-group", "head": "HEAD", "heartbeat": "5", "kind": "fix", "label": "bug",
+	"file": "input.md", "from": "/tmp/board", "group": "20261125-example-group", "head": "HEAD", "heartbeat": "5", "host": "build-b", "kind": "fix", "label": "bug",
 	"language": "en", "launcher": "herdr", "limit": "5", "listen": "127.0.0.1:7878", "log-keep": "64MiB", "message": "hello",
 	"message-file": "message.md", "older-than": "7d", "operation-id": "operation-1", "owner": "codex", "pane": "pane-1", "previous-run-id": "run-0",
 	"project": "demo", "reason": "because", "refresh": "2", "git-remote": "https://example.com/r.git", "renew": "10s",
@@ -203,6 +212,8 @@ var companionFlags = map[string][]string{
 	"file":            {"--action", "apply"},
 	// A requirement decision justifies a requirement of a new batch.
 	"requirement-decision": {"--requirements-file", "requirements.json"},
+	// kander start waits with --timeout only for a start on another host.
+	"timeout": {"--host", "build-b"},
 }
 
 func sampleArguments(t *testing.T, leaf leafCommand) []string {

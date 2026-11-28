@@ -48,6 +48,10 @@ func New(serverURL, clientID string) (*Client, error) {
 // ClientID returns the identity this client sends.
 func (c *Client) ClientID() string { return c.clientID }
 
+// ServerURL returns the server URL the client was created with, without a
+// trailing slash.
+func (c *Client) ServerURL() string { return c.base.String() }
+
 // Claim is the context a holder presents on every write of a claimed task.
 type Claim struct {
 	ReviewWriter       string

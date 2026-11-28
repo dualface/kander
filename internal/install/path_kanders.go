@@ -29,9 +29,19 @@ var pathKanderVersion = probeKanderVersion
 // deduplicated by file identity, in PATH precedence order. Version probing failures
 // leave Version empty instead of dropping the entry.
 func PathKanderBinaries() []PathKanderBinary {
+	return pathKanderBinaries(os.Getenv("PATH"), true)
+}
+
+// PathKanderExecutables is PathKanderBinaries for pathList without the version probe: no
+// candidate is executed, and Version stays empty.
+func PathKanderExecutables(pathList string) []PathKanderBinary {
+	return pathKanderBinaries(pathList, false)
+}
+
+func pathKanderBinaries(pathList string, probe bool) []PathKanderBinary {
 	var binaries []PathKanderBinary
 	seen := make([]os.FileInfo, 0, 8)
-	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
+	for _, dir := range filepath.SplitList(pathList) {
 		if dir == "" {
 			if runtime.GOOS == "windows" {
 				continue
@@ -65,12 +75,11 @@ func PathKanderBinaries() []PathKanderBinary {
 			if resErr != nil {
 				resolved = candidate
 			}
-			binaries = append(binaries, PathKanderBinary{
-				Path:     candidate,
-				Resolved: resolved,
-				Version:  pathKanderVersion(candidate),
-				Brew:     isBrewManaged(resolved),
-			})
+			binary := PathKanderBinary{Path: candidate, Resolved: resolved, Brew: isBrewManaged(resolved)}
+			if probe {
+				binary.Version = pathKanderVersion(candidate)
+			}
+			binaries = append(binaries, binary)
 		}
 	}
 	return binaries

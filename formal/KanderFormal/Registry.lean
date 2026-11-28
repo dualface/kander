@@ -21,6 +21,7 @@ import KanderFormal.Proofs.WrapUpWitness
 import KanderFormal.Proofs.IssueResult
 import KanderFormal.Proofs.IssueResultDecision
 import KanderFormal.Proofs.IssueResultSave
+import KanderFormal.Alphabets.StartOrder
 import KanderFormal.Alphabets.IssueResult
 import KanderFormal.Alphabets.ReviewRun
 import KanderFormal.Alphabets.ServerIntegration
@@ -973,7 +974,11 @@ def entries : List Entry := [
   { machine := Machines.ServerIntegration.serverIntegrationMachine
     source := "KanderFormal/Machines/ServerIntegration.lean"
     vectors := { depth := 4, paramSets := [[("maxGen", 2), ("maxRev", 4), ("maxAuth", 2)]], natDomain := [], events := integrationEvents }
-    theorems := serverIntegrationTheorems }
+    theorems := serverIntegrationTheorems },
+  { machine := Machines.StartOrder.startOrderMachine
+    source := "KanderFormal/Machines/StartOrder.lean"
+    vectors := { depth := 4, paramSets := [[("maxGen", 2)]], natDomain := [], events := startOrderEvents }
+    theorems := startOrderTheorems }
 ]
 
 end KanderFormal.Registry

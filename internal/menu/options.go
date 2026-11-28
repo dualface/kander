@@ -715,8 +715,15 @@ func (s *Session) finish() error {
 	return nil
 }
 
-// Save writes the active tab: scope config.json or the project overlay.
-func (s *Session) Save() (string, error) {
+// Save writes the active tab: scope config.json or the project overlay. A
+// successful save scans this host again, so the agents and launchers the
+// worker reports follow the new configuration.
+func (s *Session) Save() (path string, err error) {
+	defer func() {
+		if err == nil {
+			refreshHostScan()
+		}
+	}()
 	if s.EditingOverlay() {
 		return s.saveOverlay()
 	}
