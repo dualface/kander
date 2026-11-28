@@ -7,7 +7,16 @@ name: release-gate
 #
 # Dispatch it on the branch to release:
 #   gh workflow run release-gate.yml --repo dualface/kander --ref v2
+# or push the commit to a branch below release-gate/:
+#   git push origin HEAD:refs/heads/release-gate/<name>
+# The push trigger exists because GitHub refuses to dispatch a workflow that is
+# not on the default branch (main, the v1 line) until a push or another event
+# has run it once (HTTP 404 "workflow release-gate.yml not found on the default
+# branch"). scripts/release.sh accepts a successful run of either trigger, as
+# long as it ran on the commit to tag.
 on:
+  push:
+    branches: ['release-gate/**']
   workflow_dispatch:
     inputs:
       windows_extra_packages:
