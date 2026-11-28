@@ -37,6 +37,8 @@ const (
 	defaultHostRescan     = 5 * time.Second
 	defaultHeartbeatWait  = api.HostHeartbeatMaxWait
 	maxHeartbeatBackoff   = 60 * time.Second
+	minReportBackoff      = 2 * time.Second
+	maxReportBackoff      = 60 * time.Second
 	startChildTimeout     = 15 * time.Minute
 	startChildOutputLimit = 1 << 20
 )
@@ -47,15 +49,30 @@ type hostAgent struct {
 	workerID string
 	log      *slog.Logger
 	queue    chan queuedOrder
-	// mu guards known and loops. known holds the orders this worker queued,
-	// with their server, so an order is run once per worker process; a new
-	// process runs the orders accepted earlier that are not final again, and the
-	// launch receipt of the order keeps that from starting a second agent. An
-	// order a heartbeat of its server no longer lists is final and forgotten.
+	// mu guards known, outcomes, and loops. known holds the orders this worker
+	// queued, with their server, so an order is run once per worker process; a
+	// new process runs the orders accepted earlier that are not final again, and
+	// the launch receipt of the order keeps that from starting a second agent.
+	// An order a heartbeat of its server no longer lists is final and forgotten.
 	mu    sync.Mutex
 	known map[string]string
-	loops map[string]context.CancelFunc
-	wg    sync.WaitGroup
+	// outcomes holds the failure of each order this worker has not reported
+	// yet: the read or the report did not reach the server. A heartbeat that
+	// still lists the order queues the report again once its backoff passed,
+	// with the same idempotency key, until the server records it or a read shows
+	// the order ended or bound to a claim.
+	outcomes map[string]*orderOutcome
+	loops    map[string]context.CancelFunc
+	wg       sync.WaitGroup
+}
+
+// orderOutcome is a failure of an order that waits for its report.
+type orderOutcome struct {
+	failure api.StartOrderFailure
+	key     string
+	due     time.Time
+	backoff time.Duration
+	queued  bool
 }
 
 func newWorkerID() string {
@@ -72,7 +89,7 @@ func (w *loop) startHostAgent(ctx context.Context) func() {
 	if !w.o.AcceptOrders {
 		return func() {}
 	}
-	h := &hostAgent{o: w.o, workerID: newWorkerID(), log: w.o.Logger.With("component", "host"), queue: make(chan queuedOrder, 64), known: map[string]string{}, loops: map[string]context.CancelFunc{}}
+	h := &hostAgent{o: w.o, workerID: newWorkerID(), log: w.o.Logger.With("component", "host"), queue: make(chan queuedOrder, 64), known: map[string]string{}, outcomes: map[string]*orderOutcome{}, loops: map[string]context.CancelFunc{}}
 	ctx, cancel := context.WithCancel(ctx)
 	h.wg.Add(2)
 	go h.supervise(ctx)
@@ -251,8 +268,9 @@ func checkRegistration(ctx context.Context, c *client.Client, reg remote.Project
 }
 
 // takeOrders accepts the pending orders of a heartbeat answer and queues them,
-// and queues the accepted orders this worker did not run. It reports whether
-// an acceptance failed.
+// queues the accepted orders this worker did not run, and queues the failure
+// reports of accepted orders that are due again. It reports whether an
+// acceptance failed.
 func (h *hostAgent) takeOrders(ctx context.Context, log *slog.Logger, c *client.Client, orders []api.StartOrder) bool {
 	h.forgetFinished(c.ServerURL(), orders)
 	failed := false
@@ -278,12 +296,16 @@ func (h *hostAgent) takeOrders(ctx context.Context, log *slog.Logger, c *client.
 		h.mu.Lock()
 		_, known := h.known[order.ID]
 		h.known[order.ID] = c.ServerURL()
+		report := false
+		if out := h.outcomes[order.ID]; known && out != nil && !out.queued && !time.Now().Before(out.due) {
+			out.queued, report = true, true
+		}
 		h.mu.Unlock()
-		if known {
+		if known && !report {
 			continue
 		}
 		select {
-		case h.queue <- queuedOrder{order: order, client: c}:
+		case h.queue <- queuedOrder{order: order, client: c, report: report}:
 		case <-ctx.Done():
 			return failed
 		}
@@ -303,14 +325,17 @@ func (h *hostAgent) forgetFinished(url string, orders []api.StartOrder) {
 	for id, server := range h.known {
 		if server == url && !listed[id] {
 			delete(h.known, id)
+			delete(h.outcomes, id)
 		}
 	}
 }
 
-// queuedOrder is an accepted order with the client of its server.
+// queuedOrder is an accepted order with the client of its server; report
+// queues the pending failure report of the order instead of its start.
 type queuedOrder struct {
 	order  api.StartOrder
 	client *client.Client
+	report bool
 }
 
 // execute runs the queued orders one at a time: one repository and one
@@ -322,6 +347,10 @@ func (h *hostAgent) execute(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case queued := <-h.queue:
+			if queued.report {
+				h.settle(ctx, h.log.With("order", queued.order.ID, "task", queued.order.TaskID), queued.client.Project(queued.order.ProjectID), queued.order.ID)
+				continue
+			}
 			h.run(ctx, queued.client, queued.order)
 		}
 	}
@@ -389,35 +418,74 @@ func (h *hostAgent) run(ctx context.Context, c *client.Client, order api.StartOr
 	}
 	code, message := childFailure(stderr.Bytes(), runErr)
 	log.Info("kander start finished", "error", runErr, "code", code)
-	readCtx, cancelRead = context.WithTimeout(ctx, 30*time.Second)
-	current, err = project.StartOrder(readCtx, order.ID)
-	cancelRead()
-	if err != nil {
-		log.Warn("start order could not be read after the start", "error", err)
-		return
-	}
-	// Only a start that never claimed leaves the order to the worker: a claim
-	// binds the generation, whose confirmation or end the server records.
-	if current.State != api.StartOrderAccepted || current.Generation != 0 {
-		return
-	}
-	if runErr == nil {
+	if code == "" {
 		code, message = "start_without_claim", config.Text("host.start_without_claim")
 	}
-	h.fail(ctx, log, project, current, code, message)
+	// Only a start that never claimed leaves the order to the worker: a claim
+	// binds the generation, whose confirmation or end the server records. The
+	// report reads the order first and drops the failure of a bound order.
+	h.fail(ctx, log, project, order, code, message)
 }
 
+// fail records the failure of an order and reports it.
 func (h *hostAgent) fail(ctx context.Context, log *slog.Logger, project *client.Project, order api.StartOrder, code, message string) {
 	if len(message) > 2000 {
 		message = message[:2000]
 	}
-	callCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	if _, err := project.FailStartOrder(callCtx, client.NewKey(), order.ID, api.StartOrderFailure{Code: code, Message: message}); err != nil {
-		log.Warn("start order failure could not be reported", "code", code, "error", err)
+	h.mu.Lock()
+	h.outcomes[order.ID] = &orderOutcome{failure: api.StartOrderFailure{Code: code, Message: message}, key: client.NewKey()}
+	h.mu.Unlock()
+	h.settle(ctx, log, project, order.ID)
+}
+
+// settle reports the pending failure of an order while a read shows the order
+// accepted and not bound to a claim; the failure of an order that ended or
+// bound a generation is dropped. A read or a report that fails keeps the
+// failure, and a later heartbeat queues it again after a growing backoff.
+func (h *hostAgent) settle(ctx context.Context, log *slog.Logger, project *client.Project, id string) {
+	h.mu.Lock()
+	out := h.outcomes[id]
+	if out == nil {
+		h.mu.Unlock()
 		return
 	}
-	log.Info("start order failed", "code", code, "message", message)
+	out.queued = false
+	failure, key := out.failure, out.key
+	h.mu.Unlock()
+	readCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	current, err := project.StartOrder(readCtx, id)
+	cancel()
+	if err == nil {
+		if current.State != api.StartOrderAccepted || current.Generation != 0 {
+			h.dropOutcome(id)
+			return
+		}
+		callCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		_, err = project.FailStartOrder(callCtx, key, id, failure)
+		cancel()
+		if err == nil {
+			h.dropOutcome(id)
+			log.Info("start order failed", "code", failure.Code, "message", failure.Message)
+			return
+		}
+	}
+	if api.IsCode(err, api.CodeNotFound) {
+		h.dropOutcome(id)
+		return
+	}
+	h.mu.Lock()
+	if out := h.outcomes[id]; out != nil {
+		out.backoff = min(max(2*out.backoff, minReportBackoff), maxReportBackoff)
+		out.due = time.Now().Add(out.backoff)
+		log.Warn("start order failure could not be reported; a later heartbeat retries it", "code", failure.Code, "error", err, "retry_in", out.backoff)
+	}
+	h.mu.Unlock()
+}
+
+func (h *hostAgent) dropOutcome(id string) {
+	h.mu.Lock()
+	delete(h.outcomes, id)
+	h.mu.Unlock()
 }
 
 // registrationFor finds the registration of a project on the server of c.

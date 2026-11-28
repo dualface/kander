@@ -2,9 +2,7 @@ package launch
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"time"
 
@@ -69,7 +67,7 @@ func runHostStart(host, agent, launcher string, timeout float64, task string) in
 	order, err := session.Project.CreateStartOrder(ctx, client.NewKey(), api.NewStartOrder{TaskID: task, Host: host, Agent: agent, Launcher: launcher})
 	cancel()
 	if err != nil {
-		return fail(hostStartError(err))
+		return fail(remote.HostRouteError(err))
 	}
 	if !command.JSON() {
 		fmt.Fprintln(os.Stderr, t("host.order_created", order.ID, order.TargetHost, order.TaskID))
@@ -79,15 +77,6 @@ func runHostStart(host, agent, launcher string, timeout float64, task string) in
 		return fail(err)
 	}
 	return startOrderExit(order)
-}
-
-// hostStartError explains a server that does not know the route.
-func hostStartError(err error) error {
-	var e *api.Error
-	if errors.As(err, &e) && e.Status == http.StatusNotFound && e.Code == api.CodeInternal {
-		return command.Coded("start_order_unsupported", errors.New(t("host.server_unsupported")))
-	}
-	return err
 }
 
 // waitStartOrder reads the order until it is final or timeout passed, waking

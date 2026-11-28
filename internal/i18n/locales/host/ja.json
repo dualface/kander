@@ -32,7 +32,7 @@
   "host.timeout_needs_host": "--timeout は kander start --host にだけ使えます",
   "host.timeout_invalid": "--timeout は 0 より大きい有限の秒数でなければなりません",
   "host.start_needs_task": "kander start --host にはタスク ID が必要です",
-  "host.server_unsupported": "サーバーはホストを指定した開始に対応していません。サーバーを更新してください",
+  "host.server_unsupported": "サーバーはホストと開始指示を保持していません。kander start --host、kander host、kander order を使うにはサーバーを更新してください",
   "host.order_created": "開始指示 {{.V0}}: ホスト {{.V1}} に {{.V2}} の開始を依頼しました。結果を待っています。",
   "host.order_started": "ホスト {{.V1}} で {{.V0}} を開始しました: generation {{.V2}}、ウィンドウ {{.V3}}。",
   "host.order_finished": "開始指示 {{.V0}} は {{.V1}} で終わりました: {{.V2}} {{.V3}}",
