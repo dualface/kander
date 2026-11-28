@@ -37,36 +37,39 @@ permissions:
   contents: read
 
 jobs:
+  # The native jobs come from the shard plan .github/release-gate-shards.json,
+  # built by scripts/gateshards from the go test -json timings of an earlier
+  # gate run; docs/release-gate.md describes it and when to regenerate it.
+  plan:
+    name: Shard plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.3'
+      - name: Read the shard plan
+        id: matrix
+        run: |
+          matrix=$(go run ./scripts/gateshards matrix)
+          echo "$matrix"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
   native:
-    name: Native ${{ matrix.os }} (${{ matrix.suite }})
-    # The ubuntu job runs go test ./... with a 150-minute timeout; the other
-    # jobs need far less.
-    timeout-minutes: ${{ matrix.suite == 'all' && 180 || 90 }}
+    name: Native ${{ matrix.platform }} (${{ matrix.shard }})
+    needs: plan
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # Every package, the model search TestModelCompositeStates included.
-          - os: ubuntu-latest
-            suffix: ''
-            suite: all
-          # The operating-system packages of scripts/platform-test-packages.sh,
-          # plus internal/board and internal/remote in steps of their own.
-          - os: macos-latest
-            suffix: ''
-            suite: platform
-          - os: windows-latest
-            suffix: '.exe'
-            suite: services
-          # The Windows board tests run in a job of their own so that service
-          # failures are visible without waiting for them.
-          - os: windows-latest
-            suffix: '.exe'
-            suite: board
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
-    # Every go test step writes its go test -json stream below
-    # $RUNNER_TEMP/test-json; the last step uploads it. The data feeds the shard
-    # plan of the gate. (runner.temp is not available in the job's env mapping.)
+    # Every go test call writes its go test -json stream below
+    # $RUNNER_TEMP/test-json; the last step uploads it. The data feeds the next
+    # shard plan. (runner.temp is not available in the job's env mapping.)
     env:
       GOMEMLIMIT: 2GiB
     steps:
@@ -74,12 +77,17 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.27.3'
+      # The build, vet, Import and concurrent lock steps run once per platform,
+      # in the shard the plan marks common.
       - name: Build kander
-        run: go build -o "${{ runner.temp }}/kander-check${{ matrix.suffix }}" ./cmd/kander
+        if: matrix.common
+        run: go build -o "${{ runner.temp }}/kander-check${{ runner.os == 'Windows' && '.exe' || '' }}" ./cmd/kander
       - name: Static analysis
+        if: matrix.common
         run: go vet ./...
       # Canonical short paths preserve no-follow checks and fit Unix sockets.
       - name: Import under the exclusive source lock
+        if: matrix.common
         shell: bash
         env:
           TMPDIR: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
@@ -87,123 +95,47 @@ jobs:
           TEMP: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
         run: bash scripts/go-test-json.sh "$RUNNER_TEMP/test-json/import.json" -p 1 -count=1 -timeout 5m ./internal/fs ./internal/server -run '^(TestWindowsReadingLockedFilesPreservesEmptyAndNonemptySemantics|TestImport.*|TestOfflineMaintenance.*|TestMaintainCommand.*|TestIssueResult.*)$'
       - name: Concurrent lock and launcher regressions
+        if: ${{ !cancelled() && matrix.common }}
         shell: bash
         env:
           TMPDIR: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
           TMP: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
           TEMP: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
         run: bash scripts/go-test-json.sh "$RUNNER_TEMP/test-json/concurrent-locks.json" -p 1 -count=20 -timeout 10m ./internal/fs ./internal/board ./cmd/kander ./internal/launch -run '^(TestOpenLockFile.*|TestSortedBatchLocksAndConcurrentIndexAppend|TestBoardRootOverrideAfterCWDDeletion|TestLuvusLauncherStart|TestLateExecOfANativeWrapperIsNeverAMismatch|TestACardWriteBeforeTheExecRecordsNothing|TestForegroundIdentityWaitsForTheTaskFileRead|TestARemovedTaskFileCountsAsRead)$'
+      # The packages each platform tests. ubuntu tests every package, the model
+      # search TestModelCompositeStates included. macOS and Windows test the
+      # operating-system packages of scripts/platform-test-packages.sh, plus
+      # internal/board and internal/remote; the plan's filters narrow those
+      # two (docs/model-test.md). The rest shard of the plan runs every listed
+      # package that no plan entry names, so a new package needs no new plan.
+      # The script runs under bash, because the bash of a pwsh step may be the
+      # one of WSL.
+      - name: List the packages of the platform
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          if [ "${{ matrix.platform }}" = ubuntu ]; then
+            go list ./... > "$RUNNER_TEMP/universe.txt"
+          else
+            bash scripts/platform-test-packages.sh > "$RUNNER_TEMP/universe.txt"
+            go list ./internal/board ./internal/remote >> "$RUNNER_TEMP/universe.txt"
+          fi
+          cat "$RUNNER_TEMP/universe.txt"
       # Disable the test result cache: large model-test input logs otherwise
       # require substantially more memory after the tests themselves finish.
-      # The gate always runs the model search; see docs/model-test.md.
-      - name: Complete native tests
-        if: matrix.suite == 'all'
+      - name: Shard tests
+        if: ${{ !cancelled() }}
         shell: bash
         env:
-          TMPDIR: ${{ runner.temp }}
-          TMP: ${{ runner.temp }}
-          TEMP: ${{ runner.temp }}
-        run: bash scripts/go-test-json.sh "$RUNNER_TEMP/test-json/all.json" -p 1 -count=1 -timeout 150m ./...
-      # macOS and Windows run the packages that can behave differently there.
-      # The platform-neutral ones (internal/i18n, internal/statemachine,
-      # internal/version, skills) run in the ubuntu job only;
-      # scripts/platform-test-packages.sh holds the rule and the list.
-      # internal/board and internal/remote have steps of their own below. The
-      # script runs under bash, because the bash of a pwsh step may be the one
-      # of WSL.
-      - name: List the operating-system packages
-        if: matrix.suite == 'platform' || matrix.suite == 'services'
-        shell: bash
-        run: |
-          bash scripts/platform-test-packages.sh > "$RUNNER_TEMP/platform-packages.txt"
-          cat "$RUNNER_TEMP/platform-packages.txt"
-      - name: Complete macOS service tests
-        if: matrix.suite == 'platform'
-        shell: bash
-        env:
-          TMPDIR: /private/tmp
-          TMP: /private/tmp
-          TEMP: /private/tmp
-        run: |
-          # A read loop rather than mapfile: the bash of a macOS runner may be 3.2.
-          packages=()
-          while IFS= read -r package; do
-            if [ -n "$package" ]; then packages+=("$package"); fi
-          done < "$RUNNER_TEMP/platform-packages.txt"
-          if [ "${#packages[@]}" -eq 0 ]; then echo "no operating-system packages are listed" >&2; exit 1; fi
-          bash scripts/go-test-json.sh "$RUNNER_TEMP/test-json/services.json" -p 1 -count=1 -timeout 60m "${packages[@]}"
-      # The TestModel tests of internal/board are searches over abstract board
-      # states and the checks of that search, in model_*_test.go. The large
-      # search TestModelCompositeStates runs in the ubuntu job only, because its
-      # result does not depend on the platform. The other TestModel tests run
-      # here: the subprocess tests of model_subprocess_contract_test.go start
-      # child processes.
-      - name: Complete macOS board tests
-        if: ${{ !cancelled() && matrix.suite == 'platform' }}
-        shell: bash
-        env:
-          TMPDIR: /private/tmp
-          TMP: /private/tmp
-          TEMP: /private/tmp
-        run: bash scripts/go-test-json.sh "$RUNNER_TEMP/test-json/board.json" -p 1 -count=1 -timeout 30m -skip '^TestModelCompositeStates$' ./internal/board
-      # internal/remote failed on macOS only in earlier runs
-      # (TestLocalDataRootWritesTheIdentityMarkerOnce), so macOS runs all of it.
-      - name: Complete macOS remote tests
-        if: ${{ !cancelled() && matrix.suite == 'platform' }}
-        shell: bash
-        env:
-          TMPDIR: /private/tmp
-          TMP: /private/tmp
-          TEMP: /private/tmp
-        run: bash scripts/go-test-json.sh "$RUNNER_TEMP/test-json/remote.json" -p 1 -count=1 -timeout 30m ./internal/remote
-      # Four packages at a time: the runner has four vCPUs, and runs 44453011243
-      # and 44453016220 took 250 and 255 s here against 374 and 364 s with -p 1.
-      # TestUploadOfMoreFilesThanTheOldDefaultLimit runs in the next step; keep
-      # the -skip here and the -run there on the same test name.
-      - name: Complete Windows service tests
-        if: matrix.suite == 'services'
-        shell: bash
-        env:
-          TMPDIR: ${{ runner.temp }}
-          TMP: ${{ runner.temp }}
-          TEMP: ${{ runner.temp }}
-        run: |
-          # A read loop rather than mapfile: the bash of a macOS runner may be 3.2.
-          packages=()
-          while IFS= read -r package; do
-            if [ -n "$package" ]; then packages+=("$package"); fi
-          done < "$RUNNER_TEMP/platform-packages.txt"
-          if [ "${#packages[@]}" -eq 0 ]; then echo "no operating-system packages are listed" >&2; exit 1; fi
-          bash scripts/go-test-json.sh "$RUNNER_TEMP/test-json/services.json" -p 4 -count=1 -timeout 20m -skip '^TestUploadOfMoreFilesThanTheOldDefaultLimit$' "${packages[@]}"
-      # TestUploadOfMoreFilesThanTheOldDefaultLimit creates 100,001 files and took
-      # 414 to 557 s here, about half of the internal/server time; with it the
-      # package reached the 20-minute go test timeout (run 45986080768). It runs
-      # alone in this step, under a timeout of its own. The -run name must match
-      # the -skip name of the previous step.
-      - name: Windows large upload test
-        if: ${{ !cancelled() && matrix.suite == 'services' }}
-        shell: bash
-        env:
-          TMPDIR: ${{ runner.temp }}
-          TMP: ${{ runner.temp }}
-          TEMP: ${{ runner.temp }}
-        run: bash scripts/go-test-json.sh "$RUNNER_TEMP/test-json/large-upload.json" -p 1 -count=1 -timeout 20m -run '^TestUploadOfMoreFilesThanTheOldDefaultLimit$' ./internal/server
-      # Windows-specific tests of internal/remote, named TestWindows*. Its
-      # platform-neutral tests run in the ubuntu job, the macOS job and the race
-      # job. With no match go test reports "no tests to run" and exits 0.
-      - name: Windows-specific remote tests
-        if: ${{ !cancelled() && matrix.suite == 'services' }}
-        shell: bash
-        env:
-          TMPDIR: ${{ runner.temp }}
-          TMP: ${{ runner.temp }}
-          TEMP: ${{ runner.temp }}
-        run: bash scripts/go-test-json.sh "$RUNNER_TEMP/test-json/remote-windows.json" -p 1 -count=1 -timeout 15m ./internal/remote -run '^TestWindows'
+          TMPDIR: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
+          TMP: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
+          TEMP: ${{ runner.os == 'macOS' && '/private/tmp' || runner.temp }}
+        run: go run ./scripts/gateshards run -platform "${{ matrix.platform }}" -shard "${{ matrix.shard }}" -universe "$RUNNER_TEMP/universe.txt" -json-dir "$RUNNER_TEMP/test-json"
       # A dispatch can name extra packages to test on Windows, for example
       # -f windows_extra_packages=./internal/remote. The value reaches the script
       # only through env and must name ./internal or ./cmd packages.
       - name: Extra Windows packages
-        if: ${{ !cancelled() && matrix.suite == 'services' && inputs.windows_extra_packages != '' }}
+        if: ${{ !cancelled() && matrix.platform == 'windows' && matrix.common && inputs.windows_extra_packages != '' }}
         shell: bash
         env:
           TMPDIR: ${{ runner.temp }}
@@ -220,24 +152,11 @@ jobs:
           done
           if [ "${#packages[@]}" -eq 0 ]; then exit 0; fi
           bash scripts/go-test-json.sh "$RUNNER_TEMP/test-json/extra.json" -p 1 -count=1 -timeout 30m -skip '^TestModelCompositeStates$' "${packages[@]}"
-      # The TestModel tests of internal/board are searches over abstract board
-      # states and the checks of that search, in model_*_test.go. Their result does
-      # not depend on the platform; only the temporary directory they use is chosen
-      # per platform. The ubuntu job runs them; on Windows TestModelCompositeStates
-      # alone took 67 minutes (run 44410469265). See docs/model-test.md.
-      - name: Complete Windows board tests
-        if: matrix.suite == 'board'
-        shell: bash
-        env:
-          TMPDIR: ${{ runner.temp }}
-          TMP: ${{ runner.temp }}
-          TEMP: ${{ runner.temp }}
-        run: bash scripts/go-test-json.sh "$RUNNER_TEMP/test-json/board.json" -p 1 -count=1 -timeout 30m -skip '^TestModel' ./internal/board
       - name: Upload test timings
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: test-json-native-${{ matrix.os }}-${{ matrix.suite }}
+          name: test-json-native-${{ matrix.os }}-${{ matrix.shard }}
           path: ${{ runner.temp }}/test-json/
           if-no-files-found: warn
           retention-days: 30

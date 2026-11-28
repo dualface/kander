@@ -1,0 +1,647 @@
+{
+  "schema": 1,
+  "generated_from": "release-gate run 46132427480 (commit ee6171cc)",
+  "platforms": [
+    {
+      "name": "ubuntu",
+      "os": "ubuntu-latest",
+      "parallel": 4,
+      "timeout": "30m",
+      "shards": [
+        {
+          "name": "1",
+          "common": true,
+          "rest": true,
+          "estimate_seconds": 503,
+          "entries": [
+            {
+              "package": "api"
+            },
+            {
+              "package": "cli"
+            },
+            {
+              "package": "client"
+            },
+            {
+              "package": "cmd/kander"
+            },
+            {
+              "package": "internal/board"
+            },
+            {
+              "package": "internal/check"
+            },
+            {
+              "package": "internal/cli"
+            },
+            {
+              "package": "internal/client"
+            },
+            {
+              "package": "internal/command"
+            },
+            {
+              "package": "internal/commands"
+            },
+            {
+              "package": "internal/config"
+            },
+            {
+              "package": "internal/flow"
+            },
+            {
+              "package": "internal/focus"
+            },
+            {
+              "package": "internal/fs"
+            },
+            {
+              "package": "internal/i18n"
+            },
+            {
+              "package": "internal/install"
+            },
+            {
+              "package": "internal/issue"
+            },
+            {
+              "package": "internal/issue/ghcli"
+            },
+            {
+              "package": "internal/launch"
+            },
+            {
+              "package": "internal/liveness"
+            },
+            {
+              "package": "internal/menu"
+            },
+            {
+              "package": "internal/notify"
+            },
+            {
+              "package": "internal/probe"
+            },
+            {
+              "package": "internal/process"
+            },
+            {
+              "package": "internal/remote"
+            },
+            {
+              "package": "internal/review"
+            },
+            {
+              "package": "internal/server"
+            },
+            {
+              "package": "internal/servicecmd"
+            },
+            {
+              "package": "internal/servicectl"
+            },
+            {
+              "package": "internal/statemachine/cardlifecycle"
+            },
+            {
+              "package": "internal/statemachine/coordinator"
+            },
+            {
+              "package": "internal/statemachine/coordmember"
+            },
+            {
+              "package": "internal/statemachine/dispatch"
+            },
+            {
+              "package": "internal/statemachine/example"
+            },
+            {
+              "package": "internal/statemachine/executionledger"
+            },
+            {
+              "package": "internal/statemachine/issueresult"
+            },
+            {
+              "package": "internal/statemachine/issueresultdecision"
+            },
+            {
+              "package": "internal/statemachine/issueresultsave"
+            },
+            {
+              "package": "internal/statemachine/reviewdisposition"
+            },
+            {
+              "package": "internal/statemachine/reviewfindings"
+            },
+            {
+              "package": "internal/statemachine/reviewobligation"
+            },
+            {
+              "package": "internal/statemachine/reviewplan"
+            },
+            {
+              "package": "internal/statemachine/reviewrun"
+            },
+            {
+              "package": "internal/statemachine/serverclaim"
+            },
+            {
+              "package": "internal/statemachine/serverdelivery"
+            },
+            {
+              "package": "internal/statemachine/servergrouplease"
+            },
+            {
+              "package": "internal/statemachine/serverintegration"
+            },
+            {
+              "package": "internal/statemachine/serverproposal"
+            },
+            {
+              "package": "internal/statemachine/serverrequest"
+            },
+            {
+              "package": "internal/statemachine/startorder"
+            },
+            {
+              "package": "internal/statemachine/vectortest"
+            },
+            {
+              "package": "internal/statemachine/wrapupwitness"
+            },
+            {
+              "package": "internal/svcinstall"
+            },
+            {
+              "package": "internal/takeover"
+            },
+            {
+              "package": "internal/terminal"
+            },
+            {
+              "package": "internal/terminal/builtin"
+            },
+            {
+              "package": "internal/terminal/herdr"
+            },
+            {
+              "package": "internal/terminal/herdrcore"
+            },
+            {
+              "package": "internal/terminal/terminaltest"
+            },
+            {
+              "package": "internal/terminalcheck"
+            },
+            {
+              "package": "internal/tui"
+            },
+            {
+              "package": "internal/version"
+            },
+            {
+              "package": "internal/worker"
+            },
+            {
+              "package": "rules"
+            },
+            {
+              "package": "scripts"
+            },
+            {
+              "package": "server"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "macos",
+      "os": "macos-latest",
+      "parallel": 2,
+      "timeout": "30m",
+      "filters": {
+        "internal/board": {
+          "skip": "^TestModelCompositeStates$"
+        }
+      },
+      "shards": [
+        {
+          "name": "1",
+          "common": true,
+          "rest": true,
+          "estimate_seconds": 444,
+          "entries": [
+            {
+              "package": "internal/client"
+            },
+            {
+              "package": "internal/flow"
+            },
+            {
+              "package": "internal/focus"
+            },
+            {
+              "package": "internal/issue"
+            },
+            {
+              "package": "internal/notify"
+            },
+            {
+              "package": "internal/probe"
+            },
+            {
+              "package": "internal/server",
+              "skip": [
+                "TestUploadOfMoreFilesThanTheOldDefaultLimit"
+              ]
+            },
+            {
+              "package": "internal/servicectl"
+            },
+            {
+              "package": "internal/terminal/herdr"
+            },
+            {
+              "package": "internal/terminal/herdrcore"
+            }
+          ]
+        },
+        {
+          "name": "2",
+          "estimate_seconds": 566,
+          "entries": [
+            {
+              "package": "internal/server",
+              "tests": [
+                "TestUploadOfMoreFilesThanTheOldDefaultLimit"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "3",
+          "estimate_seconds": 444,
+          "entries": [
+            {
+              "package": "api"
+            },
+            {
+              "package": "cli"
+            },
+            {
+              "package": "client"
+            },
+            {
+              "package": "internal/fs"
+            },
+            {
+              "package": "internal/install"
+            },
+            {
+              "package": "internal/launch"
+            },
+            {
+              "package": "internal/liveness"
+            },
+            {
+              "package": "internal/menu"
+            },
+            {
+              "package": "internal/remote"
+            },
+            {
+              "package": "internal/servicecmd"
+            },
+            {
+              "package": "internal/svcinstall"
+            },
+            {
+              "package": "internal/terminal"
+            },
+            {
+              "package": "internal/terminal/builtin"
+            },
+            {
+              "package": "internal/terminalcheck"
+            },
+            {
+              "package": "internal/tui"
+            },
+            {
+              "package": "internal/worker"
+            },
+            {
+              "package": "rules"
+            }
+          ]
+        },
+        {
+          "name": "4",
+          "estimate_seconds": 444,
+          "entries": [
+            {
+              "package": "cmd/kander"
+            },
+            {
+              "package": "internal/board"
+            },
+            {
+              "package": "internal/check"
+            },
+            {
+              "package": "internal/cli"
+            },
+            {
+              "package": "internal/command"
+            },
+            {
+              "package": "internal/commands"
+            },
+            {
+              "package": "internal/config"
+            },
+            {
+              "package": "internal/issue/ghcli"
+            },
+            {
+              "package": "internal/process"
+            },
+            {
+              "package": "internal/review"
+            },
+            {
+              "package": "internal/takeover"
+            },
+            {
+              "package": "internal/terminal/terminaltest"
+            },
+            {
+              "package": "scripts"
+            },
+            {
+              "package": "server"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "windows",
+      "os": "windows-latest",
+      "parallel": 4,
+      "timeout": "30m",
+      "filters": {
+        "internal/board": {
+          "skip": "^TestModel"
+        },
+        "internal/remote": {
+          "run": "^TestWindows"
+        }
+      },
+      "shards": [
+        {
+          "name": "1",
+          "common": true,
+          "rest": true,
+          "estimate_seconds": 384,
+          "entries": [
+            {
+              "package": "internal/server",
+              "tests": [
+                "TestBareMoveKeepsItsBehaviorWithoutAPreparableProposal",
+                "TestCoordinatorReviewRefusesMembersThatDoNotQualify",
+                "TestCoordinatorReviewRefusesMixedOrMalformedProofs",
+                "TestCoordinatorReviewRefusesMixedProofsWhenRecoveringAPreparedRun",
+                "TestCoordinatorReviewRefusesWithoutAuthority",
+                "TestCoordinatorReviewWritesEveryOperation",
+                "TestIntegrationContainmentKindsNeedExactEdges",
+                "TestLivenessObservationsKeepOneReceiptPerExecution"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "2",
+          "estimate_seconds": 539,
+          "entries": [
+            {
+              "package": "internal/board",
+              "skip": [
+                "TestAddMembersRefusals",
+                "TestCompletedMemberDoesNotBlockTheOthers",
+                "TestCoordinatorCompletedFixSurvivesClosedBatchRestart",
+                "TestCoordinatorWrapUpRestartsAfterPartialArchive",
+                "TestDispatchKillRecovery",
+                "TestDispatchWrapUpRejectsInsufficientExitFacts",
+                "TestFixDispatchBindsRunOnAdvanceChain",
+                "TestFixProposalNamesEachBatchAndFindingProblem",
+                "TestFixProposalReportsAuthorReferenceProblems",
+                "TestObligationKernelRefinement",
+                "TestOldReclaimKeepsWorkingAfterTheFirstWrite",
+                "TestRecoveredMemberNeedsAnActualReview",
+                "TestRecoveredMemberReachesDone",
+                "TestRemoveMemberRefusesAStartedMember",
+                "TestResetAfterADropOwesTheDroppedRole",
+                "TestReviewKillRestartBoundaries",
+                "TestRoundReasonNamesBothSides",
+                "TestStuckBatchRecoversThroughAdvanceChain",
+                "TestSummaryCacheHotRefreshBudget",
+                "TestWrapUpStructuralCheckFollowsTheCardTarget"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "3",
+          "estimate_seconds": 536,
+          "entries": [
+            {
+              "package": "internal/server",
+              "skip": [
+                "TestBareMoveKeepsItsBehaviorWithoutAPreparableProposal",
+                "TestCoordinatorReviewRefusesMembersThatDoNotQualify",
+                "TestCoordinatorReviewRefusesMixedOrMalformedProofs",
+                "TestCoordinatorReviewRefusesMixedProofsWhenRecoveringAPreparedRun",
+                "TestCoordinatorReviewRefusesWithoutAuthority",
+                "TestCoordinatorReviewWritesEveryOperation",
+                "TestIntegrationContainmentKindsNeedExactEdges",
+                "TestLargeUploadStagingIsRemovedAtEveryEnd",
+                "TestLivenessObservationsKeepOneReceiptPerExecution",
+                "TestUploadOfMoreFilesThanTheOldDefaultLimit"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "4",
+          "estimate_seconds": 520,
+          "entries": [
+            {
+              "package": "internal/server",
+              "tests": [
+                "TestLargeUploadStagingIsRemovedAtEveryEnd",
+                "TestUploadOfMoreFilesThanTheOldDefaultLimit"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "5",
+          "estimate_seconds": 324,
+          "entries": [
+            {
+              "package": "client"
+            },
+            {
+              "package": "internal/board",
+              "tests": [
+                "TestAddMembersRefusals",
+                "TestCompletedMemberDoesNotBlockTheOthers",
+                "TestCoordinatorCompletedFixSurvivesClosedBatchRestart",
+                "TestCoordinatorWrapUpRestartsAfterPartialArchive",
+                "TestDispatchKillRecovery",
+                "TestDispatchWrapUpRejectsInsufficientExitFacts",
+                "TestFixDispatchBindsRunOnAdvanceChain",
+                "TestFixProposalNamesEachBatchAndFindingProblem",
+                "TestFixProposalReportsAuthorReferenceProblems",
+                "TestObligationKernelRefinement",
+                "TestOldReclaimKeepsWorkingAfterTheFirstWrite",
+                "TestRecoveredMemberNeedsAnActualReview",
+                "TestRecoveredMemberReachesDone",
+                "TestRemoveMemberRefusesAStartedMember",
+                "TestResetAfterADropOwesTheDroppedRole",
+                "TestReviewKillRestartBoundaries",
+                "TestRoundReasonNamesBothSides",
+                "TestStuckBatchRecoversThroughAdvanceChain",
+                "TestSummaryCacheHotRefreshBudget",
+                "TestWrapUpStructuralCheckFollowsTheCardTarget"
+              ]
+            },
+            {
+              "package": "internal/check"
+            },
+            {
+              "package": "internal/client"
+            },
+            {
+              "package": "internal/command"
+            },
+            {
+              "package": "internal/flow"
+            },
+            {
+              "package": "internal/fs"
+            },
+            {
+              "package": "internal/issue/ghcli"
+            },
+            {
+              "package": "internal/menu"
+            },
+            {
+              "package": "internal/notify"
+            },
+            {
+              "package": "internal/probe"
+            },
+            {
+              "package": "internal/servicecmd"
+            },
+            {
+              "package": "internal/svcinstall"
+            },
+            {
+              "package": "internal/takeover"
+            },
+            {
+              "package": "internal/terminal"
+            },
+            {
+              "package": "internal/terminal/builtin"
+            },
+            {
+              "package": "internal/terminal/herdr"
+            },
+            {
+              "package": "rules"
+            },
+            {
+              "package": "scripts"
+            }
+          ]
+        },
+        {
+          "name": "6",
+          "estimate_seconds": 324,
+          "entries": [
+            {
+              "package": "api"
+            },
+            {
+              "package": "cli"
+            },
+            {
+              "package": "cmd/kander"
+            },
+            {
+              "package": "internal/cli"
+            },
+            {
+              "package": "internal/commands"
+            },
+            {
+              "package": "internal/config"
+            },
+            {
+              "package": "internal/focus"
+            },
+            {
+              "package": "internal/install"
+            },
+            {
+              "package": "internal/issue"
+            },
+            {
+              "package": "internal/launch"
+            },
+            {
+              "package": "internal/liveness"
+            },
+            {
+              "package": "internal/process"
+            },
+            {
+              "package": "internal/remote"
+            },
+            {
+              "package": "internal/review"
+            },
+            {
+              "package": "internal/servicectl"
+            },
+            {
+              "package": "internal/terminal/herdrcore"
+            },
+            {
+              "package": "internal/terminal/terminaltest"
+            },
+            {
+              "package": "internal/terminalcheck"
+            },
+            {
+              "package": "internal/tui"
+            },
+            {
+              "package": "internal/worker"
+            },
+            {
+              "package": "server"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
