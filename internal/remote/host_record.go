@@ -49,9 +49,14 @@ type ProjectRegistration struct {
 // HostScan is what kander doctor found usable on this host, per registered
 // project, with the PATH it searched.
 type HostScan struct {
-	ScannedAt time.Time     `json:"scanned_at"`
-	Path      string        `json:"path"`
-	Projects  []ProjectScan `json:"projects"`
+	ScannedAt time.Time `json:"scanned_at"`
+	Path      string    `json:"path"`
+	// Env holds the config_home.env values that were set when kander doctor took the scan,
+	// for every agent definition of the registered projects, resolved or not. The version
+	// refresh resolves with them and writes them back unchanged, so an agent that is not
+	// resolvable for one refresh gets its values back when it resolves again.
+	Env      map[string]string `json:"env,omitempty"`
+	Projects []ProjectScan     `json:"projects"`
 }
 
 // ProjectScan lists the usable agents and launchers of one registered project.

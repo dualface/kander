@@ -496,3 +496,92 @@ func TestVersionRefreshCleansTheGlobalInjectionWhateverTheMarker(t *testing.T) {
 		t.Fatalf("marker = %s %v", data, err)
 	}
 }
+
+// An agent that the recorded PATH does not resolve during one refresh, and a project whose
+// configuration cannot be read during it, lose no config_home.env value: the snapshot stays in
+// host.json, and the next refresh resolves the agent with its recorded value again.
+func TestVersionRefreshKeepsTheEnvSnapshotWhileAnAgentIsUnavailable(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake agent is a POSIX script")
+	}
+	env := newRefreshEnv(t)
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git is not installed")
+	}
+	recorded := t.TempDir()
+	recordedPath := recorded + string(os.PathListSeparator) + filepath.Dir(git)
+	t.Setenv("PATH", filepath.Dir(git))
+	t.Setenv("CLAUDE_CONFIG_DIR", "/process/claude")
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	repo := filepath.Join(t.TempDir(), "app")
+	if out, err := exec.Command(git, "init", "-q", repo).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	if _, err := remote.RegisterProject(env.client, "http://hosts:7878", "app", repo, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	// A record of the previous release: the values live only in the agent entries.
+	if err := remote.StoreHostScan(env.client, remote.HostScan{Path: recordedPath, Projects: []remote.ProjectScan{{
+		ServerURL: "http://hosts:7878", Project: "app",
+		Agents:    []remote.AgentScan{{Name: "claude", Path: "/gone/claude", Env: map[string]string{"CLAUDE_CONFIG_DIR": "/recorded/claude"}}},
+		Launchers: []string{},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	claudeOf := func() (remote.AgentScan, bool) {
+		t.Helper()
+		record, err := remote.ReadHostRecord(env.client)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if record.Scan.Path != recordedPath || record.Scan.Env["CLAUDE_CONFIG_DIR"] != "/recorded/claude" {
+			t.Fatalf("scan path %q env %v", record.Scan.Path, record.Scan.Env)
+		}
+		scan, _ := record.ScanOf("http://hosts:7878", "app")
+		index := slices.IndexFunc(scan.Agents, func(a remote.AgentScan) bool { return a.Name == "claude" })
+		if index < 0 {
+			return remote.AgentScan{}, false
+		}
+		return scan.Agents[index], true
+	}
+
+	// claude is not on the recorded PATH: it leaves the agent list, its value stays.
+	if got := RefreshForVersion(); got.Status != VersionRefreshDone {
+		t.Fatalf("refresh = %+v", got)
+	}
+	if _, ok := claudeOf(); ok {
+		t.Fatal("an unresolvable agent is listed")
+	}
+
+	// The project configuration cannot be read: nothing of it is scanned, the value stays.
+	overlay := filepath.Join(repo, config.OverlayFilename)
+	if err := os.WriteFile(overlay, []byte("{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	version.Version = "2.1.0"
+	if got := RefreshForVersion(); got.Status != VersionRefreshDone || len(got.Pending) != 1 {
+		t.Fatalf("refresh with an unreadable configuration = %+v", got)
+	}
+	claudeOf()
+
+	// Both recover: claude resolves again with its recorded value, not this process's.
+	if err := os.Remove(overlay); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(recorded, "claude"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	version.Version = "2.2.0"
+	if got := RefreshForVersion(); got.Status != VersionRefreshDone || len(got.Pending) > 0 {
+		t.Fatalf("refresh after the recovery = %+v", got)
+	}
+	agent, ok := claudeOf()
+	if !ok || agent.Path != filepath.Join(recorded, "claude") || agent.Env["CLAUDE_CONFIG_DIR"] != "/recorded/claude" {
+		t.Fatalf("claude = %+v %v", agent, ok)
+	}
+}
