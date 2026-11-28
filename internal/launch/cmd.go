@@ -79,20 +79,40 @@ func RequireMessage(c *cobra.Command, name string) error {
 
 // NewStartCommand builds kander start.
 func NewStartCommand() *cobra.Command {
-	var agent, launcher string
+	var agent, launcher, host string
+	var timeout float64
 	c := command.RequireProject(&cobra.Command{
 		Use:  "start [task-id]",
 		Args: command.Args(0, 1),
-		// Choosing a task from a list needs a terminal; --json refuses it as an argument error.
-		PreRunE: func(_ *cobra.Command, args []string) error {
-			if len(args) == 0 && command.JSON() {
-				return command.Interactive(t("launch.interactive_select_task"))
-			}
-			return nil
-		},
-		RunE: func(_ *cobra.Command, args []string) error { return command.Exit(runStart(agent, launcher, args)) },
 	})
+	// Choosing a task from a list needs a terminal; --json refuses it as an argument error.
+	// A start on another host names its task, and only such a start waits.
+	c.PreRunE = func(_ *cobra.Command, args []string) error {
+		if c.Flags().Changed("timeout") && !c.Flags().Changed("host") {
+			return command.Usage("host.timeout_needs_host")
+		}
+		if len(args) == 0 && c.Flags().Changed("host") {
+			return command.Usage("host.start_needs_task")
+		}
+		if len(args) == 0 && command.JSON() {
+			return command.Interactive(t("launch.interactive_select_task"))
+		}
+		return nil
+	}
+	c.RunE = func(_ *cobra.Command, args []string) error {
+		if c.Flags().Changed("host") {
+			return command.Exit(runHostStart(host, agent, launcher, timeout, args[0]))
+		}
+		return command.Exit(runStart(agent, launcher, args))
+	}
 	AddAgentFlags(c, &agent, &launcher)
+	command.Checked(c.Flags(), &host, "host", "", func(name string) error {
+		if !config.ValidHostName(name) {
+			return command.Usage("host.invalid_host_name", command.Escape(name))
+		}
+		return nil
+	})
+	command.Seconds(c.Flags(), &timeout, "timeout", hostStartDefaultTimeout, "", "host.timeout_invalid")
 	return c
 }
 
@@ -153,6 +173,9 @@ func (o resumeOptions) validate(c *cobra.Command, task string) error {
 
 // runStart implements kander start in server mode.
 func runStart(agent, launcher string, rest []string) int {
+	// The order of a worker's start leaves the environment before anything
+	// else runs, so nothing this start launches inherits it.
+	order := takeStartOrder()
 	var taskID string
 	if len(rest) == 0 && command.JSON() {
 		return command.FailStatus(2, command.Interactive(t("launch.interactive_select_task")))
@@ -183,7 +206,7 @@ func runStart(agent, launcher string, rest []string) int {
 	} else {
 		taskID = rest[0]
 	}
-	result, err := StartRemote(agent, launcher, taskID)
+	result, err := launchRemote(remoteLaunchInput{Agent: agent, Launcher: launcher, TaskID: taskID, StartOrder: order})
 	for _, warning := range result.Warnings {
 		command.Notify("launch_warning", warning)
 	}

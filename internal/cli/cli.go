@@ -54,6 +54,8 @@ func init() {
 	Register(remote.NewGuardWriteCommand)
 	Register(remote.NewRequestCommand)
 	Register(remote.NewPolicyCommand)
+	Register(remote.NewHostCommand)
+	Register(remote.NewOrderCommand)
 }
 
 func newVersionCommand() *cobra.Command {

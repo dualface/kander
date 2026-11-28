@@ -126,10 +126,11 @@ func TestCommandIndexWordLimits(t *testing.T) {
 	// The limits keep the index short; each new command line raises them by its own words
 	// only (kander server gc: 13; kander gc: 8, plus 9 for its table row in the README; kander
 	// policy: 11, plus 8 for its table row; kander review --requirement-decision: 2; kander
-	// service: 24, plus 9 for its table row).
+	// service: 24, plus 9 for its table row; kander start --host: 11; kander host and kander
+	// order: 11, plus 19 for their table rows).
 	readme, _ := File("snippets/commands/README.md")
-	if n := len(strings.Fields(string(readme))); n > 886 {
-		t.Fatalf("README has %d words, limit 886", n)
+	if n := len(strings.Fields(string(readme))); n > 927 {
+		t.Fatalf("README has %d words, limit 927", n)
 	}
 	kanban, _ := File("KANDER-KANBAN-RULES.md")
 	text := string(kanban)
@@ -138,8 +139,8 @@ func TestCommandIndexWordLimits(t *testing.T) {
 	if start < 0 || end < 0 {
 		t.Fatal("Command Contract section not found")
 	}
-	if n := len(strings.Fields(text[start : start+1+end])); n > 657 {
-		t.Fatalf("Command Contract has %d words, limit 657", n)
+	if n := len(strings.Fields(text[start : start+1+end])); n > 679 {
+		t.Fatalf("Command Contract has %d words, limit 679", n)
 	}
 	for _, title := range []string{"**Durable Dispatch**", "**Launchers**", "**Reading the event stream**", "**Subscription Events**", "**Card Pins**", "**Check and Liveness Classification**"} {
 		if strings.Contains(text, title) {

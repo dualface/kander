@@ -337,7 +337,7 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 		}
 		restart.Request.ObservationTicket, restart.Request.PreviousPresence = state.ObservationTicket, &presence
 	}
-	request := api.ClaimRequest{ClientID: session.Client.ClientID(), ExecutionID: execution, Owner: agentName, ExpectedRevision: task.Revision, Start: &api.StartInput{Session: initialSession, Window: window, ExecResolved: choice.record}, PolicyRevision: session.PolicyRevision(), BranchMode: session.BranchMode()}
+	request := api.ClaimRequest{ClientID: session.Client.ClientID(), ExecutionID: execution, Owner: agentName, ExpectedRevision: task.Revision, Start: &api.StartInput{Session: initialSession, Window: window, ExecResolved: choice.record}, PolicyRevision: session.PolicyRevision(), BranchMode: session.BranchMode(), StartOrderID: input.StartOrder}
 	var grant api.ClaimGrant
 	if input.Takeover {
 		request.Decision, request.Dispatch, request.ExpectedGeneration = restart.Request.Decision, restart.Request.Dispatch, restart.Request.ExpectedGeneration

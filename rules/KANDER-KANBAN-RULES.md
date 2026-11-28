@@ -49,6 +49,9 @@ kander init [--server <URL>] [--project <name>] [project-path]
 kander policy show
 kander policy init [--yes]
 kander policy set <key> <value>
+kander host list
+kander order show <order-id>
+kander order cancel <order-id>
 kander list [--agent-status] [backlog|todo|working|review|done|archived|trash]
 kander show [--document <relative-path>] <task-id>
 kander new [--large] [--language <agent language>] <feature|bug|chore|research> <slug> <title...>
@@ -61,6 +64,7 @@ kander pick [task-id]
 kander confirm <task-id> --expect-revision <revision>
 kander update <task-id> --document <relative-path> --file <UTF8-input> --expect-revision <revision> [--contract-decision-file <UTF8-decision>] [--dispatch-id <id> --execution-epoch <epoch>]
 kander start [--agent <configured-agent>] [--launcher <launcher>] [task-id]
+kander start --host <host> [--agent <configured-agent>] [--launcher <launcher>] [--timeout SECONDS] <task-id>
 kander orchestrate [--agent <configured-agent>] [--launcher <launcher>] (--message TEXT | --message-file FILE) <task-id|task-group-id>...
 kander resume [--agent <configured-agent>] [--decision <reference>] [--timeout SECONDS] (--message TEXT | --message-file FILE) [--launcher <launcher>] [--dispatch-id <id>] [--kind fix|sync|wrap-up] [--base <full-SHA>] [--evidence-file <JSON>] <task-id>
 kander resume --adopt --decision <reference> <task-id>

@@ -10,12 +10,15 @@ Launches an executing agent on a `todo/` card in its own container and writes th
 
 ```text
 kander start [--agent <configured-agent>] [--launcher <launcher>] [task-id]
+kander start --host <host> [--agent <configured-agent>] [--launcher <launcher>] [--timeout SECONDS] <task-id>
 ```
 
 ## Arguments
 
 - `task-id`: the card; without it, the command lists the `todo/` candidates.
 - `--agent <configured-agent>`: the execution agent for this launch only. Default: the agent the card pins, otherwise `kanban_agents.<SIZE>` of the card. A value that differs from a pinned agent is refused (see "Card Pins").
+- `--host <host>`: start the card on the named host instead of this one; see "Starting on Another Host". Use it only when the user or the confirmed plan names the host for the card. A name that is this host's own starts here, as without `--host`.
+- `--timeout SECONDS`: with `--host` only, how long to wait for the order to become final. Default 300.
 - `--launcher <launcher>`: a built-in launcher name (`auto`, `tmux`, `tmux-session`, `herdr`, `herdr-core`, `luvus`, `dsh`, `foreground`, `console`) or one provided by a loaded terminal definition (see "Launchers" below). Pass it only as allowed under "Choosing the Launcher".
 
 ## Examples
@@ -26,6 +29,9 @@ kander start 20261118-example-task
 
 # Start a card with the launcher the user named and an explicit agent
 kander start --agent codex --launcher tmux 20261118-example-task
+
+# Start a card on the host the user named
+kander start --host build-b 20261118-example-task
 ```
 
 ## Preconditions
@@ -80,6 +86,13 @@ kander start --agent codex --launcher tmux 20261118-example-task
 Source: moved from `KANDER-KANBAN-RULES.md` "Claiming, Starting, and Coordination".
 
 - When no task is specified and `todo/` has several cards, list the candidates for the user; task groups are ordered by confirmed dependencies, not asked card by card. When a specified card belongs to a task group, inspect the group and its prerequisites before claiming and use the member-card start entry in `snippets/orchestrate-start.md` "Task Orchestration". If that makes the current agent the orchestrator, advance the group in dependency order instead of claiming the requested card early. For other unmet start conditions, only report the gap; never claim or move back to `backlog/`.
+
+**Starting on Another Host**
+
+- `kander start --host <host> <task-id>` asks the server for a start order: the named host's resident worker takes it and runs `kander start` for the card in the project directory that host registered, exactly as a person on that host would. Use it only when the user or the confirmed plan names the host; never choose a host on your own. `kander host list` shows the hosts, whether they are online, and the agents and launchers each reports for the project.
+- The server refuses the order, without creating it, with `remote_required` (the project has no Git remote), `task_not_todo`, `host_unknown`, `host_offline`, `host_unsupported` (the host takes no orders), `host_project_missing`, `host_agent_unavailable` or `host_launcher_unavailable` (the `--agent` or `--launcher` given is not among those the host reported), or `start_order_open` (the card already has an order that is not final). `--agent` and `--launcher` pass to the start on that host; without them its configuration decides.
+- The command then waits for the order to become final. `started` prints the host, the generation, and the window and exits 0. `failed`, `cancelled`, or `expired` prints the reason code and message and exits 1: read the reason, report it, and let the user decide; never retry on another host on your own. When `--timeout` passes first, it prints the order ID and its state and exits 3 without cancelling: read the order later with `kander order show <order-id>` (`snippets/commands/order.md`) instead of starting again.
+- A start on another host runs with the environment of that host's worker service: the `PATH` and the agent configuration directory variables its last `kander doctor` scan recorded, and nothing of the requesting host. Credentials the agent needs there, such as Git push access, must be available in that service environment.
 
 **Late Failures**
 
@@ -136,11 +149,12 @@ started-unresolved: <task-id> window=<address> reason=<reason>
 ## Output
 
 - The scale, the actual agent, the resolved launcher, and the container address; `tmux-session` also prints the session name, window id, and an attach hint. With `--json`: `action` (`start`), `task_id`, `size`, `agent`, `launcher`, `address` (the complete container address), `replayed` (a receipt of an earlier confirmed start), and `superseded` (a takeover overtook the start). A `foreground` or `console` launcher, and a missing task ID that needs the selection prompt, are refused with `interactive_required` and exit status 2 before the card is claimed; when the service project lookup that precedes the refusal gets no answer, the call ends with that error (`unreachable` or `not_ready`, exit status 1) instead, still before the card is claimed, and repeating it once the service answers gives the refusal. Launch warnings are notices with the code `launch_warning`. A late failure with executor evidence is the error object with the code `launch_unresolved` and exit status 3; its message holds the next steps.
+- `--host`: the order is created first, and its ID goes to stderr. With `--json` the result is the order object of `snippets/commands/order.md`, with exit status 0 for `started`, 1 for another final state, and 3 when `--timeout` passed while the order was not final. A server without start orders fails with `start_order_unsupported`.
 
 ## Rejections
 
 - A card outside `todo/`, a failed `todo` gate, an unavailable agent or launcher, a pin violation, or a failed launch (the container is closed and the card rolled back).
-- More than one task ID, an option without a value, or an unknown option is a usage error.
+- More than one task ID, an option without a value, or an unknown option is a usage error; so are `--timeout` without `--host`, `--host` without a task ID, and a host name that breaks the host name rule.
 - In a distributed project, a claim refused twice with `policy_revision_stale` (see "Branch snapshot").
 
 ## Distributed Git workspace
