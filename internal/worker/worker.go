@@ -44,6 +44,17 @@ type Options struct {
 	// Managed marks a worker a service manager started (KANDER_MANAGED=1): it stays without
 	// live claims, records the flag in worker.json, and passes it to a successor it starts.
 	Managed bool
+	// AcceptOrders makes the worker the resident host agent: it sends host
+	// heartbeats for the projects of host.json and runs the start orders other
+	// hosts direct at it (host.go). A managed worker does; tests set it.
+	AcceptOrders bool
+	// HostRescan is how often the host agent reads host.json for its servers,
+	// and HeartbeatWait the long poll of one heartbeat.
+	HostRescan    time.Duration
+	HeartbeatWait time.Duration
+	// StartExecutable names the binary whose `start` command runs an order;
+	// the default is this worker's own binary.
+	StartExecutable func() (string, error)
 	// ExitOnHandover makes a worker that found its binary replaced exit after releasing the
 	// lock instead of starting the successor itself: the service manager restarts it from the
 	// new file. Managed workers on Linux and macOS set it; Windows keeps the handover.
@@ -172,6 +183,7 @@ func run() int {
 func managedOptions(o Options, managed bool, goos string) Options {
 	o.Managed = managed
 	o.ExitOnHandover = managed && goos != "windows"
+	o.AcceptOrders = managed
 	return o
 }
 
@@ -236,6 +248,15 @@ func Serve(ctx context.Context, o Options) error {
 	if o.WriteRecord == nil {
 		o.WriteRecord = remote.WriteWorkerRecord
 	}
+	if o.HostRescan <= 0 {
+		o.HostRescan = defaultHostRescan
+	}
+	if o.HeartbeatWait <= 0 {
+		o.HeartbeatWait = defaultHeartbeatWait
+	}
+	if o.StartExecutable == nil {
+		o.StartExecutable = defaultStartExecutable
+	}
 	o.defaultHandover()
 	if err := os.MkdirAll(o.Home, 0o700); err != nil {
 		return err
@@ -279,6 +300,7 @@ func Serve(ctx context.Context, o Options) error {
 	defer w.stopRenewals()
 	w.startPolicyRefresh(ctx)
 	defer w.stopPolicyRefresh()
+	defer w.startHostAgent(ctx)()
 	idleSince := o.Now()
 	ticker := time.NewTicker(o.Tick)
 	defer ticker.Stop()

@@ -20,6 +20,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/dualface/kander/v2/api"
+	"github.com/dualface/kander/v2/internal/cli"
 	"github.com/dualface/kander/v2/internal/client"
 	"github.com/dualface/kander/v2/internal/command/commandtest"
 	"github.com/dualface/kander/v2/internal/commands"
@@ -33,6 +34,10 @@ import (
 // detached by Controller just like the distributed executable.
 func TestMain(m *testing.M) {
 	serveFakeHC()
+	// A worker of the host start tests runs `kander start` through this binary.
+	if os.Getenv(cliChildEnv) == "1" && len(os.Args) > 1 && !strings.HasPrefix(os.Args[1], "-test.") {
+		os.Exit(cli.Run(append([]string{"kander"}, os.Args[1:]...)))
+	}
 	if os.Getenv("KANDER_TEST_SERVER_CHILD") == "1" && len(os.Args) > 2 && os.Args[1] == "server" {
 		os.Exit(runServer(os.Args[2:]))
 	}
