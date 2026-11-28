@@ -13,8 +13,17 @@ const (
 	EnvCoordinatorExecutionID = "KANDER_COORDINATOR_EXECUTION_ID"
 )
 
+// EnvManaged marks a process a service manager started from a service definition that kander
+// service install wrote: a server or a worker in managed mode. A detached child never inherits
+// it; the only exception is the successor of a managed worker on Windows, which its parent
+// passes it to explicitly.
+const EnvManaged = "KANDER_MANAGED"
+
+// Managed reports whether this process runs in managed mode.
+func Managed() bool { return os.Getenv(EnvManaged) == "1" }
+
 // DaemonEnvironment is the environment of a detached long-lived child: the
-// current environment without the execution variables, followed by extra
+// current environment without the execution variables and without EnvManaged, followed by extra
 // ("NAME=value" entries) so an extra entry wins over an inherited one.
 func DaemonEnvironment(extra ...string) []string {
 	return daemonEnvironment(os.Environ(), runtime.GOOS == "windows", extra)
@@ -24,7 +33,7 @@ func daemonEnvironment(env []string, foldCase bool, extra []string) []string {
 	out := make([]string, 0, len(env)+len(extra))
 	for _, entry := range env {
 		name, _, _ := strings.Cut(entry, "=")
-		if sameEnvName(name, EnvExecutionID, foldCase) || sameEnvName(name, EnvCoordinatorExecutionID, foldCase) {
+		if sameEnvName(name, EnvExecutionID, foldCase) || sameEnvName(name, EnvCoordinatorExecutionID, foldCase) || sameEnvName(name, EnvManaged, foldCase) {
 			continue
 		}
 		out = append(out, entry)

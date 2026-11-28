@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-func TestDaemonEnvironmentDropsOnlyTheExecutionVariables(t *testing.T) {
-	env := []string{"PATH=/bin", EnvExecutionID + "=exec-1", "KANDER_CLIENT_HOME=/home/c", EnvCoordinatorExecutionID + "=exec-2", "EMPTY=", "kander_execution_id=lower"}
+func TestDaemonEnvironmentDropsOnlyTheExecutionAndManagedVariables(t *testing.T) {
+	env := []string{"PATH=/bin", EnvExecutionID + "=exec-1", "KANDER_CLIENT_HOME=/home/c", EnvCoordinatorExecutionID + "=exec-2", EnvManaged + "=1", "EMPTY=", "kander_execution_id=lower"}
 	got := daemonEnvironment(env, false, []string{"KANDER_CLIENT_HOME=/other"})
 	want := []string{"PATH=/bin", "KANDER_CLIENT_HOME=/home/c", "EMPTY=", "kander_execution_id=lower", "KANDER_CLIENT_HOME=/other"}
 	if !slices.Equal(got, want) {

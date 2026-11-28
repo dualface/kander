@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"reflect"
+	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"github.com/dualface/kander/v2/internal/command"
 	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/fs"
+	"github.com/dualface/kander/v2/internal/process"
 	"github.com/dualface/kander/v2/internal/remote"
 	"github.com/dualface/kander/v2/internal/version"
 )
@@ -39,8 +41,15 @@ type Options struct {
 	Home     string
 	Tick     time.Duration
 	IdleExit time.Duration
-	Logger   *slog.Logger
-	Now      func() time.Time
+	// Managed marks a worker a service manager started (KANDER_MANAGED=1): it stays without
+	// live claims, records the flag in worker.json, and passes it to a successor it starts.
+	Managed bool
+	// ExitOnHandover makes a worker that found its binary replaced exit after releasing the
+	// lock instead of starting the successor itself: the service manager restarts it from the
+	// new file. Managed workers on Linux and macOS set it; Windows keeps the handover.
+	ExitOnHandover bool
+	Logger         *slog.Logger
+	Now            func() time.Time
 	// Version and PID name this worker in worker.json and in the log; the
 	// defaults are version.String and os.Getpid. Tests set them to tell a
 	// worker from the one that handed over to it in the same process.
@@ -159,12 +168,19 @@ func run() int {
 	return runWorker(ctx, home, os.Stderr)
 }
 
+// managedOptions are the options of a worker whose managed mode is managed.
+func managedOptions(o Options, managed bool, goos string) Options {
+	o.Managed = managed
+	o.ExitOnHandover = managed && goos != "windows"
+	return o
+}
+
 // runWorker logs the ignored configuration once and serves until ctx ends or the worker is idle.
 // It returns the exit status of the command.
 func runWorker(ctx context.Context, home string, logOut io.Writer) int {
 	logger := slog.New(slog.NewJSONHandler(logOut, nil))
 	logIgnoredConfig(logger)
-	err := Serve(ctx, Options{Home: home, Logger: logger})
+	err := Serve(ctx, managedOptions(Options{Home: home, Logger: logger}, process.Managed(), runtime.GOOS))
 	if errors.Is(err, ErrRunning) {
 		return 0
 	}
@@ -249,14 +265,14 @@ func Serve(ctx context.Context, o Options) error {
 	// removed then: left in place it would name that worker's version and pid.
 	if err := o.WriteRecord(o.Home, remote.WorkerRecord{
 		Version: o.Version(), PID: o.PID(), Executable: self.path(),
-		Handover: self.enabled(), StartedAt: o.Now(),
+		Handover: self.enabled(), Managed: o.Managed, StartedAt: o.Now(),
 	}); err != nil {
 		o.Logger.Error("worker record could not be written", "error", err)
 		if err := remote.RemoveWorkerRecord(o.Home); err != nil {
 			o.Logger.Error("the record of the earlier worker could not be removed", "error", err)
 		}
 	}
-	o.Logger.Info("worker started", "version", o.Version(), "pid", o.PID(), "executable", self.path())
+	o.Logger.Info("worker started", "version", o.Version(), "pid", o.PID(), "executable", self.path(), "managed", o.Managed)
 	// Registered after the lock release, so it runs first: only the worker that
 	// holds worker.lock acts on credentials.
 	w.startRenewals(ctx)
@@ -271,7 +287,8 @@ func Serve(ctx context.Context, o Options) error {
 		if err != nil {
 			o.Logger.Error("worker pass failed", "error", err)
 		}
-		if live > 0 {
+		// A managed worker stays without claims: the host takes directed starts at any time.
+		if live > 0 || o.Managed {
 			idleSince = o.Now()
 		} else if o.Now().Sub(idleSince) >= o.IdleExit {
 			return nil

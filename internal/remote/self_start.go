@@ -3,7 +3,6 @@ package remote
 import (
 	"context"
 	"errors"
-	"os"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
@@ -112,7 +111,7 @@ func dataLockUnavailable(unavailable error, dir string, probeErr error) error {
 
 // startCredentialWorker starts the worker of a client home. It is a variable so
 // a test can count the starts.
-var startCredentialWorker = StartWorker
+var startCredentialWorker = func(home, executable string) (*WorkerProcess, error) { return StartWorker(home, executable) }
 
 // renewableCredential reports whether home holds a credential the worker
 // would renew: a record without a release tombstone whose lease is not lost.
@@ -148,12 +147,10 @@ func ensureCredentialWorker(home string) error {
 	if err != nil || held {
 		return err
 	}
-	self, err := os.Executable()
-	if err != nil {
+	return startWorkerFor(home, func(home, executable string) error {
+		_, err := startCredentialWorker(home, executable)
 		return err
-	}
-	_, err = startCredentialWorker(home, self)
-	return err
+	})
 }
 
 // UseServerStarterForTest lets a test binary of another package start a local

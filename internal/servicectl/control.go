@@ -24,15 +24,25 @@ func ServerStartArguments(dir string, o StartOptions) []string {
 }
 
 // Controller owns bounded start/stop operations. Executable is injectable for
-// subprocess tests. A server outlives the command that starts it.
+// subprocess tests. A server outlives the command that starts it. When a managed
+// server service serves the client home of this process (svcinstall.ManagedFor),
+// start, stop, and restart go through the service manager instead.
 type Controller struct {
 	Executable string
 	Timeout    time.Duration
+	// Unmanaged controls the server directly even when a service is installed:
+	// kander service install uses it to stop a detached server before the
+	// service manager starts its own.
+	Unmanaged bool
 }
 
 type StartOptions struct {
 	DataDir, Listen string
 	TTL, Renew      time.Duration
+	// ExplicitData and ExplicitListen report the flags the user gave. With a
+	// service installed, an explicit value that differs from the one of the
+	// service definition is refused.
+	ExplicitData, ExplicitListen bool
 }
 
 func (c Controller) timeout() time.Duration {
@@ -85,6 +95,11 @@ func serverCommand(exe, dir string, o StartOptions) *exec.Cmd {
 }
 
 func (c Controller) Start(ctx context.Context, o StartOptions) (api.ServerInfo, error) {
+	if svc, ok, err := c.service(ctx); err != nil {
+		return api.ServerInfo{}, err
+	} else if ok {
+		return c.startService(ctx, svc, o)
+	}
 	dir, err := DataDir(o.DataDir)
 	if err != nil {
 		return api.ServerInfo{}, err
@@ -164,6 +179,11 @@ func (c Controller) Start(ctx context.Context, o StartOptions) (api.ServerInfo, 
 }
 
 func (c Controller) Stop(ctx context.Context, target string) (bool, error) {
+	if svc, ok, err := c.service(ctx); err != nil {
+		return false, err
+	} else if ok {
+		return c.stopService(ctx, svc)
+	}
 	if !Local(target) {
 		return false, errors.New(config.Text("server.local_only"))
 	}
@@ -215,6 +235,11 @@ func (c Controller) Stop(ctx context.Context, target string) (bool, error) {
 }
 
 func (c Controller) Restart(ctx context.Context, target string) (api.ServerInfo, error) {
+	if svc, ok, err := c.service(ctx); err != nil {
+		return api.ServerInfo{}, err
+	} else if ok {
+		return c.restartService(ctx, svc)
+	}
 	if !Local(target) {
 		return api.ServerInfo{}, errors.New(config.Text("server.local_only"))
 	}

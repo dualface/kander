@@ -17,6 +17,7 @@ import (
 	"github.com/dualface/kander/v2/internal/install"
 	"github.com/dualface/kander/v2/internal/menu"
 	"github.com/dualface/kander/v2/internal/remote"
+	"github.com/dualface/kander/v2/internal/servicecmd"
 	"github.com/dualface/kander/v2/internal/terminalcheck"
 	"github.com/dualface/kander/v2/internal/version"
 )
@@ -38,6 +39,7 @@ func init() {
 	Register(menu.NewConfigCommand)
 	Register(newVersionCommand)
 	Register(install.NewInstallCommand)
+	Register(servicecmd.NewCommand)
 	Register(install.NewUninstallCommand)
 	Register(terminalcheck.NewCommand)
 	Register(remote.NewInitCommand)

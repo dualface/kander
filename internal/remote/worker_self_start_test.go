@@ -14,6 +14,7 @@ import (
 	"github.com/dualface/kander/v2/api"
 	"github.com/dualface/kander/v2/internal/fs"
 	"github.com/dualface/kander/v2/internal/servicectl"
+	"github.com/dualface/kander/v2/internal/svcinstall"
 )
 
 // renewable is a live credential of execution id.
@@ -267,5 +268,54 @@ func TestOpenReturnsAsSoonAsTheCommandIsCanceledWhileTheServerStarts(t *testing.
 	}
 	if time.Since(began) > 5*time.Second {
 		t.Fatalf("Open took %v", time.Since(began))
+	}
+}
+
+// installWorkerService registers a worker service for home with a fake systemd and returns the
+// commands it ran.
+func installWorkerService(t *testing.T, home string) *[]string {
+	t.Helper()
+	var calls []string
+	run := func(_ context.Context, name string, args ...string) ([]byte, error) {
+		calls = append(calls, strings.Join(append([]string{name}, args...), " "))
+		return nil, nil
+	}
+	svcinstall.UseForTest(t, svcinstall.TestPlatform{GOOS: "linux", Dir: t.TempDir(), Run: run, User: "alice"})
+	spec := svcinstall.Spec{Kind: svcinstall.KindWorker, Executable: "/usr/local/bin/kander", Args: WorkerArguments(),
+		ClientHome: home, WorkDir: home, LogPath: filepath.Join(home, "worker.log")}
+	prepared, err := svcinstall.Prepare(t.Context(), spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := prepared.Write(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	calls = nil
+	return &calls
+}
+
+// With the worker service of the client home installed, the self-start asks the service
+// manager instead of starting a detached worker.
+func TestWorkerSelfStartUsesTheWorkerService(t *testing.T) {
+	home, starts, _ := workerStartFixture(t)
+	writeCredential(t, home, renewable("e1"))
+	calls := installWorkerService(t, home)
+	if err := ensureCredentialWorker(home); err != nil || starts.Load() != 0 {
+		t.Fatalf("err=%v detached starts=%d", err, starts.Load())
+	}
+	if want := []string{"systemctl --user start kander-worker.service"}; !slices.Equal(*calls, want) {
+		t.Fatalf("commands %q", *calls)
+	}
+	detached := 0
+	if _, err := ensureWorker(home, func(string, string) error { detached++; return nil }); err != nil || detached != 0 || len(*calls) != 2 {
+		t.Fatalf("EnsureWorker: err=%v detached=%d commands=%q", err, detached, *calls)
+	}
+	// Another client home keeps the detached start.
+	other := filepath.Join(t.TempDir(), "other")
+	if err := ensureHome(other); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ensureWorker(other, func(string, string) error { detached++; return nil }); err != nil || detached != 1 || len(*calls) != 2 {
+		t.Fatalf("another home: err=%v detached=%d commands=%q", err, detached, *calls)
 	}
 }

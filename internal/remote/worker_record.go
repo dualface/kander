@@ -31,7 +31,10 @@ type WorkerRecord struct {
 	Executable string `json:"executable"`
 	// Handover reports whether the worker watches its executable and hands over
 	// to a replaced file.
-	Handover  bool      `json:"handover"`
+	Handover bool `json:"handover"`
+	// Managed reports a worker a service manager started (KANDER_MANAGED=1), or the
+	// successor such a worker handed over to.
+	Managed   bool      `json:"managed"`
 	StartedAt time.Time `json:"started_at"`
 }
 

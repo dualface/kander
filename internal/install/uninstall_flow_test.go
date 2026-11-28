@@ -392,3 +392,32 @@ func TestEncodePowerShell(t *testing.T) {
 		t.Fatalf("decoded %q", got)
 	}
 }
+
+// The managed services are listed and unregistered before the processes are stopped, so no
+// service manager starts them again.
+func TestUninstallUnregistersServicesFirst(t *testing.T) {
+	f := newUninstallFixture(t)
+	saved := inspectUninstallServices
+	t.Cleanup(func() { inspectUninstallServices = saved })
+	unit := filepath.Join(f.home, ".config", "systemd", "user", "kander-worker.service")
+	inspectUninstallServices = func(context.Context) ([]UninstallService, error) {
+		return []UninstallService{{Kind: UninstallWorker, Location: unit, Unregister: func(context.Context) error {
+			f.bg.stopped = append(f.bg.stopped, "service")
+			return nil
+		}}}, nil
+	}
+	plan := PlanUninstall(context.Background(), f.paths)
+	if text := planText(plan); !strings.Contains(text, config.Text("install.uninstall_plan_unregister", "worker", unit)) {
+		t.Fatalf("plan lacks the service:\n%s", text)
+	}
+	code, stdout, _ := commandtest.Capture(func() int { return commandtest.Run(NewUninstallCommand(), "--yes", "--json") })
+	if code != 0 {
+		t.Fatalf("code=%d\n%s", code, stdout)
+	}
+	if strings.Join(f.bg.stopped, ",") != "service,server,worker" {
+		t.Fatalf("order=%v", f.bg.stopped)
+	}
+	if !strings.Contains(stdout, `{"action":"unregister","path":"`+unit+`","service":"worker"}`) {
+		t.Fatalf("the JSON result lacks the service:\n%s", stdout)
+	}
+}

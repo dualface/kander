@@ -4,7 +4,7 @@ Source: new in this file
 
 ## Purpose and users
 
-Removes the global Kander install of this host and stops its local server and background processes; the data directories stay. It stops the local server and the worker, removes what Kander wrote for the agents (the Kander load commands earlier releases wrote into the agents' global rules files, the agent rules extensions, and the managed `kander-leader` skill), deletes the rule files and state files of the rules root, and deletes the global `kander` binary last. A new install continues with the kept directories. Used by the user.
+Removes the global Kander install of this host and stops its local server and background processes; the data directories stay. It unregisters the services of `kander service install`, stops the local server and the worker, removes what Kander wrote for the agents (the Kander load commands earlier releases wrote into the agents' global rules files, the agent rules extensions, and the managed `kander-leader` skill), deletes the rule files and state files of the rules root, and deletes the global `kander` binary last. A new install continues with the kept directories. Used by the user.
 
 ## Syntax
 
@@ -29,8 +29,9 @@ kander uninstall --yes
 
 ## Effects
 
-- Lists everything first: the processes it stops (the local server and the worker, each with its PID), every rules file it edits or deletes, every extension, skill file, rule file of the rules root, and binary it deletes, the number of rule files, every path it keeps or skips with the reason, the three kept data directories, and the unreleased leases of this host with their impact. On a terminal it then asks y/N (default N); any answer other than `y` changes nothing.
+- Lists everything first: the managed services it unregisters, the processes it stops (the local server and the worker, each with its PID), every rules file it edits or deletes, every extension, skill file, rule file of the rules root, and binary it deletes, the number of rule files, every path it keeps or skips with the reason, the three kept data directories, and the unreleased leases of this host with their impact. On a terminal it then asks y/N (default N); any answer other than `y` changes nothing.
 - Leases in use or running agents never refuse the uninstall. Each lease is listed with its project ID, task ID, generation, kind, and agent PID. While Kander is uninstalled these leases are not renewed and the `kander` commands their agents run fail; after a new install, once a worker runs again, the leases nobody took over renew again.
+- Unregisters each server or worker service whose definition carries the Kander marker first, as `kander service uninstall` does, so no service manager starts the process again (`snippets/commands/service.md`). A definition without the marker stays.
 - Stops the loopback server at the `server.url` of the scope `config.json`, the one the project overlay of the working directory binds, and the one the default server data directory recorded, the same way as `kander server stop`, when its administration key is readable; one whose key cannot be read is skipped and reported. A remote server is never touched.
 - Stops the worker that holds `worker.lock` of the client home by writing the stop request `worker.stop` next to the lock, then waits up to 30 seconds for the lock to be free. It signals no process. The worker exits through its normal shutdown and deletes the request; a lock still held after the wait is a failed stop that names the lock file.
 - A failed stop is reported and the other steps still run; the exit status is then 1.
@@ -46,7 +47,7 @@ kander uninstall --yes
 
 - The plan on standard output, the y/N prompt on standard error, then one line per change, and last the list of what stays.
 - Exit 0 on success, 1 when cancelled or when a step failed, 2 for a usage error or a missing `--yes` without a terminal.
-- With `--json` and `--yes`: `mode` (always `global`), `rules_dir`, `items` (array of `action` (`edit`, `remove`, `stop`, `keep`, `skip`), `path` for a file, `process` and `pid` for a process, and `reason`), `leases` (array of `project_id`, `task_id`, `kind`, `generation`, and `agent_pid`), and `failures` (array of messages, empty on success; exit status 1 otherwise). `--json` without `--yes` is refused with `interactive_required` and exit status 2 before anything changes.
+- With `--json` and `--yes`: `mode` (always `global`), `rules_dir`, `items` (array of `action` (`unregister`, `edit`, `remove`, `stop`, `keep`, `skip`), `path` for a file or a service definition, `service` for a service, `process` and `pid` for a process, and `reason`), `leases` (array of `project_id`, `task_id`, `kind`, `generation`, and `agent_pid`), and `failures` (array of messages, empty on success; exit status 1 otherwise). `--json` without `--yes` is refused with `interactive_required` and exit status 2 before anything changes.
 
 ## Rejections
 

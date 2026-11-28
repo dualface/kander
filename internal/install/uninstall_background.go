@@ -127,3 +127,55 @@ func printLeases(out io.Writer, leases []UninstallLease) {
 	}
 	fmt.Fprintln(out, config.Text("install.uninstall_lease_impact"))
 }
+
+// UninstallService is one managed service of this host: a definition kander service install
+// registered with the service manager.
+type UninstallService struct {
+	// Kind is UninstallServer or UninstallWorker.
+	Kind string
+	// Location is the definition file, or the name of the scheduled task.
+	Location string
+	// Unregister stops the service and removes its definition.
+	Unregister func(ctx context.Context) error
+}
+
+// inspectUninstallServices finds the managed services. The package that owns kander service
+// registers it; a binary without it unregisters nothing.
+var inspectUninstallServices func(ctx context.Context) ([]UninstallService, error)
+
+// RegisterUninstallServices sets the inspection kander uninstall uses to find the managed
+// services. The inspection never changes anything; only the Unregister functions do.
+func RegisterUninstallServices(inspect func(ctx context.Context) ([]UninstallService, error)) {
+	inspectUninstallServices = inspect
+}
+
+// planServices adds the managed services to unregister to the plan.
+func (plan *UninstallPlan) planServices(ctx context.Context) {
+	if inspectUninstallServices == nil {
+		return
+	}
+	services, err := inspectUninstallServices(ctx)
+	if err != nil {
+		plan.Services = append(plan.Services, UninstallItem{Action: UninstallSkip, Path: config.Text("install.uninstall_services"), Reason: err.Error(), service: &UninstallService{}})
+	}
+	for _, s := range services {
+		plan.Services = append(plan.Services, UninstallItem{Action: UninstallUnregister, Path: s.Location, service: &s})
+	}
+}
+
+// unregisterServices unregisters every planned service. A failure is reported and the rest go on.
+func unregisterServices(ctx context.Context, items []UninstallItem, out io.Writer) error {
+	var failed error
+	for _, item := range items {
+		if item.Action != UninstallUnregister {
+			continue
+		}
+		if err := item.service.Unregister(ctx); err != nil {
+			fmt.Fprintln(out, config.Text("install.uninstall_unregister_failed", item.service.Kind, item.Path, err))
+			failed = joinFailure(failed, item.Path, err)
+			continue
+		}
+		fmt.Fprintln(out, config.Text("install.uninstall_unregistered", item.service.Kind, item.Path))
+	}
+	return failed
+}

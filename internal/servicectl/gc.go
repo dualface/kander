@@ -22,19 +22,30 @@ const ListenRecordName = "server-listen.json"
 type ListenRecord struct {
 	Listen string `json:"listen"`
 	PID    int    `json:"pid"`
+	// Managed reports a server a service manager started (KANDER_MANAGED=1).
+	Managed bool `json:"managed,omitempty"`
+}
+
+// ReadListenRecord reads the record of dataDir; found is false without a usable one.
+func ReadListenRecord(dataDir string) (ListenRecord, bool, error) {
+	data, found, err := fs.ReadRegularFileIfExists(filepath.Dir(dataDir), filepath.Join(dataDir, ListenRecordName))
+	if err != nil || !found {
+		return ListenRecord{}, false, err
+	}
+	var record ListenRecord
+	if json.Unmarshal(data, &record) != nil || record.Listen == "" {
+		return ListenRecord{}, false, nil
+	}
+	return record, true, nil
 }
 
 // RecordedURL returns the loopback URL of the address the server of dataDir
 // recorded, or "" when there is no usable record. The record can be stale:
 // the caller still asks the server at that URL which directory it serves.
 func RecordedURL(dataDir string) (string, error) {
-	data, found, err := fs.ReadRegularFileIfExists(filepath.Dir(dataDir), filepath.Join(dataDir, ListenRecordName))
+	record, found, err := ReadListenRecord(dataDir)
 	if err != nil || !found {
 		return "", err
-	}
-	var record ListenRecord
-	if json.Unmarshal(data, &record) != nil || record.Listen == "" {
-		return "", nil
 	}
 	target, err := ProbeURL(record.Listen)
 	if err != nil || !Local(target) {

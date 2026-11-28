@@ -32,11 +32,14 @@ const (
 	// UninstallSkip leaves an object to its owner: a binary a package manager installed, or a
 	// process uninstall cannot stop. The reason says what to do instead.
 	UninstallSkip
+	// UninstallUnregister stops a managed service and removes its definition.
+	UninstallUnregister
 )
 
 // uninstallActionNames are the action values of the --json result.
 var uninstallActionNames = map[UninstallAction]string{
 	UninstallEdit: "edit", UninstallRemove: "remove", UninstallKeep: "keep", UninstallStop: "stop", UninstallSkip: "skip",
+	UninstallUnregister: "unregister",
 }
 
 // UninstallItem is one planned path of kander uninstall.
@@ -55,13 +58,18 @@ type UninstallItem struct {
 	failed bool
 	// process is the process an UninstallStop item stops.
 	process *UninstallProcess
+	// service is the service an UninstallUnregister item unregisters.
+	service *UninstallService
 }
 
 // UninstallPlan is everything kander uninstall stops, removes, edits, and keeps, computed before
 // anything changes.
 type UninstallPlan struct {
 	Paths config.InstallPaths
-	// Processes are the local server and worker, stopped first.
+	// Services are the managed services, unregistered first so that no service manager starts
+	// a process again.
+	Services []UninstallItem
+	// Processes are the local server and worker, stopped next.
 	Processes []UninstallItem
 	// Items are the agent files and the rules directory.
 	Items []UninstallItem
@@ -138,6 +146,7 @@ type uninstallItem struct {
 	Action  string `json:"action"`
 	Path    string `json:"path,omitempty"`
 	Process string `json:"process,omitempty"`
+	Service string `json:"service,omitempty"`
 	PID     int    `json:"pid,omitzero"`
 	Reason  string `json:"reason,omitempty"`
 }
@@ -147,11 +156,14 @@ type uninstallItem struct {
 func uninstallJSON(ctx context.Context, plan *UninstallPlan) int {
 	outcomes, failed := applyUninstall(ctx, *plan, io.Discard)
 	var items []uninstallItem
-	for _, group := range [][]UninstallItem{plan.Processes, plan.Items, plan.Binary, outcomes, plan.Kept} {
+	for _, group := range [][]UninstallItem{plan.Services, plan.Processes, plan.Items, plan.Binary, outcomes, plan.Kept} {
 		for _, item := range group {
 			entry := uninstallItem{Action: uninstallActionNames[item.Action], Path: item.Path, Reason: item.Reason}
 			if item.process != nil {
 				entry.Path, entry.Process, entry.PID = "", item.Path, item.process.PID
+			}
+			if item.service != nil && item.Action == UninstallUnregister {
+				entry.Path, entry.Service = item.service.Location, item.service.Kind
 			}
 			items = append(items, entry)
 		}
@@ -194,6 +206,7 @@ func askUninstall() (bool, error) {
 // earlier release go too; it is the same plan the global injection cleanup applies.
 func PlanUninstall(ctx context.Context, paths config.InstallPaths) UninstallPlan {
 	plan := UninstallPlan{Paths: paths}
+	plan.planServices(ctx)
 	plan.planBackground(ctx)
 	plan.Items = append(plan.Items, planGlobalInjectionCleanup(paths).Items...)
 	for _, agent := range config.ExecutionAgents {
@@ -274,7 +287,8 @@ func applyUninstall(ctx context.Context, plan UninstallPlan, out io.Writer) ([]U
 		}
 	}
 	stopCtx, cancel := context.WithTimeout(ctx, uninstallStopBudget)
-	failed := stopProcesses(stopCtx, plan.Processes, out)
+	failed := unregisterServices(stopCtx, plan.Services, out)
+	failed = errors.Join(failed, stopProcesses(stopCtx, plan.Processes, out))
 	cancel()
 	removedRules, _, err := applyUninstallItems(plan.Items, out)
 	if err != nil && errors.Is(err, errSkillRemoval) {
@@ -303,6 +317,11 @@ func applyUninstall(ctx context.Context, plan UninstallPlan, out io.Writer) ([]U
 
 func printUninstallPlan(out io.Writer, plan UninstallPlan) {
 	fmt.Fprintln(out, config.Text("install.uninstall_plan_global"))
+	for _, item := range plan.Services {
+		if item.Action == UninstallUnregister {
+			fmt.Fprintln(out, config.Text("install.uninstall_plan_unregister", item.service.Kind, item.Path))
+		}
+	}
 	for _, item := range plan.Processes {
 		if item.Action == UninstallStop {
 			fmt.Fprintln(out, config.Text("install.uninstall_plan_stop", item.Path))
@@ -323,7 +342,7 @@ func printUninstallPlan(out io.Writer, plan UninstallPlan) {
 	if rulesFiles > 0 {
 		fmt.Fprintln(out, config.Text("install.uninstall_plan_rules", rulesFiles, plan.Paths.RulesDir))
 	}
-	for _, group := range [][]UninstallItem{plan.Processes, plan.Binary} {
+	for _, group := range [][]UninstallItem{plan.Services, plan.Processes, plan.Binary} {
 		for _, item := range group {
 			if item.Action == UninstallSkip {
 				fmt.Fprintln(out, config.Text("install.uninstall_plan_skip", item.Path, item.Reason))

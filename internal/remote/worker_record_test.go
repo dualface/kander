@@ -10,7 +10,7 @@ import (
 func TestWorkerRecordRoundTrips(t *testing.T) {
 	home := t.TempDir()
 	started := time.Date(2026, 11, 19, 8, 30, 0, 0, time.FixedZone("east", 8*3600))
-	want := WorkerRecord{Version: "v2.0.0-dev+abc1234", PID: 4242, Executable: "/usr/local/bin/kander", Handover: true, StartedAt: started}
+	want := WorkerRecord{Version: "v2.0.0-dev+abc1234", PID: 4242, Executable: "/usr/local/bin/kander", Handover: true, Managed: true, StartedAt: started}
 	if err := WriteWorkerRecord(home, want); err != nil {
 		t.Fatal(err)
 	}
@@ -26,9 +26,9 @@ func TestWorkerRecordRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const text = `{"schema":1,"version":"v2.0.0-dev+abc1234","pid":4242,"executable":"/usr/local/bin/kander","handover":true,"started_at":"2026-11-19T00:30:00Z"}` + "\n"
+	const text = `{"schema":1,"version":"v2.0.0-dev+abc1234","pid":4242,"executable":"/usr/local/bin/kander","handover":true,"managed":true,"started_at":"2026-11-19T00:30:00Z"}` + "\n"
 	if string(data) != text {
-		t.Fatalf("the file has the six documented fields in UTC:\n%s", data)
+		t.Fatalf("the file has the seven documented fields in UTC:\n%s", data)
 	}
 }
 

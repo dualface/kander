@@ -12,6 +12,7 @@ import (
 	"github.com/dualface/kander/v2/internal/command"
 	"github.com/dualface/kander/v2/internal/fs"
 	"github.com/dualface/kander/v2/internal/probe"
+	"github.com/dualface/kander/v2/internal/process"
 	"github.com/dualface/kander/v2/internal/remote"
 	"github.com/dualface/kander/v2/internal/version"
 )
@@ -98,7 +99,8 @@ func (o *Options) defaultHandover() {
 		}
 	}
 	if o.Spawn == nil {
-		o.Spawn = startSuccessor
+		managed := o.Managed
+		o.Spawn = func(home, executable string) (Successor, error) { return startSuccessor(home, executable, managed) }
 	}
 	if o.Held == nil {
 		o.Held = remote.WorkerHeld
@@ -156,8 +158,14 @@ func probeExecutable(ctx context.Context, executable string, timeout time.Durati
 	return nil
 }
 
-func startSuccessor(home, executable string) (Successor, error) {
-	p, err := remote.StartWorker(home, executable)
+// startSuccessor starts the worker of the replaced binary. The successor of a managed worker
+// stays managed: the detached start drops KANDER_MANAGED, so it is passed on explicitly.
+func startSuccessor(home, executable string, managed bool) (Successor, error) {
+	var env []string
+	if managed {
+		env = append(env, process.EnvManaged+"=1")
+	}
+	p, err := remote.StartWorker(home, executable, env...)
 	if err != nil {
 		return nil, err
 	}
@@ -229,6 +237,12 @@ func (w *loop) tryHandover(ctx context.Context, h *handover, lock *workerLock) (
 		return handoverNone, nil
 	}
 	lock.release()
+	if w.o.ExitOnHandover {
+		// The service manager starts the replaced binary once this process exits.
+		w.closeRequestFiles()
+		log.Info("worker exits for its service manager to start the replaced binary", "old_version", version.String())
+		return handoverDone, nil
+	}
 	next, err := w.o.Spawn(w.o.Home, h.executable)
 	if err == nil {
 		err = w.confirm(ctx, next)

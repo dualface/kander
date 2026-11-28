@@ -12,6 +12,7 @@ import (
 	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/fs"
 	"github.com/dualface/kander/v2/internal/remote"
+	"github.com/dualface/kander/v2/internal/svcinstall"
 	"github.com/dualface/kander/v2/internal/version"
 )
 
@@ -187,5 +188,33 @@ func TestDoctorWorkerCheckChangesNothing(t *testing.T) {
 		if after[name] != content {
 			t.Fatalf("%s changed", name)
 		}
+	}
+}
+
+// Doctor shows both services; a definition whose executable does not exist is a problem.
+func TestDoctorReportsTheServices(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "client")
+	t.Setenv(remote.EnvClientHome, home)
+	t.Setenv(config.EnvLangCLI, "1")
+	t.Setenv(config.EnvLang, "en")
+	svcinstall.UseForTest(t, svcinstall.TestPlatform{GOOS: "linux", Dir: t.TempDir(), User: "alice",
+		Run: func(context.Context, string, ...string) ([]byte, error) { return []byte("ActiveState=inactive\n"), nil }})
+	var healthy bool
+	lines := CaptureReport(func() { healthy = reportServices() })
+	if !healthy || !strings.Contains(joinLines(lines), "server service: not installed") || !strings.Contains(joinLines(lines), "worker service: not installed") {
+		t.Fatalf("healthy=%v\n%s", healthy, joinLines(lines))
+	}
+	missing := filepath.Join(t.TempDir(), "kander")
+	spec := svcinstall.Spec{Kind: svcinstall.KindWorker, Executable: missing, Args: []string{"worker"}, ClientHome: home, WorkDir: home, LogPath: filepath.Join(home, "worker.log")}
+	prepared, err := svcinstall.Prepare(t.Context(), spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := prepared.Write(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	lines = CaptureReport(func() { healthy = reportServices() })
+	if healthy || !strings.Contains(joinLines(lines), missing+", which does not exist") {
+		t.Fatalf("a missing executable must be a problem: healthy=%v\n%s", healthy, joinLines(lines))
 	}
 }

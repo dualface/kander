@@ -34,7 +34,10 @@ func NewServerCommand(runForeground func(context.Context, server.Options, string
 	startCommand := command.Streaming(&cobra.Command{
 		Use:  "start",
 		Args: command.Args(0, 0),
-		RunE: func(*cobra.Command, []string) error { return command.Exit(runStart(start, foreground, runForeground)) },
+		RunE: func(c *cobra.Command, _ []string) error {
+			start.ExplicitData, start.ExplicitListen = c.Flags().Changed("data"), c.Flags().Changed("listen")
+			return command.Exit(runStart(start, foreground, runForeground))
+		},
 	})
 	startFlags := startCommand.Flags()
 	startFlags.StringVar(&start.DataDir, "data", "", "")

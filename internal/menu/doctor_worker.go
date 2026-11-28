@@ -1,11 +1,15 @@
 package menu
 
 import (
+	"context"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/dualface/kander/v2/internal/config"
 	"github.com/dualface/kander/v2/internal/remote"
+	"github.com/dualface/kander/v2/internal/servicecmd"
+	"github.com/dualface/kander/v2/internal/svcinstall"
 	"github.com/dualface/kander/v2/internal/version"
 )
 
@@ -44,4 +48,29 @@ func reportBackgroundWorker() bool {
 	}
 	success(config.Text("menu.background_worker_running", status.Record.Version, strconv.Itoa(status.Record.PID)))
 	return true
+}
+
+// reportServices reports the server and worker services of this host. It only reads. A
+// definition whose executable does not exist makes the report unhealthy: the service manager
+// cannot start it.
+func reportServices() bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	healthy := true
+	for _, st := range servicecmd.Inspect(ctx, svcinstall.Kinds) {
+		headline, _ := st.Lines()
+		switch {
+		case st.Installed:
+			success(headline)
+		default:
+			hint(headline)
+		}
+		for _, text := range st.Warnings {
+			warning(text)
+		}
+		if st.MissingExecutable {
+			healthy = false
+		}
+	}
+	return healthy
 }

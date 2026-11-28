@@ -64,6 +64,10 @@ func playProbeTarget(mode string) int {
 	case "sleep":
 		time.Sleep(time.Minute)
 		return 0
+	case "env":
+		// A started successor reports the managed mode it was given.
+		_ = os.WriteFile(os.Getenv(probePIDFileEnv), []byte(os.Getenv(process.EnvManaged)), 0o600)
+		return 0
 	}
 	return 2
 }

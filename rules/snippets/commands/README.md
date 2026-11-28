@@ -8,6 +8,7 @@ Global flags: `--lang`, `--json`.
 | Command | Purpose | Users | Contract |
 | --- | --- | --- | --- |
 | `server` | Administer | user | `snippets/commands/server.md` |
+| `service` | Services | user | `snippets/commands/service.md` |
 | `config` | Configuration | agents | `snippets/commands/config.md` |
 | `doctor` | Repair | user | `snippets/commands/doctor.md` |
 | `version` | Version | user | `snippets/commands/version.md` |
@@ -49,6 +50,10 @@ kander server import [--data DIR] --project NAME [--git-remote GIT-URL] [--from 
 kander server maintain [--data DIR] --project NAME [--maintenance]
 kander server projects [--data DIR]
 kander server gc [--data DIR] [--project NAME] [--dry-run] [--yes] [--older-than D] [--log-keep SIZE]
+kander service install server [--listen ADDR] [--data DIR] [--ttl D] [--renew D]
+kander service install worker
+kander service uninstall <server|worker>
+kander service status [server|worker]
 kander doctor
 kander version
 kander install

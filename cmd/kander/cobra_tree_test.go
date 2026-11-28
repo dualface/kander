@@ -24,8 +24,8 @@ import (
 
 const sampleTask = "20261118-sample-task"
 
-// groups are the commands that only group subcommands.
-var groups = map[string]bool{"coordinator": true, "decision": true, "dispatch": true, "issue": true, "policy": true, "server": true, "terminal": true}
+// groups are the paths of the commands that only group subcommands.
+var groups = map[string]bool{"coordinator": true, "decision": true, "dispatch": true, "issue": true, "policy": true, "server": true, "service": true, "service install": true, "service uninstall": true, "terminal": true}
 
 // leafCommand is a command that runs something, with its command path.
 type leafCommand struct {
@@ -45,8 +45,9 @@ func commandLeaves(root *cobra.Command) []leafCommand {
 			}
 			// A command that takes its command line verbatim (the Windows job bootstrap of review)
 			// has no flags to parse.
-			if child.Runnable() && !groups[child.Name()] && !child.DisableFlagParsing {
-				leaves = append(leaves, leafCommand{child, strings.TrimPrefix(child.CommandPath(), "kander ")})
+			path := strings.TrimPrefix(child.CommandPath(), "kander ")
+			if child.Runnable() && !groups[path] && !child.DisableFlagParsing {
+				leaves = append(leaves, leafCommand{child, path})
 			}
 			walk(child)
 		}
@@ -129,6 +130,11 @@ var samplePositionals = map[string][]string{
 	"server start":                 {},
 	"server status":                {},
 	"server stop":                  {},
+	"service install server":       {},
+	"service install worker":       {},
+	"service status":               {},
+	"service uninstall server":     {},
+	"service uninstall worker":     {},
 	"show":                         {sampleTask},
 	"start":                        {},
 	"subscribe":                    {"20261118-sample-group", sampleTask},
